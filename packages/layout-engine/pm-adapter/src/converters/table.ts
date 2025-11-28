@@ -8,6 +8,8 @@ import type {
   BoxSpacing,
   FlowBlock,
   ParagraphBlock,
+  ImageBlock,
+  DrawingBlock,
   TableCell,
   TableCellAttrs,
   TableBorders,
@@ -88,27 +90,37 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
     return null;
   }
 
-  const paraNode = cellNode.content.find((c: PMNode) => c.type === 'paragraph');
-  if (!paraNode) {
-    return null;
+  // Convert all paragraphs in the cell to blocks
+  // Note: Table cells can only contain paragraphs, images, and drawings (not nested tables)
+  const blocks: (ParagraphBlock | ImageBlock | DrawingBlock)[] = [];
+
+  for (const childNode of cellNode.content) {
+    if (childNode.type === 'paragraph') {
+      const paragraphBlocks = context.paragraphToFlowBlocks(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+        context.defaultFont,
+        context.defaultSize,
+        context.styleContext,
+        undefined,
+        context.trackedChanges,
+        context.bookmarks,
+        context.hyperlinkConfig,
+        context.themeColors,
+        context.converterContext,
+      );
+      const paragraph = paragraphBlocks.find((b): b is ParagraphBlock => b.kind === 'paragraph');
+      if (paragraph) {
+        blocks.push(paragraph);
+      }
+    }
+    // TODO: Add support for other block types (lists, images) if needed
   }
 
-  const paragraphBlocks = context.paragraphToFlowBlocks(
-    paraNode,
-    context.nextBlockId,
-    context.positions,
-    context.defaultFont,
-    context.defaultSize,
-    context.styleContext,
-    undefined,
-    context.trackedChanges,
-    context.bookmarks,
-    context.hyperlinkConfig,
-    context.themeColors,
-    context.converterContext,
-  );
-  const paragraph = paragraphBlocks.find((b): b is ParagraphBlock => b.kind === 'paragraph');
-  if (!paragraph) return null;
+  if (blocks.length === 0) {
+    return null;
+  }
 
   const cellAttrs: TableCellAttrs = {};
 
@@ -140,7 +152,9 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
 
   return {
     id: context.nextBlockId(`cell-${rowIndex}-${cellIndex}`),
-    paragraph,
+    blocks,
+    // Backward compatibility: set paragraph to first block if it's a paragraph
+    paragraph: blocks[0]?.kind === 'paragraph' ? (blocks[0] as ParagraphBlock) : undefined,
     rowSpan: rowSpan ?? undefined,
     colSpan: colSpan ?? undefined,
     attrs: Object.keys(cellAttrs).length > 0 ? cellAttrs : undefined,
@@ -297,6 +311,12 @@ export function tableNodeToBlock(
     tableAttrs.tableWidth = node.attrs.tableWidth;
   } else if (hydratedTableStyle?.tableWidth) {
     tableAttrs.tableWidth = hydratedTableStyle.tableWidth;
+  }
+
+  // Pass tableLayout through (extracted by tblLayout-translator.js)
+  const tableLayout = node.attrs?.tableLayout;
+  if (tableLayout) {
+    tableAttrs.tableLayout = tableLayout;
   }
 
   let columnWidths: number[] | undefined = undefined;

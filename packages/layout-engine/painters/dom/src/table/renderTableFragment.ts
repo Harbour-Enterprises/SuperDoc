@@ -9,7 +9,6 @@ import type {
 } from '@superdoc/contracts';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import type { FragmentRenderContext, BlockLookup } from '../renderer.js';
-import { createTableBorderOverlay } from './border-utils.js';
 import { renderTableRow } from './renderTableRow.js';
 
 type ApplyStylesFn = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>) => void;
@@ -132,7 +131,9 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
   const block = lookup.block as TableBlock;
   const measure = lookup.measure as TableMeasure;
   const tableBorders = block.attrs?.borders;
-  const borderOverlay = tableBorders ? createTableBorderOverlay(doc, fragment, tableBorders) : null;
+  // Note: We don't use createTableBorderOverlay because we implement single-owner
+  // border model where cells handle all borders (including outer table borders)
+  // to prevent double borders when rendering with absolutely-positioned divs.
 
   const container = doc.createElement('div');
   container.classList.add(CLASS_NAMES.fragment);
@@ -146,6 +147,66 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
 
   // Add metadata for interactive table resizing
   if (fragment.metadata?.columnBoundaries) {
+    // Build row-aware boundary segments
+    // For each grid column boundary, track which row ranges have actual cell edges there
+    const columnCount = measure.columnWidths.length;
+    const rowCount = block.rows.length;
+
+    // boundarySegments[colIndex] = array of {fromRow, toRow, y, height} segments where this boundary exists
+    const boundarySegments: Array<Array<{ fromRow: number; toRow: number; y: number; height: number }>> = [];
+    for (let i = 0; i < columnCount; i++) {
+      boundarySegments.push([]);
+    }
+
+    // For each row, determine which grid columns have cell boundaries
+    // A boundary exists at column X if there's a cell that ENDS at column X (gridColumnStart + colSpan = X)
+    let rowY = 0;
+    for (let rowIndex = 0; rowIndex < rowCount; rowIndex++) {
+      const rowMeasure = measure.rows[rowIndex];
+      if (!rowMeasure) continue;
+
+      // Track which column boundaries exist in this row
+      const boundariesInRow = new Set<number>();
+
+      for (const cellMeasure of rowMeasure.cells) {
+        const startCol = cellMeasure.gridColumnStart ?? 0;
+        const colSpan = cellMeasure.colSpan ?? 1;
+        const endCol = startCol + colSpan;
+
+        // A cell creates boundaries at its start and end columns
+        // Start boundary (left edge of cell)
+        if (startCol > 0) {
+          boundariesInRow.add(startCol);
+        }
+        // End boundary (right edge of cell)
+        if (endCol < columnCount) {
+          boundariesInRow.add(endCol);
+        }
+      }
+
+      // For each boundary that exists in this row, extend or create a segment
+      for (const boundaryCol of boundariesInRow) {
+        const segments = boundarySegments[boundaryCol];
+        const lastSegment = segments[segments.length - 1];
+
+        // If the last segment ends at this row, extend it
+        if (lastSegment && lastSegment.toRow === rowIndex) {
+          lastSegment.toRow = rowIndex + 1;
+          lastSegment.height += rowMeasure.height;
+        } else {
+          // Start a new segment
+          segments.push({
+            fromRow: rowIndex,
+            toRow: rowIndex + 1,
+            y: rowY,
+            height: rowMeasure.height,
+          });
+        }
+      }
+
+      rowY += rowMeasure.height;
+    }
+
     const metadata = {
       columns: fragment.metadata.columnBoundaries.map((boundary) => ({
         i: boundary.index,
@@ -154,6 +215,14 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
         min: boundary.minWidth,
         r: boundary.resizable ? 1 : 0,
       })),
+      // Add segments for each column boundary (segments where resize handle should appear)
+      segments: boundarySegments.map((segs, colIndex) =>
+        segs.map((seg) => ({
+          c: colIndex, // column index
+          y: seg.y, // y position
+          h: seg.height, // height of segment
+        })),
+      ),
     };
 
     container.setAttribute('data-table-boundaries', JSON.stringify(metadata));
@@ -169,6 +238,9 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
     container.style.borderSpacing = `${block.attrs.cellSpacing}px`;
   }
 
+  // Pre-calculate all row heights for rowspan calculations
+  const allRowHeights: number[] = measure.rows.map((r) => r.height);
+
   let y = 0;
   for (let r = fragment.fromRow; r < fragment.toRow; r += 1) {
     const rowMeasure = measure.rows[r];
@@ -182,15 +254,13 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
       row: block.rows[r],
       totalRows: block.rows.length,
       tableBorders,
+      columnWidths: measure.columnWidths,
+      allRowHeights,
       context,
       renderLine,
       applySdtDataset,
     });
     y += rowMeasure.height;
-  }
-
-  if (borderOverlay) {
-    container.appendChild(borderOverlay);
   }
 
   return container;

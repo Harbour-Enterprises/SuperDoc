@@ -1267,6 +1267,88 @@ describe('measureBlock', () => {
       expect(Math.round(measure.height)).toBe(300);
       expect(measure.width).toBeCloseTo(150);
     });
+
+    describe('negative positioning bypass logic', () => {
+      it('bypasses maxHeight when anchored image has offsetV < 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-negative-offset',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+            offsetV: -24,
+          },
+        };
+
+        // maxHeight is 50, but bypass should allow full 100px height
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.width).toBe(200);
+        expect(measure.height).toBe(100);
+      });
+
+      it('bypasses maxHeight when anchored image has margin.top < 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-negative-margin',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+          },
+          margin: {
+            top: -24,
+          },
+        };
+
+        // maxHeight is 50, but bypass should allow full 100px height
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.width).toBe(200);
+        expect(measure.height).toBe(100);
+      });
+
+      it('does NOT bypass maxHeight when anchored image has offsetV === 0', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-zero-offset',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+        };
+
+        // maxHeight is 50, should scale down since no negative offset
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.height).toBe(50);
+        expect(measure.width).toBe(100);
+      });
+
+      it('does NOT bypass maxHeight when image is not anchored', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-not-anchored',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          anchor: {
+            isAnchored: false,
+          },
+          margin: {
+            top: -24,
+          },
+        };
+
+        // maxHeight is 50, should scale down since not anchored
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
+        expect(measure.height).toBe(50);
+        expect(measure.width).toBe(100);
+      });
+    });
   });
 
   describe('drawing measurement', () => {
@@ -1321,6 +1403,186 @@ describe('measureBlock', () => {
       const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 200 }));
       expect(measure.geometry.rotation).toBe(270);
     });
+
+    describe('negative positioning bypass logic', () => {
+      it('bypasses maxHeight when anchored drawing has offsetV < 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: -50,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height due to negative offsetV bypass
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('bypasses maxHeight when anchored drawing has margin.top < 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-margin',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+          margin: {
+            top: -30,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height due to negative margin.top bypass
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('does NOT bypass maxHeight when anchored drawing has offsetV === 0', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-zero-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 0,
+          },
+          margin: {
+            top: 0,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because offsetV and margin.top are both 0 (not negative)
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('does NOT bypass maxHeight when non-anchored drawing has negative margin', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-not-anchored',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: false,
+          },
+          margin: {
+            top: -30,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because drawing is not anchored
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('respects maxHeight when anchored drawing has positive offsets', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-positive-offset',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 10,
+          },
+          margin: {
+            top: 5,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should scale height because both offsetV and margin.top are positive
+        expect(measure.height).toBe(100);
+        expect(measure.width).toBe(50);
+        expect(measure.scale).toBe(0.5);
+      });
+
+      it('bypasses maxHeight when one of offsetV or margin.top is negative (OR condition)', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-mixed-offsets',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: 10,
+          },
+          margin: {
+            top: -20,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height because margin.top is negative (OR condition)
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+
+      it('bypasses maxHeight when offsetV is negative even with positive margin.top', async () => {
+        const block: DrawingBlock = {
+          kind: 'drawing',
+          id: 'drawing-negative-offsetV-positive-margin',
+          drawingKind: 'vectorShape',
+          geometry: {
+            width: 100,
+            height: 200,
+            rotation: 0,
+          },
+          anchor: {
+            isAnchored: true,
+            offsetV: -15,
+          },
+          margin: {
+            top: 25,
+          },
+        };
+
+        const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 100 }));
+        // Should NOT scale height because offsetV is negative (OR condition)
+        expect(measure.height).toBe(200);
+        expect(measure.width).toBe(100);
+        expect(measure.scale).toBe(1);
+      });
+    });
   });
 
   describe('table measurement with column widths', () => {
@@ -1334,6 +1596,13 @@ describe('measureBlock', () => {
             cells: [
               {
                 id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-0',
@@ -1342,6 +1611,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-1',
@@ -1350,6 +1626,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-2',
@@ -1380,6 +1663,13 @@ describe('measureBlock', () => {
             cells: [
               {
                 id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-0',
@@ -1388,6 +1678,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-1',
@@ -1420,6 +1717,13 @@ describe('measureBlock', () => {
             cells: [
               {
                 id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-0',
@@ -1428,6 +1732,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-1',
@@ -1436,6 +1747,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-2',
@@ -1467,6 +1785,13 @@ describe('measureBlock', () => {
             cells: [
               {
                 id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-0',
@@ -1475,6 +1800,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-1',
@@ -1483,6 +1815,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-2',
@@ -1516,6 +1855,13 @@ describe('measureBlock', () => {
             cells: [
               {
                 id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-0',
@@ -1524,6 +1870,13 @@ describe('measureBlock', () => {
               },
               {
                 id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
                 paragraph: {
                   kind: 'paragraph',
                   id: 'para-1',
@@ -1542,6 +1895,230 @@ describe('measureBlock', () => {
       if (measure.kind !== 'table') throw new Error('expected table measure');
       expect(measure.columnWidths).toHaveLength(2);
       expect(measure.columnWidths).toEqual([100, 150]);
+    });
+  });
+
+  describe('multi-paragraph cell support', () => {
+    it('measures cell with multiple paragraphs and accumulates height', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'multi-para-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'First paragraph', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Second paragraph', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'Third paragraph', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      expect(cellMeasure.blocks).toHaveLength(3);
+
+      // Each paragraph should be measured
+      expect(cellMeasure.blocks[0].kind).toBe('paragraph');
+      expect(cellMeasure.blocks[1].kind).toBe('paragraph');
+      expect(cellMeasure.blocks[2].kind).toBe('paragraph');
+
+      // Heights should accumulate (3 paragraphs + padding)
+      const para1Height = cellMeasure.blocks[0].totalHeight;
+      const para2Height = cellMeasure.blocks[1].totalHeight;
+      const para3Height = cellMeasure.blocks[2].totalHeight;
+      const totalContentHeight = para1Height + para2Height + para3Height;
+      const padding = 4; // Default top (2) + bottom (2)
+
+      expect(cellMeasure.height).toBe(totalContentHeight + padding);
+    });
+
+    it('measures cell with empty blocks array', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'empty-blocks-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [],
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      expect(cellMeasure.blocks).toHaveLength(0);
+
+      // Height should be just padding
+      const padding = 4; // Default top (2) + bottom (2)
+      expect(cellMeasure.height).toBe(padding);
+    });
+
+    it('maintains backward compatibility with legacy paragraph field', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'legacy-paragraph-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'Legacy paragraph', fontFamily: 'Arial', fontSize: 12 }],
+                  attrs: {},
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+
+      // Should have blocks array from paragraph fallback
+      expect(cellMeasure.blocks).toHaveLength(1);
+      expect(cellMeasure.blocks[0].kind).toBe('paragraph');
+
+      // Should also have paragraph field for backward compatibility
+      expect(cellMeasure.paragraph).toBeDefined();
+      expect(cellMeasure.paragraph?.kind).toBe('paragraph');
+    });
+
+    it('calculates height correctly including padding for multi-block cells', async () => {
+      const customPadding = { top: 10, bottom: 20, left: 5, right: 5 };
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'padding-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Paragraph with custom padding', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Second paragraph', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                ],
+                attrs: {
+                  padding: customPadding,
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      const para1Height = cellMeasure.blocks[0].totalHeight;
+      const para2Height = cellMeasure.blocks[1].totalHeight;
+      const totalContentHeight = para1Height + para2Height;
+      const expectedHeight = totalContentHeight + customPadding.top + customPadding.bottom;
+
+      expect(cellMeasure.height).toBe(expectedHeight);
+    });
+
+    it('handles cells with both blocks and paragraph fields (prefers blocks)', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'both-fields-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-in-blocks',
+                    runs: [{ text: 'From blocks array', fontFamily: 'Arial', fontSize: 12 }],
+                    attrs: {},
+                  },
+                ],
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-legacy',
+                  runs: [{ text: 'From paragraph field', fontFamily: 'Arial', fontSize: 12 }],
+                  attrs: {},
+                },
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+
+      // Should use blocks array (not paragraph field)
+      expect(cellMeasure.blocks).toHaveLength(1);
+      expect((cellMeasure.blocks[0] as any).lines?.[0]).toBeDefined();
     });
   });
 });

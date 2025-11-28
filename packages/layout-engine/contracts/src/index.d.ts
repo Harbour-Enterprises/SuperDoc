@@ -110,7 +110,43 @@ export type TabRun = {
   pmStart?: number;
   pmEnd?: number;
 };
-export type Run = TextRun | TabRun;
+
+/**
+ * An inline image that flows with text within a paragraph.
+ */
+export type ImageRun = {
+  kind: 'image';
+  /** Image source URL (data URI or external URL). */
+  src: string;
+  /** Image width in pixels. */
+  width: number;
+  /** Image height in pixels. */
+  height: number;
+  /** Alternative text for accessibility. */
+  alt?: string;
+  /** Image title (tooltip). */
+  title?: string;
+  /** Spacing above the image in pixels. */
+  distTop?: number;
+  /** Spacing below the image in pixels. */
+  distBottom?: number;
+  /** Spacing to the left of the image in pixels. */
+  distLeft?: number;
+  /** Spacing to the right of the image in pixels. */
+  distRight?: number;
+  /** Vertical alignment of image relative to text baseline. */
+  verticalAlign?: 'bottom';
+  /** Absolute ProseMirror position (inclusive) of this image run. */
+  pmStart?: number;
+  /** Absolute ProseMirror position (exclusive) of this image run. */
+  pmEnd?: number;
+  /** SDT metadata if this run is inside a structured document tag. */
+  sdt?: SdtMetadata;
+  /** Custom data attributes propagated from ProseMirror marks. */
+  dataAttrs?: Record<string, string>;
+};
+
+export type Run = TextRun | TabRun | ImageRun;
 /**
  * A logical block in the document flow (typically a paragraph).
  *
@@ -234,7 +270,10 @@ export type TableAttrs = {
 };
 export type TableCell = {
   id: BlockId;
-  paragraph: ParagraphBlock;
+  /** @deprecated Use `blocks` instead. Kept for backward compatibility. */
+  paragraph?: ParagraphBlock;
+  /** Cell content blocks - supports multiple paragraphs and other flow content */
+  blocks: FlowBlock[];
   rowSpan?: number;
   colSpan?: number;
   /** Cell-specific attributes */
@@ -619,9 +658,18 @@ export type ImageMeasure = {
   height: number;
 };
 export type TableCellMeasure = {
-  paragraph: ParagraphMeasure;
+  /** @deprecated Use `blocks` instead. Kept for backward compatibility. */
+  paragraph?: ParagraphMeasure;
+  /** Measured blocks within the cell */
+  blocks: Measure[];
   width: number;
   height: number;
+  /** Starting grid column index (0-based) */
+  gridColumnStart?: number;
+  /** Number of grid columns this cell spans */
+  colSpan?: number;
+  /** Number of rows this cell spans */
+  rowSpan?: number;
 };
 export type TableRowMeasure = {
   cells: TableCellMeasure[];

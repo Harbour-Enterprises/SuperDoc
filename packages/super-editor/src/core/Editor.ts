@@ -1186,7 +1186,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Attach styles and attributes to the editor element
    */
-  updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement, hasPaginationEnabled: boolean = true): void {
+  updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement): void {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
 
     if (!proseMirror || !element) {
@@ -1243,9 +1243,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
     // Always pad the body to the page top margin so the body baseline
     // starts at pageTop + topMargin (Word parity). Pagination decorations
     // will only reserve header overflow beyond this margin.
-    if (pageMargins?.top != null) {
+    if (this.presentationEditor && pageMargins?.top != null) {
       proseMirror.style.paddingTop = `${pageMargins.top}in`;
-    } else if (!hasPaginationEnabled) {
+    } else if (this.presentationEditor) {
       // Fallback for missing margins
       proseMirror.style.paddingTop = '1in';
     } else {
@@ -1263,12 +1263,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
    *
    * @param element - The DOM element to apply styles to
    */
-  initDefaultStyles(element: HTMLElement | null = this.element, isPaginationEnabled: boolean = true): void {
+  initDefaultStyles(element: HTMLElement | null = this.element): void {
     if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
     const proseMirror = element?.querySelector('.ProseMirror') as HTMLElement;
 
-    this.updateEditorStyles(element!, proseMirror, isPaginationEnabled);
+    this.updateEditorStyles(element!, proseMirror);
 
     this.initMobileStyles(element);
   }

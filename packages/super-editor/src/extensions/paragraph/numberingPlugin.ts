@@ -132,14 +132,14 @@ export function createNumberingPlugin(editor: Editor): Plugin {
               listLevel: path,
               lvlText: String(lvlText ?? ''),
               listNumberingType: String(listNumberingType),
-              customFormat: customFormat ?? undefined,
+              customFormat: (customFormat ?? null) as any,
             }),
           );
         } else {
           markerText = String(docxNumberingHelpers.normalizeLvlTextChar(String(lvlText ?? '•')));
         }
 
-        const safeSuffix = typeof suffix === 'string' ? suffix : undefined;
+        const safeSuffix = typeof suffix === 'string' ? suffix : null;
         const safeJustification: string = typeof justification === 'string' ? justification : '';
         const safeNumberingType: string = String(listNumberingType ?? '');
 

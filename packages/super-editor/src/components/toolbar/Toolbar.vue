@@ -56,7 +56,7 @@ const restoreSelection = () => {
 </script>
 
 <template>
-  <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar">
+  <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar" data-editor-ui-surface>
     <ButtonGroup
       tabindex="0"
       v-if="showLeftSide"

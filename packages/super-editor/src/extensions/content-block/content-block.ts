@@ -80,6 +80,8 @@ export const ContentBlock = Node.create({
         default: null,
         renderDOM: (attrs: {
           size?: { top?: number; left?: number; width?: number | string; height?: number | string } | null;
+          marginOffset?: { horizontal?: number; top?: number } | null;
+          originalAttributes?: { relativeHeight?: number } | null;
         }) => {
           const { size } = attrs;
           if (!size) return {};
@@ -92,6 +94,21 @@ export const ContentBlock = Node.create({
             const heightValue = size.height.toString().endsWith('%') ? size.height : `${size.height}px`;
             style += `height: ${heightValue}; `;
           }
+
+          // Apply positioning and z-index for anchored content blocks
+          if (attrs.marginOffset?.horizontal != null || attrs.marginOffset?.top != null) {
+            style += 'position: absolute; ';
+
+            // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+            const relativeHeight = attrs.originalAttributes?.relativeHeight;
+            if (relativeHeight != null) {
+              const zIndex = Math.floor(relativeHeight / 1000000);
+              style += `z-index: ${zIndex}; `;
+            } else {
+              style += 'z-index: 1; ';
+            }
+          }
+
           return { style };
         },
       },
@@ -111,6 +128,15 @@ export const ContentBlock = Node.create({
       },
 
       attributes: {
+        rendered: false,
+      },
+
+      originalAttributes: {
+        rendered: false,
+      },
+
+      marginOffset: {
+        default: null,
         rendered: false,
       },
     };

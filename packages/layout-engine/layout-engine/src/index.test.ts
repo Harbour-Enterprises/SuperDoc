@@ -1833,6 +1833,132 @@ describe('layoutHeaderFooter', () => {
     expect(layout.height).toBe(40);
     expect(layout.pages[0].fragments[0]).toMatchObject({ kind: 'image', height: 40 });
   });
+
+  it('transforms page-relative anchor offsets by subtracting left margin', () => {
+    // An anchored image with hRelativeFrom='page' and offsetH=545 (absolute from page left)
+    // When left margin is 107, the image should be positioned at 545-107=438 within the header
+    // Anchored images are attached to the nearest paragraph and placed during paragraph layout
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'page',
+        offsetH: 545,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 70,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 602, // content width
+      height: 100,
+      pageWidth: 816, // actual page width (8.5" at 96dpi)
+      margins: { left: 107, right: 107 },
+    });
+
+    expect(layout.pages).toHaveLength(1);
+    // Find the image fragment (should be anchored)
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // The offsetH should be transformed: 545 - 107 = 438
+    expect(imageFragment!.x).toBe(438);
+  });
+
+  it('does not transform anchor offset when margins not provided', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'page',
+        offsetH: 100,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    // No margins provided - should not transform (marginLeft defaults to 0)
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 400,
+      height: 60,
+    });
+
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // With no margin transform, offsetH stays at 100
+    expect(imageFragment!.x).toBe(100);
+  });
+
+  it('does not transform non-page-relative anchors', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        hRelativeFrom: 'margin',
+        offsetH: 50,
+        offsetV: 0,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 400,
+      height: 60,
+      margins: { left: 100, right: 100 },
+    });
+
+    const imageFragment = layout.pages[0].fragments.find((f) => f.kind === 'image');
+    expect(imageFragment).toBeDefined();
+    // margin-relative anchors should not be transformed - offsetH stays at 50
+    expect(imageFragment!.x).toBe(50);
+  });
 });
 
 describe('requirePageBoundary edge cases', () => {
@@ -2495,6 +2621,45 @@ describe('requirePageBoundary edge cases', () => {
       // columnWidth = 816, lineWidth = 10
       // right-aligned: x = 0 + (816 - 10) = 806
       expect(fragment.x).toBe(806);
+    });
+
+    it('positions wrap=none frame paragraphs as overlays without consuming flow in headers', () => {
+      const frameBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'page-num',
+        runs: [{ text: '1', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: { frame: { wrap: 'none', xAlign: 'right', y: 10 } },
+      };
+      const headerText: FlowBlock = {
+        kind: 'paragraph',
+        id: 'header-text',
+        runs: [{ text: 'Normal header text', fontFamily: 'Arial', fontSize: 12 }],
+      };
+
+      const frameMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 1, width: 8, ascent: 9, descent: 3, lineHeight: 12 }],
+        totalHeight: 12,
+      };
+      const headerMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 17, width: 100, ascent: 10, descent: 3, lineHeight: 14 }],
+        totalHeight: 14,
+      };
+
+      const layout = layoutHeaderFooter([frameBlock, headerText], [frameMeasure, headerMeasure], {
+        width: 200,
+        height: 60,
+      });
+
+      const pageFragments = layout.pages[0].fragments as ParaFragment[];
+      const pageNumFrag = pageFragments.find((f) => f.blockId === 'page-num')!;
+      const headerFrag = pageFragments.find((f) => f.blockId === 'header-text')!;
+
+      expect(pageNumFrag.x).toBeCloseTo(192);
+      expect(pageNumFrag.y).toBeCloseTo(10);
+      // Frame paragraph should not push following content down
+      expect(headerFrag.y).toBe(0);
     });
   });
 });

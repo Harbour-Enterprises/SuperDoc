@@ -244,9 +244,22 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
 
       extension: { rendered: false },
 
+      shouldStretch: {
+        default: false,
+        rendered: false,
+      },
+
       size: {
         default: {},
-        renderDOM: ({ size, extension }: { size?: ImageAttrs['size']; extension?: string }) => {
+        renderDOM: ({
+          size,
+          extension,
+          shouldStretch,
+        }: {
+          size?: ImageAttrs['size'];
+          extension?: string;
+          shouldStretch?: boolean;
+        }) => {
           let style = '';
           if (size && typeof size === 'object' && !Array.isArray(size)) {
             const width = 'width' in size ? size.width : undefined;
@@ -259,7 +272,9 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
               ['emf', 'wmf'].includes(extension)
             )
               style += `height: ${height}px; border: 1px solid black; position: absolute;`;
-            else if (height) style += 'height: auto;';
+            else if (height && typeof height === 'number' && shouldStretch) {
+              style += `height: ${height}px; object-fit: fill;`;
+            } else if (height) style += 'height: auto;';
           }
           return { style };
         },
@@ -356,7 +371,14 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
       switch (type) {
         case 'None':
           style += 'position: absolute;';
-          if (attrs.behindDoc) {
+          // Use relativeHeight from OOXML for proper z-ordering of overlapping elements
+          const relativeHeight = node.attrs.originalAttributes?.relativeHeight;
+          if (relativeHeight != null) {
+            // Scale down the relativeHeight value to a reasonable CSS z-index range
+            // OOXML uses large numbers (e.g., 251659318), we normalize to a smaller range
+            const zIndex = Math.floor(relativeHeight / 1000000);
+            style += `z-index: ${zIndex};`;
+          } else if (attrs.behindDoc) {
             style += 'z-index: -1;';
           } else {
             style += 'z-index: 1;';
@@ -506,6 +528,20 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
             if (!style.includes('float: left;')) {
               style += 'float: left;';
             }
+          } else if (!anchorData.alignH && marginOffset?.horizontal != null) {
+            // When positioned relative to column with a posOffset (not alignment),
+            // and the element is absolutely positioned (e.g., wrap type 'None'),
+            // we need to use 'left' positioning to allow negative offsets
+            // This handles cases like full-width images that extend into margins
+            const isAbsolutelyPositioned = style.includes('position: absolute;');
+            if (isAbsolutelyPositioned) {
+              // Don't apply horizontal offset via margins - will use 'left' instead
+              // Set a flag to apply the offset directly as 'left' property
+              style += `left: ${baseHorizontal}px;`;
+              // Override max-width: 100% to allow image to extend beyond container into margins
+              style += 'max-width: none;';
+              baseHorizontal = 0; // Reset to prevent double-application
+            }
           }
           break;
         default:
@@ -515,6 +551,7 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
 
     if (hasAnchorData || hasMarginOffsets) {
       const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
+      const relativeFromMarginV = anchorData?.vRelativeFrom === 'margin';
       const maxMarginV = 500;
       const baseTop = Math.max(0, marginOffset?.top ?? 0);
       // TODO: Images that go into the margin have negative offsets - often by high values.
@@ -542,7 +579,9 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
         }
       }
 
-      if (top) {
+      // Don't apply vertical offset as margin-top for images positioned relative to margin
+      // as this causes double-counting of the offset
+      if (top && !relativeFromMarginV) {
         if (relativeFromPageV && top >= maxMarginV) margin.top += maxMarginV;
         else margin.top += top;
       }

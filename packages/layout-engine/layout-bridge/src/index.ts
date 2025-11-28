@@ -19,8 +19,13 @@ export {
   resolveHeaderFooterForPage,
 } from './headerFooterUtils';
 export type { HeaderFooterIdentifier } from './headerFooterUtils';
-export { layoutHeaderFooterWithCache, type HeaderFooterBatchResult } from './layoutHeaderFooter';
-export type { HeaderFooterBatch } from './layoutHeaderFooter';
+export {
+  layoutHeaderFooterWithCache,
+  type HeaderFooterBatchResult,
+  getBucketForPageNumber,
+  getBucketRepresentative,
+} from './layoutHeaderFooter';
+export type { HeaderFooterBatch, DigitBucket } from './layoutHeaderFooter';
 export { findWordBoundaries, findParagraphBoundaries } from './text-boundaries';
 export type { BoundaryRange } from './text-boundaries';
 export { incrementalLayout, measureCache } from './incrementalLayout';
@@ -551,7 +556,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.text ?? '';
+    const text = run.kind === 'image' ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -671,6 +676,12 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
     if (!run) continue;
 
     if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // FIXED: ImageRun handling - images are atomic units, no slicing needed
+    if (run.kind === 'image') {
       result.push(run);
       continue;
     }

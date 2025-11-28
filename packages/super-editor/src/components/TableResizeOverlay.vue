@@ -1,19 +1,21 @@
 <template>
   <div v-if="visible && tableMetadata" class="superdoc-table-resize-overlay" :style="overlayStyle" @mousedown.stop>
-    <!-- Resize handles for each column boundary -->
-    <div
-      v-for="(boundary, index) in resizableBoundaries"
-      :key="`handle-${boundary.type}-${boundary.index}`"
-      class="resize-handle"
-      :class="{
-        'resize-handle--active': dragState && dragState.boundaryIndex === index,
-        'resize-handle--edge': boundary.type === 'right-edge',
-      }"
-      :data-boundary-index="index"
-      :data-boundary-type="boundary.type"
-      :style="getHandleStyle(boundary)"
-      @mousedown="onHandleMouseDown($event, index)"
-    ></div>
+    <!-- Resize handles for each column boundary segment -->
+    <template v-for="(boundary, boundaryIndex) in resizableBoundaries" :key="`boundary-${boundaryIndex}`">
+      <div
+        v-for="(segment, segmentIndex) in getBoundarySegments(boundary)"
+        :key="`handle-${boundary.type}-${boundary.index}-${segmentIndex}`"
+        class="resize-handle"
+        :class="{
+          'resize-handle--active': dragState && dragState.boundaryIndex === boundaryIndex,
+          'resize-handle--edge': boundary.type === 'right-edge',
+        }"
+        :data-boundary-index="boundaryIndex"
+        :data-boundary-type="boundary.type"
+        :style="getSegmentHandleStyle(boundary, segment)"
+        @mousedown="onHandleMouseDown($event, boundaryIndex)"
+      ></div>
+    </template>
 
     <!-- Visual guideline during drag -->
     <div v-if="dragState" class="resize-guideline" :style="guidelineStyle"></div>
@@ -189,7 +191,121 @@ const resizableBoundaries = computed(() => {
 });
 
 /**
- * Get style for a resize handle
+ * Retrieves vertical segments for a column boundary where resize handles should appear.
+ *
+ * Segments define the vertical ranges where a column boundary is visible and resizable,
+ * accounting for merged cells that span multiple rows. A boundary at column index N
+ * exists only where cells end at that column position.
+ *
+ * **Segment Structure:**
+ * Each segment has:
+ * - `y`: Vertical position in pixels from table top
+ * - `h`: Height in pixels, or `null` for full-height (100%)
+ *
+ * **Right Edge Handling:**
+ * Right-edge boundaries always span full height since they represent the table's
+ * outer edge.
+ *
+ * **Merged Cell Handling:**
+ * When cells span multiple columns, some boundaries don't exist at certain rows.
+ * For example, if row 0 has a cell spanning columns 0-2, there's no boundary at
+ * column 1 for that row.
+ *
+ * @param {{index: number, type: string, ...rest: unknown}} boundary - Column boundary data with index and type properties
+ * @returns {Array<{y: number, h: number | null}>} Array of vertical segments where handles should render, or empty array if boundary is fully covered by merged cells
+ *
+ * @example
+ * ```typescript
+ * // Right edge boundary - always full height
+ * getBoundarySegments({ index: 2, type: 'right-edge' })
+ * // Returns: [{ y: 0, h: null }]
+ *
+ * // Inner boundary with segments at specific rows
+ * getBoundarySegments({ index: 1, type: 'inner' })
+ * // Returns: [{ y: 0, h: 50 }, { y: 100, h: 25 }]
+ *
+ * // Boundary completely covered by merged cells
+ * getBoundarySegments({ index: 1, type: 'inner' })
+ * // Returns: []
+ * ```
+ */
+function getBoundarySegments(boundary) {
+  // For right-edge, always show full height
+  if (boundary.type === 'right-edge') {
+    return [{ y: 0, h: null }]; // null height means 100%
+  }
+
+  // Get segments for this boundary column from metadata
+  // The boundary at index N is between columns N and N+1
+  // So we look up segments for column index N+1 (the right edge of column N)
+  const segmentsData = tableMetadata.value?.segments;
+  if (!segmentsData || !Array.isArray(segmentsData)) {
+    // Fallback to full-height if no segments data
+    return [{ y: 0, h: null }];
+  }
+
+  // boundary.index is the column index, the boundary is at boundary.index + 1
+  const boundaryColIndex = boundary.index + 1;
+  const colSegments = segmentsData[boundaryColIndex];
+
+  if (!colSegments || colSegments.length === 0) {
+    // No segments for this boundary - it's completely inside merged cells
+    // Return empty array to hide handle entirely for this boundary
+    return [];
+  }
+
+  return colSegments.map((seg) => ({
+    y: seg.y,
+    h: seg.h,
+  }));
+}
+
+/**
+ * Generates CSS styles for positioning a resize handle segment.
+ *
+ * Creates an absolutely-positioned element at the specified column boundary,
+ * with vertical positioning and height determined by the segment. The handle
+ * is offset horizontally to center it on the boundary line.
+ *
+ * **Positioning Logic:**
+ * - Horizontal: Positioned at `boundary.x` with -4px transform to center the 9px-wide handle
+ * - Vertical: Uses `segment.y` for top position, or 0 if null
+ * - Height: Uses `segment.h` for pixel height, or '100%' if null
+ *
+ * **Interaction:**
+ * - Cursor is set to 'col-resize' for visual feedback
+ * - Pointer events enabled to capture mouse interactions
+ *
+ * @param {{x: number, index: number, ...rest: unknown}} boundary - Column boundary data containing x position
+ * @param {{y: number | null, h: number | null}} segment - Segment position (y) and height (h), null values use defaults
+ * @returns {Record<string, string>} CSS style object for the handle element
+ *
+ * @example
+ * ```typescript
+ * // Full-height handle at x=100
+ * getSegmentHandleStyle({ x: 100, index: 0 }, { y: null, h: null })
+ * // Returns: { position: 'absolute', left: '100px', top: '0', width: '9px', height: '100%', ... }
+ *
+ * // Segment handle from y=50 with height 75px
+ * getSegmentHandleStyle({ x: 200, index: 1 }, { y: 50, h: 75 })
+ * // Returns: { position: 'absolute', left: '200px', top: '50px', width: '9px', height: '75px', ... }
+ * ```
+ */
+function getSegmentHandleStyle(boundary, segment) {
+  return {
+    position: 'absolute',
+    left: `${boundary.x}px`,
+    top: segment.y != null ? `${segment.y}px` : '0',
+    width: '9px',
+    height: segment.h != null ? `${segment.h}px` : '100%',
+    transform: 'translateX(-4px)',
+    cursor: 'col-resize',
+    pointerEvents: 'auto',
+  };
+}
+
+/**
+ * Get style for a resize handle (full height - kept for backwards compatibility)
  * @param {{x: number, index: number}} boundary - Column boundary data
  * @returns {Object} Style object
  */
@@ -284,7 +400,12 @@ function parseTableMetadata() {
       return;
     }
 
-    tableMetadata.value = { columns: validatedColumns };
+    // Extract segments if present (for merged cell support)
+    // segments[colIndex] contains segment data for that column boundary
+    // Each segment has {c: columnIndex, y: yPosition, h: height}
+    const segments = Array.isArray(parsed.segments) ? parsed.segments : undefined;
+
+    tableMetadata.value = { columns: validatedColumns, segments };
   } catch (error) {
     tableMetadata.value = null;
     emit('resize-error', {
@@ -542,7 +663,7 @@ function dispatchResizeTransaction(columnIndex, newWidths) {
 
     // Invalidate the measure cache for this table to force re-measurement with new widths
     const blockId = props.tableElement?.getAttribute('data-sd-block-id');
-    if (blockId) {
+    if (blockId && blockId.trim()) {
       measureCache.invalidate([blockId]);
     }
 

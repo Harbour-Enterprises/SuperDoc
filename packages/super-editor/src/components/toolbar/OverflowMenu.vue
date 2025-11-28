@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { getCurrentInstance, ref, computed } from 'vue';
+import { getCurrentInstance, ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import ButtonGroup from './ButtonGroup.vue';
 
 const { proxy } = getCurrentInstance();
 
-const emit = defineEmits(['buttonClick']);
+const emit = defineEmits(['buttonClick', 'close']);
 
 const props = defineProps({
   toolbarItem: {
@@ -18,11 +18,12 @@ const props = defineProps({
   },
 });
 
-const isDropdownOpened = computed(() => props.toolbarItem.expand.value);
+const isOverflowMenuOpened = computed(() => props.toolbarItem.expand.value);
+const hasOpenDropdown = ref(false);
 
 const overflowToolbarItem = computed(() => ({
   ...props.toolbarItem,
-  active: isDropdownOpened.value,
+  active: isOverflowMenuOpened.value,
 }));
 
 const toggleOverflowMenu = () => {
@@ -32,6 +33,23 @@ const toggleOverflowMenu = () => {
 const handleCommand = ({ item, argument }) => {
   proxy.$toolbar.emitCommand({ item, argument });
 };
+
+const handleKeyDown = (e) => {
+  if (e.key === 'Escape') {
+    if (isOverflowMenuOpened.value && !hasOpenDropdown.value) {
+      e.preventDefault();
+      emit('close');
+    }
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('keydown', handleKeyDown, true);
+});
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', handleKeyDown, true);
+});
 </script>
 
 <template>
@@ -39,12 +57,13 @@ const handleCommand = ({ item, argument }) => {
     <div class="overflow-menu-trigger">
       <ToolbarButton :toolbar-item="overflowToolbarItem" @buttonClick="toggleOverflowMenu" />
     </div>
-    <div v-if="isDropdownOpened" class="overflow-menu_items" role="group">
+    <div v-if="isOverflowMenuOpened" class="overflow-menu_items" role="group">
       <ButtonGroup
         class="superdoc-toolbar-overflow"
         :toolbar-items="overflowItems"
         from-overflow
         @command="handleCommand"
+        @dropdown-update-show="hasOpenDropdown = $event"
       />
     </div>
   </div>

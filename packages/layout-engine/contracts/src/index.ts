@@ -180,7 +180,69 @@ export type TabRun = {
   pmEnd?: number;
 };
 
-export type Run = TextRun | TabRun;
+/**
+ * Inline image run for images that flow with text on the same line.
+ * Unlike ImageBlock (anchored/floating images), ImageRun is part of the paragraph's run array
+ * and participates in line breaking alongside text.
+ *
+ * Corresponds to Microsoft Word's inline images (<wp:inline> in DOCX).
+ *
+ * @example
+ * // A paragraph with text and inline image:
+ * {
+ *   kind: 'paragraph',
+ *   runs: [
+ *     { kind: 'text', text: 'Here is an image: ', ... },
+ *     { kind: 'image', src: 'data:...', width: 100, height: 50, ... },
+ *     { kind: 'text', text: ' within text.', ... }
+ *   ]
+ * }
+ */
+export type ImageRun = {
+  kind: 'image';
+  /** Image source URL (data URI or external URL). */
+  src: string;
+  /** Image width in pixels. */
+  width: number;
+  /** Image height in pixels. */
+  height: number;
+  /** Alternative text for accessibility. */
+  alt?: string;
+  /** Image title (tooltip). */
+  title?: string;
+
+  /**
+   * Spacing around the image (from DOCX distT/distB/distL/distR attributes).
+   * Applied as CSS margins in the DOM painter.
+   * All values in pixels.
+   */
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
+
+  /**
+   * Vertical alignment of image relative to text baseline.
+   * Currently only 'bottom' is supported (image sits on baseline).
+   * Future: 'top', 'middle', 'baseline', 'text-top', 'text-bottom'.
+   */
+  verticalAlign?: 'bottom';
+
+  /** Absolute ProseMirror position (inclusive) of this image run. */
+  pmStart?: number;
+  /** Absolute ProseMirror position (exclusive) after this image run. */
+  pmEnd?: number;
+
+  /** SDT metadata if image is wrapped in a structured document tag. */
+  sdt?: SdtMetadata;
+
+  /**
+   * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
+   */
+  dataAttrs?: Record<string, string>;
+};
+
+export type Run = TextRun | TabRun | ImageRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
@@ -256,7 +318,10 @@ export type TableAttrs = {
 
 export type TableCell = {
   id: BlockId;
-  paragraph: ParagraphBlock;
+  /** Multi-block cell content (new feature) */
+  blocks?: (ParagraphBlock | ImageBlock | DrawingBlock)[];
+  /** Single paragraph (backward compatibility) */
+  paragraph?: ParagraphBlock;
   rowSpan?: number;
   colSpan?: number;
   attrs?: TableCellAttrs;
@@ -342,10 +407,86 @@ export type PositionedDrawingGeometry = DrawingGeometry & {
   y?: number;
 };
 
+/** Gradient stop for gradient fills. Defines a color at a specific position along the gradient. */
+export type GradientStop = {
+  /** Position along the gradient (0-1 range, where 0 is start and 1 is end). */
+  position: number;
+  /** Hex color code (e.g., "#FF0000"). */
+  color: string;
+  /** Optional alpha/opacity value (0-1 range). */
+  alpha?: number;
+};
+
+/** Gradient fill configuration for linear or radial gradients. */
+export type GradientFill = {
+  type: 'gradient';
+  /** Type of gradient: linear (directional) or radial (circular). */
+  gradientType: 'linear' | 'radial';
+  /** Array of color stops defining the gradient. */
+  stops: GradientStop[];
+  /** Angle in degrees for linear gradients (0 = left to right, 90 = bottom to top). */
+  angle: number;
+  /** Path descriptor for radial gradients (e.g., 'circle'). */
+  path?: string;
+};
+
+/** Solid fill with alpha transparency. */
+export type SolidFillWithAlpha = {
+  type: 'solidWithAlpha';
+  /** Hex color code. */
+  color: string;
+  /** Alpha/opacity value (0-1 range, where 0 is fully transparent and 1 is fully opaque). */
+  alpha: number;
+};
+
+/**
+ * Fill color for shapes. Can be:
+ * - string: Simple hex color (e.g., "#FF0000") for backward compatibility
+ * - GradientFill: Linear or radial gradient
+ * - SolidFillWithAlpha: Solid color with transparency
+ * - null: No fill
+ */
+export type FillColor = string | GradientFill | SolidFillWithAlpha | null;
+
+/**
+ * Stroke color for shapes. Can be:
+ * - string: Hex color (e.g., "#000000")
+ * - null: Explicitly no border/stroke
+ */
+export type StrokeColor = string | null;
+
+/** Text formatting options for shape text content. */
+export type TextFormatting = {
+  bold?: boolean;
+  italic?: boolean;
+  color?: string;
+  fontSize?: number;
+};
+
+/** A single text part with optional formatting. */
+export type TextPart = {
+  text: string;
+  formatting?: TextFormatting;
+  /** Indicates this part represents a line break between paragraphs. */
+  isLineBreak?: boolean;
+  /** Indicates this line break follows an empty paragraph (creates extra spacing). */
+  isEmptyParagraph?: boolean;
+};
+
+/** Text content configuration for shapes. */
+export type ShapeTextContent = {
+  /** Array of text parts with individual formatting. */
+  parts: TextPart[];
+  /** Horizontal text alignment within the shape. */
+  horizontalAlign?: 'left' | 'center' | 'right';
+};
+
 export type VectorShapeStyle = {
-  fillColor?: string;
-  strokeColor?: string;
+  fillColor?: FillColor;
+  strokeColor?: StrokeColor;
   strokeWidth?: number;
+  textContent?: ShapeTextContent;
+  textAlign?: string;
 };
 
 export type ShapeGroupTransform = {
@@ -376,6 +517,8 @@ export type ShapeGroupImageChild = {
   attrs: PositionedDrawingGeometry & {
     src: string;
     alt?: string;
+    imageId?: string;
+    imageName?: string;
   };
 };
 
@@ -404,9 +547,18 @@ export type VectorShapeDrawing = DrawingBlockBase & {
   drawingKind: 'vectorShape';
   geometry: DrawingGeometry;
   shapeKind?: string;
-  fillColor?: string;
-  strokeColor?: string;
+  fillColor?: FillColor;
+  strokeColor?: StrokeColor;
   strokeWidth?: number;
+  textContent?: ShapeTextContent;
+  textAlign?: string;
+  textVerticalAlign?: 'top' | 'center' | 'bottom';
+  textInsets?: {
+    top: number;
+    right: number;
+    bottom: number;
+    left: number;
+  };
 };
 
 export type ShapeGroupDrawing = DrawingBlockBase & {
@@ -591,6 +743,9 @@ export type ParagraphAttrs = {
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
+  /** Drop cap flag from w:framePr/@w:dropCap. */
+  dropCap?: string | number | boolean;
+  frame?: ParagraphFrame;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
   shading?: ParagraphShading;
@@ -612,6 +767,16 @@ export type ParagraphAttrs = {
   sdt?: SdtMetadata;
   /** Container SDT for blocks with both primary and container metadata. */
   containerSdt?: SdtMetadata;
+};
+
+export type ParagraphFrame = {
+  wrap?: string;
+  x?: number;
+  y?: number;
+  xAlign?: 'left' | 'right' | 'center';
+  yAlign?: 'top' | 'center' | 'bottom';
+  hAnchor?: string;
+  vAnchor?: string;
 };
 
 export type ListMarker = {
@@ -719,9 +884,18 @@ export type DrawingMeasure = {
 };
 
 export type TableCellMeasure = {
-  paragraph: ParagraphMeasure;
+  /** Multi-block cell measurements (new feature) */
+  blocks?: Measure[];
+  /** Single paragraph measure (backward compatibility) */
+  paragraph?: ParagraphMeasure;
   width: number;
   height: number;
+  /** Starting grid column index (0-based) */
+  gridColumnStart?: number;
+  /** Number of grid columns this cell spans */
+  colSpan?: number;
+  /** Number of rows this cell spans */
+  rowSpan?: number;
 };
 
 export type TableRowMeasure = {
@@ -823,6 +997,16 @@ export type TableFragmentMetadata = {
   coordinateSystem: 'fragment';
 };
 
+export type ImageFragmentMetadata = {
+  originalWidth: number;
+  originalHeight: number;
+  maxWidth: number;
+  maxHeight: number;
+  aspectRatio: number;
+  minWidth: number;
+  minHeight: number;
+};
+
 export type TableFragment = {
   kind: 'table';
   blockId: BlockId;
@@ -848,6 +1032,7 @@ export type ImageFragment = {
   zIndex?: number;
   pmStart?: number;
   pmEnd?: number;
+  metadata?: ImageFragmentMetadata;
 };
 
 export type DrawingFragment = {

@@ -2,8 +2,8 @@ name: 📦 Release [auto]
 
 on:
   push:
+    # main temporarily disabled to pause beta prerelease publishing
     branches:
-      - main
       - stable
       - "*.x" # Maintenance branches
     paths:

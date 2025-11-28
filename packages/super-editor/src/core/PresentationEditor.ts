@@ -1,4 +1,4 @@
-import { TextSelection } from 'prosemirror-state';
+import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -11,6 +11,8 @@ import {
   measureCharacterX,
   extractIdentifierFromConverter,
   getHeaderFooterType,
+  getBucketForPageNumber,
+  getBucketRepresentative,
 } from '@superdoc/layout-bridge';
 import type { HeaderFooterIdentifier, HeaderFooterLayoutResult, PositionHit } from '@superdoc/layout-bridge';
 import { createDomPainter } from '@superdoc/painter-dom';
@@ -26,6 +28,7 @@ import type {
   Line,
   TrackedChangesMode,
   ParaFragment,
+  Fragment,
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
@@ -37,6 +40,7 @@ import {
   HeaderFooterLayoutAdapter,
   type HeaderFooterDescriptor,
 } from './header-footer/HeaderFooterRegistry.js';
+import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
 
 export type PageSize = {
   w: number;
@@ -392,6 +396,7 @@ export class PresentationEditor extends EventEmitter {
   #clickCount = 0;
   #lastClickTime = 0;
   #lastClickPosition: { x: number; y: number } = { x: 0, y: 0 };
+  #lastSelectedImageBlockId: string | null = null;
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -2127,9 +2132,12 @@ export class PresentationEditor extends EventEmitter {
     const converter = (this.#editor as Editor & { converter?: unknown }).converter;
     this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
     this.#headerFooterManager = new HeaderFooterEditorManager(this.#editor);
-    const mediaFiles =
-      (this.#options as { mediaFiles?: Record<string, unknown> })?.mediaFiles ??
-      (this.#editor as Editor & { storage?: { image?: { media?: Record<string, unknown> } } }).storage?.image?.media;
+
+    const optionsMedia = (this.#options as { mediaFiles?: Record<string, unknown> })?.mediaFiles;
+    const storageMedia = (this.#editor as Editor & { storage?: { image?: { media?: Record<string, unknown> } } })
+      .storage?.image?.media;
+    const mediaFiles = optionsMedia ?? storageMedia;
+
     this.#headerFooterAdapter = new HeaderFooterLayoutAdapter(
       this.#headerFooterManager,
       mediaFiles as Record<string, string> | undefined,
@@ -2267,6 +2275,67 @@ export class PresentationEditor extends EventEmitter {
       }
       return;
     }
+
+    // Check if click landed on an atomic fragment (image, drawing)
+    const fragmentHit = getFragmentAtPosition(
+      this.#layoutState.layout,
+      this.#layoutState.blocks,
+      this.#layoutState.measures,
+      hit.pos,
+    );
+
+    // If clicked on an atomic fragment (image or drawing), create NodeSelection
+    if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
+      const doc = this.#editor.state.doc;
+      try {
+        // Create NodeSelection for atomic node at hit position
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, hit.pos));
+        this.#editor.view?.dispatch(tr);
+
+        // Emit imageDeselected if previous selection was a different image
+        if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+        }
+
+        // Emit imageSelected event for overlay to detect
+        if (fragmentHit.fragment.kind === 'image') {
+          const targetElement = this.#viewportHost.querySelector(
+            `.superdoc-image-fragment[data-pm-start="${fragmentHit.fragment.pmStart}"]`,
+          );
+          if (targetElement) {
+            this.emit('imageSelected', {
+              element: targetElement,
+              blockId: fragmentHit.fragment.blockId,
+              pmStart: fragmentHit.fragment.pmStart,
+            });
+            this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
+          }
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to create NodeSelection for atomic fragment:', error);
+        }
+      }
+
+      // Focus editor and schedule selection update
+      this.#scheduleSelectionUpdate();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        editorDom.focus();
+        this.#editor.view?.focus();
+      }
+      return;
+    }
+
+    // If clicking away from an image, emit imageDeselected
+    if (this.#lastSelectedImageBlockId) {
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+      this.#lastSelectedImageBlockId = null;
+    }
+
     const clickDepth = this.#registerPointerClick(event);
     let handledByDepth = false;
     if (this.#session.mode === 'body') {
@@ -2931,7 +3000,9 @@ export class PresentationEditor extends EventEmitter {
   #computeHeaderFooterConstraints() {
     const pageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-    const width = pageSize.w - ((margins.left ?? DEFAULT_MARGINS.left!) + (margins.right ?? DEFAULT_MARGINS.right!));
+    const marginLeft = margins.left ?? DEFAULT_MARGINS.left!;
+    const marginRight = margins.right ?? DEFAULT_MARGINS.right!;
+    const width = pageSize.w - (marginLeft + marginRight);
     if (!Number.isFinite(width) || width <= 0) {
       return null;
     }
@@ -2940,6 +3011,9 @@ export class PresentationEditor extends EventEmitter {
     return {
       width,
       height,
+      // Pass actual page dimensions for page-relative anchor positioning in headers/footers
+      pageWidth: pageSize.w,
+      margins: { left: marginLeft, right: marginRight },
     };
   }
 
@@ -2966,11 +3040,12 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      const slotPage =
-        variant.layout.pages.find((candidate: Page) => candidate.number === pageNumber) ?? variant.layout.pages[0];
+      // Find the best page slot for this page number (exact match, then bucket representative)
+      const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
       if (!slotPage) {
         return null;
       }
+      const fragments = slotPage.fragments ?? [];
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
@@ -2983,7 +3058,7 @@ export class PresentationEditor extends EventEmitter {
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
-        fragments: slotPage.fragments,
+        fragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -3005,6 +3080,50 @@ export class PresentationEditor extends EventEmitter {
         },
       };
     };
+  }
+
+  /**
+   * Finds the header/footer page layout for a given page number with bucket fallback.
+   *
+   * Lookup strategy:
+   * 1. Try exact match first (find page with matching number)
+   * 2. If bucketing is used, fall back to the bucket's representative page
+   * 3. Finally, fall back to the first available page
+   *
+   * Digit buckets (for large documents):
+   * - d1: pages 1-9 → representative page 5
+   * - d2: pages 10-99 → representative page 50
+   * - d3: pages 100-999 → representative page 500
+   * - d4: pages 1000+ → representative page 5000
+   *
+   * @param pages - Array of header/footer layout pages from the variant
+   * @param pageNumber - Physical page number to find layout for (1-indexed)
+   * @returns Header/footer page layout, or undefined if no suitable page found
+   */
+  #findHeaderFooterPageForPageNumber(
+    pages: Array<{ number: number; fragments: Fragment[] }>,
+    pageNumber: number,
+  ): { number: number; fragments: Fragment[] } | undefined {
+    if (!pages || pages.length === 0) {
+      return undefined;
+    }
+
+    // 1. Try exact match first
+    const exactMatch = pages.find((p) => p.number === pageNumber);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    // 2. If bucketing is used, find the representative for this page's bucket
+    const bucket = getBucketForPageNumber(pageNumber);
+    const representative = getBucketRepresentative(bucket);
+    const bucketMatch = pages.find((p) => p.number === representative);
+    if (bucketMatch) {
+      return bucketMatch;
+    }
+
+    // 3. Final fallback: return the first available page
+    return pages[0];
   }
 
   #computeDecorationBox(kind: 'header' | 'footer', pageMargins?: PageMargins, pageHeight?: number) {
@@ -3813,54 +3932,59 @@ export class PresentationEditor extends EventEmitter {
 
 class PresentationInputBridge {
   #windowRoot: Window;
-  #visibleHost: HTMLElement;
+  #layoutSurfaces: Set<EventTarget>;
   #getTargetDom: () => HTMLElement | null;
   #onTargetChanged?: (target: HTMLElement | null) => void;
-  #listeners: Array<{ type: string; handler: EventListener; target: EventTarget }>;
+  #listeners: Array<{ type: string; handler: EventListener; target: EventTarget; useCapture: boolean }>;
   #currentTarget: HTMLElement | null = null;
   #destroyed = false;
+  #useWindowFallback: boolean;
 
   constructor(
     windowRoot: Window,
-    visibleHost: HTMLElement,
+    layoutSurface: HTMLElement,
     getTargetDom: () => HTMLElement | null,
     onTargetChanged?: (target: HTMLElement | null) => void,
+    options?: { useWindowFallback?: boolean },
   ) {
     this.#windowRoot = windowRoot;
-    this.#visibleHost = visibleHost;
+    this.#layoutSurfaces = new Set<EventTarget>([layoutSurface]);
     this.#getTargetDom = getTargetDom;
     this.#onTargetChanged = onTargetChanged;
     this.#listeners = [];
+    this.#useWindowFallback = options?.useWindowFallback ?? false;
   }
 
   bind() {
-    // Keyboard events bubble to window - listen there so we always capture shortcuts even when focus drifts.
-    this.#addListener('keydown', this.#forwardKeyboardEvent, this.#windowRoot);
-    this.#addListener('keypress', this.#forwardKeyboardEvent, this.#windowRoot);
-    this.#addListener('keyup', this.#forwardKeyboardEvent, this.#windowRoot);
+    const keyboardTargets = this.#getListenerTargets();
+    keyboardTargets.forEach((target) => {
+      this.#addListener('keydown', this.#forwardKeyboardEvent, target);
+      this.#addListener('keyup', this.#forwardKeyboardEvent, target);
+    });
 
-    // Composition events (IME) also bubble to window.
-    this.#addListener('compositionstart', this.#forwardCompositionEvent, this.#windowRoot);
-    this.#addListener('compositionupdate', this.#forwardCompositionEvent, this.#windowRoot);
-    this.#addListener('compositionend', this.#forwardCompositionEvent, this.#windowRoot);
+    const compositionTargets = this.#getListenerTargets();
+    compositionTargets.forEach((target) => {
+      this.#addListener('compositionstart', this.#forwardCompositionEvent, target);
+      this.#addListener('compositionupdate', this.#forwardCompositionEvent, target);
+      this.#addListener('compositionend', this.#forwardCompositionEvent, target);
+    });
 
-    // Context menu events bubble to window.
-    this.#addListener('contextmenu', this.#forwardContextMenu, this.#windowRoot);
+    const textTargets = this.#getListenerTargets();
+    textTargets.forEach((target) => {
+      this.#addListener('beforeinput', this.#forwardTextEvent, target);
+      this.#addListener('input', this.#forwardTextEvent, target);
+      this.#addListener('textInput', this.#forwardTextEvent, target);
+    });
 
-    // BeforeInput/input/textInput events only fire on whatever element currently owns focus.
-    // Capture them on both the visible host (layout container) and window so we can remap to
-    // the hidden editor regardless of where the browser delivered the event.
-    this.#addListener('beforeinput', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('input', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('textInput', this.#forwardTextEvent, this.#visibleHost);
-    this.#addListener('beforeinput', this.#forwardTextEvent, this.#windowRoot);
-    this.#addListener('input', this.#forwardTextEvent, this.#windowRoot);
-    this.#addListener('textInput', this.#forwardTextEvent, this.#windowRoot);
+    const contextTargets = this.#getListenerTargets();
+    contextTargets.forEach((target) => {
+      this.#addListener('contextmenu', this.#forwardContextMenu, target);
+    });
   }
 
   destroy() {
-    this.#listeners.forEach(({ type, handler, target }) => {
-      target.removeEventListener(type, handler, true);
+    this.#listeners.forEach(({ type, handler, target, useCapture }) => {
+      target.removeEventListener(type, handler, useCapture);
     });
     this.#listeners = [];
     this.#currentTarget = null;
@@ -3899,10 +4023,10 @@ class PresentationInputBridge {
     this.#onTargetChanged?.(nextTarget ?? null);
   }
 
-  #addListener<T extends Event>(type: string, handler: (event: T) => void, target: EventTarget) {
+  #addListener<T extends Event>(type: string, handler: (event: T) => void, target: EventTarget, useCapture = false) {
     const bound = handler.bind(this) as EventListener;
-    this.#listeners.push({ type, handler: bound, target });
-    target.addEventListener(type, bound, true);
+    this.#listeners.push({ type, handler: bound, target, useCapture });
+    target.addEventListener(type, bound, useCapture);
   }
 
   #dispatchToTarget(originalEvent: Event, synthetic: Event) {
@@ -3924,11 +4048,28 @@ class PresentationInputBridge {
     }
   }
 
+  /**
+   * Forwards keyboard events to the hidden editor, skipping IME composition events
+   * and plain character keys (which are handled by beforeinput instead).
+   * Uses microtask deferral to allow other handlers to preventDefault first.
+   *
+   * @param event - The keyboard event from the layout surface
+   */
   #forwardKeyboardEvent(event: KeyboardEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
+      return;
+    }
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
+    if (this.#isPlainCharacterKey(event)) {
       return;
     }
 
+    // Dispatch synchronously so browser defaults can still be prevented
     const synthetic = new KeyboardEvent(event.type, {
       key: event.key,
       code: event.code,
@@ -3944,29 +4085,57 @@ class PresentationInputBridge {
     this.#dispatchToTarget(event, synthetic);
   }
 
+  /**
+   * Forwards text input events (beforeinput) to the hidden editor.
+   * Skips composition events and uses microtask deferral for cooperative handling.
+   *
+   * @param event - The input event from the layout surface
+   */
   #forwardTextEvent(event: InputEvent | TextEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
+      return;
+    }
+    if ((event as InputEvent).isComposing) {
       return;
     }
 
-    let synthetic: Event;
-    if (typeof InputEvent !== 'undefined') {
-      synthetic = new InputEvent(event.type, {
-        data: (event as InputEvent).data ?? (event as TextEvent).data ?? null,
-        inputType: (event as InputEvent).inputType ?? 'insertText',
-        dataTransfer: (event as InputEvent).dataTransfer ?? null,
-        isComposing: (event as InputEvent).isComposing ?? false,
-        bubbles: true,
-        cancelable: true,
-      });
-    } else {
-      synthetic = new Event(event.type, { bubbles: true, cancelable: true });
-    }
-    this.#dispatchToTarget(event, synthetic);
+    queueMicrotask(() => {
+      // Only re-check mutable state - surface check was already done
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      let synthetic: Event;
+      if (typeof InputEvent !== 'undefined') {
+        synthetic = new InputEvent(event.type, {
+          data: (event as InputEvent).data ?? (event as TextEvent).data ?? null,
+          inputType: (event as InputEvent).inputType ?? 'insertText',
+          dataTransfer: (event as InputEvent).dataTransfer ?? null,
+          isComposing: (event as InputEvent).isComposing ?? false,
+          bubbles: true,
+          cancelable: true,
+        });
+      } else {
+        synthetic = new Event(event.type, { bubbles: true, cancelable: true });
+      }
+      this.#dispatchToTarget(event, synthetic);
+    });
   }
 
+  /**
+   * Forwards composition events (compositionstart, compositionupdate, compositionend)
+   * to the hidden editor for IME input handling.
+   *
+   * @param event - The composition event from the layout surface
+   */
   #forwardCompositionEvent(event: CompositionEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
+      return;
+    }
+    if (event.defaultPrevented) {
       return;
     }
 
@@ -3983,11 +4152,18 @@ class PresentationInputBridge {
     this.#dispatchToTarget(event, synthetic);
   }
 
+  /**
+   * Forwards context menu events to the hidden editor.
+   *
+   * @param event - The context menu event from the layout surface
+   */
   #forwardContextMenu(event: MouseEvent) {
-    if (this.#isEventOnActiveTarget(event)) {
+    if (this.#shouldSkipSurface(event)) {
       return;
     }
-
+    if (event.defaultPrevented) {
+      return;
+    }
     const synthetic = new MouseEvent('contextmenu', {
       bubbles: true,
       cancelable: true,
@@ -4022,5 +4198,77 @@ class PresentationInputBridge {
       return containsFn.call(targetNode, origin);
     }
     return false;
+  }
+
+  /**
+   * Determines if an event originated from a UI surface that should be excluded
+   * from keyboard forwarding (e.g., toolbars, dropdowns).
+   *
+   * Checks three conditions in order:
+   * 1. Event is already on the active target (hidden editor) - skip to prevent loops
+   * 2. Event is not in a layout surface - skip non-editor events
+   * 3. Event is in a registered UI surface - skip toolbar/dropdown events
+   *
+   * @param event - The event to check
+   * @returns true if the event should be skipped, false if it should be forwarded
+   */
+  #shouldSkipSurface(event: Event): boolean {
+    if (this.#isEventOnActiveTarget(event)) {
+      return true;
+    }
+    if (!this.#isInLayoutSurface(event)) {
+      return true;
+    }
+    if (isInRegisteredSurface(event)) {
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Checks if an event originated within a layout surface by walking the
+   * event's composed path. Falls back to checking event.target directly
+   * if composedPath is unavailable.
+   *
+   * @param event - The event to check
+   * @returns true if event originated in a layout surface
+   */
+  #isInLayoutSurface(event: Event): boolean {
+    const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+    if (path.length) {
+      return path.some((node) => this.#layoutSurfaces.has(node as EventTarget));
+    }
+    const origin = event.target as EventTarget | null;
+    return origin ? this.#layoutSurfaces.has(origin) : false;
+  }
+
+  /**
+   * Returns the set of event targets to attach listeners to.
+   * Includes registered layout surfaces and optionally the window for fallback.
+   *
+   * @returns Set of EventTargets for listener attachment
+   */
+  #getListenerTargets(): EventTarget[] {
+    const targets = new Set<EventTarget>(this.#layoutSurfaces);
+    if (this.#useWindowFallback) {
+      targets.add(this.#windowRoot);
+    }
+    return Array.from(targets);
+  }
+
+  /**
+   * Determines if a keyboard event represents a plain character key without
+   * modifiers. Plain character keys are filtered out because they should be
+   * handled by the beforeinput event instead to avoid double-handling.
+   *
+   * Note: Shift is intentionally not considered a modifier here since
+   * Shift+character produces a different character (e.g., uppercase) that
+   * should still go through beforeinput.
+   *
+   * @param event - The keyboard event to check
+   * @returns true if event is a single character without Ctrl/Meta/Alt modifiers
+   */
+  #isPlainCharacterKey(event: KeyboardEvent): boolean {
+    return event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey;
   }
 }

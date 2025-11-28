@@ -167,7 +167,7 @@ const cleanupCustomItems = () => {
 
 const handleGlobalKeyDown = (event) => {
   // ESCAPE: always close popover or menu
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && isOpen.value) {
     event.preventDefault();
     event.stopPropagation();
     closeMenu();

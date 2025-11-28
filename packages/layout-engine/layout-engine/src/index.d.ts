@@ -28,6 +28,10 @@ export type LayoutOptions = {
 export type HeaderFooterConstraints = {
   width: number;
   height: number;
+  /** Actual page width for page-relative anchor positioning */
+  pageWidth?: number;
+  /** Page margins for page-relative anchor positioning */
+  margins?: { left: number; right: number };
 };
 /**
  * Layout FlowBlocks into paginated fragments using measured line data.
@@ -43,3 +47,5 @@ export declare function layoutHeaderFooter(
   constraints: HeaderFooterConstraints,
 ): HeaderFooterLayout;
 export { buildAnchorMap, resolvePageRefTokens, getTocBlocksForRemeasurement } from './resolvePageRefs.js';
+export { formatPageNumber, computeDisplayPageNumber } from './pageNumbering.js';
+export type { PageNumberFormat, DisplayPageInfo } from './pageNumbering.js';
