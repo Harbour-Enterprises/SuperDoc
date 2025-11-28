@@ -5,3 +5,4 @@ export * from './getStructuredContentTagsById';
 export * from './getStructuredContentByGroup';
 export * from './getStructuredContentTablesById';
 export * from './tagUtils';
+export * from './types';

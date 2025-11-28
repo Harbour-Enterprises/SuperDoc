@@ -134,7 +134,7 @@ class DocxZipper {
   getFileExtension(fileName: string): string | null {
     const fileSplit = fileName.split('.');
     if (fileSplit.length < 2) return null;
-    return fileSplit[fileSplit.length - 1];
+    return fileSplit[fileSplit.length - 1] || null;
   }
 
   /**
@@ -158,8 +158,8 @@ class DocxZipper {
     if (fromJson) {
       if ('files' in docx && Array.isArray(docx.files)) {
         contentTypesXml = docx.files.find((file) => file.name === contentTypesPath)?.content || '';
-      } else if ('files' in docx) {
-        contentTypesXml = docx.files?.[contentTypesPath] || '';
+      } else if ('files' in docx && typeof docx.files === 'object') {
+        contentTypesXml = (docx.files as Record<string, string>)[contentTypesPath] || '';
       } else {
         contentTypesXml = '';
       }
@@ -184,25 +184,24 @@ class DocxZipper {
     }
 
     // Update for comments
-    const xmlJson = JSON.parse(xmljs.xml2json(contentTypesXml, { compact: false }));
-    const types = xmlJson.elements?.find((el: { name: string }) => el.name === 'Types') || {};
+    type XmlElement = { name: string; attributes?: { PartName?: string }; elements?: XmlElement[] };
+    const xmlJson = JSON.parse(xmljs.xml2json(contentTypesXml, { compact: false })) as {
+      elements?: XmlElement[];
+    };
+    const types = xmlJson.elements?.find((el) => el.name === 'Types') || { elements: [] };
 
     // Overrides
     const hasComments = types.elements?.some(
-      (el: { name: string; attributes: { PartName: string } }) =>
-        el.name === 'Override' && el.attributes.PartName === '/word/comments.xml',
+      (el: XmlElement) => el.name === 'Override' && el.attributes?.PartName === '/word/comments.xml',
     );
     const hasCommentsExtended = types.elements?.some(
-      (el: { name: string; attributes: { PartName: string } }) =>
-        el.name === 'Override' && el.attributes.PartName === '/word/commentsExtended.xml',
+      (el: XmlElement) => el.name === 'Override' && el.attributes?.PartName === '/word/commentsExtended.xml',
     );
     const hasCommentsIds = types.elements?.some(
-      (el: { name: string; attributes: { PartName: string } }) =>
-        el.name === 'Override' && el.attributes.PartName === '/word/commentsIds.xml',
+      (el: XmlElement) => el.name === 'Override' && el.attributes?.PartName === '/word/commentsIds.xml',
     );
     const hasCommentsExtensible = types.elements?.some(
-      (el: { name: string; attributes: { PartName: string } }) =>
-        el.name === 'Override' && el.attributes.PartName === '/word/commentsExtensible.xml',
+      (el: XmlElement) => el.name === 'Override' && el.attributes?.PartName === '/word/commentsExtensible.xml',
     );
 
     const hasFile = (filename: string): boolean => {
@@ -245,8 +244,7 @@ class DocxZipper {
       if (name.includes('.rels')) return;
       if (!name.includes('header') && !name.includes('footer')) return;
       const hasExtensible = types.elements?.some(
-        (el: { name: string; attributes: { PartName: string } }) =>
-          el.name === 'Override' && el.attributes.PartName === `/${name}`,
+        (el: XmlElement) => el.name === 'Override' && el.attributes?.PartName === `/${name}`,
       );
       const type = name.includes('header') ? 'header' : 'footer';
       const extendedDef = `<Override PartName="/${name}" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.${type}+xml"/>`;
@@ -259,13 +257,13 @@ class DocxZipper {
     let updatedContentTypesXml = contentTypesXml.replace(beginningString, `${beginningString}${typesString}`);
 
     // Include any header/footer targets referenced from document relationships
-    let relationshipsXml = updatedDocs['word/_rels/document.xml.rels'];
+    let relationshipsXml: string | undefined = updatedDocs['word/_rels/document.xml.rels'];
     if (!relationshipsXml) {
       if (fromJson) {
         if ('files' in docx && Array.isArray(docx.files)) {
           relationshipsXml = docx.files.find((file) => file.name === 'word/_rels/document.xml.rels')?.content;
-        } else if ('files' in docx) {
-          relationshipsXml = docx.files?.['word/_rels/document.xml.rels'];
+        } else if ('files' in docx && typeof docx.files === 'object') {
+          relationshipsXml = (docx.files as Record<string, string>)['word/_rels/document.xml.rels'];
         }
       } else {
         relationshipsXml = await (docx as JSZip).file('word/_rels/document.xml.rels')?.async('string');
@@ -274,9 +272,14 @@ class DocxZipper {
 
     if (relationshipsXml) {
       try {
-        const relJson = xmljs.xml2js(relationshipsXml, { compact: false });
-        const relationships = relJson.elements?.find((el: { name: string }) => el.name === 'Relationships');
-        relationships?.elements?.forEach((rel: { attributes?: { Type?: string; Target?: string } }) => {
+        const relJson = xmljs.xml2js(relationshipsXml, { compact: false }) as {
+          elements?: Array<{
+            name: string;
+            elements?: Array<{ attributes?: { Type?: string; Target?: string } }>;
+          }>;
+        };
+        const relationships = relJson.elements?.find((el) => el.name === 'Relationships');
+        relationships?.elements?.forEach((rel) => {
           const type = rel.attributes?.Type;
           const target = rel.attributes?.Target;
           if (!type || !target) return;

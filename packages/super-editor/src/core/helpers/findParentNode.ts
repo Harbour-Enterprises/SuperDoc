@@ -1,7 +1,7 @@
 // @ts-check
-import { findParentNodeClosestToPos } from './findParentNodeClosestToPos';
+import { findParentNodeClosestToPos } from './findParentNodeClosestToPos.js';
 import type { Node as PmNode, ResolvedPos } from 'prosemirror-model';
-import type { ParentNodeInfo } from './findParentNodeClosestToPos';
+import type { ParentNodeInfo } from './findParentNodeClosestToPos.js';
 
 /**
  * @typedef {import("./findParentNodeClosestToPos").ParentNodeInfo} ParentNodeInfo

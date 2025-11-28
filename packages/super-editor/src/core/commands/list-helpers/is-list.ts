@@ -9,5 +9,5 @@ import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPr
 export const isList = (node: PmNode | null | undefined): boolean =>
   !!node &&
   node.type?.name === 'paragraph' &&
-  getResolvedParagraphProperties(node).numberingProperties &&
+  !!getResolvedParagraphProperties(node)?.numberingProperties &&
   node.attrs?.listRendering;

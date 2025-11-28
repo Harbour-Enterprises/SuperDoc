@@ -1,10 +1,9 @@
-//@ts-check
+import type { ContentValue, InsertContentOptions as InsertContentAtOptions } from './insertContentAt.js';
 import type { Command } from '../types/ChainedCommands.js';
 import { processContent } from '../helpers/contentProcessor.js';
 
-interface InsertContentOptions {
+interface InsertContentOptions extends InsertContentAtOptions {
   contentType?: 'html' | 'markdown' | 'text' | 'schema';
-  parseOptions?: boolean;
   [key: string]: unknown;
 }
 
@@ -22,7 +21,7 @@ interface InsertContentOptions {
  * @returns {function} A command function that can be executed by the editor.
  */
 export const insertContent =
-  (value: string | object, options: InsertContentOptions = {}): Command =>
+  (value: ContentValue, options: InsertContentOptions = {}): Command =>
   ({ tr, commands, editor }) => {
     // If contentType is specified, use the new processor
     if (options.contentType) {
@@ -44,12 +43,10 @@ export const insertContent =
           return false;
         }
 
-        const jsonContent = processedDoc.toJSON();
-        const ok = commands.insertContentAt(
-          { from: tr.selection.from, to: tr.selection.to },
-          jsonContent,
-          options,
-        ) as boolean;
+        const jsonContent = processedDoc.toJSON() as Record<string, unknown>;
+        const ok = Boolean(
+          commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, jsonContent, options),
+        );
 
         // Schedule list migration right after the insert transaction dispatches
         if (ok && (options.contentType === 'html' || options.contentType === 'markdown')) {
@@ -64,5 +61,5 @@ export const insertContent =
     }
 
     // Otherwise use the original behavior for backward compatibility
-    return commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, value, options) as boolean;
+    return Boolean(commands.insertContentAt({ from: tr.selection.from, to: tr.selection.to }, value, options));
   };

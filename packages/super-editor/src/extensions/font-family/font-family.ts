@@ -59,8 +59,8 @@ export const FontFamily = Extension.create<FontFamilyOptions>({
         attributes: {
           fontFamily: {
             default: null,
-            parseDOM: (el) => el.style.fontFamily?.replace(/['"]+/g, ''),
-            renderDOM: (attrs) => {
+            parseDOM: (el: HTMLElement) => el.style.fontFamily?.replace(/['"]+/g, ''),
+            renderDOM: (attrs: FontFamilyAttributes) => {
               if (!attrs.fontFamily) return {};
               return { style: `font-family: ${attrs.fontFamily}` };
             },
@@ -86,8 +86,8 @@ export const FontFamily = Extension.create<FontFamilyOptions>({
        * @note Preserves other text styling attributes
        */
       setFontFamily:
-        (fontFamily) =>
-        ({ chain }) => {
+        (fontFamily: FontFamilyValue) =>
+        ({ chain }: { chain: () => { setMark: (...args: unknown[]) => { run: () => boolean } } }) => {
           return chain().setMark('textStyle', { fontFamily }).run();
         },
 
@@ -100,7 +100,11 @@ export const FontFamily = Extension.create<FontFamilyOptions>({
        */
       unsetFontFamily:
         () =>
-        ({ chain }) => {
+        ({
+          chain,
+        }: {
+          chain: () => { setMark: (...args: unknown[]) => { removeEmptyTextStyle: () => { run: () => boolean } } };
+        }) => {
           return chain().setMark('textStyle', { fontFamily: null }).removeEmptyTextStyle().run();
         },
     };

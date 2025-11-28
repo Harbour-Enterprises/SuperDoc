@@ -1,5 +1,7 @@
-import { Node, Attribute } from '@core/index.js';
-import type { DOMOutputSpec } from 'prosemirror-model';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
+import type { DOMOutputSpec, Node as PmNode } from 'prosemirror-model';
+import type { Transaction } from 'prosemirror-state';
+import type { Editor } from '@core/Editor.js';
 
 /**
  * Bookmark configuration
@@ -55,7 +57,7 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
        */
       name: {
         default: null,
-        renderDOM: ({ name }) => {
+        renderDOM: ({ name }: { name?: string }) => {
           if (name) return { name };
           return {};
         },
@@ -67,7 +69,7 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
        */
       id: {
         default: null,
-        renderDOM: ({ id }) => {
+        renderDOM: ({ id }: { id?: string }) => {
           if (id) return { id };
           return {};
         },
@@ -76,7 +78,13 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return ['a', Attribute.mergeAttributes((this.options as BookmarkStartOptions).htmlAttributes, htmlAttributes)];
+    return [
+      'a',
+      Attribute.mergeAttributes(
+        (this.options as BookmarkStartOptions).htmlAttributes,
+        htmlAttributes as Record<string, AttributeValue>,
+      ),
+    ];
   },
 
   addCommands() {
@@ -96,7 +104,11 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
        */
       insertBookmark:
         (config: BookmarkConfig) =>
-        ({ commands }) => {
+        ({
+          commands,
+        }: {
+          commands: { insertContent: (content: { type: string; attrs: BookmarkConfig }) => boolean };
+        }) => {
           return commands.insertContent({
             type: this.name,
             attrs: config,
@@ -114,11 +126,11 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
        */
       goToBookmark:
         (name: string) =>
-        ({ editor, tr }) => {
+        ({ editor, tr }: { editor: Editor; tr: Transaction }) => {
           const { doc } = tr;
           let targetPos: number | null = null;
 
-          doc.descendants((node, pos) => {
+          doc.descendants((node: PmNode, pos: number) => {
             if (node.type.name === 'bookmarkStart' && node.attrs.name === name) {
               targetPos = pos;
               return false; // Stop iteration
@@ -131,6 +143,6 @@ export const BookmarkStart = Node.create<BookmarkStartOptions>({
           }
           return false;
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 });

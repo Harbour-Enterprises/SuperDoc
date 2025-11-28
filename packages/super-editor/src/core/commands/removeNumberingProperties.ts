@@ -10,10 +10,12 @@ export const removeNumberingProperties =
   ({ checkType = 'startParagraph' }: { checkType?: 'startParagraph' | 'empty' } = {}): Command =>
   (props) => {
     const { tr, state, editor, dispatch } = props;
-    const { node: paragraph, pos } = findParentNode(isList)(state.selection) || {};
+    const foundNode = findParentNode(isList)(state.selection);
+    const paragraph = foundNode?.node;
+    const pos = foundNode?.pos;
 
     // Guard checks
-    if (!paragraph) return false;
+    if (!paragraph || pos === undefined) return false;
     if (checkType === 'empty' && !isVisuallyEmptyParagraph(paragraph)) return false;
     if (checkType === 'startParagraph') {
       const { $from, empty } = state.selection;
@@ -21,7 +23,12 @@ export const removeNumberingProperties =
     }
 
     // If level > 0, outdent one level first
-    const ilvl = getResolvedParagraphProperties(paragraph).numberingProperties.ilvl;
+    const numberingProps = (getResolvedParagraphProperties(paragraph) ?? {}).numberingProperties as Record<
+      string,
+      unknown
+    > | null;
+    const ilvlRaw = numberingProps?.ilvl;
+    const ilvl = Number(ilvlRaw ?? 0);
     if (ilvl > 0) {
       const outdented = decreaseListIndent()(props);
       if (outdented) {

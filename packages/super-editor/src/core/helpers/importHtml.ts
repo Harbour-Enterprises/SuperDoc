@@ -1,7 +1,7 @@
 import { DOMParser, Node as PmNode } from 'prosemirror-model';
 import { stripHtmlStyles } from './htmlSanitizer.js';
 import { htmlHandler } from '../InputRule.js';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 /**
  * Create a document from HTML content

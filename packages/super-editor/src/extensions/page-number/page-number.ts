@@ -1,8 +1,8 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import { isHeadless } from '@/utils/headless-helpers.js';
 import type { Node as PmNode, Mark } from 'prosemirror-model';
 import type { Transaction, EditorState } from 'prosemirror-state';
-import type { Decoration, EditorView } from 'prosemirror-view';
+import type { Decoration, EditorView as PmEditorView } from 'prosemirror-view';
 import type { Editor } from '@core/Editor.js';
 
 interface CommandProps {
@@ -71,7 +71,7 @@ export const PageNumber = Node.create({
 
   addNodeView() {
     return ({ node, editor, getPos, decorations }: NodeViewProps) => {
-      const htmlAttributes = this.options.htmlAttributes;
+      const htmlAttributes = this.options.htmlAttributes as unknown as Record<string, string>;
       return new AutoPageNumberNodeView(node, getPos, decorations, editor, htmlAttributes);
     };
   },
@@ -80,8 +80,11 @@ export const PageNumber = Node.create({
     return [{ tag: 'span[data-id="auto-page-number"' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+  renderDOM({ htmlAttributes }: { htmlAttributes?: Record<string, unknown> }) {
+    return [
+      'span',
+      Attribute.mergeAttributes(this.options.htmlAttributes, (htmlAttributes as Record<string, AttributeValue>) ?? {}),
+    ];
   },
 
   addCommands() {
@@ -121,7 +124,7 @@ export const PageNumber = Node.create({
 
   addShortcuts() {
     return {
-      'Mod-Shift-alt-p': () => this.editor.commands.addAutoPageNumber(),
+      'Mod-Shift-alt-p': () => this.editor?.commands.addAutoPageNumber(),
     };
   },
 });
@@ -178,7 +181,7 @@ export const TotalPageCount = Node.create({
 
   addNodeView() {
     return ({ node, editor, getPos, decorations }: NodeViewProps) => {
-      const htmlAttributes = this.options.htmlAttributes;
+      const htmlAttributes = this.options.htmlAttributes as unknown as Record<string, string>;
       return new AutoPageNumberNodeView(node, getPos, decorations, editor, htmlAttributes);
     };
   },
@@ -187,8 +190,12 @@ export const TotalPageCount = Node.create({
     return [{ tag: 'span[data-id="auto-total-pages"' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: { htmlAttributes?: Record<string, unknown> }) {
+    return [
+      'span',
+      Attribute.mergeAttributes(this.options.htmlAttributes, (htmlAttributes as Record<string, AttributeValue>) ?? {}),
+      0,
+    ];
   },
 
   addCommands() {
@@ -211,7 +218,8 @@ export const TotalPageCount = Node.create({
           const pageNumberType = schema.nodes?.['total-page-number'];
           if (!pageNumberType) return false;
 
-          const currentPages = editor?.options?.parentEditor?.currentTotalPages || 1;
+          const parent = editor?.options?.parentEditor as { currentTotalPages?: number } | undefined;
+          const currentPages = parent?.currentTotalPages || 1;
           const pageNumberNode = {
             type: 'total-page-number',
             content: [{ type: 'text', text: String(currentPages) }],
@@ -227,36 +235,48 @@ export const TotalPageCount = Node.create({
 
   addShortcuts() {
     return {
-      'Mod-Shift-alt-c': () => this.editor.commands.addTotalPageCount(),
+      'Mod-Shift-alt-c': () => this.editor?.commands.addTotalPageCount(),
     };
   },
 });
 
-const getNodeAttributes = (nodeName, editor) => {
+interface NodeAttributesResult {
+  text: string | number;
+  className: string;
+  dataId: string;
+  ariaLabel: string;
+}
+
+const getNodeAttributes = (nodeName: string, editor: Editor): NodeAttributesResult => {
   switch (nodeName) {
     case 'page-number':
       return {
-        text: editor.options.currentPageNumber || '1',
+        text: (editor.options as { currentPageNumber?: number }).currentPageNumber || '1',
         className: 'sd-editor-auto-page-number',
         dataId: 'auto-page-number',
         ariaLabel: 'Page number node',
       };
     case 'total-page-number':
       return {
-        text: editor.options.parentEditor?.currentTotalPages || '1',
+        text: (editor.options.parentEditor as { currentTotalPages?: number } | undefined)?.currentTotalPages || '1',
         className: 'sd-editor-auto-total-pages',
         dataId: 'auto-total-pages',
         ariaLabel: 'Total page count node',
       };
     default:
-      return {};
+      return {
+        text: '',
+        className: '',
+        dataId: '',
+        ariaLabel: '',
+      };
   }
 };
 
 export class AutoPageNumberNodeView {
   node: PmNode;
   editor: Editor;
-  view: EditorView;
+  view: PmEditorView;
   getPos: () => number | undefined;
   dom: HTMLElement;
 
@@ -285,9 +305,11 @@ export class AutoPageNumberNodeView {
     nodeContent.setAttribute('aria-label', String(attrs.ariaLabel));
 
     const currentPos = this.getPos();
-    const { styles, marks } = getMarksFromNeighbors(currentPos, this.view);
-    this.#scheduleUpdateNodeStyle(currentPos, marks);
-    Object.assign(nodeContent.style, styles);
+    if (currentPos !== undefined) {
+      const { styles, marks } = getMarksFromNeighbors(currentPos, this.view);
+      this.#scheduleUpdateNodeStyle(currentPos, marks);
+      Object.assign(nodeContent.style, styles);
+    }
 
     nodeContent.appendChild(content);
 
@@ -334,14 +356,14 @@ export class AutoPageNumberNodeView {
 
 /**
  * Get styles from the marks of the node before and after the current position.
- * @param {Number} currentPos The current position in the document.
- * @param {Object} view The ProseMirror view instance.
- * @returns {Object} An object containing CSS styles derived from the marks of the neighboring nodes.
  */
-const getMarksFromNeighbors = (currentPos, view) => {
+const getMarksFromNeighbors = (
+  currentPos: number,
+  view: PmEditorView,
+): { styles: Record<string, string>; marks: Mark[] } => {
   const $pos = view.state.doc.resolve(currentPos);
-  const styles = {};
-  const marks = [];
+  const styles: Record<string, string> = {};
+  const marks: Mark[] = [];
 
   const before = $pos.nodeBefore;
   if (before) {
@@ -363,11 +385,9 @@ const getMarksFromNeighbors = (currentPos, view) => {
 
 /**
  * Process marks to extract styles.
- * @param {Object[]} marks The marks to process.
- * @returns {Object} An object containing CSS styles derived from the marks.
  */
-const processMarks = (marks) => {
-  const styles = {};
+const processMarks = (marks: readonly Mark[]): Record<string, string> => {
+  const styles: Record<string, string> = {};
 
   marks.forEach((mark) => {
     const { type, attrs } = mark;
@@ -398,8 +418,8 @@ const processMarks = (marks) => {
 
       default:
         // Handle unknown/custom marks gracefully
-        if (attrs?.style) {
-          Object.entries(attrs.style).forEach(([key, value]) => {
+        if (attrs?.style && typeof attrs.style === 'object') {
+          Object.entries(attrs.style as Record<string, string>).forEach(([key, value]) => {
             styles[key] = value;
           });
         }

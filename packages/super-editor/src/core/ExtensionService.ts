@@ -1,6 +1,6 @@
 import { keymap } from 'prosemirror-keymap';
 import type { Plugin, Transaction } from 'prosemirror-state';
-import type { NodeType, Node as PmNode, Mark as PmMark } from 'prosemirror-model';
+import type { NodeType, Node as PmNode, Mark as PmMark, MarkType } from 'prosemirror-model';
 import { Schema } from './Schema.js';
 import { Attribute } from './Attribute.js';
 import { getNodeType } from './helpers/getNodeType.js';
@@ -22,7 +22,7 @@ interface ExtensionContext {
   options: Record<string, unknown>;
   storage: Record<string, unknown>;
   editor: Editor;
-  type?: NodeType | null;
+  type?: NodeType | MarkType | null;
 }
 
 /**
@@ -106,9 +106,9 @@ export class ExtensionService {
    * Get all attributes defined in the extensions.
    * @returns Array of attributes.
    */
-  get attributes() {
+  get attributes(): ReturnType<typeof Attribute.getAttributesFromExtensions> {
     return Attribute.getAttributesFromExtensions(
-      this.extensions as unknown as Array<{
+      this.extensions as Array<{
         type: string;
         name: string;
         options: Record<string, unknown>;
@@ -204,17 +204,16 @@ export class ExtensionService {
 
         const addShortcuts = getExtensionConfigField(extension, 'addShortcuts', context);
 
-        let bindingsObject: Record<string, (...args: unknown[]) => boolean> = {};
+        const bindingsObject: Record<string, (...args: unknown[]) => boolean> = {};
 
         if (typeof addShortcuts === 'function') {
           const shortcuts = addShortcuts() as Record<
             string,
             (props: { editor: Editor; keymapArgs: unknown[] }) => boolean
           >;
-          const entries = Object.entries(shortcuts).map(([shortcut, method]) => {
-            return [shortcut, (...args: unknown[]) => method({ editor, keymapArgs: args })];
+          Object.entries(shortcuts).forEach(([shortcut, method]) => {
+            bindingsObject[shortcut] = (...args: unknown[]) => method({ editor, keymapArgs: args });
           });
-          bindingsObject = { ...Object.fromEntries(entries) };
         }
 
         plugins.push(keymap(bindingsObject));
@@ -222,7 +221,7 @@ export class ExtensionService {
         const addInputRules = getExtensionConfigField(extension, 'addInputRules', context);
 
         if (
-          isExtensionRulesEnabled(extension, editor.options.enableInputRules) &&
+          isExtensionRulesEnabled(extension, editor.options.enableInputRules ?? false) &&
           typeof addInputRules === 'function'
         ) {
           const rules = addInputRules() as InputRule[];
@@ -253,58 +252,61 @@ export class ExtensionService {
    * Get all node views from the extensions.
    * @returns An object with all node views.
    */
-  get nodeViews(): Record<string, (...args: unknown[]) => unknown> {
+  get nodeViews(): Record<string, (node: unknown, view: unknown, getPos: unknown, decorations: unknown) => unknown> {
     const { editor } = this;
     const nodeExtensions = this.extensions.filter((e) => e.type === 'node');
 
-    const entries = nodeExtensions
-      .filter((extension) => !!getExtensionConfigField(extension, 'addNodeView'))
-      .map((extension) => {
-        const extensionAttrs = this.attributes.filter((a) => a.type === extension.name);
-        const context: ExtensionContext = {
-          name: extension.name,
-          options: extension.options,
-          storage: extension.storage,
+    const entries: Array<[string, (node: unknown, view: unknown, getPos: unknown, decorations: unknown) => unknown]> =
+      [];
+
+    for (const extension of nodeExtensions) {
+      const hasNodeView = getExtensionConfigField(extension, 'addNodeView');
+      if (!hasNodeView) continue;
+
+      const extensionAttrs = this.attributes.filter((a) => a.type === extension.name);
+      const context: ExtensionContext = {
+        name: extension.name,
+        options: extension.options,
+        storage: extension.storage,
+        editor,
+        type: getNodeType(extension.name, this.schema),
+      };
+
+      const addNodeView = getExtensionConfigField(extension, 'addNodeView', context);
+
+      if (typeof addNodeView !== 'function') continue;
+
+      // Call addNodeView() to get the actual node view function
+      // It may return null in headless mode or other scenarios
+      const nodeViewFunction = addNodeView() as
+        | ((props: {
+            editor: Editor;
+            node: unknown;
+            getPos: unknown;
+            decorations: unknown;
+            htmlAttributes: Record<string, unknown>;
+            extension: ResolvedExtension;
+            extensionAttrs: ReturnType<typeof Attribute.getAttributesFromExtensions>;
+          }) => unknown)
+        | null;
+
+      if (!nodeViewFunction) continue;
+
+      const nodeview = (node: unknown, _view: unknown, getPos: unknown, decorations: unknown) => {
+        const htmlAttributes = Attribute.getAttributesToRender(node as PmNode | PmMark, extensionAttrs);
+        return nodeViewFunction({
           editor,
-          type: getNodeType(extension.name, this.schema),
-        };
+          node,
+          getPos,
+          decorations,
+          htmlAttributes,
+          extension,
+          extensionAttrs,
+        });
+      };
 
-        const addNodeView = getExtensionConfigField(extension, 'addNodeView', context);
-
-        if (typeof addNodeView !== 'function') return null;
-
-        // Call addNodeView() to get the actual node view function
-        // It may return null in headless mode or other scenarios
-        const nodeViewFunction = addNodeView() as
-          | ((props: {
-              editor: Editor;
-              node: unknown;
-              getPos: unknown;
-              decorations: unknown;
-              htmlAttributes: Record<string, unknown>;
-              extension: ResolvedExtension;
-              extensionAttrs: unknown[];
-            }) => unknown)
-          | null;
-
-        if (!nodeViewFunction) return null;
-
-        const nodeview = (node: unknown, _view: unknown, getPos: unknown, decorations: unknown) => {
-          const htmlAttributes = Attribute.getAttributesToRender(node as PmNode | PmMark, extensionAttrs);
-          return nodeViewFunction({
-            editor,
-            node,
-            getPos,
-            decorations,
-            htmlAttributes,
-            extension,
-            extensionAttrs,
-          });
-        };
-
-        return [extension.name, nodeview];
-      })
-      .filter(Boolean) as [string, (...args: unknown[]) => unknown][];
+      entries.push([extension.name, nodeview]);
+    }
 
     return Object.fromEntries(entries);
   }
@@ -326,7 +328,8 @@ export class ExtensionService {
       };
 
       if (extension.type === 'mark') {
-        const keepOnSplit = callOrGet(getExtensionConfigField(extension, 'keepOnSplit', context)) ?? true;
+        const keepOnSplitValue = callOrGet(getExtensionConfigField(extension, 'keepOnSplit', context));
+        const keepOnSplit = typeof keepOnSplitValue === 'boolean' ? keepOnSplitValue : true;
         if (keepOnSplit) {
           this.splittableMarks.push(extension.name);
         }

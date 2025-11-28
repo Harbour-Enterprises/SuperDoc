@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import type { ParseRule, DOMOutputSpec } from 'prosemirror-model';
 
 /**
@@ -63,7 +63,7 @@ export const LineBreak = Node.create<LineBreakOptions>({
        */
       insertLineBreak:
         () =>
-        ({ commands }) => {
+        ({ commands }: { commands: { insertContent: (content: { type: string }) => boolean } }) => {
           return commands.insertContent({ type: 'lineBreak' });
         },
     };
@@ -155,7 +155,10 @@ export const HardBreak = Node.create<HardBreakOptions>({
     { htmlAttributes }: { htmlAttributes?: Record<string, unknown> } = {},
   ): DOMOutputSpec {
     const options = this.options;
-    const merged = Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes ?? {});
+    const merged = Attribute.mergeAttributes(
+      (options?.htmlAttributes as Record<string, AttributeValue>) ?? {},
+      (htmlAttributes as Record<string, AttributeValue>) ?? {},
+    );
     return ['span', merged];
   },
 
@@ -170,7 +173,11 @@ export const HardBreak = Node.create<HardBreakOptions>({
        */
       insertPageBreak:
         () =>
-        ({ commands }) => {
+        ({
+          commands,
+        }: {
+          commands: { insertContent: (content: { type: string; attrs: { pageBreakType: string } }) => boolean };
+        }) => {
           return commands.insertContent({
             type: 'hardBreak',
             attrs: { pageBreakType: 'page' },

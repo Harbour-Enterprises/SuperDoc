@@ -535,7 +535,7 @@ export class HeaderFooterEditorManager extends EventEmitter {
       return null;
     }
 
-    const handleUpdate = async ({ transaction }: { transaction?: unknown }) => {
+    const handleUpdate = async ({ transaction }: { transaction?: { selection?: unknown } }) => {
       this.emit('contentChanged', { descriptor } as ContentChangedPayload);
       try {
         // Update the converter data structures with the latest content

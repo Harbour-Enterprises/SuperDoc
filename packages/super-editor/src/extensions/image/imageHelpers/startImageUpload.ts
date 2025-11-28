@@ -41,7 +41,7 @@ export const checkAndProcessImage = async ({
   }
 };
 
-interface EditorOptions {
+export interface EditorOptions {
   isHeaderOrFooter?: boolean;
   lastSelection?: Selection;
   mode?: 'docx' | 'text' | 'html';
@@ -117,7 +117,11 @@ export async function uploadAndInsertImage({
 
   try {
     const imageStorage = editor.storage.image as ImageStorage;
-    const existingFileNames = new Set(Object.keys(imageStorage.media ?? {}).map((key) => key.split('/').pop()));
+    const existingFileNames = new Set<string>(
+      Object.keys(imageStorage.media ?? {})
+        .map((key) => key.split('/').pop() || key)
+        .filter(Boolean) as string[],
+    );
 
     const uniqueFileName = ensureUniqueFileName(file.name, existingFileNames);
     const normalizedFile =

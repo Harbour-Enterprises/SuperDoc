@@ -1,11 +1,14 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 import { getMarkRange } from '@core/helpers/getMarkRange.js';
-// @ts-expect-error - JS file without declaration
 import { insertNewRelationship } from '@core/super-converter/docx-helpers/document-rels.js';
 import { sanitizeHref, encodeTooltip, UrlValidationConstants } from '@superdoc/url-validation';
+
+/** URL protocol schemes allowed by url-validation */
+type Protocol = 'http' | 'https' | 'mailto' | 'tel' | 'sms' | 'ftp' | 'sftp' | 'irc';
 import type { ParseRule, DOMOutputSpec } from 'prosemirror-model';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import type { SanitizedLink } from '@superdoc/url-validation';
+
+type SanitizedLink = { href: string; isExternal?: boolean };
 
 /**
  * Configuration options for Link
@@ -20,6 +23,7 @@ export interface LinkOptions extends Record<string, unknown> {
     rel: string;
     class: string | null;
     title: string | null;
+    rId?: string | null;
   };
 }
 
@@ -43,6 +47,7 @@ export const Link = Mark.create<LinkOptions>({
         rel: 'noopener noreferrer nofollow' as string,
         class: null as string | null,
         title: null as string | null,
+        rId: null as string | null,
       },
     };
   },
@@ -57,7 +62,7 @@ export const Link = Mark.create<LinkOptions>({
     const sanitizedHref = sanitizeLinkHref(htmlAttributes.href as string | null | undefined, options?.protocols ?? []);
     const attrs = { ...htmlAttributes };
     attrs.href = sanitizedHref ? sanitizedHref.href : '';
-    return ['a', Attribute.mergeAttributes(options?.htmlAttributes ?? {}, attrs), 0];
+    return ['a', Attribute.mergeAttributes(options?.htmlAttributes ?? {}, attrs as Record<string, AttributeValue>), 0];
   },
 
   addAttributes() {
@@ -68,8 +73,10 @@ export const Link = Mark.create<LinkOptions>({
        */
       href: {
         default: null,
-        renderDOM: ({ href, name }: { href?: string; name?: string }) => {
-          if (href) return { href };
+        renderDOM(this: { options: LinkOptions }, { href, name }: { href?: string; name?: string }) {
+          const options = this.options;
+          const sanitized = sanitizeLinkHref(href, options?.protocols ?? []);
+          if (sanitized) return { href: sanitized.href };
           if (name) return { href: `#${name}` };
           return {};
         },
@@ -79,9 +86,12 @@ export const Link = Mark.create<LinkOptions>({
        * @param target - Link target window
        */
       target: {
-        default: null,
-        renderDOM: ({ target }: { target?: string }) => {
+        default: (this.options as LinkOptions | undefined)?.htmlAttributes?.target ?? null,
+        renderDOM(this: { options: LinkOptions }, { target, href }: { target?: string; href?: string }) {
           if (target) return { target };
+          const options = this.options;
+          const sanitized = sanitizeLinkHref(href, options?.protocols ?? []);
+          if (sanitized && sanitized.isExternal) return { target: '_blank' };
           return {};
         },
       },
@@ -90,14 +100,14 @@ export const Link = Mark.create<LinkOptions>({
        * @param rel - Relationship attributes
        */
       rel: {
-        default: 'noopener noreferrer nofollow',
+        default: (this.options as LinkOptions | undefined)?.htmlAttributes?.rel ?? 'noopener noreferrer nofollow',
       },
       /**
        * @private
        * @category Attribute
        * @param rId - Word relationship ID for internal links
        */
-      rId: { default: null },
+      rId: { default: (this.options as LinkOptions | undefined)?.htmlAttributes?.rId || null },
       /**
        * @category Attribute
        * @param text - Display text for the link
@@ -248,7 +258,8 @@ export const Link = Mark.create<LinkOptions>({
        */
       unsetLink:
         () =>
-        ({ chain }) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ({ chain }: { chain: () => any }) => {
           return chain()
             .unsetMark('underline', { extendEmptyMarkRange: true })
             .unsetColor()
@@ -266,7 +277,7 @@ export const Link = Mark.create<LinkOptions>({
        */
       toggleLink:
         ({ href, text }: { href?: string; text?: string } = {}) =>
-        ({ commands }) => {
+        ({ commands }: { commands: Record<string, (...args: unknown[]) => boolean> }) => {
           if (!href) return commands.unsetLink();
           return commands.setLink({ href, text });
         },
@@ -329,7 +340,7 @@ function sanitizeLinkHref(
 
   const allowedProtocols = Array.from(
     new Set([...UrlValidationConstants.DEFAULT_ALLOWED_PROTOCOLS, ...normalizedProtocols]),
-  );
+  ) as Protocol[];
   return sanitizeHref(href, { allowedProtocols });
 }
 

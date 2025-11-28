@@ -1,6 +1,6 @@
 import { DOMParser, Schema, Fragment, type Node as PmNode, type ParseOptions } from 'prosemirror-model';
 import { htmlHandler } from '../InputRule.js';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 const removeWhitespaces = (node: Node): Node => {
   const children = node.childNodes;

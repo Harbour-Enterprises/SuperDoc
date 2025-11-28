@@ -99,7 +99,11 @@ function flattenFoundList(listElem: HTMLElement, editor: Editor): void {
     const level = getEffectiveLevel(li, baseLevel);
     const styleType = getListStyleType(li, tag);
     const numFmt = googleNumDefMap.get(styleType) || (tag === 'ol' ? 'decimal' : 'bullet');
-    const lvlText = getLvlTextForGoogleList(styleType, level + 1, editor);
+    const lvlText = getLvlTextForGoogleList(
+      styleType,
+      level + 1,
+      editor as unknown as Parameters<typeof getLvlTextForGoogleList>[2],
+    );
 
     if (levelStarts[level] == null) {
       levelStarts[level] = getInitialStartValue({ li, listElem, level, baseLevel });

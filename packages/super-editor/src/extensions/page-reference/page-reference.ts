@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 
 export const PageReference = Node.create({
   name: 'pageReference',
@@ -38,7 +38,11 @@ export const PageReference = Node.create({
     return [{ tag: 'span[data-id="auto-page-reference"]' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: { htmlAttributes?: Record<string, unknown> }) {
+    return [
+      'span',
+      Attribute.mergeAttributes(this.options.htmlAttributes, (htmlAttributes as Record<string, AttributeValue>) ?? {}),
+      0,
+    ];
   },
 });

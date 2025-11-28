@@ -9,10 +9,20 @@
  * @param {boolean} [params.approximate=true] - Whether to approximate non-standard styles
  * @returns {string} CSS style string (e.g., 'text-decoration-line: underline; text-decoration-style: dashed;')
  */
-export function getUnderlineCssString({ type = 'single', color = null, thickness = null, approximate = true } = {}) {
-  const parts = [];
+export function getUnderlineCssString({
+  type = 'single',
+  color = null,
+  thickness = null,
+  approximate = true,
+}: {
+  type?: string;
+  color?: string | null;
+  thickness?: string | null;
+  approximate?: boolean;
+} = {}): string {
+  const parts: string[] = [];
 
-  const add = (k, v) => {
+  const add = (k: string, v: string | null | undefined) => {
     if (!v) return;
     parts.push(`${k}: ${v}`);
   };

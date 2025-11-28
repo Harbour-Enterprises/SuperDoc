@@ -1,5 +1,6 @@
 import { Extension } from '@core/index.js';
 import { yCursorPlugin } from 'y-prosemirror';
+import type { Awareness } from 'y-protocols/awareness';
 
 interface CollaborationUser {
   name?: string;
@@ -29,8 +30,11 @@ export const CollaborationCursor = Extension.create({
   },
 
   addPmPlugins() {
-    const { collaborationProvider: provider = null } = this.editor.options as {
-      collaborationProvider?: { awareness: unknown } | null;
+    const editor = this.editor;
+    if (!editor) return [];
+
+    const { collaborationProvider: provider = null } = editor.options as {
+      collaborationProvider?: { awareness: Awareness } | null;
     };
     if (!provider) return [];
 
@@ -45,7 +49,7 @@ const customCursors = (user: CollaborationUser): HTMLSpanElement => {
 
   const userDiv = document.createElement('div');
   userDiv.setAttribute('style', `background-color: ${user.color}`);
-  userDiv.insertBefore(document.createTextNode(user.name || user.email), null);
+  userDiv.insertBefore(document.createTextNode(user.name || user.email || ''), null);
   cursor.insertBefore(userDiv, null);
   return cursor;
 };

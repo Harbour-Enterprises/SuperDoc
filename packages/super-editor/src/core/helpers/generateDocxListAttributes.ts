@@ -1,4 +1,4 @@
-import { generateDocxRandomId } from './generateDocxRandomId';
+import { generateDocxRandomId } from './generateDocxRandomId.js';
 
 type ListType = 'bulletList' | 'orderedList' | string;
 

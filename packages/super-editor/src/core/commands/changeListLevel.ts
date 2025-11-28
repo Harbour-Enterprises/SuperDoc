@@ -61,15 +61,16 @@ export const changeListLevel = (delta: number, editor: Editor, tr: Transaction):
     listItemsInSelection.push({ node: currentItem.node, pos: currentItem.pos });
   }
 
-  const targets = [];
+  type Target = { node: Node; pos: number; numberingProperties: { numId: number; ilvl: number } };
+  const targets: Target[] = [];
   let encounteredNegativeLevel = false;
 
   for (const item of listItemsInSelection) {
     const numberingProperties = getResolvedParagraphProperties(item.node)?.numberingProperties;
 
-    if (!numberingProperties) continue;
+    if (!numberingProperties || numberingProperties.numId === undefined) continue;
 
-    const currentLevel = Number.parseInt(numberingProperties.ilvl ?? 0, 10);
+    const currentLevel = Number.parseInt(String(numberingProperties.ilvl ?? '0'), 10);
     const normalizedLevel = Number.isNaN(currentLevel) ? 0 : currentLevel;
     const newLevel = normalizedLevel + delta;
 
@@ -86,7 +87,7 @@ export const changeListLevel = (delta: number, editor: Editor, tr: Transaction):
       node: item.node,
       pos: item.pos,
       numberingProperties: {
-        ...numberingProperties,
+        numId: numberingProperties.numId,
         ilvl: newLevel,
       },
     });

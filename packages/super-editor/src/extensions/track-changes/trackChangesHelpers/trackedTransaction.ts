@@ -56,18 +56,18 @@ export const trackedTransaction = ({ tr, state, user }: TrackedTransactionParams
     }
 
     if (step instanceof ReplaceStep) {
+      const originalReplaceStep = originalStep as ReplaceStep;
       replaceStep({
         state,
         tr,
         step,
         newTr,
         map,
-        doc,
         user,
         date,
-        originalStep,
+        originalStep: originalReplaceStep,
         originalStepIndex,
-      } as unknown);
+      });
     } else if (step instanceof AddMarkStep) {
       addMarkStep({
         state,
@@ -76,7 +76,7 @@ export const trackedTransaction = ({ tr, state, user }: TrackedTransactionParams
         doc,
         user,
         date,
-      } as unknown);
+      });
     } else if (step instanceof RemoveMarkStep) {
       removeMarkStep({
         state,
@@ -85,7 +85,7 @@ export const trackedTransaction = ({ tr, state, user }: TrackedTransactionParams
         doc,
         user,
         date,
-      } as unknown);
+      });
     } else {
       newTr.step(step);
     }

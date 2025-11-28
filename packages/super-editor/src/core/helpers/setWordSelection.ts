@@ -1,7 +1,8 @@
 import { findWordBounds } from './findWordBounds.js';
 import { TextSelection } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 
-export const setWordSelection = (view, pos) => {
+export const setWordSelection = (view: EditorView, pos: number): void => {
   const { state, dispatch } = view;
   const word = findWordBounds(state.doc, pos);
   if (!word) return;

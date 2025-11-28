@@ -1,4 +1,4 @@
-import { OxmlNode, Attribute } from '@core/index.js';
+import { OxmlNode, Attribute, type AttributeValue } from '@core/index.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { splitBlock } from '@core/commands/splitBlock.js';
 import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
@@ -11,6 +11,10 @@ import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
 import { createDropcapPlugin } from './dropcapPlugin.js';
 import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
+import type { Node as PmNode } from 'prosemirror-model';
+import type { Decoration } from 'prosemirror-view';
+import type { Editor } from '@core/Editor.js';
+import type { CommandProps } from '@core/types/ChainedCommands.js';
 
 /**
  * Input rule regex that matches a bullet list marker (-, +, or *)
@@ -62,7 +66,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
     };
   },
 
-  addAttributes(): Record<string, unknown> {
+  addAttributes() {
     return {
       paraId: { rendered: false },
       textId: { rendered: false },
@@ -73,22 +77,22 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
       rsidDel: { rendered: false },
       extraAttrs: {
         default: {},
-        parseDOM: (element) => {
+        parseDOM: (element: Element) => {
           const extra: Record<string, string> = {};
-          Array.from(element.attributes).forEach((attr) => {
+          Array.from(element.attributes).forEach((attr: Attr) => {
             extra[attr.name] = attr.value;
           });
           return extra;
         },
-        renderDOM: (attributes) => {
+        renderDOM: (attributes: { extraAttrs?: Record<string, string> }) => {
           return attributes.extraAttrs || {};
         },
       },
       sdBlockId: {
         default: null,
         keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs: { sdBlockId?: string | null }) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
@@ -104,7 +108,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
         renderDOM: ({
           listRendering,
         }: {
-          listRendering?: { markerText?: string; path?: string; numberingType?: string };
+          listRendering?: { markerText?: string; path?: string | unknown; numberingType?: string };
         }) => {
           return {
             'data-marker-type': listRendering?.markerText,
@@ -120,41 +124,33 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
     return [
       {
         tag: 'p',
-        getAttrs: (node) => {
+        getAttrs: (node: Element) => {
           const numberingProperties: { numId?: number; ilvl?: number } = {};
           let indent: Record<string, number> | undefined;
           let spacing: Record<string, number> | undefined;
           const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce(
-            (acc: Record<string, string>, attr) => {
+            (acc: Record<string, string>, attr: Attr) => {
               if (attr.name === 'data-num-id') {
-                numberingProperties.numId = parseInt(attr.value);
+                numberingProperties.numId = parseInt(attr.value, 10);
               } else if (attr.name === 'data-level') {
-                numberingProperties.ilvl = parseInt(attr.value);
+                numberingProperties.ilvl = parseInt(attr.value, 10);
               } else if (attr.name === 'data-indent') {
                 try {
-                  indent = JSON.parse(attr.value);
-                  // Ensure numeric values
-                  if (indent) {
-                    Object.keys(indent).forEach((key) => {
-                      if (indent) {
-                        indent[key] = Number(indent[key]);
-                      }
-                    });
-                  }
+                  const parsed = JSON.parse(attr.value) as Record<string, number>;
+                  indent = {};
+                  Object.entries(parsed || {}).forEach(([key, val]) => {
+                    indent![key] = Number(val);
+                  });
                 } catch {
                   // ignore invalid indent value
                 }
               } else if (attr.name === 'data-spacing') {
                 try {
-                  spacing = JSON.parse(attr.value);
-                  // Ensure numeric values
-                  if (spacing) {
-                    Object.keys(spacing).forEach((key) => {
-                      if (spacing) {
-                        spacing[key] = Number(spacing[key]);
-                      }
-                    });
-                  }
+                  const parsed = JSON.parse(attr.value) as Record<string, number>;
+                  spacing = {};
+                  Object.entries(parsed || {}).forEach(([key, val]) => {
+                    spacing![key] = Number(val);
+                  });
                 } catch {
                   // ignore invalid spacing value
                 }
@@ -163,7 +159,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
               }
               return acc;
             },
-            {},
+            {} as Record<string, string>,
           );
 
           if (Object.keys(numberingProperties).length > 0) {
@@ -185,9 +181,9 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
       },
       {
         tag: 'div',
-        getAttrs: (node) => {
-          const extra = {};
-          Array.from(node.attributes).forEach((attr) => {
+        getAttrs: (node: Element) => {
+          const extra: Record<string, string> = {};
+          Array.from(node.attributes).forEach((attr: Attr) => {
             extra[attr.name] = attr.value;
           });
           return { extraAttrs: extra };
@@ -197,43 +193,70 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
         tag: 'blockquote',
         attrs: { paragraphProperties: { styleId: 'BlockQuote' } },
       },
-      ...this.options.headingLevels.map((level) => ({
+      ...(this.options?.headingLevels ?? []).map((level) => ({
         tag: `h${level}`,
         attrs: { level, paragraphProperties: { styleId: `Heading${level}` } },
       })),
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['p', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: { htmlAttributes?: Record<string, AttributeValue> }) {
+    return [
+      'p',
+      Attribute.mergeAttributes(
+        (this.options?.htmlAttributes ?? {}) as Record<string, AttributeValue>,
+        htmlAttributes || {},
+      ),
+      0,
+    ];
   },
 
   addNodeView(): unknown {
-    if (shouldSkipNodeView(this.editor)) return null;
-    return ({ node, editor, getPos, decorations, extensionAttrs }: Record<string, unknown>) => {
-      return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
+    if (!this.editor || shouldSkipNodeView(this.editor)) return null;
+    return ({
+      node,
+      editor,
+      getPos,
+      decorations,
+      extensionAttrs,
+    }: {
+      node: PmNode;
+      editor: Editor;
+      getPos: () => number;
+      decorations: readonly Decoration[];
+      extensionAttrs?: unknown;
+    }) => {
+      return new ParagraphNodeView(
+        node,
+        editor,
+        getPos,
+        decorations,
+        (extensionAttrs as Record<string, unknown>) || {},
+      );
     };
   },
 
-  addShortcuts(): unknown {
+  addShortcuts(): Record<string, (...args: unknown[]) => unknown> {
+    if (!this.editor) return {};
+    const editor = this.editor;
     return {
       'Mod-Shift-7': () => {
-        return this.editor.commands.toggleOrderedList();
+        return editor.commands.toggleOrderedList();
       },
       'Mod-Shift-8': () => {
-        return this.editor.commands.toggleBulletList();
+        return editor.commands.toggleBulletList();
       },
-      Enter: (params: Record<string, unknown>) => {
+      Enter: (params: unknown) => {
         return removeNumberingProperties({ checkType: 'empty' })({
-          ...params,
-          tr: this.editor.state.tr,
-          state: this.editor.state,
-          dispatch: this.editor.view.dispatch,
+          ...(params as CommandProps),
+          tr: editor.state.tr,
+          state: editor.state,
+          dispatch: editor.view.dispatch,
         });
       },
 
       'Shift-Enter': () => {
-        return this.editor.commands.first(({ commands }) => [
+        return editor.commands.first(({ commands }: CommandProps) => [
           () => commands.createParagraphNear(),
           splitBlock({
             attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering', 'numberingProperties'],
@@ -242,16 +265,18 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
       },
 
       Tab: () => {
-        return this.editor.commands.first(({ commands }) => [() => commands.increaseListIndent()]);
+        return editor.commands.first(({ commands }: CommandProps) => [() => commands.increaseListIndent()]);
       },
 
       'Shift-Tab': () => {
-        return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
+        return editor.commands.first(({ commands }: CommandProps) => [() => commands.decreaseListIndent()]);
       },
     };
   },
 
   addInputRules() {
+    if (!this.editor) return [];
+    const editor = this.editor;
     return [
       { regex: orderedInputRegex, type: 'orderedList' },
       { regex: bulletInputRegex, type: 'bulletList' },
@@ -274,14 +299,15 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
             ListHelpers.createNewList({
               listType: type,
               tr,
-              editor: this.editor,
+              editor,
             });
           },
         }),
     );
   },
 
-  addCommands(): unknown {
+  addCommands(): Record<string, (...args: unknown[]) => unknown> {
+    if (!this.editor) return {};
     return {
       /**
        * Toggle ordered list formatting
@@ -290,7 +316,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
        * editor.commands.toggleOrderedList()
        * @note Converts selection to ordered list or back to paragraphs
        */
-      toggleOrderedList: () => (params: Record<string, unknown>) => {
+      toggleOrderedList: () => (params: CommandProps) => {
         return toggleList('orderedList')(params);
       },
 
@@ -302,7 +328,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
        * editor.commands.toggleBulletList()
        * @note Converts selected paragraphs to list items or removes list formatting
        */
-      toggleBulletList: () => (params: Record<string, unknown>) => {
+      toggleBulletList: () => (params: CommandProps) => {
         return toggleList('bulletList')(params);
       },
 
@@ -319,6 +345,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
   },
 
   addPmPlugins() {
+    if (!this.editor) return [];
     const dropcapPlugin = createDropcapPlugin(this.editor);
     const numberingPlugin = createNumberingPlugin(this.editor);
     return [dropcapPlugin, numberingPlugin];

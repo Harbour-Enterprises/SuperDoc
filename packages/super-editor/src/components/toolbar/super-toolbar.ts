@@ -23,11 +23,12 @@ import {
   type ColorOption,
 } from './color-dropdown-helpers.js';
 import { isInTable } from '@helpers/isInTable.js';
-import { useToolbarItem, type ToolbarItem } from '@components/toolbar/use-toolbar-item';
+import { useToolbarItem, type ToolbarItem, type ToolbarItemOptions } from './use-toolbar-item';
 import { yUndoPluginKey } from 'y-prosemirror';
 import { isNegatedMark } from './format-negation.js';
 import { collectTrackedChanges, isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 import { isList } from '@core/commands/list-helpers';
+import type { Comment } from '@core/types/EditorEvents.js';
 import { calculateResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 import { twipsToLines } from '@converter/helpers';
 import { parseSizeUnit } from '@core/utilities';
@@ -57,7 +58,7 @@ import { parseSizeUnit } from '@core/utilities';
  * @property {Object} [editor=null] - The editor instance
  * @property {string} [aiApiKey=null] - API key for AI integration
  * @property {string} [aiEndpoint=null] - Endpoint for AI integration
- * @property {ToolbarItem[]} [customButtons=[]] - Custom buttons to add to the toolbar
+ * @property {(ToolbarItemOptions|ToolbarItem)[]} [customButtons=[]] - Custom buttons to add to the toolbar
  * @property {string} [documentMode] - Document mode ('editing', 'viewing', etc.)
  * @property {boolean} [isDev] - Whether in development mode
  * @property {any} [superdoc] - SuperDoc instance
@@ -192,7 +193,7 @@ export class SuperToolbar extends EventEmitter {
     editor: import('../../core/Editor').Editor | null;
     aiApiKey: string | null;
     aiEndpoint: string | null;
-    customButtons: ToolbarItem[];
+    customButtons: Array<ToolbarItem | ToolbarItemOptions>;
     superdoc: unknown;
   } = {
     selector: null,
@@ -436,8 +437,15 @@ export class SuperToolbar extends EventEmitter {
 
       this.emit('superdoc-command', { item, argument });
 
-      const layers = this.superdoc.element?.querySelector('.layers');
-      if (!layers) return;
+      interface SuperdocInstance {
+        element?: HTMLElement;
+        superdocStore?: {
+          activeZoom?: number;
+        };
+      }
+
+      const layers = (this.superdoc as SuperdocInstance)?.element?.querySelector('.layers');
+      if (!layers || !(layers instanceof HTMLElement)) return;
 
       const isMobileDevice = typeof screen.orientation !== 'undefined';
       // 768px breakpoint doesn't consider iPad in portrait orientation
@@ -446,12 +454,15 @@ export class SuperToolbar extends EventEmitter {
       // Zoom property doesn't work correctly when testing on mobile devices
       if (isMobileDevice && isSmallScreen) {
         layers.style.transformOrigin = '0 0';
-        layers.style.transform = `scale(${parseInt(argument, 10) / 100})`;
+        layers.style.transform = `scale(${parseInt(argument as string, 10) / 100})`;
       } else {
-        layers.style.zoom = parseInt(argument, 10) / 100;
+        layers.style.zoom = String(parseInt(argument as string, 10) / 100);
       }
 
-      this.superdoc.superdocStore.activeZoom = parseInt(argument, 10);
+      const superdocStore = (this.superdoc as SuperdocInstance)?.superdocStore;
+      if (superdocStore) {
+        superdocStore.activeZoom = parseInt(argument as string, 10);
+      }
     },
 
     /**
@@ -536,7 +547,10 @@ export class SuperToolbar extends EventEmitter {
      * @returns {void}
      */
     toggleRuler: () => {
-      this.superdoc.toggleRuler();
+      interface SuperdocWithRuler {
+        toggleRuler?: () => void;
+      }
+      (this.superdoc as SuperdocWithRuler)?.toggleRuler?.();
     },
 
     /**
@@ -555,7 +569,10 @@ export class SuperToolbar extends EventEmitter {
 
         const { size, file } = await checkAndProcessImage({
           file: result.file,
-          getMaxContentSize: () => this.activeEditor.getMaxContentSize(),
+          getMaxContentSize: () => {
+            const maxSize = this.activeEditor?.getMaxContentSize() ?? {};
+            return { width: maxSize.width ?? 0, height: maxSize.height ?? 0 };
+          },
         });
 
         if (!file) {
@@ -566,7 +583,8 @@ export class SuperToolbar extends EventEmitter {
 
         replaceSelectionWithImagePlaceholder({
           view: this.activeEditor.view,
-          editorOptions: this.activeEditor.options,
+          editorOptions: this.activeEditor
+            .options as import('../../extensions/image/imageHelpers/index.js').EditorOptions,
           id,
         });
 
@@ -574,7 +592,10 @@ export class SuperToolbar extends EventEmitter {
           editor: this.activeEditor,
           view: this.activeEditor.view,
           file,
-          size,
+          size:
+            size && size.width != null && size.height != null
+              ? { width: size.width, height: size.height }
+              : { width: 0, height: 0 },
           id,
         });
       } catch (error) {
@@ -691,9 +712,9 @@ export class SuperToolbar extends EventEmitter {
 
         // move cursor to end
         const { view } = this.activeEditor;
-        let { selection } = view.state;
-        if (this.activeEditor.options.isHeaderOrFooter) {
-          selection = this.activeEditor.options.lastSelection;
+        let selection = view.state.selection;
+        if (this.activeEditor.options.isHeaderOrFooter && this.activeEditor.options.lastSelection) {
+          selection = this.activeEditor.options.lastSelection as typeof view.state.selection;
         }
         const endPos = selection.$to.pos;
 
@@ -868,7 +889,12 @@ export class SuperToolbar extends EventEmitter {
 
     const customItems = this.config.customButtons || [];
     if (customItems.length) {
-      defaultItems.push(...customItems.map((item) => useToolbarItem({ ...item })));
+      const normalizedCustomItems = customItems.map((item) => {
+        const maybeToolbarItem = item as ToolbarItem;
+        if (maybeToolbarItem?.id?.value) return maybeToolbarItem;
+        return useToolbarItem(item as ToolbarItemOptions);
+      });
+      defaultItems.push(...normalizedCustomItems);
     }
 
     let allConfigItems = [
@@ -918,10 +944,18 @@ export class SuperToolbar extends EventEmitter {
       .filter((color: string) => !pickerColorOptions.includes(color))
       .map((color: string) => makeColorOption(color));
 
+    const perChunk = 7;
+    const customColorRows: ColorOption[][] = [];
+    customColors.forEach((color, index) => {
+      const chunkIndex = Math.floor(index / perChunk);
+      if (!customColorRows[chunkIndex]) customColorRows[chunkIndex] = [];
+      customColorRows[chunkIndex].push(color);
+    });
+
     const option = {
       key: 'color',
       type: 'render',
-      render: () => renderColorOptions(this, highlightItem, customColors, true),
+      render: () => renderColorOptions(this, highlightItem, customColorRows, true),
     };
 
     highlightItem.nestedOptions.value = [option];
@@ -1007,16 +1041,24 @@ export class SuperToolbar extends EventEmitter {
       }
 
       const rawActiveMark = marks.find((mark) => mark.name === item.name.value);
-      const markNegated = rawActiveMark ? isNegatedMark(rawActiveMark.name, rawActiveMark.attrs) : false;
+      const markNegated =
+        rawActiveMark && typeof rawActiveMark.attrs === 'object'
+          ? isNegatedMark(rawActiveMark.name, rawActiveMark.attrs)
+          : false;
       const activeMark = markNegated ? null : rawActiveMark;
 
       if (activeMark) {
-        if (activeMark.name === 'fontSize') {
-          const fontSizes = marks.filter((i) => i.name === 'fontSize').map((i) => i.attrs.fontSize);
-          const isMultiple = [...new Set(fontSizes)].length > 1;
+        if (activeMark.name === 'fontSize' && typeof activeMark.attrs === 'object') {
+          const fontSizes = marks
+            .filter((i) => i.name === 'fontSize' && typeof i.attrs === 'object')
+            .map((i) => (i.attrs as Record<string, unknown>).fontSize)
+            .filter((size): size is string => typeof size === 'string');
+          const isMultiple = Array.from(new Set(fontSizes)).length > 1;
           item.activate(activeMark.attrs, isMultiple);
-        } else {
+        } else if (typeof activeMark.attrs === 'object') {
           item.activate(activeMark.attrs);
+        } else {
+          item.activate(typeof activeMark.attrs === 'boolean' ? {} : (activeMark.attrs as Record<string, unknown>));
         }
       } else {
         item.deactivate();
@@ -1050,8 +1092,13 @@ export class SuperToolbar extends EventEmitter {
       }
 
       if (item.name.value === 'lineHeight') {
-        if (paragraphProps?.spacing) {
-          item.selectedValue.value = String(twipsToLines(paragraphProps.spacing.line));
+        if (paragraphProps?.spacing && typeof paragraphProps.spacing === 'object' && 'line' in paragraphProps.spacing) {
+          const line = (paragraphProps.spacing as { line: unknown }).line;
+          if (typeof line === 'number') {
+            item.selectedValue.value = String(twipsToLines(line));
+          } else {
+            item.selectedValue.value = '';
+          }
         } else {
           item.selectedValue.value = '';
         }
@@ -1135,18 +1182,64 @@ export class SuperToolbar extends EventEmitter {
     }
   }
 
-  #enrichTrackedChanges(trackedChanges = []) {
-    if (!trackedChanges?.length) return trackedChanges;
-    const store = this.superdoc?.commentsStore;
-    if (!store?.getComment) return trackedChanges;
+  #enrichTrackedChanges(
+    trackedChanges: Array<{
+      id: string | null;
+      type: string | null;
+      attrs: Record<string, unknown>;
+      from: number;
+      to: number;
+      segments: { from: number; to: number }[];
+      comment?: unknown;
+    }> = [],
+  ): Array<{
+    id: string | null;
+    type: string | null;
+    attrs: Record<string, unknown>;
+    from: number;
+    to: number;
+    segments: { from: number; to: number }[];
+    comment?: Comment | null;
+  }> {
+    if (!trackedChanges?.length)
+      return trackedChanges as Array<{
+        id: string | null;
+        type: string | null;
+        attrs: Record<string, unknown>;
+        from: number;
+        to: number;
+        segments: { from: number; to: number }[];
+        comment?: Comment | null;
+      }>;
+
+    interface SuperdocWithComments {
+      commentsStore?: {
+        getComment?: (id: string) => unknown;
+      };
+    }
+
+    const store = (this.superdoc as SuperdocWithComments)?.commentsStore;
+    if (!store?.getComment)
+      return trackedChanges as Array<{
+        id: string | null;
+        type: string | null;
+        attrs: Record<string, unknown>;
+        from: number;
+        to: number;
+        segments: { from: number; to: number }[];
+        comment?: Comment | null;
+      }>;
 
     return trackedChanges.map((change) => {
       const commentId = change.id;
-      if (!commentId) return change;
+      if (!commentId) return { ...change, comment: null };
       const storeComment = store.getComment(commentId);
-      if (!storeComment) return change;
-      const comment = typeof storeComment.getValues === 'function' ? storeComment.getValues() : storeComment;
-      return { ...change, comment };
+      if (!storeComment) return { ...change, comment: null };
+      const comment =
+        typeof (storeComment as { getValues?: () => unknown }).getValues === 'function'
+          ? (storeComment as { getValues: () => unknown }).getValues()
+          : storeComment;
+      return { ...change, comment: comment as Comment | null };
     });
   }
 

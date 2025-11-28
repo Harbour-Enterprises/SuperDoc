@@ -43,7 +43,7 @@ export const setBodyHeaderFooter =
 
     const styles = editor.getPageStyles?.() || {};
     const current = styles.pageMargins || {};
-    const next = { ...current };
+    const next: Record<string, unknown> = { ...(current as Record<string, unknown>) };
     if (hasHeader) next.header = headerInches;
     if (hasFooter) next.footer = footerInches;
 

@@ -8,7 +8,14 @@ import type { Editor } from '@core/Editor.js';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
 
-export const Collaboration = Extension.create({
+interface CollaborationOptions extends Record<string, unknown> {
+  ydoc: Y.Doc | null;
+  field: string;
+  fragment: Y.XmlFragment | null;
+  isReady: boolean;
+}
+
+export const Collaboration = Extension.create<CollaborationOptions>({
   name: 'collaboration',
 
   priority: 1000,
@@ -23,21 +30,27 @@ export const Collaboration = Extension.create({
   },
 
   addPmPlugins() {
-    if (!(this.editor.options as { ydoc?: Y.Doc }).ydoc) return [];
-    this.options.ydoc = (this.editor.options as { ydoc: Y.Doc }).ydoc;
+    const editor = this.editor;
+    if (!editor) return [];
 
-    initSyncListener(this.options.ydoc, this.editor, this);
-    initDocumentListener({ ydoc: this.options.ydoc, editor: this.editor });
+    const ydoc = (editor.options as { ydoc?: Y.Doc }).ydoc;
+    if (!ydoc) return [];
 
-    const [syncPlugin, fragment] = createSyncPlugin(this.options.ydoc, this.editor);
+    this.options.ydoc = ydoc;
+
+    initSyncListener(ydoc, editor, this as { options: { isReady: boolean } });
+    initDocumentListener({ ydoc, editor });
+
+    const [syncPlugin, fragment] = createSyncPlugin(ydoc, editor);
     this.options.fragment = fragment;
 
-    const metaMap = this.options.ydoc.getMap('media');
-    metaMap.observe((event) => {
-      event.changes.keys.forEach((_, key) => {
-        if (!(key in (this.editor.storage.image as { media: Record<string, unknown> }).media)) {
+    const metaMap = ydoc.getMap('media');
+    metaMap.observe((event: Y.YMapEvent<unknown>) => {
+      event.changes.keys.forEach((_change: { action: string }, key: string) => {
+        const imageStorage = editor.storage.image as { media: Record<string, unknown> } | undefined;
+        if (imageStorage && !(key in imageStorage.media)) {
           const fileData = metaMap.get(key);
-          (this.editor.storage.image as { media: Record<string, unknown> }).media[key] = fileData;
+          imageStorage.media[key] = fileData;
         }
       });
     });
@@ -50,8 +63,9 @@ export const Collaboration = Extension.create({
       addImageToCollaboration:
         ({ mediaPath, fileData }: { mediaPath: string; fileData: unknown }) =>
         () => {
-          if (!this.options.ydoc || !mediaPath || !fileData) return false;
-          const mediaMap = this.options.ydoc.getMap('media');
+          const ydoc = this.options.ydoc;
+          if (!ydoc || !mediaPath || !fileData) return false;
+          const mediaMap = ydoc.getMap('media');
           mediaMap.set(mediaPath, fileData);
           return true;
         },

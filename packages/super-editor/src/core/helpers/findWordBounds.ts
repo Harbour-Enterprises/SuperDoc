@@ -4,13 +4,17 @@
  * @param pos event position.
  * @returns position of the word.
  */
-export const findWordBounds = (doc, pos) => {
+import type { Node as PmNode, ResolvedPos } from 'prosemirror-model';
+
+type ResolvableDoc = PmNode & { resolve: (pos: number) => ResolvedPos };
+
+export const findWordBounds = (doc: ResolvableDoc, pos: number): { from: number; to: number } | undefined => {
   const $pos = doc.resolve(pos);
   const parent = $pos.parent;
   const offsetInParent = $pos.parentOffset;
 
   let offset = 0;
-  let targetNode = null;
+  let targetNode: PmNode | null = null;
   let nodeStart = 0;
 
   parent.forEach((child, childOffset) => {
@@ -29,13 +33,15 @@ export const findWordBounds = (doc, pos) => {
 
   if (!targetNode) return;
 
-  const text = targetNode.text;
+  const text: string | undefined = (targetNode as { text?: string }).text;
+  if (typeof text !== 'string') return;
   const cursorOffset = offsetInParent - nodeStart;
 
-  const isWordChar = (ch) => /\w/.test(ch);
-  const isPunctOrSpace = (ch) => /[.,;:!-?=()[\]{}"'\s]/.test(ch);
+  const isWordChar = (ch: string) => /\w/.test(ch);
+  const isPunctOrSpace = (ch: string) => /[.,;:!-?=()[\]{}"'\s]/.test(ch);
 
-  let from, to;
+  let from: number;
+  let to: number;
 
   if (isPunctOrSpace(text[cursorOffset])) {
     from = $pos.start() + nodeStart + cursorOffset;

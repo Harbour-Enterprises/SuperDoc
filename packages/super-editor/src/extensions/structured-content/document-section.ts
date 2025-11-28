@@ -2,9 +2,14 @@ import { Node, Attribute } from '@core/index.js';
 import { DocumentSectionView } from './document-section/DocumentSectionView.js';
 import { htmlHandler } from '@core/InputRule.js';
 import { Selection } from 'prosemirror-state';
-import { DOMParser as PMDOMParser } from 'prosemirror-model';
+import { DOMParser as PMDOMParser, type Fragment, type Node as PmNode, type NodeType } from 'prosemirror-model';
 import { findParentNode } from '@helpers/index.js';
 import { SectionHelpers } from './document-section/helpers.js';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { Command } from '@core/types/ChainedCommands.js';
+import type { ProseMirrorJSON } from '@core/types/EditorTypes.js';
+import type { Decoration } from 'prosemirror-view';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
 
 /**
  * Document section creation options
@@ -25,7 +30,7 @@ interface SectionCreate {
   sectionType?: string;
   isLocked?: boolean;
   html?: string;
-  json?: unknown;
+  json?: ProseMirrorJSON;
 }
 
 /**
@@ -40,7 +45,7 @@ interface SectionCreate {
 interface SectionUpdate {
   id: number;
   html?: string;
-  json?: unknown;
+  json?: ProseMirrorJSON;
   attrs?: Record<string, unknown>;
 }
 
@@ -68,7 +73,9 @@ interface SectionUpdate {
  * @sidebarTitle Document Section
  * @snippetPath /snippets/extensions/document-section.mdx
  */
-export const DocumentSection = Node.create({
+export const DocumentSection = Node.create<{
+  htmlAttributes: Record<string, AttributeValue>;
+}>({
   name: 'documentSection',
   group: 'block',
   content: 'block*',
@@ -84,7 +91,7 @@ export const DocumentSection = Node.create({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [
       {
         tag: 'div.sd-document-section-block',
@@ -93,8 +100,12 @@ export const DocumentSection = Node.create({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
+    return [
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>),
+      0,
+    ];
   },
 
   addAttributes() {
@@ -103,8 +114,8 @@ export const DocumentSection = Node.create({
       sdBlockId: {
         default: null,
         keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
@@ -116,8 +127,16 @@ export const DocumentSection = Node.create({
   },
 
   addNodeView() {
-    return ({ node, getPos, decorations }) => {
-      return new DocumentSectionView(node, getPos, decorations, this.editor);
+    return ({
+      node,
+      getPos,
+      decorations,
+    }: {
+      node: PmNode;
+      getPos: () => number | undefined;
+      decorations: Decoration[];
+    }) => {
+      return new DocumentSectionView(node, getPos, decorations, this.editor!);
     };
   },
 
@@ -136,33 +155,36 @@ export const DocumentSection = Node.create({
        * })
        */
       createDocumentSection:
-        (options: SectionCreate = {}) =>
-        ({ tr, state, dispatch, editor }): boolean => {
+        (options: SectionCreate = {}): Command =>
+        ({ tr, state, dispatch, editor }) => {
+          const currentEditor = editor ?? this.editor;
+          if (!currentEditor) return false;
+
           const { selection } = state;
           let { from, to } = selection;
 
-          let content = selection.content().content;
+          let content: Fragment = selection.content().content;
           const { html: optionsHTML, json: optionsJSON } = options;
 
           // If HTML is provided, parse it and convert to ProseMirror nodes
           if (optionsHTML) {
-            const html = htmlHandler(optionsHTML, this.editor);
-            const doc = PMDOMParser.fromSchema(this.editor.schema).parse(html);
+            const html = htmlHandler(optionsHTML, currentEditor);
+            const doc = PMDOMParser.fromSchema(currentEditor.schema).parse(html);
             content = doc.content;
           }
 
           // JSON takes priority over HTML
           if (optionsJSON) {
-            content = this.editor.schema.nodeFromJSON(optionsJSON);
+            content = currentEditor.schema.nodeFromJSON(optionsJSON).content;
           }
 
-          if (!content?.content?.length) {
-            content = this.editor.schema.nodeFromJSON({ type: 'paragraph', content: [] });
+          if (!content.childCount) {
+            content = currentEditor.schema.nodeFromJSON({ type: 'paragraph', content: [] }).content;
           }
 
           // We assign IDs as positive integers starting from 0.
           if (!options.id) {
-            const allSections = SectionHelpers.getAllSections(editor);
+            const allSections = SectionHelpers.getAllSections(currentEditor);
             options.id = allSections.length + 1;
           }
 
@@ -170,7 +192,9 @@ export const DocumentSection = Node.create({
             options.title = 'Document section';
           }
 
-          const node = this.type.createAndFill(options, content);
+          const nodeType = this.type;
+          if (!nodeType || typeof nodeType === 'string') return false;
+          const node = (nodeType as NodeType).createAndFill(options, content);
           if (!node) return false;
 
           const isAlreadyInSdtBlock = findParentNode((node) => node.type.name === 'documentSection')(selection);
@@ -253,8 +277,8 @@ export const DocumentSection = Node.create({
        * @note Content stays in document, only section wrapper is removed
        */
       removeSectionAtSelection:
-        () =>
-        ({ tr, dispatch }): boolean => {
+        (): Command =>
+        ({ tr, dispatch }) => {
           const sdtNode = findParentNode((node) => node.type.name === 'documentSection')(tr.selection);
           if (!sdtNode) return false;
 
@@ -295,9 +319,11 @@ export const DocumentSection = Node.create({
        * editor.commands.removeSectionById(123)
        */
       removeSectionById:
-        (id: number) =>
-        ({ tr, dispatch }): boolean => {
-          const sections = SectionHelpers.getAllSections(this.editor);
+        (id: number): Command =>
+        ({ tr, dispatch }) => {
+          const currentEditor = this.editor;
+          if (!currentEditor) return false;
+          const sections = SectionHelpers.getAllSections(currentEditor);
           const sectionToRemove = sections.find(({ node }) => node.attrs.id === id);
           if (!sectionToRemove) return false;
 
@@ -324,9 +350,11 @@ export const DocumentSection = Node.create({
        * editor.commands.lockSectionById(123)
        */
       lockSectionById:
-        (id: number) =>
-        ({ tr, dispatch }): boolean => {
-          const sections = SectionHelpers.getAllSections(this.editor);
+        (id: number): Command =>
+        ({ tr, dispatch }) => {
+          const currentEditor = this.editor;
+          if (!currentEditor) return false;
+          const sections = SectionHelpers.getAllSections(currentEditor);
           const sectionToLock = sections.find(({ node }) => node.attrs.id === id);
           if (!sectionToLock) return false;
 
@@ -354,14 +382,16 @@ export const DocumentSection = Node.create({
        * })
        */
       updateSectionById:
-        ({ id, html, json, attrs }: SectionUpdate) =>
-        ({ tr, dispatch, editor }): boolean => {
-          const sections = SectionHelpers.getAllSections(editor || this.editor);
+        ({ id, html, json, attrs }: SectionUpdate): Command =>
+        ({ tr, dispatch, editor }) => {
+          const currentEditor = editor || this.editor;
+          if (!currentEditor) return false;
+          const sections = SectionHelpers.getAllSections(currentEditor);
           const sectionToUpdate = sections.find(({ node }) => node.attrs.id === id);
           if (!sectionToUpdate) return false;
 
           const { pos, node } = sectionToUpdate;
-          let newContent = null;
+          let newContent: Fragment | PmNode | null = null;
 
           // If HTML is provided, parse it and convert to ProseMirror nodes
           if (html) {
@@ -391,12 +421,12 @@ export const DocumentSection = Node.create({
 
           return true;
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 
   addHelpers() {
     return {
       ...SectionHelpers,
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 });

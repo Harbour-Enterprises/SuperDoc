@@ -12,7 +12,7 @@ export const getSelectionMarks =
     tr.setMeta('preventDispatch', true);
 
     const marks = getMarksFromSelection(state) ?? [];
-    const uniqueByType = new Map();
+    const uniqueByType = new Map<string, Mark>();
 
     for (const mark of marks) {
       const typeName = typeof mark?.type === 'string' ? mark.type : mark?.type?.name;

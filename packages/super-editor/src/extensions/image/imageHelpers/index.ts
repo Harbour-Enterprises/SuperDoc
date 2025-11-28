@@ -7,3 +7,6 @@ export * from './imagePositionPlugin.js';
 export * from './fileNameUtils.js';
 export * from './rotation.js';
 export * from './legacyAttributes.js';
+
+// Re-export types that are used externally
+export type { EditorOptions } from './startImageUpload.js';

@@ -1,8 +1,11 @@
 import { Extension } from '@core/Extension.js';
-import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
+import { applyLinkedStyleToTransaction, generateLinkedStyleString, type LinkedStyleDefinition } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
 import { findParentNodeClosestToPos } from '@core/helpers';
 import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
+import type { Editor } from '@core/Editor.js';
+import type { EditorState, Transaction } from 'prosemirror-state';
+import type { Node as PmNode } from 'prosemirror-model';
 
 /**
  * Style definition from Word document
@@ -23,6 +26,8 @@ import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPr
  * @sidebarTitle Linked Styles
  * @snippetPath /snippets/extensions/linked-styles.mdx
  */
+type LocalLinkedStyle = LinkedStyleDefinition & { id?: string | null };
+
 export const LinkedStyles = Extension.create({
   name: 'linkedStyles',
 
@@ -33,6 +38,7 @@ export const LinkedStyles = Extension.create({
   },
 
   addPmPlugins() {
+    if (!this.editor) return [];
     return [createLinkedStylesPlugin(this.editor)];
   },
 
@@ -48,10 +54,12 @@ export const LinkedStyles = Extension.create({
        * @note Clears existing formatting when applying a style
        * @note Works with custom selection preservation
        */
-      setLinkedStyle: (style: Record<string, unknown>) => (params: Record<string, unknown>) => {
-        const { tr } = params;
-        return applyLinkedStyleToTransaction(tr, this.editor, style);
-      },
+      setLinkedStyle:
+        (style: LinkedStyleDefinition) =>
+        ({ tr }: { tr: Transaction }) => {
+          if (!this.editor) return false;
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
 
       /**
        * Toggle a linked style on the current selection
@@ -63,29 +71,32 @@ export const LinkedStyles = Extension.create({
        * @note If selection is empty, returns false
        * @note Removes style if already applied, applies it if not
        */
-      toggleLinkedStyle: (style: Record<string, unknown>) => (params: Record<string, unknown>) => {
-        const { tr } = params;
-        if (tr.selection.empty) {
-          return false;
-        }
-        let node = tr.doc.nodeAt(tr.selection.$from.pos);
+      toggleLinkedStyle:
+        (style: LocalLinkedStyle) =>
+        ({ tr }: { tr: Transaction }): boolean => {
+          if (!this.editor) return false;
+          if (tr.selection.empty) {
+            return false;
+          }
+          const $from = tr.selection.$from;
+          let node: PmNode | null | undefined = tr.doc.nodeAt($from.pos);
 
-        if (node && node.type.name !== 'paragraph') {
-          node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
-            return n.type.name === 'paragraph';
-          })?.node;
-        }
-        if (!node) {
-          return false;
-        }
-        const paragraphProps = getResolvedParagraphProperties(node);
-        const currentStyleId = paragraphProps.styleId;
+          if (node && node.type.name !== 'paragraph') {
+            node = findParentNodeClosestToPos($from, (n) => {
+              return n.type.name === 'paragraph';
+            })?.node;
+          }
+          if (!node) {
+            return false;
+          }
+          const paragraphProps = getResolvedParagraphProperties(node) ?? {};
+          const currentStyleId = paragraphProps.styleId;
 
-        if (currentStyleId === style.id) {
-          return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
-        }
-        return applyLinkedStyleToTransaction(tr, this.editor, style);
-      },
+          if (currentStyleId === style.id) {
+            return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
+          }
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
 
       /**
        * Apply a linked style by its ID
@@ -96,21 +107,23 @@ export const LinkedStyles = Extension.create({
        * editor.commands.setStyleById('Normal')
        * @note Looks up the style from loaded Word styles
        */
-      setStyleById: (styleId: string) => (params: Record<string, unknown>) => {
-        const { state, tr } = params;
-        const pluginState = LinkedStylesPluginKey.getState(state);
-        if (!pluginState) return false;
+      setStyleById:
+        (styleId: string) =>
+        ({ state, tr }: { state: EditorState; tr: Transaction }): boolean => {
+          if (!this.editor) return false;
+          const pluginState = LinkedStylesPluginKey.getState(state);
+          if (!pluginState) return false;
 
-        const style = pluginState.styles?.find((s: Record<string, unknown>) => s.id === styleId);
-        if (!style) return false;
+          const style = (pluginState.styles as LinkedStyleDefinition[] | undefined)?.find((s) => s.id === styleId);
+          if (!style) return false;
 
-        return applyLinkedStyleToTransaction(tr, this.editor, style);
-      },
+          return applyLinkedStyleToTransaction(tr, this.editor, style);
+        },
     };
   },
 
   addHelpers() {
-    const editor = this.editor;
+    const editor = this.editor as Editor;
     const extensionName = this.name;
 
     return {
@@ -122,8 +135,10 @@ export const LinkedStyles = Extension.create({
        * const styles = editor.helpers.linkedStyles.getStyles();
        * // Returns all styles from the Word document
        */
-      getStyles: () => {
-        const pluginState = LinkedStylesPluginKey.getState(editor.state) as Record<string, unknown> | undefined;
+      getStyles: (): LinkedStyleDefinition[] => {
+        const pluginState = LinkedStylesPluginKey.getState(editor.state) as
+          | { styles?: LinkedStyleDefinition[] }
+          | undefined;
         const styles = pluginState?.styles || [];
         return styles;
       },
@@ -138,8 +153,8 @@ export const LinkedStyles = Extension.create({
        */
       getStyleById: (styleId: string) => {
         const helpers = editor.helpers as Record<string, unknown>;
-        const styles = (helpers?.[extensionName] as Record<string, unknown>)?.getStyles() ?? [];
-        return (styles as Array<Record<string, unknown>>).find((s) => s.id === styleId);
+        const styles = (helpers?.[extensionName] as { getStyles?: () => LinkedStyleDefinition[] })?.getStyles?.() ?? [];
+        return styles.find((s) => s.id === styleId);
       },
 
       /**
@@ -154,8 +169,8 @@ export const LinkedStyles = Extension.create({
        */
       getLinkedStyleString: (styleId: string) => {
         const helpers = editor.helpers as Record<string, unknown>;
-        const styles = (helpers?.linkedStyles as Record<string, unknown>)?.getStyles() ?? [];
-        const style = (styles as Array<Record<string, unknown>>).find((s) => s.id === styleId);
+        const styles = (helpers?.linkedStyles as { getStyles?: () => LinkedStyleDefinition[] })?.getStyles?.() ?? [];
+        const style = styles.find((s) => s.id === styleId);
         if (!style) return '';
         return generateLinkedStyleString(style, null, null, null);
       },

@@ -5,7 +5,6 @@ const sanitizeNumber = (value: string, defaultNumber: number): number => {
   let sanitizedNum = parseFloat(sanitized);
   if (isNaN(sanitizedNum)) sanitizedNum = defaultNumber;
 
-  sanitizedNum = parseFloat(sanitized);
   return sanitizedNum;
 };
 

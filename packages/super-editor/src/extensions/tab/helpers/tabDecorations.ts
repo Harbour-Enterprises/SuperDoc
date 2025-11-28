@@ -1,6 +1,9 @@
 import { Decoration } from 'prosemirror-view';
+import type { EditorView } from 'prosemirror-view';
+import type { Node as PmNode, ResolvedPos } from 'prosemirror-model';
 import { twipsToPixels } from '@superdoc/word-layout';
 import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
+import type { TabStopInput, TabStopAlignment, TabLeader } from '../types.js';
 
 interface IndentAttrs {
   left?: number | string;
@@ -8,18 +11,43 @@ interface IndentAttrs {
   hanging?: number | string;
 }
 
+type ParagraphEntry = { node: PmNode; pos: number };
+export interface ParagraphContext {
+  paragraph: PmNode;
+  paragraphDepth: number;
+  startPos: number;
+  indent: Record<string, unknown>;
+  tabStops: TabStopInput[];
+  flattened: ParagraphEntry[];
+  positionMap: Map<number, number>;
+  accumulatedTabWidth: number;
+  indentWidth?: number;
+  tabHeight?: string;
+  paragraphWidth?: number;
+}
+
+type ParagraphCache = Map<number, ParagraphContext>;
+type CoordCache = Map<number, number | null>;
+type DomPosCache = Map<number, { node: Node; offset: number }>;
+
 export const defaultTabDistance = 48;
 export const defaultLineLength = 816;
 
-export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
-  const decorations = [];
-  const paragraphCache = new Map();
-  const coordCache = new Map();
-  const domPosCache = new Map();
+export const getTabDecorations = (
+  doc: PmNode,
+  view: EditorView,
+  helpers: unknown,
+  from = 0,
+  to: number | null = null,
+) => {
+  const decorations: Decoration[] = [];
+  const paragraphCache: ParagraphCache = new Map();
+  const coordCache: CoordCache = new Map();
+  const domPosCache: DomPosCache = new Map();
 
   const end = to ?? doc.content.size;
 
-  doc.nodesBetween(from, end, (node, pos) => {
+  doc.nodesBetween(from, end, (node: PmNode, pos: number) => {
     if (node.type.name !== 'tab') return;
 
     const $pos = doc.resolve(pos);
@@ -42,14 +70,14 @@ export const getTabDecorations = (doc, view, helpers, from = 0, to = null) => {
 };
 
 export function calculateTabStyle(
-  nodeSize,
-  view,
-  pos,
-  blockParent,
-  paragraphContext,
-  coordCache = null,
-  domPosCache = null,
-) {
+  nodeSize: number,
+  view: EditorView,
+  pos: number,
+  blockParent: PmNode,
+  paragraphContext: ParagraphContext,
+  coordCache: CoordCache | null = null,
+  domPosCache: DomPosCache | null = null,
+): string | null {
   let extraStyles = '';
   try {
     const { tabStops, flattened, positionMap, startPos } = paragraphContext;
@@ -79,14 +107,15 @@ export function calculateTabStyle(
       const tabStop = tabStops.find((stop) => stop.pos > currentWidth && stop.val !== 'clear');
       if (tabStop) {
         tabWidth = Math.min(tabStop.pos, paragraphContext.paragraphWidth) - currentWidth;
-        let val = tabStop.val;
-        const aliases = { left: 'start', right: 'end' };
-        if (aliases[val]) val = aliases[val];
+        let val: TabStopAlignment = tabStop.val;
+        const aliases: Partial<Record<TabStopAlignment, TabStopAlignment>> = { left: 'start', right: 'end' };
+        const mappedVal = aliases[val];
+        if (mappedVal) val = mappedVal;
 
         if (val === 'center' || val === 'end' || val === 'right') {
           // Use O(1) map lookup instead of O(n) findIndex
           const entryIndex = positionMap.get(pos);
-          if (entryIndex === undefined) return;
+          if (entryIndex === undefined) return null;
 
           const nextTabIndex = findNextTabIndex(flattened, entryIndex + 1);
           const segmentStartPos = pos + nodeSize;
@@ -97,7 +126,7 @@ export function calculateTabStyle(
         } else if (val === 'decimal' || val === 'num') {
           // Use O(1) map lookup instead of O(n) findIndex
           const entryIndex = positionMap.get(pos);
-          if (entryIndex === undefined) return;
+          if (entryIndex === undefined) return null;
 
           const breakChar = tabStop.decimalChar || '.';
           const decimalPos = findDecimalBreakPos(flattened, entryIndex + 1, breakChar);
@@ -114,7 +143,8 @@ export function calculateTabStyle(
         }
 
         if (tabStop.leader) {
-          const leaderStyles = {
+          const leaderStyles: Record<TabLeader, string> = {
+            none: '',
             dot: 'border-bottom: 1px dotted black;',
             heavy: 'border-bottom: 2px solid black;',
             hyphen: 'border-bottom: 1px solid black;',
@@ -132,7 +162,7 @@ export function calculateTabStyle(
     }
 
     // Use cached tabHeight (computed once per paragraph)
-    const tabHeight = paragraphContext.tabHeight;
+    const tabHeight = paragraphContext.tabHeight ?? 'auto';
 
     paragraphContext.accumulatedTabWidth = accumulatedTabWidth + tabWidth;
     return `width: ${tabWidth}px; height: ${tabHeight}; ${extraStyles}`;
@@ -141,7 +171,11 @@ export function calculateTabStyle(
   }
 }
 
-export function findParagraphContext($pos, cache, helpers) {
+export function findParagraphContext(
+  $pos: ResolvedPos,
+  cache: ParagraphCache,
+  helpers: unknown,
+): ParagraphContext | null {
   for (let depth = $pos.depth; depth >= 0; depth--) {
     const node = $pos.node(depth);
     if (node?.type?.name === 'paragraph') {
@@ -150,32 +184,34 @@ export function findParagraphContext($pos, cache, helpers) {
         const paragraphContext = extractParagraphContext(node, startPos, helpers, depth);
         cache.set(startPos, paragraphContext);
       }
-      return cache.get(startPos);
+      return cache.get(startPos) ?? null;
     }
   }
   return null;
 }
 
-export function extractParagraphContext(node, startPos, helpers, depth = 0) {
-  const paragraphProperties = getResolvedParagraphProperties(node);
+export function extractParagraphContext(node: PmNode, startPos: number, helpers: unknown, depth = 0): ParagraphContext {
+  const paragraphProperties = getResolvedParagraphProperties(node) || {};
   // Map OOXML alignment values to internal values (for RTL support)
-  const alignmentAliases = { left: 'start', right: 'end' };
-  let tabStops = [];
+  const alignmentAliases: Partial<Record<TabStopAlignment, TabStopAlignment>> = { left: 'start', right: 'end' };
+  let tabStops: TabStopInput[] = [];
 
-  if (Array.isArray(paragraphProperties.tabStops)) {
-    tabStops = paragraphProperties.tabStops
+  if (Array.isArray((paragraphProperties as Record<string, unknown>).tabStops)) {
+    tabStops = (paragraphProperties as { tabStops: TabStopInput[] }).tabStops
       .map((stop) => {
-        const ref = stop?.tab;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const ref = (stop as any)?.tab;
         if (!ref) return stop || null;
-        const rawType = ref.tabType || 'start';
-        const mappedVal = alignmentAliases[rawType] || rawType;
+        const rawType = (ref.tabType as TabStopAlignment) || 'start';
+        const mappedVal = (alignmentAliases[rawType] || rawType) as TabStopAlignment;
         return {
           val: mappedVal,
           pos: twipsToPixels(Number(ref.pos) || 0),
-          leader: ref.leader,
+          leader: ref.leader as TabLeader | undefined,
+          decimalChar: ref.decimalChar as string | undefined,
         };
       })
-      .filter(Boolean);
+      .filter((stop): stop is TabStopInput => Boolean(stop));
   }
 
   const { entries, positionMap } = flattenParagraph(node, startPos);
@@ -183,7 +219,7 @@ export function extractParagraphContext(node, startPos, helpers, depth = 0) {
     paragraph: node,
     paragraphDepth: depth,
     startPos,
-    indent: paragraphProperties.indent || {},
+    indent: (paragraphProperties as { indent?: Record<string, unknown> }).indent || {},
     tabStops: tabStops,
     flattened: entries,
     positionMap: positionMap, // Store position map for O(1) lookups
@@ -191,16 +227,16 @@ export function extractParagraphContext(node, startPos, helpers, depth = 0) {
   };
 }
 
-export function flattenParagraph(paragraph, paragraphStartPos) {
-  const entries = [];
-  const positionMap = new Map(); // Map from position to index for O(1) lookup
+export function flattenParagraph(paragraph: PmNode, paragraphStartPos: number) {
+  const entries: ParagraphEntry[] = [];
+  const positionMap: Map<number, number> = new Map(); // Map from position to index for O(1) lookup
 
-  const walk = (node, basePos) => {
+  const walk = (node: PmNode | null, basePos: number) => {
     if (!node) return;
     if (node.type?.name === 'run') {
       node.forEach((child, offset) => {
         const childPos = basePos + offset + 1;
-        walk(child, childPos);
+        walk(child as PmNode, childPos);
       });
       return;
     }
@@ -212,13 +248,13 @@ export function flattenParagraph(paragraph, paragraphStartPos) {
 
   paragraph.forEach((child, offset) => {
     const childPos = paragraphStartPos + offset + 1;
-    walk(child, childPos);
+    walk(child as PmNode, childPos);
   });
 
   return { entries, positionMap };
 }
 
-export function findNextTabIndex(flattened, fromIndex) {
+export function findNextTabIndex(flattened: ParagraphEntry[], fromIndex: number) {
   for (let i = fromIndex; i < flattened.length; i++) {
     if (flattened[i]?.node?.type?.name === 'tab') {
       return i;
@@ -227,7 +263,7 @@ export function findNextTabIndex(flattened, fromIndex) {
   return -1;
 }
 
-export function findDecimalBreakPos(flattened, startIndex, breakChar) {
+export function findDecimalBreakPos(flattened: ParagraphEntry[], startIndex: number, breakChar: string | null) {
   if (!breakChar) return null;
   for (let i = startIndex; i < flattened.length; i++) {
     const entry = flattened[i];
@@ -243,7 +279,13 @@ export function findDecimalBreakPos(flattened, startIndex, breakChar) {
   return null;
 }
 
-export function measureRangeWidth(view, from, to, coordCache = null, domPosCache = null) {
+export function measureRangeWidth(
+  view: EditorView,
+  from: number,
+  to: number,
+  coordCache: CoordCache | null = null,
+  domPosCache: DomPosCache | null = null,
+): number {
   if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return 0;
   try {
     const range = document.createRange();
@@ -263,12 +305,12 @@ export function measureRangeWidth(view, from, to, coordCache = null, domPosCache
 }
 
 export function getIndentWidth(
-  view,
-  paragraphStartPos,
+  view: EditorView,
+  paragraphStartPos: number,
   indentAttrs: IndentAttrs = {},
-  coordCache = null,
-  domPosCache = null,
-) {
+  coordCache: CoordCache | null = null,
+  domPosCache: DomPosCache | null = null,
+): number {
   const marginLeft = getLeftCoord(view, paragraphStartPos, coordCache, domPosCache);
   const lineLeft = getLeftCoord(view, paragraphStartPos + 1, coordCache, domPosCache);
   if (marginLeft != null && lineLeft != null) {
@@ -280,7 +322,7 @@ export function getIndentWidth(
   return calculateIndentFallback(indentAttrs);
 }
 
-export function getBlockNodeWidth(view, blockStartPos) {
+export function getBlockNodeWidth(view: EditorView, blockStartPos: number) {
   const blockDom = view.nodeDOM(blockStartPos - 1);
   // Calculate full width including margins, paddings, borders
   if (blockDom instanceof HTMLElement) {
@@ -319,15 +361,20 @@ export function calculateIndentFallback(indentAttrs: IndentAttrs = {}) {
   return 0;
 }
 
-export function getLeftCoord(view, pos, coordCache = null, domPosCache = null) {
+export function getLeftCoord(
+  view: EditorView,
+  pos: number,
+  coordCache: CoordCache | null = null,
+  domPosCache: DomPosCache | null = null,
+): number | null {
   if (!Number.isFinite(pos)) return null;
 
   // Check cache first
   if (coordCache && coordCache.has(pos)) {
-    return coordCache.get(pos);
+    return coordCache.get(pos) ?? null;
   }
 
-  let result = null;
+  let result: number | null = null;
   try {
     result = view.coordsAtPos(pos).left;
   } catch {
@@ -352,9 +399,13 @@ export function getLeftCoord(view, pos, coordCache = null, domPosCache = null) {
   return result;
 }
 
-export function getCachedDomAtPos(view, pos, domPosCache = null) {
+export function getCachedDomAtPos(
+  view: EditorView,
+  pos: number,
+  domPosCache: DomPosCache | null = null,
+): { node: Node; offset: number } {
   if (domPosCache && domPosCache.has(pos)) {
-    return domPosCache.get(pos);
+    return domPosCache.get(pos)!;
   }
 
   const result = view.domAtPos(pos);
@@ -366,7 +417,7 @@ export function getCachedDomAtPos(view, pos, domPosCache = null) {
   return result;
 }
 
-export function calcTabHeight(blockParent) {
+export function calcTabHeight(blockParent: PmNode) {
   const ptToPxRatio = 1.333;
   const defaultFontSize = 16;
   const defaultLineHeight = 1.1;

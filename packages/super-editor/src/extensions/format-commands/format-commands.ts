@@ -64,7 +64,7 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
        */
       clearFormat:
         () =>
-        ({ chain }) => {
+        ({ chain }: { chain: () => { clearNodes: () => { unsetAllMarks: () => { run: () => boolean } } } }) => {
           return chain().clearNodes().unsetAllMarks().run();
         },
 
@@ -77,7 +77,7 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
        */
       clearMarksFormat:
         () =>
-        ({ chain }) => {
+        ({ chain }: { chain: () => { unsetAllMarks: () => { run: () => boolean } } }) => {
           return chain().unsetAllMarks().run();
         },
 
@@ -90,7 +90,7 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
        */
       clearNodesFormat:
         () =>
-        ({ chain }) => {
+        ({ chain }: { chain: () => { clearNodes: () => { run: () => boolean } } }) => {
           return chain().clearNodes().run();
         },
 
@@ -103,9 +103,11 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
        */
       copyFormat:
         () =>
-        ({ chain }) => {
+        ({ chain }: { chain: () => Record<string, (...args: unknown[]) => unknown> }) => {
+          if (!this.editor) return false;
           // If we don't have a saved style, save the current one
-          if (!this.storage.storedStyle) {
+          const storedMarks = this.storage.storedStyle;
+          if (!storedMarks) {
             const marks = getMarksFromSelection(this.editor.state);
             this.storage.storedStyle = marks;
             return true;
@@ -113,13 +115,15 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
 
           // Special case: if there are no stored marks, but this is still an apply action
           // We just clear the format
-          if (!this.storage.storedStyle.length) {
+          if (!storedMarks.length) {
             this.storage.storedStyle = null;
-            return chain().clearFormat().run();
+            const chainObj = chain() as { clearFormat?: () => { run?: () => boolean } };
+            const res = chainObj.clearFormat?.();
+            const run = res?.run;
+            return typeof run === 'function' ? run.call(res) : true;
           }
 
           // If we do have a stored style, apply it
-          const storedMarks = this.storage.storedStyle;
           const processedMarks: StoredStyle[] = [];
           storedMarks.forEach((mark) => {
             const { type, attrs } = mark;
@@ -147,8 +151,7 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
           };
 
           // Apply marks present, clear ones that are not, by chaining commands
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let result: any = chain();
+          let result = chain() as Record<string, (...args: unknown[]) => unknown>;
           Object.keys(marksToCommands).forEach((key) => {
             const [setCommand, unsetCommand, defaultParam] = marksToCommands[key];
             const markToApply = processedMarks.find((mark) => mark.name === key);
@@ -157,19 +160,22 @@ export const FormatCommands = Extension.create<FormatCommandsOptions, FormatComm
             let cmd: { command: string; argument: unknown };
             if (!markToApply && !hasEmptyAttrs) cmd = { command: unsetCommand, argument: defaultParam };
             else cmd = { command: setCommand, argument: markToApply?.attrs[key] || defaultParam };
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            result = (result as any)[cmd.command](cmd.argument);
+            const commandFn = result[cmd.command];
+            if (typeof commandFn === 'function') {
+              result = commandFn.call(result, cmd.argument) as typeof result;
+            }
           });
 
           this.storage.storedStyle = null;
-          return result;
+          const run = (result as unknown as { run?: () => boolean }).run;
+          return typeof run === 'function' ? run.call(result) : true;
         },
     };
   },
 
   addShortcuts() {
     return {
-      'Mod-Alt-c': () => this.editor.commands.clearFormat(),
+      'Mod-Alt-c': () => this.editor?.commands.clearFormat() ?? false,
     };
   },
 });

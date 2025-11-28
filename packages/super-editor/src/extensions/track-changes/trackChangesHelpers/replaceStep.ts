@@ -1,5 +1,6 @@
 import { Mapping, ReplaceStep } from 'prosemirror-transform';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import type { Mark as PmMark } from 'prosemirror-model';
 import { markInsertion } from './markInsertion.js';
 import { markDeletion } from './markDeletion.js';
 import { findMark } from '@core/helpers/index.js';
@@ -70,7 +71,7 @@ export const replaceStep = ({
     map.appendMap(mappedInvertStep.getMap());
   }
 
-  const meta: { insertedMark?: unknown; step?: unknown; deletionNodes?: unknown[]; deletionMark?: unknown } = {};
+  const meta: { insertedMark?: PmMark; step?: ReplaceStep; deletionNodes?: unknown[]; deletionMark?: unknown } = {};
   if (newStep) {
     const trTemp = state.apply(newTr).tr;
 

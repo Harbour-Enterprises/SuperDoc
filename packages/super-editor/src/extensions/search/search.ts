@@ -3,6 +3,8 @@ import { search, SearchQuery, setSearchState, getMatchHighlights } from './prose
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { v4 as uuidv4 } from 'uuid';
+import type { EditorState, Transaction } from 'prosemirror-state';
+import type { Editor } from '@core/Editor.js';
 
 const isRegExp = (value: unknown): value is RegExp => Object.prototype.toString.call(value) === '[object RegExp]';
 
@@ -98,7 +100,7 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
       goToFirstMatch:
         () =>
         /** @returns {boolean} */
-        ({ state, editor }) => {
+        ({ state, editor }: { state: EditorState; editor: Editor }) => {
           const highlights = getMatchHighlights(state);
           if (!highlights) return false;
 
@@ -108,7 +110,10 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
 
           const firstMatch = decorations[0];
           const domPos = editor.view.domAtPos(firstMatch.from);
-          domPos?.node?.scrollIntoView(true);
+          const target = domPos?.node;
+          if (target instanceof Element) {
+            target.scrollIntoView({ block: 'center', inline: 'nearest' });
+          }
           return true;
         },
 
@@ -130,7 +135,7 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
        */
       search:
         (patternInput: string | RegExp, options: SearchCommandOptions = {}) =>
-        ({ state, dispatch }): SearchMatch[] => {
+        ({ state, dispatch }: { state: EditorState; dispatch?: (tr: Transaction) => void }): SearchMatch[] => {
           // Validate options parameter - must be an object if provided
           if (options != null && (typeof options !== 'object' || Array.isArray(options))) {
             throw new TypeError('Search options must be an object');
@@ -168,7 +173,7 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
             wholeWord,
           });
           const tr = setSearchState(state.tr, query, null, { highlight });
-          dispatch(tr);
+          dispatch?.(tr);
 
           const newState = state.apply(tr);
 
@@ -198,7 +203,15 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
        */
       goToSearchResult:
         (match: SearchMatch) =>
-        ({ state, dispatch, editor }): boolean => {
+        ({
+          state,
+          dispatch,
+          editor,
+        }: {
+          state: EditorState;
+          dispatch: (tr: Transaction) => void;
+          editor: Editor;
+        }): boolean => {
           const { from, to } = match;
 
           editor.view.focus();
@@ -206,7 +219,7 @@ export const Search = Extension.create<SearchOptions, SearchStorage>({
           dispatch(tr);
 
           const { node } = editor.view.domAtPos(from);
-          if (node?.scrollIntoView) {
+          if (node instanceof Element) {
             node.scrollIntoView({ block: 'center', inline: 'nearest' });
           }
 

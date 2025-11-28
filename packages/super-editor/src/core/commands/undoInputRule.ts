@@ -1,4 +1,13 @@
 import type { Command } from '../types/ChainedCommands.js';
+import type { Step } from 'prosemirror-transform';
+import type { Node as ProseMirrorNode } from 'prosemirror-model';
+
+type UndoableState = {
+  transform: { steps: Step[]; docs: ProseMirrorNode[] };
+  from: number;
+  to: number;
+  text?: string;
+};
 
 export const undoInputRule =
   (): Command =>
@@ -7,9 +16,9 @@ export const undoInputRule =
 
     for (let i = 0; i < plugins.length; i += 1) {
       const plugin = plugins[i];
-      let undoable;
+      let undoable: UndoableState | null = null;
 
-      if (plugin.spec.isInputRules && (undoable = plugin.getState(state))) {
+      if (plugin.spec.isInputRules && (undoable = plugin.getState(state) as UndoableState | null)) {
         if (dispatch) {
           const tr = state.tr;
           const toUndo = undoable.transform;

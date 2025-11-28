@@ -1,28 +1,42 @@
 import { Attribute } from '@core/index';
 import { NodeSelection } from 'prosemirror-state';
+import type { Node as PmNode } from 'prosemirror-model';
+import type { Decoration, DecorationSource, EditorView } from 'prosemirror-view';
+import type { Editor } from '@core/Editor.js';
+import type { AttributeValue } from '@core/Attribute.js';
+
+export interface StructuredContentViewProps {
+  node: PmNode;
+  editor: Editor;
+  getPos: () => number | undefined;
+  decorations: readonly Decoration[];
+  innerDecorations: DecorationSource;
+  extension?: unknown;
+  htmlAttributes: Record<string, AttributeValue>;
+}
 
 export class StructuredContentViewBase {
-  node;
+  node: PmNode;
 
-  view;
+  view: EditorView;
 
-  getPos;
+  getPos: () => number | undefined;
 
-  decorations;
+  decorations: readonly Decoration[];
 
-  innerDecorations;
+  innerDecorations: DecorationSource;
 
-  editor;
+  editor: Editor;
 
-  extension;
+  extension: unknown;
 
-  htmlAttributes;
+  htmlAttributes: Record<string, AttributeValue>;
 
-  root;
+  root: HTMLElement | null = null;
 
   isDragging = false;
 
-  constructor(props) {
+  constructor(props: StructuredContentViewProps) {
     this.node = props.node;
     this.view = props.editor.view;
     this.getPos = props.getPos;
@@ -39,15 +53,15 @@ export class StructuredContentViewBase {
     return;
   }
 
-  get dom() {
+  get dom(): HTMLElement | null {
     return this.root;
   }
 
-  get contentDOM() {
+  get contentDOM(): HTMLElement | null {
     return null;
   }
 
-  update(node, decorations, innerDecorations) {
+  update(node: PmNode, decorations: readonly Decoration[], innerDecorations: DecorationSource) {
     if (node.type !== this.node.type) {
       return false;
     }
@@ -60,10 +74,11 @@ export class StructuredContentViewBase {
     return true;
   }
 
-  stopEvent(event) {
+  stopEvent(event: Event) {
     if (!this.dom) return false;
 
-    const target = event.target;
+    const target = event.target as HTMLElement | null;
+    if (!target) return false;
     const isInElement = this.dom.contains(target) && !this.contentDOM?.contains(target);
 
     // any event from child nodes should be handled by ProseMirror
@@ -136,12 +151,13 @@ export class StructuredContentViewBase {
     return true;
   }
 
-  ignoreMutation(mutation) {
+  ignoreMutation(mutation: MutationRecord) {
     if (!this.dom || !this.contentDOM) return true;
 
     if (this.node.isLeaf || this.node.isAtom) return true;
 
-    if (mutation.type === 'selection') return false;
+    const mutationType = mutation.type as string;
+    if (mutationType === 'selection') return false;
 
     if (this.contentDOM === mutation.target && mutation.type === 'attributes') return true;
 
@@ -151,11 +167,11 @@ export class StructuredContentViewBase {
   }
 
   destroy() {
-    this.dom.remove();
+    this.dom?.remove();
     this.contentDOM?.remove();
   }
 
-  updateAttributes(attrs) {
+  updateAttributes(attrs: Partial<Record<string, AttributeValue>>) {
     const pos = this.getPos();
 
     if (typeof pos !== 'number') {
@@ -189,9 +205,10 @@ export class StructuredContentViewBase {
     return dragHandle;
   }
 
-  onDragStart(event) {
+  onDragStart(event: DragEvent) {
     const { view } = this.editor;
-    const target = event.target;
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
 
     // get the drag handle element
     // `closest` is not available for text nodes so we may have to use its parent
@@ -212,8 +229,8 @@ export class StructuredContentViewBase {
       const domBox = this.dom.getBoundingClientRect();
       const handleBox = dragHandle.getBoundingClientRect();
 
-      const offsetX = event.offsetX ?? event.nativeEvent?.offsetX;
-      const offsetY = event.offsetY ?? event.nativeEvent?.offsetY;
+      const offsetX = event.offsetX;
+      const offsetY = event.offsetY;
 
       x = handleBox.x - domBox.x + offsetX;
       y = handleBox.y - domBox.y + offsetY;

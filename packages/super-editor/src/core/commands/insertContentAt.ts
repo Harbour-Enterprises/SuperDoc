@@ -1,12 +1,18 @@
-import { createNodeFromContent } from '../helpers/createNodeFromContent';
+import { createNodeFromContent } from '../helpers/createNodeFromContent.js';
 import type { Command, CommandProps } from '../types/ChainedCommands.js';
-import { selectionToInsertionEnd } from '../helpers/selectionToInsertionEnd';
+import { selectionToInsertionEnd } from '../helpers/selectionToInsertionEnd.js';
 import type { Node as ProseMirrorNode, Fragment as ProseMirrorFragment, ResolvedPos } from 'prosemirror-model';
 
-type ContentValue = string | Array<string | { text?: string }> | ProseMirrorNode | ProseMirrorFragment;
-type Position = ResolvedPos | number | { from: number; to: number };
+export type JSONContent = Record<string, unknown> | Array<Record<string, unknown>>;
+export type ContentValue =
+  | string
+  | Array<string | { text?: string }>
+  | ProseMirrorNode
+  | ProseMirrorFragment
+  | JSONContent;
+export type Position = ResolvedPos | number | { from: number; to: number };
 
-interface InsertContentOptions {
+export interface InsertContentOptions {
   parseOptions?: Record<string, unknown>;
   updateSelection?: boolean;
   applyInputRules?: boolean;
@@ -41,6 +47,8 @@ export const insertContentAt =
   ({ tr, dispatch, editor }: CommandProps) => {
     if (!dispatch) return true;
 
+    const isPmContent = typeof value === 'object' && value !== null && 'childCount' in value;
+
     options = {
       parseOptions: {},
       updateSelection: true,
@@ -51,31 +59,44 @@ export const insertContentAt =
       ...options,
     };
 
-    let content;
+    let content: ProseMirrorNode | ProseMirrorFragment;
 
     try {
-      content = createNodeFromContent(value, editor, {
-        parseOptions: {
-          preserveWhitespace: 'full',
-          ...options.parseOptions,
-        },
-        errorOnInvalidContent: options.errorOnInvalidContent ?? editor.options.enableContentCheck,
-      });
+      content = isPmContent
+        ? (value as ProseMirrorNode | ProseMirrorFragment)
+        : createNodeFromContent(value as string | Record<string, unknown> | Array<Record<string, unknown>>, editor, {
+            parseOptions: {
+              preserveWhitespace: 'full',
+              ...options.parseOptions,
+            },
+            errorOnInvalidContent: Boolean(
+              options.errorOnInvalidContent ?? (editor.options as Record<string, unknown>).enableContentCheck,
+            ),
+          });
     } catch (e) {
-      editor.emit('contentError', {
-        editor,
-        error: e,
-        disableCollaboration: () => {
-          console.error('[super-editor error]: Unable to disable collaboration at this point in time');
+      editor.emit(
+        'contentError',
+        {
+          editor,
+          error: e as Error,
         },
-      });
+      );
       return false;
     }
 
-    let { from, to } =
-      typeof position === 'number'
-        ? { from: position, to: position }
-        : { from: position.from, to: position.to };
+    let from: number;
+    let to: number;
+    if (typeof position === 'number') {
+      from = position;
+      to = position;
+    } else if ((position as { from?: number; to?: number }).from !== undefined) {
+      from = (position as { from: number }).from;
+      to = (position as { to: number }).to;
+    } else {
+      const resolved = position as ResolvedPos;
+      from = resolved.pos;
+      to = resolved.pos;
+    }
 
     // Heuristic:
     // - Bare strings that LOOK like HTML: let parser handle (replaceWith)
@@ -86,8 +107,8 @@ export const insertContentAt =
     const forceTextInsert =
       !!options.asText ||
       (hasNewline && !looksLikeHTML) ||
-      (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof v.text === 'string'))) ||
-      (!!value && typeof value === 'object' && typeof value.text === 'string');
+      (Array.isArray(value) && value.every((v) => typeof v === 'string' || (v && typeof (v as { text?: string }).text === 'string'))) ||
+      (!!value && typeof value === 'object' && 'text' in value && typeof value.text === 'string');
 
     // Inspect parsed nodes to decide text vs block replacement
     let isOnlyTextContent = true;
@@ -101,9 +122,9 @@ export const insertContentAt =
       }
 
       // only-plain-text if every node is an unmarked text node
-      isOnlyTextContent = isOnlyTextContent ? (node.isText && node.marks.length === 0) : false;
+      isOnlyTextContent = isOnlyTextContent ? ('isText' in node && node.isText && node.marks?.length === 0) : false;
 
-      isOnlyBlockContent = isOnlyBlockContent ? node.isBlock : false;
+      isOnlyBlockContent = isOnlyBlockContent ? ('isBlock' in node && Boolean(node.isBlock)) : false;
     });
 
     // Replace empty textblock wrapper when inserting blocks at a cursor
@@ -118,13 +139,13 @@ export const insertContentAt =
       }
     }
 
-    let newContent;
+    let newContent: ProseMirrorNode | ProseMirrorFragment | string;
 
     // Use insertText for pure text OR when explicitly/heuristically forced
     if (isOnlyTextContent || forceTextInsert) {
       if (Array.isArray(value)) {
         newContent = value.map((v) => (typeof v === 'string' ? v : (v && v.text) || '')).join('');
-      } else if (typeof value === 'object' && !!value && !!value.text) {
+      } else if (typeof value === 'object' && !!value && 'text' in value && typeof value.text === 'string') {
         newContent = value.text;
       } else {
         newContent = typeof value === 'string' ? value : '';

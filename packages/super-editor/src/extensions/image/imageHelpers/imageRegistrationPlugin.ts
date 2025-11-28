@@ -145,16 +145,21 @@ export const handleNodePath = (foundImages: ImageNodeInfo[], editor: Editor, sta
     imageStorage.media = mediaStore;
   }
 
-  const existingFileNames = new Set(Object.keys(mediaStore).map((key) => key.split('/').pop()));
+  const existingFileNames = new Set<string>(
+    Object.keys(mediaStore)
+      .map((key) => key.split('/').pop() || key)
+      .filter(Boolean) as string[],
+  );
 
   foundImages.forEach(({ node, pos }: ImageNodeInfo) => {
-    const { src } = node.attrs;
-    const preferredFileName = derivePreferredFileName(src);
+    const { src } = node.attrs as { src?: unknown };
+    const srcValue = typeof src === 'string' ? src : String(src ?? '');
+    const preferredFileName = derivePreferredFileName(srcValue);
     const uniqueFileName = ensureUniqueFileName(preferredFileName, existingFileNames);
     existingFileNames.add(uniqueFileName);
 
     const mediaPath = buildMediaPath(uniqueFileName);
-    mediaStore[mediaPath] = src;
+    mediaStore[mediaPath] = typeof src === 'string' ? src : String(src ?? '');
 
     const path = mediaPath.startsWith(WORD_MEDIA_PREFIX) ? mediaPath.slice(WORD_MEDIA_PREFIX.length) : mediaPath;
     const rId = addImageRelationship({ editor, path });

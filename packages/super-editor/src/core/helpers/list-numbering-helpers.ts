@@ -1,8 +1,8 @@
 import { getStyleTagFromStyleId } from '@core/super-converter/v2/importer/listImporter.js';
-import { baseBulletList, baseOrderedListDef } from './baseListDefinitions';
-import { updateNumberingProperties } from '@core/commands/changeListLevel';
+import { baseBulletList, baseOrderedListDef } from './baseListDefinitions.js';
+import { updateNumberingProperties } from '@core/commands/changeListLevel.js';
 import { findParentNode } from './findParentNode.js';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 import type { Node as PmNode, NodeType } from 'prosemirror-model';
 import type { Transaction } from 'prosemirror-state';
 

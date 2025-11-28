@@ -2,13 +2,14 @@ import { getTrackChanges } from './trackChangesHelpers/getTrackChanges.js';
 import type { EditorState } from 'prosemirror-state';
 import type { Mark as PmMark } from 'prosemirror-model';
 import type { PermissionParams } from '@core/types/EditorConfig.js';
+import type { Comment } from '@core/types/EditorEvents.js';
 
 type Editor = {
   options?: {
     role?: string;
     isInternal?: boolean;
     user?: unknown;
-    permissionResolver?: (params: PermissionParams) => boolean | undefined;
+    permissionResolver?: ((params: PermissionParams) => boolean | undefined) | null;
   };
 } | null;
 
@@ -20,7 +21,7 @@ type NormalizedChange = {
   from: number;
   to: number;
   segments: { from: number; to: number }[];
-  comment?: unknown;
+  comment?: Comment | null;
 };
 
 const PERMISSION_MAP = {
@@ -55,7 +56,7 @@ const mergeChange = (bucket: Map<string, NormalizedChange>, change: RawTrackedCh
       from: change.from,
       to: change.to,
       segments: [{ from: change.from, to: change.to }],
-      comment: change.comment,
+      comment: (change.comment as Comment | null | undefined) ?? null,
     });
   }
 };
@@ -159,8 +160,8 @@ export const isTrackedChangeActionAllowed = ({
         to: change.to,
         segments: change.segments,
         commentId: change.id,
-      } as unknown,
-      comment: (change.comment ?? null) as unknown,
+      },
+      comment: change.comment ?? null,
     };
 
     return resolver(payload) !== false;

@@ -1,26 +1,22 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
+import type { Node as PmNode, DOMOutputSpec } from 'prosemirror-model';
 
 /**
  * Configuration options for Mention
- * @typedef {Object} MentionOptions
- * @category Options
- * @property {Object} [htmlAttributes] - HTML attributes for mention elements
  */
-
-/**
- * Attributes for mention nodes
- * @typedef {Object} MentionAttributes
- * @category Attributes
- * @property {string} [name=null] - Display name of the mentioned person
- * @property {string} [email=null] - Email address of the mentioned person
- */
+export interface MentionOptions extends Record<string, unknown> {
+  htmlAttributes: {
+    class: string;
+    'aria-label': string;
+  };
+}
 
 /**
  * @module Mention
  * @sidebarTitle Mention
  * @snippetPath /snippets/extensions/mention.mdx
  */
-export const Mention = Node.create({
+export const Mention = Node.create<MentionOptions>({
   name: 'mention',
 
   group: 'inline',
@@ -45,8 +41,8 @@ export const Mention = Node.create({
   parseDOM() {
     return [
       {
-        tag: `span[data-type="${this.name || this.email}"]`,
-        getAttrs: (node) => ({
+        tag: `span[data-type="${this.name}"]`,
+        getAttrs: (node: HTMLElement) => ({
           name: node.getAttribute('name') || null,
           email: node.getAttribute('email') || null,
         }),
@@ -54,12 +50,16 @@ export const Mention = Node.create({
     ];
   },
 
-  renderDOM({ node, htmlAttributes }) {
-    const { name, email } = node.attrs;
+  renderDOM({ node, htmlAttributes }: { node: PmNode; htmlAttributes?: Record<string, unknown> }): DOMOutputSpec {
+    const { name, email } = node.attrs as { name?: string; email?: string };
 
     return [
       'span',
-      Attribute.mergeAttributes({ 'data-type': this.name || this.email }, this.options.htmlAttributes, htmlAttributes),
+      Attribute.mergeAttributes(
+        { 'data-type': this.name },
+        this.options.htmlAttributes,
+        (htmlAttributes as Record<string, AttributeValue>) ?? {},
+      ),
       `@${name ? name : email}`,
     ];
   },

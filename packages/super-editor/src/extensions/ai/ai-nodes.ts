@@ -1,4 +1,4 @@
-import { Attribute, Node } from '@core/index.js';
+import { Attribute, type AttributeValue, Node } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 import dotsLoader from '@superdoc/common/icons/dots-loader.svg';
 import { AiLoaderNodeName } from './ai-constants.js';
@@ -36,9 +36,12 @@ export const AiLoaderNode = Node.create({
     const { htmlAttributes } = (args[0] || {}) as { htmlAttributes?: Record<string, unknown> };
     const span = document.createElement('span');
     const options = this.options as { htmlAttributes?: Record<string, unknown> };
-    Object.entries(Attribute.mergeAttributes(options.htmlAttributes || {}, htmlAttributes || {})).forEach(([k, v]) =>
-      span.setAttribute(k, String(v)),
-    );
+    Object.entries(
+      Attribute.mergeAttributes(
+        (options.htmlAttributes as Record<string, AttributeValue>) || {},
+        (htmlAttributes as Record<string, AttributeValue>) || {},
+      ),
+    ).forEach(([k, v]) => span.setAttribute(k, String(v)));
 
     const img = document.createElement('img');
     img.src = dotsLoader;

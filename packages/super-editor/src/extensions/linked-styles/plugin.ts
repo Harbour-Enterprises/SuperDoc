@@ -166,7 +166,7 @@ const generateDecorations = (state: EditorState, styles: LinkedStyleDefinition[]
     for (let d = $pos.depth; d >= 0; d--) {
       const n = $pos.node(d);
       if (n?.type?.name === 'paragraph') {
-        const paragraphProps = getResolvedParagraphProperties(n);
+        const paragraphProps = getResolvedParagraphProperties(n) ?? {};
         return paragraphProps.styleId || null;
       }
     }

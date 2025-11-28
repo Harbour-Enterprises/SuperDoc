@@ -1,4 +1,6 @@
 import { findChildren } from '@core/helpers/findChildren';
+import type { EditorState } from 'prosemirror-state';
+import type { StructuredContentMatch } from './types';
 
 /**
  * Get structured content tag(s) by ID
@@ -10,7 +12,7 @@ import { findChildren } from '@core/helpers/findChildren';
  * const field = editor.helpers.getStructuredContentTagsById('field-123', editor.state)
  * if (field.length) console.log('Found field:', field[0].node.attrs)
  */
-export function getStructuredContentTagsById(idOrIds, state) {
+export function getStructuredContentTagsById(idOrIds: string | string[], state: EditorState): StructuredContentMatch[] {
   const result = findChildren(state.doc, (node) => {
     const isStructuredContent = ['structuredContent', 'structuredContentBlock'].includes(node.type.name);
     if (Array.isArray(idOrIds)) {

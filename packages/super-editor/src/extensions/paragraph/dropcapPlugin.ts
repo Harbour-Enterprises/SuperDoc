@@ -27,7 +27,7 @@ export function createDropcapPlugin(editor: Editor): Plugin {
     view: EditorView,
     widthCache: Map<number, number>,
   ): Decoration[] => {
-    const decorations = [];
+    const decorations: Decoration[] = [];
 
     state.doc.descendants((node, pos) => {
       if (hasDropcapParagraph(node, pos, state)) {
@@ -44,7 +44,7 @@ export function createDropcapPlugin(editor: Editor): Plugin {
 
   function getDropcapWidth(view: EditorView, pos: number, widthCache: Map<number, number>): number {
     if (widthCache.has(pos)) {
-      return widthCache.get(pos);
+      return widthCache.get(pos) ?? 0;
     }
 
     const domNode = view.nodeDOM(pos);

@@ -56,18 +56,13 @@ export const unsetTextIndentation = (): Command => modifyIndentation(() => null)
  * @returns {number|null} New left indentation in twips, or null if no indentation
  */
 function calculateNewIndentation(node: Node, delta: number): number | null {
-  const { indent } = getResolvedParagraphProperties(node);
-  let { left } = indent || {};
-
+  const { indent } = getResolvedParagraphProperties(node) ?? {};
   const increment = ptToTwips(delta * defaultIncrementPoints);
-  if (!left) {
-    left = increment;
-  } else {
-    left += increment;
-  }
+  let left = typeof indent?.left === 'number' ? indent.left : 0;
+  left += increment;
 
   if (left <= 0) {
-    left = null;
+    return null;
   }
   return left;
 }

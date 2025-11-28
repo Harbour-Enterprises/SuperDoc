@@ -195,9 +195,10 @@ export const useToolbarItem = (options: ToolbarItemOptions): ToolbarItem => {
 
   const unref = (): Record<string, unknown> => {
     const flattened: Record<string, unknown> = {};
-    Object.keys(refs).forEach((key) => {
-      const refValue = (refs as Record<string, Ref<unknown>>)[key];
-      if (refValue.value !== undefined) {
+    const refsRecord = refs as unknown as Record<string, Ref<unknown>>;
+    Object.keys(refsRecord).forEach((key) => {
+      const refValue = refsRecord[key];
+      if (refValue?.value !== undefined) {
         flattened[key] = refValue.value;
       }
     });

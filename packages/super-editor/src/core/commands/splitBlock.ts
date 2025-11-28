@@ -87,19 +87,24 @@ export const splitBlock =
     return true;
   };
 
-function deleteAttributes(attrs: Record<string, unknown>, attrsToRemove: string[]): Record<string, unknown> {
+function deleteAttributes(
+  attrs: Record<string, AttributeValue>,
+  attrsToRemove: string[],
+): Record<string, AttributeValue> {
   const newAttrs = { ...attrs };
   attrsToRemove.forEach((attrName) => {
     const parts = attrName.split('.');
     if (parts.length === 1) {
       delete newAttrs[attrName];
     } else {
-      let current: Record<string, unknown> = newAttrs;
+      let current: Record<string, AttributeValue> | AttributeValue = newAttrs;
       for (let i = 0; i < parts.length - 1; i++) {
-        if (current[parts[i]] == null) return;
-        current = current[parts[i]] as Record<string, unknown>;
+        if (current == null || typeof current !== 'object' || Array.isArray(current)) return;
+        current = (current as Record<string, AttributeValue>)[parts[i]];
       }
-      delete current[parts[parts.length - 1]];
+      if (current != null && typeof current === 'object' && !Array.isArray(current)) {
+        delete (current as Record<string, AttributeValue>)[parts[parts.length - 1]];
+      }
     }
   });
   return newAttrs;

@@ -1,4 +1,4 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 import { AiMarkName, AiAnimationMarkName } from './ai-constants.js';
 
@@ -34,8 +34,8 @@ export const AiMark = Mark.create({
     return [
       AiMarkName,
       Attribute.mergeAttributes(
-        (this.options as { htmlAttributes: Record<string, unknown> }).htmlAttributes,
-        htmlAttributes,
+        (this.options as { htmlAttributes: Record<string, AttributeValue> }).htmlAttributes,
+        htmlAttributes as Record<string, AttributeValue>,
       ),
     ];
   },
@@ -83,8 +83,8 @@ export const AiAnimationMark = Mark.create({
     return [
       AiAnimationMarkName,
       Attribute.mergeAttributes(
-        (this.options as { htmlAttributes: Record<string, unknown> }).htmlAttributes,
-        htmlAttributes,
+        (this.options as { htmlAttributes: Record<string, AttributeValue> }).htmlAttributes,
+        htmlAttributes as Record<string, AttributeValue>,
       ),
     ];
   },

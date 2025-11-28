@@ -11,8 +11,21 @@ export function objectIncludes(
   const keys = Object.keys(obj2);
   if (!keys.length) return true;
   return keys.every((key) => {
-    if (options.strict) return obj2[key] === obj1[key];
-    if (isRegExp(obj2[key])) return obj2[key].test(obj1[key]);
-    return obj2[key] === obj1[key];
+    const value1 = obj1[key];
+    const value2 = obj2[key];
+
+    if (options.strict) {
+      return value2 === value1;
+    }
+
+    if (isRegExp(value2)) {
+      // Type guard: ensure value1 can be tested by the RegExp
+      if (typeof value1 === 'string' || typeof value1 === 'number') {
+        return value2.test(String(value1));
+      }
+      return false;
+    }
+
+    return value2 === value1;
   });
 }

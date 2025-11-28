@@ -18,14 +18,15 @@ export function createNumberingPlugin(editor: Editor): Plugin {
   // Helpers to initialize and refresh start settings from definitions
   const applyStartSettingsFromDefinitions = (definitionsMap: Record<string, unknown>): void => {
     Object.entries(definitionsMap || {}).forEach(([numId, levels]) => {
-      Object.entries(levels || {}).forEach(([level, def]: [string, unknown]) => {
-        const defObj = def as Record<string, unknown>;
-        const start = parseInt(String(defObj?.start)) || 1;
-        let restart = defObj?.restart;
-        if (restart != null) {
-          restart = parseInt(restart);
+      Object.entries((levels as Record<string, unknown>) || {}).forEach(([level, def]: [string, unknown]) => {
+        const defObj = (def as Record<string, unknown>) || {};
+        const start = parseInt(String(defObj?.start ?? '')) || 1;
+        let restart: number | undefined;
+        const restartRaw = defObj?.restart;
+        if (restartRaw != null) {
+          restart = parseInt(String(restartRaw), 10);
         }
-        numberingManager.setStartSettings(numId, parseInt(level), start, restart);
+        numberingManager.setStartSettings(numId, parseInt(level, 10), start, restart);
       });
     });
   };
@@ -76,13 +77,33 @@ export function createNumberingPlugin(editor: Editor): Plugin {
       numberingManager.enableCache();
       newState.doc.descendants((node, pos) => {
         const resolvedProps = calculateResolvedParagraphProperties(editor, node, newState.doc.resolve(pos));
-        if (node.type.name !== 'paragraph' || !resolvedProps.numberingProperties) {
+        const numberingProps = resolvedProps?.numberingProperties;
+        if (
+          node.type.name !== 'paragraph' ||
+          !numberingProps ||
+          numberingProps.numId === undefined ||
+          numberingProps.numId === null
+        ) {
           return;
         }
 
         // Retrieving numbering definition from docx
-        const { numId, ilvl: level = 0 } = resolvedProps.numberingProperties;
-        const definitionDetails = ListHelpers.getListDefinitionDetails({ numId, level, listType: undefined, editor });
+        const rawNumId = numberingProps.numId;
+        const rawLevel = numberingProps.ilvl;
+        const numIdValue =
+          typeof rawNumId === 'string' ? parseInt(rawNumId, 10) : typeof rawNumId === 'number' ? rawNumId : NaN;
+        if (!Number.isFinite(numIdValue)) {
+          tr.setNodeAttribute(pos, 'listRendering', null);
+          return;
+        }
+        const levelValue =
+          typeof rawLevel === 'string' ? parseInt(rawLevel, 10) : typeof rawLevel === 'number' ? rawLevel : 0;
+        const definitionDetails = ListHelpers.getListDefinitionDetails({
+          numId: numIdValue,
+          level: levelValue,
+          listType: undefined,
+          editor,
+        });
 
         if (!definitionDetails || Object.keys(definitionDetails).length === 0) {
           // Treat as normal paragraph if definition is missing
@@ -98,41 +119,47 @@ export function createNumberingPlugin(editor: Editor): Plugin {
           justification,
           abstractId,
         } = definitionDetails;
-        let listNumberingType = listNumberingTypeRaw;
+        const safeAbstractId: string | number | undefined = abstractId ?? undefined;
+        const listNumberingType: string = listNumberingTypeRaw ?? 'decimal';
         // Defining the list marker
         let markerText = '';
-        listNumberingType = listNumberingType || 'decimal';
-        const count = numberingManager.calculateCounter(numId, level, pos, abstractId);
-        numberingManager.setCounter(numId, level, pos, count, abstractId);
-        const path = numberingManager.calculatePath(numId, level, pos);
+        const count = numberingManager.calculateCounter(numIdValue, levelValue, pos, safeAbstractId);
+        numberingManager.setCounter(numIdValue, levelValue, pos, count, safeAbstractId);
+        const path = numberingManager.calculatePath(numIdValue, levelValue, pos);
         if (listNumberingType !== 'bullet') {
-          markerText = generateOrderedListIndex({
-            listLevel: path,
-            lvlText: lvlText,
-            listNumberingType,
-            customFormat,
-          });
+          markerText = String(
+            generateOrderedListIndex({
+              listLevel: path,
+              lvlText: String(lvlText ?? ''),
+              listNumberingType: String(listNumberingType),
+              customFormat: customFormat ?? undefined,
+            }),
+          );
         } else {
-          markerText = docxNumberingHelpers.normalizeLvlTextChar(lvlText);
+          markerText = String(docxNumberingHelpers.normalizeLvlTextChar(String(lvlText ?? '•')));
         }
+
+        const safeSuffix = typeof suffix === 'string' ? suffix : undefined;
+        const safeJustification: string = typeof justification === 'string' ? justification : '';
+        const safeNumberingType: string = String(listNumberingType ?? '');
 
         if (
           JSON.stringify(node.attrs.listRendering) !==
           JSON.stringify({
             markerText,
-            suffix,
-            justification,
+            suffix: safeSuffix,
+            justification: safeJustification,
             path,
-            numberingType: listNumberingType,
+            numberingType: safeNumberingType,
           })
         ) {
           // Updating rendering attrs for node view usage
           tr.setNodeAttribute(pos, 'listRendering', {
             markerText,
-            suffix,
-            justification,
+            suffix: safeSuffix,
+            justification: safeJustification,
             path,
-            numberingType: listNumberingType,
+            numberingType: safeNumberingType,
           });
         }
 

@@ -13,9 +13,9 @@ export function findHeaderFooterAnnotationsByFieldId(
   editor: Editor,
   activeSectionEditor: Editor,
 ): Array<{ node: PmNode; pos: number }> {
-  const sectionEditors = getAllHeaderFooterEditors();
+  const sectionEditors = getAllHeaderFooterEditors() as Array<{ editor: Editor }>;
   const annotations: Array<{ node: PmNode; pos: number }> = [];
-  sectionEditors.forEach(({ editor: sectionEditor }: { editor: Editor }) => {
+  sectionEditors.forEach(({ editor: sectionEditor }) => {
     const state =
       activeSectionEditor.options.documentId === sectionEditor.options.documentId
         ? activeSectionEditor.state

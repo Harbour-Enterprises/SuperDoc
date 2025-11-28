@@ -95,10 +95,10 @@ export const FontSize = Extension.create<FontSizeOptions>({
         attributes: {
           fontSize: {
             default: null,
-            parseDOM: (el) => el.style.fontSize,
-            renderDOM: (attrs) => {
+            parseDOM: (el: HTMLElement) => el.style.fontSize,
+            renderDOM: (attrs: FontSizeAttributes) => {
               if (!attrs.fontSize) return {};
-              const [value, unit] = parseSizeUnit(attrs.fontSize);
+              const [value, unit] = parseSizeUnit(String(attrs.fontSize));
               if (Number.isNaN(value)) return {};
               const finalUnit = unit ? unit : this.options.defaults.unit;
               return { style: `font-size: ${value}${finalUnit}` };
@@ -122,15 +122,17 @@ export const FontSize = Extension.create<FontSizeOptions>({
        * @note Automatically clamps to min/max values
        */
       setFontSize:
-        (fontSize) =>
-        ({ chain }) => {
-          let value, unit;
+        (fontSize: FontSizeValue) =>
+        ({ chain }: { chain: () => { setMark: (...args: unknown[]) => { run: () => boolean } } }) => {
+          let value: number;
+          let unit: string | null = null;
 
           if (typeof fontSize === 'number') {
             value = fontSize;
-            unit = null;
           } else {
-            [value, unit] = parseSizeUnit(fontSize);
+            const [parsedValue, parsedUnitRaw] = parseSizeUnit(String(fontSize));
+            value = Number(parsedValue);
+            unit = typeof parsedUnitRaw === 'string' ? parsedUnitRaw : null;
           }
 
           if (Number.isNaN(value)) {
@@ -155,7 +157,11 @@ export const FontSize = Extension.create<FontSizeOptions>({
        */
       unsetFontSize:
         () =>
-        ({ chain }) => {
+        ({
+          chain,
+        }: {
+          chain: () => { setMark: (...args: unknown[]) => { removeEmptyTextStyle: () => { run: () => boolean } } };
+        }) => {
           return chain().setMark('textStyle', { fontSize: null }).removeEmptyTextStyle().run();
         },
     };

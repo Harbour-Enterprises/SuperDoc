@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 
 /**
  * Configuration options for ShapeTextbox
@@ -45,8 +45,8 @@ export const ShapeTextbox = Node.create<ShapeTextboxOptions>({
       sdBlockId: {
         default: null,
         keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs: { sdBlockId?: string | null }) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
@@ -64,10 +64,12 @@ export const ShapeTextbox = Node.create<ShapeTextboxOptions>({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }) {
     return [
       'div',
-      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-type': this.name }),
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>, {
+        'data-type': this.name,
+      }),
       0,
     ];
   },

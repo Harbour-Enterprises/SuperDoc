@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 
 interface CommentOptions extends Record<string, unknown> {
@@ -32,7 +32,10 @@ export const CommentRangeStart = Node.create<CommentOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return ['commentRangeStart', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+    return [
+      'commentRangeStart',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>),
+    ];
   },
 
   addAttributes() {
@@ -75,7 +78,10 @@ export const CommentRangeEnd = Node.create<CommentOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return ['commentRangeEnd', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+    return [
+      'commentRangeEnd',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>),
+    ];
   },
 
   addAttributes() {
@@ -114,7 +120,10 @@ export const CommentReference = Node.create<CommentOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return ['commentReference', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+    return [
+      'commentReference',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>),
+    ];
   },
 
   addAttributes() {

@@ -84,7 +84,8 @@ export const migrateListsToV2IfNecessary = (editor: Editor): Replacement[] => {
   }
 
   tr.setMeta('listsv2migration', replacements);
-  (editor.options as { migrated?: boolean }).migrated = true;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (editor.options as any).migrated = true;
   dispatch(tr);
 
   return replacements;
@@ -122,7 +123,7 @@ function flattenListCompletely(
     level: baseLevel,
     listType: currentListType,
     editor,
-  } as unknown as Parameters<typeof ListHelpers.getListDefinitionDetails>[0]);
+  });
   if (!listHasDef || (!sharedNumId && !numId)) {
     // In some legacy cases, we might not find any list ID at all but we can infer
     // the list style from the list-style-type attribute.
@@ -132,7 +133,7 @@ function flattenListCompletely(
       numId,
       listType: currentListType,
       editor,
-    } as Parameters<typeof ListHelpers.generateNewListDefinition>[0]);
+    });
   }
 
   if (!sharedNumId) sharedNumId = numId;
@@ -247,9 +248,7 @@ const checkValidDefinition = (listNode: Node, editor: Editor): boolean => {
   const listItem = listNode.content.firstChild;
   const { attrs } = listItem || {};
   const { numId, level } = attrs || {};
-  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor } as unknown as Parameters<
-    typeof ListHelpers.getListDefinitionDetails
-  >[0]);
+  const listDef = ListHelpers.getListDefinitionDetails({ numId, level, listType, editor });
   const { abstract } = listDef || {};
 
   if (abstract) return true;
@@ -261,16 +260,17 @@ const checkValidDefinition = (listNode: Node, editor: Editor): boolean => {
  * This function creates a new list definition based on the attributes of the list item
  * and the editor instance.
  */
-const generateMissingListDefinition = (listNode: Node, editor: Editor): unknown => {
+const generateMissingListDefinition = (listNode: Node, editor: Editor): FlattenedItem[] => {
   const listType = listNode.type.name;
   const listItem = listNode.content.firstChild;
   const { attrs } = listItem || {};
   const { numId } = attrs || {};
-  return ListHelpers.generateNewListDefinition({
+  ListHelpers.generateNewListDefinition({
     numId,
     listType,
     editor,
-  } as Parameters<typeof ListHelpers.generateNewListDefinition>[0]);
+  });
+  return [];
 };
 
 interface AnnotationValue {
@@ -315,7 +315,8 @@ export const migrateParagraphFieldsListsV2 = async (
         element,
         html: value,
         onCreate: ({ editor: localEditor }) => {
-          const migrated = (localEditor.options as { migrated?: boolean }).migrated;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const migrated = (localEditor.options as any).migrated;
 
           if (migrated) {
             const newHTML = localEditor.getHTML();
@@ -324,7 +325,7 @@ export const migrateParagraphFieldsListsV2 = async (
           }
           resolve();
         },
-      } as Parameters<typeof editor.createChildEditor>[0]);
+      });
     });
   }
 

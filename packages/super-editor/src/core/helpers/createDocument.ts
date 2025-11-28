@@ -3,7 +3,7 @@
  */
 
 import type { Schema, Node as PmNode } from 'prosemirror-model';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 type Converter = {
   getSchema: (editor: Editor) => unknown;

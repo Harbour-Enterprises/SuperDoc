@@ -1,4 +1,6 @@
 import { Decoration } from 'prosemirror-view';
+import type { EditorView } from 'prosemirror-view';
+import type { Node as PmNode } from 'prosemirror-model';
 import { calculateTabWidth } from '@superdoc/contracts';
 import { twipsToPixels } from '@superdoc/word-layout';
 import {
@@ -11,8 +13,12 @@ import {
   getBlockNodeWidth,
   getIndentWidth,
 } from './tabDecorations.js';
+import type { ParagraphContext } from './tabDecorations.js';
+import type { Editor } from '@core/Editor.js';
+import type { LayoutRequest, LayoutResult, TabSpan, TextSpan } from '../types.js';
 
 const leaderStyles = {
+  none: '',
   dot: 'border-bottom: 1px dotted black;',
   heavy: 'border-bottom: 2px solid black;',
   hyphen: 'border-bottom: 1px solid black;',
@@ -20,9 +26,11 @@ const leaderStyles = {
   underscore: 'border-bottom: 1px solid black;',
 };
 
+type Span = TextSpan | TabSpan;
+
 // Create a stable paragraph ID from its start position.
-const paragraphIdFromPos = (startPos) => `para-${startPos}`;
-const tabIdForIndex = (paragraphId, index) => `${paragraphId}-tab-${index}`;
+const paragraphIdFromPos = (startPos: number) => `para-${startPos}`;
+const tabIdForIndex = (paragraphId: string, index: number) => `${paragraphId}-tab-${index}`;
 
 /**
  * Build a layout request for a given paragraph.
@@ -34,9 +42,16 @@ const tabIdForIndex = (paragraphId, index) => `${paragraphId}-tab-${index}`;
  * @param {number} [paragraphWidthOverride]
  * @returns {import('../types.js').LayoutRequest|null}
  */
-export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, paragraphWidthOverride) {
+export function createLayoutRequest(
+  doc: PmNode,
+  paragraphPos: number,
+  view: EditorView,
+  helpers: Editor['helpers'],
+  revision: number,
+  paragraphWidthOverride?: number,
+): LayoutRequest | null {
   const $pos = doc.resolve(paragraphPos);
-  const paragraphCache = new Map();
+  const paragraphCache: Map<number, ParagraphContext> = new Map();
   const paragraphContext = findParagraphContext($pos, paragraphCache, helpers);
   if (!paragraphContext) return null;
 
@@ -45,7 +60,7 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
   const paragraphNode = paragraphContext.paragraph;
   const { entries } = flattenParagraph(paragraphNode, paragraphContext.startPos);
 
-  const spans = [];
+  const spans: Span[] = [];
   let tabIndex = 0;
   entries.forEach((entry, idx) => {
     const node = entry.node;
@@ -113,7 +128,11 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
  * @param {import('prosemirror-view').EditorView} [view]
  * @returns {import('../types.js').LayoutResult}
  */
-export function calculateTabLayout(request, measurement, view) {
+export function calculateTabLayout(
+  request: LayoutRequest,
+  measurement?: { measureText?: (spanId: string, text: string) => number },
+  view?: EditorView,
+): LayoutResult {
   const {
     spans,
     tabStops,
@@ -126,10 +145,10 @@ export function calculateTabLayout(request, measurement, view) {
     paragraphNode,
   } = request;
 
-  const tabs = {};
+  const tabs: LayoutResult['tabs'] = {};
   let currentX = indentWidth;
 
-  const measureText = (span) => {
+  const measureText = (span: TextSpan) => {
     if (measurement?.measureText) return measurement.measureText(span.spanId, span.text || '');
     if (view && typeof span.from === 'number' && typeof span.to === 'number') {
       return measureRangeWidth(view, span.from, span.to);
@@ -149,9 +168,10 @@ export function calculateTabLayout(request, measurement, view) {
 
       // Create measureText callback that can measure the following text
       // For center/right/decimal alignment, we need to measure the text width
-      let measureTextCallback;
+      let measureTextCallback: ((text: string) => number) | undefined;
       if (measurement?.measureText) {
-        measureTextCallback = (text) => measurement.measureText(span.spanId, text);
+        const measureFn = measurement.measureText;
+        measureTextCallback = (text) => measureFn(span.spanId, text);
       } else if (view) {
         // Measure using view by finding the range of the following text spans
         const followingRange = getFollowingTextRange(spans, i + 1);
@@ -173,19 +193,21 @@ export function calculateTabLayout(request, measurement, view) {
 
       const result = calculateTabWidth({
         currentX,
-        tabStops,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tabStops: tabStops as any,
         paragraphWidth,
         defaultTabDistance,
         defaultLineLength,
         followingText,
-        measureText: measureTextCallback,
+        measureText: measureTextCallback ?? (() => 0),
       });
 
+      const alignment = result.alignment === 'clear' ? 'default' : (result.alignment ?? 'default');
       tabs[span.tabId] = {
         width: result.width,
         height: tabHeight,
         leader: result.leader,
-        alignment: result.alignment,
+        alignment,
         tabStopPosUsed: result.tabStopPosUsed,
       };
       currentX += result.width;
@@ -206,8 +228,8 @@ export function calculateTabLayout(request, measurement, view) {
  * @param {number} paragraphPos // position before paragraph
  * @returns {Decoration[]}
  */
-export function applyLayoutResult(result, paragraph, paragraphPos) {
-  const decorations = [];
+export function applyLayoutResult(result: LayoutResult, paragraph: PmNode, paragraphPos: number) {
+  const decorations: Decoration[] = [];
   let tabIndex = 0;
   paragraph.forEach((node, offset) => {
     if (node.type.name !== 'tab') return;
@@ -217,8 +239,11 @@ export function applyLayoutResult(result, paragraph, paragraphPos) {
     if (!layout) return;
     let style = `width: ${layout.width}px;`;
     if (layout.height) style += ` height: ${layout.height};`;
-    if (layout.leader && leaderStyles[layout.leader]) {
-      style += ` ${leaderStyles[layout.leader]}`;
+    if (layout.leader) {
+      const leaderStyle = leaderStyles[layout.leader] ?? '';
+      if (leaderStyle) {
+        style += ` ${leaderStyle}`;
+      }
     }
 
     decorations.push(Decoration.node(pos, pos + node.nodeSize, { style }));
@@ -226,7 +251,7 @@ export function applyLayoutResult(result, paragraph, paragraphPos) {
   return decorations;
 }
 
-function collectFollowingText(spans, startIndex) {
+function collectFollowingText(spans: Span[], startIndex: number) {
   let text = '';
   for (let i = startIndex; i < spans.length; i++) {
     const span = spans[i];
@@ -240,9 +265,9 @@ function collectFollowingText(spans, startIndex) {
  * Get the document range (from/to positions) of text spans following a tab.
  * Used to measure text width for center/right/decimal alignment.
  */
-function getFollowingTextRange(spans, startIndex) {
-  let from = null;
-  let to = null;
+function getFollowingTextRange(spans: Span[], startIndex: number) {
+  let from: number | null = null;
+  let to: number | null = null;
   for (let i = startIndex; i < spans.length; i++) {
     const span = spans[i];
     if (span.type === 'tab') break;

@@ -14,6 +14,7 @@ export interface HistoryLinkTableCommandAugmentations {
     tableNode?: unknown;
     valueRows?: unknown[][];
     copyRowStyle?: boolean;
+    dispatch?: boolean;
   }) => boolean;
   insertTable: (config?: { rows?: number; cols?: number; withHeaderRow?: boolean }) => boolean;
   deleteTable: () => boolean;

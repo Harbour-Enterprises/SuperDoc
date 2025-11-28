@@ -19,6 +19,6 @@ export const toggleMark =
     const { extendEmptyMarkRange = false } = options;
     const type = getMarkType(typeOrName, state.schema);
     const isActive = isMarkActive(state, type, attrs);
-    if (isActive) return commands.unsetMark(type, { extendEmptyMarkRange });
-    return commands.setMark(type, attrs);
+    if (isActive) return Boolean(commands.unsetMark(type, { extendEmptyMarkRange }));
+    return Boolean(commands.setMark(type, attrs));
   };

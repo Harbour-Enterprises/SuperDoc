@@ -2,7 +2,7 @@ import { getMarksFromSelection } from './getMarksFromSelection.js';
 import { findMark } from './findMark.js';
 import type { EditorState } from 'prosemirror-state';
 import type { Mark, MarkType, Node as PmNode } from 'prosemirror-model';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 type FormattingEntry = { name: string; attrs: Record<string, unknown> | boolean };
 

@@ -1,33 +1,62 @@
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { Node as PmNode } from 'prosemirror-model';
+import type { Decoration, DecorationSource, EditorView, NodeView } from 'prosemirror-view';
 
-export class ShapeGroupView {
-  node;
+interface ShapeAttrs extends Record<string, unknown> {
+  x?: number | null;
+  y?: number | null;
+  width?: number | null;
+  height?: number | null;
+  rotation?: number | null;
+  flipH?: boolean;
+  flipV?: boolean;
+  kind?: string;
+  fillColor?: string;
+  strokeColor?: string;
+  strokeWidth?: number | null;
+}
 
-  view;
+interface ShapeGroupNodeAttrs {
+  groupTransform?: { width?: number | null; height?: number | null };
+  shapes?: Array<{ shapeType?: string; attrs?: ShapeAttrs }>;
+  size?: { width?: number | null; height?: number | null };
+}
 
-  getPos;
+type ShapeGroupEditor = { view: EditorView };
 
-  decorations;
+export interface ShapeGroupViewProps {
+  node: PmNode;
+  view: EditorView;
+  getPos: () => number | undefined;
+  decorations: readonly Decoration[];
+  innerDecorations: DecorationSource;
+  editor?: ShapeGroupEditor;
+  extension?: unknown;
+  htmlAttributes?: Record<string, AttributeValue>;
+}
 
-  innerDecorations;
+export class ShapeGroupView implements NodeView {
+  node: PmNode;
+  view: EditorView;
+  getPos: () => number | undefined;
+  decorations: readonly Decoration[];
+  innerDecorations: DecorationSource;
+  editor: ShapeGroupEditor;
+  extension: unknown;
+  htmlAttributes: Record<string, AttributeValue>;
+  root: HTMLElement | null;
 
-  editor;
-
-  extension;
-
-  htmlAttributes;
-
-  root;
-
-  constructor(props) {
+  constructor(props: ShapeGroupViewProps) {
     this.node = props.node;
-    this.view = props.editor.view;
+    this.view = props.editor?.view ?? props.view;
     this.getPos = props.getPos;
     this.decorations = props.decorations;
     this.innerDecorations = props.innerDecorations;
-    this.editor = props.editor;
-    this.extension = props.extension;
-    this.htmlAttributes = props.htmlAttributes;
+    this.editor = props.editor ?? { view: props.view };
+    this.extension = props.extension ?? null;
+    this.htmlAttributes = props.htmlAttributes || {};
+    this.root = null;
 
     this.mount();
   }
@@ -37,15 +66,15 @@ export class ShapeGroupView {
   }
 
   get dom() {
-    return this.root;
+    return this.root as HTMLElement;
   }
 
   get contentDOM() {
     return null;
   }
 
-  createElement() {
-    const attrs = this.node.attrs;
+  createElement(): { element: HTMLElement } {
+    const attrs = this.node.attrs as ShapeGroupNodeAttrs;
     const { groupTransform, shapes, size } = attrs;
 
     const container = document.createElement('div');
@@ -53,8 +82,8 @@ export class ShapeGroupView {
     container.setAttribute('data-shape-group', '');
 
     // Use size from attrs if available, otherwise calculate from group transform
-    const width = size?.width || groupTransform?.width || 300;
-    const height = size?.height || groupTransform?.height || 200;
+    const width = Number(size?.width ?? groupTransform?.width ?? 300);
+    const height = Number(size?.height ?? groupTransform?.height ?? 200);
 
     container.style.width = `${width}px`;
     container.style.height = `${height}px`;
@@ -87,24 +116,26 @@ export class ShapeGroupView {
     return { element: container };
   }
 
-  createShapeElement(shape: Record<string, unknown>, _groupTransform?: Record<string, unknown>) {
-    const attrs = shape.attrs;
-    if (!attrs) return null;
+  createShapeElement(
+    shape: { attrs?: ShapeAttrs; shapeType?: string },
+    _groupTransform?: Record<string, unknown>,
+  ): SVGGElement | null {
+    const attrs: ShapeAttrs = shape.attrs || {};
 
     // Calculate position relative to group
-    const x = attrs.x || 0;
-    const y = attrs.y || 0;
-    const width = attrs.width || 100;
-    const height = attrs.height || 100;
+    const x = Number(attrs.x ?? 0);
+    const y = Number(attrs.y ?? 0);
+    const width = Number(attrs.width ?? 100);
+    const height = Number(attrs.height ?? 100);
 
     // Create a group element for the shape
     const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 
     // Apply transformations
-    const transforms = [];
+    const transforms: string[] = [];
     transforms.push(`translate(${x}, ${y})`);
 
-    if (attrs.rotation !== 0) {
+    if (attrs.rotation && attrs.rotation !== 0) {
       transforms.push(`rotate(${attrs.rotation} ${width / 2} ${height / 2})`);
     }
 
@@ -121,21 +152,19 @@ export class ShapeGroupView {
     }
 
     // Generate the shape based on its kind
-    const shapeKind = attrs.kind || 'rect';
-    const fillColor = attrs.fillColor || '#5b9bd5';
-    const strokeColor = attrs.strokeColor || '#000000';
-    const strokeWidth = attrs.strokeWidth || 1;
+    const shapeKind = (attrs.kind as string) || 'rect';
+    const fillColor = (attrs.fillColor as string) || '#5b9bd5';
+    const strokeColor = (attrs.strokeColor as string) || '#000000';
+    const strokeWidth = Number(attrs.strokeWidth ?? 1);
 
     try {
       const svgContent = getPresetShapeSvg({
         preset: shapeKind,
-        styleOverrides: {
+        styleOverrides: () => ({
           fill: fillColor || 'none',
           stroke: strokeColor || 'none',
           strokeWidth: strokeWidth || 0,
-        },
-        width,
-        height,
+        }),
       });
 
       if (svgContent) {
@@ -229,7 +258,7 @@ export class ShapeGroupView {
     this.root = element;
   }
 
-  update() {
+  update(): boolean {
     // Recreate the NodeView.
     return false;
   }

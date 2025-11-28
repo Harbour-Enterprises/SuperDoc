@@ -1,29 +1,33 @@
 import { NodeSelection, TextSelection, AllSelection } from 'prosemirror-state';
+import type { Transaction, EditorState } from 'prosemirror-state';
+import type { EditorView } from 'prosemirror-view';
 import { canSplit } from 'prosemirror-transform';
 import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
+import type { Command } from '@core/types/ChainedCommands.js';
 
 /**
  * Splits a run node at the current selection.
  * @returns {import('@core/commands/types').Command} A command handler.
  */
-export const splitRun = () => (props) => {
-  const { state, view, tr } = props;
-  const { $from, empty } = state.selection;
-  if (!empty) return false;
-  if ($from.parent.type.name !== 'run') return false;
+export const splitRun =
+  (): Command =>
+  ({ state, view, tr }: { state: EditorState; view: EditorView; tr: Transaction }) => {
+    const { $from, empty } = state.selection;
+    if (!empty) return false;
+    if ($from.parent.type.name !== 'run') return false;
 
-  const handled = splitBlockPatch(state, (transaction) => {
-    view.dispatch(transaction);
-  });
+    const handled = splitBlockPatch(state, (transaction) => {
+      view.dispatch(transaction);
+    });
 
-  if (handled) {
-    tr.setMeta('preventDispatch', true);
-  }
+    if (handled) {
+      tr.setMeta('preventDispatch', true);
+    }
 
-  return handled;
-};
+    return handled;
+  };
 
-export function splitBlockPatch(state, dispatch) {
+export function splitBlockPatch(state: EditorState, dispatch?: (tr: Transaction) => void) {
   const { $from } = state.selection;
   if (state.selection instanceof NodeSelection && state.selection.node.isBlock) {
     if (!$from.parentOffset || !canSplit(state.doc, $from.pos)) return false;

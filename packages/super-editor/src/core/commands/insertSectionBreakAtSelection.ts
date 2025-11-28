@@ -1,5 +1,6 @@
 import { updateSectionMargins, getSectPrMargins } from '@converter/section-properties.js';
 import type { Command } from '../types/ChainedCommands.js';
+import type { Node } from 'prosemirror-model';
 
 interface SectionBreakParams {
   headerInches?: number;
@@ -40,7 +41,7 @@ export const insertSectionBreakAtSelection =
     const { $from } = state.selection;
     // Find nearest paragraph node and its position
     let paraPos = 0;
-    let paragraph = null;
+    let paragraph: Node | null = null;
     for (let d = $from.depth; d >= 0; d -= 1) {
       const node = $from.node(d);
       if (node?.type?.name === 'paragraph') {

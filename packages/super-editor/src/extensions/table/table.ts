@@ -167,7 +167,7 @@
  * @property {import('prosemirror-model').Node[]} rows - Row nodes to append
  */
 
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import { callOrGet } from '@core/utilities/callOrGet.js';
 import { getExtensionConfigField } from '@core/helpers/getExtensionConfigField.js';
 import { /* TableView */ createTableView } from './TableView.js';
@@ -180,6 +180,10 @@ import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
 import { isCellSelection } from './tableHelpers/isCellSelection.js';
+import type { EditorState } from 'prosemirror-state';
+import type { Node as PmNode, DOMOutputSpec, NodeType } from 'prosemirror-model';
+import type { CommandProps } from '@core/types/ChainedCommands.js';
+import type { TableRect, TableRole } from 'prosemirror-tables';
 import {
   addColumnBefore as originalAddColumnBefore,
   addColumnAfter as originalAddColumnAfter,
@@ -236,6 +240,12 @@ interface InsertTableOptions {
 interface SetCellSelectionOptions {
   anchorCell: number;
   headCell: number;
+}
+
+interface CurrentCellInfo {
+  rect: TableRect;
+  cell: PmNode;
+  attrs: Record<string, unknown>;
 }
 
 /**
@@ -340,8 +350,8 @@ export const Table = Node.create({
       sdBlockId: {
         default: null,
         keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs: { sdBlockId?: string | null }) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
@@ -351,9 +361,8 @@ export const Table = Node.create({
        * @param {TableIndent} [tableIndent] - Table indentation configuration
        */
       tableIndent: {
-        renderDOM: ({ tableIndent }) => {
+        renderDOM: ({ tableIndent }: { tableIndent?: { width?: number } | null }) => {
           if (!tableIndent) return {};
-          // @ts-expect-error - tableIndent is known to be an object at runtime
           const { width } = tableIndent;
           let style = '';
           if (width) style += `margin-left: ${width}px`;
@@ -369,11 +378,13 @@ export const Table = Node.create({
        */
       borders: {
         default: {},
-        renderDOM({ borders }) {
+        renderDOM({ borders }: { borders?: Record<string, { size?: number; color?: string | null }> }) {
           if (!borders) return {};
 
-          const style = Object.entries(borders).reduce((acc, [key, { size, color }]) => {
-            return `${acc}border-${key}: ${Math.ceil(size)}px solid ${color || 'black'};`;
+          const style = Object.entries(borders).reduce((acc, [key, borderSpec]) => {
+            const size = borderSpec?.size ?? 0;
+            const color = borderSpec?.color ?? 'black';
+            return `${acc}border-${key}: ${Math.ceil(size)}px solid ${color};`;
           }, '');
 
           return {
@@ -388,7 +399,7 @@ export const Table = Node.create({
        */
       borderCollapse: {
         default: null,
-        renderDOM({ borderCollapse }) {
+        renderDOM({ borderCollapse }: { borderCollapse?: string | null }) {
           return {
             style: `border-collapse: ${borderCollapse || 'collapse'}`,
           };
@@ -401,7 +412,7 @@ export const Table = Node.create({
        */
       justification: {
         default: null,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: { justification?: string | null }) => {
           if (!attrs.justification) return {};
 
           if (attrs.justification === 'center') {
@@ -483,7 +494,7 @@ export const Table = Node.create({
     return [{ tag: 'table' }];
   },
 
-  renderDOM({ node, htmlAttributes }) {
+  renderDOM({ node, htmlAttributes }: { node: PmNode; htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
     const { colgroup, tableWidth, tableMinWidth } = createColGroup(
       node,
       this.options.cellMinWidth,
@@ -491,9 +502,13 @@ export const Table = Node.create({
       undefined,
     );
 
-    const attrs = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
-      style: tableWidth ? `width: ${tableWidth}` : `min-width: ${tableMinWidth}`,
-    });
+    const attrs = Attribute.mergeAttributes(
+      this.options.htmlAttributes,
+      htmlAttributes as Record<string, AttributeValue>,
+      {
+        style: tableWidth ? `width: ${tableWidth}` : `min-width: ${tableMinWidth}`,
+      },
+    );
 
     return ['table', attrs, colgroup, ['tbody', 0]];
   },
@@ -509,13 +524,13 @@ export const Table = Node.create({
        */
       appendRowsWithContent:
         ({ tablePos, tableNode, valueRows = [], copyRowStyle = false }: AppendRowsWithContentOptions) =>
-        ({ editor, chain }): boolean => {
+        ({ editor, chain }: CommandProps): boolean => {
           if ((typeof tablePos !== 'number' && !tableNode) || !Array.isArray(valueRows) || !valueRows.length) {
             return false;
           }
 
           return chain()
-            .command(({ tr, dispatch }) => {
+            .command(({ tr, dispatch }: CommandProps) => {
               const workingTable = resolveTable(tr, tablePos, tableNode);
               if (!workingTable) return false;
 
@@ -535,19 +550,26 @@ export const Table = Node.create({
                 .filter(Boolean);
               if (!newRows.length) return false;
 
-              let resolvedTablePos = tablePos;
+              let resolvedTablePos: number | undefined = tablePos;
               if (typeof resolvedTablePos !== 'number' && workingTable) {
                 // Try to find the position of the table node in the document
                 const tables = editor.getNodesOfType('table');
-                const match = workingTable ? tables.find((t) => t.node.eq(workingTable)) : tables[0];
-                resolvedTablePos = match?.pos ?? null;
+                const match = workingTable
+                  ? tables.find((t: { node: PmNode; pos: number }) => t.node.eq(workingTable))
+                  : tables[0];
+                resolvedTablePos = match?.pos;
               }
               if (typeof resolvedTablePos !== 'number') {
                 return false;
               }
 
               if (dispatch) {
-                insertRowsAtTableEnd({ tr, tablePos, tableNode: workingTable, rows: newRows });
+                insertRowsAtTableEnd({
+                  tr,
+                  tablePos: resolvedTablePos,
+                  tableNode: workingTable,
+                  rows: newRows as PmNode[],
+                });
               }
               return true;
             })
@@ -563,7 +585,7 @@ export const Table = Node.create({
        */
       insertTable:
         ({ rows = 3, cols = 3, withHeaderRow = false }: InsertTableOptions = {}) =>
-        ({ tr, dispatch, editor }): boolean => {
+        ({ tr, dispatch, editor }: CommandProps): boolean => {
           const node = createTable(editor.schema, rows, cols, withHeaderRow);
 
           if (dispatch) {
@@ -584,7 +606,7 @@ export const Table = Node.create({
        */
       deleteTable:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return deleteTable(state, dispatch);
         },
 
@@ -597,14 +619,14 @@ export const Table = Node.create({
        */
       addColumnBefore:
         () =>
-        ({ state, dispatch, chain }) => {
+        ({ state, dispatch, chain }: CommandProps) => {
           if (!originalAddColumnBefore(state)) return false;
 
           const { rect, attrs: currentCellAttrs } = getCurrentCellAttrs(state);
 
           return chain()
             .command(() => originalAddColumnBefore(state, dispatch))
-            .command(({ tr }) => {
+            .command(({ tr }: CommandProps) => {
               const table = tr.doc.nodeAt(rect.tableStart - 1);
               if (!table) return false;
               const updatedMap = TableMap.get(table);
@@ -645,14 +667,14 @@ export const Table = Node.create({
        */
       addColumnAfter:
         () =>
-        ({ state, dispatch, chain }) => {
+        ({ state, dispatch, chain }: CommandProps) => {
           if (!originalAddColumnAfter(state)) return false;
 
           const { rect, attrs: currentCellAttrs } = getCurrentCellAttrs(state);
 
           return chain()
             .command(() => originalAddColumnAfter(state, dispatch))
-            .command(({ tr }) => {
+            .command(({ tr }: CommandProps) => {
               const table = tr.doc.nodeAt(rect.tableStart - 1);
               if (!table) return false;
               const updatedMap = TableMap.get(table);
@@ -692,7 +714,7 @@ export const Table = Node.create({
        */
       deleteColumn:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return deleteColumn(state, dispatch);
         },
 
@@ -706,14 +728,14 @@ export const Table = Node.create({
        */
       addRowBefore:
         () =>
-        ({ state, dispatch, chain }) => {
+        ({ state, dispatch, chain }: CommandProps) => {
           if (!originalAddRowBefore(state)) return false;
 
           const { rect, attrs: currentCellAttrs } = getCurrentCellAttrs(state);
 
           return chain()
             .command(() => originalAddRowBefore(state, dispatch))
-            .command(({ tr }) => {
+            .command(({ tr }: CommandProps) => {
               const table = tr.doc.nodeAt(rect.tableStart - 1);
               if (!table) return false;
               const updatedMap = TableMap.get(table);
@@ -754,14 +776,14 @@ export const Table = Node.create({
        */
       addRowAfter:
         () =>
-        ({ state, dispatch, chain }) => {
+        ({ state, dispatch, chain }: CommandProps) => {
           if (!originalAddRowAfter(state)) return false;
 
           const { rect, attrs: currentCellAttrs } = getCurrentCellAttrs(state);
 
           return chain()
             .command(() => originalAddRowAfter(state, dispatch))
-            .command(({ tr }) => {
+            .command(({ tr }: CommandProps) => {
               const table = tr.doc.nodeAt(rect.tableStart - 1);
               if (!table) return false;
               const updatedMap = TableMap.get(table);
@@ -799,7 +821,7 @@ export const Table = Node.create({
        */
       deleteRow:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return deleteRow(state, dispatch);
         },
 
@@ -813,7 +835,7 @@ export const Table = Node.create({
        */
       mergeCells:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return originalMergeCells(state, dispatch);
         },
 
@@ -826,7 +848,7 @@ export const Table = Node.create({
        */
       splitCell:
         () =>
-        ({ state, dispatch, commands }) => {
+        ({ state, dispatch, commands }: CommandProps) => {
           if (originalSplitCell(state, dispatch)) {
             return true;
           }
@@ -849,7 +871,7 @@ export const Table = Node.create({
        */
       splitSingleCell:
         () =>
-        ({ state, dispatch, tr }) => {
+        ({ state, dispatch, tr }: CommandProps) => {
           // For reference.
           // https://github.com/ProseMirror/prosemirror-tables/blob/a99f70855f2b3e2433bc77451fedd884305fda5b/src/commands.ts#L497
           const sel = state.selection;
@@ -893,6 +915,9 @@ export const Table = Node.create({
             // Insert new cell after the current one.
             const newCellAttrs = { ...baseAttrs, colwidth: newCellWidth ? [newCellWidth] : null };
             const newCell = getCellType({ node: cellNode, state }).createAndFill(newCellAttrs);
+            if (!newCell) {
+              return false;
+            }
             tr.insert(tr.mapping.map(cellPos + cellNode.nodeSize, 1), newCell);
 
             // Update colspan and colwidth for cells in other rows.
@@ -946,7 +971,7 @@ export const Table = Node.create({
        */
       mergeOrSplit:
         () =>
-        ({ state, dispatch, commands }) => {
+        ({ state, dispatch, commands }: CommandProps) => {
           if (originalMergeCells(state, dispatch)) {
             return true;
           }
@@ -963,7 +988,7 @@ export const Table = Node.create({
        */
       toggleHeaderColumn:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return toggleHeader('column')(state, dispatch);
         },
 
@@ -976,7 +1001,7 @@ export const Table = Node.create({
        */
       toggleHeaderRow:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return toggleHeader('row')(state, dispatch);
         },
 
@@ -989,7 +1014,7 @@ export const Table = Node.create({
        */
       toggleHeaderCell:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return toggleHeaderCell(state, dispatch);
         },
 
@@ -1004,8 +1029,8 @@ export const Table = Node.create({
        * setCellAttr('verticalAlign', 'middle')
        */
       setCellAttr:
-        (name, value) =>
-        ({ state, dispatch }) => {
+        (name: string, value: unknown) =>
+        ({ state, dispatch }: CommandProps) => {
           return setCellAttr(name, value)(state, dispatch);
         },
 
@@ -1018,7 +1043,7 @@ export const Table = Node.create({
        */
       goToNextCell:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return goToNextCell(1)(state, dispatch);
         },
 
@@ -1031,7 +1056,7 @@ export const Table = Node.create({
        */
       goToPreviousCell:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           return goToNextCell(-1)(state, dispatch);
         },
 
@@ -1045,7 +1070,7 @@ export const Table = Node.create({
        */
       fixTables:
         () =>
-        ({ state, dispatch }) => {
+        ({ state, dispatch }: CommandProps) => {
           if (dispatch) {
             fixTables(state);
           }
@@ -1063,7 +1088,7 @@ export const Table = Node.create({
        */
       setCellSelection:
         (pos: SetCellSelectionOptions) =>
-        ({ tr, dispatch }): boolean => {
+        ({ tr, dispatch }: CommandProps): boolean => {
           if (dispatch) {
             tr.setSelection(CellSelection.create(tr.doc, pos.anchorCell, pos.headCell));
           }
@@ -1081,7 +1106,7 @@ export const Table = Node.create({
        */
       setCellBackground:
         (value: string) =>
-        ({ editor, commands, dispatch }): boolean => {
+        ({ editor, commands, dispatch }: CommandProps): boolean => {
           const { selection } = editor.state;
 
           if (!isCellSelection(selection)) {
@@ -1107,7 +1132,7 @@ export const Table = Node.create({
        */
       deleteCellAndTableBorders:
         () =>
-        ({ state, tr }) => {
+        ({ state, tr }: CommandProps) => {
           if (!isInTable(state)) {
             return false;
           }
@@ -1122,7 +1147,7 @@ export const Table = Node.create({
           const to = table.pos + table.node.nodeSize;
 
           // remove from cells
-          state.doc.nodesBetween(from, to, (node, pos) => {
+          state.doc.nodesBetween(from, to, (node: PmNode, pos: number) => {
             if (['tableCell', 'tableHeader'].includes(node.type.name)) {
               tr.setNodeMarkup(pos, undefined, {
                 ...node.attrs,
@@ -1139,30 +1164,40 @@ export const Table = Node.create({
 
           return true;
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 
   addShortcuts() {
+    const editor = this.editor;
+    if (!editor) {
+      return {};
+    }
+
     return {
       Tab: () => {
-        if (this.editor.commands.goToNextCell()) {
+        if (editor.commands.goToNextCell()) {
           return true;
         }
-        if (!this.editor.can().addRowAfter()) {
+        if (!editor.can().addRowAfter()) {
           return false;
         }
-        return this.editor.chain().addRowAfter().goToNextCell().run();
+        return editor.chain().addRowAfter().goToNextCell().run();
       },
-      'Shift-Tab': () => this.editor.commands.goToPreviousCell(),
+      'Shift-Tab': () => editor.commands.goToPreviousCell(),
       Backspace: deleteTableWhenSelected,
       'Mod-Backspace': deleteTableWhenSelected,
       Delete: deleteTableWhenSelected,
       'Mod-Delete': deleteTableWhenSelected,
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 
   addPmPlugins() {
-    const resizable = this.options.resizable && this.editor.isEditable;
+    const editor = this.editor;
+    if (!editor) {
+      return [];
+    }
+
+    const resizable = this.options.resizable && editor.isEditable;
 
     return [
       ...(resizable
@@ -1176,7 +1211,7 @@ export const Table = Node.create({
               defaultCellMinWidth: this.options.cellMinWidth,
               lastColumnResizable: this.options.lastColumnResizable,
               View: createTableView({
-                editor: this.editor,
+                editor,
               }),
             }),
           ]
@@ -1188,7 +1223,12 @@ export const Table = Node.create({
     ];
   },
 
-  extendNodeSchema(extension: Record<string, unknown>) {
+  extendNodeSchema(...args: unknown[]) {
+    const [extension] = args as [{ name: string; options: unknown; storage: unknown }?];
+    if (!extension) {
+      return {};
+    }
+
     return {
       tableRole: callOrGet(
         getExtensionConfigField(extension, 'tableRole', {
@@ -1209,9 +1249,11 @@ export const Table = Node.create({
  * @param {Object} params.state - Editor state
  * @returns {Object} Cell node type
  */
-function getCellType({ node, state }) {
-  const nodeTypes = tableNodeTypes(state.schema);
-  return nodeTypes[node.type.spec.tableRole];
+function getCellType({ node, state }: { node: PmNode; state: EditorState }): NodeType {
+  const nodeTypes = tableNodeTypes(state.schema) as Record<TableRole | string, NodeType>;
+  const role = node.type.spec.tableRole as TableRole | undefined;
+
+  return (role && nodeTypes[role]) || node.type;
 }
 
 /**
@@ -1221,10 +1263,10 @@ function getCellType({ node, state }) {
  * @returns {Object} Filtered attributes without colspan, rowspan, colwidth
  * @note Used when creating new cells to preserve styling but not structure
  */
-function copyCellAttrs(node) {
+function copyCellAttrs(node: PmNode): Record<string, unknown> {
   // Exclude colspan, rowspan and colwidth attrs.
   const { colspan: _colspan, rowspan: _rowspan, colwidth: _colwidth, ...attrs } = node.attrs;
-  return attrs;
+  return attrs as Record<string, unknown>;
 }
 
 /**
@@ -1233,11 +1275,16 @@ function copyCellAttrs(node) {
  * @param {Object} state - Editor state
  * @returns {CurrentCellInfo} Current cell information
  */
-function getCurrentCellAttrs(state) {
+function getCurrentCellAttrs(state: EditorState): CurrentCellInfo {
   const rect = selectedRect(state);
   const index = rect.top * rect.map.width + rect.left;
   const pos = rect.map.map[index];
   const cell = rect.table.nodeAt(pos);
+
+  if (!cell) {
+    throw new Error('Failed to resolve current table cell');
+  }
+
   const attrs = copyCellAttrs(cell);
   return { rect, cell, attrs };
 }

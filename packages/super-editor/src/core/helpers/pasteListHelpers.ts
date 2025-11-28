@@ -23,6 +23,7 @@ export const extractListLevelStyles = (
 };
 
 export const extractParagraphStyles = (cssText: string, className: string | null): Record<string, string> | null => {
+  if (!className) return null;
   const pattern = new RegExp(`\\.(${className})\\s*\\{([^}]+)\\}`, 'i');
   const match = cssText.match(pattern);
   if (!match) return null;
@@ -139,23 +140,27 @@ export const googleNumDefMap = new Map([
   ['bullet', 'bullet'],
 ]);
 
-export const getLvlTextForGoogleList = (
-  fmt: string,
-  level: number,
-  editor: {
-    converter: {
-      numbering: {
-        abstracts: Array<{
-          elements: Array<{
+/**
+ * Editor instance with converter property containing numbering abstracts
+ */
+interface EditorWithConverter {
+  converter: {
+    numbering: {
+      abstracts: Array<{
+        elements: Array<{
+          name: string;
+          attributes?: Record<string, string>;
+          elements?: Array<{
             name: string;
             attributes?: Record<string, string>;
-            elements?: Array<{ name: string; attributes?: Record<string, string> }>;
           }>;
         }>;
-      };
+      }>;
     };
-  },
-): string => {
+  };
+}
+
+export const getLvlTextForGoogleList = (fmt: string, level: number, editor: EditorWithConverter): string => {
   const bulletListDef = editor.converter.numbering.abstracts[0];
   const bulletDefForLevel = bulletListDef.elements.find(
     (el) => el.name === 'w:lvl' && el.attributes?.['w:ilvl'] === (level - 1).toString(),
@@ -166,7 +171,7 @@ export const getLvlTextForGoogleList = (
     case 'decimal-leading-zero':
       return `0%${level}.`;
     case 'bullet':
-      return bulletLvlText;
+      return bulletLvlText || '';
     default:
       return `%${level}.`;
   }

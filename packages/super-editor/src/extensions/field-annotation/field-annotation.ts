@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import type { Editor } from '@core/index.js';
 import { FieldAnnotationView } from './FieldAnnotationView.js';
 import { FieldAnnotationPlugin } from './FieldAnnotationPlugin.js';
@@ -11,7 +11,8 @@ import { toHex } from 'color2k';
 import { parseSizeUnit, minMax } from '@core/utilities/index.js';
 import { NodeSelection, Selection } from 'prosemirror-state';
 import type { EditorState, Transaction } from 'prosemirror-state';
-import type { Node as PmNode, Mark as PmMark } from 'prosemirror-model';
+import type { Node as PmNode, Mark as PmMark, DOMOutputSpec } from 'prosemirror-model';
+import type { Decoration } from 'prosemirror-view';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { commands as cleanupCommands } from './cleanup-commands/index.js';
 import { isHeadless } from '@/utils/headless-helpers.js';
@@ -61,6 +62,14 @@ interface FieldAnnotationOptions extends Record<string, unknown> {
   toggleFormatNames: string[];
 }
 
+interface FieldAnnotationNodeViewProps {
+  editor: Editor;
+  node: PmNode;
+  getPos: () => number;
+  HTMLAttributes?: Record<string, unknown>;
+  decorations: readonly Decoration[];
+}
+
 export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
   name: 'fieldAnnotation',
 
@@ -108,7 +117,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       defaultDisplayLabel: {
         default: '',
-        parseDOM: (elem) => elem.getAttribute('data-default-display-label'),
+        parseDOM: (elem: Element) => elem.getAttribute('data-default-display-label'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.defaultDisplayLabel) return {};
           return {
@@ -119,7 +128,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       displayLabel: {
         default: '',
-        parseDOM: (elem) => elem.getAttribute('data-display-label'),
+        parseDOM: (elem: Element) => elem.getAttribute('data-display-label'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.displayLabel) return {};
           return {
@@ -131,7 +140,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
       imageSrc: {
         default: null,
         rendered: false,
-        parseDOM: (elem) => {
+        parseDOM: (elem: Element) => {
           const img = elem.querySelector('img');
           return img?.getAttribute('src') || null;
         },
@@ -162,7 +171,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
       linkUrl: {
         default: null,
         rendered: false,
-        parseDOM: (elem) => {
+        parseDOM: (elem: Element) => {
           const link = elem.querySelector('a');
           return link?.getAttribute('href') || null;
         },
@@ -170,7 +179,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       fieldId: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-field-id'),
+        parseDOM: (elem: Element) => elem.getAttribute('data-field-id'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.fieldId) return {};
           return {
@@ -181,7 +190,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       fieldType: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-field-type'),
+        parseDOM: (elem: Element) => elem.getAttribute('data-field-type'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.fieldType) return {};
           return {
@@ -192,7 +201,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       fieldColor: {
         default: '#980043',
-        parseDOM: (elem) => elem.getAttribute('data-field-color') || elem.style.backgroundColor || null,
+        parseDOM: (elem: HTMLElement) => elem.getAttribute('data-field-color') || elem.style.backgroundColor || null,
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.fieldColor || attrs.fieldColor == 'None') return {};
           let hexColor = toHex(attrs.fieldColor as string);
@@ -219,7 +228,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       hidden: {
         default: false,
-        parseDOM: (elem) => {
+        parseDOM: (elem: HTMLElement) => {
           const hasHiddenAttr = elem.hasAttribute('hidden');
           const hasDisplayNoneStyle = elem.style.display === 'none';
           const isHidden = hasHiddenAttr || hasDisplayNoneStyle;
@@ -253,7 +262,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       multipleImage: {
         default: false,
-        parseDOM: (elem) => elem.getAttribute('data-multiple-image'),
+        parseDOM: (elem: Element) => elem.getAttribute('data-multiple-image'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.multipleImage) return {};
           return {
@@ -264,7 +273,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       size: {
         default: null,
-        renderDOM: ({ size }) => {
+        renderDOM: ({ size }: { size?: { width: number; height: number } | null }) => {
           if (!size || typeof size !== 'object' || !('width' in size)) return {};
           const sizeObj = size as { width: number; height: number };
           const style = `width: ${sizeObj.width}px; height: ${sizeObj.height}px; overflow: hidden;`;
@@ -280,7 +289,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
       /// Formatting attrs for y-prosemirror support.
       bold: {
         default: false,
-        parseDOM: (elem) => elem.getAttribute('data-bold') === 'true',
+        parseDOM: (elem: Element) => elem.getAttribute('data-bold') === 'true',
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.bold) return {};
           return {
@@ -292,7 +301,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       italic: {
         default: false,
-        parseDOM: (elem) => elem.getAttribute('data-italic') === 'true',
+        parseDOM: (elem: Element) => elem.getAttribute('data-italic') === 'true',
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.italic) return {};
           return {
@@ -304,7 +313,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       underline: {
         default: false,
-        parseDOM: (elem) => elem.getAttribute('data-underline') === 'true',
+        parseDOM: (elem: Element) => elem.getAttribute('data-underline') === 'true',
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.underline) return {};
           return {
@@ -316,7 +325,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       fontFamily: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-font-family') || elem.style.fontFamily || null,
+        parseDOM: (elem: HTMLElement) => elem.getAttribute('data-font-family') || elem.style.fontFamily || null,
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.fontFamily) return {};
           return {
@@ -328,7 +337,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       fontSize: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-font-size') || elem.style.fontSize || null,
+        parseDOM: (elem: HTMLElement) => elem.getAttribute('data-font-size') || elem.style.fontSize || null,
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.fontSize) return {};
           const [value, rawUnit] = parseSizeUnit(attrs.fontSize as string);
@@ -344,7 +353,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       textHighlight: {
         default: null,
-        parseDOM: (element) => element.getAttribute('data-text-highlight'),
+        parseDOM: (element: Element) => element.getAttribute('data-text-highlight'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.textHighlight) return {};
           return {
@@ -357,7 +366,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       textColor: {
         default: null,
-        parseDOM: (element) => element.getAttribute('data-text-color'),
+        parseDOM: (element: Element) => element.getAttribute('data-text-color'),
         renderDOM: (attrs: FieldAnnotationAttributes) => {
           if (!attrs.textColor) return {};
           return {
@@ -397,39 +406,40 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
   renderDOM: function (
     this: { options: FieldAnnotationOptions },
     { node, htmlAttributes }: { node: PmNode; htmlAttributes: Record<string, unknown> },
-  ) {
+  ): DOMOutputSpec {
     const { type, displayLabel, imageSrc, linkUrl } = node.attrs as FieldAnnotationAttributes;
     const options = this.options;
+    const displayText = displayLabel ?? '';
 
-    const textRenderer = () => {
+    const textRenderer = (): DOMOutputSpec => {
       return [
         'span',
-        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes),
+        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
         [
           'span',
           {
             class: `${options?.annotationContentClass ?? 'annotation-content'}`,
           },
-          displayLabel,
+          displayText,
         ],
       ];
     };
 
-    const imageRenderer = () => {
-      const contentRenderer = () => {
-        if (!imageSrc) return displayLabel;
+    const imageRenderer = (): DOMOutputSpec => {
+      const contentRenderer = (): DOMOutputSpec | string => {
+        if (!imageSrc) return displayText;
         return [
           'img',
           {
             src: imageSrc,
-            alt: displayLabel,
+            alt: displayText,
           },
         ];
       };
 
       return [
         'span',
-        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes),
+        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
         [
           'span',
           {
@@ -440,22 +450,22 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
       ];
     };
 
-    const linkRenderer = () => {
-      const contentRenderer = () => {
-        if (!linkUrl) return displayLabel;
+    const linkRenderer = (): DOMOutputSpec => {
+      const contentRenderer = (): DOMOutputSpec | string => {
+        if (!linkUrl) return displayText;
         return [
           'a',
           {
             href: linkUrl,
             target: '_blank',
           },
-          linkUrl,
+          linkUrl ?? displayText,
         ];
       };
 
       return [
         'span',
-        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes),
+        Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
         [
           'span',
           {
@@ -466,7 +476,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
       ];
     };
 
-    const renderers: Record<string, () => unknown> = {
+    const renderers: Record<string, () => DOMOutputSpec> = {
       text: () => textRenderer(),
       image: () => imageRenderer(),
       signature: () => imageRenderer(),
@@ -515,8 +525,8 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
             const newPos = tr.mapping.map(pos);
             const $pos = state.doc.resolve(newPos);
-            let currentMarks = $pos.marks();
-            currentMarks = currentMarks.length ? [...currentMarks] : null;
+            const marks = $pos.marks();
+            const currentMarks: readonly PmMark[] | null = marks.length ? [...marks] : null;
 
             /// for y-prosemirror support - attrs instead marks
             const formatAttrs = getFormatAttrsFromMarks(currentMarks);
@@ -527,16 +537,12 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               (attrs as Record<string, unknown>).displayLabel ||
               '';
 
-            const node = schema.nodes[this.name].create(
-              {
-                ...attrs,
-                ...formatAttrs,
-                defaultDisplayLabel,
-                hash: (attrs as { hash?: string }).hash || generateDocxRandomId(4),
-              },
-              null,
-              null,
-            );
+            const node = schema.nodes[this.name].create({
+              ...attrs,
+              ...formatAttrs,
+              defaultDisplayLabel,
+              hash: (attrs as { hash?: string }).hash || generateDocxRandomId(4),
+            });
 
             state.tr.insert(newPos, node).setSelection(Selection.near(tr.doc.resolve(newPos + node.nodeSize)));
 
@@ -587,15 +593,11 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
             (attrs as { hash: string }).hash = generateDocxRandomId(4);
 
-            const node = schema.nodes[this.name].create(
-              {
-                ...attrs,
-                defaultDisplayLabel,
-                hash: (attrs as { hash?: string }).hash || generateDocxRandomId(4),
-              },
-              null,
-              null,
-            );
+            const node = schema.nodes[this.name].create({
+              ...attrs,
+              defaultDisplayLabel,
+              hash: (attrs as { hash?: string }).hash || generateDocxRandomId(4),
+            });
 
             tr.replaceWith(newPosFrom, newPosTo, node);
           });
@@ -660,13 +662,13 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               const nodeEqual = node.attrs.fieldId === currentNode?.attrs?.fieldId;
 
               const $newPosFrom = tr.doc.resolve(newPosFrom);
-              let currentMarks = $newPosFrom.marks();
-              currentMarks = currentMarks.length ? [...currentMarks] : null;
+              const marksAtPos = $newPosFrom.marks();
+              const currentMarks: readonly PmMark[] | null = marksAtPos.length ? [...marksAtPos] : null;
 
               if (nodeEqual) {
                 // empty text nodes are not allowed.
                 const label = node.attrs.displayLabel || ' ';
-                const textNode = state.schema.text(label, currentMarks);
+                const textNode = state.schema.text(label, currentMarks ?? undefined);
                 tr.replaceWith(newPosFrom, newPosTo, textNode);
               }
             });
@@ -844,7 +846,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               const newPosTo = tr.mapping.map(pos + node.nodeSize);
 
               const currentNode = tr.doc.nodeAt(newPosFrom);
-              if (node.eq(currentNode)) {
+              if (currentNode && node.eq(currentNode)) {
                 tr.delete(newPosFrom, newPosTo);
               }
             });
@@ -867,7 +869,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               const newPosTo = tr.mapping.map(pos + node.nodeSize);
 
               const currentNode = tr.doc.nodeAt(newPosFrom);
-              if (node.eq(currentNode)) {
+              if (currentNode && node.eq(currentNode)) {
                 tr.delete(newPosFrom, newPosTo);
               }
             });
@@ -889,7 +891,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
             const newPosTo = tr.mapping.map(pos + node.nodeSize);
 
             const currentNode = tr.doc.nodeAt(newPosFrom);
-            if (node.eq(currentNode)) {
+            if (currentNode && node.eq(currentNode)) {
               tr.delete(newPosFrom, newPosTo);
             }
           }
@@ -923,7 +925,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
                 const newPosTo = tr.mapping.map(pos + node.nodeSize);
 
                 const currentNode = tr.doc.nodeAt(newPosFrom);
-                if (node.eq(currentNode)) {
+                if (currentNode && node.eq(currentNode)) {
                   tr.delete(newPosFrom, newPosTo);
                 }
               }
@@ -964,8 +966,11 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           if (dispatch) {
             const otherAnnotations: Array<{ pos: number; node: PmNode }> = [];
             const matchedAnnotations = annotations.filter((annotation) => {
-              if (predicate(annotation.node)) return annotation;
-              else otherAnnotations.push(annotation);
+              const isMatch = predicate(annotation.node);
+              if (!isMatch) {
+                otherAnnotations.push(annotation);
+              }
+              return isMatch;
             });
 
             if (unsetFromOthers) {
@@ -1081,9 +1086,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           }
 
           if (dispatch) {
-            const matchedAnnotations = annotations.filter((annotation) => {
-              if (predicate(annotation.node)) return annotation;
-            });
+            const matchedAnnotations = annotations.filter((annotation) => predicate(annotation.node));
 
             return commands.updateFieldAnnotationsAttributes(matchedAnnotations, {
               highlighted,
@@ -1113,7 +1116,8 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
             return false;
           }
 
-          const { from, to, node } = state.selection;
+          const { from, to } = state.selection;
+          const selectionNode = state.selection instanceof NodeSelection ? state.selection.node : null;
           const annotations = findFieldAnnotationsBetween(from, to, state.doc);
 
           if (!annotations.length) {
@@ -1127,7 +1131,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               });
             });
 
-            if (setSelection && node?.type.name === this.name) {
+            if (setSelection && selectionNode?.type.name === this.name) {
               tr.setSelection(NodeSelection.create(tr.doc, from));
             }
           }
@@ -1148,7 +1152,8 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           state: EditorState;
           commands: Editor['commands'];
         }) => {
-          const { from, to, node } = state.selection;
+          const { from, to } = state.selection;
+          const selectionNode = state.selection instanceof NodeSelection ? state.selection.node : null;
           const annotations = findFieldAnnotationsBetween(from, to, state.doc);
 
           if (!annotations.length) {
@@ -1162,7 +1167,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               });
             });
 
-            if (setSelection && node?.type.name === this.name) {
+            if (setSelection && selectionNode?.type.name === this.name) {
               tr.setSelection(NodeSelection.create(tr.doc, from));
             }
           }
@@ -1183,14 +1188,15 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           state: EditorState;
           commands: Editor['commands'];
         }) => {
-          const { from, to, node } = state.selection;
+          const { from, to } = state.selection;
+          const selectionNode = state.selection instanceof NodeSelection ? state.selection.node : null;
           const annotations = findFieldAnnotationsBetween(from, to, state.doc);
 
           if (!annotations.length) {
             return true;
           }
 
-          let [value, unit] = parseSizeUnit(fontSize as string);
+          let [value, unit] = parseSizeUnit(String(fontSize));
           const min = 8,
             max = 96,
             defaultUnit = 'pt';
@@ -1209,7 +1215,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               });
             });
 
-            if (setSelection && node?.type.name === this.name) {
+            if (setSelection && selectionNode?.type.name === this.name) {
               tr.setSelection(NodeSelection.create(tr.doc, from));
             }
           }
@@ -1230,7 +1236,8 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           state: EditorState;
           commands: Editor['commands'];
         }) => {
-          const { from, to, node } = state.selection;
+          const { from, to } = state.selection;
+          const selectionNode = state.selection instanceof NodeSelection ? state.selection.node : null;
           const annotations = findFieldAnnotationsBetween(from, to, state.doc);
 
           if (!annotations.length) {
@@ -1244,7 +1251,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               });
             });
 
-            if (setSelection && node?.type.name === this.name) {
+            if (setSelection && selectionNode?.type.name === this.name) {
               tr.setSelection(NodeSelection.create(tr.doc, from));
             }
           }
@@ -1265,7 +1272,8 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
           state: EditorState;
           commands: Editor['commands'];
         }) => {
-          const { from, to, node } = state.selection;
+          const { from, to } = state.selection;
+          const selectionNode = state.selection instanceof NodeSelection ? state.selection.node : null;
           const annotations = findFieldAnnotationsBetween(from, to, state.doc);
 
           if (!annotations.length) {
@@ -1279,7 +1287,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
               });
             });
 
-            if (setSelection && node?.type.name === this.name) {
+            if (setSelection && selectionNode?.type.name === this.name) {
               tr.setSelection(NodeSelection.create(tr.doc, from));
             }
           }
@@ -1290,19 +1298,14 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 
       // Clean up commands (after field deletion)
       ...cleanupCommands,
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 
   addNodeView() {
-    return (props: {
-      editor: Editor;
-      node: PmNode;
-      getPos: () => number;
-      HTMLAttributes: Record<string, unknown>;
-      decorations: readonly unknown[];
-    }) => {
+    return (props: FieldAnnotationNodeViewProps) => {
       return new FieldAnnotationView({
         ...props,
+        htmlAttributes: props.HTMLAttributes ?? {},
         annotationClass: this.options?.annotationClass ?? 'annotation',
         annotationContentClass: this.options?.annotationContentClass ?? 'annotation-content',
         borderColor: this.options?.borderColor ?? '#b015b3',
@@ -1311,6 +1314,10 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
   },
 
   addPmPlugins() {
+    if (!this.editor) {
+      return [];
+    }
+
     return [
       FieldAnnotationPlugin({
         editor: this.editor,
@@ -1322,7 +1329,7 @@ export const FieldAnnotation = Node.create<FieldAnnotationOptions>({
 });
 
 /// for y-prosemirror support
-function getFormatAttrsFromMarks(marks: PmMark[] | null): {
+function getFormatAttrsFromMarks(marks: readonly PmMark[] | null): {
   bold: boolean;
   italic: boolean;
   underline: boolean;

@@ -1,15 +1,16 @@
-import { Attribute, Node } from '@core/index.js';
+import { Attribute, type AttributeValue, Node } from '@core/index.js';
 import { ImageRegistrationPlugin } from './imageHelpers/imageRegistrationPlugin.js';
 import { ImagePositionPlugin } from './imageHelpers/imagePositionPlugin.js';
 import { getNormalizedImageAttrs } from './imageHelpers/legacyAttributes.js';
 import { getRotationMargins } from './imageHelpers/rotation.js';
 import { inchesToPixels } from '@converter/helpers.js';
+import type { DOMOutputSpec, Node as PmNode } from 'prosemirror-model';
 
 /**
  * Configuration options for Image
  * @category Options
  */
-interface ImageOptions extends Record<string, unknown> {
+export interface ImageOptions extends Record<string, unknown> {
   /** Allow base64 encoded images */
   allowBase64: boolean;
   /** Default HTML attributes for image elements */
@@ -72,12 +73,43 @@ interface SetWrappingOptions {
   attrs?: Record<string, unknown>;
 }
 
+export interface ImageStorage extends Record<string, unknown> {
+  media: Record<string, string>;
+}
+
+type ImageMargin = {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+};
+
+type ImageWrapAttrs = {
+  wrapText?: 'bothSides' | 'largest' | 'left' | 'right';
+  distTop?: number;
+  distBottom?: number;
+  distLeft?: number;
+  distRight?: number;
+  polygon?: Array<[number, number]>;
+  behindDoc?: boolean;
+};
+
+type ImageAttrs = {
+  wrap?: { type?: string; attrs?: ImageWrapAttrs };
+  marginOffset?: { horizontal?: number; top?: number };
+  anchorData?: { hRelativeFrom?: string; vRelativeFrom?: string; alignH?: string };
+  padding?: { left?: number; right?: number; top?: number; bottom?: number };
+  transformData?: { rotation?: number; verticalFlip?: boolean; horizontalFlip?: boolean };
+  size?: { width?: number; height?: number };
+  extension?: string;
+};
+
 /**
  * @module Image
  * @sidebarTitle Image
  * @snippetPath /snippets/extensions/image.mdx
  */
-export const Image = Node.create<ImageOptions>({
+export const Image = Node.create<ImageOptions, ImageStorage>({
   name: 'image',
 
   group: 'inline',
@@ -96,9 +128,9 @@ export const Image = Node.create<ImageOptions>({
     };
   },
 
-  addStorage(): Record<string, unknown> {
+  addStorage(): ImageStorage {
     return {
-      media: {} as Record<string, string>,
+      media: {},
     };
   },
 
@@ -106,11 +138,11 @@ export const Image = Node.create<ImageOptions>({
     return {
       src: {
         default: null,
-        renderDOM: ({ src }) => {
+        renderDOM: ({ src }: { src?: unknown }) => {
           const srcKey = Array.isArray(src) || typeof src === 'object' ? String(src) : src;
           return {
             src: (typeof srcKey === 'string' ? this.storage.media[srcKey] : null) ?? src,
-          };
+          } as Record<string, AttributeValue>;
         },
       },
 
@@ -178,7 +210,7 @@ export const Image = Node.create<ImageOptions>({
 
       transformData: {
         default: {},
-        renderDOM: ({ transformData }) => {
+        renderDOM: ({ transformData }: { transformData?: ImageAttrs['transformData'] }) => {
           let style = '';
           if (transformData && typeof transformData === 'object' && !Array.isArray(transformData)) {
             const rotation = 'rotation' in transformData ? transformData.rotation : undefined;
@@ -214,7 +246,7 @@ export const Image = Node.create<ImageOptions>({
 
       size: {
         default: {},
-        renderDOM: ({ size, extension }) => {
+        renderDOM: ({ size, extension }: { size?: ImageAttrs['size']; extension?: string }) => {
           let style = '';
           if (size && typeof size === 'object' && !Array.isArray(size)) {
             const width = 'width' in size ? size.width : undefined;
@@ -246,12 +278,13 @@ export const Image = Node.create<ImageOptions>({
       style: {
         default: null,
         rendered: true,
-        renderDOM: ({ style }) => {
+        renderDOM: ({ style }: { style?: string | null }) => {
           if (!style) return {};
           return { style };
         },
       },
-    };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Complex attribute structure for ProseMirror
+    } as any;
   },
 
   parseDOM() {
@@ -262,14 +295,21 @@ export const Image = Node.create<ImageOptions>({
     ];
   },
 
-  renderDOM({ node, htmlAttributes }) {
+  renderDOM({ node, htmlAttributes }: { node: PmNode; htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
     // multiple attributes influence the margin sizes, so we handle them here together rather than separately.
     // Also, the editor context is needed for wrap styling in some cases.
 
-    const { wrap, marginOffset } = getNormalizedImageAttrs(node.attrs);
-    const { anchorData, padding, transformData = {}, size = { width: 0, height: 0 } } = node.attrs;
+    const normalizedAttrs = getNormalizedImageAttrs(node.attrs as ImageAttrs) as ImageAttrs;
+    const { wrap, marginOffset } = normalizedAttrs;
+    const {
+      anchorData,
+      padding,
+      transformData = {},
+      size: rawSize = { width: 0, height: 0 },
+    } = node.attrs as ImageAttrs;
+    const size = rawSize ?? { width: 0, height: 0 };
 
-    const margin = {
+    const margin: ImageMargin = {
       left: 0,
       right: 0,
       top: 0,
@@ -300,7 +340,7 @@ export const Image = Node.create<ImageOptions>({
     //   bottom += transformData.sizeExtension.bottom || 0;
     // }
     const { rotation } = transformData;
-    const { height, width } = size;
+    const { height = 0, width = 0 } = size ?? {};
     if (rotation && height && width) {
       const { horizontal, vertical } = getRotationMargins(width, height, rotation);
       margin.left += horizontal;
@@ -311,7 +351,7 @@ export const Image = Node.create<ImageOptions>({
 
     // Handle wrap styling (needs editor context)
     if (wrap && wrap.type) {
-      const { type, attrs = {} } = wrap;
+      const { type, attrs = {} as ImageWrapAttrs } = wrap;
 
       switch (type) {
         case 'None':
@@ -333,21 +373,24 @@ export const Image = Node.create<ImageOptions>({
           } else if (attrs.wrapText === 'left') {
             style += 'float: right;';
             floatRight = true;
-          } else if (['largest', 'bothSides'].includes(attrs.wrapText)) {
+          } else if (attrs.wrapText && ['largest', 'bothSides'].includes(attrs.wrapText)) {
             // TODO: HTML/CSS doesn't support true both-sides wrapping
             // We use 'largest' as best approximation
             //
             // For 'largest', float to the side that would leave the most space for text
-            const pageStylesData = getDataFromPageStyles({
-              editor: this.editor,
-              marginOffset,
-              size,
-              attrs,
-            });
+            const editorInstance = this.editor;
+            if (editorInstance) {
+              const pageStylesData = getDataFromPageStyles({
+                editor: editorInstance,
+                marginOffset,
+                size,
+                attrs,
+              });
 
-            style += pageStylesData.style;
-            floatRight = pageStylesData.floatRight;
-            baseHorizontal = pageStylesData.baseHorizontal;
+              style += pageStylesData.style;
+              floatRight = pageStylesData.floatRight;
+              baseHorizontal = pageStylesData.baseHorizontal;
+            }
           }
           if (attrs.distTop) margin.top += attrs.distTop;
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
@@ -359,16 +402,18 @@ export const Image = Node.create<ImageOptions>({
         case 'Tight': {
           style += 'clear: both;';
 
-          const pageStylesData = getDataFromPageStyles({
-            editor: this.editor,
-            marginOffset,
-            size,
-            attrs,
-          });
+          if (this.editor) {
+            const pageStylesData = getDataFromPageStyles({
+              editor: this.editor,
+              marginOffset,
+              size,
+              attrs,
+            });
 
-          style += pageStylesData.style;
-          floatRight = pageStylesData.floatRight;
-          baseHorizontal = pageStylesData.baseHorizontal;
+            style += pageStylesData.style;
+            floatRight = pageStylesData.floatRight;
+            baseHorizontal = pageStylesData.baseHorizontal;
+          }
 
           // Use float and shape-outside if polygon is provided
 
@@ -376,7 +421,7 @@ export const Image = Node.create<ImageOptions>({
           if (attrs.distBottom) margin.bottom += attrs.distBottom;
           if (attrs.distLeft) margin.left += attrs.distLeft;
           if (attrs.distRight) margin.right += attrs.distRight;
-          if (attrs.polygon) {
+          if (attrs.polygon && Array.isArray(attrs.polygon)) {
             // Convert polygon points to CSS polygon string
             // For left floating images - we add 15 to the horizontal offset to prevent overlap with text.
             // For right floating images - we pick the smallest x value of the polygon. Difference is due to
@@ -396,8 +441,10 @@ export const Image = Node.create<ImageOptions>({
             });
             const originalWidth = maxX - minX;
             const originalHeight = maxY - minY;
-            const scaleWidth = Math.min(1, size.width / originalWidth);
-            const scaleHeight = Math.min(1, size.height / originalHeight);
+            const sizeWidth = size?.width ?? 0;
+            const sizeHeight = size?.height ?? 0;
+            const scaleWidth = originalWidth ? Math.min(1, sizeWidth / originalWidth) : 0;
+            const scaleHeight = originalHeight ? Math.min(1, sizeHeight / originalHeight) : 0;
             // TODO: Calculating the scale factors based on the declared size of the image and the size of the
             // polygon will work if the polygon touch all the edges of the images (typical case). It will give
             // somewhat incorrect values not if the polygon does not touch the right and bottom edges of the image.
@@ -433,29 +480,29 @@ export const Image = Node.create<ImageOptions>({
     const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
 
     if (hasAnchorData) {
-      switch (anchorData.hRelativeFrom) {
+      switch (anchorData?.hRelativeFrom) {
         case 'page':
           const pageStyles =
             this.editor?.converter?.pageStyles || this.editor?.options.parentEditor?.converter?.pageStyles;
           margin.left -= inchesToPixels(pageStyles?.pageMargins?.left) || 0;
           break;
         case 'margin':
-          if (anchorData.alignH === 'center') {
+          if (anchorData?.alignH === 'center') {
             style += 'position: absolute; left: 50%; transform: translateX(-50%);';
           }
-          if (anchorData.alignH === 'left' || anchorData.alignH === 'right') {
+          if (anchorData?.alignH === 'left' || anchorData?.alignH === 'right') {
             style += `position: absolute; ${anchorData.alignH}: 0;`;
           }
           break;
         case 'column':
-          if (anchorData.alignH === 'center') {
+          if (anchorData?.alignH === 'center') {
             centered = true;
-          } else if (anchorData.alignH === 'right') {
+          } else if (anchorData?.alignH === 'right') {
             floatRight = true;
             if (!style.includes('float: right;')) {
               style += 'float: right;';
             }
-          } else if (anchorData.alignH === 'left') {
+          } else if (anchorData?.alignH === 'left') {
             if (!style.includes('float: left;')) {
               style += 'float: left;';
             }
@@ -511,13 +558,16 @@ export const Image = Node.create<ImageOptions>({
     if (margin.bottom) style += `margin-bottom: ${margin.bottom}px;`;
 
     // Merge wrap styling with existing htmlAttributes style
-    const finalAttributes = { ...htmlAttributes };
+    const finalAttributes: Record<string, unknown> = { ...htmlAttributes };
     if (style) {
-      const existingStyle = finalAttributes.style || '';
+      const existingStyle = typeof finalAttributes.style === 'string' ? finalAttributes.style : '';
       finalAttributes.style = existingStyle + (existingStyle ? ' ' : '') + style;
     }
 
-    return ['img', Attribute.mergeAttributes(this.options.htmlAttributes, finalAttributes)];
+    return [
+      'img',
+      Attribute.mergeAttributes(this.options.htmlAttributes, finalAttributes as Record<string, AttributeValue>),
+    ];
   },
 
   addCommands() {
@@ -537,7 +587,7 @@ export const Image = Node.create<ImageOptions>({
        */
       setImage:
         (options: ImageInsertOptions) =>
-        ({ commands }): boolean => {
+        ({ commands }: { commands: { insertContent: (content: unknown) => boolean } }): boolean => {
           return commands.insertContent({
             type: this.name,
             attrs: options,
@@ -592,7 +642,13 @@ export const Image = Node.create<ImageOptions>({
        */
       setWrapping:
         (options: SetWrappingOptions) =>
-        ({ chain, state }): boolean => {
+        ({
+          chain,
+          state,
+        }: {
+          chain: () => { updateAttributes: (...args: unknown[]) => { run: () => boolean } };
+          state: { selection: { $from: { nodeAfter: PmNode | null } } };
+        }): boolean => {
           const { selection } = state;
           const { $from } = selection;
           const node = $from.nodeAfter;
@@ -633,10 +689,11 @@ export const Image = Node.create<ImageOptions>({
 
           return chain().updateAttributes(this.name, updatedAttrs).run();
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 
   addPmPlugins() {
+    if (!this.editor) return [];
     return [ImageRegistrationPlugin({ editor: this.editor }), ImagePositionPlugin({ editor: this.editor })];
   },
 });
@@ -650,7 +707,7 @@ const getDataFromPageStyles = ({
   editor: import('@core/Editor.js').Editor;
   marginOffset: { horizontal?: number; top?: number } | undefined;
   size: { width?: number; height?: number };
-  attrs: Record<string, unknown>;
+  attrs: ImageWrapAttrs;
 }): { style: string; floatRight: boolean; baseHorizontal: number } => {
   let style = '';
   let floatRight = false;
@@ -666,7 +723,7 @@ const getDataFromPageStyles = ({
 
     // marginOffset.horizontal is space on the left when wrapText === "largest"
     // We can therefore calculate the space on the right vs on the left:
-    const leftSpace = marginOffset.horizontal;
+    const leftSpace = marginOffset?.horizontal ?? 0;
     const rightSpace = contentWidth - leftSpace - imageWidth;
 
     if (rightSpace < 0) {

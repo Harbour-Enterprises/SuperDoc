@@ -91,7 +91,7 @@ export const TextStyle = Mark.create<TextStyleOptions>({
           const attributes = Attribute.getMarkAttributes(state, this.name as string | MarkType);
           const hasStyles = Object.entries(attributes).some(([, value]) => !!value);
           if (hasStyles) return true;
-          return commands.unsetMark(this.name);
+          return Boolean(commands.unsetMark(this.name));
         },
     };
   },

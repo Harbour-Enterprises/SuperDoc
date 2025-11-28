@@ -1,4 +1,7 @@
 import { getStructuredContentTagsById } from './getStructuredContentTagsById';
+import type { EditorState } from 'prosemirror-state';
+import type { Node as PmNode } from 'prosemirror-model';
+import type { StructuredContentMatch } from './types';
 
 /**
  * Find all tables inside a structured content block by ID
@@ -10,7 +13,7 @@ import { getStructuredContentTagsById } from './getStructuredContentTagsById';
  * const tables = editor.helpers.getStructuredContentTablesById('block-123', editor.state)
  * console.log(`Block contains ${tables.length} table(s)`)
  */
-export function getStructuredContentTablesById(id, state) {
+export function getStructuredContentTablesById(id: string, state: EditorState): StructuredContentMatch[] {
   if (!id || !state) return [];
 
   const blocks = getStructuredContentTagsById(id, state).filter(
@@ -21,8 +24,8 @@ export function getStructuredContentTablesById(id, state) {
 
   const { pos: blockPos, node: blockNode } = blocks[0];
 
-  const tablesInBlock = [];
-  blockNode.descendants((child, relPos) => {
+  const tablesInBlock: StructuredContentMatch[] = [];
+  blockNode.descendants((child: PmNode, relPos: number) => {
     if (child.type.name === 'table') {
       const absPos = blockPos + 1 + relPos;
       tablesInBlock.push({ node: child, pos: absPos });

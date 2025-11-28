@@ -1,6 +1,6 @@
 import { setBlockType } from 'prosemirror-commands';
 import type { NodeType } from 'prosemirror-model';
-import type { Command } from '../types/ChainedCommands.js';
+import type { Command, CommandProps } from '../types/ChainedCommands.js';
 import { getNodeType } from '../helpers/getNodeType.js';
 
 /**
@@ -17,12 +17,12 @@ export const setNode =
     return (
       chain()
         // try to convert node to default node if needed
-        .command(({ commands }) => {
+        .command(({ commands }: CommandProps) => {
           const canSetBlock = setBlockType(type, attrs)(state);
           if (canSetBlock) return true;
           return commands.clearNodes();
         })
-        .command(({ state: updatedState }) => {
+        .command(({ state: updatedState }: CommandProps) => {
           return setBlockType(type, attrs)(updatedState, dispatch);
         })
         .run()

@@ -3,6 +3,7 @@ import { Plugin, PluginKey, EditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
 import tippy, { Instance as TippyInstance } from 'tippy.js';
+import type { Editor } from '@core/Editor.js';
 import { applyStyleIsolationClass } from '../../utils/styleIsolation.js';
 
 import Mentions from '@/components/popovers/Mentions.vue';
@@ -52,6 +53,9 @@ export const PopoverPlugin = Extension.create({
         },
       },
       view: (view) => {
+        if (!this.editor) {
+          return {};
+        }
         const popover = new Popover(view, this.editor);
         return {
           update: (view) => {
@@ -69,25 +73,16 @@ export const PopoverPlugin = Extension.create({
   },
 });
 
-interface PopoverRect {
-  width: number;
-  height: number;
-  top: number;
-  left: number;
-  bottom: number;
-  right: number;
-}
-
 class Popover {
-  editor: Record<string, unknown>;
+  editor: Editor;
   view: EditorView;
   popover: HTMLDivElement;
   tippyInstance: TippyInstance;
-  popoverRect?: PopoverRect;
+  popoverRect?: DOMRect;
   app?: App;
   state?: EditorState;
 
-  constructor(view: EditorView, editor: Record<string, unknown>) {
+  constructor(view: EditorView, editor: Editor) {
     this.editor = editor;
     this.view = view;
     this.popover = document.createElement('div');
@@ -102,7 +97,9 @@ class Popover {
       appendTo: document.body,
       arrow: false,
       onShow: (instance) => {
-        instance.setProps({ getReferenceClientRect: () => this.popoverRect as unknown });
+        instance.setProps({
+          getReferenceClientRect: () => this.popoverRect ?? new DOMRect(),
+        });
         this.bindKeyDownEvents();
       },
       onHide: () => {
@@ -130,7 +127,8 @@ class Popover {
 
   mountVueComponent(component: unknown, props: Record<string, unknown> = {}): void {
     if (this.app) this.app.unmount();
-    this.app = createApp(component, props);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    this.app = createApp(component as any, props);
     this.app.mount(this.popover);
     this.tippyInstance.setContent(this.popover);
   }
@@ -175,14 +173,7 @@ class Popover {
 
   showPopoverAtPosition(pos: number): void {
     const end = this.view.coordsAtPos(pos);
-    this.popoverRect = {
-      width: 0,
-      height: 0,
-      top: end.bottom,
-      left: end.left,
-      bottom: end.bottom,
-      right: end.left,
-    };
+    this.popoverRect = new DOMRect(end.left, end.bottom, 0, 0);
 
     this.tippyInstance.show();
   }

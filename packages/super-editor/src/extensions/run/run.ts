@@ -1,4 +1,4 @@
-import { Attribute, OxmlNode } from '@core/index.js';
+import { Attribute, type AttributeValue, OxmlNode } from '@core/index.js';
 import { splitRun } from './commands/index.js';
 
 /**
@@ -47,7 +47,7 @@ export const Run = OxmlNode.create({
     };
   },
 
-  addCommands(): unknown {
+  addCommands(): Record<string, (...args: unknown[]) => unknown> {
     return {
       splitRun,
     };
@@ -57,8 +57,11 @@ export const Run = OxmlNode.create({
     return [{ tag: 'span[data-run]' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    const base = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
+  renderDOM({ htmlAttributes }: { htmlAttributes?: Record<string, unknown> }) {
+    const base = Attribute.mergeAttributes(
+      this.options?.htmlAttributes ?? {},
+      (htmlAttributes as Record<string, AttributeValue>) || {},
+    );
     return ['span', base, 0];
   },
 });

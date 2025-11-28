@@ -16,7 +16,7 @@ interface SectionHeaderFooterParams {
  * @returns {{ node: import('prosemirror-model').Node, pos: number }|null} The paragraph node and position, or null if not found
  */
 function findNearestParagraphWithSectPr(doc: Node, pos: number): { node: Node; pos: number } | null {
-  let target = null;
+  let target: { node: Node; pos: number } | null = null;
   doc.descendants((node, nodePos) => {
     if (nodePos > pos) return false;
     if (node.type?.name === 'paragraph' && node.attrs?.paragraphProperties?.sectPr) {

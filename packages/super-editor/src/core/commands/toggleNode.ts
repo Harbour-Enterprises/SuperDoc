@@ -15,6 +15,6 @@ export const toggleNode =
     const type = getNodeType(typeOrName, state.schema);
     const toggleType = getNodeType(toggleTypeOrName, state.schema);
     const isActive = isNodeActive(state, type, attrs);
-    if (isActive) return commands.setNode(toggleType);
-    return commands.setNode(type, attrs);
+    if (isActive) return Boolean(commands.setNode(toggleType));
+    return Boolean(commands.setNode(type, attrs));
   };

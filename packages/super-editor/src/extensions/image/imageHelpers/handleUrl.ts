@@ -39,9 +39,10 @@ export const urlToFile = async (
     const finalMimeType = mimeType || response.headers.get('content-type') || blob.type || 'image/jpeg';
 
     return new File([blob], finalFilename, { type: finalMimeType });
-  } catch (error) {
+  } catch (error: unknown) {
     if (isCorsError(error)) {
-      console.warn(`CORS policy prevents accessing image from ${url}:`, error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      console.warn(`CORS policy prevents accessing image from ${url}:`, message);
       return null;
     }
 
@@ -55,7 +56,8 @@ export const urlToFile = async (
  * @param error - The error to check
  * @returns True if the error appears to be CORS-related
  */
-const isCorsError = (error: Error): boolean => {
+const isCorsError = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
   const errorMessage = error.message.toLowerCase();
   const errorName = error.name.toLowerCase();
 

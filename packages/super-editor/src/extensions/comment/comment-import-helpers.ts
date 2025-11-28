@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 
-interface Comment {
+export interface Comment {
   importedId?: string | number;
   commentId: string;
   internal?: boolean;
@@ -12,7 +12,7 @@ interface Comment {
   isDone?: boolean;
 }
 
-interface Converter {
+export interface Converter {
   comments?: Comment[];
 }
 

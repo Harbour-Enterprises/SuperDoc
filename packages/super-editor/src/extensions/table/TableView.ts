@@ -145,9 +145,9 @@ export function updateColumns(
     node.attrs.tableProperties.tableIndent?.type ?? 'dxa',
   );
   const firstRowFirstCellPaddingLeftPx =
-    (firstRow?.firstChild?.attrs as Record<string, unknown>)?.cellMargins?.left ?? 0;
+    (firstRow?.firstChild?.attrs as { cellMargins?: { left?: number } } | undefined)?.cellMargins?.left ?? 0;
   const firstRowLastCellPaddingRightPx =
-    (firstRow?.lastChild?.attrs as Record<string, unknown>)?.cellMargins?.right ?? 0;
+    (firstRow?.lastChild?.attrs as { cellMargins?: { right?: number } } | undefined)?.cellMargins?.right ?? 0;
 
   table.style.marginLeft = `${-firstRowFirstCellPaddingLeftPx}px`;
   if (tableIndent !== null) {

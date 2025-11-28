@@ -2,7 +2,7 @@ import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
 import type { Transaction } from 'prosemirror-state';
 import type { Node as PmNode } from 'prosemirror-model';
 
-interface RemovedNode {
+export interface RemovedNode {
   node: PmNode;
   pos: number;
 }
@@ -10,9 +10,11 @@ interface RemovedNode {
 export function findRemovedFieldAnnotations(tr: Transaction): RemovedNode[] {
   const removedNodes: RemovedNode[] = [];
 
+  const meta = (tr as unknown as { meta?: Record<string, unknown> }).meta;
+
   if (
     !tr.steps.length ||
-    (tr.meta && !Object.keys(tr.meta).every((meta) => ['inputType', 'uiEvent', 'paste'].includes(meta))) ||
+    (meta && !Object.keys(meta).every((metaKey) => ['inputType', 'uiEvent', 'paste'].includes(metaKey))) ||
     ['historyUndo', 'historyRedo'].includes(tr.getMeta('inputType')) ||
     ['drop'].includes(tr.getMeta('uiEvent')) ||
     tr.getMeta('fieldAnnotationUpdate') === true ||

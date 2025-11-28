@@ -144,9 +144,10 @@ export class Schema {
 
       const parseDOM = callOrGet(getExtensionConfigField(extension, 'parseDOM', context)) as PmParseRule[] | undefined;
       if (parseDOM) {
+        // Type assertion needed due to ProseMirror ParseRule type incompatibility
         schema.parseDOM = parseDOM.map((parseRule) => {
           return Attribute.insertExtensionAttrsToParseRule(parseRule, extensionAttributes);
-        }) as unknown as PmParseRule[];
+        }) as unknown as typeof schema.parseDOM;
       }
 
       const renderDOM = getExtensionConfigField(extension, 'renderDOM', context) as
@@ -212,9 +213,10 @@ export class Schema {
 
       const parseDOM = callOrGet(getExtensionConfigField(extension, 'parseDOM', context)) as PmParseRule[] | undefined;
       if (parseDOM) {
+        // Type assertion needed due to ProseMirror ParseRule type incompatibility
         schema.parseDOM = parseDOM.map((parseRule) => {
           return Attribute.insertExtensionAttrsToParseRule(parseRule, extensionAttributes);
-        }) as unknown as PmParseRule[];
+        }) as unknown as typeof schema.parseDOM;
       }
       const renderDOM = getExtensionConfigField(extension, 'renderDOM', context) as
         | ((context: RenderMarkDOMContext) => unknown)

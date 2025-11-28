@@ -11,16 +11,16 @@ export const toggleList =
     let predicate: (n: Node) => boolean;
     if (listType === 'orderedList') {
       predicate = (n): boolean => {
-        const paraProps = getResolvedParagraphProperties(n);
-        return (
-          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType !== 'bullet'
+        const paraProps = getResolvedParagraphProperties(n) ?? {};
+        return Boolean(
+          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType !== 'bullet',
         );
       };
     } else if (listType === 'bulletList') {
       predicate = (n): boolean => {
-        const paraProps = getResolvedParagraphProperties(n);
-        return (
-          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType === 'bullet'
+        const paraProps = getResolvedParagraphProperties(n) ?? {};
+        return Boolean(
+          paraProps.numberingProperties && n.attrs.listRendering && n.attrs.listRendering.numberingType === 'bullet',
         );
       };
     } else {
@@ -64,11 +64,12 @@ export const toggleList =
       } else {
         // Apply numbering properties to new list paragraphs while keeping existing list items untouched
         mode = 'reuse';
-        const paraProps = getResolvedParagraphProperties(firstListNode);
-        const baseNumbering = paraProps.numberingProperties || {};
+        const paraProps = getResolvedParagraphProperties(firstListNode) ?? {};
+        const baseNumbering = (paraProps.numberingProperties as Record<string, unknown>) || {};
         sharedNumberingProperties = {
-          ...baseNumbering,
-          ilvl: baseNumbering.ilvl ?? 0,
+          ...(baseNumbering as Record<string, unknown>),
+          numId: Number((baseNumbering as Record<string, unknown>).numId ?? ListHelpers.getNewListId(editor)),
+          ilvl: Number((baseNumbering as Record<string, unknown>).ilvl ?? 0),
         };
       }
     } else {

@@ -8,6 +8,18 @@ interface VectorShapeOptions extends Record<string, unknown> {
   htmlAttributes: Record<string, AttributeValue>;
 }
 
+type VectorShapeAttrs = {
+  kind?: string;
+  width?: number | null;
+  height?: number | null;
+  fillColor?: string | null;
+  strokeColor?: string | null;
+  strokeWidth?: number | null;
+  rotation?: number | null;
+  flipH?: boolean | null;
+  flipV?: boolean | null;
+};
+
 export const VectorShape = Node.create<VectorShapeOptions>({
   name: 'vectorShape',
 
@@ -27,7 +39,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
     return {
       kind: {
         default: 'rect',
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (!attrs.kind) return {};
           return { 'data-kind': attrs.kind };
         },
@@ -35,7 +47,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       width: {
         default: 100,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (attrs.width == null) return {};
           return { 'data-width': attrs.width };
         },
@@ -43,7 +55,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       height: {
         default: 100,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (attrs.height == null) return {};
           return { 'data-height': attrs.height };
         },
@@ -51,7 +63,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       fillColor: {
         default: '#5b9bd5',
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (!attrs.fillColor) return {};
           return { 'data-fill-color': attrs.fillColor };
         },
@@ -59,7 +71,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       strokeColor: {
         default: '#000000',
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (!attrs.strokeColor) return {};
           return { 'data-stroke-color': attrs.strokeColor };
         },
@@ -67,7 +79,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       strokeWidth: {
         default: 1,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (attrs.strokeWidth == null) return {};
           return { 'data-stroke-width': attrs.strokeWidth };
         },
@@ -75,7 +87,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       rotation: {
         default: 0,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (attrs.rotation == null) return {};
           return { 'data-rotation': attrs.rotation };
         },
@@ -83,7 +95,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       flipH: {
         default: false,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (!attrs.flipH) return {};
           return { 'data-flip-h': attrs.flipH };
         },
@@ -91,7 +103,7 @@ export const VectorShape = Node.create<VectorShapeOptions>({
 
       flipV: {
         default: false,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: VectorShapeAttrs) => {
           if (!attrs.flipV) return {};
           return { 'data-flip-v': attrs.flipV };
         },

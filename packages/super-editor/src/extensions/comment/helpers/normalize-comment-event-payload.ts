@@ -1,12 +1,12 @@
-interface User {
-  name?: string;
-  email?: string;
-  image?: string;
+interface UserLike {
+  name?: string | null;
+  email?: string | null;
+  image?: string | null;
 }
 
-interface EditorOptions {
-  user?: User;
-  documentId?: string;
+interface EditorOptionsLike {
+  user?: UserLike | null;
+  documentId?: string | null;
 }
 
 interface Conversation {
@@ -36,7 +36,7 @@ export const normalizeCommentEventPayload = ({
   fallbackInternal,
 }: {
   conversation: Conversation;
-  editorOptions: EditorOptions;
+  editorOptions: EditorOptionsLike;
   fallbackCommentId: string;
   fallbackInternal: boolean;
 }): Conversation => {

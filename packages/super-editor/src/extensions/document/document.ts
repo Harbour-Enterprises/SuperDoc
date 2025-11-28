@@ -75,7 +75,7 @@ export const Document = Node.create<DocumentOptions>({
       getDocumentStats:
         () =>
         ({ editor }: { editor: Editor }) => {
-          const text = editor.getText();
+          const text = editor.state.doc.textBetween(0, editor.state.doc.content.size, ' ', ' ');
           const words = text.split(/\s+/).filter((word: string) => word.length > 0).length;
           const characters = text.length;
           const paragraphs = editor.state.doc.content.childCount;

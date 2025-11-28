@@ -73,13 +73,13 @@ export const makeDefaultItems = ({
       ariaLabel: 'Font family',
     },
     options: fontOptions,
-    onActivate: ({ fontFamily }) => {
-      if (!fontFamily) return;
-      fontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
-      fontButton.label.value = fontFamily;
+    onActivate: ({ fontFamily }: { fontFamily?: unknown }) => {
+      if (!fontFamily || typeof fontFamily !== 'string') return;
+      const cleanFontFamily = fontFamily.split(',')[0]; // in case of fonts with fallbacks
+      fontButton.label.value = cleanFontFamily;
 
       const defaultFont = fontOptions.find((i) => i.label === fontButton.defaultLabel.value);
-      const foundFont = fontOptions.find((i) => i.label === fontFamily);
+      const foundFont = fontOptions.find((i) => i.label === cleanFontFamily);
       if (foundFont) {
         fontButton.selectedValue.value = foundFont.key;
       } else if (defaultFont) {
@@ -166,7 +166,7 @@ export const makeDefaultItems = ({
       ariaLabel: 'Font size',
     },
     options: fontSizeOptions,
-    onActivate: ({ fontSize: size }, isMultiple = false) => {
+    onActivate: ({ fontSize: size }: { fontSize?: unknown }, isMultiple = false) => {
       if (isMultiple) {
         // if there are multiple sizes in the selection.
         fontSize.label.value = '';
@@ -175,7 +175,7 @@ export const makeDefaultItems = ({
       }
 
       const defaultSize = fontSizeOptions.find((i) => i.label === String(fontSize.defaultLabel.value));
-      if (!size) {
+      if (!size || typeof size !== 'string') {
         fontSize.label.value = fontSize.defaultLabel.value;
         if (defaultSize) fontSize.selectedValue.value = defaultSize.key;
         else fontSize.selectedValue.value = '';
@@ -271,8 +271,8 @@ export const makeDefaultItems = ({
         render: () => renderColorOptions(superToolbar, highlight, [], true),
       },
     ],
-    onActivate: ({ color }) => {
-      highlight.iconColor.value = color || '';
+    onActivate: ({ color }: { color?: unknown }) => {
+      highlight.iconColor.value = (typeof color === 'string' ? color : '') || '';
     },
     onDeactivate: () => (highlight.iconColor.value = ''),
   });
@@ -298,8 +298,8 @@ export const makeDefaultItems = ({
         render: () => renderColorOptions(superToolbar, colorButton),
       },
     ],
-    onActivate: ({ color }) => {
-      colorButton.iconColor.value = color;
+    onActivate: ({ color }: { color?: unknown }) => {
+      colorButton.iconColor.value = typeof color === 'string' ? color : '#000';
     },
     onDeactivate: () => (colorButton.iconColor.value = '#000'),
   });
@@ -326,8 +326,8 @@ export const makeDefaultItems = ({
   });
 
   const renderSearchDropdown = () => {
-    const handleSubmit = ({ value }) => {
-      superToolbar.activeEditor.commands.search(value);
+    const handleSubmit = ({ value }: { value: string }) => {
+      superToolbar.activeEditor?.commands.search(value);
     };
 
     return h('div', {}, [
@@ -355,8 +355,8 @@ export const makeDefaultItems = ({
         render: () => renderLinkDropdown(link),
       },
     ],
-    onActivate: ({ href }) => {
-      if (href) link.attributes.value = { href };
+    onActivate: ({ href }: { href?: unknown }) => {
+      if (href && typeof href === 'string') link.attributes.value = { href };
       else link.attributes.value = {};
     },
     onDeactivate: () => {
@@ -373,10 +373,10 @@ export const makeDefaultItems = ({
         goToAnchor: () => {
           closeDropdown(link);
           if (!superToolbar.activeEditor || !link.attributes.value?.href) return;
-          const anchorName = link.attributes.value?.href?.slice(1);
+          const anchorName = (link.attributes.value.href as string)?.slice(1);
           const container = superToolbar.activeEditor.element;
           const anchor = container.querySelector(`a[name='${anchorName}']`);
-          if (anchor) scrollToElement(anchor);
+          if (anchor instanceof HTMLElement) scrollToElement(anchor);
         },
       }),
     ]);
@@ -425,9 +425,9 @@ export const makeDefaultItems = ({
     ],
   });
 
-  function renderTableGrid(tableItem) {
-    const handleSelect = (e) => {
-      superToolbar.emitCommand({ item: tableItem, argument: e });
+  function renderTableGrid(tableItem: ToolbarItem) {
+    const handleSelect = (e: unknown) => {
+      superToolbar.emitCommand({ item: tableItem, argument: e, option: undefined });
       closeDropdown(tableItem);
     };
 
@@ -562,13 +562,13 @@ export const makeDefaultItems = ({
     },
   ];
 
-  function renderTableActions(tableActionsItem) {
+  function renderTableActions(tableActionsItem: ToolbarItem) {
     return h(TableActions, {
       options: tableActionsOptions,
-      onSelect: (event) => {
+      onSelect: (event: { command: string }) => {
         closeDropdown(tableActionsItem);
         const { command } = event;
-        superToolbar.emitCommand({ item: tableActionsItem, argument: { command } });
+        superToolbar.emitCommand({ item: tableActionsItem, argument: { command }, option: undefined });
       },
     });
   }
@@ -591,11 +591,11 @@ export const makeDefaultItems = ({
       {
         type: 'render',
         render: () => {
-          const handleSelect = (e) => {
+          const handleSelect = (e: string) => {
             closeDropdown(alignment);
             const buttonWithCommand = { ...alignment, command: 'setTextAlign' };
             buttonWithCommand.command = 'setTextAlign';
-            superToolbar.emitCommand({ item: buttonWithCommand, argument: e });
+            superToolbar.emitCommand({ item: buttonWithCommand, argument: e, option: undefined });
             setAlignmentIcon(alignment, e);
           };
 
@@ -608,15 +608,15 @@ export const makeDefaultItems = ({
         key: 'alignment',
       },
     ],
-    onActivate: ({ textAlign }) => {
-      setAlignmentIcon(alignment, textAlign);
+    onActivate: ({ textAlign }: { textAlign?: unknown }) => {
+      setAlignmentIcon(alignment, typeof textAlign === 'string' ? textAlign : 'left');
     },
     onDeactivate: () => {
       setAlignmentIcon(alignment, 'left');
     },
   });
 
-  const setAlignmentIcon = (alignment, e) => {
+  const setAlignmentIcon = (alignment: ToolbarItem, e: string) => {
     const alignValue = e === 'both' ? 'justify' : e;
     const icons = {
       left: toolbarIcons.alignLeft,
@@ -723,10 +723,18 @@ export const makeDefaultItems = ({
       { label: '150%', key: 1.5, props: { 'data-item': 'btn-zoom-option' } },
       { label: '200%', key: 2, props: { 'data-item': 'btn-zoom-option' } },
     ],
-    onActivate: ({ zoom: value }) => {
-      if (!value) return;
+    onActivate: ({ zoom: value }: { zoom?: unknown }) => {
+      if (value === null || value === undefined) return;
 
-      zoom.label.value = value;
+      if (typeof value === 'number') {
+        if (!Number.isFinite(value)) return;
+        zoom.label.value = `${value}%`;
+        return;
+      }
+
+      if (typeof value === 'string') {
+        zoom.label.value = value;
+      }
     },
   });
 
@@ -907,16 +915,16 @@ export const makeDefaultItems = ({
     },
   ];
 
-  function renderDocumentMode(renderDocumentButton) {
+  function renderDocumentMode(renderDocumentButton: ToolbarItem) {
     const optionsAfterRole = getDocumentOptionsAfterRole(role, documentOptions);
     return h(DocumentMode, {
       options: optionsAfterRole,
-      onSelect: (item) => {
+      onSelect: (item: { label: string; icon: string }) => {
         closeDropdown(renderDocumentButton);
         const { label, icon } = item;
         documentMode.label.value = label;
         documentMode.icon.value = icon;
-        superToolbar.emitCommand({ item: documentMode, argument: label });
+        superToolbar.emitCommand({ item: documentMode, argument: label, option: undefined });
       },
     });
   }
@@ -968,10 +976,10 @@ export const makeDefaultItems = ({
         type: 'render',
         key: 'linkedStyle',
         render: () => {
-          const handleSelect = (style) => {
+          const handleSelect = (style: { id: string }) => {
             closeDropdown(linkedStyles);
             const itemWithCommand = { ...linkedStyles, command: 'setLinkedStyle' };
-            superToolbar.emitCommand({ item: itemWithCommand, argument: style });
+            superToolbar.emitCommand({ item: itemWithCommand, argument: style, option: undefined });
             selectedLinkedStyle.value = style.id;
           };
 
@@ -985,12 +993,14 @@ export const makeDefaultItems = ({
         },
       },
     ],
-    onActivate: ({ styleId }) => {
+    onActivate: ({ styleId }: { styleId?: unknown }) => {
       const styles = getQuickFormatList(superToolbar.activeEditor);
-      const selectedStyle = styles?.find((style) => style.id === styleId);
+      const selectedStyle = styles?.find((style: { id: string }) => style.id === styleId);
       // Normal linked style is default one
       linkedStyles.label.value =
-        selectedStyle && selectedStyle.id !== 'Normal' ? selectedStyle.definition.attrs.name : toolbarTexts.formatText;
+        selectedStyle && selectedStyle.id !== 'Normal'
+          ? String(selectedStyle.definition.attrs.name)
+          : toolbarTexts.formatText;
       linkedStyles.disabled.value = false;
     },
     onDeactivate: () => {
@@ -999,8 +1009,8 @@ export const makeDefaultItems = ({
     },
   });
 
-  const renderIcon = (value, selectedValue) => {
-    if (selectedValue.value != value) return;
+  const renderIcon = (value: number, selectedValue: Ref<string | undefined>) => {
+    if (selectedValue.value != String(value)) return;
     return h('div', { innerHTML: checkIconSvg, class: 'dropdown-select-icon' });
   };
 
@@ -1089,7 +1099,15 @@ export const makeDefaultItems = ({
     documentMode,
   ];
 
-  if (!superToolbar.config?.superdoc?.config?.modules?.ai) {
+  interface SuperdocConfig {
+    config?: {
+      modules?: {
+        ai?: boolean;
+      };
+    };
+  }
+
+  if (!(superToolbar.config?.superdoc as SuperdocConfig)?.config?.modules?.ai) {
     toolbarItems = toolbarItems.filter((item) => item.name.value !== 'ai');
   }
 

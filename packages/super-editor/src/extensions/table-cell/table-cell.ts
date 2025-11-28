@@ -36,6 +36,8 @@
  */
 
 import { Node, Attribute } from '@core/index.js';
+import type { AttributeValue, RenderNodeContext } from '@core/index.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
 import { createCellBorders } from './helpers/createCellBorders.js';
 
 /**
@@ -59,8 +61,11 @@ import { createCellBorders } from './helpers/createCellBorders.js';
  */
 interface TableCellOptions extends Record<string, unknown> {
   /** HTML attributes for table cells */
-  htmlAttributes: Record<string, string>;
+  htmlAttributes: Record<string, AttributeValue>;
 }
+
+type CellBackground = { color?: string };
+type CellMargins = Record<'top' | 'right' | 'bottom' | 'left', number>;
 
 /**
  * Attributes for table cell nodes
@@ -111,24 +116,22 @@ export const TableCell = Node.create<TableCellOptions>({
 
       colwidth: {
         default: [100],
-        parseDOM: (elem) => {
+        parseDOM: (elem: Element) => {
           const colwidth = elem.getAttribute('data-colwidth');
           const value = colwidth ? colwidth.split(',').map((width) => parseInt(width, 10)) : null;
           return value;
         },
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: { colwidth?: number[] | null }) => {
           if (!attrs.colwidth) return {};
           return {
-            // @ts-expect-error - colwidth is known to be an array at runtime
             'data-colwidth': attrs.colwidth.join(','),
           };
         },
       },
 
       background: {
-        renderDOM({ background }) {
+        renderDOM({ background }: { background?: CellBackground | null }) {
           if (!background) return {};
-          // @ts-expect-error - background is known to be an object at runtime
           const { color } = background || {};
           const style = `background-color: ${color ? `#${color}` : 'transparent'}`;
           return { style };
@@ -136,7 +139,7 @@ export const TableCell = Node.create<TableCellOptions>({
       },
 
       verticalAlign: {
-        renderDOM({ verticalAlign }) {
+        renderDOM({ verticalAlign }: { verticalAlign?: string | null }) {
           if (!verticalAlign) return {};
           const style = `vertical-align: ${verticalAlign}`;
           return { style };
@@ -144,15 +147,21 @@ export const TableCell = Node.create<TableCellOptions>({
       },
 
       cellMargins: {
-        renderDOM({ cellMargins, borders }) {
+        renderDOM({
+          cellMargins,
+          borders,
+        }: {
+          cellMargins?: Partial<CellMargins> | null;
+          borders?: Record<string, { val?: string; size?: number }> | null;
+        }) {
           if (!cellMargins) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
           const style = sides
             .map((side) => {
-              const margin = cellMargins?.[side] ?? 0;
-              const border = borders?.[side];
+              const margin = cellMargins?.[side as keyof typeof cellMargins] ?? 0;
+              const border = (borders as Record<string, { val?: string; size?: number }> | undefined)?.[side];
               // TODO: this should include table-level borders as well for the first/last cell in the row
-              const borderSize = border && border.val !== 'none' ? Math.ceil(border.size) : 0;
+              const borderSize = border && border.val !== 'none' ? Math.ceil(border.size ?? 0) : 0;
 
               if (margin) return `padding-${side}: ${Math.max(0, margin - borderSize)}px;`;
               return '';
@@ -164,14 +173,14 @@ export const TableCell = Node.create<TableCellOptions>({
 
       borders: {
         default: () => createCellBorders(),
-        renderDOM({ borders }) {
+        renderDOM({ borders }: { borders?: Record<string, { val?: string; size?: number; color?: string }> }) {
           if (!borders) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
           const style = sides
             .map((side) => {
               const border = borders?.[side];
               if (border && border.val === 'none') return `border-${side}: ${border.val};`;
-              if (border) return `border-${side}: ${Math.ceil(border.size)}px solid ${border.color || 'black'};`;
+              if (border) return `border-${side}: ${Math.ceil(border.size ?? 0)}px solid ${border.color || 'black'};`;
               return '';
             })
             .join(' ');
@@ -191,11 +200,11 @@ export const TableCell = Node.create<TableCellOptions>({
 
       __placeholder: {
         default: null,
-        parseDOM: (element) => {
+        parseDOM: (element: Element) => {
           const value = element.getAttribute('data-placeholder');
           return value || null;
         },
-        renderDOM({ __placeholder }) {
+        renderDOM({ __placeholder }: { __placeholder?: string | null }) {
           if (!__placeholder) return {};
           return {
             'data-placeholder': __placeholder,
@@ -215,11 +224,15 @@ export const TableCell = Node.create<TableCellOptions>({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [{ tag: 'td' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['td', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: RenderNodeContext): DOMOutputSpec {
+    return [
+      'td',
+      Attribute.mergeAttributes(this.options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
+      0,
+    ];
   },
 });

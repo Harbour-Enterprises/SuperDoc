@@ -1,5 +1,5 @@
 import { getMarksFromSelection } from '../helpers/getMarksFromSelection.js';
-import type { Command } from '../types/ChainedCommands.js';
+import type { Command, ChainableCommandObject } from '../types/ChainedCommands.js';
 import type { EditorState } from 'prosemirror-state';
 import type { Mark } from 'prosemirror-model';
 import type { Editor } from '../Editor.js';
@@ -10,6 +10,16 @@ interface ToggleMarkCascadeOptions {
   styleDetector?: (params: { state: EditorState; selectionMarks: Mark[]; markName: string; editor: Editor }) => boolean;
   extendEmptyMarkRange?: boolean;
 }
+
+/**
+ * Helper type for chainable commands that support extended setMark API.
+ * The setMark command's base signature doesn't include the options parameter,
+ * but the chainable command system may support it at runtime for consistency
+ * with other mark commands like unsetMark.
+ */
+type ChainWithExtendedSetMark = ChainableCommandObject & {
+  setMark(name: string, attrs: Record<string, unknown>, opts?: Record<string, unknown>): ChainableCommandObject;
+};
 
 /**
  * Cascade-aware toggle for marks that may be provided by styles (e.g., rStyle in runProperties).
@@ -50,8 +60,7 @@ export const toggleMarkCascade =
 
     // 2) If inline is present and style is also ON, we must both remove inline AND add negation
     if (hasInline && styleOn) {
-      return cmdChain
-        .unsetMark(markName, { extendEmptyMarkRange })
+      return (cmdChain.unsetMark(markName, { extendEmptyMarkRange }) as ChainWithExtendedSetMark)
         .setMark(markName, negationAttrs, { extendEmptyMarkRange })
         .run();
     }
@@ -60,10 +69,12 @@ export const toggleMarkCascade =
     if (hasInline) return cmdChain.unsetMark(markName, { extendEmptyMarkRange }).run();
 
     // 4) If only style is present, add negation (turn OFF)
-    if (styleOn) return cmdChain.setMark(markName, negationAttrs, { extendEmptyMarkRange }).run();
+    if (styleOn) {
+      return (cmdChain as ChainWithExtendedSetMark).setMark(markName, negationAttrs, { extendEmptyMarkRange }).run();
+    }
 
     // 5) Neither inline nor style is present; turn ON inline
-    return cmdChain.setMark(markName, {}, { extendEmptyMarkRange }).run();
+    return (cmdChain as ChainWithExtendedSetMark).setMark(markName, {}, { extendEmptyMarkRange }).run();
   };
 
 /**
@@ -84,21 +95,39 @@ export function defaultStyleDetector({
 }): boolean {
   try {
     const styleId = getEffectiveStyleId(state, selectionMarks);
-    if (!styleId || !editor?.converter?.linkedStyles) return false;
+    if (!styleId) return false;
+
+    // Type guard: converter exists and has linkedStyles array
+    const converter = editor?.converter as
+      | {
+          linkedStyles?: Array<{
+            id: string;
+            definition?: {
+              styles?: Record<string, unknown>;
+              attrs?: { basedOn?: string };
+            };
+          }>;
+        }
+      | null
+      | undefined;
+
+    const linkedStyles = converter?.linkedStyles;
+    if (!linkedStyles || !Array.isArray(linkedStyles)) return false;
+
     // Resolve styles with basedOn chain
-    const styles = editor.converter.linkedStyles;
-    const seen = new Set();
-    let current = styleId;
+    const seen = new Set<string>();
+    let current: string | null = styleId;
     const key = mapMarkToStyleKey(markName);
+
     while (current && !seen.has(current)) {
       seen.add(current);
-      const style = styles.find((s) => s.id === current);
+      const style = linkedStyles.find((s) => s.id === current);
       const def = style?.definition?.styles || {};
       if (key in def) {
         const raw = def[key];
         // Some style parsers set the key with undefined value to indicate presence (ON)
         if (raw === undefined) return true;
-        const val = raw?.value ?? raw;
+        const val = (raw as { value?: unknown } | undefined)?.value ?? raw;
         return isStyleTokenEnabled(val);
       }
       current = style?.definition?.attrs?.basedOn || null;

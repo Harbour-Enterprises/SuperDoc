@@ -23,10 +23,10 @@ export const updateAttributes = (typeOrName: string | NodeType | MarkType, attrs
   if (!schemaType) return false;
 
   if (schemaType === 'node') {
-    nodeType = getNodeType(typeOrName, state.schema);
+    nodeType = getNodeType(typeOrName as string, state.schema);
   }
   if (schemaType === 'mark') {
-    markType = getMarkType(typeOrName, state.schema);
+    markType = getMarkType(typeOrName as string, state.schema);
   }
 
   if (dispatch) {

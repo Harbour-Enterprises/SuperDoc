@@ -1,3 +1,5 @@
+import type { CommandProps } from '@core/types/ChainedCommands.js';
+
 /**
  * Utility helpers for cascade-aware mark toggles.
  */
@@ -39,17 +41,17 @@ export function createCascadeToggleCommands({
   return {
     [setName]:
       () =>
-      ({ commands }) =>
+      ({ commands }: CommandProps) =>
         commands.setMark(markName),
 
     [unsetName]:
       () =>
-      ({ commands }) =>
+      ({ commands }: CommandProps) =>
         commands.unsetMark(markName),
 
     [toggleName]:
       () =>
-      ({ commands }) =>
+      ({ commands }: CommandProps) =>
         commands.toggleMarkCascade(markName, cascadeOptions),
   };
 }

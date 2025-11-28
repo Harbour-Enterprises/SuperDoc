@@ -12,10 +12,12 @@ export const setLineHeight =
   (lineHeight: number): Command =>
   ({ commands }) => {
     if (!lineHeight) return false;
-    return commands.updateAttributes('paragraph', {
-      'paragraphProperties.spacing.line': linesToTwips(lineHeight),
-      'paragraphProperties.spacing.lineRule': 'auto',
-    });
+    return Boolean(
+      commands.updateAttributes('paragraph', {
+        'paragraphProperties.spacing.line': linesToTwips(lineHeight),
+        'paragraphProperties.spacing.lineRule': 'auto',
+      }),
+    );
   };
 
 /**
@@ -28,9 +30,7 @@ export const setLineHeight =
 export const unsetLineHeight =
   (): Command =>
   ({ commands }) => {
-    return commands.resetAttributes(
-      'paragraph',
-      'paragraphProperties.spacing.line',
-      'paragraphProperties.spacing.lineRule',
+    return Boolean(
+      commands.resetAttributes('paragraph', 'paragraphProperties.spacing.line', 'paragraphProperties.spacing.lineRule'),
     );
   };

@@ -1,5 +1,8 @@
 import { Node, Attribute } from '@core/index';
 import { StructuredContentBlockView } from './StructuredContentBlockView';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
+import type { StructuredContentViewProps } from './StructuredContentViewBase';
 
 export const structuredContentClass = 'sd-structured-content-block';
 export const structuredContentInnerClass = 'sd-structured-content-block__content';
@@ -26,7 +29,9 @@ export const structuredContentInnerClass = 'sd-structured-content-block__content
  * console.log(attrs.id, attrs.alias)
  */
 
-export const StructuredContentBlock = Node.create({
+export const StructuredContentBlock = Node.create<{
+  htmlAttributes: Record<string, AttributeValue>;
+}>({
   name: 'structuredContentBlock',
 
   group: 'block structuredContent',
@@ -52,8 +57,8 @@ export const StructuredContentBlock = Node.create({
     return {
       id: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-id'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.id) return {};
           return { 'data-id': attrs.id };
         },
@@ -61,8 +66,8 @@ export const StructuredContentBlock = Node.create({
 
       tag: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-tag'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-tag'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.tag) return {};
           return { 'data-tag': attrs.tag };
         },
@@ -70,8 +75,8 @@ export const StructuredContentBlock = Node.create({
 
       alias: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-alias'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-alias'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.alias) return {};
           return { 'data-alias': attrs.alias };
         },
@@ -83,11 +88,11 @@ export const StructuredContentBlock = Node.create({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [{ tag: 'div[data-structured-content-block]' }];
   },
 
-  renderDOM({ htmlAttributes }) {
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
     return [
       'div',
       Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
@@ -98,7 +103,7 @@ export const StructuredContentBlock = Node.create({
   },
 
   addNodeView() {
-    return (props) => {
+    return (props: StructuredContentViewProps) => {
       return new StructuredContentBlockView({ ...props });
     };
   },

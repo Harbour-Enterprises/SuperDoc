@@ -1,4 +1,4 @@
-import type { Extension } from '../Extension';
+import type { Extension } from '../Extension.js';
 
 type EnabledExtension = string | { name: string };
 

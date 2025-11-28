@@ -1,4 +1,4 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
 import type { ParseRule, DOMOutputSpec } from 'prosemirror-model';
 
@@ -6,7 +6,7 @@ import type { ParseRule, DOMOutputSpec } from 'prosemirror-model';
  * Configuration options for Italic
  * @category Options
  */
-interface ItalicOptions extends Record<string, unknown> {
+export interface ItalicOptions extends Record<string, unknown> {
   /** HTML attributes for italic elements */
   htmlAttributes: Record<string, unknown>;
 }
@@ -58,7 +58,10 @@ export const Italic = Mark.create<ItalicOptions>({
     { htmlAttributes }: { htmlAttributes?: Record<string, unknown> } = {},
   ): DOMOutputSpec {
     const options = this.options;
-    const merged = Attribute.mergeAttributes(options?.htmlAttributes ?? {}, htmlAttributes ?? {});
+    const merged = Attribute.mergeAttributes(
+      (options?.htmlAttributes as Record<string, AttributeValue>) ?? {},
+      (htmlAttributes as Record<string, AttributeValue>) ?? {},
+    );
     const { value, ...rest } = merged || {};
     if (value === '0') {
       return ['span', rest, 0];
@@ -101,8 +104,8 @@ export const Italic = Mark.create<ItalicOptions>({
 
   addShortcuts() {
     return {
-      'Mod-i': () => this.editor.commands.toggleItalic(),
-      'Mod-I': () => this.editor.commands.toggleItalic(),
+      'Mod-i': () => this.editor?.commands.toggleItalic(),
+      'Mod-I': () => this.editor?.commands.toggleItalic(),
     };
   },
 });

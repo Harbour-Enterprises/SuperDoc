@@ -7,8 +7,27 @@ import { getStructuredContentTagsById } from './structuredContentHelpers/getStru
 import { getStructuredContentByGroup } from './structuredContentHelpers/getStructuredContentByGroup';
 import { createTagObject } from './structuredContentHelpers/tagUtils';
 import * as structuredContentHelpers from './structuredContentHelpers/index';
+import type { Command } from '@core/types/ChainedCommands.js';
+import type { ProseMirrorJSON } from '@core/types/EditorTypes.js';
+import type { Fragment, Node as PmNode } from 'prosemirror-model';
+import type { StructuredContentMatch } from './structuredContentHelpers/types';
 
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
+
+type StructuredContentTag = string | Record<string, unknown> | null;
+
+type StructuredContentAttrs = {
+  id?: string;
+  tag?: StructuredContentTag;
+  alias?: string;
+  sdtPr?: unknown;
+  [key: string]: unknown;
+};
+
+type StructuredContentInsertAttrs = StructuredContentAttrs & {
+  /** Group identifier for linking multiple fields (auto-encoded to JSON tag) */
+  group?: string;
+};
 
 /**
  * Options for inserting inline structured content
@@ -17,16 +36,9 @@ interface StructuredContentInlineInsert {
   /** Text content to insert */
   text?: string;
   /** ProseMirror JSON */
-  json?: unknown;
+  json?: ProseMirrorJSON;
   /** Node attributes */
-  attrs?: {
-    id?: string;
-    tag?: string | object;
-    alias?: string;
-    /** Group identifier for linking multiple fields (auto-encoded to JSON tag) */
-    group?: string;
-    [key: string]: unknown;
-  };
+  attrs?: StructuredContentInsertAttrs;
 }
 
 /**
@@ -36,16 +48,9 @@ interface StructuredContentBlockInsert {
   /** HTML content to insert */
   html?: string;
   /** ProseMirror JSON */
-  json?: unknown;
+  json?: ProseMirrorJSON;
   /** Node attributes */
-  attrs?: {
-    id?: string;
-    tag?: string | object;
-    alias?: string;
-    /** Group identifier for linking multiple fields (auto-encoded to JSON tag) */
-    group?: string;
-    [key: string]: unknown;
-  };
+  attrs?: StructuredContentInsertAttrs;
 }
 
 /**
@@ -57,9 +62,9 @@ interface StructuredContentUpdate {
   /** Replace content with HTML (only for structured content block) */
   html?: string;
   /** Replace content with ProseMirror JSON (overrides html) */
-  json?: unknown;
+  json?: ProseMirrorJSON;
   /** Update attributes only (preserves content) */
-  attrs?: Record<string, unknown>;
+  attrs?: StructuredContentAttrs;
 }
 
 /**
@@ -69,6 +74,14 @@ interface StructuredContentUpdate {
  * @property {Array<string[]>|Array<string>} rows - Cell values to append
  * @property {boolean} [copyRowStyle=false] - Clone the last row's styling when true
  */
+interface StructuredContentTableAppendRowsOptions {
+  id: string;
+  tableIndex?: number;
+  rows?: Array<string[] | string>;
+  copyRowStyle?: boolean;
+}
+
+type StructuredContentEntry = StructuredContentMatch;
 
 export const StructuredContentCommands = Extension.create({
   name: 'structuredContentCommands',
@@ -101,7 +114,7 @@ export const StructuredContentCommands = Extension.create({
        * });
        */
       insertStructuredContentInline:
-        (options: StructuredContentInlineInsert = {}) =>
+        (options: StructuredContentInlineInsert = {}): Command =>
         ({ editor, dispatch, state, tr }) => {
           const { schema } = editor;
           let { from, to } = state.selection;
@@ -109,7 +122,7 @@ export const StructuredContentCommands = Extension.create({
           if (dispatch) {
             const selectionText = state.doc.textBetween(from, to);
 
-            let content = null;
+            let content: PmNode | null = null;
 
             if (selectionText) {
               content = schema.text(selectionText);
@@ -128,23 +141,21 @@ export const StructuredContentCommands = Extension.create({
             }
 
             // Handle group parameter: convert to JSON tag
-            let tag = options.attrs?.tag || 'inline_text_sdt';
+            let tag: StructuredContentTag = options.attrs?.tag || 'inline_text_sdt';
             if (options.attrs?.group) {
               tag = createTagObject({ group: options.attrs.group });
             }
 
-            const attrs = {
+            const attrs: StructuredContentInsertAttrs = {
               id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
               tag,
               alias: options.attrs?.alias || 'Structured content',
               ...options.attrs,
             };
-            // Remove group from attrs to avoid storing it separately
-            delete attrs.group;
+            const { group: _group, ...attrsWithoutGroup } = attrs;
+            const node = schema.nodes.structuredContent.create(attrsWithoutGroup, content, undefined);
 
-            const node = schema.nodes.structuredContent.create(attrs, content, null);
-
-            const parent = findParentNode((node) => node.type.name === 'structuredContent')(state.selection);
+            const parent = findParentNode((node: PmNode) => node.type.name === 'structuredContent')(state.selection);
             if (parent) {
               const insertPos = parent.pos + parent.node.nodeSize;
               from = to = insertPos;
@@ -180,7 +191,7 @@ export const StructuredContentCommands = Extension.create({
        * });
        */
       insertStructuredContentBlock:
-        (options: StructuredContentBlockInsert = {}) =>
+        (options: StructuredContentBlockInsert = {}): Command =>
         ({ editor, dispatch, state, tr }) => {
           const { schema } = editor;
           let { from, to } = state.selection;
@@ -188,7 +199,7 @@ export const StructuredContentCommands = Extension.create({
           if (dispatch) {
             const selectionContent = state.selection.content();
 
-            let content = null;
+            let content: Fragment | PmNode | null = null;
 
             if (selectionContent.size) {
               content = selectionContent.content;
@@ -209,21 +220,19 @@ export const StructuredContentCommands = Extension.create({
             }
 
             // Handle group parameter: convert to JSON tag
-            let tag = options.attrs?.tag || 'block_table_sdt';
+            let tag: StructuredContentTag = options.attrs?.tag || 'block_table_sdt';
             if (options.attrs?.group) {
               tag = createTagObject({ group: options.attrs.group });
             }
 
-            const attrs = {
+            const attrs: StructuredContentInsertAttrs = {
               id: options.attrs?.id || generateRandomSigned32BitIntStrId(),
               tag,
               alias: options.attrs?.alias || 'Structured content',
               ...options.attrs,
             };
-            // Remove group from attrs to avoid storing it separately
-            delete attrs.group;
-
-            const node = schema.nodes.structuredContentBlock.create(attrs, content, null);
+            const { group: _group, ...attrsWithoutGroup } = attrs;
+            const node = schema.nodes.structuredContentBlock.create(attrsWithoutGroup, content, undefined);
 
             const parent = findParentNode((node) => node.type.name === 'structuredContentBlock')(state.selection);
             if (parent) {
@@ -254,9 +263,9 @@ export const StructuredContentCommands = Extension.create({
        * });
        */
       updateStructuredContentById:
-        (id: string, options: StructuredContentUpdate = {}) =>
+        (id: string, options: StructuredContentUpdate = {}): Command =>
         ({ editor, dispatch, state, tr }) => {
-          const structuredContentTags = getStructuredContentTagsById(id, state);
+          const structuredContentTags: StructuredContentMatch[] = getStructuredContentTagsById(id, state);
 
           if (!structuredContentTags.length) {
             return true;
@@ -270,7 +279,7 @@ export const StructuredContentCommands = Extension.create({
             const posFrom = pos;
             const posTo = pos + node.nodeSize;
 
-            let content = null;
+            let content: Fragment | PmNode | null = null;
 
             if (options.text) {
               content = schema.text(options.text);
@@ -307,14 +316,14 @@ export const StructuredContentCommands = Extension.create({
        * editor.commands.deleteStructuredContent(fields);
        */
       deleteStructuredContent:
-        (structuredContentTags) =>
+        (structuredContentTags: StructuredContentEntry[]): Command =>
         ({ dispatch, tr }) => {
           if (!structuredContentTags.length) {
             return true;
           }
 
           if (dispatch) {
-            structuredContentTags.forEach((structuredContent) => {
+            structuredContentTags.forEach((structuredContent: StructuredContentEntry) => {
               const { pos, node } = structuredContent;
               const posFrom = tr.mapping.map(pos);
               const posTo = tr.mapping.map(pos + node.nodeSize);
@@ -337,9 +346,9 @@ export const StructuredContentCommands = Extension.create({
        * editor.commands.deleteStructuredContentById(['123', '456']);
        */
       deleteStructuredContentById:
-        (idOrIds) =>
+        (idOrIds: string | string[]): Command =>
         ({ dispatch, state, tr }) => {
-          const structuredContentTags = getStructuredContentTagsById(idOrIds, state);
+          const structuredContentTags: StructuredContentMatch[] = getStructuredContentTagsById(idOrIds, state);
 
           if (!structuredContentTags.length) {
             return true;
@@ -367,9 +376,9 @@ export const StructuredContentCommands = Extension.create({
        * editor.commands.deleteStructuredContentAtSelection();
        */
       deleteStructuredContentAtSelection:
-        () =>
+        (): Command =>
         ({ dispatch, state, tr }) => {
-          const predicate = (node) => STRUCTURED_CONTENT_NAMES.includes(node.type.name);
+          const predicate = (node: PmNode) => STRUCTURED_CONTENT_NAMES.includes(node.type.name);
           const structuredContent = findParentNode(predicate)(state.selection);
 
           if (!structuredContent) {
@@ -403,9 +412,9 @@ export const StructuredContentCommands = Extension.create({
        * });
        */
       updateStructuredContentByGroup:
-        (group: string, options: StructuredContentUpdate = {}) =>
+        (group: string, options: StructuredContentUpdate = {}): Command =>
         ({ editor, dispatch, state, tr }) => {
-          const structuredContentTags = getStructuredContentByGroup(group, state);
+          const structuredContentTags: StructuredContentMatch[] = getStructuredContentByGroup(group, state);
 
           if (!structuredContentTags.length) {
             return true;
@@ -419,7 +428,7 @@ export const StructuredContentCommands = Extension.create({
               const posFrom = tr.mapping.map(pos);
               const posTo = tr.mapping.map(pos + node.nodeSize);
 
-              let content = null;
+              let content: Fragment | PmNode | null = null;
 
               if (options.text) {
                 content = schema.text(options.text);
@@ -463,9 +472,9 @@ export const StructuredContentCommands = Extension.create({
        * editor.commands.deleteStructuredContentByGroup(['header', 'footer']);
        */
       deleteStructuredContentByGroup:
-        (groupOrGroups) =>
+        (groupOrGroups: string | string[]): Command =>
         ({ dispatch, state, tr }) => {
-          const structuredContentTags = getStructuredContentByGroup(groupOrGroups, state);
+          const structuredContentTags: StructuredContentMatch[] = getStructuredContentByGroup(groupOrGroups, state);
 
           if (!structuredContentTags.length) {
             return true;
@@ -500,7 +509,7 @@ export const StructuredContentCommands = Extension.create({
        * });
        */
       appendRowsToStructuredContentTable:
-        ({ id, tableIndex = 0, rows = [], copyRowStyle = false }) =>
+        ({ id, tableIndex = 0, rows = [], copyRowStyle = false }: StructuredContentTableAppendRowsOptions): Command =>
         ({ state, commands, dispatch }) => {
           const normalized = normalizeRowsInput(rows);
           if (!normalized.length) return true;
@@ -537,14 +546,14 @@ export const StructuredContentCommands = Extension.create({
  * @param {Array} rowsOrValues - Raw row data
  * @returns {Array<string[]>}
  */
-const normalizeRowsInput = (rowsOrValues) => {
+const normalizeRowsInput = (rowsOrValues: Array<string | string[]> | undefined): string[][] => {
   if (!Array.isArray(rowsOrValues) || !rowsOrValues.length) {
     return [];
   }
 
   if (Array.isArray(rowsOrValues[0])) {
-    return rowsOrValues;
+    return rowsOrValues as string[][];
   }
 
-  return [rowsOrValues];
+  return [rowsOrValues as string[]];
 };

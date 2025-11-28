@@ -1,5 +1,6 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
+import type { DOMOutputSpec, Mark as PmMark } from 'prosemirror-model';
 
 /**
  * Configuration options for Strike
@@ -29,13 +30,16 @@ export const Strike = Mark.create<StrikeOptions>({
     return [
       { tag: 's' },
       { style: 'text-decoration=line-through' },
-      { style: 'text-decoration=auto', clearMark: (m) => m.type.name == 's' },
+      { style: 'text-decoration=auto', clearMark: (m: PmMark) => m.type.name === 's' },
     ];
   },
 
-  renderDOM({ mark, htmlAttributes }) {
-    const merged = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
-    const { value } = mark.attrs;
+  renderDOM({ mark, htmlAttributes }: { mark: PmMark; htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
+    const merged = Attribute.mergeAttributes(
+      this.options.htmlAttributes as Record<string, AttributeValue>,
+      htmlAttributes,
+    );
+    const { value } = mark.attrs as { value?: string | boolean | null };
     const { ...rest } = merged || {};
     if (value === '0' || value === false) {
       return ['span', rest, 0];
@@ -84,7 +88,7 @@ export const Strike = Mark.create<StrikeOptions>({
        */
       value: {
         default: null,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: { value?: string | boolean | null }) => {
           if (attrs.value == null) return {};
           if (attrs.value === '0' || !attrs.value) {
             return { style: 'text-decoration: none' };
@@ -97,7 +101,7 @@ export const Strike = Mark.create<StrikeOptions>({
 
   addShortcuts() {
     return {
-      'Mod-Shift-s': () => this.editor.commands.toggleStrike(),
+      'Mod-Shift-s': () => this.editor?.commands.toggleStrike() ?? false,
     };
   },
 });

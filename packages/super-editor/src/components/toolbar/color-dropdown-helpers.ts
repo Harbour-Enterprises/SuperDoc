@@ -42,7 +42,7 @@ interface SuperToolbar {
 export const renderColorOptions = (
   superToolbar: SuperToolbar,
   button: DropdownButton,
-  customIcons: ColorOption[] = [],
+  customIcons: ColorOption[][] = [],
   hasNoneIcon: boolean = false,
 ): VNode => {
   const handleSelect = (e: string): void => {

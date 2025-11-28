@@ -1,4 +1,6 @@
 import { Node, Attribute } from '@core/index.js';
+import type { AttributeValue, RenderNodeContext } from '@core/index.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
 
 /**
  * @typedef {Object} CnfStyle
@@ -46,7 +48,7 @@ import { Node, Attribute } from '@core/index.js';
  */
 interface TableRowOptions extends Record<string, unknown> {
   /** HTML attributes for table rows */
-  htmlAttributes: Record<string, string>;
+  htmlAttributes: Record<string, AttributeValue>;
 }
 
 /**
@@ -87,7 +89,7 @@ export const TableRow = Node.create<TableRowOptions>({
   addAttributes() {
     return {
       rowHeight: {
-        renderDOM({ rowHeight }) {
+        renderDOM({ rowHeight }: { rowHeight?: number | null }) {
           if (!rowHeight) return {};
           const style = `height: ${rowHeight}px`;
           return { style };
@@ -96,10 +98,10 @@ export const TableRow = Node.create<TableRowOptions>({
 
       cantSplit: {
         default: false,
-        parseDOM() {
+        parseDOM(): Record<string, never> {
           return {};
         },
-        renderDOM({ cantSplit }) {
+        renderDOM({ cantSplit }: { cantSplit?: boolean }) {
           // Render as a data attribute so it can be inspected in the DOM, but it's optional.
           if (!cantSplit) return {};
           return { 'data-cant-split': 'true' };
@@ -136,11 +138,15 @@ export const TableRow = Node.create<TableRowOptions>({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [{ tag: 'tr' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['tr', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: RenderNodeContext): DOMOutputSpec {
+    return [
+      'tr',
+      Attribute.mergeAttributes(this.options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
+      0,
+    ];
   },
 });

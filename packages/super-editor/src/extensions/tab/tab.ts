@@ -6,6 +6,7 @@ import type { EditorView } from 'prosemirror-view';
 import { isHeadless } from '@/utils/headless-helpers.js';
 import { createLayoutRequest, calculateTabLayout, applyLayoutResult } from './helpers/tabAdapter.js';
 import type { Editor } from '@core/Editor.js';
+import type { AttributeValue, RenderNodeContext } from '@core/index.js';
 
 /**
  * Configuration options for TabNode
@@ -13,7 +14,7 @@ import type { Editor } from '@core/Editor.js';
  */
 export interface TabNodeOptions extends Record<string, unknown> {
   /** HTML attributes for tab elements */
-  htmlAttributes: Record<string, unknown>;
+  htmlAttributes: Record<string, AttributeValue>;
 }
 
 /**
@@ -55,14 +56,18 @@ export const TabNode = Node.create<TabNodeOptions>({
     return [{ tag: 'span.sd-editor-tab' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['span', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: RenderNodeContext) {
+    return [
+      'span',
+      Attribute.mergeAttributes(this.options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
+      0,
+    ];
   },
 
   addAttributes() {
     return {
       tabSize: {
-        renderDOM: ({ tabSize }) => {
+        renderDOM: ({ tabSize }: { tabSize?: number | null }) => {
           if (!tabSize) return {};
           const style = `width: ${tabSize}px; min-width: ${tabSize}px;`;
           return { style };
@@ -73,7 +78,7 @@ export const TabNode = Node.create<TabNodeOptions>({
 
   addPmPlugins() {
     // Skip tab plugin entirely in headless mode
-    if (isHeadless(this.editor)) {
+    if (!this.editor || isHeadless(this.editor)) {
       return [];
     }
 

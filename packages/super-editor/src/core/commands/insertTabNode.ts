@@ -1,7 +1,9 @@
 import { TextSelection } from 'prosemirror-state';
 import type { Command, CommandProps } from '../types/ChainedCommands.js';
 
-export const insertTabCharacter = ({ tr, state, dispatch }: CommandProps): boolean => {
+type InsertTabProps = Pick<CommandProps, 'tr' | 'state' | 'dispatch' | 'editor'>;
+
+export const insertTabCharacter = ({ tr, state, dispatch }: InsertTabProps): boolean => {
   const { from } = tr.selection;
   const tabText = state.schema.text('\t');
 
@@ -19,7 +21,7 @@ export const insertTabNode =
     const tabNode = state.schema?.nodes?.tab?.create();
 
     // If tab node isn't defined, fallback to tab character
-    if (!tabNode) return insertTabCharacter({ tr, state, dispatch, editor } as CommandProps);
+    if (!tabNode) return insertTabCharacter({ tr, state, dispatch, editor });
 
     tr.insert(newPos, tabNode);
     if (dispatch) dispatch(tr);

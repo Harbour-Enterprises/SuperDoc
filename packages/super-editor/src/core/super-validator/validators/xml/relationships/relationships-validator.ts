@@ -29,7 +29,8 @@ export function createRelationshipsValidator({
     const results: string[] = [];
     let modified = false;
 
-    const convertedXml = editor?.converter?.convertedXml;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const convertedXml = (editor as any)?.converter?.convertedXml as Record<string, unknown> | undefined;
     if (!convertedXml || typeof convertedXml !== 'object') {
       return { results, modified };
     }
@@ -89,7 +90,10 @@ function findAndNormalizeRelationshipsFile(
     'document.xml.rels',
   ];
 
-  const relsKey = candidateKeys.find((k) => convertedXml?.[k]?.elements);
+  const relsKey = candidateKeys.find((k) => {
+    const value = convertedXml?.[k];
+    return value && typeof value === 'object' && 'elements' in value;
+  });
   if (!relsKey) return { relsKey: null, wasNormalized: false };
 
   const canonicalKey = 'word/_rels/document.xml.rels';
@@ -107,11 +111,12 @@ function findAndNormalizeRelationshipsFile(
  * Validates and fixes the relationships root element structure
  */
 function validateRelationshipsRoot(
-  relsTree: XmlTree,
+  relsTree: unknown,
   relsKey: string,
   results: string[],
 ): { root: XmlElement | null; wasFixed: boolean } {
-  const root = relsTree?.elements?.[0];
+  const tree = relsTree as XmlTree;
+  const root = tree?.elements?.[0];
 
   if (!root || root.type !== 'element') {
     results.push(`${relsKey} is not a valid xml`);
@@ -173,8 +178,10 @@ function processRelationships(
 
   const isHyperlinkType = (type: unknown): boolean => isType(type, 'hyperlink');
   const isImageType = (type: unknown): boolean => isType(type, 'image');
-  const looksExternal = (target: unknown): boolean =>
-    /^https?:\/\//i.test(target || '') || /^mailto:/i.test(target || '');
+  const looksExternal = (target: unknown): boolean => {
+    const targetStr = String(target || '');
+    return /^https?:\/\//i.test(targetStr) || /^mailto:/i.test(targetStr);
+  };
 
   const usedIds = new Set<string>();
   let maxRid = 0;
@@ -209,7 +216,8 @@ function processRelationships(
   const filtered: XmlElement[] = [];
 
   function extractStringAttr(attrs: Record<string, unknown> | undefined, key: string): string {
-    return typeof attrs?.[key] === 'string' ? attrs[key].trim() : '';
+    const value = attrs?.[key];
+    return typeof value === 'string' ? value.trim() : '';
   }
   for (const rel of root.elements) {
     rel.attributes = rel.attributes || {};
@@ -311,7 +319,7 @@ function fixMissingDocumentRefs(
   logger: ValidatorLogger,
 ): boolean {
   const documentPath = 'word/document.xml';
-  const document = convertedXml[documentPath];
+  const document = convertedXml[documentPath] as XmlTree | undefined;
 
   if (document?.elements?.length) {
     const documentRoot = document.elements[0];
@@ -342,8 +350,8 @@ function updateContentTypes(
 
   if (typeof contentTypesXml === 'string') {
     return updateContentTypesString(contentTypesXml, binMediaTargets, results, convertedXml, contentTypesKey);
-  } else if (contentTypesXml?.elements?.length) {
-    return updateContentTypesElements(contentTypesXml, binMediaTargets, results);
+  } else if (contentTypesXml && typeof contentTypesXml === 'object' && 'elements' in contentTypesXml) {
+    return updateContentTypesElements(contentTypesXml as XmlTree, binMediaTargets, results);
   } else {
     return false; // no changes made
   }
@@ -405,10 +413,13 @@ function updateContentTypesElements(
 ): boolean {
   const typesRoot = contentTypesXml.elements?.find((el) => el.name === 'Types') || contentTypesXml.elements?.[0];
   if (!typesRoot) return false;
-  typesRoot.elements = typesRoot.elements || [];
+  if (!typesRoot.elements) {
+    typesRoot.elements = [];
+  }
 
-  const hasDefault = (ext: string): boolean =>
-    typesRoot.elements?.some((el) => el.name === 'Default' && el.attributes?.Extension === ext) || false;
+  const hasDefault = (ext: string): boolean => {
+    return typesRoot.elements?.some((el) => el.name === 'Default' && el.attributes?.Extension === ext) ?? false;
+  };
 
   const addDefault = (ext: string, ct: string): void => {
     if (!typesRoot.elements) typesRoot.elements = [];
@@ -419,8 +430,9 @@ function updateContentTypesElements(
     });
   };
 
-  const hasOverride = (part: string): boolean =>
-    typesRoot.elements?.some((el) => el.name === 'Override' && el.attributes?.PartName === part) || false;
+  const hasOverride = (part: string): boolean => {
+    return typesRoot.elements?.some((el) => el.name === 'Override' && el.attributes?.PartName === part) ?? false;
+  };
 
   const addOverride = (part: string, ct: string): void => {
     if (!typesRoot.elements) typesRoot.elements = [];

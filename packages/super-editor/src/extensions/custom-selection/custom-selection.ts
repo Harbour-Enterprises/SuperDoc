@@ -1,12 +1,13 @@
 /* global Element */
 import { Extension } from '@core/Extension.js';
-import { Plugin, TextSelection } from 'prosemirror-state';
-import type { Transaction, EditorState, Selection } from 'prosemirror-state';
+import { Plugin, TextSelection, Selection } from 'prosemirror-state';
+import type { Transaction, EditorState } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { PluginKey } from 'prosemirror-state';
 import { shouldAllowNativeContextMenu } from '../../utils/contextmenu-helpers.js';
 import type { EditorView } from 'prosemirror-view';
 import type { Editor } from '@core/index.js';
+import type { EditorOptions } from '@core/types/EditorConfig.js';
 
 /**
  * Selection state
@@ -57,16 +58,17 @@ const handleClickOutside = (event: MouseEvent, editor: Editor) => {
   const editorElem = editor?.options?.element;
   if (!editorElem) return;
 
-  const isInsideEditor = editorElem?.contains(event.target);
+  const targetElement = event.target instanceof HTMLElement ? event.target : null;
+  const isInsideEditor = targetElement ? editorElem.contains(targetElement) : false;
 
   if (!isInsideEditor) {
     editor.setOptions({
-      focusTarget: event.target,
-    });
+      focusTarget: targetElement,
+    } as unknown as Partial<EditorOptions>);
   } else {
     editor.setOptions({
       focusTarget: null,
-    });
+    } as unknown as Partial<EditorOptions>);
   }
 };
 
@@ -138,6 +140,7 @@ export const CustomSelection = Extension.create({
 
   addPmPlugins() {
     const editor = this.editor;
+    if (!editor) return [];
     const customSelectionPlugin = new Plugin({
       key: CustomSelectionPluginKey,
       state: {
@@ -163,6 +166,7 @@ export const CustomSelection = Extension.create({
       props: {
         handleDOMEvents: {
           contextmenu: (view: EditorView, event: MouseEvent) => {
+            if (!this.editor) return false;
             if (shouldAllowNativeContextMenu(event)) {
               return false;
             }
@@ -210,24 +214,24 @@ export const CustomSelection = Extension.create({
                 );
 
                 // Store selection in editor options too
-                this.editor.setOptions({
+                this.editor?.setOptions({
                   lastSelection: selection,
                   preservedSelection: selection,
-                });
+                } as unknown as Partial<EditorOptions>);
               }
               return false;
             }
 
             const { selection } = view.state;
-            const target = event.target;
+            const target = event.target as EventTarget | null;
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
 
             // Store focus target for other components
-            this.editor.setOptions({
+            this.editor?.setOptions({
               focusTarget: target,
-            });
+            } as unknown as Partial<EditorOptions>);
 
             // Handle toolbar input clicks - preserve selection
             if (isToolbarInp && !selection.empty) {
@@ -242,19 +246,19 @@ export const CustomSelection = Extension.create({
               );
 
               // Store in editor options as well for commands
-              this.editor.setOptions({
+              this.editor?.setOptions({
                 lastSelection: selection,
                 preservedSelection: selection,
-              });
+              } as unknown as Partial<EditorOptions>);
               return false; // Don't prevent the input from getting focus
             }
 
             // Handle toolbar button clicks
             if (isToolbarBtn && !isToolbarInp) {
               if (!selection.empty) {
-                this.editor.setOptions({
+                this.editor?.setOptions({
                   lastSelection: selection,
-                });
+                } as unknown as Partial<EditorOptions>);
                 // Keep selection visible for toolbar buttons
                 view.dispatch(
                   setFocusMeta(view.state.tr, {
@@ -281,10 +285,8 @@ export const CustomSelection = Extension.create({
               );
 
               // Clear selection if clicking outside editor
-              if (!selection.empty && !this.editor.options.element?.contains(target)) {
-                this.editor.setOptions({
-                  lastSelection: selection,
-                });
+              if (!selection.empty && target && !this.editor?.options.element?.contains(target as Node)) {
+                this.editor?.setOptions({ lastSelection: selection } as unknown as Partial<EditorOptions>);
                 const clearSelectionTr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 0));
                 view.dispatch(clearSelectionTr);
               }
@@ -292,7 +294,7 @@ export const CustomSelection = Extension.create({
           },
 
           focus: (view: EditorView) => {
-            const target = this.editor.options.focusTarget;
+            const target = this.editor?.options.focusTarget ?? null;
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
@@ -319,7 +321,7 @@ export const CustomSelection = Extension.create({
           },
 
           blur: (view: EditorView) => {
-            const target = this.editor.options.focusTarget;
+            const target = this.editor?.options.focusTarget ?? null;
             const isElement = target instanceof Element;
             const isToolbarBtn = isElement && isToolbarButton(target);
             const isToolbarInp = isElement && isToolbarInput(target);
@@ -399,12 +401,12 @@ export const CustomSelection = Extension.create({
         () =>
         ({ tr, state }: { tr: Transaction; state: EditorState }): Transaction => {
           const focusState = getFocusState(state);
-          if (focusState.preservedSelection) {
+          if (focusState?.preservedSelection) {
             return tr.setSelection(focusState.preservedSelection);
           }
 
-          const lastSelection = this.editor.options.lastSelection;
-          if (lastSelection) {
+          const lastSelection = (this.editor?.options as { lastSelection?: Selection | null })?.lastSelection;
+          if (lastSelection && lastSelection instanceof Selection) {
             return tr.setSelection(lastSelection);
           }
           return tr;

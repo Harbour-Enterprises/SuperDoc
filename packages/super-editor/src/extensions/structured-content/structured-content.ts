@@ -1,5 +1,8 @@
 import { Node, Attribute } from '@core/index';
 import { StructuredContentInlineView } from './StructuredContentInlineView';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
+import type { StructuredContentViewProps } from './StructuredContentViewBase';
 
 export const structuredContentClass = 'sd-structured-content';
 export const structuredContentInnerClass = 'sd-structured-content__content';
@@ -31,7 +34,9 @@ export const structuredContentInnerClass = 'sd-structured-content__content';
  * @sidebarTitle Structured Content
  * @snippetPath /snippets/extensions/structured-content.mdx
  */
-export const StructuredContent = Node.create({
+export const StructuredContent = Node.create<{
+  htmlAttributes: Record<string, AttributeValue>;
+}>({
   name: 'structuredContent',
 
   group: 'inline structuredContent',
@@ -59,8 +64,8 @@ export const StructuredContent = Node.create({
     return {
       id: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-id'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.id) return {};
           return { 'data-id': attrs.id };
         },
@@ -68,8 +73,8 @@ export const StructuredContent = Node.create({
 
       tag: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-tag'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-tag'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.tag) return {};
           return { 'data-tag': attrs.tag };
         },
@@ -77,8 +82,8 @@ export const StructuredContent = Node.create({
 
       alias: {
         default: null,
-        parseDOM: (elem) => elem.getAttribute('data-alias'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-alias'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
           if (!attrs.alias) return {};
           return { 'data-alias': attrs.alias };
         },
@@ -90,11 +95,11 @@ export const StructuredContent = Node.create({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [{ tag: 'span[data-structured-content]' }];
   },
 
-  renderDOM({ htmlAttributes }) {
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
     return [
       'span',
       Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
@@ -105,7 +110,7 @@ export const StructuredContent = Node.create({
   },
 
   addNodeView() {
-    return (props) => {
+    return (props: StructuredContentViewProps) => {
       return new StructuredContentInlineView({ ...props });
     };
   },

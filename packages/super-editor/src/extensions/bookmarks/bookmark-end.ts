@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 
 /**
@@ -40,7 +40,7 @@ export const BookmarkEnd = Node.create<BookmarkEndOptions>({
        */
       id: {
         default: null,
-        renderDOM: ({ id }) => {
+        renderDOM: ({ id }: { id?: string }) => {
           if (id) return { 'data-bookmark-end-id': id };
           return {};
         },
@@ -52,7 +52,7 @@ export const BookmarkEnd = Node.create<BookmarkEndOptions>({
        */
       displacedByCustomXml: {
         default: null,
-        renderDOM: ({ displacedByCustomXml }) => {
+        renderDOM: ({ displacedByCustomXml }: { displacedByCustomXml?: string }) => {
           if (displacedByCustomXml) return { 'data-displaced-by-custom-xml': displacedByCustomXml };
           return {};
         },
@@ -69,7 +69,13 @@ export const BookmarkEnd = Node.create<BookmarkEndOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return ['span', Attribute.mergeAttributes((this.options as BookmarkEndOptions).htmlAttributes, htmlAttributes)];
+    return [
+      'span',
+      Attribute.mergeAttributes(
+        (this.options as BookmarkEndOptions).htmlAttributes,
+        htmlAttributes as Record<string, AttributeValue>,
+      ),
+    ];
   },
 
   addCommands() {
@@ -85,12 +91,16 @@ export const BookmarkEnd = Node.create<BookmarkEndOptions>({
        */
       insertBookmarkEnd:
         (id: string) =>
-        ({ commands }) => {
+        ({
+          commands,
+        }: {
+          commands: { insertContent: (content: { type: string; attrs: { id: string } }) => boolean };
+        }) => {
           return commands.insertContent({
             type: this.name,
             attrs: { id },
           });
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 });

@@ -16,7 +16,7 @@
  * createTagObject({ group: 'terms', style: 'header' })
  * // => '{"group":"terms","style":"header"}'
  */
-export function createTagObject(tagData) {
+export function createTagObject(tagData: Record<string, unknown> | null): string | null {
   if (!tagData || typeof tagData !== 'object') {
     return null;
   }
@@ -35,13 +35,13 @@ export function createTagObject(tagData) {
  * parseTagObject('inline_text_sdt')
  * // => null (plain string tag)
  */
-export function parseTagObject(tag) {
+export function parseTagObject(tag: string | null): Record<string, unknown> | null {
   if (typeof tag !== 'string' || !tag.startsWith('{')) {
     return null;
   }
   try {
-    const parsed = JSON.parse(tag);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    const parsed = JSON.parse(tag) as unknown;
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : null;
   } catch {
     return null;
   }
@@ -55,7 +55,7 @@ export function parseTagObject(tag) {
  * hasGroup('{"group":"customer-info"}')  // => true
  * hasGroup('inline_text_sdt')            // => false
  */
-export function hasGroup(tag) {
+export function hasGroup(tag: string): boolean {
   const parsed = parseTagObject(tag);
   return parsed !== null && typeof parsed.group === 'string';
 }
@@ -68,7 +68,7 @@ export function hasGroup(tag) {
  * getGroup('{"group":"customer-info"}')  // => 'customer-info'
  * getGroup('inline_text_sdt')            // => null
  */
-export function getGroup(tag) {
+export function getGroup(tag: string): string | null {
   const parsed = parseTagObject(tag);
   return parsed && typeof parsed.group === 'string' ? parsed.group : null;
 }

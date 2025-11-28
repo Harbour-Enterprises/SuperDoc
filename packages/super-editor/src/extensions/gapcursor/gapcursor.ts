@@ -28,7 +28,7 @@ export const Gapcursor = Extension.create<GapcursorOptions>({
    * Extend node schema to allow gap cursor positioning
    * @returns Schema extension with allowGapCursor property
    */
-  extendNodeSchema(extension) {
+  extendNodeSchema(extension: { name: string; options: unknown; storage: unknown }) {
     return {
       /**
        * Whether to allow gap cursor before/after this node

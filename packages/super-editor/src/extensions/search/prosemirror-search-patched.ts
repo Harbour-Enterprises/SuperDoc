@@ -352,7 +352,7 @@ function mapIndexWithinNode(node: Node, start: number, index: number): number {
     const child = node.child(i);
     const childStart = offset;
     if (child.isText) {
-      const len = child.text.length;
+      const len = child.text?.length ?? 0;
       if (index <= len) return childStart + index;
       index -= len;
       offset += child.nodeSize;
@@ -447,7 +447,7 @@ function checkWordBoundary(state: EditorState, pos: number): boolean {
   const before = $pos.nodeBefore,
     after = $pos.nodeAfter;
   if (!before || !after || !before.isText || !after.isText) return true;
-  return !/\p{L}$/u.test(before.text) || !/^\p{L}/u.test(after.text);
+  return !/\p{L}$/u.test(before.text ?? '') || !/^\p{L}/u.test(after.text ?? '');
 }
 
 /**
@@ -566,7 +566,7 @@ function search(options: SearchOptions = {}): Plugin<SearchState> {
       },
     },
     props: {
-      decorations: (state) => searchKey.getState(state).deco,
+      decorations: (state) => searchKey.getState(state)?.deco ?? DecorationSet.empty,
     },
   });
 }

@@ -1,7 +1,7 @@
 import { getExtensionConfigField } from './getExtensionConfigField.js';
 import { callOrGet } from '../utilities/callOrGet.js';
-import type { Extension } from '../Extension';
-import type { Node } from '../Node';
+import type { Extension } from '../Extension.js';
+import type { Node } from '../Node.js';
 
 type AnyExtension = Extension | Node;
 

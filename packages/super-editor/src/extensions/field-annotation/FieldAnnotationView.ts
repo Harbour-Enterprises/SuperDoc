@@ -1,7 +1,9 @@
-import { Attribute } from '@core/index.js';
+import { Attribute, type AttributeValue } from '@core/index.js';
 import type { Editor } from '@core/index.js';
 import { NodeSelection } from 'prosemirror-state';
-import type { Node as PmNode, Decoration } from 'prosemirror-model';
+import type { Node as PmNode } from 'prosemirror-model';
+import type { Decoration, NodeView, ViewMutationRecord } from 'prosemirror-view';
+import type { CommandProps } from '@core/types/ChainedCommands.js';
 
 interface FieldAnnotationViewOptions {
   editor: Editor;
@@ -14,7 +16,7 @@ interface FieldAnnotationViewOptions {
   borderColor: string;
 }
 
-export class FieldAnnotationView {
+export class FieldAnnotationView implements NodeView {
   editor: Editor;
 
   node: PmNode;
@@ -32,6 +34,8 @@ export class FieldAnnotationView {
   annotationContentClass: string;
 
   borderColor: string;
+
+  contentDOM = null;
 
   constructor(options: FieldAnnotationViewOptions) {
     this.editor = options.editor;
@@ -52,7 +56,7 @@ export class FieldAnnotationView {
     this.attachEventListeners();
   }
 
-  buildView() {
+  buildView(): void {
     const { type } = this.node.attrs;
 
     type HandlerKey = 'text' | 'image' | 'signature' | 'checkbox' | 'html' | 'link' | 'default';
@@ -72,7 +76,7 @@ export class FieldAnnotationView {
     buildHandler();
   }
 
-  buildTextView() {
+  buildTextView(): void {
     const { displayLabel } = this.node.attrs;
 
     const { annotation } = this.#createAnnotation({
@@ -82,7 +86,7 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  buildImageView() {
+  buildImageView(): void {
     const { displayLabel, imageSrc } = this.node.attrs;
 
     const { annotation, content } = this.#createAnnotation();
@@ -108,7 +112,7 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  buildSignatureView() {
+  buildSignatureView(): void {
     const { displayLabel: rawDisplayLabel, imageSrc } = this.node.attrs;
 
     const displayLabel = rawDisplayLabel || 'Signature';
@@ -137,7 +141,7 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  buildCheckboxView() {
+  buildCheckboxView(): void {
     const { displayLabel } = this.node.attrs;
 
     const { annotation } = this.#createAnnotation({
@@ -147,7 +151,7 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  buildHTMLView() {
+  buildHTMLView(): void {
     const { displayLabel, rawHtml: rawHtmlAttr } = this.node.attrs;
     let rawHtml = rawHtmlAttr;
 
@@ -178,7 +182,7 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  buildLinkView() {
+  buildLinkView(): void {
     const { displayLabel, linkUrl } = this.node.attrs;
 
     const { annotation, content } = this.#createAnnotation();
@@ -201,7 +205,10 @@ export class FieldAnnotationView {
     this.dom = annotation;
   }
 
-  #createAnnotation({ displayLabel }: { displayLabel?: string } = {}) {
+  #createAnnotation({ displayLabel }: { displayLabel?: string } = {}): {
+    annotation: HTMLSpanElement;
+    content: HTMLSpanElement;
+  } {
     const { highlighted } = this.node.attrs;
 
     const annotation = document.createElement('span');
@@ -228,7 +235,7 @@ export class FieldAnnotationView {
 
     const annotationStyle = styles.join('; ');
 
-    const mergedAttrs = Attribute.mergeAttributes(this.htmlAttributes, {
+    const mergedAttrs = Attribute.mergeAttributes(this.htmlAttributes as Record<string, AttributeValue>, {
       style: omitHighlight ? '' : annotationStyle,
     });
 
@@ -246,19 +253,19 @@ export class FieldAnnotationView {
     };
   }
 
-  attachEventListeners() {
+  attachEventListeners(): void {
     this.dom.addEventListener('click', this.handleAnnotationClick);
     this.dom.addEventListener('dblclick', this.handleAnnotationDoubleClick);
     this.editor.on('selectionUpdate', this.handleSelectionUpdate);
   }
 
-  removeEventListeners() {
+  removeEventListeners(): void {
     this.dom.removeEventListener('click', this.handleAnnotationClick);
     this.dom.removeEventListener('dblclick', this.handleAnnotationDoubleClick);
     this.editor.off('selectionUpdate', this.handleSelectionUpdate);
   }
 
-  handleSelectionUpdate({ editor }: { editor: Editor }) {
+  handleSelectionUpdate({ editor }: { editor: Editor }): void {
     if (!this.editor.isEditable) {
       return;
     }
@@ -279,7 +286,7 @@ export class FieldAnnotationView {
     }
   }
 
-  handleAnnotationClick(event: MouseEvent) {
+  handleAnnotationClick(event: MouseEvent): void {
     if (!this.editor.isEditable) {
       return;
     }
@@ -293,7 +300,7 @@ export class FieldAnnotationView {
     });
   }
 
-  handleAnnotationDoubleClick(event: MouseEvent) {
+  handleAnnotationDoubleClick(event: MouseEvent): void {
     if (!this.editor.isEditable) {
       return;
     }
@@ -307,7 +314,7 @@ export class FieldAnnotationView {
     });
   }
 
-  stopEvent(event: Event) {
+  stopEvent(event: Event): boolean {
     if (!this.editor.isEditable) {
       event.preventDefault();
       return true;
@@ -318,20 +325,20 @@ export class FieldAnnotationView {
 
   // Can be used to manually update the NodeView.
   // Otherwise the NodeView is recreated.
-  update() {
+  update(): boolean {
     return false;
   }
 
-  ignoreMutation() {
+  ignoreMutation(_mutation?: ViewMutationRecord): boolean {
     return true;
   }
 
-  destroy() {
+  destroy(): void {
     this.removeEventListeners();
   }
 
-  updateAttributes(attributes: Record<string, unknown>) {
-    this.editor.commands.command(({ tr }) => {
+  updateAttributes(attributes: Record<string, unknown>): void {
+    this.editor.commands.command(({ tr }: CommandProps) => {
       tr.setNodeMarkup(this.getPos(), undefined, {
         ...this.node.attrs,
         ...attributes,

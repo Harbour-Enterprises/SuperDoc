@@ -951,7 +951,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
   static async loadXmlData(
     fileSource: File | Blob | Buffer,
     isNode: boolean = false,
-  ): Promise<[DocxFileEntry[], Record<string, unknown>, Record<string, unknown>, Record<string, unknown>] | undefined> {
+  ): Promise<
+    [DocxFileEntry[], Record<string, string>, Record<string, string>, Record<string, Uint8Array>] | undefined
+  > {
     if (!fileSource) return;
 
     const zipper = new DocxZipper();
@@ -1078,7 +1080,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
-          const createdDoc = createDocument(this.converter as unknown as Record<string, unknown>, this.schema, this);
+          const createdDoc = createDocument(
+            this.converter as Parameters<typeof createDocument>[0],
+            this.schema,
+            this as Parameters<typeof createDocument>[2],
+          );
           if (!createdDoc) {
             throw new Error('Failed to create document from converter');
           }
@@ -1152,7 +1158,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
     }
 
     this.view.setProps({
-      nodeViews: this.extensionService.nodeViews as unknown as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ProseMirror nodeViews type is complex and varies by node
+      nodeViews: this.extensionService.nodeViews as any,
     });
   }
 
@@ -1351,7 +1358,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (!this.options.isNewFile) {
       this.#initComments();
-      updateYdocDocxData(this, this.options.ydoc);
+      updateYdocDocxData(this, this.options.ydoc ?? undefined);
     }
   }
 
@@ -1737,7 +1744,16 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const { tr, doc } = newState;
 
-    prepareCommentsForExport(doc, tr, this.schema, comments as unknown as Record<string, unknown>[]);
+    prepareCommentsForExport(
+      doc,
+      tr,
+      this.schema,
+      comments.map((c) => ({
+        commentId: c.id,
+        parentCommentId: (c as Record<string, unknown>).parentCommentId as string | number | undefined,
+        createdTime: (c as Record<string, unknown>).createdTime as number | string | undefined,
+      })),
+    );
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
@@ -1845,23 +1861,26 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const zipper = new DocxZipper();
 
       if (getUpdatedDocs) {
-        updatedDocs['[Content_Types].xml'] = (await zipper.updateContentTypes(
+        const contentTypesResult = await zipper.updateContentTypes(
           {
-            files: this.options.content as unknown as Record<string, string> | import('./DocxZipper.js').DocxFile[],
+            files: this.options.content as DocxFileEntry[] | Record<string, string>,
           },
           media,
           true,
           updatedDocs,
-        )) as string;
+        );
+        if (typeof contentTypesResult === 'string') {
+          updatedDocs['[Content_Types].xml'] = contentTypesResult;
+        }
         return updatedDocs;
       }
 
       const result = await zipper.updateZip({
-        docx: this.options.content as unknown as Record<string, string> | import('./DocxZipper.js').DocxFile[],
+        docx: this.options.content as DocxFileEntry[] | Record<string, string>,
         updatedDocs: updatedDocs,
         originalDocxFile: this.options.fileSource ?? undefined,
         media,
-        fonts: this.options.fonts as unknown as Record<string, Uint8Array>,
+        fonts: this.options.fonts as Record<string, Uint8Array>,
         isHeadless: this.options.isHeadless ?? false,
       });
 
@@ -1965,8 +1984,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (!hasRunMigrations) return;
 
     // Return the updated ydoc
-    const pluginState = syncPlugin?.getState(this.state);
-    return pluginState.doc;
+    const pluginState = syncPlugin?.getState(this.state) as { doc?: unknown } | undefined;
+    return pluginState?.doc;
   }
 
   /**
@@ -1974,7 +1993,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   async replaceFile(newFile: File | Blob | Buffer): Promise<void> {
     this.setOptions({ annotations: true });
-    const [docx, media, mediaFiles, fonts] = (await Editor.loadXmlData(newFile))!;
+    const result = await Editor.loadXmlData(newFile);
+    if (!result) {
+      throw new Error('Failed to load XML data from file');
+    }
+    const [docx, media, mediaFiles, fonts] = result;
     this.setOptions({
       fileSource: newFile,
       content: docx,
@@ -2007,16 +2030,22 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * @param name - File name
    * @param type - type of result (json, string)
    */
-  getInternalXmlFile(name: string, type: 'json' | 'string' = 'json'): unknown | string | null {
-    if (!this.converter.convertedXml[name]) {
+  getInternalXmlFile(name: string, type: 'json' | 'string' = 'json'): unknown | null {
+    const convertedXml = this.converter?.convertedXml;
+    if (!convertedXml || !convertedXml[name]) {
       console.warn('Cannot find file in docx');
       return null;
     }
 
-    if (type === 'json') {
-      return this.converter.convertedXml[name].elements[0] || null;
+    const fileData = convertedXml[name] as { elements?: unknown[] } | undefined;
+    if (!fileData?.elements?.[0]) {
+      return null;
     }
-    return this.converter.schemaToXml(this.converter.convertedXml[name].elements[0]);
+
+    if (type === 'json') {
+      return fileData.elements[0];
+    }
+    return this.converter.schemaToXml(fileData.elements[0]);
   }
 
   /**

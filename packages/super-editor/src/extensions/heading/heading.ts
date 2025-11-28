@@ -49,8 +49,8 @@ export const Heading = Extension.create<HeadingOptions>({
        * @note Converts current block to heading
        */
       setHeading:
-        (attributes) =>
-        ({ commands }) => {
+        (attributes: HeadingAttributes) =>
+        ({ commands }: { commands: { setLinkedStyle: (attrs: { id: string }) => boolean } }) => {
           const containsLevel = this.options.levels.includes(attributes.level);
           if (!containsLevel) return false;
           return commands.setLinkedStyle({ id: `Heading${attributes.level}` });
@@ -66,8 +66,8 @@ export const Heading = Extension.create<HeadingOptions>({
        * @note Switches between heading and paragraph for the same level
        */
       toggleHeading:
-        (attributes) =>
-        ({ commands }) => {
+        (attributes: HeadingAttributes) =>
+        ({ commands }: { commands: { toggleLinkedStyle: (style: { id: string }, fallback: string) => boolean } }) => {
           const containsLevel = this.options.levels.includes(attributes.level);
           if (!containsLevel) return false;
           return commands.toggleLinkedStyle({ id: `Heading${attributes.level}` }, 'paragraph');
@@ -80,7 +80,7 @@ export const Heading = Extension.create<HeadingOptions>({
       (items, level) => ({
         ...items,
         ...{
-          [`Mod-Alt-${level}`]: () => this.editor.commands.toggleHeading({ level }),
+          [`Mod-Alt-${level}`]: () => this.editor?.commands.toggleHeading({ level }) ?? false,
         },
       }),
       {},

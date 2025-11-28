@@ -11,9 +11,9 @@ export class DocumentSectionView {
   decorations: readonly Decoration[];
   view: EditorView;
   getPos: () => number | undefined;
-  dom: HTMLElement;
-  contentDOM: HTMLElement;
-  infoDiv: HTMLElement;
+  dom!: HTMLElement;
+  contentDOM!: HTMLElement;
+  infoDiv!: HTMLElement;
 
   constructor(node: PmNode, getPos: () => number | undefined, decorations: readonly Decoration[], editor: Editor) {
     this.node = node;

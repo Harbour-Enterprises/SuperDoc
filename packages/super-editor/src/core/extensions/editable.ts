@@ -1,5 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '../Extension.js';
+import type { Editor } from '../Editor.js';
 
 export const Editable = Extension.create({
   name: 'editable',
@@ -9,7 +10,7 @@ export const Editable = Extension.create({
       key: new PluginKey('editable'),
       props: {
         editable: () => {
-          return this.editor.options.editable;
+          return Boolean((this.editor as Editor | undefined)?.options?.editable);
         },
       },
     });

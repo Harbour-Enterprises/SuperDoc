@@ -1,6 +1,19 @@
 import { Node, Attribute } from '@core/index.js';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
 
-export const DocumentPartObject = Node.create({
+interface DocumentPartObjectOptions extends Record<string, unknown> {
+  htmlAttributes: Record<string, AttributeValue>;
+}
+
+interface DocumentPartObjectAttrs {
+  sdBlockId?: string | null;
+  id?: string | null;
+  docPartGallery?: unknown;
+  docPartUnique?: boolean;
+}
+
+export const DocumentPartObject = Node.create<DocumentPartObjectOptions>({
   name: 'documentPartObject',
   group: 'block',
   content: 'block*',
@@ -16,7 +29,7 @@ export const DocumentPartObject = Node.create({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [
       {
         tag: 'div.sd-document-part-object-block',
@@ -25,7 +38,7 @@ export const DocumentPartObject = Node.create({
     ];
   },
 
-  renderDOM({ htmlAttributes }) {
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
     return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
@@ -34,13 +47,13 @@ export const DocumentPartObject = Node.create({
       sdBlockId: {
         default: null,
         keepOnSplit: false,
-        parseDOM: (elem) => elem.getAttribute('data-sd-block-id'),
-        renderDOM: (attrs) => {
+        parseDOM: (elem: Element) => elem.getAttribute('data-sd-block-id'),
+        renderDOM: (attrs: DocumentPartObjectAttrs) => {
           return attrs.sdBlockId ? { 'data-sd-block-id': attrs.sdBlockId } : {};
         },
       },
-      id: {},
-      docPartGallery: {},
+      id: { default: null },
+      docPartGallery: { default: null },
       docPartUnique: {
         default: true,
       },

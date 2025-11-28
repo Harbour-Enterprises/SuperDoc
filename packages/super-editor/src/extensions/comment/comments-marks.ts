@@ -1,4 +1,4 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 import { CommentMarkName } from './comments-constants.js';
 
@@ -35,6 +35,9 @@ export const CommentsMark = Mark.create<CommentsMarkOptions>({
   },
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
-    return [CommentMarkName, Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
+    return [
+      CommentMarkName,
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>),
+    ];
   },
 });

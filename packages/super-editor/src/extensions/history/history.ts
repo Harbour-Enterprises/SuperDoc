@@ -1,7 +1,7 @@
 import { history, redo as originalRedo, undo as originalUndo } from 'prosemirror-history';
 import { undo as yUndo, redo as yRedo, yUndoPlugin } from 'y-prosemirror';
 import { Extension } from '@core/Extension.js';
-import type { Plugin } from 'prosemirror-state';
+import type { Plugin, EditorState, Transaction } from 'prosemirror-state';
 
 /**
  * Configuration options for History
@@ -39,7 +39,7 @@ export const History = Extension.create<HistoryOptions>({
   },
 
   addPmPlugins() {
-    if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+    if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
       const undoPlugin = createUndoPlugin();
       return [undoPlugin];
     }
@@ -57,8 +57,9 @@ export const History = Extension.create<HistoryOptions>({
        * editor.commands.undo()
        * @note Groups changes within the newGroupDelay window
        */
-      undo: () => ({ state, dispatch, tr }) => {
-        if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+      undo: () =>
+        ({ state, dispatch, tr }: { state: EditorState; dispatch?: (tr: Transaction) => void; tr: Transaction }) => {
+        if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
           tr.setMeta('preventDispatch', true);
           return yUndo(state);
         }
@@ -73,8 +74,9 @@ export const History = Extension.create<HistoryOptions>({
        * editor.commands.redo()
        * @note Only available after an undo action
        */
-      redo: () => ({ state, dispatch, tr }) => {
-        if (this.editor.options.collaborationProvider && this.editor.options.ydoc) {
+      redo: () =>
+        ({ state, dispatch, tr }: { state: EditorState; dispatch?: (tr: Transaction) => void; tr: Transaction }) => {
+        if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
           tr.setMeta('preventDispatch', true);
           return yRedo(state);
         }
@@ -86,9 +88,9 @@ export const History = Extension.create<HistoryOptions>({
 
   addShortcuts() {
     return {
-      'Mod-z': () => this.editor.commands.undo(),
-      'Mod-Shift-z': () => this.editor.commands.redo(),
-      'Mod-y': () => this.editor.commands.redo(),
+      'Mod-z': () => this.editor?.commands.undo() ?? false,
+      'Mod-Shift-z': () => this.editor?.commands.redo() ?? false,
+      'Mod-y': () => this.editor?.commands.redo() ?? false,
     };
   },
 });

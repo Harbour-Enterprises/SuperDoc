@@ -36,7 +36,7 @@ export const updatePosition = ({
   currentBounds: DOMRect | Bounds;
   node: PmNode;
 }): void => {
-  let bounds = {};
+  let bounds: Bounds;
 
   if (currentBounds instanceof DOMRect) {
     bounds = {

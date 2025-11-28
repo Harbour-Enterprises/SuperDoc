@@ -5,10 +5,12 @@ import { kebabCase } from '@superdoc/common';
 import { getUnderlineCssString } from './index.js';
 import { twipsToLines, twipsToPixels, halfPointToPixels } from '@converter/helpers.js';
 import type { Node as PmNode, Mark } from 'prosemirror-model';
-import type { Transaction, EditorState, Selection } from 'prosemirror-state';
+import type { Transaction, EditorState } from 'prosemirror-state';
+import { Selection } from 'prosemirror-state';
+import type { Step } from 'prosemirror-transform';
 import type { Editor } from '@core/Editor.js';
 
-interface LinkedStyleDefinition {
+export interface LinkedStyleDefinition {
   id?: string;
   type?: string;
   definition?: {
@@ -38,20 +40,11 @@ interface MarkAttr {
 interface TransactionLike {
   selection: Selection;
   doc: PmNode;
-  setSelection: (selection: Selection) => void;
-  setNodeMarkup: (pos: number, type: unknown, attrs: Record<string, unknown>) => void;
-  removeMark: (from: number, to: number, mark: Mark) => void;
+  setSelection: (selection: Selection) => TransactionLike;
+  setNodeMarkup: (pos: number, type: unknown, attrs: Record<string, unknown>) => TransactionLike;
+  removeMark: (from: number, to: number, mark: Mark) => TransactionLike | void;
   nodesBetween: (from: number, to: number, callback: (node: PmNode, pos: number) => boolean | void) => void;
-}
-
-interface StepLike {
-  slice?: {
-    size: number;
-    content: {
-      descendants: (callback: (node: PmNode) => boolean | void) => void;
-    };
-  };
-  from?: number;
+  mapping?: unknown;
 }
 
 /**
@@ -90,10 +83,12 @@ export const getSpacingStyle = (spacing: SpacingAttrs): Record<string, string> =
 
   const result: Record<string, string> = {};
   if (!beforeAutoSpacing) {
-    result['margin-top'] = lineSpaceBefore + 'px';
+    const beforeVal = typeof lineSpaceBefore === 'number' ? lineSpaceBefore : 0;
+    result['margin-top'] = `${beforeVal}px`;
   }
   if (!afterAutoSpacing) {
-    result['margin-bottom'] = lineSpaceAfter + 'px';
+    const afterVal = typeof lineSpaceAfter === 'number' ? lineSpaceAfter : 0;
+    result['margin-bottom'] = `${afterVal}px`;
   }
 
   return {
@@ -114,13 +109,13 @@ export const getSpacingStyleString = (spacing: SpacingAttrs, marks: MarkAttr[], 
   const { before: beforeRaw, after: afterRaw, line: lineRaw, lineRule, beforeAutospacing, afterAutospacing } = spacing;
   let before = beforeRaw;
   let after = afterRaw;
-  let line = lineRaw;
-  line = twipsToLines(line);
+  let line: number | string | null = lineRaw ?? null;
+  line = twipsToLines(line as number | null);
   // Prevent values less than 1 to avoid squashed text
-  if (line != null && line < 1) {
+  if (typeof line === 'number' && line < 1) {
     line = 1;
   }
-  if (lineRule === 'exact' && line) {
+  if (lineRule === 'exact' && line != null) {
     line = String(line);
   }
 
@@ -130,7 +125,8 @@ export const getSpacingStyleString = (spacing: SpacingAttrs, marks: MarkAttr[], 
   before = twipsToPixels(before);
   if (beforeAutospacing) {
     if (fontSize) {
-      before += halfPointToPixels(parseInt(fontSize) * 0.5);
+      const sizeNum = typeof fontSize === 'number' ? fontSize : Number(fontSize);
+      before += halfPointToPixels(sizeNum * 0.5);
     }
     if (isListItem) {
       before = 0; // Lists do not apply before autospacing
@@ -140,7 +136,8 @@ export const getSpacingStyleString = (spacing: SpacingAttrs, marks: MarkAttr[], 
   after = twipsToPixels(after);
   if (afterAutospacing) {
     if (fontSize) {
-      after += halfPointToPixels(parseInt(fontSize) * 0.5);
+      const sizeNum = typeof fontSize === 'number' ? fontSize : Number(fontSize);
+      after += halfPointToPixels(sizeNum * 0.5);
     }
     if (isListItem) {
       after = 0; // Lists do not apply after autospacing
@@ -202,8 +199,8 @@ export const getQuickFormatList = (editor: Editor): LinkedStyleDefinition[] => {
   return editor.converter.linkedStyles
     .filter((style: LinkedStyleDefinition) => style.type === 'paragraph' && style.definition?.attrs)
     .sort((a: LinkedStyleDefinition, b: LinkedStyleDefinition) => {
-      const nameA = a.definition.attrs?.name ?? '';
-      const nameB = b.definition.attrs?.name ?? '';
+      const nameA = (a.definition?.attrs as { name?: string } | undefined)?.name ?? '';
+      const nameB = (b.definition?.attrs as { name?: string } | undefined)?.name ?? '';
       return nameA.localeCompare(nameB);
     });
 };
@@ -323,7 +320,11 @@ export const generateLinkedStyleString = (
               : typeof value === 'object' && value !== null && 'color' in value
                 ? (value as { color?: unknown }).color
                 : undefined;
-          if (color) markValue['background-color'] = color as string;
+          if (typeof color === 'string' && color) {
+            markValue['background-color'] = color;
+          } else if (color != null) {
+            markValue['background-color'] = String(color);
+          }
         }
       } else if (key === 'underline' && node) {
         const styleValRaw =
@@ -385,7 +386,7 @@ export const generateLinkedStyleString = (
  * @note Handles both cursor position and selection ranges
  */
 export const applyLinkedStyleToTransaction = (
-  tr: TransactionLike,
+  tr: Transaction | TransactionLike,
   editor: Editor,
   style: LinkedStyleDefinition | { id: null },
 ): boolean => {
@@ -401,7 +402,7 @@ export const applyLinkedStyleToTransaction = (
     tr.setSelection(selection);
   }
   // Fallback to lastSelection if no preserved selection
-  else if (selection.empty && editor.options.lastSelection) {
+  else if (selection.empty && editor.options.lastSelection instanceof Selection) {
     selection = editor.options.lastSelection;
     tr.setSelection(selection);
   }
@@ -490,15 +491,22 @@ export const applyLinkedStyleToTransaction = (
 export const stepInsertsTextIntoStyledParagraph = (
   tr: Transaction,
   oldEditorState: EditorState,
-  step: StepLike,
+  step: Step,
   stepIndex: number,
 ): boolean => {
-  if (!step.slice || step.slice.size === 0 || typeof step.from !== 'number') {
+  const slice = (
+    step as unknown as {
+      slice?: { size: number; content: { descendants: (callback: (node: PmNode) => boolean | void) => void } };
+      from?: number;
+    }
+  ).slice;
+  const from = (step as unknown as { from?: number }).from;
+  if (!slice || slice.size === 0 || typeof from !== 'number') {
     return false;
   }
 
   let insertsText = false;
-  step.slice.content.descendants((node) => {
+  slice.content.descendants((node: PmNode) => {
     if (node.type?.name === 'text' && node.text?.length) {
       insertsText = true;
       return false;
@@ -508,9 +516,9 @@ export const stepInsertsTextIntoStyledParagraph = (
 
   if (!insertsText) return false;
 
-  const docBeforeStep = tr.docs?.[stepIndex] || oldEditorState.doc;
+  const docBeforeStep = (tr as unknown as { docs?: PmNode[] }).docs?.[stepIndex] || oldEditorState.doc;
   if (!docBeforeStep) return false;
-  const resolvedPos = Math.min(step.from, docBeforeStep.content.size);
+  const resolvedPos = Math.min(from, docBeforeStep.content.size);
   const $pos = docBeforeStep.resolve(resolvedPos);
   for (let depth = $pos.depth; depth >= 0; depth--) {
     const node = $pos.node(depth);

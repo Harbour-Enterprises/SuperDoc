@@ -49,10 +49,10 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
     },
 
     props: {
-      handleDrop(view, event, slice, moved) {
+      handleDrop(view: EditorView, event: DragEvent, _slice: Slice, moved: boolean) {
         if (moved) return false;
 
-        const fieldAnnotation = event?.dataTransfer.getData('fieldAnnotation');
+        const fieldAnnotation = event?.dataTransfer?.getData('fieldAnnotation');
 
         if (fieldAnnotation) {
           if (options.handleDropOutside) {
@@ -63,10 +63,10 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
               event,
             });
           } else {
-            let annotationAttrs;
+            let annotationAttrs: Record<string, unknown> | undefined;
 
             try {
-              const fieldAnnotationObj = JSON.parse(fieldAnnotation);
+              const fieldAnnotationObj = JSON.parse(fieldAnnotation) as { attributes?: Record<string, unknown> };
               annotationAttrs = fieldAnnotationObj.attributes;
             } catch {
               return false;
@@ -77,7 +77,7 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
               top: event.clientY,
             });
 
-            if (coordinates) {
+            if (coordinates && annotationAttrs) {
               editor.commands.addFieldAnnotation(coordinates.pos, {
                 ...annotationAttrs,
               });
@@ -90,7 +90,7 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
         return false;
       },
 
-      handlePaste(view, event, slice) {
+      handlePaste(view: EditorView, _event: ClipboardEvent, slice: Slice) {
         const content = slice.content.content.filter((item) => item.type.name === 'fieldAnnotation');
         if (content.length) {
           editor.emit('fieldAnnotationPaste', {
@@ -102,7 +102,7 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
       },
 
       handleDOMEvents: {
-        dragstart: (view, event) => {
+        dragstart: (_view: EditorView, event: DragEvent) => {
           if (!event.target) return false;
 
           const { target } = event;
@@ -140,7 +140,7 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
         return;
       }
 
-      const affectedRanges = [];
+      const affectedRanges: Array<[number, number]> = [];
       let hasFieldAnnotationsInSlice = false;
       let hasSteps = false;
 
@@ -224,7 +224,7 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
         const { marks } = node;
         const currentNode = tr.doc.nodeAt(pos);
 
-        if (marks.length > 0 && node.eq(currentNode)) {
+        if (marks.length > 0 && currentNode && node.eq(currentNode)) {
           tr.removeMark(pos, pos + node.nodeSize, null);
           changed = true;
         }
@@ -295,10 +295,10 @@ export const FieldAnnotationPlugin = (options: FieldAnnotationPluginOptions) => 
  * @param {DragEvent} params.event - Browser drag event
  * @returns {void}
  */
-function handleDropOutside({ fieldAnnotation, editor, view, event }: DropOutsideParams) {
-  let sourceField;
+function handleDropOutside({ fieldAnnotation, editor, view, event }: DropOutsideParams): void {
+  let sourceField: unknown;
   try {
-    const fieldAnnotationObj = JSON.parse(fieldAnnotation);
+    const fieldAnnotationObj = JSON.parse(fieldAnnotation) as { sourceField?: unknown };
     sourceField = fieldAnnotationObj.sourceField;
   } catch {
     return;

@@ -1,4 +1,6 @@
 import { Node, Attribute } from '@core/index.js';
+import type { AttributeValue, RenderNodeContext } from '@core/index.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
 
 /**
  * Configuration options for TableHeader
@@ -6,7 +8,7 @@ import { Node, Attribute } from '@core/index.js';
  */
 interface TableHeaderOptions extends Record<string, unknown> {
   /** HTML attributes for table headers */
-  htmlAttributes: Record<string, string>;
+  htmlAttributes: Record<string, AttributeValue>;
 }
 
 /**
@@ -52,15 +54,14 @@ export const TableHeader = Node.create<TableHeaderOptions>({
 
       colwidth: {
         default: null,
-        parseDOM: (element) => {
+        parseDOM: (element: Element) => {
           const colwidth = element.getAttribute('data-colwidth');
           const value = colwidth ? colwidth.split(',').map((width) => parseInt(width, 10)) : null;
           return value;
         },
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: { colwidth?: number[] | null }) => {
           if (!attrs.colwidth) return {};
           return {
-            // @ts-expect-error - colwidth is known to be an array at runtime
             'data-colwidth': attrs.colwidth.join(','),
           };
         },
@@ -68,11 +69,11 @@ export const TableHeader = Node.create<TableHeaderOptions>({
 
       __placeholder: {
         default: null,
-        parseDOM: (element) => {
+        parseDOM: (element: Element) => {
           const value = element.getAttribute('data-placeholder');
           return value || null;
         },
-        renderDOM({ __placeholder }) {
+        renderDOM({ __placeholder }: { __placeholder?: string | null }) {
           if (!__placeholder) return {};
           return {
             'data-placeholder': __placeholder,
@@ -82,11 +83,15 @@ export const TableHeader = Node.create<TableHeaderOptions>({
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [{ tag: 'th' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['th', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: RenderNodeContext): DOMOutputSpec {
+    return [
+      'th',
+      Attribute.mergeAttributes(this.options?.htmlAttributes ?? {}, htmlAttributes as Record<string, AttributeValue>),
+      0,
+    ];
   },
 });

@@ -1,6 +1,6 @@
 import type { Node as PmNode } from 'prosemirror-model';
 
-export type TabStopAlignment = 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear';
+export type TabStopAlignment = 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear' | 'left' | 'right' | 'num';
 export type TabLeader = 'none' | 'dot' | 'hyphen' | 'underscore' | 'heavy' | 'middleDot';
 
 export interface TabStopInput {
@@ -9,6 +9,12 @@ export interface TabStopInput {
   val: TabStopAlignment;
   leader?: TabLeader;
   decimalChar?: string;
+  tab?: {
+    tabType?: TabStopAlignment;
+    pos?: number;
+    leader?: TabLeader;
+    decimalChar?: string;
+  };
 }
 
 export interface Indents {
@@ -50,8 +56,8 @@ export interface LayoutRequest {
 
 export interface TabLayout {
   width: number;
-  height: number;
-  alignment: 'start' | 'center' | 'end' | 'decimal' | 'bar' | 'default';
+  height?: number | string;
+  alignment: TabStopAlignment | 'default';
   tabStopPosUsed: number | string;
   leader?: TabLeader;
 }

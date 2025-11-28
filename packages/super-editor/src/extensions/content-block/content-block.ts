@@ -1,4 +1,4 @@
-import { Node, Attribute } from '@core/index.js';
+import { Node, Attribute, type AttributeValue } from '@core/index.js';
 import type { DOMOutputSpec } from 'prosemirror-model';
 
 /**
@@ -70,7 +70,7 @@ export const ContentBlock = Node.create({
     return {
       horizontalRule: {
         default: false,
-        renderDOM: ({ horizontalRule }) => {
+        renderDOM: ({ horizontalRule }: { horizontalRule?: boolean }) => {
           if (!horizontalRule) return {};
           return { 'data-horizontal-rule': 'true' };
         },
@@ -98,7 +98,7 @@ export const ContentBlock = Node.create({
 
       background: {
         default: null,
-        renderDOM: (attrs) => {
+        renderDOM: (attrs: { background?: string | null }) => {
           if (!attrs.background) return {};
           return {
             style: `background-color: ${attrs.background}`,
@@ -129,8 +129,12 @@ export const ContentBlock = Node.create({
     const options = this.options as { htmlAttributes?: Record<string, unknown> };
     return [
       'div',
-      Attribute.mergeAttributes(options.htmlAttributes || {}, htmlAttributes || {}, { 'data-type': this.name }),
-    ] as const;
+      Attribute.mergeAttributes(
+        (options.htmlAttributes as Record<string, AttributeValue>) || {},
+        (htmlAttributes as Record<string, AttributeValue>) || {},
+        { 'data-type': this.name },
+      ),
+    ];
   },
 
   addCommands() {
@@ -183,6 +187,6 @@ export const ContentBlock = Node.create({
             attrs: config,
           });
         },
-    };
+    } as Record<string, (...args: unknown[]) => unknown>;
   },
 });

@@ -179,7 +179,9 @@ export const AiPlugin = Extension.create({
   },
 
   addPmPlugins() {
-    const editor = this.editor;
+    const editor = this.editor as Editor | undefined;
+    if (!editor) return [];
+
     const aiPlugin = new Plugin({
       key: AiPluginKey,
       state: {
@@ -241,7 +243,7 @@ export const AiPlugin = Extension.create({
       },
       props: {
         decorations(state: EditorState) {
-          return this.getState(state).decorations;
+          return this.getState(state)?.decorations;
         },
       },
     });

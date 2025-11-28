@@ -5,7 +5,7 @@ import { resolveRunProperties, encodeCSSFromRPr, encodeCSSFromPPr } from '../../
 import { isList } from '@core/commands/list-helpers';
 import { getResolvedParagraphProperties, calculateResolvedParagraphProperties } from './resolvedPropertiesCache.js';
 import type { Node as PmNode } from 'prosemirror-model';
-import type { Decoration, NodeView } from 'prosemirror-view';
+import type { Decoration, NodeView, ViewMutationRecord } from 'prosemirror-view';
 import type { Editor } from '@core/Editor.js';
 import type { ExtensionAttribute } from '@core/Attribute.js';
 
@@ -23,8 +23,8 @@ export class ParagraphNodeView implements NodeView {
   decorations: readonly Decoration[];
   extensionAttrs: Record<string, unknown>;
   _animationFrameRequest: number | null;
-  marker?: HTMLElement;
-  separator?: HTMLElement | Text;
+  marker: HTMLElement | null;
+  separator: HTMLElement | Text | null;
 
   constructor(
     node: PmNode,
@@ -39,8 +39,11 @@ export class ParagraphNodeView implements NodeView {
     this.decorations = decorations;
     this.extensionAttrs = extensionAttrs;
     this._animationFrameRequest = null;
+    this.marker = null;
+    this.separator = null;
 
-    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
+    const initialPos = this.getPos?.() ?? 0;
+    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(initialPos));
 
     this.dom = document.createElement('p');
     this.contentDOM = document.createElement('span');
@@ -58,7 +61,7 @@ export class ParagraphNodeView implements NodeView {
     this.#updateDOMStyles();
   }
 
-  update(node: PmNode, decorations: readonly Decoration[]): boolean {
+  update(node: PmNode, decorations: readonly Decoration[], _innerDecorations?: unknown): boolean {
     const oldAttrs = this.node.attrs;
     const newAttrs = node.attrs;
     this.node = node;
@@ -68,7 +71,8 @@ export class ParagraphNodeView implements NodeView {
       return true;
     }
 
-    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(this.getPos()));
+    const currentPos = this.getPos?.() ?? 0;
+    calculateResolvedParagraphProperties(this.editor, this.node, this.editor.state.doc.resolve(currentPos));
 
     this.#updateHTMLAttributes();
     this.#updateDOMStyles();
@@ -98,10 +102,11 @@ export class ParagraphNodeView implements NodeView {
       }
       this.dom.setAttribute(key, String(value));
     }
-    const paragraphProperties = getResolvedParagraphProperties(this.node);
-    if (this.#checkIsList()) {
-      this.dom.setAttribute('data-num-id', paragraphProperties.numberingProperties.numId);
-      this.dom.setAttribute('data-level', paragraphProperties.numberingProperties.ilvl);
+    const paragraphProperties = getResolvedParagraphProperties(this.node) ?? {};
+    const numbering = paragraphProperties.numberingProperties;
+    if (this.#checkIsList() && numbering) {
+      this.dom.setAttribute('data-num-id', String(numbering.numId ?? ''));
+      this.dom.setAttribute('data-level', String(numbering.ilvl ?? ''));
     } else {
       this.dom.removeAttribute('data-num-id');
       this.dom.removeAttribute('data-level');
@@ -113,43 +118,66 @@ export class ParagraphNodeView implements NodeView {
     }
 
     if (paragraphProperties.styleId) {
-      this.dom.setAttribute('styleid', paragraphProperties.styleId);
+      this.dom.setAttribute('styleid', String(paragraphProperties.styleId));
     }
   }
 
   #updateDOMStyles() {
     this.dom.style.cssText = '';
-    const paragraphProperties = getResolvedParagraphProperties(this.node);
+    const paragraphProperties = getResolvedParagraphProperties(this.node) ?? {};
     const style = encodeCSSFromPPr(paragraphProperties);
     Object.entries(style).forEach(([k, v]) => {
-      this.dom.style[k] = v;
+      (this.dom.style as unknown as Record<string, string>)[k] = v as string;
     });
   }
 
   #updateListStyles() {
-    const { suffix: suffixRaw, justification } = this.node.attrs.listRendering;
+    if (!this.marker) return true;
+    const { suffix: suffixRaw, justification } = this.node.attrs.listRendering || {};
     const suffix = suffixRaw ?? 'tab';
-    this.#calculateMarkerStyle(justification);
+    const justificationValue = (justification as 'left' | 'right' | 'center') ?? 'left';
+    this.#calculateMarkerStyle(justificationValue);
     if (suffix === 'tab') {
-      const paragraphProperties = getResolvedParagraphProperties(this.node);
-      this.#calculateTabSeparatorStyle(justification, paragraphProperties.indent);
+      const paragraphProperties = getResolvedParagraphProperties(this.node) ?? {};
+      this.#calculateTabSeparatorStyle(
+        justificationValue,
+        (paragraphProperties.indent as { hanging?: number; firstLine?: number } | undefined) ?? null,
+      );
     } else {
-      this.separator.textContent = suffix === 'space' ? '\u00A0' : '';
+      if (this.separator) {
+        this.separator.textContent = suffix === 'space' ? '\u00A0' : '';
+      }
     }
 
     return true;
   }
 
-  ignoreMutation(mutation: MutationRecord): boolean {
+  ignoreMutation = (mutation: ViewMutationRecord): boolean => {
     // Ignore mutations to the list marker and separator}
-    if (this.marker && (mutation.target === this.marker || this.marker.contains(mutation.target))) {
+    if (
+      this.marker &&
+      'target' in mutation &&
+      mutation.target instanceof Node &&
+      (mutation.target === this.marker || this.marker.contains(mutation.target))
+    ) {
       return true;
     }
-    if (this.separator && (mutation.target === this.separator || this.separator.contains(mutation.target))) {
+    if (
+      this.separator &&
+      'target' in mutation &&
+      mutation.target instanceof Node &&
+      (mutation.target === this.separator ||
+        (this.separator instanceof HTMLElement && this.separator.contains(mutation.target)))
+    ) {
       return true;
     }
     // Ignore style attribute changes on the paragraph DOM element
-    if (mutation.type === 'attributes' && mutation.target === this.dom && mutation.attributeName === 'style') {
+    if (
+      mutation.type === 'attributes' &&
+      'target' in mutation &&
+      mutation.target === this.dom &&
+      (mutation as MutationRecord).attributeName === 'style'
+    ) {
       return true;
     }
     // Ignore addition/removal of marker/separator nodes
@@ -169,7 +197,7 @@ export class ParagraphNodeView implements NodeView {
       }
     }
     return false;
-  }
+  };
 
   #initList(listRendering: { markerText: string; suffix?: string }): void {
     this.#createMarker(listRendering.markerText);
@@ -191,6 +219,7 @@ export class ParagraphNodeView implements NodeView {
   }
 
   #createSeparator(suffix?: string): void {
+    if (!this.marker) return;
     if (suffix === 'tab' || suffix == null) {
       if (this.separator == null || (this.separator as HTMLElement).tagName?.toLowerCase() !== 'span') {
         this.separator?.parentNode?.removeChild(this.separator);
@@ -236,6 +265,7 @@ export class ParagraphNodeView implements NodeView {
     justification: 'left' | 'right' | 'center',
     indent: { hanging?: number; firstLine?: number } | null,
   ): void {
+    if (!this.marker || !this.separator) return;
     const markerWidth = this.marker.getBoundingClientRect().width;
     let tabStyle;
     const { paragraphContext, start } = this.#getParagraphContext();
@@ -260,7 +290,7 @@ export class ParagraphNodeView implements NodeView {
       const tabNode = this.editor.schema.nodes.tab.create(null);
       tabStyle = calculateTabStyle(tabNode.nodeSize, this.editor.view, start, this.node, paragraphContext);
     }
-    if (this.separator && 'style' in this.separator) {
+    if (this.separator && 'style' in this.separator && tabStyle) {
       (this.separator as HTMLElement).style.cssText = tabStyle;
     }
   }
@@ -279,14 +309,16 @@ export class ParagraphNodeView implements NodeView {
    * The left/center/right alignment positioning uses the left indent (+ firstLine if present) as the anchor point.
    */
   #calculateMarkerStyle(justification: 'left' | 'right' | 'center'): void {
+    if (!this.marker) return;
+    const markerEl = this.marker;
     // START: modify after CSS styles
-    const paragraphProperties = getResolvedParagraphProperties(this.node);
+    const paragraphProperties = getResolvedParagraphProperties(this.node) ?? {};
     const runProperties = resolveRunProperties(
       { docx: this.editor.converter.convertedXml, numbering: this.editor.converter.numbering },
       paragraphProperties.runProperties || {},
       paragraphProperties,
       true,
-      Boolean(this.node.attrs.paragraphProperties.numberingProperties),
+      Boolean(this.node.attrs.paragraphProperties?.numberingProperties),
     );
     const style = encodeCSSFromRPr(runProperties, this.editor.converter.convertedXml);
     this.marker.style.cssText = Object.entries(style)
@@ -313,7 +345,7 @@ export class ParagraphNodeView implements NodeView {
       let top = '0';
       if (globalThis) {
         const computedStyle = globalThis.getComputedStyle(this.dom);
-        const markerComputedStyle = globalThis.getComputedStyle(this.marker);
+        const markerComputedStyle = globalThis.getComputedStyle(markerEl);
         const lineHeight = parseFloat(computedStyle.lineHeight);
         const markerLineHeight = parseFloat(markerComputedStyle.lineHeight);
         top = `${lineHeight - markerLineHeight}px`;
@@ -321,7 +353,7 @@ export class ParagraphNodeView implements NodeView {
       return top;
     };
 
-    const rect = this.marker.getBoundingClientRect();
+    const rect = markerEl.getBoundingClientRect();
     const markerWidth = rect.width;
     if (justification === 'right') {
       markerStyle.position = 'absolute';
@@ -335,27 +367,28 @@ export class ParagraphNodeView implements NodeView {
       domStyle.position = 'relative';
     }
     Object.entries(markerStyle).forEach(([k, v]) => {
-      this.marker.style[k] = v;
+      markerEl.style.setProperty(k, v);
     });
     Object.entries(domStyle).forEach(([k, v]) => {
-      this.dom.style[k] = v;
+      this.dom.style.setProperty(k, v);
     });
   }
 
   #removeList() {
     if (this.marker) {
-      this.dom.removeChild(this.marker);
+      this.dom.removeChild(this.marker as Element);
       this.marker = null;
     }
     if (this.separator) {
-      this.dom.removeChild(this.separator);
+      this.dom.removeChild(this.separator as unknown as Node);
       this.separator = null;
     }
     this.dom.style.position = '';
   }
 
   #getParagraphContext() {
-    const $pos = this.editor.state.doc.resolve(this.getPos());
+    const pos = this.getPos?.() ?? 0;
+    const $pos = this.editor.state.doc.resolve(pos);
     const start = $pos.start($pos.depth + 1);
     const paragraphContext = extractParagraphContext(this.node, start, this.editor.helpers);
     return { paragraphContext, start };

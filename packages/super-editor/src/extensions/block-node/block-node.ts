@@ -59,13 +59,15 @@ export const BlockNode = Extension.create({
       replaceBlockNodeById:
         (id: string, contentNode: ProseMirrorNode) =>
         ({ dispatch, tr }: { dispatch?: (tr: Transaction) => void; tr: Transaction }): boolean => {
-          const blockNode = (
-            this.editor as {
-              helpers: {
-                blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
-              };
-            }
-          ).helpers.blockNode.getBlockNodeById(id);
+          const editor = this.editor as unknown as
+            | {
+                helpers: {
+                  blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
+                };
+              }
+            | undefined;
+          if (!editor) return false;
+          const blockNode = editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }
@@ -95,13 +97,15 @@ export const BlockNode = Extension.create({
       deleteBlockNodeById:
         (id: string) =>
         ({ dispatch, tr }: { dispatch?: (tr: Transaction) => void; tr: Transaction }): boolean => {
-          const blockNode = (
-            this.editor as {
-              helpers: {
-                blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
-              };
-            }
-          ).helpers.blockNode.getBlockNodeById(id);
+          const editor = this.editor as unknown as
+            | {
+                helpers: {
+                  blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
+                };
+              }
+            | undefined;
+          if (!editor) return false;
+          const blockNode = editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }
@@ -134,13 +138,15 @@ export const BlockNode = Extension.create({
       updateBlockNodeAttributes:
         (id: string, attrs: Record<string, unknown> = {}) =>
         ({ dispatch, tr }: { dispatch?: (tr: Transaction) => void; tr: Transaction }): boolean => {
-          const blockNode = (
-            this.editor as {
-              helpers: {
-                blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
-              };
-            }
-          ).helpers.blockNode.getBlockNodeById(id);
+          const editor = this.editor as unknown as
+            | {
+                helpers: {
+                  blockNode: { getBlockNodeById: (id: string) => Array<{ node: ProseMirrorNode; pos: number }> };
+                };
+              }
+            | undefined;
+          if (!editor) return false;
+          const blockNode = editor.helpers.blockNode.getBlockNodeById(id);
           if (!blockNode || blockNode.length > 1) {
             return false;
           }

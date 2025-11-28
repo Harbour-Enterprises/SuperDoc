@@ -1,7 +1,7 @@
 import { marked } from 'marked';
 import { createDocFromHTML } from './importHtml.js';
 import type { Node as PmNode } from 'prosemirror-model';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 // Configure marked once
 marked.use({

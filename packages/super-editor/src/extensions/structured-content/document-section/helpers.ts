@@ -1,4 +1,11 @@
 import { DOMSerializer } from 'prosemirror-model';
+import type { Editor } from '@core/Editor.js';
+import type { ProseMirrorJSON } from '@core/types/EditorTypes.js';
+import type { EditorOptions } from '@core/types/EditorConfig.js';
+import type { Transaction } from 'prosemirror-state';
+import type { Node as PmNode } from 'prosemirror-model';
+
+type SectionMatch = { node: PmNode; pos: number };
 
 /**
  * Get all sections in the editor document.
@@ -6,14 +13,14 @@ import { DOMSerializer } from 'prosemirror-model';
  * @param {Editor} editor - The editor instance to search within.
  * @returns {Array} An array of objects containing the node and its position in the document
  */
-export const getAllSections = (editor) => {
+export const getAllSections = (editor?: Editor | null): SectionMatch[] => {
   if (!editor) return [];
   const type = editor.schema.nodes.documentSection;
   if (!type) return [];
 
-  const sections = [];
+  const sections: SectionMatch[] = [];
   const { state } = editor;
-  state.doc.descendants((node, pos) => {
+  state.doc.descendants((node: PmNode, pos: number) => {
     if (node.type.name === type.name) {
       sections.push({ node, pos });
     }
@@ -27,11 +34,15 @@ export const getAllSections = (editor) => {
  * @param {Editor} editor - The editor instance containing the sections.
  * @returns {Array} An array of objects containing section details and their HTML representation.
  */
-export const exportSectionsToHTML = (editor) => {
+export const exportSectionsToHTML = (
+  editor: Editor | null,
+): Array<{ id: number | string | null | undefined; title?: string; description?: string; html: string }> => {
+  if (!editor) return [];
   const sections = getAllSections(editor);
 
-  const processedSections = new Set();
-  const result = [];
+  const processedSections = new Set<number | string | null | undefined>();
+  const result: Array<{ id: number | string | null | undefined; title?: string; description?: string; html: string }> =
+    [];
   sections.forEach(({ node }) => {
     const { attrs } = node;
     const { id, title, description } = attrs;
@@ -55,7 +66,7 @@ export const exportSectionsToHTML = (editor) => {
  * @param {Editor} editor - The editor instance used for serialization.
  * @returns {String} The HTML representation of the node's content.
  */
-export const getHTMLFromNode = (node, editor) => {
+export const getHTMLFromNode = (node: PmNode, editor: Editor): string => {
   const tempDocument = document.implementation.createHTMLDocument();
   const container = tempDocument.createElement('div');
   const fragment = DOMSerializer.fromSchema(editor.schema).serializeFragment(node.content);
@@ -70,10 +81,23 @@ export const getHTMLFromNode = (node, editor) => {
  * @param {Editor} editor - The editor instance containing the sections.
  * @returns {Array} An array of objects containing section details and their JSON representation.
  */
-export const exportSectionsToJSON = (editor) => {
+export const exportSectionsToJSON = (
+  editor: Editor | null,
+): Array<{
+  id: number | string | null | undefined;
+  title?: string;
+  description?: string;
+  content: ProseMirrorJSON;
+}> => {
+  if (!editor) return [];
   const sections = getAllSections(editor);
-  const processedSections = new Set();
-  const result = [];
+  const processedSections = new Set<number | string | null | undefined>();
+  const result: Array<{
+    id: number | string | null | undefined;
+    title?: string;
+    description?: string;
+    content: ProseMirrorJSON;
+  }> = [];
   sections.forEach(({ node }) => {
     const { attrs } = node;
     const { id, title, description } = attrs;
@@ -98,14 +122,18 @@ export const exportSectionsToJSON = (editor) => {
  * @param {Editor} editor - The parent editor instance.
  * @returns {Editor|null} The child editor instance for the linked section, or null if the section is not found.
  */
-export const getLinkedSectionEditor = (id, options, editor) => {
+export const getLinkedSectionEditor = (
+  id: string | number,
+  options: Partial<EditorOptions>,
+  editor: Editor,
+): Editor | null => {
   const sections = getAllSections(editor);
   const section = sections.find((s) => s.node.attrs.id === id);
   if (!section) return null;
 
   const child = editor.createChildEditor({
     ...options,
-    onUpdate: ({ editor: childEditor, transaction }) => {
+    onUpdate: ({ editor: childEditor, transaction }: { editor: Editor; transaction: Transaction }) => {
       const isFromtLinkedParent = transaction.getMeta('fromLinkedParent');
       if (isFromtLinkedParent) return; // Prevent feedback loop
 
@@ -138,9 +166,9 @@ export const getLinkedSectionEditor = (id, options, editor) => {
     // Only update if content is actually different
     const sectionContent = sectionNode.node.content;
 
-    const json = {
+    const json: ProseMirrorJSON = {
       type: 'doc',
-      content: sectionContent.content.map((node) => node.toJSON()),
+      content: sectionContent.content.map((node: PmNode) => node.toJSON()),
     };
 
     const childTr = child.state.tr;

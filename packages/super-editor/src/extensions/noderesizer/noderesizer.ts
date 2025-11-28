@@ -1,23 +1,31 @@
 import { Plugin, PluginKey, NodeSelection } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
+import type { EditorView } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
+import type { Editor } from '@core/Editor.js';
 
 const STYLE_ISOLATION_CLASS = 'sd-editor-scoped';
 
-/**
- * Configuration options for NodeResizer
- * @typedef {Object} NodeResizerOptions
- * @category Options
- */
+interface ResizeState {
+  dragging: boolean;
+  startX: number;
+  startY: number;
+  startWidth: number;
+  startHeight: number;
+  handle: string | null;
+  pos: number | null;
+  resizableElement: HTMLElement | null;
+  aspectRatio: number;
+}
 
 export const NodeResizerKey = new PluginKey('node-resizer');
 
 /**
  * Plugin key for the resize plugin
  */
-const nodeResizer = (nodeNames = ['image'], editor) => {
+const nodeResizer = (nodeNames: string[] = ['image'], editor: Editor) => {
   // Track the resize state
-  let resizeState = {
+  let resizeState: ResizeState = {
     dragging: false,
     startX: 0,
     startY: 0,
@@ -30,12 +38,12 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
   };
 
   // Store references to resize handles container and editor view
-  let resizeContainer = null;
-  let editorView = null;
-  let globalClickHandler = null;
-  let globalMousedownHandler = null;
-  let scrollHandler = null;
-  let currentWrapper = null;
+  let resizeContainer: HTMLDivElement | null = null;
+  let editorView: EditorView | null = null;
+  let globalClickHandler: ((event: MouseEvent) => void) | null = null;
+  let globalMousedownHandler: ((event: MouseEvent) => boolean | void) | null = null;
+  let scrollHandler: (() => void) | null = null;
+  let currentWrapper: HTMLElement | null = null;
 
   return new Plugin({
     key: NodeResizerKey,
@@ -92,11 +100,9 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
       editorView = view;
 
       // Add global click handler
-      globalClickHandler = (event) => {
-        if (
-          !event.target.closest('.sd-editor-resizable-wrapper') &&
-          !event.target.closest('.sd-editor-resize-container')
-        ) {
+      globalClickHandler = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (!target.closest('.sd-editor-resizable-wrapper') && !target.closest('.sd-editor-resize-container')) {
           hideResizeHandles();
         }
       };
@@ -104,11 +110,12 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
       document.addEventListener('click', globalClickHandler);
 
       // Add global mousedown handler
-      globalMousedownHandler = (event) => {
-        if (event.target.closest('.sd-editor-resize-handle')) {
+      globalMousedownHandler = (event: MouseEvent) => {
+        const target = event.target as HTMLElement;
+        if (target.closest('.sd-editor-resize-handle')) {
           event.preventDefault();
           event.stopPropagation();
-          startResize(editorView, event, event.target);
+          startResize(editorView, event, target);
           return true;
         }
       };
@@ -134,7 +141,9 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
           if (selection.from !== prevSelection.from || selection.to !== prevSelection.to) {
             setTimeout(() => {
               const searchRoot = editorView?.dom;
-              const selectedResizableWrapper = searchRoot?.querySelector('.sd-editor-resizable-wrapper');
+              const selectedResizableWrapper = searchRoot?.querySelector(
+                '.sd-editor-resizable-wrapper',
+              ) as HTMLElement | null;
               if (selectedResizableWrapper) {
                 showResizeHandles(view, selectedResizableWrapper);
               } else {
@@ -165,13 +174,13 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     },
   });
 
-  function showResizeHandles(view, wrapper) {
+  function showResizeHandles(view: EditorView, wrapper: HTMLElement): void {
     hideResizeHandles();
 
-    const pos = Number.parseInt(wrapper.getAttribute('data-pos'), 10);
+    const pos = Number.parseInt(wrapper.getAttribute('data-pos') || '0', 10);
 
     const node = view.state.doc.nodeAt(pos);
-    if (!nodeNames.includes(node?.type.name)) return;
+    if (!nodeNames.includes(node?.type.name ?? '')) return;
 
     // Store current wrapper for scroll updates
     currentWrapper = wrapper;
@@ -208,7 +217,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     currentWrapper = null; // Clear wrapper reference
   }
 
-  function updateHandlePositions(resizableElement) {
+  function updateHandlePositions(resizableElement: Element | null): void {
     if (!resizeContainer || !resizableElement) return;
 
     const rect = resizableElement.getBoundingClientRect();
@@ -221,16 +230,19 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     resizeContainer.style.height = `${rect.height}px`;
   }
 
-  function startResize(view, event, handleElement) {
-    if (!view.hasFocus()) return;
+  function startResize(view: EditorView | null, event: MouseEvent, handleElement: HTMLElement): void {
+    if (!view || !view.hasFocus()) return;
     const handle = handleElement.getAttribute('data-handle');
     const pos = Number.parseInt(handleElement.getAttribute('data-pos') || '0', 10);
     const selection = view.state.selection;
     // Check for NodeSelection using both instanceof and duck typing for test compatibility
-    const selectionNode = selection instanceof NodeSelection || selection.node ? selection.node : null;
-    if (selection.from !== pos || !nodeNames.includes(selectionNode?.type.name)) return;
+    const selectionNode =
+      selection instanceof NodeSelection || (selection as NodeSelection).node
+        ? (selection as NodeSelection).node
+        : null;
+    if (selection.from !== pos || !nodeNames.includes(selectionNode?.type.name ?? '')) return;
 
-    const resizableElement = view.nodeDOM(pos);
+    const resizableElement = view.nodeDOM(pos) as HTMLElement | null;
 
     if (!resizableElement) return;
 
@@ -254,7 +266,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     document.body.style.userSelect = 'none';
   }
 
-  function handleMouseMove(event) {
+  function handleMouseMove(event: MouseEvent): void {
     if (!resizeState.dragging) return;
 
     event.preventDefault();
@@ -263,7 +275,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     let deltaX = event.clientX - resizeState.startX;
 
     // Adjust delta based on handle position
-    if (resizeState.handle.includes('w')) deltaX = -deltaX;
+    if (resizeState.handle?.includes('w')) deltaX = -deltaX;
 
     // Calculate new dimensions maintaining aspect ratio
     const newWidth = Math.max(20, resizeState.startWidth + deltaX);
@@ -278,7 +290,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     }
   }
 
-  function handleMouseUp(event) {
+  function handleMouseUp(event: MouseEvent): void {
     if (!resizeState.dragging) return;
 
     cleanupEventListeners();
@@ -286,22 +298,22 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     let deltaX = event.clientX - resizeState.startX;
 
     // Adjust delta based on handle position
-    if (resizeState.handle.includes('w')) deltaX = -deltaX;
+    if (resizeState.handle?.includes('w')) deltaX = -deltaX;
 
     // Calculate final dimensions
     const newWidth = Math.max(20, resizeState.startWidth + deltaX);
     const newHeight = newWidth / resizeState.aspectRatio;
 
     // Update the document
-    if (editorView && resizeState.pos < editorView.state.doc.content.size) {
+    if (editorView && resizeState.pos !== null && resizeState.pos < editorView.state.doc.content.size) {
       const tr = editorView.state.tr;
       const node = tr.doc.nodeAt(resizeState.pos);
 
-      if (nodeNames.includes(node?.type.name)) {
+      if (node && nodeNames.includes(node.type.name)) {
         const attrs = {
           ...node.attrs,
           size: {
-            ...node.attrs.size,
+            ...(node.attrs.size as Record<string, unknown>),
             width: Math.round(newWidth),
             height: Math.round(newHeight),
           },
@@ -327,14 +339,14 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     };
   }
 
-  function cleanupEventListeners() {
+  function cleanupEventListeners(): void {
     document.removeEventListener('mousemove', handleMouseMove);
     document.removeEventListener('mouseup', handleMouseUp);
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   }
 
-  function getResizeCursor(handle) {
+  function getResizeCursor(handle: string | null): string {
     switch (handle) {
       case 'nw':
       case 'se':
@@ -361,9 +373,11 @@ export const NodeResizer = Extension.create({
   },
 
   addPmPlugins() {
-    const isHeadless = this.editor.options.isHeadless;
+    const editor = this.editor;
+    if (!editor) return [];
+    const isHeadless = editor.options.isHeadless;
     const hasDocument = typeof document !== 'undefined';
     if (isHeadless || !hasDocument) return [];
-    return [nodeResizer(['image'], this.editor)];
+    return [nodeResizer(['image'], editor)];
   },
 });

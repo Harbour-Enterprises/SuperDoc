@@ -78,7 +78,7 @@ export const hydrateParagraphStyleAttrs = (
   const resolvedExtended = resolved as ExtendedResolvedProps;
   const resolvedAsRecord = resolved as Record<string, unknown>;
   const hydrated: ParagraphStyleHydration = {
-    resolved,
+    resolved: resolved as ResolvedParagraphProperties,
     spacing: cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined,
     indent: cloneIfObject(resolvedAsRecord.indent) as ParagraphIndent | undefined,
     borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],

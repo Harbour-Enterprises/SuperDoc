@@ -1,4 +1,4 @@
-import { Mark, Attribute } from '@core/index.js';
+import { Mark, Attribute, type AttributeValue } from '@core/index.js';
 
 /**
  * Configuration options for Highlight
@@ -28,8 +28,8 @@ export const Highlight = Mark.create<HighlightOptions>({
     return {
       color: {
         default: null,
-        parseDOM: (element) => element.getAttribute('data-color') || element.style.backgroundColor,
-        renderDOM: (attributes) => {
+        parseDOM: (element: HTMLElement) => element.getAttribute('data-color') || element.style.backgroundColor,
+        renderDOM: (attributes: { color?: string | null }) => {
           if (!attributes.color) {
             return {};
           }
@@ -46,8 +46,12 @@ export const Highlight = Mark.create<HighlightOptions>({
     return [{ tag: 'mark' }];
   },
 
-  renderDOM({ htmlAttributes }) {
-    return ['mark', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }) {
+    return [
+      'mark',
+      Attribute.mergeAttributes(this.options.htmlAttributes as Record<string, AttributeValue>, htmlAttributes),
+      0,
+    ];
   },
 
   addCommands() {
@@ -61,8 +65,8 @@ export const Highlight = Mark.create<HighlightOptions>({
        * editor.commands.setHighlight('rgba(255, 235, 59, 0.5)')
        */
       setHighlight:
-        (color) =>
-        ({ commands }) =>
+        (color: string) =>
+        ({ commands }: { commands: { setMark: (name: string, attrs: Record<string, unknown>) => boolean } }) =>
           commands.setMark(this.name, { color }),
 
       /**
@@ -73,7 +77,7 @@ export const Highlight = Mark.create<HighlightOptions>({
        */
       unsetHighlight:
         () =>
-        ({ commands }) =>
+        ({ commands }: { commands: { unsetMark: (name: string) => boolean } }) =>
           commands.unsetMark(this.name),
 
       /**
@@ -84,14 +88,14 @@ export const Highlight = Mark.create<HighlightOptions>({
        */
       toggleHighlight:
         () =>
-        ({ commands }) =>
+        ({ commands }: { commands: { toggleMark: (name: string) => boolean } }) =>
           commands.toggleMark(this.name),
     };
   },
 
   addShortcuts() {
     return {
-      'Mod-Shift-h': () => this.editor.commands.toggleHighlight(),
+      'Mod-Shift-h': () => this.editor?.commands.toggleHighlight() ?? false,
     };
   },
 });

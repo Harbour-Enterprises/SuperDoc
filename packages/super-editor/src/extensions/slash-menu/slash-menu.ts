@@ -1,4 +1,4 @@
-import { Plugin, PluginKey } from 'prosemirror-state';
+import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
 
@@ -32,7 +32,15 @@ import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
  * @property {string} [id] - Menu item ID (for 'select' action)
  */
 
-export const SlashMenuPluginKey = new PluginKey('slashMenu');
+interface SlashMenuState {
+  open: boolean;
+  selected: string | null;
+  anchorPos: number | null;
+  menuPosition: { left: string; top: string } | null;
+  disabled: boolean;
+}
+
+export const SlashMenuPluginKey = new PluginKey<SlashMenuState>('slashMenu');
 
 // Menu positioning constants (in pixels)
 const MENU_OFFSET_X = 100; // Horizontal offset for slash menu
@@ -62,13 +70,16 @@ export const SlashMenu = Extension.create({
 
   addPmPlugins() {
     const editor = this.editor;
+    if (!editor) {
+      return [];
+    }
     if (editor.options?.isHeadless) {
       return [];
     }
 
     // Cooldown flag and timeout for slash menu
     let slashCooldown = false;
-    let slashCooldownTimeout = null;
+    let slashCooldownTimeout: ReturnType<typeof setTimeout> | null = null;
 
     /**
      * Check if the context menu is disabled via editor options
@@ -81,7 +92,7 @@ export const SlashMenu = Extension.create({
      * @param {Partial<SlashMenuState>} [value={}] - Partial state to merge with defaults
      * @returns {SlashMenuState} Complete state object with all properties
      */
-    const ensureStateShape = (value = {}) => ({
+    const ensureStateShape = (value: Partial<SlashMenuState> = {}): SlashMenuState => ({
       open: false,
       selected: null,
       anchorPos: null,
@@ -90,7 +101,7 @@ export const SlashMenu = Extension.create({
       ...value,
     });
 
-    const slashMenuPlugin = new Plugin({
+    const slashMenuPlugin = new Plugin<SlashMenuState>({
       key: SlashMenuPluginKey,
 
       state: {
@@ -213,7 +224,7 @@ export const SlashMenu = Extension.create({
         const updatePosition = () => {
           if (isMenuDisabled()) return;
           const state = SlashMenuPluginKey.getState(editorView.state);
-          if (state.open) {
+          if (state?.open) {
             editorView.dispatch(
               editorView.state.tr.setMeta(SlashMenuPluginKey, {
                 type: 'updatePosition',
@@ -252,7 +263,8 @@ export const SlashMenu = Extension.create({
           if (isMenuDisabled()) {
             return false;
           }
-          const pluginState = this.getState(view.state);
+          const pluginState = SlashMenuPluginKey.getState(view.state);
+          if (!pluginState) return false;
 
           // If cooldown is active and slash is pressed, allow default behavior
           if (event.key === '/' && slashCooldown) {
@@ -260,10 +272,9 @@ export const SlashMenu = Extension.create({
           }
 
           if (event.key === '/' && !pluginState.open) {
-            const { selection } = view.state;
-            const $cursor =
-              'empty' in selection && selection.empty ? (selection as Record<string, unknown>).$cursor : null;
-            if (!$cursor) return false;
+            const selection = view.state.selection;
+            if (!(selection instanceof TextSelection) || !selection.empty || !selection.$cursor) return false;
+            const { $cursor } = selection;
 
             const isParagraph = $cursor.parent.type.name === 'paragraph';
             if (!isParagraph) return false;
@@ -305,8 +316,7 @@ export const SlashMenu = Extension.create({
 
             // Restore cursor position and focus
             if (anchorPos !== null) {
-              const Selection = view.state.selection.constructor as Record<string, unknown>;
-              const tr = view.state.tr.setSelection(Selection.near(view.state.doc.resolve(anchorPos)));
+              const tr = view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(anchorPos)));
               view.dispatch(tr);
               view.focus();
             }

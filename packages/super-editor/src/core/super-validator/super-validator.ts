@@ -51,7 +51,14 @@ export class SuperValidator {
     const requiredNodes = new Set<string>();
     const requiredMarks = new Set<string>();
 
-    const initializeValidatorSet = (validatorFactories: Record<string, unknown>): Record<string, unknown> => {
+    type ValidatorFactory = (params: {
+      editor: Editor;
+      logger: ValidatorLogger;
+    }) => ValidatorFunction | (() => ValidationResult);
+
+    const initializeValidatorSet = (
+      validatorFactories: Record<string, ValidatorFactory>,
+    ): Record<string, ValidatorFunction | (() => ValidationResult)> => {
       return Object.fromEntries(
         Object.entries(validatorFactories).map(([key, factory]) => {
           const validatorLogger = this.logger.withPrefix(key);
@@ -65,12 +72,12 @@ export class SuperValidator {
       );
     };
 
-    const stateValidators = initializeValidatorSet(StateValidators);
-    const xmlValidators = initializeValidatorSet(XmlValidators);
+    const stateValidators = initializeValidatorSet(StateValidators as unknown as Record<string, ValidatorFactory>);
+    const xmlValidators = initializeValidatorSet(XmlValidators as unknown as Record<string, ValidatorFactory>);
 
     return {
-      stateValidators: stateValidators,
-      xmlValidators: xmlValidators,
+      stateValidators: stateValidators as Record<string, ValidatorFunction>,
+      xmlValidators: xmlValidators as Record<string, () => ValidationResult>,
       nodeTypes: requiredNodes,
       markTypes: requiredMarks,
     };
@@ -87,14 +94,15 @@ export class SuperValidator {
     const validatorWithReqs = validator as ValidatorFunction;
     if (!validatorWithReqs.requiredElements) return;
 
-    if (typeof validatorWithReqs.requiredElements === 'object') {
-      if (validatorWithReqs.requiredElements.nodes) {
-        validatorWithReqs.requiredElements.nodes.forEach((nodeType: string) => {
+    const requirements = validatorWithReqs.requiredElements;
+    if (typeof requirements === 'object' && requirements !== null) {
+      if (requirements.nodes && Array.isArray(requirements.nodes)) {
+        requirements.nodes.forEach((nodeType) => {
           requiredNodes.add(nodeType);
         });
       }
-      if (validatorWithReqs.requiredElements.marks) {
-        validatorWithReqs.requiredElements.marks.forEach((markType: string) => {
+      if (requirements.marks && Array.isArray(requirements.marks)) {
+        requirements.marks.forEach((markType) => {
           requiredMarks.add(markType);
         });
       }
@@ -110,26 +118,36 @@ export class SuperValidator {
     const analysis: DocumentAnalysis = {};
 
     // Initialize arrays for required element types
-    this.#requiredNodeTypes.forEach((type) => (analysis[type] = []));
-    this.#requiredMarkTypes.forEach((type) => (analysis[type] = []));
+    this.#requiredNodeTypes.forEach((type) => {
+      analysis[type] = [];
+    });
+    this.#requiredMarkTypes.forEach((type) => {
+      analysis[type] = [];
+    });
 
     const collectElements = (node: Node, pos: number): void => {
       // Collect nodes by type
       if (this.#requiredNodeTypes.has(node.type.name)) {
-        analysis[node.type.name].push({ node, pos });
+        const arr = analysis[node.type.name];
+        if (arr) {
+          arr.push({ node, pos });
+        }
       }
 
       // Collect marks from text nodes
       if (node.isText && node.marks) {
         node.marks.forEach((mark: Mark) => {
           if (this.#requiredMarkTypes.has(mark.type.name)) {
-            analysis[mark.type.name].push({
-              mark,
-              node,
-              pos,
-              from: pos,
-              to: pos + node.nodeSize,
-            });
+            const arr = analysis[mark.type.name];
+            if (arr) {
+              arr.push({
+                mark,
+                node,
+                pos,
+                from: pos,
+                to: pos + node.nodeSize,
+              });
+            }
           }
         });
       }

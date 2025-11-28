@@ -1,7 +1,7 @@
 import { DOMParser } from 'prosemirror-model';
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
 
 type ContentType = 'html' | 'markdown' | 'text' | 'schema';

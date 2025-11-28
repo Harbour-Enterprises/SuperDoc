@@ -8,18 +8,33 @@ import type { EditorExtension } from '@core/index.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 
+interface SectionDataEntry {
+  data?: unknown;
+  height?: number;
+  sectionEditor?: SuperEditor;
+  sectionContainer?: HTMLDivElement;
+}
+
+interface SectionData {
+  headers: Record<string, SectionDataEntry>;
+  footers: Record<string, SectionDataEntry>;
+}
+
+interface HeaderFooterEditorItem {
+  id?: string;
+  editor: SuperEditor;
+}
+
 /**
- * Initialize the pagination data for the editor
- * This will fetch the header and footer data from the converter and calculate their height
- * @param {SuperEditor} editor The editor instance
- * @returns {Object} The data for the headers and footers
+ * Initialize the pagination data for the editor.
+ * This will fetch the header and footer data from the converter and calculate their height.
  */
-export const initPaginationData = async (editor) => {
+export const initPaginationData = async (editor: SuperEditor): Promise<SectionData | undefined> => {
   if (isHeadless(editor) || !editor.converter) return;
 
-  const sectionData = { headers: {}, footers: {} };
-  const headerIds = editor.converter.headerIds.ids;
-  const footerIds = editor.converter.footerIds.ids;
+  const sectionData: SectionData = { headers: {}, footers: {} };
+  const headerIds = editor.converter.headerIds.ids as Record<string, string>;
+  const footerIds = editor.converter.footerIds.ids as Record<string, string>;
 
   for (const key in headerIds) {
     const sectionId = headerIds[key];
@@ -40,7 +55,7 @@ export const initPaginationData = async (editor) => {
     if (!sectionId) continue;
 
     const dataForThisSection = editor.converter.footers[sectionId];
-    if (!sectionData.headers[sectionId]) sectionData.footers[sectionId] = {};
+    if (!sectionData.footers[sectionId]) sectionData.footers[sectionId] = {};
     sectionData.footers[sectionId].data = dataForThisSection;
     // Wait for the height to be resolved
     const { height, sectionEditor, sectionContainer } = await getSectionHeight(editor, dataForThisSection);
@@ -59,10 +74,7 @@ interface SectionHeightResult {
 }
 
 /**
- * Get the height of a section
- * @param {SuperEditor} editor The editor instance
- * @param {Object} data The data for the section
- * @returns {Promise<Object>} An object containing the height of the section, the section editor and the section container
+ * Get the height of a section.
  */
 const getSectionHeight = async (editor: SuperEditor, data: unknown): Promise<SectionHeightResult> => {
   if (!data) return {} as SectionHeightResult;
@@ -140,6 +152,12 @@ export const createHeaderFooterEditor = ({
   });
   if (appendToBody) document.body.appendChild(editorContainer);
 
+  interface ImageExtensionStorage {
+    media?: Record<string, unknown>;
+  }
+
+  const storage = editor.storage;
+  const imageStorage = storage.image as ImageExtensionStorage | undefined;
   const headerFooterEditor = new SuperEditor({
     role: editor.options.role,
     loadFromSchema: true,
@@ -148,8 +166,8 @@ export const createHeaderFooterEditor = ({
     content: data,
     extensions: getStarterExtensions() as EditorExtension[],
     documentId: sectionId || 'sectionId',
-    media: (editor.storage as Record<string, unknown>).image?.media,
-    mediaFiles: (editor.storage as Record<string, unknown>).image?.media,
+    media: imageStorage?.media,
+    mediaFiles: imageStorage?.media,
     fonts: editor.options.fonts,
     isHeaderOrFooter: true, // This flag prevents pagination from being enabled
     isHeadless: editor.options.isHeadless,
@@ -159,8 +177,8 @@ export const createHeaderFooterEditor = ({
     // parentEditor: editor,
     editable: false,
     documentMode: 'viewing',
-    onCreate: (evt) => setEditorToolbar(evt, editor),
-    onBlur: (evt) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
+    onCreate: (evt: { editor: SuperEditor }) => setEditorToolbar(evt, editor),
+    onBlur: (evt: { editor: SuperEditor }) => onHeaderFooterDataUpdate(evt, editor, sectionId, type),
   } as Record<string, unknown>);
 
   // Store parent editor reference separately to avoid circular reference in options
@@ -189,7 +207,7 @@ export const createHeaderFooterEditor = ({
   return headerFooterEditor;
 };
 
-export const broadcastEditorEvents = (editor, sectionEditor) => {
+export const broadcastEditorEvents = (editor: SuperEditor, sectionEditor: SuperEditor): void => {
   const eventNames = [
     'fieldAnnotationDropped',
     'fieldAnnotationPaste',
@@ -197,27 +215,37 @@ export const broadcastEditorEvents = (editor, sectionEditor) => {
     'fieldAnnotationClicked',
     'fieldAnnotationDoubleClicked',
     'fieldAnnotationDeleted',
-  ];
+  ] as const;
   eventNames.forEach((eventName) => {
-    sectionEditor.on(eventName, (...args) => {
+    sectionEditor.on(eventName, (...args: unknown[]) => {
       editor.emit(eventName, ...args);
       console.debug('broadcastEditorEvents', { eventName, args });
     });
   });
 };
 
-export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEditMode, documentMode }) => {
+export const toggleHeaderFooterEditMode = ({
+  editor,
+  focusedSectionEditor,
+  isEditMode,
+  documentMode,
+}: {
+  editor: SuperEditor;
+  focusedSectionEditor?: SuperEditor | null;
+  isEditMode: boolean;
+  documentMode: string;
+}): void => {
   if (isHeadless(editor)) return;
 
-  editor.converter.headerEditors.forEach((item) => {
+  editor.converter.headerEditors.forEach((item: HeaderFooterEditorItem) => {
     item.editor.setEditable(isEditMode, false);
-    item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
+    item.editor.view.dom.setAttribute('aria-readonly', String(!isEditMode));
     item.editor.view.dom.setAttribute('documentmode', documentMode);
   });
 
-  editor.converter.footerEditors.forEach((item) => {
+  editor.converter.footerEditors.forEach((item: HeaderFooterEditorItem) => {
     item.editor.setEditable(isEditMode, false);
-    item.editor.view.dom.setAttribute('aria-readonly', !isEditMode);
+    item.editor.view.dom.setAttribute('aria-readonly', String(!isEditMode));
     item.editor.view.dom.setAttribute('documentmode', documentMode);
   });
 
@@ -225,7 +253,7 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
     const pm = editor.view?.dom || editor.options.element?.querySelector?.('.ProseMirror');
     if (pm) {
       pm.classList.add('header-footer-edit');
-      pm.setAttribute('aria-readonly', true);
+      pm.setAttribute('aria-readonly', 'true');
     }
   }
 
@@ -235,24 +263,26 @@ export const toggleHeaderFooterEditMode = ({ editor, focusedSectionEditor, isEdi
 };
 
 export const onHeaderFooterDataUpdate = async (
-  { editor, transaction }: { editor: SuperEditor; transaction?: unknown },
+  { editor, transaction }: { editor: SuperEditor; transaction?: { selection?: unknown } },
   mainEditor: SuperEditor,
   sectionId?: string,
   type?: string,
-) => {
+): Promise<void> => {
   if (!type || !sectionId) return;
 
   const updatedData = editor.getUpdatedJson();
-  mainEditor.converter[`${type}Editors`].forEach((item: Record<string, unknown>) => {
+  const editorsList = mainEditor.converter[`${type}Editors`] as HeaderFooterEditorItem[];
+  editorsList.forEach((item: HeaderFooterEditorItem) => {
+    const sectionEditor = item.editor;
     if (item.id === sectionId) {
-      item.editor.setOptions({
+      sectionEditor.setOptions({
         media: editor.options.media,
         mediaFiles: editor.options.mediaFiles,
       });
-      item.editor.replaceContent(updatedData);
+      sectionEditor.replaceContent(updatedData);
     }
-    item.editor.setOptions({
-      lastSelection: transaction?.selection,
+    sectionEditor.setOptions({
+      lastSelection: transaction?.selection ?? null,
     });
   });
   mainEditor.converter[`${type}s`][sectionId] = updatedData;
@@ -261,6 +291,8 @@ export const onHeaderFooterDataUpdate = async (
   await updateYdocDocxData(mainEditor, undefined);
 };
 
-const setEditorToolbar = ({ editor }: { editor: SuperEditor }, mainEditor: SuperEditor) => {
-  editor.setToolbar(mainEditor.toolbar);
+const setEditorToolbar = ({ editor }: { editor: SuperEditor }, mainEditor: SuperEditor): void => {
+  if (mainEditor.toolbar) {
+    editor.setToolbar(mainEditor.toolbar);
+  }
 };

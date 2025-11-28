@@ -1,5 +1,7 @@
 import { findChildren } from '@core/helpers/findChildren';
 import { getGroup } from './tagUtils';
+import type { EditorState } from 'prosemirror-state';
+import type { StructuredContentMatch } from './types';
 
 /**
  * Get structured content nodes by group identifier.
@@ -15,7 +17,10 @@ import { getGroup } from './tagUtils';
  * // Find fields with multiple groups
  * const fields = editor.helpers.getStructuredContentByGroup(['customer-info', 'terms'], editor.state)
  */
-export function getStructuredContentByGroup(groupOrGroups, state) {
+export function getStructuredContentByGroup(
+  groupOrGroups: string | string[],
+  state: EditorState,
+): StructuredContentMatch[] {
   const searchGroups = Array.isArray(groupOrGroups) ? groupOrGroups : [groupOrGroups];
 
   const result = findChildren(state.doc, (node) => {

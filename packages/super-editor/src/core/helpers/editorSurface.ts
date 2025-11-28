@@ -1,7 +1,7 @@
 /**
  * Resolve the DOM element representing the visible editing surface for either flow or presentation editors.
  */
-import type { Editor } from '../Editor';
+import type { Editor } from '../Editor.js';
 
 export function getEditorSurfaceElement(editor: Editor | null | undefined): HTMLElement | null {
   if (!editor) return null;

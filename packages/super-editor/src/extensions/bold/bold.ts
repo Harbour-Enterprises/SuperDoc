@@ -60,7 +60,7 @@ export const Bold = Mark.create<BoldOptions>({
 
   renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, unknown> }): DOMOutputSpec {
     const options = this.options as BoldOptions;
-    const merged = Attribute.mergeAttributes(options.htmlAttributes, htmlAttributes);
+    const merged = Attribute.mergeAttributes(options.htmlAttributes, htmlAttributes as Record<string, AttributeValue>);
     const { value, ...rest } = merged || {};
     if (value === '0') {
       return ['span', rest, 0] as const;
