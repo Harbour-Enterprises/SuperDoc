@@ -2,7 +2,6 @@ import type { FlowBlock, HeaderFooterLayout, Measure } from '@superdoc/contracts
 import { layoutHeaderFooter, type HeaderFooterConstraints } from '../../layout-engine/src/index';
 import { MeasureCache } from './cache';
 import { resolveHeaderFooterTokens, cloneHeaderFooterBlocks } from './resolveHeaderFooterTokens';
-import type { DisplayPageInfo } from '../../layout-engine/src/pageNumbering';
 import { FeatureFlags } from './featureFlags';
 import { HeaderFooterCacheLogger } from './instrumentation';
 

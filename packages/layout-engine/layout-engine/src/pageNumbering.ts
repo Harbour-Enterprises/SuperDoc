@@ -250,7 +250,7 @@ export function computeDisplayPageNumber(pages: Page[], sections: SectionMetadat
   // Track running page counter across sections
   let runningCounter = 1;
   let currentSectionIndex = -1;
-  let pagesInCurrentSection = 0;
+  let _pagesInCurrentSection = 0;
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
@@ -272,7 +272,7 @@ export function computeDisplayPageNumber(pages: Page[], sections: SectionMetadat
       // else: continuous section - keep runningCounter from previous section
 
       currentSectionIndex = pageSectionIndex;
-      pagesInCurrentSection = 0;
+      _pagesInCurrentSection = 0;
     }
 
     // Get section metadata and numbering format
@@ -294,7 +294,7 @@ export function computeDisplayPageNumber(pages: Page[], sections: SectionMetadat
 
     // Increment counters
     runningCounter++;
-    pagesInCurrentSection++;
+    _pagesInCurrentSection++;
   }
 
   return result;
