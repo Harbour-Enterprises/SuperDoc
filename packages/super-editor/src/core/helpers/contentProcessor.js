@@ -2,6 +2,7 @@
 import { DOMParser } from 'prosemirror-model';
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
+import { wrapTextsInRuns } from '../inputRules/docx-paste/docx-paste.js';
 
 /**
  * Unified content processor that handles all content types
@@ -30,10 +31,12 @@ export function processContent({ content, type, editor }) {
       para.textContent = content;
       wrapper.appendChild(para);
       doc = DOMParser.fromSchema(editor.schema).parse(wrapper);
+      doc = wrapTextsInRuns(doc);
       break;
 
     case 'schema':
       doc = editor.schema.nodeFromJSON(content);
+      doc = wrapTextsInRuns(doc);
       break;
 
     default:

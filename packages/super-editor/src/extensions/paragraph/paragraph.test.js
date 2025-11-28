@@ -54,7 +54,6 @@ describe('Paragraph Node', () => {
                 type: 'text',
               },
             ],
-            attributes: null,
           },
         ],
       },
