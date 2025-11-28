@@ -3040,11 +3040,12 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      // Find page slot: exact match first, then fall back to bucket representative
+      // Find the best page slot for this page number (exact match, then bucket representative)
       const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
       if (!slotPage) {
         return null;
       }
+      const fragments = slotPage.fragments ?? [];
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
@@ -3057,7 +3058,7 @@ export class PresentationEditor extends EventEmitter {
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = headerId ?? fallbackId ?? undefined;
       return {
-        fragments: slotPage.fragments,
+        fragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,

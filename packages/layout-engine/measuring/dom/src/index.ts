@@ -48,6 +48,7 @@ import type {
   Run,
   TextRun,
   TabRun,
+  ImageRun,
   TabStop,
   DrawingBlock,
   DrawingMeasure,
@@ -281,6 +282,13 @@ function isTabRun(run: Run): run is TabRun {
 }
 
 /**
+ * Type guard to check if a run is an image run
+ */
+function isImageRun(run: Run): run is ImageRun {
+  return run.kind === 'image';
+}
+
+/**
  * Calculate tab width and update the tab run with resolved width
  *
  * @param tabRun - The tab run to resolve
@@ -502,6 +510,91 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const to = Math.max(originX, target);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
+      }
+
+      continue;
+    }
+
+    // Handle image runs
+    if (isImageRun(run)) {
+      // Calculate image width including spacing
+      const leftSpace = run.distLeft ?? 0;
+      const rightSpace = run.distRight ?? 0;
+      const imageWidth = run.width + leftSpace + rightSpace;
+
+      // Calculate image height including spacing (for line height)
+      const topSpace = run.distTop ?? 0;
+      const bottomSpace = run.distBottom ?? 0;
+      const imageHeight = run.height + topSpace + bottomSpace;
+
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1, // Images are treated as single atomic units
+          width: imageWidth,
+          maxFontSize: imageHeight, // Use image height for line height calculation
+          maxWidth: availableWidth,
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+            },
+          ],
+        };
+        availableWidth = contentWidth;
+        continue;
+      }
+
+      // Check if image fits on current line
+      if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
+        // Image doesn't fit - finish current line and start new line with image
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        tabStopCursor = 0;
+        pendingTabAlignment = null;
+
+        // Start new line with the image
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: imageWidth,
+          maxFontSize: imageHeight,
+          maxWidth: contentWidth,
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+            },
+          ],
+        };
+        availableWidth = contentWidth;
+      } else {
+        // Image fits on current line - append it
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        currentLine.width = roundValue(currentLine.width + imageWidth);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, imageHeight);
+        if (!currentLine.segments) currentLine.segments = [];
+        currentLine.segments.push({
+          runIndex,
+          fromChar: 0,
+          toChar: 1,
+          width: imageWidth,
+        });
       }
 
       continue;
@@ -801,7 +894,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   }
 
   if (!currentLine && lines.length === 0) {
-    const fallbackFontSize = (block.runs[0]?.kind !== 'tab' ? block.runs[0]?.fontSize : undefined) ?? 12;
+    const fallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
     const metrics = calculateTypographyMetrics(fallbackFontSize, spacing);
     const fallbackLine: Line = {
       fromRun: 0,
@@ -1049,7 +1142,19 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
   const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
 
   const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
-  const maxHeight = constraints.maxHeight && constraints.maxHeight > 0 ? constraints.maxHeight : Infinity;
+
+  // For anchored images with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This matches MS Word behavior where images in headers/footers
+  // with negative offsets are rendered at their full size regardless of region constraints.
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
 
   const widthScale = maxWidth / intrinsic.width;
   const heightScale = maxHeight / intrinsic.height;
@@ -1284,7 +1389,7 @@ async function measureListBlock(block: ListBlock, constraints: MeasureConstraint
 
 const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
   return (
-    paragraph.runs.find((run): run is TextRun => run.kind !== 'tab' && Boolean(run.fontFamily && run.fontSize)) || {
+    paragraph.runs.find((run): run is TextRun => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize)) || {
       text: '',
       fontFamily: 'Arial',
       fontSize: 16,
@@ -1293,7 +1398,7 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
 };
 
 const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
-  const letterSpacing = run.kind !== 'tab' ? run.letterSpacing || 0 : 0;
+  const letterSpacing = run.kind === 'text' ? run.letterSpacing || 0 : 0;
   const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
   return roundValue(width);
 };

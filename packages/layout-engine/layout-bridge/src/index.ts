@@ -556,7 +556,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.text ?? '';
+    const text = run.kind === 'image' ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -676,6 +676,12 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
     if (!run) continue;
 
     if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // FIXED: ImageRun handling - images are atomic units, no slicing needed
+    if (run.kind === 'image') {
       result.push(run);
       continue;
     }

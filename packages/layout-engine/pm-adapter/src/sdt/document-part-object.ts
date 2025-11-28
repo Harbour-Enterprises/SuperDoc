@@ -1,7 +1,7 @@
 /**
  * Document Part Object Handler
  *
- * Processes documentPartObject nodes (e.g., TOC galleries, page number galleries).
+ * Processes documentPartObject nodes (e.g., TOC galleries, page numbers).
  * Applies document part metadata and processes children appropriately.
  */
 
@@ -10,16 +10,9 @@ import { getDocPartGallery, getDocPartObjectId, getNodeInstruction, resolveNodeS
 import { processTocChildren } from './toc.js';
 
 /**
- * Check if a gallery is a page number gallery.
- */
-function isPageNumberGallery(gallery: string | undefined): boolean {
-  if (!gallery) return false;
-  return gallery.startsWith('Page Numbers');
-}
-
-/**
- * Handle document part object nodes (e.g., TOC galleries, page number galleries).
- * Processes children for Table of Contents and Page Number galleries.
+ * Handle document part object nodes (e.g., TOC galleries, page numbers).
+ * Processes TOC children for Table of Contents galleries.
+ * For other gallery types (page numbers, etc.), processes child paragraphs normally.
  *
  * @param node - Document part object node to process
  * @param context - Shared handler context
@@ -40,7 +33,6 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
     converters,
     listCounterContext,
     trackedChangesConfig,
-    nodeHandlers,
   } = context;
   const docPartGallery = getDocPartGallery(node);
   const docPartObjectId = getDocPartObjectId(node);
@@ -64,11 +56,10 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
       { blocks, recordBlockKind },
       paragraphToFlowBlocks,
     );
-  } else if (isPageNumberGallery(docPartGallery) && paragraphToFlowBlocks) {
-    // Process page number gallery children (paragraphs containing page-number tokens)
+  } else if (paragraphToFlowBlocks) {
+    // For non-ToC gallery types (page numbers, etc.), process child paragraphs normally
     for (const child of node.content) {
       if (child.type === 'paragraph') {
-        // Call paragraphToFlowBlocks with individual arguments (same as TOC processing)
         const childBlocks = paragraphToFlowBlocks(
           child,
           nextBlockId,
@@ -83,13 +74,7 @@ export function handleDocumentPartObjectNode(node: PMNode, context: NodeHandlerC
         );
         for (const block of childBlocks) {
           blocks.push(block);
-          recordBlockKind(block.id, block.kind);
-        }
-      } else if (nodeHandlers && child.type in nodeHandlers) {
-        // Recursively handle other node types
-        const handler = nodeHandlers[child.type as keyof typeof nodeHandlers];
-        if (handler) {
-          handler(child, context);
+          recordBlockKind(block.kind);
         }
       }
     }

@@ -53,8 +53,8 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
  * @returns CSS font string (e.g., "italic bold 16px Arial")
  */
 export function getRunFontString(run: Run): string {
-  // TabRun doesn't have styling properties, use defaults
-  if (run.kind === 'tab') {
+  // TabRun and ImageRun don't have styling properties, use defaults
+  if (run.kind === 'tab' || run.kind === 'image') {
     return 'normal normal 16px Arial';
   }
 
@@ -82,6 +82,12 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
     if (!run) continue;
 
     if (isTabRun(run)) {
+      result.push(run);
+      continue;
+    }
+
+    // FIXED: ImageRun handling - images are atomic units, no slicing needed
+    if (run.kind === 'image') {
       result.push(run);
       continue;
     }
@@ -128,7 +134,11 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
     const runs = sliceRunsForLine(block, line);
     const charsInLine = Math.max(
       1,
-      runs.reduce((sum, run) => sum + (isTabRun(run) ? TAB_CHAR_LENGTH : (run.text ?? '').length), 0),
+      runs.reduce((sum, run) => {
+        if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
+        if (run.kind === 'image') return sum;
+        return sum + (run.text ?? '').length;
+      }, 0),
     );
     return (charOffset / charsInLine) * line.width;
   }
@@ -150,7 +160,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       continue;
     }
 
-    const text = run.text ?? '';
+    const text = run.kind === 'image' ? '' : (run.text ?? '');
     const runLength = text.length;
 
     // If target character is within this run
@@ -201,7 +211,11 @@ export function findCharacterAtX(
     const runs = sliceRunsForLine(block, line);
     const charsInLine = Math.max(
       1,
-      runs.reduce((sum, run) => sum + (isTabRun(run) ? TAB_CHAR_LENGTH : (run.text ?? '').length), 0),
+      runs.reduce((sum, run) => {
+        if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
+        if (run.kind === 'image') return sum;
+        return sum + (run.text ?? '').length;
+      }, 0),
     );
     const ratio = Math.max(0, Math.min(1, x / line.width));
     const charOffset = Math.round(ratio * charsInLine);
@@ -238,7 +252,7 @@ export function findCharacterAtX(
       continue;
     }
 
-    const text = run.text ?? '';
+    const text = run.kind === 'image' ? '' : (run.text ?? '');
     const runLength = text.length;
 
     if (runLength === 0) continue;
@@ -293,8 +307,8 @@ export function findCharacterAtX(
 }
 
 const computeLetterSpacingWidth = (run: Run, precedingChars: number, runLength: number): number => {
-  // TabRun doesn't have letterSpacing
-  if (run.kind === 'tab' || !run.letterSpacing) {
+  // Only text runs support letter spacing (older data may omit kind on text runs).
+  if (isTabRun(run) || run.kind === 'image' || !run.letterSpacing) {
     return 0;
   }
   const maxGaps = Math.max(runLength - 1, 0);

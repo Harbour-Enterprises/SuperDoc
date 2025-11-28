@@ -657,6 +657,140 @@ describe('Media Utilities', () => {
     });
   });
 
+  describe('hydrateImageBlocks - ImageRun hydration', () => {
+    it('hydrates ImageRuns inside paragraph blocks', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: [
+            { text: 'Before ' },
+            { kind: 'image', src: 'media/logo.png', width: 100, height: 100 },
+            { text: ' After' },
+          ],
+        },
+      ];
+      const mediaFiles = { 'media/logo.png': 'iVBORw0KGgoAAAANS' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const runs = (result[0] as (typeof blocks)[0] & { runs: (typeof blocks)[0]['runs'] }).runs;
+
+      expect(runs[0]).toEqual({ text: 'Before ' });
+      expect(runs[1]).toEqual({
+        kind: 'image',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANS',
+        width: 100,
+        height: 100,
+      });
+      expect(runs[2]).toEqual({ text: ' After' });
+    });
+
+    it('hydrates multiple ImageRuns in same paragraph', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: [
+            { kind: 'image', src: 'img1.png', width: 50, height: 50 },
+            { text: ' and ' },
+            { kind: 'image', src: 'img2.jpg', width: 60, height: 60 },
+          ],
+        },
+      ];
+      const mediaFiles = {
+        'img1.png': 'base64data1',
+        'img2.jpg': 'base64data2',
+      };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const runs = (result[0] as (typeof blocks)[0] & { runs: (typeof blocks)[0]['runs'] }).runs;
+
+      expect(runs[0]).toEqual({
+        kind: 'image',
+        src: 'data:image/png;base64,base64data1',
+        width: 50,
+        height: 50,
+      });
+      expect(runs[2]).toEqual({
+        kind: 'image',
+        src: 'data:image/jpg;base64,base64data2',
+        width: 60,
+        height: 60,
+      });
+    });
+
+    it('skips non-ImageRuns in paragraph', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: [{ text: 'Text run' }, { kind: 'tab', text: '\t', tabIndex: 0, leader: null }],
+        },
+      ];
+      const mediaFiles = { 'media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0]).toEqual(blocks[0]);
+    });
+
+    it('skips ImageRuns with data URLs', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,existing',
+              width: 100,
+              height: 100,
+            },
+          ],
+        },
+      ];
+      const mediaFiles = { 'media/image.png': 'newdata' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const runs = (result[0] as (typeof blocks)[0] & { runs: (typeof blocks)[0]['runs'] }).runs;
+      expect(runs[0]).toEqual({
+        kind: 'image',
+        src: 'data:image/png;base64,existing',
+        width: 100,
+        height: 100,
+      });
+    });
+
+    it('returns original runs array when no changes', () => {
+      const originalRuns = [{ text: 'No images' }];
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: originalRuns,
+        },
+      ];
+      const mediaFiles = { 'media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const runs = (result[0] as (typeof blocks)[0] & { runs: (typeof blocks)[0]['runs'] }).runs;
+      expect(runs).toBe(originalRuns); // Same reference (optimization)
+    });
+
+    it('handles paragraphs with empty runs array', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'paragraph',
+          id: '1',
+          runs: [],
+        },
+      ];
+      const mediaFiles = { 'media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result).toEqual(blocks);
+    });
+  });
+
   describe('hydrateImageBlocks', () => {
     it('returns blocks unchanged when no media files', () => {
       const blocks: FlowBlock[] = [{ kind: 'paragraph', id: '1', runs: [] }];

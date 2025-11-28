@@ -16,10 +16,16 @@ import type {
 import { computeFragmentPmRange, normalizeLines, sliceLines, extractBlockPmRange } from './layout-utils.js';
 import { computeAnchorX } from './floating-objects.js';
 
-const spacingDebugEnabled = true;
+const spacingDebugEnabled = false;
+const anchorDebugEnabled = false;
 
 const spacingDebugLog = (..._args: unknown[]): void => {
   if (!spacingDebugEnabled) return;
+};
+
+const anchorDebugLog = (...args: unknown[]): void => {
+  if (!anchorDebugEnabled) return;
+  console.log('[AnchorDebug]', ...args);
 };
 
 export type ParagraphLayoutContext = {
@@ -63,7 +69,27 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
       const state = ensurePage();
-      const anchorY = state.cursorY;
+      const baseAnchorY = state.cursorY;
+
+      // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
+      // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
+      const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
+      const vRelativeFrom = entry.block.anchor?.vRelativeFrom;
+      const paragraphAdjustment = vRelativeFrom === 'paragraph' ? firstLineHeight / 2 : 0;
+      const anchorY = baseAnchorY + paragraphAdjustment;
+
+      anchorDebugLog('Positioning anchored image:', {
+        blockId: entry.block.id,
+        baseAnchorY,
+        paragraphAdjustment,
+        anchorY,
+        offsetV: entry.block.anchor?.offsetV,
+        finalY: anchorY + (entry.block.anchor?.offsetV ?? 0),
+        measureHeight: entry.measure.height,
+        measureWidth: entry.measure.width,
+        pageNumber: state.page.number,
+        vRelativeFrom,
+      });
 
       floatManager.registerDrawing(entry.block, entry.measure, anchorY, state.columnIndex, state.page.number);
 
@@ -329,6 +355,16 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       width: effectiveColumnWidth,
       ...computeFragmentPmRange(block, lines, fromLine, slice.toLine),
     };
+
+    anchorDebugLog('Positioning paragraph fragment:', {
+      blockId: block.id,
+      fragmentY: state.cursorY,
+      fragmentHeight,
+      firstLineHeight: lines[fromLine]?.lineHeight,
+      firstLineAscent: lines[fromLine]?.ascent,
+      firstLineDescent: lines[fromLine]?.descent,
+      pageNumber: state.page.number,
+    });
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;
