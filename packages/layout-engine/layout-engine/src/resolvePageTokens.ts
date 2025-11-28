@@ -195,14 +195,14 @@ function cloneBlockWithResolvedTokens(
     if ('token' in run && run.token) {
       if (run.token === 'pageNumber') {
         // Clone the run and resolve the token
-        const { token, ...runWithoutToken } = run;
+        const { token: _token, ...runWithoutToken } = run;
         return {
           ...runWithoutToken,
           text: displayPageText,
         };
       } else if (run.token === 'totalPageCount') {
         // Clone the run and resolve the token
-        const { token, ...runWithoutToken } = run;
+        const { token: _token, ...runWithoutToken } = run;
         return {
           ...runWithoutToken,
           text: totalPagesStr,

@@ -809,7 +809,10 @@ export const computeParagraphAttrs = (
     }
 
     const dropCap = framePr['w:dropCap'] ?? framePr.dropCap;
-    if (dropCap != null) {
+    if (
+      dropCap != null &&
+      (typeof dropCap === 'string' || typeof dropCap === 'number' || typeof dropCap === 'boolean')
+    ) {
       paragraphAttrs.dropCap = dropCap;
     }
 

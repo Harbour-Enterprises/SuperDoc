@@ -11,7 +11,8 @@
  * 4. Body measure cache for affected block IDs after token resolution
  */
 
-import type { FlowBlock, SectionMetadata, HeaderFooterConstraints } from '@superdoc/contracts';
+import type { FlowBlock, SectionMetadata } from '@superdoc/contracts';
+import type { HeaderFooterConstraints } from '../../layout-engine/src/index';
 import type { MeasureCache } from './cache';
 import type { HeaderFooterLayoutCache } from './layoutHeaderFooter';
 import { HeaderFooterCacheLogger } from './instrumentation';
@@ -36,7 +37,10 @@ export function computeHeaderFooterContentHash(blocks: FlowBlock[]): string {
 
     if (block.kind === 'paragraph') {
       for (const run of block.runs) {
-        parts.push(run.text ?? '');
+        // Only TextRun and TabRun have text property; ImageRun does not
+        if (run.kind !== 'image') {
+          parts.push(run.text ?? '');
+        }
         if ('bold' in run && run.bold) parts.push('b');
         if ('italic' in run && run.italic) parts.push('i');
         if ('token' in run && run.token) parts.push(`token:${run.token}`);
@@ -62,7 +66,7 @@ export function computeSectionMetadataHash(sections: SectionMetadata[]): string 
   const parts: string[] = [];
 
   for (const section of sections) {
-    parts.push(section.id);
+    parts.push(`section:${section.sectionIndex}`);
 
     // Include numbering properties that affect display
     if (section.numbering) {
@@ -70,9 +74,20 @@ export function computeSectionMetadataHash(sections: SectionMetadata[]): string 
       parts.push(`num:${num.format ?? 'decimal'}:${num.start ?? 1}`);
     }
 
-    // Include section type (affects page breaks and variants)
-    if (section.type) {
-      parts.push(`type:${section.type}`);
+    // Include header/footer refs that affect which variants are used
+    if (section.headerRefs) {
+      const refs = section.headerRefs;
+      if (refs.default) parts.push(`hdr-def:${refs.default}`);
+      if (refs.first) parts.push(`hdr-first:${refs.first}`);
+      if (refs.even) parts.push(`hdr-even:${refs.even}`);
+      if (refs.odd) parts.push(`hdr-odd:${refs.odd}`);
+    }
+    if (section.footerRefs) {
+      const refs = section.footerRefs;
+      if (refs.default) parts.push(`ftr-def:${refs.default}`);
+      if (refs.first) parts.push(`ftr-first:${refs.first}`);
+      if (refs.even) parts.push(`ftr-even:${refs.even}`);
+      if (refs.odd) parts.push(`ftr-odd:${refs.odd}`);
     }
   }
 
