@@ -825,7 +825,7 @@ export function decodeRPrFromMarks(marks) {
   }
 
   marks.forEach((mark) => {
-    switch (mark.type) {
+    switch (mark.type.name ?? mark.type) {
       case 'strike':
       case 'italic':
       case 'bold':
