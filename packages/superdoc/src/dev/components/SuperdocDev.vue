@@ -13,7 +13,7 @@ import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/to
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
-import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
+import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter';
 
 // Or set worker globally outside the component.
 // pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
