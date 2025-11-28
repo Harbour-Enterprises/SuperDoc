@@ -1,5 +1,4 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
-import { TextSelection } from 'prosemirror-state';
 import { expect } from 'vitest';
 import { getDocumentRelationshipElements } from '@core/super-converter/docx-helpers/document-rels.js';
 import {
@@ -30,7 +29,7 @@ describe('Relationships tests', () => {
     // Apply the link
     editor.commands.setLink({ href: 'https://www.superdoc.dev' });
 
-    const linkMark = editor.state.doc.firstChild.firstChild.marks[0];
+    const linkMark = editor.state.doc.firstChild.firstChild.firstChild.marks[0];
 
     expect(linkMark.type.name).toBe('link');
     expect(linkMark.attrs.rId).toBeTruthy();
