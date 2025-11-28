@@ -105,7 +105,7 @@ describe('StructuredContentTableCommands', () => {
     const newLastRow = updatedTable.lastChild;
     const firstCell = newLastRow.firstChild;
     const blockNode = firstCell.firstChild;
-    const textNode = blockNode.firstChild;
+    const textNode = blockNode.firstChild.firstChild;
 
     expect(blockNode.type).toBe(templateBlockType);
     if (templateBlockAttrs) {
