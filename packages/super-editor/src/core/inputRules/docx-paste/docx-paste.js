@@ -146,7 +146,8 @@ export const handleDocxPaste = (html, editor, view) => {
   });
 
   transformWordLists(tempDiv, editor);
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  let doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  doc = wrapTextsInRuns(doc);
 
   tempDiv.remove();
 
