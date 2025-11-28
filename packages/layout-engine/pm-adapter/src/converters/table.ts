@@ -8,6 +8,8 @@ import type {
   BoxSpacing,
   FlowBlock,
   ParagraphBlock,
+  ImageBlock,
+  DrawingBlock,
   TableCell,
   TableCellAttrs,
   TableBorders,
@@ -89,7 +91,8 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   }
 
   // Convert all paragraphs in the cell to blocks
-  const blocks: FlowBlock[] = [];
+  // Note: Table cells can only contain paragraphs, images, and drawings (not nested tables)
+  const blocks: (ParagraphBlock | ImageBlock | DrawingBlock)[] = [];
 
   for (const childNode of cellNode.content) {
     if (childNode.type === 'paragraph') {

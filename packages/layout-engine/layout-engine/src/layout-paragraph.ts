@@ -8,6 +8,7 @@ import type {
   ImageBlock,
   ImageMeasure,
   ImageFragment,
+  ImageFragmentMetadata,
   DrawingBlock,
   DrawingMeasure,
   DrawingFragment,
@@ -55,6 +56,15 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const { block, measure, columnWidth, ensurePage, advanceColumn, columnX, floatManager } = ctx;
   const remeasureParagraph = ctx.remeasureParagraph;
 
+  const frame = (block.attrs as { frame?: Record<string, unknown> } | undefined)?.frame as
+    | {
+        wrap?: string;
+        x?: number;
+        y?: number;
+        xAlign?: 'left' | 'right' | 'center';
+      }
+    | undefined;
+
   if (anchors?.anchoredDrawings?.length) {
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
@@ -96,6 +106,34 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
       const pmRange = extractBlockPmRange(entry.block);
       if (entry.block.kind === 'image' && entry.measure.kind === 'image') {
+        const pageContentHeight = Math.max(0, state.contentBottom - state.topMargin);
+        const relativeFrom = entry.block.anchor?.hRelativeFrom ?? 'column';
+        const marginLeft = anchors.pageMargins.left ?? 0;
+        const marginRight = anchors.pageMargins.right ?? 0;
+        let maxWidth: number;
+        if (relativeFrom === 'page') {
+          maxWidth = anchors.columns.count === 1 ? anchors.pageWidth - marginLeft - marginRight : anchors.pageWidth;
+        } else if (relativeFrom === 'margin') {
+          maxWidth = anchors.pageWidth - marginLeft - marginRight;
+        } else {
+          maxWidth = anchors.columns.width;
+        }
+
+        const aspectRatio =
+          entry.measure.width > 0 && entry.measure.height > 0 ? entry.measure.width / entry.measure.height : 1.0;
+        const minWidth = 20;
+        const minHeight = minWidth / aspectRatio;
+
+        const metadata: ImageFragmentMetadata = {
+          originalWidth: entry.measure.width,
+          originalHeight: entry.measure.height,
+          maxWidth,
+          maxHeight: pageContentHeight,
+          aspectRatio,
+          minWidth,
+          minHeight,
+        };
+
         const fragment: ImageFragment = {
           kind: 'image',
           blockId: entry.block.id,
@@ -105,6 +143,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           height: entry.measure.height,
           isAnchored: true,
           zIndex: entry.block.anchor?.behindDoc ? 0 : 1,
+          metadata,
         };
         if (pmRange.pmStart != null) fragment.pmStart = pmRange.pmStart;
         if (pmRange.pmEnd != null) fragment.pmEnd = pmRange.pmEnd;
@@ -149,6 +188,48 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       spacingBefore,
       spacingAfter,
     });
+  }
+
+  const isPositionedFrame = frame?.wrap === 'none';
+  if (isPositionedFrame) {
+    let state = ensurePage();
+    if (state.cursorY >= state.contentBottom) {
+      state = advanceColumn(state);
+    }
+
+    const maxLineWidth = lines.reduce((max, line) => Math.max(max, line.width ?? 0), 0);
+    const fragmentWidth = maxLineWidth || columnWidth;
+
+    let x = columnX(state.columnIndex);
+    if (frame.xAlign === 'right') {
+      x += columnWidth - fragmentWidth;
+    } else if (frame.xAlign === 'center') {
+      x += (columnWidth - fragmentWidth) / 2;
+    }
+    if (typeof frame.x === 'number' && Number.isFinite(frame.x)) {
+      x += frame.x;
+    }
+
+    const yOffset = typeof frame.y === 'number' && Number.isFinite(frame.y) ? frame.y : 0;
+    const fragment: ParaFragment = {
+      kind: 'para',
+      blockId: block.id,
+      fromLine: 0,
+      toLine: lines.length,
+      x,
+      y: state.cursorY + yOffset,
+      width: fragmentWidth,
+      ...computeFragmentPmRange(block, lines, 0, lines.length),
+    };
+
+    if (measure.marker) {
+      fragment.markerWidth = measure.marker.markerWidth;
+    }
+
+    state.page.fragments.push(fragment);
+    state.trailingSpacing = 0;
+    state.lastParagraphStyleId = styleId;
+    return;
   }
 
   let didRemeasureForFloats = false;

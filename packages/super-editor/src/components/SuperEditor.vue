@@ -11,6 +11,7 @@ import Ruler from './rulers/Ruler.vue';
 import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import TableResizeOverlay from './TableResizeOverlay.vue';
+import ImageResizeOverlay from './ImageResizeOverlay.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
@@ -96,6 +97,15 @@ const tableResizeState = reactive({
 });
 
 /**
+ * Image resize overlay state management
+ */
+const imageResizeState = reactive({
+  visible: false,
+  imageElement: null,
+  blockId: null,
+});
+
+/**
  * Update table resize overlay visibility based on mouse position
  * Shows overlay when hovering over tables with data-table-boundaries attribute
  */
@@ -130,6 +140,65 @@ const updateTableResizeOverlay = (event) => {
 const hideTableResizeOverlay = () => {
   tableResizeState.visible = false;
   tableResizeState.tableElement = null;
+};
+
+/**
+ * Update image resize overlay visibility based on mouse position
+ * Shows overlay when hovering over images with data-image-metadata attribute
+ */
+const updateImageResizeOverlay = (event) => {
+  if (!editorElem.value) return;
+
+  let target = event.target;
+  // Walk up DOM tree to find image fragment or overlay
+  while (target && target !== document.body) {
+    // Check if we're over the image resize overlay or any of its children (handles, guideline)
+    if (
+      target.classList?.contains('superdoc-image-resize-overlay') ||
+      target.closest?.('.superdoc-image-resize-overlay')
+    ) {
+      // Keep overlay visible, don't change imageElement
+      return;
+    }
+
+    if (target.classList?.contains('superdoc-image-fragment') && target.hasAttribute('data-image-metadata')) {
+      imageResizeState.visible = true;
+      imageResizeState.imageElement = target;
+      imageResizeState.blockId = target.getAttribute('data-sd-block-id');
+      return;
+    }
+    target = target.parentElement;
+  }
+
+  // No image or overlay found - hide overlay
+  imageResizeState.visible = false;
+  imageResizeState.imageElement = null;
+  imageResizeState.blockId = null;
+};
+
+/**
+ * Hide image resize overlay (on mouse leave)
+ */
+const hideImageResizeOverlay = () => {
+  imageResizeState.visible = false;
+  imageResizeState.imageElement = null;
+  imageResizeState.blockId = null;
+};
+
+/**
+ * Combined handler to update both table and image resize overlays
+ */
+const handleOverlayUpdates = (event) => {
+  updateTableResizeOverlay(event);
+  updateImageResizeOverlay(event);
+};
+
+/**
+ * Combined handler to hide both overlays
+ */
+const handleOverlayHide = () => {
+  hideTableResizeOverlay();
+  hideImageResizeOverlay();
 };
 
 let dataPollTimeout;
@@ -236,6 +305,26 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     const paginationTarget = editor.value?.editor ? { value: base } : editor;
     adjustPaginationBreaks(editorElem, paginationTarget);
   });
+
+  // Handle image resize overlay re-acquisition after layout updates
+  if (editor.value instanceof PresentationEditor) {
+    editor.value.on('layoutUpdated', () => {
+      if (imageResizeState.visible && imageResizeState.blockId) {
+        // Re-acquire element reference (may have been recreated after re-render)
+        const newElement = editorElem.value?.querySelector(
+          `.superdoc-image-fragment[data-sd-block-id="${imageResizeState.blockId}"]`,
+        );
+        if (newElement) {
+          imageResizeState.imageElement = newElement;
+        } else {
+          // Image virtualized away - hide overlay
+          imageResizeState.visible = false;
+          imageResizeState.imageElement = null;
+          imageResizeState.blockId = null;
+        }
+      }
+    });
+  }
 
   editor.value.on('collaborationReady', () => {
     setTimeout(() => {
@@ -361,8 +450,8 @@ onBeforeUnmount(() => {
       @keydown="handleSuperEditorKeydown"
       @click="handleSuperEditorClick"
       @mousedown="handleMarginClick"
-      @mousemove="updateTableResizeOverlay"
-      @mouseleave="hideTableResizeOverlay"
+      @mousemove="handleOverlayUpdates"
+      @mouseleave="handleOverlayHide"
     >
       <div ref="editorElem" class="editor-element super-editor__element" role="presentation"></div>
       <!-- Single SlashMenu component, no Teleport needed -->
@@ -379,6 +468,13 @@ onBeforeUnmount(() => {
         :editor="activeEditor"
         :visible="tableResizeState.visible"
         :tableElement="tableResizeState.tableElement"
+      />
+      <!-- Image resize overlay for interactive image resizing -->
+      <ImageResizeOverlay
+        v-if="editorReady && activeEditor"
+        :editor="activeEditor"
+        :visible="imageResizeState.visible"
+        :imageElement="imageResizeState.imageElement"
       />
     </div>
 

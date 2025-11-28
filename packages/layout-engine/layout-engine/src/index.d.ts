@@ -47,3 +47,5 @@ export declare function layoutHeaderFooter(
   constraints: HeaderFooterConstraints,
 ): HeaderFooterLayout;
 export { buildAnchorMap, resolvePageRefTokens, getTocBlocksForRemeasurement } from './resolvePageRefs.js';
+export { formatPageNumber, computeDisplayPageNumber } from './pageNumbering.js';
+export type { PageNumberFormat, DisplayPageInfo } from './pageNumbering.js';

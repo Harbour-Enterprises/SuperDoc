@@ -374,8 +374,11 @@ export const normalizeBorderSide = (value: unknown): ParagraphBorder | undefined
   }
 
   const border: ParagraphBorder = {};
-  // Note: style cannot be 'none' here - we already returned early above
-  if (style) border.style = style;
+  // Assign style if present. We already filtered out 'none' with early return above,
+  // so at runtime this is safe, but TypeScript can't prove it through control flow
+  if (style) {
+    border.style = style as Exclude<ParagraphBorder['style'], 'none'>;
+  }
   if (widthPx != null) border.width = Math.max(0, widthPx);
   if (color) border.color = color;
   if (space != null) border.space = Math.max(0, space);

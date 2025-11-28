@@ -2622,5 +2622,44 @@ describe('requirePageBoundary edge cases', () => {
       // right-aligned: x = 0 + (816 - 10) = 806
       expect(fragment.x).toBe(806);
     });
+
+    it('positions wrap=none frame paragraphs as overlays without consuming flow in headers', () => {
+      const frameBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'page-num',
+        runs: [{ text: '1', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: { frame: { wrap: 'none', xAlign: 'right', y: 10 } },
+      };
+      const headerText: FlowBlock = {
+        kind: 'paragraph',
+        id: 'header-text',
+        runs: [{ text: 'Normal header text', fontFamily: 'Arial', fontSize: 12 }],
+      };
+
+      const frameMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 1, width: 8, ascent: 9, descent: 3, lineHeight: 12 }],
+        totalHeight: 12,
+      };
+      const headerMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 17, width: 100, ascent: 10, descent: 3, lineHeight: 14 }],
+        totalHeight: 14,
+      };
+
+      const layout = layoutHeaderFooter([frameBlock, headerText], [frameMeasure, headerMeasure], {
+        width: 200,
+        height: 60,
+      });
+
+      const pageFragments = layout.pages[0].fragments as ParaFragment[];
+      const pageNumFrag = pageFragments.find((f) => f.blockId === 'page-num')!;
+      const headerFrag = pageFragments.find((f) => f.blockId === 'header-text')!;
+
+      expect(pageNumFrag.x).toBeCloseTo(192);
+      expect(pageNumFrag.y).toBeCloseTo(10);
+      // Frame paragraph should not push following content down
+      expect(headerFrag.y).toBe(0);
+    });
   });
 });

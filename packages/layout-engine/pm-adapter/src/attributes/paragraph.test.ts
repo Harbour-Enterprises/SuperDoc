@@ -31,6 +31,7 @@ import {
   convertListParagraphAttrs,
 } from './paragraph.js';
 import type { ListCounterContext } from '../types.js';
+import { twipsToPx } from '../utilities.js';
 
 // Mock PM node shape
 type PMNode = {
@@ -901,7 +902,26 @@ describe('computeParagraphAttrs', () => {
     expect(result?.floatAlignment).toBe('right');
   });
 
-  it('should handle framePr in paragraphProperties', () => {
+  it('should surface frame positioning data from framePr', () => {
+    const para: PMNode = {
+      attrs: {
+        framePr: { xAlign: 'right', wrap: 'none', y: 1440, hAnchor: 'margin', vAnchor: 'text' },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect(result?.frame?.wrap).toBe('none');
+    expect(result?.frame?.xAlign).toBe('right');
+    expect(result?.frame?.vAnchor).toBe('text');
+    expect(result?.frame?.hAnchor).toBe('margin');
+    expect(result?.frame?.y).toBeCloseTo(twipsToPx(1440));
+  });
+
+  it('should handle framePr in paragraphProperties (raw OOXML elements)', () => {
     const para: PMNode = {
       attrs: {
         paragraphProperties: {
@@ -921,6 +941,30 @@ describe('computeParagraphAttrs', () => {
 
     const result = computeParagraphAttrs(para, styleContext);
     expect(result?.floatAlignment).toBe('center');
+  });
+
+  it('should handle framePr in paragraphProperties (decoded object from v3 translator)', () => {
+    // This is the format produced by the v3 translator when importing DOCX
+    // Headers/footers with right-aligned page numbers use this structure
+    const para: PMNode = {
+      attrs: {
+        paragraphProperties: {
+          framePr: { xAlign: 'right', wrap: 'none', hAnchor: 'margin', vAnchor: 'text', y: 1440 },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect(result?.floatAlignment).toBe('right');
+    expect(result?.frame?.wrap).toBe('none');
+    expect(result?.frame?.xAlign).toBe('right');
+    expect(result?.frame?.hAnchor).toBe('margin');
+    expect(result?.frame?.vAnchor).toBe('text');
+    expect(result?.frame?.y).toBeCloseTo(twipsToPx(1440));
   });
 
   it('should handle numberingProperties with list counter', () => {
@@ -973,5 +1017,280 @@ describe('computeParagraphAttrs', () => {
     const resetCalls = (listCounterContext.resetListCounter as never).mock.calls;
     expect(resetCalls.length).toBeGreaterThan(0);
     expect(resetCalls.some((call: PMNode) => call[1] === 3)).toBe(true);
+  });
+
+  describe('framePr edge cases and validation', () => {
+    const createStyleContext = () =>
+      ({
+        styles: {},
+        defaults: {},
+      }) as never;
+
+    it('should return undefined for empty framePr object', () => {
+      const para: PMNode = {
+        attrs: { framePr: {} },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Empty framePr should not produce floatAlignment or frame
+      expect(result?.floatAlignment).toBeUndefined();
+      expect(result?.frame).toBeUndefined();
+    });
+
+    it('should handle framePr with attributes wrapper but empty attributes', () => {
+      const para: PMNode = {
+        attrs: { framePr: { attributes: {} } },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.floatAlignment).toBeUndefined();
+      expect(result?.frame).toBeUndefined();
+    });
+
+    it('should handle non-numeric x/y values gracefully', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: 'right',
+            x: 'invalid',
+            y: 'bad',
+            wrap: 'none',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should extract valid xAlign and wrap, ignore invalid x/y
+      expect(result?.floatAlignment).toBe('right');
+      expect(result?.frame?.xAlign).toBe('right');
+      expect(result?.frame?.wrap).toBe('none');
+      expect(result?.frame?.x).toBeUndefined();
+      expect(result?.frame?.y).toBeUndefined();
+    });
+
+    it('should use w:prefixed keys first via nullish coalescing', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            'w:xAlign': 'right',
+            xAlign: 'left', // Should be ignored due to nullish coalescing
+            'w:wrap': 'around',
+            wrap: 'none', // Should be ignored
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should prefer w:prefixed keys
+      expect(result?.floatAlignment).toBe('right');
+      expect(result?.frame?.xAlign).toBe('right');
+      expect(result?.frame?.wrap).toBe('around');
+    });
+
+    it('should return undefined frame when all framePr values are invalid', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: 'invalid',
+            yAlign: 'invalid',
+            x: 'bad',
+            y: 'bad',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Invalid xAlign should not produce floatAlignment
+      expect(result?.floatAlignment).toBeUndefined();
+      // Frame is still set with invalid xAlign (validation deferred to renderer)
+      expect(result?.frame?.xAlign).toBe('invalid');
+      expect(result?.frame?.yAlign).toBe('invalid');
+      // Invalid x and y should not be set
+      expect(result?.frame?.x).toBeUndefined();
+      expect(result?.frame?.y).toBeUndefined();
+    });
+
+    it('should handle mixed valid and invalid framePr properties', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: 'center', // valid
+            yAlign: 'top', // valid
+            x: 'bad', // invalid
+            y: 720, // valid
+            wrap: 'none', // valid
+            hAnchor: 'margin', // valid
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.floatAlignment).toBe('center');
+      expect(result?.frame?.xAlign).toBe('center');
+      expect(result?.frame?.yAlign).toBe('top');
+      expect(result?.frame?.x).toBeUndefined();
+      expect(result?.frame?.y).toBeCloseTo(twipsToPx(720));
+      expect(result?.frame?.wrap).toBe('none');
+      expect(result?.frame?.hAnchor).toBe('margin');
+    });
+
+    it('should handle framePr with null values', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: null,
+            wrap: null,
+            y: 1440,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Null values should be ignored by nullish coalescing
+      expect(result?.floatAlignment).toBeUndefined();
+      // Only y should be set
+      expect(result?.frame?.xAlign).toBeUndefined();
+      expect(result?.frame?.wrap).toBeUndefined();
+      expect(result?.frame?.y).toBeCloseTo(twipsToPx(1440));
+    });
+
+    it('should handle very large numeric values for x and y', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: 'left',
+            x: Number.MAX_SAFE_INTEGER,
+            y: Number.MAX_SAFE_INTEGER,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.floatAlignment).toBe('left');
+      // Large values should be converted but remain finite
+      expect(result?.frame?.x).toBeDefined();
+      expect(Number.isFinite(result?.frame?.x)).toBe(true);
+      expect(result?.frame?.y).toBeDefined();
+      expect(Number.isFinite(result?.frame?.y)).toBe(true);
+    });
+
+    it('should convert case-insensitive xAlign values correctly', () => {
+      const testCases = [
+        { input: 'LEFT', expected: 'left' },
+        { input: 'Right', expected: 'right' },
+        { input: 'CENTER', expected: 'center' },
+        { input: 'CeNtEr', expected: 'center' },
+      ];
+
+      testCases.forEach(({ input, expected }) => {
+        const para: PMNode = {
+          attrs: {
+            framePr: { xAlign: input },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.floatAlignment).toBe(expected);
+        expect(result?.frame?.xAlign).toBe(expected);
+      });
+    });
+
+    it('should set yAlign values without validation', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            xAlign: 'center',
+            yAlign: 'bottom',
+            wrap: 'none',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // xAlign should still work
+      expect(result?.floatAlignment).toBe('center');
+      expect(result?.frame?.xAlign).toBe('center');
+      // yAlign set as-is (no validation at this stage)
+      expect(result?.frame?.yAlign).toBe('bottom');
+      expect(result?.frame?.wrap).toBe('none');
+    });
+
+    it('should handle framePr with only positioning properties (no alignment)', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            x: 1440,
+            y: 2880,
+            hAnchor: 'page',
+            vAnchor: 'page',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // No xAlign means no floatAlignment
+      expect(result?.floatAlignment).toBeUndefined();
+      // But frame should still be set with positioning
+      expect(result?.frame?.x).toBeCloseTo(twipsToPx(1440));
+      expect(result?.frame?.y).toBeCloseTo(twipsToPx(2880));
+      expect(result?.frame?.hAnchor).toBe('page');
+      expect(result?.frame?.vAnchor).toBe('page');
+    });
+
+    it('should handle framePr with dropCap property', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            xAlign: 'left',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCap).toBe('drop');
+      expect(result?.floatAlignment).toBe('left');
+    });
+
+    it('should handle w:prefixed dropCap property', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            'w:dropCap': 'margin',
+            xAlign: 'center',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCap).toBe('margin');
+      expect(result?.floatAlignment).toBe('center');
+    });
   });
 });
