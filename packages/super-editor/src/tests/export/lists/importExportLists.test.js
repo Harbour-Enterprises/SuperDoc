@@ -56,7 +56,7 @@ describe('[blank-doc.docx] import, add node, export', () => {
     dispatch(tr);
 
     const currentState = editor.getJSON();
-    expect(currentState.content[0].content[0].text).toBe('hello world');
+    expect(currentState.content[0].content[0].content[0].text).toBe('hello world');
     const content = currentState.content;
     expect(content[0].type).toBe('paragraph');
     const firstListItem = content[0];
@@ -102,14 +102,14 @@ describe('[blank-doc.docx] import, add node, export', () => {
 
   it('can add a second list item by splitting the first', () => {
     const tr = getNewTransaction(editor);
-    const $pos = tr.doc.resolve(1 + 'hello world'.length);
+    const $pos = tr.doc.resolve(3 + 'hello world'.length);
     tr.setSelection(TextSelection.near($pos));
     dispatch(tr);
 
     editor.commands.splitBlock();
 
     const currentState = editor.getJSON();
-    expect(currentState.content.length).toBe(2);
+    expect(currentState.content.length).toBe(4);
 
     const firstItem = currentState.content[0];
     expect(firstItem.type).toBe('paragraph');
