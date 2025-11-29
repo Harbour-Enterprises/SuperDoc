@@ -7,7 +7,7 @@
     "build": "docker build -t playwright .",
     "build:nocache": "docker build --pull --no-cache -t playwright .",
     "update-screenshots": "npm run build && docker run -e PLAYWRIGHT_ARGS='--update-snapshots' --rm  -v ./test-results:/app/test-results -v ./tests/visuals:/app/tests/visuals playwright",
-    "test:local": "docker run --rm --cpus=4 --memory=8gb -v ./test-results:/app/test-results -v ./tests:/app/tests playwright",
+    "test:local": "docker run --rm --cpus=4 --memory=8gb -e PLAYWRIGHT_ARGS -v ./test-results:/app/test-results -v ./tests:/app/tests playwright",
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui -g",
     "build:superdoc": "cd ../ && npm run pack && cp ./packages/superdoc/superdoc.tgz ./e2e-tests/superdoc.tgz && cd e2e-tests/templates/vue && npm install file:../../superdoc.tgz",
