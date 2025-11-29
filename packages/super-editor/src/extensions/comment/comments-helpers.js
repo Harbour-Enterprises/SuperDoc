@@ -56,74 +56,64 @@ export const getCommentPositionsById = (commentId, doc) => {
  * @returns {void}
  */
 export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
-  // Collect all pending insertions in an array
-  const startNodes = [];
-  const endNodes = [];
-  const seen = new Set();
+  // Collect a min..max range for every commentId (and children), then insert a
+  // single start/end pair per id. This prevents fragmented highlights when marks
+  // span multiple adjacent nodes.
+  const ranges = new Map();
+
+  const addRange = (id, from, to, attrs = {}) => {
+    if (!id || id === 'pending') return;
+    const existing = ranges.get(id);
+    if (existing) {
+      existing.from = Math.min(existing.from, from);
+      existing.to = Math.max(existing.to, to);
+      existing.attrs = { ...existing.attrs, ...attrs };
+    } else {
+      ranges.set(id, { from, to, attrs: { ...attrs } });
+    }
+  };
 
   doc.descendants((node, pos) => {
     const commentMarks = node.marks?.filter((mark) => mark.type.name === CommentMarkName);
     commentMarks.forEach((commentMark) => {
-      if (commentMark) {
-        const { attrs = {} } = commentMark;
-        const { commentId } = attrs;
+      if (!commentMark) return;
+      const { attrs = {} } = commentMark;
+      const { commentId } = attrs;
+      const from = pos;
+      const to = pos + node.nodeSize;
 
-        if (commentId === 'pending') return;
-        if (seen.has(commentId)) return;
-        seen.add(commentId);
+      addRange(commentId, from, to, attrs);
 
-        const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
-        const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
-        startNodes.push({
-          pos,
-          node: startNode,
-        });
+      // Also include child comments so they inherit the same span
+      const childComments = comments
+        .filter((c) => c.parentCommentId === commentId)
+        .sort((a, b) => a.createdTime - b.createdTime);
 
-        const endNode = schema.nodes.commentRangeEnd.create(commentStartNodeAttrs);
-        endNodes.push({
-          pos: pos + node.nodeSize,
-          node: endNode,
-        });
-
-        const parentId = commentId;
-        if (parentId) {
-          const childComments = comments
-            .filter((c) => c.parentCommentId === parentId)
-            .sort((a, b) => a.createdTime - b.createdTime);
-
-          childComments.forEach((c) => {
-            const childMark = getPreparedComment(c);
-            const childStartNode = schema.nodes.commentRangeStart.create(childMark);
-            seen.add(c.commentId);
-            startNodes.push({
-              pos: pos,
-              node: childStartNode,
-            });
-
-            const childEndNode = schema.nodes.commentRangeEnd.create(childMark);
-            endNodes.push({
-              pos: pos + node.nodeSize,
-              node: childEndNode,
-            });
-          });
-        }
-      }
+      childComments.forEach((c) => {
+        addRange(c.commentId, from, to, c);
+      });
     });
   });
 
-  startNodes.forEach((n) => {
-    const { pos, node } = n;
-    const mappedPos = tr.mapping.map(pos);
-
-    tr.insert(mappedPos, node);
+  const insertions = [];
+  ranges.forEach((range, id) => {
+    const attrs = getPreparedComment(range.attrs);
+    // Preserve internal flag if present
+    if (range.attrs.internal !== undefined) {
+      attrs.internal = range.attrs.internal;
+    }
+    const startNode = schema.nodes.commentRangeStart.create(attrs);
+    const endNode = schema.nodes.commentRangeEnd.create(attrs);
+    insertions.push({ pos: range.from, node: startNode });
+    insertions.push({ pos: range.to, node: endNode });
   });
 
-  endNodes.forEach((n) => {
-    const { pos, node } = n;
-    const mappedPos = tr.mapping.map(pos);
-
-    tr.insert(mappedPos, node);
-  });
+  insertions
+    .sort((a, b) => a.pos - b.pos)
+    .forEach(({ pos, node }) => {
+      const mappedPos = tr.mapping.map(pos);
+      tr.insert(mappedPos, node);
+    });
 
   return tr;
 };
