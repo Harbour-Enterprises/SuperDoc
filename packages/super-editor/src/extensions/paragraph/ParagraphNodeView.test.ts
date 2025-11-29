@@ -1,4 +1,3 @@
-// @ts-check
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ParagraphNodeView } from './ParagraphNodeView.js';
 import {

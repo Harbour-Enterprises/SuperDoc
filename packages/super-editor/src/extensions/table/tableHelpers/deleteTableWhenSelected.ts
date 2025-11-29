@@ -1,4 +1,3 @@
-// @ts-check
 import { findParentNodeClosestToPos } from '@core/helpers/findParentNodeClosestToPos.js';
 import { isCellSelection } from './isCellSelection.js';
 import type { Editor } from '@core/Editor.js';

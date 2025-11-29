@@ -1,4 +1,3 @@
-// @ts-check
 import { Fragment, type Node as PmNode, type Schema, type NodeType, type Mark } from 'prosemirror-model';
 import { TableMap } from 'prosemirror-tables';
 import type { Transaction } from 'prosemirror-state';

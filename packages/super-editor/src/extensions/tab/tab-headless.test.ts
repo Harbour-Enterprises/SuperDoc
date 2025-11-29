@@ -122,7 +122,6 @@ describe('Tab extension - headless mode behavior', () => {
 
     uiEditor.destroy();
 
-    // eslint-disable-next-line no-console
     console.log(
       '[Perf][Tab] 100 pages with tabs -> headless:',
       headlessMs.toFixed(2),

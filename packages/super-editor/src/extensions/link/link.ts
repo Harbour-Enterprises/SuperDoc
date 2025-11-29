@@ -258,8 +258,7 @@ export const Link = Mark.create<LinkOptions>({
        */
       unsetLink:
         () =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        ({ chain }: { chain: () => any }) => {
+        ({ chain }: { chain: () => import('@core/types/ChainedCommands.js').ChainableCommandObject }) => {
           return chain()
             .unsetMark('underline', { extendEmptyMarkRange: true })
             .unsetColor()

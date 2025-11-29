@@ -1,3 +1,6 @@
+import type { Extension as BaseExtension } from '@core/Extension.js';
+import type { Node as NodeExtension } from '@core/Node.js';
+import type { Mark as MarkExtension } from '@core/Mark.js';
 // Extensions
 import { History } from './history/index.js';
 import { Color } from './color/index.js';
@@ -71,7 +74,12 @@ import { CustomSelection } from './custom-selection/index.js';
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
 
-const getRichTextExtensions = () => {
+type AnyExtension =
+  | BaseExtension<Record<string, unknown>, Record<string, unknown>>
+  | NodeExtension<Record<string, unknown>, Record<string, unknown>>
+  | MarkExtension<Record<string, unknown>, Record<string, unknown>>;
+
+const getRichTextExtensions = (): AnyExtension[] => {
   return [
     Bold,
     Color,
@@ -109,7 +117,7 @@ const getRichTextExtensions = () => {
   ];
 };
 
-const getStarterExtensions = () => {
+const getStarterExtensions = (): AnyExtension[] => {
   return [
     Bold,
     BlockNode,

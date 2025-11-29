@@ -1,4 +1,3 @@
-// @ts-check
 /**
  * Cell border configuration
  * @typedef {Object} CellBorder

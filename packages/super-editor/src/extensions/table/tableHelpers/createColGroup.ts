@@ -1,4 +1,3 @@
-// @ts-check
 import { getColStyleDeclaration } from './getColStyleDeclaration.js';
 import { twipsToPixels } from '@core/super-converter/helpers.js';
 import type { Node as PmNode } from 'prosemirror-model';

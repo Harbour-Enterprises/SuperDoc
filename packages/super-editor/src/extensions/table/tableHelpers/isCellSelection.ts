@@ -1,4 +1,3 @@
-// @ts-check
 import { CellSelection } from 'prosemirror-tables';
 import type { Selection as PmSelection } from 'prosemirror-state';
 

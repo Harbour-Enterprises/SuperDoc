@@ -1,4 +1,3 @@
-// @ts-check
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createNumberingPlugin } from './numberingPlugin.js';
 import { NumberingManager } from './NumberingManager.js';

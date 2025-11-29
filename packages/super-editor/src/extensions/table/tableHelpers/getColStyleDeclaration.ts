@@ -1,4 +1,3 @@
-// @ts-check
 export const getColStyleDeclaration = (minWidth: number, width: number | null) => {
   if (width != null) {
     const numericWidth = Number(width);

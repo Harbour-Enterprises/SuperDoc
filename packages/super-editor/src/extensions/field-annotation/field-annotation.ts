@@ -15,7 +15,7 @@ import type { Node as PmNode, Mark as PmMark, DOMOutputSpec } from 'prosemirror-
 import type { Decoration } from 'prosemirror-view';
 import { generateDocxRandomId } from '../../core/helpers/index.js';
 import { commands as cleanupCommands } from './cleanup-commands/index.js';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { isHeadless } from '@/utils/headless-helpers';
 
 export const fieldAnnotationName = 'fieldAnnotation';
 export const annotationClass = 'annotation';

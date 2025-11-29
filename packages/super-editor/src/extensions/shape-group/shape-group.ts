@@ -1,16 +1,33 @@
 import { Node, Attribute } from '@core/index.js';
-import { ShapeGroupView, type ShapeGroupViewProps } from './ShapeGroupView.js';
-import type { AttributeValue } from '@core/Attribute.js';
-import type { DOMOutputSpec } from 'prosemirror-model';
-import type { NodeView } from 'prosemirror-view';
+import { ShapeGroupView } from './ShapeGroupView.js';
+import type { ShapeGroupViewProps } from './ShapeGroupView.js';
+import type { AttributeValue, AttributeSpec } from '@core/Attribute.js';
+import type { ParseRule } from 'prosemirror-model';
 
-interface ShapeGroupOptions extends Record<string, unknown> {
+type ShapeGroupSize = { width?: number | null; height?: number | null } | null;
+type ShapeGroupPadding = {
+  top?: number | null;
+  right?: number | null;
+  bottom?: number | null;
+  left?: number | null;
+} | null;
+type ShapeGroupMarginOffset = { horizontal?: number | null; top?: number | null } | null;
+
+type ShapeGroupAttributes = {
+  groupTransform?: Record<string, unknown>;
+  shapes?: unknown[];
+  size?: ShapeGroupSize;
+  padding?: ShapeGroupPadding;
+  marginOffset?: ShapeGroupMarginOffset;
+  drawingContent?: unknown;
+  wrap?: { type?: string };
+  anchorData?: unknown;
+  originalAttributes?: unknown;
+};
+
+type ShapeGroupOptions = {
   htmlAttributes: Record<string, AttributeValue>;
-}
-
-type SizeAttr = { width?: number | null; height?: number | null };
-type PaddingAttr = { top?: number | null; right?: number | null; bottom?: number | null; left?: number | null };
-type MarginOffsetAttr = { horizontal?: number | null; top?: number | null };
+};
 
 export const ShapeGroup = Node.create<ShapeGroupOptions>({
   name: 'shapeGroup',
@@ -29,7 +46,7 @@ export const ShapeGroup = Node.create<ShapeGroupOptions>({
     };
   },
 
-  addAttributes() {
+  addAttributes(): Record<string, Partial<AttributeSpec>> {
     return {
       groupTransform: {
         default: {},
@@ -42,39 +59,36 @@ export const ShapeGroup = Node.create<ShapeGroupOptions>({
       },
 
       size: {
-        default: null,
-        renderDOM: (attrs: { size?: SizeAttr | null }): Record<string, AttributeValue> => {
-          if (!attrs.size || typeof attrs.size !== 'object') return {};
+        default: null as ShapeGroupSize,
+        renderDOM: (attrs: ShapeGroupAttributes): Record<string, AttributeValue> => {
+          if (!attrs.size) return {};
           const sizeData: Record<string, AttributeValue> = {};
-          const size = attrs.size as SizeAttr;
-          if (size.width) sizeData['data-width'] = size.width;
-          if (size.height) sizeData['data-height'] = size.height;
+          if (attrs.size.width != null) sizeData['data-width'] = attrs.size.width;
+          if (attrs.size.height != null) sizeData['data-height'] = attrs.size.height;
           return sizeData;
         },
       },
 
       padding: {
-        default: null,
-        renderDOM: (attrs: { padding?: PaddingAttr | null }): Record<string, AttributeValue> => {
-          if (!attrs.padding || typeof attrs.padding !== 'object') return {};
+        default: null as ShapeGroupPadding,
+        renderDOM: (attrs: ShapeGroupAttributes): Record<string, AttributeValue> => {
+          if (!attrs.padding) return {};
           const paddingData: Record<string, AttributeValue> = {};
-          const padding = attrs.padding as PaddingAttr;
-          if (padding.top != null) paddingData['data-padding-top'] = padding.top;
-          if (padding.right != null) paddingData['data-padding-right'] = padding.right;
-          if (padding.bottom != null) paddingData['data-padding-bottom'] = padding.bottom;
-          if (padding.left != null) paddingData['data-padding-left'] = padding.left;
+          if (attrs.padding.top != null) paddingData['data-padding-top'] = attrs.padding.top;
+          if (attrs.padding.right != null) paddingData['data-padding-right'] = attrs.padding.right;
+          if (attrs.padding.bottom != null) paddingData['data-padding-bottom'] = attrs.padding.bottom;
+          if (attrs.padding.left != null) paddingData['data-padding-left'] = attrs.padding.left;
           return paddingData;
         },
       },
 
       marginOffset: {
-        default: null,
-        renderDOM: (attrs: { marginOffset?: MarginOffsetAttr | null }): Record<string, AttributeValue> => {
-          if (!attrs.marginOffset || typeof attrs.marginOffset !== 'object') return {};
+        default: null as ShapeGroupMarginOffset,
+        renderDOM: (attrs: ShapeGroupAttributes): Record<string, AttributeValue> => {
+          if (!attrs.marginOffset) return {};
           const offsetData: Record<string, AttributeValue> = {};
-          const marginOffset = attrs.marginOffset as MarginOffsetAttr;
-          if (marginOffset.horizontal != null) offsetData['data-offset-x'] = marginOffset.horizontal;
-          if (marginOffset.top != null) offsetData['data-offset-y'] = marginOffset.top;
+          if (attrs.marginOffset.horizontal != null) offsetData['data-offset-x'] = attrs.marginOffset.horizontal;
+          if (attrs.marginOffset.top != null) offsetData['data-offset-y'] = attrs.marginOffset.top;
           return offsetData;
         },
       },
@@ -82,27 +96,33 @@ export const ShapeGroup = Node.create<ShapeGroupOptions>({
       drawingContent: {
         rendered: false,
       },
+
+      wrap: {
+        default: { type: 'Inline' },
+        rendered: false,
+      },
+
+      anchorData: {
+        default: null,
+        rendered: false,
+      },
+
+      originalAttributes: {
+        rendered: false,
+      },
     };
   },
 
-  parseDOM() {
+  parseDOM(): ParseRule[] {
     return [];
   },
 
-  renderDOM(this: Node<ShapeGroupOptions>, ...args: unknown[]): DOMOutputSpec {
-    const [{ htmlAttributes } = { htmlAttributes: {} as Record<string, AttributeValue> }] = args as [
-      { htmlAttributes?: Record<string, AttributeValue> }?,
-    ];
-    return [
-      'div',
-      Attribute.mergeAttributes(this.options.htmlAttributes as Record<string, AttributeValue>, htmlAttributes || {}, {
-        'data-shape-group': '',
-      }),
-    ];
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }) {
+    return ['div', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, { 'data-shape-group': '' })];
   },
 
   addNodeView() {
-    return (props: ShapeGroupViewProps): NodeView | null => {
+    return (props: ShapeGroupViewProps) => {
       return new ShapeGroupView({ ...props });
     };
   },

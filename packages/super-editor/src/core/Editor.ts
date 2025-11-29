@@ -2123,7 +2123,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
       annotationValues,
       hiddenFieldIds: hiddenIds,
       removeEmptyFields,
-      editor: this,
     });
 
     // Dispatch everything in a single transaction, which makes this undo-able in a single undo

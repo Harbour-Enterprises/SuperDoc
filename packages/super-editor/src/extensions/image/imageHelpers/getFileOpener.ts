@@ -1,4 +1,3 @@
-// @ts-check
 const ACCEPT_IMAGE_TYPES = ['.jpg', '.jpeg', '.png', 'image/jpeg', 'image/png'];
 
 /**
@@ -11,14 +10,14 @@ const ACCEPT_IMAGE_TYPES = ['.jpg', '.jpeg', '.png', 'image/jpeg', 'image/png'];
  * if (result) console.log(result.file);
  * @note Only accepts JPEG and PNG images
  */
-export const getFileOpener = () => {
+export const getFileOpener = (): (() => Promise<{ file: File } | null>) => {
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
 
   const acceptTypes = ACCEPT_IMAGE_TYPES;
   fileInput.accept = acceptTypes.join(',');
 
-  const openFile = () => {
+  const openFile = (): Promise<{ file: File } | null> => {
     return new Promise((resolve, reject) => {
       fileInput.onchange = async () => {
         const files = fileInput.files;

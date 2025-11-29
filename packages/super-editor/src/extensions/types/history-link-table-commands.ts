@@ -39,11 +39,3 @@ export interface HistoryLinkTableCommandAugmentations {
   setCellBackground: (value: string) => boolean;
   deleteCellAndTableBorders: () => boolean;
 }
-
-declare module '@core/types/ChainedCommands.js' {
-  interface ExtensionCommandMap extends HistoryLinkTableCommandAugmentations {}
-}
-
-declare module '@core/types/ChainedCommands' {
-  interface ExtensionCommandMap extends HistoryLinkTableCommandAugmentations {}
-}

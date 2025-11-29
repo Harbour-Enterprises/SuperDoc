@@ -231,7 +231,7 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
           if (style.length > 0) {
             return { style: `transform: ${style};` };
           }
-          return;
+          return null;
         },
       },
 
@@ -298,8 +298,7 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
           return { style };
         },
       },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Complex attribute structure for ProseMirror
-    } as any;
+    };
   },
 
   parseDOM() {

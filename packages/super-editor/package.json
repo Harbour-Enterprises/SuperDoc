@@ -46,6 +46,7 @@
     "build:watch": "vite build --watch",
     "types:check": "tsc --noEmit",
     "types:check:strict": "tsc -p tsconfig.strict.json",
+    "types:check:extensions": "tsc -p tsconfig.extensions.json",
     "types:check:vue": "vue-tsc --noEmit",
     "types:check:test": "tsc -p tsconfig.test.json",
     "types:check:all": "npm run types:check:strict && npm run types:check:vue && npm run types:check:test",

@@ -45,9 +45,8 @@ describe('Editor annotation utilities', () => {
 
     const scrolledTransaction = { id: 'scrolled' };
     const scrollIntoView = vi.fn().mockReturnValue(scrolledTransaction);
-    const annotateDocumentSpy = vi
-      .spyOn(AnnotatorHelpers, 'annotateDocument')
-      .mockReturnValue({ docChanged: true, scrollIntoView });
+    const mockTransaction = { docChanged: true, scrollIntoView };
+    const annotateDocumentSpy = vi.spyOn(AnnotatorHelpers, 'annotateDocument').mockReturnValue(mockTransaction);
 
     const annotationValues = [{ input_id: 'a', input_value: 'b' }];
     const hiddenIds = ['hidden'];
@@ -57,7 +56,7 @@ describe('Editor annotation utilities', () => {
     expect(callArgs.annotationValues).toBe(annotationValues);
     expect(callArgs.hiddenFieldIds).toBe(hiddenIds);
     expect(callArgs.removeEmptyFields).toBe(true);
-    expect(callArgs.editor).toBe(editor);
+    expect(callArgs.schema).toBe(editor.schema);
 
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
     expect(dispatchSpy).toHaveBeenCalledWith(scrolledTransaction);

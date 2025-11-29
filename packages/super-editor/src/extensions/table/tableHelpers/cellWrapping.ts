@@ -1,4 +1,3 @@
-// @ts-check
 import type { ResolvedPos } from 'prosemirror-model';
 
 // https://github.com/ProseMirror/prosemirror-tables/blob/a99f70855f2b3e2433bc77451fedd884305fda5b/src/util.ts

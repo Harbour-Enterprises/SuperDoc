@@ -3,6 +3,10 @@ import { createGradient, createTextElement } from '../shared/svg-utils.js';
 import type { AttributeValue } from '@core/Attribute.js';
 import type { Node as PmNode } from 'prosemirror-model';
 import type { Decoration, DecorationSource, EditorView, NodeView } from 'prosemirror-view';
+import type { GradientData, TextContent, TextAlign } from '../shared/svg-utils.js';
+
+type GradientFill = GradientData & { type: 'gradient' };
+type SolidWithAlphaFill = { type: 'solidWithAlpha'; color: string; alpha: number };
 
 interface ShapeAttrs extends Record<string, unknown> {
   x?: number | null;
@@ -13,11 +17,11 @@ interface ShapeAttrs extends Record<string, unknown> {
   flipH?: boolean;
   flipV?: boolean;
   kind?: string;
-  fillColor?: string | { type?: string; color?: string; alpha?: number } | null;
+  fillColor?: string | GradientFill | SolidWithAlphaFill | null;
   strokeColor?: string | null;
   strokeWidth?: number | null;
-  textContent?: { parts?: unknown[] } | null;
-  textAlign?: string | null;
+  textContent?: TextContent | null;
+  textAlign?: TextAlign | null;
   src?: string | null;
 }
 
@@ -29,19 +33,12 @@ interface ShapeGroupNodeAttrs {
 
 type ShapeGroupEditor = { view: EditorView; storage?: { image?: { media?: Record<string, string> } } };
 
-type PresetShapeOptions = {
-  preset: string;
-  styleOverrides?: { fill?: string; stroke?: string; strokeWidth?: number };
-  width: number;
-  height: number;
-};
-
-const isGradientFill = (fill: ShapeAttrs['fillColor']): fill is { type: 'gradient'; [key: string]: unknown } => {
+const isGradientFill = (fill: ShapeAttrs['fillColor']): fill is GradientFill => {
   return Boolean(fill && typeof fill === 'object' && 'type' in fill && fill.type === 'gradient');
 };
 
-const isSolidAlphaFill = (fill: ShapeAttrs['fillColor']): fill is { type?: string; color?: string; alpha?: number } => {
-  return Boolean(fill && typeof fill === 'object' && 'color' in fill);
+const isSolidAlphaFill = (fill: ShapeAttrs['fillColor']): fill is SolidWithAlphaFill => {
+  return Boolean(fill && typeof fill === 'object' && 'type' in fill && fill.type === 'solidWithAlpha');
 };
 
 export interface ShapeGroupViewProps {
@@ -306,9 +303,11 @@ export class ShapeGroupView implements NodeView {
     let fillValue: string = typeof fillColor === 'string' ? fillColor : '#5b9bd5';
     if (isGradientFill(fillColor)) {
       const gradientId = `gradient-${shapeIndex}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
-      const gradient = this.createGradient(fillColor as Record<string, unknown>, gradientId);
-      defs.appendChild(gradient);
-      fillValue = `url(#${gradientId})`;
+      const gradient = this.createGradient(fillColor, gradientId);
+      if (gradient) {
+        defs.appendChild(gradient);
+        fillValue = `url(#${gradientId})`;
+      }
     } else if (fillColor === null) {
       fillValue = 'none';
     } else if (isSolidAlphaFill(fillColor) && fillColor.type === 'solidWithAlpha') {
@@ -443,11 +442,19 @@ export class ShapeGroupView implements NodeView {
     return g;
   }
 
-  createTextElement(textContent: unknown, textAlign: unknown, width: number, height: number) {
-    return createTextElement(textContent, textAlign, width, height);
+  createTextElement(
+    textContent: TextContent | null | undefined,
+    textAlign: string | null | undefined,
+    width: number,
+    height: number,
+  ) {
+    if (!textContent) return null;
+    const align: TextAlign = (textAlign || 'left') as TextAlign;
+    return createTextElement(textContent, align, width, height);
   }
 
-  createGradient(gradientData: unknown, gradientId: string) {
+  createGradient(gradientData: GradientData | null | undefined, gradientId: string) {
+    if (!gradientData) return null;
     return createGradient(gradientData, gradientId);
   }
 

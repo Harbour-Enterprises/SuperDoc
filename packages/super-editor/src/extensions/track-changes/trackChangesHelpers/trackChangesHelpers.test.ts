@@ -221,7 +221,7 @@ describe('trackChangesHelpers', () => {
     const initialState = createState(createDocWithText('abc'));
 
     // insertion
-    let tr = initialState.tr.insertText('Z', 1);
+    const tr = initialState.tr.insertText('Z', 1);
     tr.setMeta('inputType', 'insertText');
     const trackedInsert = trackedTransaction({ tr, state: initialState, user });
     const insertState = initialState.apply(trackedInsert);
@@ -234,7 +234,7 @@ describe('trackChangesHelpers', () => {
 
     // deletion
     const deleteState = createState(createDocWithText('abc'));
-    let deleteTr = deleteState.tr.delete(1, 2);
+    const deleteTr = deleteState.tr.delete(1, 2);
     deleteTr.setMeta('inputType', 'deleteContentBackward');
     const trackedDelete = trackedTransaction({ tr: deleteTr, state: deleteState, user });
     const finalState = deleteState.apply(trackedDelete);
@@ -259,7 +259,7 @@ describe('trackChangesHelpers', () => {
     let state = createState(createDocWithText('initial'));
 
     // Step 1: Make a normal change that SHOULD be in history
-    let tr1 = state.tr.insertText('normal', 8);
+    const tr1 = state.tr.insertText('normal', 8);
     tr1.setMeta('inputType', 'insertText');
     const tracked1 = trackedTransaction({ tr: tr1, state, user });
     state = state.apply(tracked1);
@@ -268,7 +268,7 @@ describe('trackChangesHelpers', () => {
 
     // Step 2: Make a programmatic change that should NOT be in history
     // This simulates the customer use case
-    let tr2 = state.tr.insertText('programmatic', 15);
+    const tr2 = state.tr.insertText('programmatic', 15);
     tr2.setMeta('addToHistory', false);
     tr2.setMeta('inputType', 'programmatic');
 

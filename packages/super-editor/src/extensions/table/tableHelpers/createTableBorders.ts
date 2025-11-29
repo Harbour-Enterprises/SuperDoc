@@ -1,4 +1,3 @@
-// @ts-check
 /**
  * Table border configuration
  * @typedef {Object} TableBorder

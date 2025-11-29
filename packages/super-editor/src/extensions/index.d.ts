@@ -1,2 +1,4 @@
-export function getRichTextExtensions(...args: any[]): any[];
-export function getStarterExtensions(...args: any[]): any[];
+import type { Extension } from '@core/index.js';
+
+export function getRichTextExtensions(): Extension[];
+export function getStarterExtensions(): Extension[];

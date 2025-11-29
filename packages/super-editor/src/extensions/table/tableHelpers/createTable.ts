@@ -1,4 +1,3 @@
-// @ts-check
 import { getNodeType } from '@core/helpers/getNodeType.js';
 import { createCell } from './createCell.js';
 import { createTableBorders } from './createTableBorders.js';

@@ -1,5 +1,5 @@
 import { Node, Attribute, type AttributeValue } from '@core/index.js';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { isHeadless } from '@/utils/headless-helpers';
 import type { Node as PmNode, Mark } from 'prosemirror-model';
 import type { Transaction, EditorState } from 'prosemirror-state';
 import type { Decoration, EditorView as PmEditorView } from 'prosemirror-view';

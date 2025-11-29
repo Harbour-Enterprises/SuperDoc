@@ -1,4 +1,3 @@
-// @ts-check
 import { describe, it, expect, vi } from 'vitest';
 import { getParagraphContext, clearParagraphContext, clearAllParagraphContexts } from './paragraphContextCache.js';
 

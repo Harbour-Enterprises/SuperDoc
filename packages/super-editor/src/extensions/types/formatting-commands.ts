@@ -44,11 +44,3 @@ export interface FormattingCommandAugmentations {
   setTextAlign: (alignment: string) => boolean;
   unsetTextAlign: () => boolean;
 }
-
-declare module '@core/types/ChainedCommands.js' {
-  interface ExtensionCommandMap extends FormattingCommandAugmentations {}
-}
-
-declare module '@core/types/ChainedCommands' {
-  interface ExtensionCommandMap extends FormattingCommandAugmentations {}
-}

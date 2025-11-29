@@ -1,4 +1,3 @@
-// @ts-check
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const getResolvedParagraphPropertiesMock = vi.hoisted(() => vi.fn((node) => node.attrs.paragraphProperties || {}));

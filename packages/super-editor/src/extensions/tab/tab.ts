@@ -5,7 +5,7 @@ import type { Transaction, EditorState } from 'prosemirror-state';
 import type { Step } from 'prosemirror-transform';
 import { DecorationSet, Decoration } from 'prosemirror-view';
 import type { EditorView } from 'prosemirror-view';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { isHeadless } from '@/utils/headless-helpers';
 import { createLayoutRequest, calculateTabLayout, applyLayoutResult } from './helpers/tabAdapter.js';
 import type { Editor } from '@core/Editor.js';
 import type { AttributeValue, RenderNodeContext } from '@core/index.js';

@@ -7,6 +7,7 @@ import {
   applyAlphaToSVG,
   generateTransforms,
 } from '../shared/svg-utils.js';
+import type { GradientData, AlphaData, TextContent, TextAlign } from '../shared/svg-utils.js';
 import type { AttributeValue } from '@core/Attribute.js';
 import type { Node as PmNode } from 'prosemirror-model';
 import type { Decoration, DecorationSource, EditorView, NodeView } from 'prosemirror-view';
@@ -19,7 +20,7 @@ type VectorShapeEditor = {
   options?: { parentEditor?: { converter?: { pageStyles?: PageStyles } } };
 };
 
-type GradientFill = { type: 'gradient'; [key: string]: unknown };
+type GradientFill = GradientData & { type: 'gradient' };
 type SolidWithAlphaFill = { type: 'solidWithAlpha'; color: string; alpha: number };
 type VectorShapeFill = string | GradientFill | SolidWithAlphaFill | null | undefined;
 
@@ -38,16 +39,9 @@ type VectorShapeAttributes = {
   anchorData?: AnchorData | null;
   marginOffset?: MarginOffset | null;
   originalAttributes?: { relativeHeight?: number } | null;
-  textContent?: { parts?: unknown[] } | null;
-  textAlign?: string;
+  textContent?: TextContent | null;
+  textAlign?: TextAlign;
   [key: string]: unknown;
-};
-
-type PresetShapeOptions = {
-  preset: string;
-  styleOverrides?: { fill?: string; stroke?: string; strokeWidth?: number };
-  width: number;
-  height: number;
 };
 
 const isGradientFill = (fill: VectorShapeFill): fill is GradientFill => {
@@ -446,7 +440,8 @@ export class VectorShapeView implements NodeView {
     return svg;
   }
 
-  createGradient(gradientData: unknown, gradientId: string) {
+  createGradient(gradientData: GradientData | null | undefined, gradientId: string): SVGGradientElement | null {
+    if (!gradientData) return null;
     return createGradient(gradientData, gradientId);
   }
 
@@ -492,16 +487,27 @@ export class VectorShapeView implements NodeView {
     }
   }
 
-  applyGradientToSVG(svg: SVGElement, gradientData: unknown) {
-    applyGradientToSVG(svg, gradientData);
+  applyGradientToSVG(svg: SVGElement, gradientData: GradientData | null | undefined) {
+    if (gradientData) {
+      applyGradientToSVG(svg, gradientData);
+    }
   }
 
-  applyAlphaToSVG(svg: SVGElement, alphaData: unknown) {
-    applyAlphaToSVG(svg, alphaData);
+  applyAlphaToSVG(svg: SVGElement, alphaData: AlphaData | null | undefined) {
+    if (alphaData) {
+      applyAlphaToSVG(svg, alphaData);
+    }
   }
 
-  createTextElement(textContent: unknown, textAlign: unknown, width: number, height: number) {
-    return createTextElement(textContent, textAlign, width, height);
+  createTextElement(
+    textContent: TextContent | null | undefined,
+    textAlign: TextAlign | null | undefined,
+    width: number,
+    height: number,
+  ): SVGForeignObjectElement | null {
+    if (!textContent) return null;
+    const align = (textAlign ?? 'left') as TextAlign;
+    return createTextElement(textContent, align, width, height);
   }
 
   buildView() {

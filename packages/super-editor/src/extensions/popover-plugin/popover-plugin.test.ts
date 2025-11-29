@@ -66,7 +66,7 @@ describe('popover plugin basics', () => {
 
   it('marks state for update when doc changes', () => {
     const doc = schema.nodes.doc.create(null, [schema.nodes.paragraph.create()]);
-    let state = EditorState.create({ schema, doc, plugins: [plugin] });
+    const state = EditorState.create({ schema, doc, plugins: [plugin] });
     const initial = plugin.getState(state);
     expect(initial.shouldUpdate).toBeUndefined();
 

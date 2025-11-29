@@ -199,8 +199,7 @@ export function extractParagraphContext(node: PmNode, startPos: number, helpers:
   if (Array.isArray((paragraphProperties as Record<string, unknown>).tabStops)) {
     tabStops = (paragraphProperties as { tabStops: TabStopInput[] }).tabStops
       .map((stop) => {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const ref = (stop as any)?.tab;
+        const ref = stop.tab;
         if (!ref) return stop || null;
         const rawType = (ref.tabType as TabStopAlignment) || 'start';
         const mappedVal = (alignmentAliases[rawType] || rawType) as TabStopAlignment;

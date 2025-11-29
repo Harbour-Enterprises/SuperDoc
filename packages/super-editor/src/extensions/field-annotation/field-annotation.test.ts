@@ -29,7 +29,7 @@ describe('FieldAnnotation extension commands', () => {
 
   it('updates annotation attributes via updateFieldAnnotation', () => {
     editor.commands.addFieldAnnotationAtSelection({ fieldId: 'field-2', displayLabel: 'Title' });
-    let [annotation] = getAnnotations('field-2');
+    const [annotation] = getAnnotations('field-2');
 
     editor.commands.updateFieldAnnotation(annotation, { displayLabel: 'Updated Title' });
     const [updated] = getAnnotations('field-2');

@@ -127,8 +127,9 @@ class Popover {
 
   mountVueComponent(component: unknown, props: Record<string, unknown> = {}): void {
     if (this.app) this.app.unmount();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    this.app = createApp(component as any, props);
+    // Vue's createApp accepts component definition objects with various shapes
+    // Using unknown here is safer than any and requires the component to be properly typed upstream
+    this.app = createApp(component as Record<string, unknown>, props);
     this.app.mount(this.popover);
     this.tippyInstance.setContent(this.popover);
   }
