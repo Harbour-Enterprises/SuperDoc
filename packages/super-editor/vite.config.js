@@ -30,6 +30,7 @@ export default defineConfig(({ mode }) => {
           '**/v3/**/index.js',
           '**/examples/**',
           '**/types.js',
+          '**/main.ts',
           '**/main.js',
           '**/migration_after_0_4_14.js',
         ],
