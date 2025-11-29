@@ -2,6 +2,7 @@ import { Node, Attribute } from '@core/index.js';
 import type { Node as PmNode } from 'prosemirror-model';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import type { Transaction, EditorState } from 'prosemirror-state';
+import type { Step } from 'prosemirror-transform';
 import { DecorationSet, Decoration } from 'prosemirror-view';
 import type { EditorView } from 'prosemirror-view';
 import { isHeadless } from '@/utils/headless-helpers.js';
@@ -198,6 +199,18 @@ function buildParagraphDecorations(
 }
 
 /**
+ * Type guard to check if a step has positional information
+ */
+function hasPositionalInfo(step: Step): step is Step & { from: number; to: number } {
+  return (
+    'from' in step &&
+    'to' in step &&
+    typeof (step as Step & { from?: unknown }).from === 'number' &&
+    typeof (step as Step & { to?: unknown }).to === 'number'
+  );
+}
+
+/**
  * Identifies paragraphs affected by transaction steps.
  * Recomputes all paragraphs in the affected range, relying on paragraph context caching
  * to make this efficient. Checks mapped positions for validity to avoid invalid additions.
@@ -209,14 +222,13 @@ function buildParagraphDecorations(
 function getAffectedParagraphStarts(tr: Transaction, newState: EditorState): Set<number> {
   const affected: Set<number> = new Set();
 
-  tr.steps.forEach((step: any, index) => {
-    // Only consider steps that touch the document
-    if (step.from == null && step.to == null) return;
+  tr.steps.forEach((step, index) => {
+    // Only consider steps that touch the document with positional information
+    if (!hasPositionalInfo(step)) return;
 
     // Map positions through subsequent step mappings to get final positions
-    let fromPos = step.from as number;
-    let toPos = step.to as number;
-    if (typeof fromPos !== 'number' || typeof toPos !== 'number') return;
+    let fromPos = step.from;
+    let toPos = step.to;
 
     for (let i = index; i < tr.steps.length; i++) {
       const stepMap = tr.steps[i].getMap();

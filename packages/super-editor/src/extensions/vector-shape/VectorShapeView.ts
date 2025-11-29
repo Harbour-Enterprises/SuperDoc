@@ -11,12 +11,57 @@ import type { AttributeValue } from '@core/Attribute.js';
 import type { Node as PmNode } from 'prosemirror-model';
 import type { Decoration, DecorationSource, EditorView, NodeView } from 'prosemirror-view';
 
+type PageMargins = { left?: number };
+type PageStyles = { pageMargins?: PageMargins };
+type VectorShapeEditor = {
+  view: EditorView;
+  converter?: { pageStyles?: PageStyles };
+  options?: { parentEditor?: { converter?: { pageStyles?: PageStyles } } };
+};
+
+type GradientFill = { type: 'gradient'; [key: string]: unknown };
+type SolidWithAlphaFill = { type: 'solidWithAlpha'; color: string; alpha: number };
+type VectorShapeFill = string | GradientFill | SolidWithAlphaFill | null | undefined;
+
+type WrapData = { type?: string; attrs?: { behindDoc?: boolean } };
+type MarginOffset = { horizontal?: number; top?: number; bottom?: number };
+type AnchorData = { hRelativeFrom?: string; alignH?: string };
+
+type VectorShapeAttributes = {
+  kind: string;
+  width: number;
+  height: number;
+  fillColor?: VectorShapeFill;
+  strokeColor?: string | null;
+  strokeWidth?: number | null;
+  wrap?: WrapData;
+  anchorData?: AnchorData | null;
+  marginOffset?: MarginOffset | null;
+  originalAttributes?: { relativeHeight?: number } | null;
+  textContent?: { parts?: unknown[] } | null;
+  textAlign?: string;
+  [key: string]: unknown;
+};
+
+type PresetShapeOptions = {
+  preset: string;
+  styleOverrides?: { fill?: string; stroke?: string; strokeWidth?: number };
+  width: number;
+  height: number;
+};
+
+const isGradientFill = (fill: VectorShapeFill): fill is GradientFill => {
+  return Boolean(fill && typeof fill === 'object' && 'type' in fill && fill.type === 'gradient');
+};
+
+const isSolidAlphaFill = (fill: VectorShapeFill): fill is SolidWithAlphaFill => {
+  return Boolean(fill && typeof fill === 'object' && 'type' in fill && fill.type === 'solidWithAlpha');
+};
+
 /**
  * Scaling factor to convert OOXML relativeHeight values to CSS z-index range.
  */
 const Z_INDEX_SCALE_FACTOR = 1000000;
-
-type VectorShapeEditor = { view: EditorView; converter?: any; options?: any };
 
 export interface VectorShapeViewProps {
   node: PmNode;
@@ -106,7 +151,7 @@ export class VectorShapeView implements NodeView {
   }
 
   createElement(): { element: HTMLElement } {
-    const attrs = this.node.attrs;
+    const attrs = this.node.attrs as VectorShapeAttributes;
 
     const element = document.createElement('span');
     element.classList.add('sd-vector-shape');
@@ -164,7 +209,7 @@ export class VectorShapeView implements NodeView {
     return { element };
   }
 
-  getPositioningStyle(attrs: any): string {
+  getPositioningStyle(attrs: VectorShapeAttributes): string {
     const { anchorData, marginOffset, wrap, originalAttributes } = attrs;
 
     if (!anchorData && !marginOffset?.horizontal && !marginOffset?.top) {
@@ -284,7 +329,7 @@ export class VectorShapeView implements NodeView {
     return generateTransforms(this.node.attrs);
   }
 
-  createSVGElement(attrs: any) {
+  createSVGElement(attrs: VectorShapeAttributes) {
     const { kind, fillColor, strokeColor, strokeWidth, width, height } = attrs;
 
     // Create SVG with proper dimensions (no viewBox distortion)
@@ -303,19 +348,17 @@ export class VectorShapeView implements NodeView {
     let fillOpacity = 1;
 
     if (fillColor) {
-      if (typeof fillColor === 'object') {
-        if (fillColor.type === 'gradient') {
-          const gradientId = `gradient-${Math.random().toString(36).slice(2, 11)}-${Date.now()}`;
-          const gradient = this.createGradient(fillColor, gradientId);
-          if (gradient) {
-            defs.appendChild(gradient);
-            fill = `url(#${gradientId})`;
-          }
-        } else if (fillColor.type === 'solidWithAlpha') {
-          fill = fillColor.color;
-          fillOpacity = fillColor.alpha;
+      if (isGradientFill(fillColor)) {
+        const gradientId = `gradient-${Math.random().toString(36).slice(2, 11)}-${Date.now()}`;
+        const gradient = this.createGradient(fillColor, gradientId);
+        if (gradient) {
+          defs.appendChild(gradient);
+          fill = `url(#${gradientId})`;
         }
-      } else {
+      } else if (isSolidAlphaFill(fillColor)) {
+        fill = fillColor.color;
+        fillOpacity = fillColor.alpha;
+      } else if (typeof fillColor === 'string') {
         fill = fillColor;
       }
     }
@@ -416,32 +459,34 @@ export class VectorShapeView implements NodeView {
     height,
   }: {
     kind: string;
-    fillColor?: any;
+    fillColor?: VectorShapeFill;
     strokeColor?: string | null;
     strokeWidth?: number | null;
     width: number;
     height: number;
   }): string | null {
     try {
-      let fill = fillColor || 'none';
-      if (fillColor && typeof fillColor === 'object') {
-        if (fillColor.type === 'gradient') {
-          fill = '#cccccc';
-        } else if (fillColor.type === 'solidWithAlpha') {
-          fill = fillColor.color;
-        }
+      let fill = 'none';
+      if (typeof fillColor === 'string') {
+        fill = fillColor;
+      } else if (isSolidAlphaFill(fillColor)) {
+        fill = fillColor.color;
+      } else if (isGradientFill(fillColor)) {
+        fill = '#cccccc';
       }
 
-      return getPresetShapeSvg({
+      const presetOptions = {
         preset: kind,
         styleOverrides: {
           fill,
           stroke: strokeColor || 'none',
-          strokeWidth: strokeWidth || 0,
-        } as any,
+          strokeWidth: strokeColor === null ? 0 : strokeWidth || 0,
+        },
         width,
         height,
-      } as any);
+      };
+
+      return getPresetShapeSvg(presetOptions as unknown as Parameters<typeof getPresetShapeSvg>[0]);
     } catch {
       return null;
     }

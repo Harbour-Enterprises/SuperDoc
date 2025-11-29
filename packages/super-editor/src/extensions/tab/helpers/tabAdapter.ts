@@ -18,6 +18,7 @@ import type { ParagraphContext } from './tabDecorations.js';
 import type { Editor } from '@core/Editor.js';
 import type { LayoutRequest, LayoutResult, TabSpan, TextSpan } from '../types.js';
 import { getParagraphContext } from './paragraphContextCache.js';
+import type { TabStop as ContractTabStop } from '@superdoc/contracts';
 
 const leaderStyles = {
   none: '',
@@ -39,7 +40,7 @@ const tabIdForIndex = (paragraphId: string, index: number) => `${paragraphId}-ta
  * @param {import('prosemirror-model').Node} doc
  * @param {number} paragraphPos
  * @param {import('prosemirror-view').EditorView} view
- * @param {any} helpers
+ * @param {import('@core/Editor.js').Editor['helpers']} helpers
  * @param {number} revision
  * @param {number} [paragraphWidthOverride]
  * @returns {import('../types.js').LayoutRequest|null}
@@ -62,9 +63,8 @@ export function createLayoutRequest(
   const paragraphNode = paragraphContext.paragraph;
   const cachedContext = getParagraphContext(paragraphNode, paragraphContext.startPos, helpers, revision, () =>
     extractParagraphContext(paragraphNode, paragraphContext.startPos, helpers, paragraphContext.paragraphDepth),
-  );
-  const effectiveContext = (cachedContext || paragraphContext) as any;
-  const ctx = effectiveContext as any;
+  ) as ParagraphContext | null;
+  const effectiveContext: ParagraphContext = cachedContext ?? paragraphContext;
   const { entries } = flattenParagraph(paragraphNode, paragraphContext.startPos);
 
   const spans: Span[] = [];
@@ -96,16 +96,18 @@ export function createLayoutRequest(
   });
 
   // Convert tab stops (twips → px) and add implicit hanging indent stop if needed
-  const tabStops = Array.isArray(ctx.tabStops) ? [...ctx.tabStops] : [];
+  const tabStops = Array.isArray(effectiveContext.tabStops) ? [...effectiveContext.tabStops] : [];
 
-  const hangingPx = twipsToPixels(Number(ctx.indent?.hanging) || 0);
-  if (hangingPx > 0 && ctx.indentWidth != null) {
-    tabStops.unshift({ val: 'start', pos: ctx.indentWidth + hangingPx, leader: 'none' });
+  const hangingPx = twipsToPixels(Number(effectiveContext.indent?.hanging) || 0);
+  if (hangingPx > 0 && effectiveContext.indentWidth != null) {
+    tabStops.unshift({ val: 'start', pos: effectiveContext.indentWidth + hangingPx, leader: 'none' });
   }
 
-  const paragraphWidth = paragraphWidthOverride ?? getBlockNodeWidth(view, ctx.startPos) ?? defaultLineLength;
+  const paragraphWidth =
+    paragraphWidthOverride ?? getBlockNodeWidth(view, effectiveContext.startPos) ?? defaultLineLength;
 
-  const indentWidth = ctx.indentWidth ?? getIndentWidth(view, ctx.startPos, ctx.indent);
+  const indentWidth =
+    effectiveContext.indentWidth ?? getIndentWidth(view, effectiveContext.startPos, effectiveContext.indent);
 
   return {
     paragraphId,
@@ -164,8 +166,19 @@ export function calculateTabLayout(
   // Precompute tab heights once
   const tabHeight = paragraphNode ? calcTabHeight(paragraphNode) : undefined;
 
+  // Validate spans array is within bounds
+  if (!Array.isArray(spans) || spans.length === 0) {
+    return {
+      paragraphId,
+      revision,
+      tabs: {},
+    };
+  }
+
   for (let i = 0; i < spans.length; i++) {
     const span = spans[i];
+    if (!span) continue;
+
     if (span.type === 'text') {
       currentX += measureText(span);
     } else if (span.type === 'tab') {
@@ -196,10 +209,43 @@ export function calculateTabLayout(
         }
       }
 
+      // Valid tab stop alignment values for ContractTabStop
+      type ValidTabStopVal = 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear';
+      const validAlignments = new Set<ValidTabStopVal>(['start', 'end', 'center', 'decimal', 'bar', 'clear']);
+
+      // Map for tab stop alignment normalization (legacy values to valid values)
+      const tabStopAlignmentMap: Record<string, ValidTabStopVal> = {
+        num: 'decimal',
+        left: 'start',
+        right: 'end',
+      };
+
+      const normalizedTabStops: ContractTabStop[] = tabStops.map((stop) => {
+        // Validate and normalize tab stop value with default fallback
+        const stopVal = typeof stop.val === 'string' ? stop.val : 'start';
+        let mappedVal: ValidTabStopVal;
+
+        if (stopVal in tabStopAlignmentMap) {
+          mappedVal = tabStopAlignmentMap[stopVal];
+        } else if (validAlignments.has(stopVal as ValidTabStopVal)) {
+          mappedVal = stopVal as ValidTabStopVal;
+        } else {
+          mappedVal = 'start'; // Default fallback for unknown values
+        }
+
+        // Validate pos is a valid number, default to 0 if invalid
+        const pos = typeof stop.pos === 'number' && !isNaN(stop.pos) && isFinite(stop.pos) ? stop.pos : 0;
+
+        return {
+          val: mappedVal,
+          pos,
+          leader: stop.leader,
+        };
+      });
+
       const result = calculateTabWidth({
         currentX,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        tabStops: tabStops as any,
+        tabStops: normalizedTabStops,
         paragraphWidth,
         defaultTabDistance,
         defaultLineLength,

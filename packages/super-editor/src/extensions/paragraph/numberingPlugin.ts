@@ -17,14 +17,29 @@ export function createNumberingPlugin(editor: Editor): Plugin {
 
   // Helpers to initialize and refresh start settings from definitions
   const applyStartSettingsFromDefinitions = (definitionsMap: Record<string, unknown>): void => {
-    Object.entries(definitionsMap || {}).forEach(([numId, levels]) => {
-      Object.entries((levels as Record<string, unknown>) || {}).forEach(([level, def]: [string, unknown]) => {
-        const defObj = (def as Record<string, unknown>) || {};
-        const start = parseInt(String(defObj?.start ?? '')) || 1;
+    if (!definitionsMap || typeof definitionsMap !== 'object') {
+      return;
+    }
+
+    Object.entries(definitionsMap).forEach(([numId, levels]) => {
+      if (!levels || typeof levels !== 'object' || Array.isArray(levels)) {
+        return;
+      }
+
+      Object.entries(levels as Record<string, unknown>).forEach(([level, def]: [string, unknown]) => {
+        if (!def || typeof def !== 'object') {
+          return;
+        }
+
+        const defObj = def as Record<string, unknown>;
+        const start = parseInt(String(defObj.start ?? ''), 10) || 1;
         let restart: number | undefined;
-        const restartRaw = defObj?.restart;
+        const restartRaw = defObj.restart;
         if (restartRaw != null) {
-          restart = parseInt(String(restartRaw), 10);
+          const parsedRestart = parseInt(String(restartRaw), 10);
+          if (!isNaN(parsedRestart)) {
+            restart = parsedRestart;
+          }
         }
         numberingManager.setStartSettings(numId, parseInt(level, 10), start, restart);
       });
@@ -77,7 +92,10 @@ export function createNumberingPlugin(editor: Editor): Plugin {
       numberingManager.enableCache();
       newState.doc.descendants((node, pos) => {
         const resolvedProps = calculateResolvedParagraphProperties(editor, node, newState.doc.resolve(pos));
-        const numberingProps = resolvedProps?.numberingProperties;
+        if (!resolvedProps) {
+          return;
+        }
+        const numberingProps = resolvedProps.numberingProperties;
         if (
           node.type.name !== 'paragraph' ||
           !numberingProps ||
@@ -105,7 +123,12 @@ export function createNumberingPlugin(editor: Editor): Plugin {
           editor,
         });
 
-        if (!definitionDetails || Object.keys(definitionDetails).length === 0) {
+        // Validate that definition details exist and have expected structure
+        if (
+          !definitionDetails ||
+          typeof definitionDetails !== 'object' ||
+          Object.keys(definitionDetails).length === 0
+        ) {
           // Treat as normal paragraph if definition is missing
           tr.setNodeAttribute(pos, 'listRendering', null);
           return;
@@ -118,9 +141,10 @@ export function createNumberingPlugin(editor: Editor): Plugin {
           suffix,
           justification,
           abstractId,
-        } = definitionDetails;
-        const safeAbstractId: string | number | undefined = abstractId ?? undefined;
-        const listNumberingType: string = listNumberingTypeRaw ?? 'decimal';
+        } = definitionDetails as Record<string, unknown>;
+        const safeAbstractId: string | number | undefined =
+          typeof abstractId === 'string' || typeof abstractId === 'number' ? abstractId : undefined;
+        const listNumberingType: string = typeof listNumberingTypeRaw === 'string' ? listNumberingTypeRaw : 'decimal';
         // Defining the list marker
         let markerText = '';
         const count = numberingManager.calculateCounter(numIdValue, levelValue, pos, safeAbstractId);
@@ -132,7 +156,7 @@ export function createNumberingPlugin(editor: Editor): Plugin {
               listLevel: path,
               lvlText: String(lvlText ?? ''),
               listNumberingType: String(listNumberingType),
-              customFormat: (customFormat ?? null) as any,
+              customFormat: (typeof customFormat === 'string' ? customFormat : null) as string | undefined,
             }),
           );
         } else {

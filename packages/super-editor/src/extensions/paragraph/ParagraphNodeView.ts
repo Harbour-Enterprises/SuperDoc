@@ -5,15 +5,17 @@ import { resolveRunProperties, encodeCSSFromRPr, encodeCSSFromPPr } from '../../
 import { isList } from '@core/commands/list-helpers';
 import { getResolvedParagraphProperties, calculateResolvedParagraphProperties } from './resolvedPropertiesCache.js';
 import type { Node as PmNode } from 'prosemirror-model';
+import { DecorationSet } from 'prosemirror-view';
 import type { Decoration, DecorationSource, NodeView, ViewMutationRecord } from 'prosemirror-view';
 import type { Editor } from '@core/Editor.js';
 import type { ExtensionAttribute } from '@core/Attribute.js';
+import type { ParagraphProperties } from '@converter/styles.js';
 
 /**
  * A map to keep track of paragraph node views for quick access.
  * @type {WeakMap<import('prosemirror-model').Node, ParagraphNodeView>}
  */
-const nodeViewMap = new WeakMap();
+const nodeViewMap = new WeakMap<PmNode, ParagraphNodeView>();
 
 /**
  * ProseMirror node view that renders paragraphs, including special handling for
@@ -34,9 +36,9 @@ export class ParagraphNodeView implements NodeView {
   marker: HTMLElement | null;
   separator: HTMLElement | Text | null;
   surroundingContext: {
-    hasPreviousParagraph?: boolean;
-    previousParagraph?: PmNode | null;
-    nextParagraphProps?: unknown;
+    hasPreviousParagraph: boolean;
+    previousParagraph: PmNode | null;
+    nextParagraphProps: ParagraphProperties | null;
   };
 
   constructor(
@@ -54,7 +56,7 @@ export class ParagraphNodeView implements NodeView {
     this._animationFrameRequest = null;
     this.marker = null;
     this.separator = null;
-    this.surroundingContext = {};
+    this.surroundingContext = { hasPreviousParagraph: false, previousParagraph: null, nextParagraphProps: null };
     nodeViewMap.set(this.node, this);
 
     const initialPos = this.getPos?.() ?? 0;
@@ -180,27 +182,32 @@ export class ParagraphNodeView implements NodeView {
    * Updates the CSS styles of the paragraph DOM element based on resolved paragraph properties.
    * @param {Record<string, unknown> | null} oldParagraphProperties
    */
-  #updateDOMStyles(oldParagraphProperties: Record<string, unknown> | null = null) {
+  #updateDOMStyles(oldParagraphProperties: ParagraphProperties | null = null) {
     this.dom.style.cssText = '';
-    const paragraphProperties = (getResolvedParagraphProperties(this.node) ?? {}) as Record<string, unknown>;
+    const paragraphProperties: ParagraphProperties = getResolvedParagraphProperties(this.node) ?? {};
     this.#resolveNeighborParagraphProperties();
 
-    const style = (encodeCSSFromPPr as any)(
+    const style = encodeCSSFromPPr(
       paragraphProperties,
-      this.surroundingContext.hasPreviousParagraph,
+      this.surroundingContext.hasPreviousParagraph ?? false,
       this.surroundingContext.nextParagraphProps,
     );
     Object.entries(style).forEach(([k, v]) => {
-      (this.dom.style as unknown as Record<string, string>)[k] = v as string;
+      if (k in this.dom.style && typeof v === 'string') {
+        // Convert camelCase to kebab-case for CSS properties
+        const kebabKey = k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+        this.dom.style.setProperty(kebabKey, v);
+      }
     });
 
     // Check if spacing-related props changed and if so, trigger update on previous paragraph so it can adjust its bottom spacing
-    if (
-      JSON.stringify((paragraphProperties as any).spacing) !==
-        JSON.stringify((oldParagraphProperties as any)?.spacing) ||
-      (paragraphProperties as any).styleId !== (oldParagraphProperties as any)?.styleId ||
-      (paragraphProperties as any).contextualSpacing !== (oldParagraphProperties as any)?.contextualSpacing
-    ) {
+    const spacingChanged =
+      JSON.stringify(paragraphProperties.spacing ?? null) !== JSON.stringify(oldParagraphProperties?.spacing ?? null);
+    const styleIdChanged = paragraphProperties.styleId !== oldParagraphProperties?.styleId;
+    const contextualSpacingChanged =
+      paragraphProperties.contextualSpacing !== oldParagraphProperties?.contextualSpacing;
+
+    if (spacingChanged || styleIdChanged || contextualSpacingChanged) {
       const previousNodeView = this.surroundingContext.previousParagraph
         ? nodeViewMap.get(this.surroundingContext.previousParagraph)
         : null;
@@ -208,15 +215,18 @@ export class ParagraphNodeView implements NodeView {
         // Check if the previous node view is still valid
         try {
           previousNodeView.getPos();
-        } catch {
+        } catch (error) {
+          console.warn('Failed to get position for previous paragraph node view:', error);
           return;
         }
-        (previousNodeView as ParagraphNodeView)._forceUpdateNext = true;
-        (previousNodeView as any).update(
-          previousNodeView.node,
-          previousNodeView.decorations,
-          (previousNodeView.innerDecorations ?? []) as DecorationSource,
-        );
+        previousNodeView._forceUpdateNext = true;
+        const inner: DecorationSource =
+          previousNodeView.innerDecorations && !Array.isArray(previousNodeView.innerDecorations)
+            ? (previousNodeView.innerDecorations as DecorationSource)
+            : Array.isArray(previousNodeView.innerDecorations)
+              ? DecorationSet.create(this.editor.state.doc, previousNodeView.innerDecorations)
+              : DecorationSet.empty;
+        previousNodeView.update(previousNodeView.node, previousNodeView.decorations, inner);
       }
     }
   }
@@ -230,8 +240,8 @@ export class ParagraphNodeView implements NodeView {
     const parent = $pos.parent;
     const index = $pos.index();
     let hasPreviousParagraph = false;
-    let previousParagraph = null;
-    let nextParagraphProps = null;
+    let previousParagraph: PmNode | null = null;
+    let nextParagraphProps: ParagraphProperties | null = null;
     if (index > 0) {
       const previousNode = parent.child(index - 1);
       hasPreviousParagraph =
@@ -244,7 +254,7 @@ export class ParagraphNodeView implements NodeView {
       if (index < parent.childCount - 1) {
         const nextNode = parent.child(index + 1);
         if (nextNode.type.name === 'paragraph') {
-          nextParagraphProps = getResolvedParagraphProperties(nextNode);
+          nextParagraphProps = getResolvedParagraphProperties(nextNode) ?? null;
         }
       }
     }
@@ -268,10 +278,13 @@ export class ParagraphNodeView implements NodeView {
     this.#calculateMarkerStyle(justificationValue);
     if (suffix === 'tab') {
       const paragraphProperties = getResolvedParagraphProperties(this.node) ?? {};
-      this.#calculateTabSeparatorStyle(
-        justificationValue,
-        (paragraphProperties.indent as { hanging?: number; firstLine?: number } | undefined) ?? null,
-      );
+      const indent =
+        paragraphProperties.indent &&
+        typeof paragraphProperties.indent === 'object' &&
+        'hanging' in paragraphProperties.indent
+          ? (paragraphProperties.indent as { hanging?: number; firstLine?: number })
+          : null;
+      this.#calculateTabSeparatorStyle(justificationValue, indent);
     } else {
       if (this.separator) {
         this.separator.textContent = suffix === 'space' ? '\u00A0' : '';
@@ -349,28 +362,47 @@ export class ParagraphNodeView implements NodeView {
 
   #createSeparator(suffix?: string): void {
     if (!this.marker) return;
+
     if (suffix === 'tab' || suffix == null) {
       if (this.separator == null || (this.separator as HTMLElement).tagName?.toLowerCase() !== 'span') {
-        this.separator?.parentNode?.removeChild(this.separator);
+        if (this.separator?.parentNode) {
+          this.separator.parentNode.removeChild(this.separator);
+        }
         this.separator = document.createElement('span');
-        this.marker.after(this.separator);
+        if (this.marker.parentNode) {
+          this.marker.after(this.separator);
+        }
       }
-      (this.separator as HTMLElement).className = 'sd-editor-tab';
-      (this.separator as HTMLElement).contentEditable = 'false';
+      if (this.separator instanceof HTMLElement) {
+        this.separator.className = 'sd-editor-tab';
+        this.separator.contentEditable = 'false';
+      }
     } else if (suffix === 'space') {
       if (this.separator == null || this.separator.nodeType !== Node.TEXT_NODE) {
-        this.separator?.parentNode?.removeChild(this.separator);
+        if (this.separator?.parentNode) {
+          this.separator.parentNode.removeChild(this.separator);
+        }
         this.separator = document.createTextNode('\u00A0');
-        this.marker.after(this.separator);
+        if (this.marker.parentNode) {
+          this.marker.after(this.separator);
+        }
       }
-      this.separator.textContent = '\u00A0';
+      if (this.separator) {
+        this.separator.textContent = '\u00A0';
+      }
     } else if (suffix === 'nothing') {
       if (this.separator == null || this.separator.nodeType !== Node.TEXT_NODE) {
-        this.separator?.parentNode?.removeChild(this.separator);
+        if (this.separator?.parentNode) {
+          this.separator.parentNode.removeChild(this.separator);
+        }
         this.separator = document.createTextNode('');
-        this.marker.after(this.separator);
+        if (this.marker.parentNode) {
+          this.marker.after(this.separator);
+        }
       }
-      this.separator.textContent = '';
+      if (this.separator) {
+        this.separator.textContent = '';
+      }
     }
   }
 

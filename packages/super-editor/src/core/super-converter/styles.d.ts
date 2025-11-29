@@ -59,7 +59,11 @@ export function encodeMarksFromRPr(runProperties: RunProperties, docx: unknown):
 /**
  * Encodes CSS from paragraph properties
  */
-export function encodeCSSFromPPr(paragraphProperties: ParagraphProperties): Record<string, string>;
+export function encodeCSSFromPPr(
+  paragraphProperties: ParagraphProperties,
+  hasPreviousParagraph?: boolean,
+  nextParagraphProps?: ParagraphProperties | null,
+): Record<string, string>;
 
 /**
  * Encodes CSS from run properties

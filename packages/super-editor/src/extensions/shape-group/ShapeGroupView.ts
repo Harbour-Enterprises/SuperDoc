@@ -13,9 +13,12 @@ interface ShapeAttrs extends Record<string, unknown> {
   flipH?: boolean;
   flipV?: boolean;
   kind?: string;
-  fillColor?: string;
-  strokeColor?: string;
+  fillColor?: string | { type?: string; color?: string; alpha?: number } | null;
+  strokeColor?: string | null;
   strokeWidth?: number | null;
+  textContent?: { parts?: unknown[] } | null;
+  textAlign?: string | null;
+  src?: string | null;
 }
 
 interface ShapeGroupNodeAttrs {
@@ -24,7 +27,22 @@ interface ShapeGroupNodeAttrs {
   size?: { width?: number | null; height?: number | null };
 }
 
-type ShapeGroupEditor = { view: EditorView; storage?: Record<string, unknown> };
+type ShapeGroupEditor = { view: EditorView; storage?: { image?: { media?: Record<string, string> } } };
+
+type PresetShapeOptions = {
+  preset: string;
+  styleOverrides?: { fill?: string; stroke?: string; strokeWidth?: number };
+  width: number;
+  height: number;
+};
+
+const isGradientFill = (fill: ShapeAttrs['fillColor']): fill is { type: 'gradient'; [key: string]: unknown } => {
+  return Boolean(fill && typeof fill === 'object' && 'type' in fill && fill.type === 'gradient');
+};
+
+const isSolidAlphaFill = (fill: ShapeAttrs['fillColor']): fill is { type?: string; color?: string; alpha?: number } => {
+  return Boolean(fill && typeof fill === 'object' && 'color' in fill);
+};
 
 export interface ShapeGroupViewProps {
   node: PmNode;
@@ -280,19 +298,21 @@ export class ShapeGroupView implements NodeView {
 
     // Generate the shape based on its kind
     const shapeKind = (attrs.kind as string | undefined) || 'rect';
-    const fillColor = attrs.fillColor === null ? null : ((attrs.fillColor as string | undefined) ?? '#5b9bd5');
-    const strokeColor = attrs.strokeColor === null ? null : ((attrs.strokeColor as string | undefined) ?? '#000000');
+    const fillColor = attrs.fillColor === null ? null : (attrs.fillColor ?? '#5b9bd5');
+    const strokeColor = attrs.strokeColor === null ? null : (attrs.strokeColor ?? '#000000');
     const strokeWidth = attrs.strokeWidth ?? 1;
 
     // Handle gradient fills
-    let fillValue: string | null | undefined = fillColor;
-    if (fillColor && typeof fillColor === 'object' && (fillColor as { type?: string }).type === 'gradient') {
+    let fillValue: string = typeof fillColor === 'string' ? fillColor : '#5b9bd5';
+    if (isGradientFill(fillColor)) {
       const gradientId = `gradient-${shapeIndex}-${Date.now()}-${Math.floor(Math.random() * 1e9)}`;
       const gradient = this.createGradient(fillColor as Record<string, unknown>, gradientId);
       defs.appendChild(gradient);
       fillValue = `url(#${gradientId})`;
     } else if (fillColor === null) {
       fillValue = 'none';
+    } else if (isSolidAlphaFill(fillColor) && fillColor.type === 'solidWithAlpha') {
+      fillValue = fillColor.color ?? '#5b9bd5';
     }
 
     if (shapeKind === 'line') {
@@ -305,15 +325,10 @@ export class ShapeGroupView implements NodeView {
       line.setAttribute('stroke-width', (strokeColor === null ? 0 : strokeWidth).toString());
       g.appendChild(line);
 
-      const textContent = (attrs as { textContent?: any }).textContent;
-      const textParts = (textContent as any)?.parts;
+      const textContent = attrs.textContent;
+      const textParts = textContent?.parts;
       if (textParts) {
-        const textGroup = this.createTextElement(
-          textContent as Record<string, unknown>,
-          (attrs as { textAlign?: string }).textAlign,
-          width,
-          height,
-        );
+        const textGroup = this.createTextElement(textContent, attrs.textAlign, width, height);
         if (textGroup) {
           g.appendChild(textGroup);
         }
@@ -329,10 +344,10 @@ export class ShapeGroupView implements NodeView {
           fill: fillValue || 'none',
           stroke: strokeColor === null ? 'none' : strokeColor,
           strokeWidth: strokeColor === null ? 0 : strokeWidth,
-        } as any,
+        },
         width,
         height,
-      } as any);
+      } as unknown as Parameters<typeof getPresetShapeSvg>[0]);
 
       if (svgContent) {
         // Parse the SVG string and extract the path/shape element
@@ -418,9 +433,8 @@ export class ShapeGroupView implements NodeView {
     }
 
     // Add text content if present
-    const textAttrs = attrs as { textContent?: { parts?: unknown }; textAlign?: unknown };
-    if (textAttrs.textContent && textAttrs.textContent.parts) {
-      const textGroup = this.createTextElement(textAttrs.textContent, textAttrs.textAlign, width, height);
+    if (attrs.textContent && attrs.textContent.parts) {
+      const textGroup = this.createTextElement(attrs.textContent, attrs.textAlign, width, height);
       if (textGroup) {
         g.appendChild(textGroup);
       }
@@ -437,7 +451,7 @@ export class ShapeGroupView implements NodeView {
     return createGradient(gradientData, gradientId);
   }
 
-  createImageElement(shape: { attrs?: Record<string, any> }, _groupTransform: unknown) {
+  createImageElement(shape: { attrs?: ShapeAttrs | null }, _groupTransform: unknown) {
     const attrs = shape.attrs;
     if (!attrs) return null;
 
@@ -455,7 +469,8 @@ export class ShapeGroupView implements NodeView {
     image.setAttribute('height', height.toString());
 
     // Get image source from editor's media storage or use the path directly
-    const src = (this.editor as any)?.storage?.image?.media?.[attrs.src] ?? attrs.src;
+    const srcKey = attrs.src ?? '';
+    const src = this.editor.storage?.image?.media?.[srcKey] ?? attrs.src ?? '';
     image.setAttribute('href', src);
     image.setAttribute('preserveAspectRatio', 'none'); // Stretch to fill
 
