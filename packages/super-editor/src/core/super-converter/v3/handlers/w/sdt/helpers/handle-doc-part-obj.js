@@ -46,6 +46,7 @@ export const tableOfContentsHandler = (params) => {
     nodes: node.elements,
     path: [...(params.path || []), node],
   });
+  const normalizedContent = normalizeDocPartContent(translatedContent);
   const sdtPr = params.extraParams.sdtPr;
   const id = sdtPr.elements?.find((el) => el.name === 'w:id')?.attributes['w:val'] || '';
   const docPartObj = sdtPr?.elements.find((el) => el.name === 'w:docPartObj');
@@ -54,7 +55,7 @@ export const tableOfContentsHandler = (params) => {
 
   const result = {
     type: 'documentPartObject',
-    content: translatedContent,
+    content: normalizedContent,
     attrs: {
       id,
       docPartGallery: 'Table of Contents',
@@ -110,4 +111,22 @@ export const genericDocPartHandler = (params) => {
 
 const validGalleryTypeMap = {
   'Table of Contents': tableOfContentsHandler,
+};
+
+const inlineNodeTypes = new Set(['bookmarkStart', 'bookmarkEnd']);
+const wrapInlineNode = (node) => ({
+  type: 'paragraph',
+  content: [node],
+});
+
+export const normalizeDocPartContent = (nodes = []) => {
+  const normalized = [];
+  nodes.forEach((node) => {
+    if (inlineNodeTypes.has(node?.type)) {
+      normalized.push(wrapInlineNode(node));
+    } else {
+      normalized.push(node);
+    }
+  });
+  return normalized;
 };
