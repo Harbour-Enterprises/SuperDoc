@@ -2,8 +2,15 @@
   "name": "@superdoc-dev/ai",
   "version": "0.1.5",
   "description": "AI integration package for SuperDoc",
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
@@ -14,11 +21,15 @@
   "keywords": [
     "superdoc",
     "ai",
+    "ai-builder",
+    "ai-actions",
     "document",
     "collaboration",
     "llm",
     "openai",
-    "anthropic"
+    "anthropic",
+    "tools",
+    "structured-outputs"
   ],
   "license": "AGPL-3.0",
   "peerDependencies": {
