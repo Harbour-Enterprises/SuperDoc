@@ -302,31 +302,17 @@ export class AIActions {
 
     /**
      * Retrieves the current document context for AI processing.
-     * Returns selected text if there is a selection, otherwise returns full document content.
+     * Combines XML and plain text representations when available.
      *
      * @returns Document context string
      */
     public getDocumentContext(): string {
         const editor = this.getEditor();
-        if (!editor || !editor.view?.state) {
+        if (!editor) {
             return '';
         }
 
-        // Access state through view to ensure we get the latest selection
-        const { state } = editor.view;
-        const { selection, doc } = state;
-
-        if (!doc) {
-            return '';
-        }
-
-        // If there's a text selection, return only the selected text
-        if (selection && !selection.empty && typeof selection.from === 'number' && typeof selection.to === 'number') {
-            return doc.textBetween(selection.from, selection.to, ' ').trim() || '';
-        }
-
-        // Otherwise, return the full document content
-        return doc.textContent?.trim() || '';
+        return editor.state?.doc?.textContent?.trim() || '';
     }
     
     /**

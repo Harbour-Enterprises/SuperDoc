@@ -19,48 +19,12 @@ describe('AIActions', () => {
             }
         };
 
-        const mockDoc = {
-            textContent: 'Sample document text',
-            content: { size: 100 },
-            textBetween: vi.fn((from: number, to: number, separator?: string) => {
-                // Simple mock: return a substring based on positions
-                const text = 'Sample document text';
-                return text.substring(Math.max(0, from), Math.min(text.length, to));
-            }),
-            resolve: vi.fn((pos) => ({ 
-                pos, 
-                parent: { inlineContent: true },
-                min: vi.fn(() => pos),
-                max: vi.fn(() => pos)
-            }))
-        };
-
         mockEditor = {
             state: {
-                doc: mockDoc,
-                tr: {
-                    setSelection: vi.fn().mockReturnThis(),
-                    scrollIntoView: vi.fn().mockReturnThis(),
+                doc: {
+                    textContent: 'Sample document text',
+                    content: { size: 100 }
                 }
-            },
-            view: {
-                state: {
-                    doc: mockDoc,
-                    selection: {
-                        from: 0,
-                        to: 0,
-                        empty: true
-                    }
-                },
-                dispatch: vi.fn(),
-                domAtPos: vi.fn((pos: number) => {
-                    return {
-                        node: {
-                            scrollIntoView: vi.fn(),
-                        },
-                        offset: 0,
-                    };
-                }),
             },
             exportDocx: vi.fn(),
             options: {
@@ -371,7 +335,7 @@ describe('AIActions', () => {
     });
 
     describe('getDocumentContext', () => {
-        it('should return document text content when no selection', async () => {
+        it('should return document text content', async () => {
             const options: AIActionsOptions = {
                 user: { displayName: 'AI Bot' },
                 provider: mockProvider
@@ -379,56 +343,9 @@ describe('AIActions', () => {
 
             const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
-
-            // Ensure no selection
-            mockEditor.view.state.selection = {
-                from: 0,
-                to: 0,
-                empty: true
-            } as any;
 
             const context = ai.getDocumentContext();
             expect(context).toBe('Sample document text');
-        });
-
-        it('should return selected text when there is a selection', async () => {
-            const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
-                provider: mockProvider
-            };
-
-            const ai = new AIActions(mockSuperdoc, options);
-            await ai.waitUntilReady();
-
-            // Set up a selection
-            mockEditor.view.state.selection = {
-                from: 0,
-                to: 6,
-                empty: false
-            } as any;
-
-            // Mock textBetween to return the selected portion
-            mockEditor.view.state.doc.textBetween = vi.fn(() => 'Sample');
-
-            const context = ai.getDocumentContext();
-            expect(context).toBe('Sample');
-            expect(mockEditor.view.state.doc.textBetween).toHaveBeenCalledWith(0, 6, ' ');
-        });
-
-        it('should return empty string when editor view state is missing', async () => {
-            const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
-                provider: mockProvider
-            };
-
-            const ai = new AIActions(mockSuperdoc, options);
-            await ai.waitUntilReady();
-
-            // Remove view state
-            (mockEditor as any).view = null;
-
-            const context = ai.getDocumentContext();
-            expect(context).toBe('');
         });
 
         it('throws during construction when no editor is available', () => {

@@ -1,17 +1,9 @@
 import { SuperDoc, Editor as EditorClass } from 'superdoc';
-import type { Mark, Node } from 'prosemirror-model';
-import type { EditorState } from 'prosemirror-state';
-import type { EditorView } from 'prosemirror-view';
+import { Mark, Node } from 'prosemirror-model';
 
 export type MarkType = Mark;
 export type NodeType = Node;
-
-// Extend the Editor type to include properties not defined in the JS class
-export type Editor = InstanceType<typeof EditorClass> & {
-    view?: EditorView;
-    state?: EditorState;
-};
-
+export type Editor = InstanceType<typeof EditorClass>;
 export type SuperDocInstance = typeof SuperDoc | SuperDoc;
 
 /**
