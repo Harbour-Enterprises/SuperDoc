@@ -1,3 +1,9 @@
+# [0.34.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.33.0...v0.34.0) (2025-11-30)
+
+### Features
+
+- add getSchemaSummaryJSON to Editor ([59a0ce5](https://github.com/Harbour-Enterprises/SuperDoc/commit/59a0ce5cebffbdcdc2ffd6c1695d9303b718abed))
+
 # [0.33.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.32.0...v0.33.0) (2025-11-26)
 
 ### Features
