@@ -54,9 +54,12 @@ export class AIActionsService {
 
     /**
      * Executes a find query and resolves editor positions for matches.
+     *
      * @param query - Natural language description of content to find
      * @param findAll - Whether to find all occurrences or just the first
      * @returns Result with found locations enriched with editor positions
+     * @throws Error if query is empty
+     * @private
      */
     private async executeFindQuery(query: string, findAll: boolean): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -80,21 +83,31 @@ export class AIActionsService {
         if (!result.success || !result.results) {
             return result;
         }
-        result.results = this.adapter.findResults(result.results);
+        result.results = this.adapter.findResults(result.results, { highlight: true });
 
         return result;
     }
 
     /**
      * Finds the first occurrence of content matching the query and resolves concrete positions via the editor adapter.
+     * Automatically scrolls to bring the found text into view.
+     *
      * @param query - Natural language description of content to find
      * @returns Result with found locations enriched with editor positions
+     * @throws Error if query is empty
      */
     async find(query: string): Promise<Result> {
         const result = await this.executeFindQuery(query, false);
 
         if (result.success && result.results?.length) {
             result.results = [result.results[0]];
+            
+            // Scroll to the found text
+            const firstMatch = result.results[0];
+            if (firstMatch?.positions && firstMatch.positions.length > 0) {
+                const { from, to } = firstMatch.positions[0];
+                this.adapter.scrollToPosition(from, to);
+            }
         }
 
         return result;
@@ -102,8 +115,10 @@ export class AIActionsService {
 
     /**
      * Finds all occurrences of content matching the query.
+     *
      * @param query - Natural language description of content to find
      * @returns Result with all found locations
+     * @throws Error if query is empty
      */
     async findAll(query: string): Promise<Result> {
         return this.executeFindQuery(query, true);
@@ -112,9 +127,12 @@ export class AIActionsService {
 
     /**
      * Finds and highlights content in the document.
+     * Automatically scrolls to bring the highlighted content into view.
+     *
      * @param query - Natural language description of content to highlight
-     * @param color - highlight color
+     * @param color - Hex color for the highlight (default: #6CA0DC)
      * @returns Result with highlight ID if successful
+     * @throws Error if query is empty or content not found
      */
     async highlight(query: string, color: string = "#6CA0DC"): Promise<Result> {
         const findResult = await this.find(query);
@@ -141,24 +159,20 @@ export class AIActionsService {
     }
 
     /**
-     * Core logic for all document operations (replace, tracked changes, comments)
-     * @param query - Natural language query
-     * @param multiple - Whether to apply to all occurrences or just the first
-     * @param operationFn - Function to execute the specific operation
-     * @returns Matches and IDs of created items
+     * Fetches AI-generated replacements based on the query.
+     *
+     * @param query - Natural language query describing what to replace
+     * @param multiple - Whether to find all occurrences or just the first
+     * @returns Array of FoundMatch results from AI, or empty array if no context or results
+     * @private
      */
-    private async executeOperation(
-        query: string,
-        multiple: boolean,
-        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
-    ): Promise<FoundMatch[]> {
+    private async fetchAIReplacements(query: string, multiple: boolean): Promise<FoundMatch[]> {
         const documentContext = this.getDocumentContext();
 
         if (!documentContext) {
             return [];
         }
 
-        // Get AI query
         const prompt = buildReplacePrompt(query, documentContext, multiple);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.EDIT},
@@ -171,36 +185,174 @@ export class AIActionsService {
             this.enableLogging
         );
 
-        const replacements = parsed.results || [];
+        return parsed.results || [];
+    }
 
-        if (!replacements.length) {
+    /**
+     * Executes a single operation on the first valid match found.
+     * 
+     * @param searchResults - Array of search results with positions
+     * @param operationFn - Function to execute the specific operation
+     * @returns Array with the processed result, or empty array if no valid result
+     * @throws Error if operation execution fails
+     * @private
+     */
+    private async executeSingleOperation(
+        searchResults: FoundMatch[],
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
+    ): Promise<FoundMatch[]> {
+        const firstValidResult = searchResults.find(
+            result => result.positions && result.positions.length > 0
+        );
+
+        if (!firstValidResult) {
             return [];
         }
 
-        const searchResults = this.adapter.findResults(replacements);
-        const match = searchResults?.[0];
+        try {
+            const position = firstValidResult.positions![0];
+            await operationFn(this.adapter, position, firstValidResult);
+            return [firstValidResult];
+        } catch (error) {
+            if (this.enableLogging) {
+                console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Collects all operations from search results into a flat array.
+     * Creates immutable copies of positions to prevent mutation.
+     * 
+     * @param searchResults - Array of search results with positions
+     * @returns Array of operations with positions and associated results
+     * @private
+     */
+    private collectOperationsFromResults(
+        searchResults: FoundMatch[]
+    ): Array<{ position: DocumentPosition; result: FoundMatch }> {
+        const allOperations: Array<{ position: DocumentPosition; result: FoundMatch }> = [];
+        
         for (const result of searchResults) {
+            if (!result.positions || !result.positions.length) {
+                continue;
+            }
+            for (const position of result.positions) {
+                allOperations.push({
+                    position: { from: position.from, to: position.to }, 
+                    result 
+                });
+            }
+        }
+        return allOperations;
+    }
+
+    /**
+     * Checks if a position overlaps with any of the processed ranges.
+     * 
+     * @param position - Position to check for overlap
+     * @param processedRanges - Array of already processed ranges
+     * @returns True if position overlaps with any processed range
+     * @private
+     */
+    private hasOverlap(
+        position: DocumentPosition,
+        processedRanges: Array<{ from: number; to: number }>
+    ): boolean {
+        return processedRanges.some(
+            range => position.from < range.to && position.to > range.from
+        );
+    }
+
+    /**
+     * Executes multiple operations, handling overlaps and processing in reverse order.
+     * Processes positions from end to beginning to prevent position drift.
+     * 
+     * @param allOperations - Array of all operations to process
+     * @param operationFn - Function to execute the specific operation
+     * @returns Array of successfully processed results
+     * @throws Error if any operation execution fails
+     * @private
+     */
+    private async executeMultipleOperations(
+        allOperations: Array<{ position: DocumentPosition; result: FoundMatch }>,
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
+    ): Promise<FoundMatch[]> {
+        // Sort positions by 'from' in descending order (end to beginning)
+        // This prevents position drift - earlier positions remain valid when processing from the end
+        allOperations.sort((a, b) => b.position.from - a.position.from);
+
+        const processedRanges: Array<{ from: number; to: number }> = [];
+        const processedResults: FoundMatch[] = [];
+        
+        for (const { position, result } of allOperations) {
             try {
-                if (!result.positions || !result.positions.length) {
-                    return [];
+                // Check if this position overlaps with any already processed range
+                if (this.hasOverlap(position, processedRanges)) {
+                    continue;
                 }
-                await operationFn(this.adapter, result.positions[0], result);
-                if (!multiple) return [match];
+                
+                await operationFn(this.adapter, { from: position.from, to: position.to }, result);
+                processedRanges.push({ from: position.from, to: position.to });
+                if (!processedResults.includes(result)) {
+                    processedResults.push(result);
+                }
             } catch (error) {
                 if (this.enableLogging) {
-                    console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown'}`);
+                    console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
                 }
                 throw error;
             }
         }
-        return searchResults;
+        
+        return processedResults;
+    }
+
+    /**
+     * Core logic for all document operations (replace, tracked changes, comments).
+     * Finds matching content and applies the operation function to each match.
+     *
+     * @param query - Natural language query to find content
+     * @param multiple - Whether to apply to all occurrences or just the first
+     * @param operationFn - Function to execute the specific operation on each match
+     * @returns Array of matches with IDs of created items
+     * @throws Error if query is empty
+     * @private
+     */
+    private async executeOperation(
+        query: string,
+        multiple: boolean,
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
+    ): Promise<FoundMatch[]> {
+        const replacements = await this.fetchAIReplacements(query, multiple);
+
+        if (!replacements.length) {
+            return [];
+        }
+        const searchResults = this.adapter.findResults(replacements);
+        
+        if (!multiple) {
+            return await this.executeSingleOperation(searchResults, operationFn);
+        }
+        
+        const allOperations = this.collectOperationsFromResults(searchResults);
+        
+        if (!allOperations.length) {
+            return [];
+        }
+        
+        return await this.executeMultipleOperations(allOperations, operationFn);
     }
 
 
     /**
-     * Finds and replaces content with AI-generated alternative.
-     * @param query - Natural language query for replacement
-     * @returns Result with original and suggested text
+     * Finds and replaces the first occurrence of content with AI-generated alternative.
+     * Uses intelligent mark preservation to maintain formatting.
+     *
+     * @param query - Natural language query describing what to replace and how
+     * @returns Result with original and suggested text for the replacement
+     * @throws Error if query is empty
      */
     async replace(query: string): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -210,8 +362,10 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             false,
-            (adapter, position, replacement) =>
-                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '')
+            (adapter, position, replacement) => {
+                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '');
+                return Promise.resolve();
+            }
         );
 
         return {
@@ -222,8 +376,11 @@ export class AIActionsService {
 
     /**
      * Finds and replaces all occurrences with AI-generated alternatives.
-     * @param query - Natural language query for replacements
+     * Uses intelligent mark preservation to maintain formatting for each replacement.
+     *
+     * @param query - Natural language query describing what to replace and how
      * @returns Result with all replacements made
+     * @throws Error if query is empty
      */
     async replaceAll(query: string): Promise<Result> {
         if (!validateInput(query, 'Query')) {
@@ -233,8 +390,10 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             true,
-            (adapter, position, replacement) =>
-                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '')
+            (adapter, position, replacement) => {
+                adapter.replaceText(position.from, position.to, replacement?.suggestedText || '');
+                return Promise.resolve();
+            }
         );
 
         return {
@@ -254,12 +413,14 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             false,
-            (adapter, position, replacement) =>
-                adapter.createTrackedChange(
+            (adapter, position, replacement) => {
+                const changeId = adapter.createTrackedChange(
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                )
+                );
+                return Promise.resolve(changeId);
+            }
         );
 
         return {
@@ -279,12 +440,14 @@ export class AIActionsService {
         const matches = await this.executeOperation(
             query,
             true,
-            (adapter, position, replacement) =>
-                adapter.createTrackedChange(
+            (adapter, position, replacement) => {
+                const changeId = adapter.createTrackedChange(
                     position.from,
                     position.to,
                     replacement.suggestedText || '',
-                )
+                );
+                return Promise.resolve(changeId);
+            }
         );
 
         return {
@@ -460,8 +623,19 @@ export class AIActionsService {
         stream: boolean = false,
         onStreamProgress?: (aggregated: string, chunk: string) => Promise<boolean | void> | boolean | void,
     ): Promise<string> {
+        if (this.enableLogging) {
+            console.log('[AIActions] AI request', {
+                stream,
+                messages,
+            });
+        }
+
         if (!stream) {
-            return this.provider.getCompletion(messages);
+            const response = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response });
+            }
+            return response;
         }
 
         let aggregated = '';
@@ -486,20 +660,35 @@ export class AIActionsService {
         } catch (error) {
             if (!aggregated) {
                 // No progress, fallback to non-streaming completion so callers still get a response.
-                return this.provider.getCompletion(messages);
+                const fallbackResponse = await this.provider.getCompletion(messages);
+                if (this.enableLogging) {
+                    console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+                }
+                return fallbackResponse;
             }
             throw error;
         }
 
         if (!streamed || !aggregated) {
-            return this.provider.getCompletion(messages);
+            const fallbackResponse = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+            }
+            return fallbackResponse;
         }
 
         const trimmed = aggregated.trim();
         if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
-            return this.provider.getCompletion(messages);
+            const fallbackResponse = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+            }
+            return fallbackResponse;
         }
 
+        if (this.enableLogging) {
+            console.log('[AIActions] AI response', { stream: true, response: aggregated });
+        }
         return aggregated;
     }
 }
