@@ -1,3 +1,9 @@
+## [0.34.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.1...v0.34.2) (2025-11-30)
+
+### Bug Fixes
+
+- positional shift problem and node text boundaries ([#1359](https://github.com/Harbour-Enterprises/SuperDoc/issues/1359)) ([d8fbe04](https://github.com/Harbour-Enterprises/SuperDoc/commit/d8fbe0467698f5384edebf367482aa75584af8c1))
+
 ## [0.34.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.0...v0.34.1) (2025-11-30)
 
 ### Reverts
