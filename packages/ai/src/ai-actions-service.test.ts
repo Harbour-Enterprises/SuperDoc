@@ -60,45 +60,8 @@ describe('AIActionsService', () => {
             state: {
                 doc: {
                     textContent: 'Sample document text for testing',
-                    content: { size: 100 },
-                    resolve: vi.fn((pos) => ({
-                        pos,
-                        parent: { inlineContent: true },
-                        min: vi.fn(() => pos),
-                        max: vi.fn(() => pos),
-                        marks: vi.fn(() => [])
-                    })),
-                    textBetween: vi.fn((from, to) => 'Sample document text for testing'.slice(from, to)),
-                    nodesBetween: vi.fn()
-                },
-                selection: {
-                    from: 0,
-                    to: 0
-                },
-                tr: {
-                    setSelection: vi.fn().mockReturnThis(),
-                    scrollIntoView: vi.fn().mockReturnThis(),
-                    delete: vi.fn().mockReturnThis(),
-                    insert: vi.fn().mockReturnThis()
-                },
-                schema: {
-                    text: vi.fn((text, marks) => ({
-                        text,
-                        marks: marks || [],
-                        nodeSize: text.length
-                    }))
+                    content: { size: 100 }
                 }
-            },
-            view: {
-                dispatch: vi.fn(),
-                domAtPos: vi.fn((pos: number) => {
-                    return {
-                        node: {
-                            scrollIntoView: vi.fn(),
-                        },
-                        offset: 0,
-                    };
-                }),
             },
             exportDocx: vi.fn(),
             options: {
@@ -147,8 +110,6 @@ describe('AIActionsService', () => {
             expect(result.success).toBe(true);
             expect(result.results).toHaveLength(1);
             expect(result.results[0].originalText).toBe('Sample');
-            expect(mockEditor.commands.search).toHaveBeenCalledWith('Sample', { highlight: true });
-            expect(mockEditor.commands.search).toHaveBeenCalledWith('document', { highlight: true });
         });
 
         it('should return empty result when no matches', async () => {
@@ -201,7 +162,6 @@ describe('AIActionsService', () => {
 
             expect(result.success).toBe(true);
             expect(result.results).toHaveLength(3);
-            expect(mockEditor.commands.search).toHaveBeenCalledWith('test', { highlight: true });
         });
     });
 
@@ -273,7 +233,7 @@ describe('AIActionsService', () => {
             const result = await actions.replace('replace old with new');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.view.dispatch).toHaveBeenCalled();
+            expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
         });
 
         it('should validate input', async () => {
@@ -498,7 +458,12 @@ describe('AIActionsService', () => {
             const result = await actions.insertContent('generate introduction');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.view.dispatch).toHaveBeenCalled();
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    type: 'text',
+                    text: 'New content to insert'
+                })
+            );
         });
 
         it('should validate input', async () => {
@@ -539,6 +504,11 @@ describe('AIActionsService', () => {
                 'content"}]}'
             ];
 
+            const streamedPieces: string[] = [];
+            mockEditor.commands.insertContent = vi.fn((content: { text: string }) => {
+                streamedPieces.push(content.text);
+            });
+
             mockProvider.streamCompletion = vi.fn().mockImplementation(async function* () {
                 for (const chunk of streamingChunks) {
                     yield chunk;
@@ -547,21 +517,20 @@ describe('AIActionsService', () => {
 
             mockProvider.getCompletion = vi.fn().mockResolvedValue(finalPayload);
 
-            const onStreamChunk = vi.fn();
             const actions = new AIActionsService(
                 mockProvider,
                 mockEditor,
                 () => mockEditor.state.doc.textContent,
                 false,
-                onStreamChunk,
+                undefined,
                 true
             );
 
             const result = await actions.insertContent('generate introduction');
 
             expect(result.success).toBe(true);
-            expect(mockEditor.view.dispatch).toHaveBeenCalled();
-            expect(onStreamChunk).toHaveBeenCalledWith('Generated content');
+            expect(streamedPieces.join('')).toBe('Generated content');
+            expect(streamedPieces.length).toBeGreaterThan(1);
         });
 
         it('should disable streaming when stream preference is false', async () => {

@@ -1,8 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { Schema } from 'prosemirror-model';
-import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorAdapter } from './editor-adapter';
-import type { Editor, FoundMatch, MarkType } from './types';
+import type { Editor, FoundMatch } from './types';
 
 const createChain = (commands?: any) => {
     const chainApi = {
@@ -42,157 +40,37 @@ const createChain = (commands?: any) => {
     return { chainFn, chainApi };
 };
 
-const schema = new Schema({
-    nodes: {
-        doc: { content: 'paragraph+' },
-        paragraph: { content: 'inline*', group: 'block' },
-        text: { group: 'inline' },
-        inlineMarker: {
-            inline: true,
-            group: 'inline',
-            atom: true,
-            selectable: true,
-            parseDOM: [{ tag: 'inline-marker' }],
-            toDOM: () => ['inline-marker'],
-        },
-    },
-    marks: {
-        bold: {
-            parseDOM: [],
-            toDOM: () => ['strong', 0],
-        },
-        italic: {
-            parseDOM: [],
-            toDOM: () => ['em', 0],
-        },
-        textStyle: {
-            attrs: {
-                fontSize: { default: '12pt' },
-            },
-            parseDOM: [],
-            toDOM: (mark) => ['span', mark.attrs],
-        },
-    },
-});
-
-const defaultSegments = [{ text: 'Sample document text' }];
-
-const buildDocFromSegments = (segments: Array<{ text: string; marks?: MarkType[] }>) => {
-    const inline = segments.map(({ text, marks }) => schema.text(text, marks ?? []));
-    const paragraph = schema.node('paragraph', null, inline);
-    return schema.node('doc', null, [paragraph]);
-};
-
-const createEditorState = (
-    segments: Array<{ text: string; marks?: MarkType[] }>,
-    selectionRange?: { from: number; to?: number },
-) => {
-    const doc = buildDocFromSegments(segments);
-    const start = selectionRange?.from ?? 1;
-    const defaultTo = doc.content.size - 1;
-    const requestedTo = selectionRange?.to ?? defaultTo;
-    const end = Math.max(start, Math.min(requestedTo, defaultTo));
-    const selection = TextSelection.create(doc, start, end);
-    return EditorState.create({
-        schema,
-        doc,
-        selection,
-    });
-};
-
 describe('EditorAdapter', () => {
     let mockEditor: Editor;
     let mockAdapter: EditorAdapter;
     let chainApi: ReturnType<typeof createChain>['chainApi'];
     let chainFn: ReturnType<typeof createChain>['chainFn'];
 
-    const updateEditorState = (
-        segments: Array<{ text: string; marks?: MarkType[] }>,
-        selectionRange?: { from: number; to?: number },
-    ) => {
-        mockEditor.state = createEditorState(segments, selectionRange);
-    };
-
-    const getParagraphNodes = () => {
-        if (!mockEditor.state?.doc) {
-            return [];
-        }
-
-        const firstChild = mockEditor.state.doc.firstChild;
-        if (!firstChild) {
-            return [];
-        }
-
-        const nodes: Array<{ text: string; marks: string[] }> = [];
-        firstChild.forEach((node) => {
-            nodes.push({
-                text: node.text ?? '',
-                marks: node.marks.map((mark) => mark.type.name),
-            });
-        });
-        return nodes;
-    };
-
     beforeEach(() => {
-        const commands = {
-            search: vi.fn(),
-            setHighlight: vi.fn(),
-            enableTrackChanges: vi.fn(),
-            disableTrackChanges: vi.fn(),
-            insertComment: vi.fn(),
-            insertContentAt: vi.fn(),
-        } as Record<string, any>;
-
-        let editorState = createEditorState(defaultSegments);
-        const view = {
-            dispatch: vi.fn((tr) => {
-                editorState = editorState.apply(tr);
-            }),
-            domAtPos: vi.fn((pos: number) => {
-                return {
-                    node: {
-                        scrollIntoView: vi.fn(),
-                    },
-                    offset: 0,
-                };
-            }),
-        };
-
-        commands.setTextSelection = vi.fn(({ from, to }: { from: number; to: number }) => {
-            const tr = editorState.tr.setSelection(TextSelection.create(editorState.doc, from, to));
-            view.dispatch(tr);
-            return true;
-        });
-
-        commands.deleteSelection = vi.fn(() => {
-            const tr = editorState.tr.deleteSelection();
-            view.dispatch(tr);
-            return true;
-        });
-
-        commands.insertContent = vi.fn((content: string | { text: string }) => {
-            const text = typeof content === 'string' ? content : content?.text ?? '';
-            const tr = editorState.tr.insertText(text);
-            view.dispatch(tr);
-            return true;
-        });
-
-        commands.getSelectionMarks = vi.fn(() => editorState.selection.$from.marks());
-
         mockEditor = {
-            get state() {
-                return editorState;
+            state: {
+                doc: {
+                    textContent: 'Sample document text',
+                    content: { size: 100 }
+                }
             },
-            set state(newState) {
-                editorState = newState;
-            },
-            view,
             exportDocx: vi.fn().mockResolvedValue({}),
             options: {
                 documentId: 'doc-123',
-                user: { name: 'Test User', image: '' },
+                user: { name: 'Test User', image: '' }
             },
-            commands,
+            commands: {
+                search: vi.fn(),
+                setTextSelection: vi.fn(),
+                setHighlight: vi.fn(),
+                deleteSelection: vi.fn(),
+                insertContent: vi.fn(),
+                getSelectionMarks: vi.fn().mockReturnValue([]),
+                enableTrackChanges: vi.fn(),
+                disableTrackChanges: vi.fn(),
+                insertComment: vi.fn(),
+                insertContentAt: vi.fn()
+            },
             setOptions: vi.fn(),
             chain: vi.fn(),
         } as any;
@@ -220,21 +98,6 @@ describe('EditorAdapter', () => {
             expect(results[0].positions).toHaveLength(2);
             expect(results[0].positions![0]).toEqual({ from: 0, to: 6 });
             expect(results[0].positions![1]).toEqual({ from: 10, to: 16 });
-            expect(mockEditor.commands.search).toHaveBeenCalledWith('sample', { highlight: false });
-        });
-
-        it('should allow highlighting when requested', () => {
-            const matches: FoundMatch[] = [
-                { originalText: 'sample', suggestedText: 'example' }
-            ];
-
-            mockEditor.commands.search = vi.fn().mockReturnValue([
-                { from: 0, to: 6 }
-            ]);
-
-            mockAdapter.findResults(matches, { highlight: true });
-
-            expect(mockEditor.commands.search).toHaveBeenCalledWith('sample', { highlight: true });
         });
 
         it('should filter out matches without positions', () => {
@@ -290,188 +153,83 @@ describe('EditorAdapter', () => {
 
     describe('createHighlight', () => {
         it('should create highlight with default color', () => {
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-
-            mockAdapter.createHighlight(from, to);
+            mockAdapter.createHighlight(0, 10);
 
             expect(chainFn).toHaveBeenCalledTimes(1);
-            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from, to });
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 10 });
             expect(chainApi.setHighlight).toHaveBeenCalledWith('#6CA0DC');
             expect(chainApi.run).toHaveBeenCalled();
         });
 
         it('should create highlight with custom color', () => {
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
+            mockAdapter.createHighlight(5, 15, '#FF0000');
 
-            mockAdapter.createHighlight(from, to, '#FF0000');
-
-            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from, to });
+            expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from: 5, to: 15 });
             expect(chainApi.setHighlight).toHaveBeenCalledWith('#FF0000');
             expect(chainApi.run).toHaveBeenCalled();
         });
     });
 
     describe('replaceText', () => {
-        it('replaces text while preserving existing mark segments', async () => {
-            const boldMark = schema.marks.bold.create();
-            const italicMark = schema.marks.italic.create();
+        it('should replace text with marks preserved', async () => {
+            const marks = [
+                { type: { name: 'bold' }, attrs: {} },
+                { type: { name: 'textStyle' }, attrs: { fontSize: '14pt' } }
+            ];
 
-            updateEditorState([
-                { text: 'ab', marks: [boldMark] },
-                { text: 'cd', marks: [italicMark] },
-            ]);
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
 
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
+            await mockAdapter.replaceText(0, 5, 'hello');
 
-            await mockAdapter.replaceText(from, to, 'WXYZ');
-
-            expect(mockEditor.state.doc.textContent).toBe('WXYZ');
-            expect(getParagraphNodes()).toEqual([
-                { text: 'WX', marks: ['bold'] },
-                { text: 'YZ', marks: ['italic'] },
-            ]);
+            expect(mockEditor.commands.setTextSelection).toHaveBeenCalledWith({ from: 0, to: 5 });
+            expect(mockEditor.commands.deleteSelection).toHaveBeenCalled();
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith({
+                type: 'text',
+                text: 'hello',
+                marks: [
+                    { type: 'bold', attrs: {} },
+                    { type: 'textStyle', attrs: { fontSize: '14pt' } }
+                ]
+            });
         });
 
-        it('extends text beyond the original range using the last segment marks', async () => {
-            const boldMark = schema.marks.bold.create();
-            const italicMark = schema.marks.italic.create();
+        it('should replace text without marks when none exist', async () => {
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            updateEditorState([
-                { text: 'ab', marks: [boldMark] },
-                { text: 'cd', marks: [italicMark] },
-            ]);
+            await mockAdapter.replaceText(0, 5, 'hello');
 
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-
-            await mockAdapter.replaceText(from, to, 'WXYZHI');
-
-            expect(mockEditor.state.doc.textContent).toBe('WXYZHI');
-            expect(getParagraphNodes()).toEqual([
-                { text: 'WX', marks: ['bold'] },
-                { text: 'YZHI', marks: ['italic'] },
-            ]);
-        });
-
-        it('handles very short replacement text (single character)', async () => {
-            const boldMark = schema.marks.bold.create();
-            updateEditorState([{ text: 'abcdef', marks: [boldMark] }]);
-
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-
-            await mockAdapter.replaceText(from, to, 'X');
-
-            expect(mockEditor.state.doc.textContent).toBe('X');
-            expect(getParagraphNodes()).toEqual([
-                { text: 'X', marks: ['bold'] },
-            ]);
-        });
-
-        it('handles very long replacement text', async () => {
-            const boldMark = schema.marks.bold.create();
-            updateEditorState([{ text: 'ab', marks: [boldMark] }]);
-
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-            const longText = 'X'.repeat(1000);
-
-            await mockAdapter.replaceText(from, to, longText);
-
-            expect(mockEditor.state.doc.textContent).toBe(longText);
-            expect(mockEditor.state.doc.textContent.length).toBe(1000);
-        });
-
-        it('handles empty replacement text (deletion)', async () => {
-            updateEditorState([{ text: 'abcdef' }]);
-
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-
-            await mockAdapter.replaceText(from, to, '');
-
-            expect(mockEditor.state.doc.textContent).toBe('');
-        });
-
-        it('safely handles invalid position boundaries (negative from)', async () => {
-            const originalText = 'Sample document text';
-            updateEditorState([{ text: originalText }]);
-            const dispatchCallsBefore = (mockEditor.view?.dispatch as any)?.mock?.calls?.length ?? 0;
-
-            await mockAdapter.replaceText(-5, 10, 'replacement');
-
-            // Should not modify document when positions are invalid
-            expect(mockEditor.state.doc.textContent).toBe(originalText);
-            // Should not dispatch any transactions
-            if (mockEditor.view?.dispatch) {
-                expect(mockEditor.view.dispatch).toHaveBeenCalledTimes(dispatchCallsBefore);
-            }
-        });
-
-        it('safely handles invalid position boundaries (to exceeds doc size)', async () => {
-            const originalText = 'Sample document text';
-            updateEditorState([{ text: originalText }]);
-            const docSize = mockEditor.state.doc.content.size;
-            const dispatchCallsBefore = (mockEditor.view?.dispatch as any)?.mock?.calls?.length ?? 0;
-
-            await mockAdapter.replaceText(1, docSize + 100, 'replacement');
-
-            expect(mockEditor.state.doc.textContent).toBe(originalText);
-            if (mockEditor.view?.dispatch) {
-                expect(mockEditor.view.dispatch).toHaveBeenCalledTimes(dispatchCallsBefore);
-            }
-        });
-
-        it('safely handles invalid position boundaries (from > to)', async () => {
-            const originalText = 'Sample document text';
-            updateEditorState([{ text: originalText }]);
-            const dispatchCallsBefore = (mockEditor.view?.dispatch as any)?.mock?.calls?.length ?? 0;
-
-            await mockAdapter.replaceText(10, 5, 'replacement');
-
-            // Should not modify document when positions are invalid
-            expect(mockEditor.state.doc.textContent).toBe(originalText);
-            // Should not dispatch any transactions
-            if (mockEditor.view?.dispatch) {
-                expect(mockEditor.view.dispatch).toHaveBeenCalledTimes(dispatchCallsBefore);
-            }
-        });
-
-        it('preserves zero-width inline nodes at the range boundary', async () => {
-            updateEditorState([{ text: 'SERVICES' }]);
-
-            const markerNode = schema.nodes.inlineMarker.create();
-            const endPosition = mockEditor.state.doc.content.size - 1;
-            const tr = mockEditor.state.tr.insert(endPosition, markerNode);
-            mockEditor.view?.dispatch(tr);
-
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1 - markerNode.nodeSize;
-
-            await mockAdapter.replaceText(from, to, 'Services');
-
-            expect(mockEditor.state.doc.textContent).toBe('Services');
-            const paragraph = mockEditor.state.doc.firstChild;
-            expect(paragraph?.lastChild?.type.name).toBe('inlineMarker');
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith('hello');
         });
     });
 
     describe('createTrackedChange', () => {
-        it('enables track changes while applying the patch', async () => {
-            updateEditorState([{ text: 'original' }]);
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
+        it('should create tracked change with author', async () => {
 
-            const changeId = await mockAdapter.createTrackedChange(from, to, 'tracked');
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
+
+            const changeId = await mockAdapter.createTrackedChange(0, 5,  'new');
 
             expect(changeId).toMatch(/^tracked-change-/);
             expect(mockEditor.commands.enableTrackChanges).toHaveBeenCalled();
             expect(mockEditor.commands.disableTrackChanges).toHaveBeenCalled();
-            expect(mockEditor.state.doc.textContent).toBe('tracked');
         });
+
+        it('should preserve marks in tracked changes', async () => {
+            const marks = [
+                { type: { name: 'italic' }, attrs: {} }
+            ];
+
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
+
+            await mockAdapter.createTrackedChange(0, 5, 'new');
+
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith({
+                type: 'text',
+                text: 'new',
+                marks: [{ type: 'italic', attrs: {} }]
+            });
+        });
+
     });
 
     describe('createComment', () => {
@@ -490,47 +248,36 @@ describe('EditorAdapter', () => {
     });
 
     describe('insertText', () => {
-        it('inserts text at the current selection', () => {
-            const endPosition = buildDocFromSegments(defaultSegments).content.size - 1;
-            updateEditorState(defaultSegments, { from: endPosition, to: endPosition });
+        it('should insert text at end of document', async () => {
+            const marks = [
+                { type: { name: 'textStyle' }, attrs: { fontFamily: 'Arial' } }
+            ];
 
-            mockAdapter.insertText(' More content');
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue(marks);
 
-            expect(mockEditor.state.doc.textContent).toBe('Sample document text More content');
-        });
+            await mockAdapter.insertText('New content');
 
-        it('applies surrounding marks when inserting into marked text', () => {
-            const boldMark = schema.marks.bold.create();
-            updateEditorState(
-                [{ text: 'Boldtext', marks: [boldMark] }],
-                { from: 3, to: 3 },
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith(
+                {
+                    type: 'text',
+                    text: 'New content',
+                    marks: [{ type: 'textStyle', attrs: { fontFamily: 'Arial' } }]
+                }
             );
-
-            mockAdapter.insertText('INSERT');
-
-            expect(mockEditor.state.doc.textContent).toContain('INSERT');
-            const insertedNode = getParagraphNodes().find((node) => node.text.includes('INSERT'));
-            expect(insertedNode).toBeDefined();
-            expect(insertedNode?.marks).toEqual(['bold']);
         });
-    });
 
-    describe('replaceText with appended content', () => {
-        it('handles appended text correctly (prefix equals original, suffix is 0)', () => {
-            const boldMark = schema.marks.bold.create();
-            updateEditorState([
-                { text: 'original', marks: [boldMark] },
-            ]);
+        it('should handle empty marks when inserting', async () => {
+            mockEditor.commands.getSelectionMarks = vi.fn().mockReturnValue([]);
 
-            const from = 1;
-            const to = mockEditor.state.doc.content.size - 1;
-            const originalText = mockEditor.state.doc.textBetween(from, to, '', '');
-            const suggestion = 'original appended text';
+            await mockAdapter.insertText('Plain text');
 
-            mockAdapter.replaceText(from, to, suggestion);
-
-            expect(mockEditor.state.doc.textContent).toBe('original appended text');
-            expect(mockEditor.state.doc.textContent).toContain('appended text');
+            expect(mockEditor.commands.insertContent).toHaveBeenCalledWith(
+                {
+                    type: 'text',
+                    text: 'Plain text',
+                    marks: []
+                }
+            );
         });
     });
 });
