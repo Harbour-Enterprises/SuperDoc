@@ -1,3 +1,9 @@
+## [0.34.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.0...v0.34.1) (2025-11-30)
+
+### Reverts
+
+- Revert "AI Actions: positional shift problem and node text boundaries ([#1311](https://github.com/Harbour-Enterprises/SuperDoc/issues/1311))" ([#1360](https://github.com/Harbour-Enterprises/SuperDoc/issues/1360)) ([4b1058b](https://github.com/Harbour-Enterprises/SuperDoc/commit/4b1058bf58e8f097d36b6f1497038da969dce66d))
+
 # [0.34.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.33.0...v0.34.0) (2025-11-30)
 
 ### Features
