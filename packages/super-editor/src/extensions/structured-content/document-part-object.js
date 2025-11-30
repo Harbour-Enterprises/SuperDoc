@@ -6,6 +6,7 @@ export const DocumentPartObject = Node.create({
   group: 'block',
   content: 'block*',
   isolating: true,
+  excludeFromSummaryJSON: true,
 
   addOptions() {
     return {

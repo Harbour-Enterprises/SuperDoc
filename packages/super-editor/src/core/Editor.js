@@ -42,6 +42,7 @@ import { createDocFromMarkdown, createDocFromHTML } from '@core/helpers/index.js
 import { transformListsInCopiedContent } from '@core/inputRules/html/transform-copied-lists.js';
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
+import { buildSchemaSummary } from './schema-summary.js';
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -1020,6 +1021,73 @@ export class Editor extends EventEmitter {
   static updateDocumentVersion(doc, version) {
     console.warn('updateDocumentVersion is deprecated, use setDocumentVersion instead');
     return Editor.setDocumentVersion(doc, version);
+  }
+
+  /**
+   * Generates a schema summary for the current runtime schema.
+   * @returns {Promise<Object>} Schema summary JSON
+   */
+  async getSchemaSummaryJSON() {
+    if (!this.schema) {
+      throw new Error('Schema is not initialized.');
+    }
+
+    const schemaVersion = this.converter?.getSuperdocVersion?.() || 'current';
+
+    const suppressedNames = new Set(
+      (this.extensionService?.extensions || [])
+        .filter((ext) => {
+          const config = ext?.config;
+          const suppressFlag = config?.excludeFromSummaryJSON;
+          return Boolean(suppressFlag);
+        })
+        .map((ext) => ext.name),
+    );
+
+    const summary = buildSchemaSummary(this.schema, schemaVersion);
+
+    if (!suppressedNames.size) {
+      return summary;
+    }
+
+    return {
+      ...summary,
+      nodes: summary.nodes.filter((node) => !suppressedNames.has(node.name)),
+      marks: summary.marks.filter((mark) => !suppressedNames.has(mark.name)),
+    };
+  }
+
+  /**
+   * Validates a ProseMirror JSON document against the current schema.
+   * @param {Object|Object[]} doc - ProseMirror JSON representation of the document
+   * @returns {Object} ProseMirror node
+   */
+  validateJSON(doc) {
+    if (!this.schema) {
+      throw new Error('Schema is not initialized.');
+    }
+
+    const topNodeName = this.schema.topNodeType?.name || 'doc';
+    const normalizedDoc = Array.isArray(doc)
+      ? { type: topNodeName, content: doc }
+      : doc && typeof doc === 'object' && doc.type
+        ? doc.type === topNodeName || doc.type === 'doc'
+          ? doc
+          : { type: topNodeName, content: [doc] }
+        : (() => {
+            throw new Error('Invalid document shape: expected a node object or an array of node objects.');
+          })();
+
+    try {
+      return this.schema.nodeFromJSON(normalizedDoc);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const validationError = new Error(`Invalid document for current schema: ${detail}`);
+      if (error instanceof Error) {
+        validationError.cause = error;
+      }
+      throw validationError;
+    }
   }
 
   /**
