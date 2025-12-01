@@ -563,8 +563,8 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
     // Pre-process PAGE and NUMPAGES field codes in headers
     // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
-    const { processedNodes: headerProcessedNodes } = preProcessPageFieldsOnly(referenceFile.elements[0].elements ?? []);
-    referenceFile.elements[0].elements = headerProcessedNodes;
+    const headerNodes = carbonCopy(referenceFile.elements[0].elements ?? []);
+    const { processedNodes: headerProcessedNodes } = preProcessPageFieldsOnly(headerNodes);
 
     const sectPrHeader = allSectPrElements.find(
       (el) => el.name === 'w:headerReference' && el.attributes['r:id'] === rId,
@@ -573,7 +573,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: headerProcessedNodes,
       nodeListHandler,
       docx,
       converter,
@@ -602,8 +602,8 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
     // Pre-process PAGE and NUMPAGES field codes in footers
     // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
-    const { processedNodes: footerProcessedNodes } = preProcessPageFieldsOnly(referenceFile.elements[0].elements ?? []);
-    referenceFile.elements[0].elements = footerProcessedNodes;
+    const footerNodes = carbonCopy(referenceFile.elements[0].elements ?? []);
+    const { processedNodes: footerProcessedNodes } = preProcessPageFieldsOnly(footerNodes);
 
     const sectPrFooter = allSectPrElements.find(
       (el) => el.name === 'w:footerReference' && el.attributes['r:id'] === rId,
@@ -612,7 +612,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
     const nodeListHandler = defaultNodeListHandler();
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: footerProcessedNodes,
       nodeListHandler,
       docx,
       converter,
