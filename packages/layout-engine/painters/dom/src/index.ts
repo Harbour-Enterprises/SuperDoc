@@ -5,6 +5,18 @@ import type { PageStyles } from './styles.js';
 // Re-export utility functions for testing
 export { sanitizeUrl, linkMetrics, applyRunDataAttributes } from './renderer.js';
 
+// Re-export PM position validation utilities
+export {
+  assertPmPositions,
+  assertFragmentPmPositions,
+  validateRenderedElement,
+  logValidationSummary,
+  resetValidationStats,
+  getValidationStats,
+  globalValidationStats,
+} from './pm-position-validation.js';
+export type { PmPositionValidationStats } from './pm-position-validation.js';
+
 export type LayoutMode = 'vertical' | 'horizontal' | 'book';
 export type PageDecorationPayload = {
   fragments: Fragment[];
