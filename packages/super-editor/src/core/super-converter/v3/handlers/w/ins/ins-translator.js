@@ -47,7 +47,6 @@ const encode = (params, encodedAttrs = {}) => {
     }
   });
 
-  console.log('subs:', subs);
   return subs;
 };
 
