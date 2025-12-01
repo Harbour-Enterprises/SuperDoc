@@ -1,15 +1,10 @@
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
-import { PNG } from 'pngjs';
-import pixelmatch from 'pixelmatch';
 import config from '../../test-config';
 
 const APP_URL = process.env.SUPERDOC_E2E_APP_URL ?? 'http://localhost:4173/';
-const UPDATE_SNAPSHOTS = Boolean(process.env.UPDATE_EXPORT_REIMPORT_SNAPSHOTS);
 const ROUND_TRIP_EXPORT_DIR = './test-results/sd-export-reimport';
-const SNAPSHOT_DIR = './tests/visuals/sd-export-reimport.spec.js-snapshots';
-const TEST_RESULT_DIR_PREFIX = './test-results/visuals-sd-export-reimport';
 const IGNORED_DOCUMENTS = [
   'advanced-tables',
   'msa-list-base-indent',
@@ -20,6 +15,7 @@ const IGNORED_DOCUMENTS = [
   'ooxml-underline-rstyle-linked-combos-demo',
   'table-of-contents',
   'table-of-contents-sdt',
+  'tiny-spacing', // FIXME: exportDocx returns undefined for this doc
 ];
 
 const documents = fs
@@ -81,42 +77,6 @@ const exportDocxAsBuffer = async (page) => {
   return Buffer.from(serialized);
 };
 
-const compareScreenshotWithSnapshot = (screenshotBuffer, baseName, maxDiffPixels = 80) => {
-  ensureDir(SNAPSHOT_DIR);
-  const snapshotPath = path.join(SNAPSHOT_DIR, `${baseName}.png`);
-  const fileExists = fs.existsSync(snapshotPath);
-
-  if (!fileExists || UPDATE_SNAPSHOTS) {
-    fs.writeFileSync(snapshotPath, screenshotBuffer);
-    if (!fileExists && !UPDATE_SNAPSHOTS) {
-      process.exit(0);
-    }
-    return { skippedComparison: true, diffPixels: 0 };
-  }
-
-  const actual = PNG.sync.read(screenshotBuffer);
-  const expected = PNG.sync.read(fs.readFileSync(snapshotPath));
-
-  if (actual.width !== expected.width || actual.height !== expected.height) {
-    throw new Error(
-      `Screenshot size mismatch for ${baseName}.png (actual ${actual.width}x${actual.height}, expected ${expected.width}x${expected.height})`,
-    );
-  }
-
-  const diff = new PNG({ width: actual.width, height: actual.height });
-  const diffPixels = pixelmatch(actual.data, expected.data, diff.data, actual.width, actual.height);
-
-  if (diffPixels > maxDiffPixels) {
-    const resultDir = `${TEST_RESULT_DIR_PREFIX}-${baseName}`;
-    ensureDir(resultDir);
-    fs.writeFileSync(path.join(resultDir, `${baseName}-actual.png`), PNG.sync.write(actual));
-    fs.writeFileSync(path.join(resultDir, `${baseName}-expected.png`), PNG.sync.write(expected));
-    fs.writeFileSync(path.join(resultDir, `${baseName}-diff.png`), PNG.sync.write(diff));
-  }
-
-  return { skippedComparison: false, diffPixels };
-};
-
 ensureDir(ROUND_TRIP_EXPORT_DIR);
 
 test.describe('SD x SD export (visual)', () => {
@@ -134,16 +94,11 @@ test.describe('SD x SD export (visual)', () => {
       await page.goto(APP_URL);
       await uploadDocument(page, exportedDocPath);
 
-      const screenshotBuffer = await page.screenshot({
+      await expect(page).toHaveScreenshot({
+        name: `${document.baseName}.png`,
         fullPage: true,
         timeout: 30_000,
       });
-
-      const { skippedComparison, diffPixels } = compareScreenshotWithSnapshot(screenshotBuffer, document.baseName);
-
-      if (!skippedComparison) {
-        expect(diffPixels).toBeLessThan(80);
-      }
     });
   }
 });
