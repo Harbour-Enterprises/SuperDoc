@@ -16,40 +16,33 @@ vi.mock('@converter/v2/importer/index.js', () => ({
 vi.mock('@converter/helpers.js', () => ({
   twipsToPixels: (twips) => (twips === undefined ? undefined : Number(twips) / 20),
   twipsToInches: (twips) => (twips === undefined ? undefined : Number(twips) / 10),
+  twipsToLines: (twips) => (twips === undefined ? undefined : Number(twips) / 240),
   pixelsToTwips: (pixels) => (pixels === undefined ? undefined : Math.round(Number(pixels) * 20)),
 }));
 
 import { handleParagraphNode } from './legacy-handle-paragraph-node.js';
 import { parseMarks, mergeTextNodes } from '@converter/v2/importer/index.js';
 
-const makeParams = (overrides = {}) => ({
-  filename: 'source.docx',
-  docx: {},
-  nodes: [
-    {
-      name: 'w:p',
-      attributes: { 'w:rsidRDefault': 'ABCDEF' },
-      elements: [],
-    },
-  ],
-  nodeListHandler: {
-    handlerEntities: [
+const makeParams = (overrides = {}) => {
+  const defaultHandler = vi.fn(() => overrides._mockContent || []);
+  const { nodeListHandler, ...rest } = overrides;
+  return {
+    filename: 'source.docx',
+    docx: {},
+    nodes: [
       {
-        handlerName: 'standardNodeHandler',
-        handler: vi.fn((p) => ({
-          nodes: [
-            {
-              type: 'paragraph',
-              attrs: {},
-              content: p._mockContent || [],
-            },
-          ],
-        })),
+        name: 'w:p',
+        attributes: { 'w:rsidRDefault': 'ABCDEF' },
+        elements: [],
       },
     ],
-  },
-  ...overrides,
-});
+    nodeListHandler: {
+      handlerEntities: nodeListHandler?.handlerEntities || [],
+      handler: nodeListHandler?.handler || defaultHandler,
+    },
+    ...rest,
+  };
+};
 
 beforeEach(() => {
   vi.clearAllMocks();

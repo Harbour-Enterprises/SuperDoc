@@ -1,8 +1,4 @@
-/**
- * @deprecated This handler is deprecated in favor of v3 bookmark translators.
- * Kept for reference for custom mark logic that needs migration.
- * TODO: Migrate custom mark logic to a proper system
- */
+import { translator as wBookmarkStartTranslator } from '../../v3/handlers/w/bookmark-start/index.js';
 
 /**
  * @type {import("docxImporter").NodeHandler}
@@ -13,13 +9,6 @@ export const handleBookmarkNode = (params) => {
     return { nodes: [], consumed: 0 };
   }
   const node = nodes[0];
-  const handleStandardNode = nodeListHandler.handlerEntities.find(
-    (e) => e.handlerName === 'standardNodeHandler',
-  )?.handler;
-  if (!handleStandardNode) {
-    console.error('Standard node handler not found');
-    return { nodes: [], consumed: 0 };
-  }
 
   // Check if this bookmark is a custom mark
   const customMarks = editor?.extensionService?.extensions?.filter((e) => e.isExternal === true) || [];
@@ -31,7 +20,6 @@ export const handleBookmarkNode = (params) => {
     );
     const textNodes = nodes.slice(1, bookmarkEndIndex);
 
-    const nodeListHandler = params.nodeListHandler;
     const attrs = {};
     node.attributes['w:name'].split(';').forEach((name) => {
       const [key, value] = name.split('=');
@@ -57,13 +45,11 @@ export const handleBookmarkNode = (params) => {
     };
   }
 
-  const updatedParams = { ...params, nodes: [node] };
-  const result = handleStandardNode(updatedParams);
-  if (result.nodes.length === 1) {
-    result.nodes[0].attrs.name = node.attributes['w:name'];
-    result.nodes[0].attrs.id = node.attributes['w:id'];
+  const encoded = wBookmarkStartTranslator.encode({ ...params, nodes: [node] });
+  if (!encoded) {
+    return { nodes: [], consumed: 0 };
   }
-  return result;
+  return { nodes: [encoded], consumed: 1 };
 };
 
 /**

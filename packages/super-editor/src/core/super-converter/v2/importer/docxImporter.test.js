@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { filterOutRootInlineNodes } from './docxImporter.js';
+import { collapseWhitespaceNextToInlinePassthrough, filterOutRootInlineNodes } from './docxImporter.js';
 
 const n = (type) => ({ type, attrs: {}, marks: [] });
 
@@ -64,5 +64,86 @@ describe('filterOutRootInlineNodes', () => {
     const result = filterOutRootInlineNodes(input, editor);
     const types = result.map((x) => x.type);
     expect(types).toEqual(['paragraph', 'table']);
+  });
+});
+
+describe('collapseWhitespaceNextToInlinePassthrough', () => {
+  const paragraph = (content) => ({ type: 'paragraph', content });
+
+  it('trims duplicate spaces around passthrough nodes', () => {
+    const tree = [
+      paragraph([
+        { type: 'text', text: 'Hello ' },
+        { type: 'passthroughInline', attrs: {} },
+        { type: 'text', text: ' world' },
+      ]),
+    ];
+
+    collapseWhitespaceNextToInlinePassthrough(tree);
+
+    expect(tree[0].content[0].text).toBe('Hello ');
+    expect(tree[0].content[2].text).toBe('world');
+  });
+
+  it('removes empty trailing sibling created after trimming', () => {
+    const tree = [
+      paragraph([
+        { type: 'text', text: 'Hello ' },
+        { type: 'passthroughInline', attrs: {} },
+        { type: 'text', text: ' ' },
+      ]),
+    ];
+
+    collapseWhitespaceNextToInlinePassthrough(tree);
+
+    expect(tree[0].content).toHaveLength(2);
+    expect(tree[0].content[0].text).toBe('Hello ');
+  });
+
+  it('ignores cases where surrounding text lacks spaces', () => {
+    const tree = [
+      paragraph([
+        { type: 'text', text: 'Hello' },
+        { type: 'passthroughInline', attrs: {} },
+        { type: 'text', text: ' world' },
+      ]),
+    ];
+
+    collapseWhitespaceNextToInlinePassthrough(tree);
+
+    expect(tree[0].content[0].text).toBe('Hello');
+    expect(tree[0].content.at(-1).text).toBe(' world');
+  });
+
+  it('skips metadata nodes when searching for adjacent text', () => {
+    const tree = [
+      paragraph([
+        { type: 'text', text: 'Hello ' },
+        { type: 'bookmarkStart' },
+        { type: 'passthroughInline', attrs: {} },
+        { type: 'text', text: ' world' },
+      ]),
+    ];
+
+    collapseWhitespaceNextToInlinePassthrough(tree);
+
+    expect(tree[0].content[0].text).toBe('Hello ');
+    expect(tree[0].content.at(-1).text).toBe('world');
+  });
+
+  it('handles text wrapped inside running nodes', () => {
+    const tree = [
+      paragraph([
+        { type: 'run', content: [{ type: 'text', text: 'Foo ' }] },
+        { type: 'passthroughInline', attrs: {} },
+        { type: 'run', content: [{ type: 'text', text: ' bar' }] },
+      ]),
+    ];
+
+    collapseWhitespaceNextToInlinePassthrough(tree);
+
+    expect(tree[0].content[0].content[0].text).toBe('Foo ');
+    expect(tree[0].content[2].content).toHaveLength(1);
+    expect(tree[0].content[2].content[0].text).toBe('bar');
   });
 });
