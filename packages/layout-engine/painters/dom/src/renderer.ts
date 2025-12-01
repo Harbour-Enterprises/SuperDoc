@@ -181,6 +181,9 @@ export type FragmentRenderContext = {
 };
 
 const LIST_MARKER_GAP = 8;
+const COMMENT_EXTERNAL_COLOR = '#B1124B';
+const COMMENT_INTERNAL_COLOR = '#078383';
+const COMMENT_INACTIVE_ALPHA = '22';
 
 type LinkRenderData = {
   href?: string;
@@ -2488,6 +2491,18 @@ export class DomPainter {
 
     // Pass isLink flag to skip applying inline color/decoration styles for links
     applyRunStyles(elem as HTMLElement, run, isActiveLink);
+    const commentColor = getCommentHighlight(run as TextRun);
+    if (commentColor && !(run as TextRun).highlight) {
+      (elem as HTMLElement).style.backgroundColor = commentColor;
+    }
+    const commentAnnotations = (run as TextRun).comments;
+    if (commentAnnotations?.length) {
+      elem.dataset.commentIds = commentAnnotations.map((c) => c.commentId).join(',');
+      if (commentAnnotations.some((c) => c.internal)) {
+        elem.dataset.commentInternal = 'true';
+      }
+      elem.classList.add('superdoc-comment-highlight');
+    }
     // Ensure text renders above tab leaders (leaders are z-index: 0)
     elem.style.zIndex = '1';
     applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
@@ -3270,6 +3285,14 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   }
 };
 
+const getCommentHighlight = (run: TextRun): string | undefined => {
+  const comments = run.comments;
+  if (!comments || comments.length === 0) return undefined;
+  const primary = comments[0];
+  const base = primary.internal ? COMMENT_INTERNAL_COLOR : COMMENT_EXTERNAL_COLOR;
+  return `${base}${COMMENT_INACTIVE_ALPHA}`;
+};
+
 /**
  * Applies data-* attributes from a text run to a DOM element.
  * Validates attribute names and safely sets them on the element.
@@ -3439,6 +3462,7 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
           text: slice,
           pmStart: pmSliceStart,
           pmEnd: pmSliceEnd,
+          comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
         };
         result.push(sliced);
       }

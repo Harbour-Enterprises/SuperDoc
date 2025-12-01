@@ -59,6 +59,12 @@ const MAX_RUN_MARK_ARRAY_LENGTH = 100;
  */
 const MAX_RUN_MARK_DEPTH = 5;
 
+type CommentAnnotation = {
+  commentId: string;
+  importedId?: string;
+  internal?: boolean;
+};
+
 /**
  * Validates JSON object depth to prevent deeply nested structures.
  * Recursively checks nesting level to prevent stack overflow attacks.
@@ -200,6 +206,27 @@ const MAX_DATA_ATTR_VALUE_LENGTH = 1000;
  * Prevents memory exhaustion from extremely long attribute names.
  */
 const MAX_DATA_ATTR_NAME_LENGTH = 100;
+
+const pushCommentAnnotation = (run: TextRun, attrs: Record<string, unknown> | undefined): void => {
+  const commentId = typeof attrs?.commentId === 'string' ? attrs.commentId : undefined;
+  const importedId = typeof attrs?.importedId === 'string' ? attrs.importedId : undefined;
+  const internal = attrs?.internal === true;
+
+  if (!commentId && !importedId) return;
+
+  const annotations: CommentAnnotation[] = run.comments ? [...run.comments] : [];
+  const key = `${commentId ?? ''}::${importedId ?? ''}`;
+  const exists = annotations.some((c) => `${c.commentId ?? ''}::${c.importedId ?? ''}` === key);
+  if (!exists) {
+    annotations.push({
+      commentId: commentId ?? (importedId as string),
+      importedId,
+      internal,
+    });
+  }
+
+  run.comments = annotations;
+};
 
 /**
  * Extracts data-* attributes from a mark's attrs and normalizes values to strings.
@@ -703,6 +730,11 @@ export const applyMarksToRun = (
         case 'textStyle':
           applyTextStyleMark(run, mark.attrs ?? {}, themeColors);
           break;
+        case 'commentMark':
+        case 'comment': {
+          pushCommentAnnotation(run, mark.attrs ?? {});
+          break;
+        }
         case 'underline': {
           const style = normalizeUnderlineStyle(mark.attrs?.underlineType);
           if (style) {
