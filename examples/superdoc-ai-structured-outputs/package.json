@@ -1,0 +1,21 @@
+{
+  "name": "superdoc-ai-quickstart",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "dev:full": "npx wrangler pages dev --proxy 5173 --port 8788",
+    "build": "vite build",
+    "preview": "npx wrangler pages dev ./dist"
+  },
+  "dependencies": {
+    "@superdoc-dev/ai": "^0.1.6-next.5",
+    "@vitejs/plugin-vue": "^6.0.2",
+    "superdoc": "^0.31.3",
+    "vue": "^3.5.24"
+  },
+  "devDependencies": {
+    "vite": "^6.3.5"
+  }
+}

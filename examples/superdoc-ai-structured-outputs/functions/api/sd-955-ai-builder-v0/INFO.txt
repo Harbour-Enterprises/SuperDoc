@@ -1,0 +1,5 @@
+PRE-ALPHA BUILD - EXPERIMENTAL
+
+This is a pre-alpha build of SuperDoc AI Builder with structured outputs support.
+
+Source commit: https://github.com/Harbour-Enterprises/SuperDoc/tree/cbd2c709477fa13501e4c48041513ff92615cc0a
