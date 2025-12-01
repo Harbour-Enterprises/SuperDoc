@@ -174,12 +174,14 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
   startNodes.forEach((n) => {
     const { pos, node } = n;
     const mappedPos = tr.mapping.map(pos);
+
     tr.insert(mappedPos, node);
   });
 
   endNodes.forEach((n) => {
     const { pos, node } = n;
     const mappedPos = tr.mapping.map(pos);
+
     tr.insert(mappedPos, node);
   });
 

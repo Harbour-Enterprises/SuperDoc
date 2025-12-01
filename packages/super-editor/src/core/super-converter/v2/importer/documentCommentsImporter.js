@@ -186,7 +186,6 @@ const extractCommentRangesFromDocument = (docx) => {
     });
   };
 
-  // Start walking from the document body
   if (documentXml.elements && documentXml.elements.length > 0) {
     const body = documentXml.elements[0];
     if (body.elements) {
@@ -215,8 +214,8 @@ const detectThreadingFromRanges = (comments, rangeEvents) => {
   // When we see a start event, push it onto the stack
   // When we see an end event, pop until we find the matching start
   // Comments that start while another comment is on the stack are children of that comment
-  const openRanges = []; // Stack of currently open comment IDs
-  const parentMap = new Map(); // Map of child commentId -> parent commentId
+  const openRanges = [];
+  const parentMap = new Map();
 
   rangeEvents.forEach((event) => {
     if (event.type === 'start') {
@@ -227,7 +226,6 @@ const detectThreadingFromRanges = (comments, rangeEvents) => {
       }
       openRanges.push(event.commentId);
     } else if (event.type === 'end') {
-      // Remove this comment from the stack
       const index = openRanges.lastIndexOf(event.commentId);
       if (index !== -1) {
         openRanges.splice(index, 1);
@@ -239,7 +237,6 @@ const detectThreadingFromRanges = (comments, rangeEvents) => {
   return comments.map((comment) => {
     const parentCommentId = parentMap.get(comment.importedId);
     if (parentCommentId) {
-      // Find the parent comment by importedId
       const parentComment = comments.find((c) => c.importedId === parentCommentId);
       if (parentComment) {
         return {

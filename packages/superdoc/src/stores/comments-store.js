@@ -438,7 +438,6 @@ export const useCommentsStore = defineStore('comments', () => {
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
-        // Preserve original DOCX-schema comment JSON so exporter can reuse it
         docxCommentJSON: comment.textJson,
         commentId: comment.commentId,
         isInternal: false,
