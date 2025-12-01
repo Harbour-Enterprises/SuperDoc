@@ -157,6 +157,57 @@ describe('measureBlock', () => {
       expect(measure.lines[0].width).toBeGreaterThan(0);
       expect(measure.lines[1].width).toBeGreaterThan(0);
     });
+
+    it('creates an empty line for leading lineBreak at start of paragraph', async () => {
+      // Regression test: DOCX documents can have <w:br/> at the start of a paragraph
+      // (e.g., signature blocks with blank lines before "By:" text). These leading
+      // line breaks must create an empty line, not be silently dropped.
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          { kind: 'lineBreak' },
+          {
+            text: 'By: ___________________________',
+            fontFamily: 'Arial',
+            fontSize: 14,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+
+      // Should have 2 lines: an empty line from the leading lineBreak, then the text
+      expect(measure.lines).toHaveLength(2);
+      expect(measure.lines[0].width).toBe(0); // Empty line from leading lineBreak
+      expect(measure.lines[1].width).toBeGreaterThan(0); // "By: ___" text
+    });
+
+    it('handles multiple leading lineBreaks at start of paragraph', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          { kind: 'lineBreak' },
+          { kind: 'lineBreak' },
+          {
+            text: 'Content after two breaks',
+            fontFamily: 'Arial',
+            fontSize: 14,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+
+      // Should have 3 lines: two empty lines, then text
+      expect(measure.lines).toHaveLength(3);
+      expect(measure.lines[0].width).toBe(0);
+      expect(measure.lines[1].width).toBe(0);
+      expect(measure.lines[2].width).toBeGreaterThan(0);
+    });
   });
 
   describe('multi-run blocks', () => {

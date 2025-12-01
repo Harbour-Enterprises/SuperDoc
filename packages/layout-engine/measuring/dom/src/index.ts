@@ -521,11 +521,27 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         };
         addBarTabsToLine(completedLine);
         lines.push(completedLine);
+      } else {
+        // Line break at the start of paragraph (no currentLine yet):
+        // Create an empty line to represent the leading line break
+        const metrics = calculateTypographyMetrics(lastFontSize, spacing);
+        const emptyLine: Line = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 0,
+          width: 0,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [],
+          ...metrics,
+        };
+        addBarTabsToLine(emptyLine);
+        lines.push(emptyLine);
       }
 
       // Start a fresh (currently empty) line after the break. If no further content
       // is added, this placeholder will become a blank line with the appropriate height.
-      const hadPreviousLine = currentLine !== null;
+      const hadPreviousLine = lines.length > 0;
       const nextLineMaxWidth: number = hadPreviousLine
         ? getEffectiveWidth(contentWidth)
         : getEffectiveWidth(initialAvailableWidth);
