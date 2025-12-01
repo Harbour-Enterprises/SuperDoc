@@ -11,6 +11,7 @@
  * - SD_HF_DIGIT_BUCKETING: Enable digit bucketing for large documents
  * - SD_DEBUG_PAGE_TOKENS: Enable debug logging for page token resolution
  * - SD_DEBUG_HF_CACHE: Enable debug logging for header/footer cache operations
+ * - SD_DEBUG_LAYOUT_VERSION: Enable debug logging for layout version tracking
  *
  * Each flag can be set to:
  * - "true" or "1": Explicitly enabled
@@ -89,6 +90,13 @@ export const FeatureFlags = {
    * Should be disabled in production (only enabled for debugging).
    */
   DEBUG_HF_CACHE: isEnabled('SD_DEBUG_HF_CACHE', false),
+
+  /**
+   * Enable debug logging for layout version tracking.
+   * Logs stale layout reads, geometry fallbacks, PM transactions, and layout completions.
+   * Should be disabled in production (only enabled for debugging).
+   */
+  DEBUG_LAYOUT_VERSION: isEnabled('SD_DEBUG_LAYOUT_VERSION', false),
 } as const;
 
 /**

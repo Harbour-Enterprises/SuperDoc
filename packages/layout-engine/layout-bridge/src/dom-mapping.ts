@@ -10,6 +10,14 @@
  * @module dom-mapping
  */
 
+// Debug logging for click-to-position pipeline
+const DEBUG_CLICK_MAPPING = false;
+const log = (...args: unknown[]) => {
+  if (DEBUG_CLICK_MAPPING) {
+    console.log('[DOM-MAPPING]', ...args);
+  }
+};
+
 /**
  * Class names used by the DOM painter for layout elements.
  * These must match the painter's output structure.
@@ -60,9 +68,13 @@ const CLASS_NAMES = {
  * ```
  */
 export function clickToPositionDom(domContainer: HTMLElement, clientX: number, clientY: number): number | null {
+  log('=== clickToPositionDom START ===');
+  log('Input coords:', { clientX, clientY });
+
   // Find the page element that contains the click point
   const pageEl = findPageElement(domContainer, clientX, clientY);
   if (!pageEl) {
+    log('No page element found');
     return null;
   }
 
@@ -71,6 +83,12 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
   const pageLocalY = clientY - pageRect.top;
   const viewX = pageRect.left + pageLocalX;
   const viewY = pageRect.top + pageLocalY;
+
+  log('Page found:', {
+    pageIndex: pageEl.dataset.pageIndex,
+    pageRect: { left: pageRect.left, top: pageRect.top, width: pageRect.width, height: pageRect.height },
+    viewCoords: { viewX, viewY },
+  });
 
   // Use elementsFromPoint to find all elements under the click
   // Note: Must call directly on document to maintain proper 'this' context
@@ -89,8 +107,47 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
   }
 
   if (!Array.isArray(hitChain)) {
+    log('elementsFromPoint returned non-array');
     return null;
   }
+
+  const hitChainData = hitChain.map((el) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      tag: el.tagName,
+      classes: el.className,
+      blockId: (el as HTMLElement).dataset?.blockId,
+      pmStart: (el as HTMLElement).dataset?.pmStart,
+      pmEnd: (el as HTMLElement).dataset?.pmEnd,
+      rect: {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        height: Math.round(rect.height),
+      },
+    };
+  });
+  log('Hit chain elements:', JSON.stringify(hitChainData, null, 2));
+
+  // Log all fragments on the page to see overlap
+  const allFragments = Array.from(pageEl.querySelectorAll(`.${CLASS_NAMES.fragment}`)) as HTMLElement[];
+  const fragmentData = allFragments.map((el) => {
+    const rect = el.getBoundingClientRect();
+    return {
+      blockId: el.dataset.blockId,
+      pmStart: el.dataset.pmStart,
+      pmEnd: el.dataset.pmEnd,
+      rect: {
+        top: Math.round(rect.top),
+        bottom: Math.round(rect.bottom),
+        left: Math.round(rect.left),
+        right: Math.round(rect.right),
+        height: Math.round(rect.height),
+      },
+    };
+  });
+  log('All fragments on page:', JSON.stringify(fragmentData, null, 2));
 
   // Find the fragment element under the click
   const fragmentEl = hitChain.find((el) => el.classList?.contains?.(CLASS_NAMES.fragment)) as HTMLElement | null;
@@ -100,13 +157,28 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
     const fallbackFragment = pageEl.querySelector(`.${CLASS_NAMES.fragment}`) as HTMLElement | null;
 
     if (!fallbackFragment) {
+      log('No fragment found in hit chain or fallback');
       return null;
     }
 
-    return processFragment(fallbackFragment, viewX, viewY);
+    log('Using fallback fragment:', {
+      blockId: fallbackFragment.dataset.blockId,
+      pmStart: fallbackFragment.dataset.pmStart,
+      pmEnd: fallbackFragment.dataset.pmEnd,
+    });
+    const result = processFragment(fallbackFragment, viewX, viewY);
+    log('=== clickToPositionDom END (fallback) ===', { result });
+    return result;
   }
 
-  return processFragment(fragmentEl, viewX, viewY);
+  log('Fragment found:', {
+    blockId: fragmentEl.dataset.blockId,
+    pmStart: fragmentEl.dataset.pmStart,
+    pmEnd: fragmentEl.dataset.pmEnd,
+  });
+  const result = processFragment(fragmentEl, viewX, viewY);
+  log('=== clickToPositionDom END ===', { result });
+  return result;
 }
 
 /**
@@ -176,53 +248,107 @@ function findPageElement(domContainer: HTMLElement, clientX: number, clientY: nu
  * @internal
  */
 function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number): number | null {
+  log('processFragment:', { viewX, viewY, blockId: fragmentEl.dataset.blockId });
+
   // Find the line element at the Y position
   const lineEls = Array.from(fragmentEl.querySelectorAll(`.${CLASS_NAMES.line}`)) as HTMLElement[];
 
+  log(
+    'Lines in fragment:',
+    lineEls.map((el, i) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        index: i,
+        pmStart: el.dataset.pmStart,
+        pmEnd: el.dataset.pmEnd,
+        rect: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right },
+      };
+    }),
+  );
+
   if (lineEls.length === 0) {
+    log('No lines in fragment');
     return null;
   }
 
   const lineEl = findLineAtY(lineEls, viewY);
   if (!lineEl) {
+    log('No line found at Y:', viewY);
     return null;
   }
 
   const lineStart = Number(lineEl.dataset.pmStart ?? 'NaN');
   const lineEnd = Number(lineEl.dataset.pmEnd ?? 'NaN');
+  const lineRect = lineEl.getBoundingClientRect();
+
+  log('Selected line:', {
+    pmStart: lineStart,
+    pmEnd: lineEnd,
+    rect: { top: lineRect.top, bottom: lineRect.bottom, left: lineRect.left, right: lineRect.right },
+  });
 
   if (!Number.isFinite(lineStart) || !Number.isFinite(lineEnd)) {
+    log('Line has invalid PM positions');
     return null;
   }
 
   // Find the span (run slice) at the X position
   const spanEls = Array.from(lineEl.querySelectorAll('span')) as HTMLSpanElement[];
 
+  log(
+    'Spans in line:',
+    spanEls.map((el, i) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        index: i,
+        pmStart: el.dataset.pmStart,
+        pmEnd: el.dataset.pmEnd,
+        text: el.textContent?.substring(0, 20) + (el.textContent && el.textContent.length > 20 ? '...' : ''),
+        visibility: el.style.visibility,
+        rect: { left: rect.left, right: rect.right, width: rect.width },
+      };
+    }),
+  );
+
   if (spanEls.length === 0) {
+    log('No spans in line, returning lineStart:', lineStart);
     return lineStart;
   }
 
   // Check if click is before first span or after last span
   const firstRect = spanEls[0].getBoundingClientRect();
   if (viewX <= firstRect.left) {
+    log('Click before first span, returning lineStart:', lineStart);
     return lineStart;
   }
 
   const lastRect = spanEls[spanEls.length - 1].getBoundingClientRect();
   if (viewX >= lastRect.right) {
+    log('Click after last span, returning lineEnd:', lineEnd);
     return lineEnd;
   }
 
   // Find the target span containing or nearest to the X coordinate
   const targetSpan = findSpanAtX(spanEls, viewX);
   if (!targetSpan) {
+    log('No target span found, returning lineStart:', lineStart);
     return lineStart;
   }
 
   const spanStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
   const spanEnd = Number(targetSpan.dataset.pmEnd ?? 'NaN');
+  const targetRect = targetSpan.getBoundingClientRect();
+
+  log('Target span:', {
+    pmStart: spanStart,
+    pmEnd: spanEnd,
+    text: targetSpan.textContent?.substring(0, 30),
+    visibility: targetSpan.style.visibility,
+    rect: { left: targetRect.left, right: targetRect.right, width: targetRect.width },
+  });
 
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
+    log('Span has invalid PM positions');
     return null;
   }
 
@@ -233,12 +359,15 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
     const spanRect = targetSpan.getBoundingClientRect();
     const closerToLeft = Math.abs(viewX - spanRect.left) <= Math.abs(viewX - spanRect.right);
     const snapPos = closerToLeft ? spanStart : spanEnd;
+    log('Empty/non-text span, snapping to:', { closerToLeft, snapPos });
     return snapPos;
   }
 
   const textNode = firstChild as Text;
   const charIndex = findCharIndexAtX(textNode, targetSpan, viewX);
   const pos = spanStart + charIndex;
+
+  log('Character position:', { charIndex, spanStart, finalPos: pos });
 
   return pos;
 }
@@ -260,15 +389,28 @@ function findLineAtY(lineEls: HTMLElement[], viewY: number): HTMLElement | null 
     return null;
   }
 
-  for (const lineEl of lineEls) {
+  for (let i = 0; i < lineEls.length; i++) {
+    const lineEl = lineEls[i];
     const rect = lineEl.getBoundingClientRect();
     if (viewY >= rect.top && viewY <= rect.bottom) {
+      log('findLineAtY: Found line at index', i, {
+        pmStart: lineEl.dataset.pmStart,
+        pmEnd: lineEl.dataset.pmEnd,
+        rect: { top: rect.top, bottom: rect.bottom },
+        viewY,
+      });
       return lineEl;
     }
   }
 
   // If Y is beyond all lines, return the last line
-  return lineEls[lineEls.length - 1];
+  const lastLine = lineEls[lineEls.length - 1];
+  log('findLineAtY: Y beyond all lines, using last line:', {
+    pmStart: lastLine.dataset.pmStart,
+    pmEnd: lastLine.dataset.pmEnd,
+    viewY,
+  });
+  return lastLine;
 }
 
 /**
@@ -291,9 +433,16 @@ function findSpanAtX(spanEls: HTMLSpanElement[], viewX: number): HTMLSpanElement
 
   let targetSpan: HTMLSpanElement = spanEls[0];
 
-  for (const span of spanEls) {
+  for (let i = 0; i < spanEls.length; i++) {
+    const span = spanEls[i];
     const rect = span.getBoundingClientRect();
     if (viewX >= rect.left && viewX <= rect.right) {
+      log('findSpanAtX: Found containing span at index', i, {
+        pmStart: span.dataset.pmStart,
+        pmEnd: span.dataset.pmEnd,
+        rect: { left: rect.left, right: rect.right },
+        viewX,
+      });
       return span;
     }
     // Track nearest span to the right if none contain X
@@ -302,6 +451,11 @@ function findSpanAtX(spanEls: HTMLSpanElement[], viewX: number): HTMLSpanElement
     }
   }
 
+  log('findSpanAtX: No containing span, using nearest:', {
+    pmStart: targetSpan.dataset.pmStart,
+    pmEnd: targetSpan.dataset.pmEnd,
+    viewX,
+  });
   return targetSpan;
 }
 
