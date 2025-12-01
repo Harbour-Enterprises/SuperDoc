@@ -556,7 +556,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.kind === 'image' ? '' : (run.text ?? '');
+    const text = run.kind === 'image' || run.kind === 'lineBreak' ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -682,6 +682,12 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
 
     // FIXED: ImageRun handling - images are atomic units, no slicing needed
     if (run.kind === 'image') {
+      result.push(run);
+      continue;
+    }
+
+    // LineBreakRun handling - line breaks are atomic units, no slicing needed
+    if (run.kind === 'lineBreak') {
       result.push(run);
       continue;
     }

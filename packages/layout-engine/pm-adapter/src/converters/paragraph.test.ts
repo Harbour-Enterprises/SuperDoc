@@ -11,6 +11,7 @@ import {
   paragraphToFlowBlocks,
   mergeAdjacentRuns,
   dataAttrsCompatible,
+  commentsCompatible,
   isInlineImage,
   imageNodeToRun,
 } from './paragraph.js';
@@ -1740,6 +1741,9 @@ describe('paragraph converters', () => {
 
         expect(blocks).toHaveLength(1);
         expect(blocks[0].kind).toBe('paragraph');
+        const paraBlock = blocks[0] as ParagraphBlock;
+        expect(paraBlock.runs).toHaveLength(2);
+        expect((paraBlock.runs[1] as Run).kind).toBe('lineBreak');
       });
     });
 
@@ -2288,6 +2292,42 @@ describe('paragraph converters', () => {
       };
 
       expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+  });
+
+  describe('commentsCompatible', () => {
+    it('returns true when both runs have identical comment annotations', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+
+      expect(commentsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns false when comment annotations differ', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c2', importedId: 'imp-2', internal: false }],
+      };
+
+      expect(commentsCompatible(runA, runB)).toBe(false);
     });
   });
 

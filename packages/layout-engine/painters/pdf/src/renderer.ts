@@ -29,6 +29,9 @@ import type {
 import type { PageDecorationProvider } from './index.js';
 
 const PX_TO_PT = 72 / 96;
+const COMMENT_EXTERNAL_COLOR = '#B1124B';
+const COMMENT_INTERNAL_COLOR = '#078383';
+const COMMENT_LIGHTEN_FACTOR = 0.75; // blend toward white for softer highlights
 
 /**
  * Slices runs for a specific line from a paragraph block.
@@ -74,6 +77,7 @@ const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
           text: slice,
           pmStart: pmSliceStart,
           pmEnd: pmSliceEnd,
+          comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
         };
         result.push(sliced);
       }
@@ -692,6 +696,10 @@ export class PdfPainter {
     if (trackedDecorations) {
       parts.push(trackedDecorations);
     }
+    const commentHighlights = this.renderCommentHighlights(block, line, x, baseline, pageHeightPx);
+    if (commentHighlights) {
+      parts.push(commentHighlights);
+    }
 
     // Render tab leaders (horizontal lines before text)
     if (line.leaders && line.leaders.length > 0) {
@@ -874,6 +882,49 @@ export class PdfPainter {
     if (!commands.length) {
       return '';
     }
+    return commands.join('\n') + '\n';
+  }
+
+  private renderCommentHighlights(
+    block: ParagraphBlock,
+    line: Line,
+    lineOriginX: number,
+    baseline: number,
+    pageHeightPx: number,
+  ): string {
+    const segments = line.segments;
+    if (!segments || segments.length === 0) return '';
+
+    const commands: string[] = [];
+    let flowCursor = 0;
+
+    segments.forEach((segment) => {
+      const run = block.runs[segment.runIndex];
+      if (!run || run.kind === 'tab') {
+        flowCursor = (segment.x ?? flowCursor) + (segment.width ?? 0);
+        return;
+      }
+      const commentColor = getCommentFillColor((run as TextRun).comments);
+      const segmentWidth = segment.width ?? 0;
+      const startPx = lineOriginX + (segment.x ?? flowCursor);
+      flowCursor = (segment.x ?? flowCursor) + segmentWidth;
+
+      if (!commentColor || segmentWidth <= 0) return;
+
+      commands.push(
+        ...this.drawHighlightRect(
+          startPx,
+          segmentWidth,
+          line.lineHeight,
+          baseline,
+          line.ascent,
+          pageHeightPx,
+          commentColor,
+        ),
+      );
+    });
+
+    if (!commands.length) return '';
     return commands.join('\n') + '\n';
   }
 
@@ -1443,6 +1494,29 @@ const selectFont = (run: Run): FontKey => {
   if (run.bold) return FONT_IDS.bold;
   if (run.italic) return FONT_IDS.italic;
   return FONT_IDS.regular;
+};
+
+const getCommentFillColor = (comments: TextRun['comments'] | undefined): string | undefined => {
+  if (!comments || comments.length === 0) return undefined;
+  const primary = comments[0];
+  const base = primary.internal ? COMMENT_INTERNAL_COLOR : COMMENT_EXTERNAL_COLOR;
+  return lightenHexColor(base, COMMENT_LIGHTEN_FACTOR);
+};
+
+const lightenHexColor = (hex: string, factor: number): string => {
+  const cleaned = hex.replace('#', '');
+  if (cleaned.length !== 6) return hex;
+  const clamp = (value: number) => Math.max(0, Math.min(255, Math.round(value)));
+  const r = Number.parseInt(cleaned.slice(0, 2), 16);
+  const g = Number.parseInt(cleaned.slice(2, 4), 16);
+  const b = Number.parseInt(cleaned.slice(4, 6), 16);
+  if ([r, g, b].some(Number.isNaN)) return hex;
+
+  const mix = (channel: number) => clamp(channel * factor + 255 * (1 - factor));
+  return `#${mix(r).toString(16).padStart(2, '0').toUpperCase()}${mix(g)
+    .toString(16)
+    .padStart(2, '0')
+    .toUpperCase()}${mix(b).toString(16).padStart(2, '0').toUpperCase()}`;
 };
 
 const formatColor = (value?: string) => colorToRgbTriplet(value) ?? '0 0 0';

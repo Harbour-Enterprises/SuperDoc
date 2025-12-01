@@ -135,6 +135,12 @@ export type TextRun = {
   text: string;
   fontFamily: string;
   fontSize: number;
+  /** Comment annotations applied to this run (supports overlapping comments). */
+  comments?: Array<{
+    commentId: string;
+    importedId?: string;
+    internal?: boolean;
+  }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
    */
@@ -176,6 +182,20 @@ export type TabRun = {
   leader?: LeaderType | null;
   decimalChar?: string;
   indent?: ParagraphIndent;
+  pmStart?: number;
+  pmEnd?: number;
+};
+
+export type LineBreakRun = {
+  kind: 'lineBreak';
+  /**
+   * Optional attributes carried through from the source document.
+   * Mirrors OOXML <w:br> attributes (type/clear) to preserve fidelity.
+   */
+  attrs?: {
+    lineBreakType?: string;
+    clear?: string;
+  };
   pmStart?: number;
   pmEnd?: number;
 };
@@ -242,7 +262,7 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun;
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
@@ -737,14 +757,87 @@ export type ParagraphShading = {
   themeTint?: string;
 };
 
+/**
+ * Run styling for drop cap letter.
+ * Contains the text and font properties of the drop cap character(s).
+ */
+export type DropCapRun = {
+  /** The drop cap text (usually a single capital letter). */
+  text: string;
+  /** Font family for the drop cap. */
+  fontFamily: string;
+  /** Font size in pixels (typically much larger than body text, e.g., 117pt). */
+  fontSize: number;
+  /** Bold styling. */
+  bold?: boolean;
+  /** Italic styling. */
+  italic?: boolean;
+  /** Text color. */
+  color?: string;
+  /** Vertical position offset in pixels (from w:position, e.g., -10). */
+  position?: number;
+};
+
+/**
+ * Structured drop cap descriptor for layout engine.
+ *
+ * Drop caps are enlarged initial letters that span multiple lines of text.
+ * OOXML encodes drop caps via w:framePr with @w:dropCap attribute on a separate
+ * paragraph containing just the drop cap letter, followed by the text paragraph.
+ *
+ * Layout engine merges these into a single paragraph with this descriptor
+ * to enable proper measurement and rendering.
+ */
+export type DropCapDescriptor = {
+  /**
+   * Drop cap mode:
+   * - 'drop': Letter drops into the text area (most common)
+   * - 'margin': Letter sits in the left margin
+   */
+  mode: 'drop' | 'margin';
+  /**
+   * Number of lines the drop cap spans (from w:lines attribute, typically 2-5).
+   * Determines the height of the drop cap box.
+   */
+  lines: number;
+  /**
+   * The drop cap run containing text and styling.
+   */
+  run: DropCapRun;
+  /**
+   * Text wrapping mode (from w:wrap attribute on framePr).
+   * - 'around': Text wraps around the drop cap (default)
+   * - 'notBeside': Text does not wrap beside drop cap
+   * - 'none': No special wrapping
+   * - 'tight': Tight wrapping
+   */
+  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  /**
+   * Measured width of the drop cap in pixels (populated during measurement).
+   */
+  measuredWidth?: number;
+  /**
+   * Measured height of the drop cap in pixels (populated during measurement).
+   */
+  measuredHeight?: number;
+};
+
 export type ParagraphAttrs = {
   styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
-  /** Drop cap flag from w:framePr/@w:dropCap. */
+  /**
+   * Legacy drop cap flag from w:framePr/@w:dropCap.
+   * @deprecated Use dropCapDescriptor for full drop cap support.
+   */
   dropCap?: string | number | boolean;
+  /**
+   * Structured drop cap descriptor with full metadata.
+   * When present, layout engine will render the drop cap with proper geometry.
+   */
+  dropCapDescriptor?: DropCapDescriptor;
   frame?: ParagraphFrame;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
@@ -862,6 +955,20 @@ export type ParagraphMeasure = {
     markerWidth: number;
     markerTextWidth: number;
     indentLeft: number;
+  };
+  /**
+   * Measured drop cap information, populated when the paragraph has a drop cap.
+   * Used by the renderer to position the drop cap element.
+   */
+  dropCap?: {
+    /** Measured width of the drop cap box (including padding). */
+    width: number;
+    /** Measured height of the drop cap (based on lines * lineHeight). */
+    height: number;
+    /** Number of lines the drop cap spans. */
+    lines: number;
+    /** Drop cap mode: 'drop' inside text area, 'margin' in the margin. */
+    mode: 'drop' | 'margin';
   };
 };
 

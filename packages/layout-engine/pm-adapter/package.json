@@ -29,8 +29,5 @@
     "@superdoc/style-engine": "*",
     "@superdoc/word-layout": "*",
     "@superdoc/url-validation": "*"
-  },
-  "devDependencies": {
-    "canvas": "^3.0.0"
   }
 }

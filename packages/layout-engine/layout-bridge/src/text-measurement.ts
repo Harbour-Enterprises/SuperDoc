@@ -53,8 +53,8 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
  * @returns CSS font string (e.g., "italic bold 16px Arial")
  */
 export function getRunFontString(run: Run): string {
-  // TabRun and ImageRun don't have styling properties, use defaults
-  if (run.kind === 'tab' || run.kind === 'image') {
+  // TabRun, ImageRun, and LineBreakRun don't have styling properties, use defaults
+  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
     return 'normal normal 16px Arial';
   }
 
@@ -88,6 +88,12 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
 
     // FIXED: ImageRun handling - images are atomic units, no slicing needed
     if (run.kind === 'image') {
+      result.push(run);
+      continue;
+    }
+
+    // LineBreakRun handling - line breaks are atomic units, no slicing needed
+    if (run.kind === 'lineBreak') {
       result.push(run);
       continue;
     }
@@ -136,7 +142,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if (run.kind === 'image') return sum;
+        if (run.kind === 'image' || run.kind === 'lineBreak') return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -157,6 +163,11 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       }
       currentX += tabWidth;
       currentCharOffset += runLength;
+      continue;
+    }
+
+    // Skip LineBreakRun - has no text to measure
+    if (run.kind === 'lineBreak') {
       continue;
     }
 
@@ -213,7 +224,7 @@ export function findCharacterAtX(
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if (run.kind === 'image') return sum;
+        if (run.kind === 'image' || run.kind === 'lineBreak') return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -249,6 +260,11 @@ export function findCharacterAtX(
       }
       currentX = endX;
       currentCharOffset += TAB_CHAR_LENGTH;
+      continue;
+    }
+
+    // Skip LineBreakRun - has no text to measure
+    if (run.kind === 'lineBreak') {
       continue;
     }
 
@@ -308,7 +324,7 @@ export function findCharacterAtX(
 
 const computeLetterSpacingWidth = (run: Run, precedingChars: number, runLength: number): number => {
   // Only text runs support letter spacing (older data may omit kind on text runs).
-  if (isTabRun(run) || run.kind === 'image' || !run.letterSpacing) {
+  if (isTabRun(run) || run.kind === 'image' || run.kind === 'lineBreak' || !run.letterSpacing) {
     return 0;
   }
   const maxGaps = Math.max(runLength - 1, 0);
