@@ -1741,6 +1741,9 @@ describe('paragraph converters', () => {
 
         expect(blocks).toHaveLength(1);
         expect(blocks[0].kind).toBe('paragraph');
+        const paraBlock = blocks[0] as ParagraphBlock;
+        expect(paraBlock.runs).toHaveLength(2);
+        expect((paraBlock.runs[1] as Run).kind).toBe('lineBreak');
       });
     });
 
