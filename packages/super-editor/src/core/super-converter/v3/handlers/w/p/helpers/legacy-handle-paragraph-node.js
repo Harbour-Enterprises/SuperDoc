@@ -1,5 +1,6 @@
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { mergeTextNodes } from '@converter/v2/importer/index.js';
+import { parseProperties } from '@converter/v2/importer/importerHelpers.js';
 import { resolveParagraphProperties } from '@converter/styles';
 import { translator as w_pPrTranslator } from '@converter/v3/handlers/w/pPr';
 
@@ -36,15 +37,6 @@ export const handleParagraphNode = (params) => {
     inlineParagraphProperties = w_pPrTranslator.encode({ ...params, nodes: [pPr] }) || {};
   }
 
-  // If it is a standard paragraph node, process normally
-  const handleStandardNode = nodeListHandler.handlerEntities.find(
-    (e) => e.handlerName === 'standardNodeHandler',
-  )?.handler;
-  if (!handleStandardNode) {
-    console.error('Standard node handler not found');
-    return null;
-  }
-
   // Resolve paragraph properties according to styles hierarchy
   const insideTable = (params.path || []).some((ancestor) => ancestor.name === 'w:tc');
   const tableStyleId = getTableStyleId(params.path || []);
@@ -55,15 +47,32 @@ export const handleParagraphNode = (params) => {
     tableStyleId,
   );
 
-  const updatedParams = {
-    ...params,
-    nodes: [node],
-    extraParams: { ...params.extraParams, paragraphProperties: resolvedParagraphProperties },
-  };
-  const result = handleStandardNode(updatedParams);
-  if (result.nodes.length === 1) {
-    schemaNode = result.nodes[0];
+  const { elements = [], attributes = {}, marks = [] } = parseProperties(node, params.docx);
+  const childContent = [];
+  if (elements.length) {
+    const updatedElements = elements.map((el) => {
+      if (!el.marks) el.marks = [];
+      el.marks.push(...marks);
+      return el;
+    });
+
+    const childParams = {
+      ...params,
+      nodes: updatedElements,
+      extraParams: { ...params.extraParams, paragraphProperties: resolvedParagraphProperties },
+      path: [...(params.path || []), node],
+    };
+    const translatedChildren = nodeListHandler.handler(childParams);
+    childContent.push(...translatedChildren);
   }
+
+  schemaNode = {
+    type: 'paragraph',
+    content: childContent,
+    attrs: { ...attributes },
+    marks: [],
+  };
+
   schemaNode.type = 'paragraph';
 
   // Pull out some commonly used properties to top-level attrs

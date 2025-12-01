@@ -1,4 +1,5 @@
 <template>
+  <!-- Prevent mousedown from propagating to editor - critical for clean resize handle drags -->
   <div v-if="visible && tableMetadata" class="superdoc-table-resize-overlay" :style="overlayStyle" @mousedown.stop>
     <!-- Resize handles for each column boundary segment -->
     <template v-for="(boundary, boundaryIndex) in resizableBoundaries" :key="`boundary-${boundaryIndex}`">

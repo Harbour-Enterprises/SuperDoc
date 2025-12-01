@@ -25,7 +25,7 @@ function fontString(run: Run): string {
 }
 
 function runText(run: Run): string {
-  return run.kind === 'image' || run.kind === 'lineBreak' ? '' : (run.text ?? '');
+  return 'src' in run ? '' : (run.text ?? '');
 }
 
 function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): number {

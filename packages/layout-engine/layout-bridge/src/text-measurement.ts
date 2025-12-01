@@ -53,8 +53,8 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
  * @returns CSS font string (e.g., "italic bold 16px Arial")
  */
 export function getRunFontString(run: Run): string {
-  // TabRun, ImageRun, and LineBreakRun don't have styling properties, use defaults
-  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
+  // TabRun and ImageRun don't have styling properties, use defaults
+  if (run.kind === 'tab' || 'src' in run) {
     return 'normal normal 16px Arial';
   }
 
@@ -87,7 +87,7 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
     }
 
     // FIXED: ImageRun handling - images are atomic units, no slicing needed
-    if (run.kind === 'image') {
+    if ('src' in run) {
       result.push(run);
       continue;
     }
@@ -135,6 +135,16 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
  */
 export function measureCharacterX(block: FlowBlock, line: Line, charOffset: number): number {
   const ctx = getMeasurementContext();
+
+  // Check if line has segment-based positioning (used for tab-aligned text)
+  // When segments have explicit X positions, we must use segment-based calculation
+  // to match the actual DOM positioning
+  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+
+  if (hasExplicitPositioning && line.segments && ctx) {
+    return measureCharacterXSegmentBased(block, line, charOffset, ctx);
+  }
+
   if (!ctx) {
     // Fallback to ratio-based calculation if Canvas unavailable
     const runs = sliceRunsForLine(block, line);
@@ -142,7 +152,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if (run.kind === 'image' || run.kind === 'lineBreak') return sum;
+        if ('src' in run) return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -166,12 +176,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       continue;
     }
 
-    // Skip LineBreakRun - has no text to measure
-    if (run.kind === 'lineBreak') {
-      continue;
-    }
-
-    const text = run.kind === 'image' ? '' : (run.text ?? '');
+    const text = 'src' in run ? '' : (run.text ?? '');
     const runLength = text.length;
 
     // If target character is within this run
@@ -200,6 +205,91 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
 }
 
 /**
+ * Measure character X position using segment-based calculation.
+ * This is used when lines have tab-aligned segments with explicit X positions.
+ * Must match the DOM positioning used in segment-based rendering.
+ *
+ * @param block - The paragraph block containing runs
+ * @param line - The line with segments
+ * @param charOffset - Character offset from start of line
+ * @param ctx - Canvas rendering context for text measurement
+ * @returns X coordinate for the character
+ */
+function measureCharacterXSegmentBased(
+  block: FlowBlock,
+  line: Line,
+  charOffset: number,
+  ctx: CanvasRenderingContext2D,
+): number {
+  if (block.kind !== 'paragraph' || !line.segments) return 0;
+
+  // Build a map of cumulative character offsets per run
+  // to translate line-relative charOffset to run-relative offsets
+  let lineCharCount = 0;
+
+  for (const segment of line.segments) {
+    const run = block.runs[segment.runIndex];
+    if (!run) continue;
+
+    const segmentChars = segment.toChar - segment.fromChar;
+
+    // Check if target character is within this segment
+    if (lineCharCount + segmentChars >= charOffset) {
+      const offsetInSegment = charOffset - lineCharCount;
+
+      // Get the base X position for this segment
+      // If segment has explicit X (tab-aligned), use it
+      // Otherwise, we'd need to calculate cumulative width up to this point
+      let segmentBaseX = segment.x;
+
+      if (segmentBaseX === undefined) {
+        // Calculate cumulative X by measuring previous segments
+        segmentBaseX = 0;
+        for (const prevSeg of line.segments) {
+          if (prevSeg === segment) break;
+          const prevRun = block.runs[prevSeg.runIndex];
+          if (!prevRun) continue;
+
+          if (prevSeg.x !== undefined) {
+            // If previous segment has explicit X, use its X + width as base
+            segmentBaseX = prevSeg.x + (prevSeg.width ?? 0);
+          } else {
+            segmentBaseX += prevSeg.width ?? 0;
+          }
+        }
+      }
+
+      // Handle tab runs
+      if (isTabRun(run)) {
+        // Tab counts as 1 character, position is at segment start or end
+        return segmentBaseX + (offsetInSegment > 0 ? (segment.width ?? 0) : 0);
+      }
+
+      // Handle ImageRun - images are atomic, use segment width
+      if ('src' in run) {
+        return segmentBaseX + (offsetInSegment >= segmentChars ? (segment.width ?? 0) : 0);
+      }
+
+      // For text runs, measure up to the target character
+      const text = run.text ?? '';
+      const segmentText = text.slice(segment.fromChar, segment.toChar);
+      const textUpToTarget = segmentText.slice(0, offsetInSegment);
+
+      ctx.font = getRunFontString(run);
+      const measured = ctx.measureText(textUpToTarget);
+      const spacingWidth = computeLetterSpacingWidth(run, offsetInSegment, segmentChars);
+
+      return segmentBaseX + measured.width + spacingWidth;
+    }
+
+    lineCharCount += segmentChars;
+  }
+
+  // Past end of line, return total width
+  return line.width;
+}
+
+/**
  * Find the character offset and PM position at a given X coordinate within a line.
  * This is the inverse of measureCharacterX.
  *
@@ -224,7 +314,7 @@ export function findCharacterAtX(
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if (run.kind === 'image' || run.kind === 'lineBreak') return sum;
+        if ('src' in run) return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -263,12 +353,7 @@ export function findCharacterAtX(
       continue;
     }
 
-    // Skip LineBreakRun - has no text to measure
-    if (run.kind === 'lineBreak') {
-      continue;
-    }
-
-    const text = run.kind === 'image' ? '' : (run.text ?? '');
+    const text = 'src' in run ? '' : (run.text ?? '');
     const runLength = text.length;
 
     if (runLength === 0) continue;
@@ -324,7 +409,7 @@ export function findCharacterAtX(
 
 const computeLetterSpacingWidth = (run: Run, precedingChars: number, runLength: number): number => {
   // Only text runs support letter spacing (older data may omit kind on text runs).
-  if (isTabRun(run) || run.kind === 'image' || run.kind === 'lineBreak' || !run.letterSpacing) {
+  if (isTabRun(run) || 'src' in run || !('letterSpacing' in run) || !run.letterSpacing) {
     return 0;
   }
   const maxGaps = Math.max(runLength - 1, 0);

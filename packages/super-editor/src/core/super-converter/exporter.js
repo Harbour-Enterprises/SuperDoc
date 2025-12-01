@@ -26,6 +26,7 @@ import { translator as sdTotalPageNumberTranslator } from '@converter/v3/handler
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -181,6 +182,8 @@ export function exportSchemaToJson(params) {
     'total-page-number': sdTotalPageNumberTranslator,
     pageReference: sdPageReferenceTranslator,
     tableOfContents: sdTableOfContentsTranslator,
+    passthroughBlock: translatePassthroughNode,
+    passthroughInline: translatePassthroughNode,
   };
 
   let handler = router[type];
@@ -197,6 +200,12 @@ export function exportSchemaToJson(params) {
 
   // Call the handler for this node type
   return handler(params);
+}
+
+function translatePassthroughNode(params) {
+  const original = params?.node?.attrs?.originalXml;
+  if (!original) return null;
+  return carbonCopy(original);
 }
 
 /**
