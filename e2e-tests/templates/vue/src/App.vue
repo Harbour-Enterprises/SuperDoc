@@ -5,10 +5,14 @@ import { onMounted, shallowRef } from 'vue';
 import { SuperDoc } from 'superdoc';
 
 import { CustomMark } from './custom-mark.js';
-import { nextTick } from 'process';
+import process from 'process';
+
+const props = defineProps(['filename']);
+console.log(props.filename);
 
 window.fileData = null;
 const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
+
 const superdoc = shallowRef(null);
 const init = async () => {
   if (superdoc.value) superdoc.value.destroy();
@@ -83,7 +87,7 @@ const init = async () => {
     }
   }
 
-  nextTick(() => {
+  process.nextTick(() => {
     if (!config.modules) config.modules = {};
     superdoc.value = new SuperDoc(config);
   });
@@ -134,8 +138,11 @@ const onFontsResolved = ({ documentFonts, unsupportedFonts }) => {
   }
 };
 
-onMounted(() => {
-  init();
+onMounted(async () => {
+  if (props.filename) {
+    window.fileData = await getFileObject(props.filename);
+  }
+  await init();
 });
 </script>
 

@@ -64,3 +64,6 @@ AGENTS.md
 codex.config.json
 perf-baseline-results.json
 .claude
+
+*storybook.log
+storybook-static
