@@ -15,7 +15,6 @@ export const PassthroughBlock = Node.create({
   name: 'passthroughBlock',
   group: 'block',
   atom: true,
-  isolating: true,
   draggable: false,
   selectable: false,
   defining: true,
@@ -38,7 +37,6 @@ export const PassthroughInline = Node.create({
   group: 'inline',
   inline: true,
   atom: true,
-  isolating: true,
   draggable: false,
   selectable: false,
 

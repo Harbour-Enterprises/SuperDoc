@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { handlePassthroughNode } from './passthroughNodeImporter.js';
+import { handlePassthroughNode, isInlineContext } from './passthroughNodeImporter.js';
 
 const createParams = (node, extra = {}) => ({
   nodes: [node],
@@ -38,5 +38,14 @@ describe('passthrough node importer', () => {
     expect(handler).toHaveBeenCalled();
     expect(nodes[0].content).toEqual([{ type: 'text', text: 'child' }]);
     expect(nodes[0].attrs.originalXml.elements).toEqual([child]);
+  });
+
+  it('treats math nodes as inline context', () => {
+    const pathChain = [{ name: 'w:p' }, { name: 'm:oMathPara' }];
+    expect(isInlineContext(pathChain)).toBe(true);
+
+    const node = { name: 'm:oMathPara', elements: [] };
+    const { nodes } = handlePassthroughNode(createParams(node, { path: pathChain }));
+    expect(nodes[0].type).toBe('passthroughInline');
   });
 });

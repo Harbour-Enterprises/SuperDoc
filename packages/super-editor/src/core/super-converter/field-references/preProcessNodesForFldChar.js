@@ -140,7 +140,6 @@ export const preProcessNodesForFldChar = (nodes = [], docx) => {
     }
   }
 
-  console.log(processedNodes);
   return { processedNodes, unpairedBegin, unpairedEnd };
 };
 

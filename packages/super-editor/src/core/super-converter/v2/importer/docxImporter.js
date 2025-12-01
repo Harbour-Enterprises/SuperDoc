@@ -125,6 +125,7 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Safety: drop any inline-only nodes that accidentally landed at the doc root
     parsedContent = filterOutRootInlineNodes(parsedContent);
+    collapseWhitespaceNextToInlinePassthrough(parsedContent);
 
     const result = {
       type: 'doc',
@@ -701,6 +702,64 @@ export function filterOutRootInlineNodes(content = []) {
   ]);
 
   return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+}
+
+/**
+ * Inline passthrough nodes render as zero-width spans. If the text before ends
+ * with a space and the text after starts with a space we will see a visible
+ * double space once the passthrough is hidden. Collapse that edge to a single
+ * trailing space on the left and trim the leading whitespace on the right.
+ *
+ * @param {Array} content
+ */
+export function collapseWhitespaceNextToInlinePassthrough(content = []) {
+  if (!Array.isArray(content) || content.length === 0) return;
+
+  const sequence = collectInlineSequence(content);
+  sequence.forEach((entry, index) => {
+    if (entry.kind !== 'passthrough') return;
+    const prev = findNeighborText(sequence, index, -1);
+    const next = findNeighborText(sequence, index, 1);
+    if (!prev || !next) return;
+    if (!prev.node.text.endsWith(' ') || !next.node.text.startsWith(' ')) return;
+
+    prev.node.text = prev.node.text.replace(/ +$/, ' ');
+    next.node.text = next.node.text.replace(/^ +/, '');
+    if (next.node.text.length === 0) {
+      next.parent.splice(next.index, 1);
+    }
+  });
+}
+
+function collectInlineSequence(nodes, result = [], insidePassthrough = false) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return result;
+  nodes.forEach((node, index) => {
+    if (!node) return;
+    const isPassthrough = node.type === 'passthroughInline';
+    if (isPassthrough && !insidePassthrough) {
+      result.push({ kind: 'passthrough', parent: nodes, index });
+    }
+    if (node.type === 'text' && typeof node.text === 'string' && !insidePassthrough) {
+      result.push({ kind: 'text', node, parent: nodes, index });
+    }
+    if (Array.isArray(node.content) && node.content.length) {
+      const nextInside = insidePassthrough || isPassthrough;
+      collectInlineSequence(node.content, result, nextInside);
+    }
+  });
+  return result;
+}
+
+function findNeighborText(sequence, startIndex, direction) {
+  let cursor = startIndex + direction;
+  while (cursor >= 0 && cursor < sequence.length) {
+    const entry = sequence[cursor];
+    if (entry.kind === 'text') {
+      return entry;
+    }
+    cursor += direction;
+  }
+  return null;
 }
 
 /**
