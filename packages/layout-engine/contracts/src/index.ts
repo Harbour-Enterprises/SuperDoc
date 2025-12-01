@@ -135,6 +135,12 @@ export type TextRun = {
   text: string;
   fontFamily: string;
   fontSize: number;
+  /** Comment annotations applied to this run (supports overlapping comments). */
+  comments?: Array<{
+    commentId: string;
+    importedId?: string;
+    internal?: boolean;
+  }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
    */

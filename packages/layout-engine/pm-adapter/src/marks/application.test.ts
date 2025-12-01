@@ -709,6 +709,24 @@ describe('mark application', () => {
       expect(run.highlight).toBe('#FFFF00');
     });
 
+    it('applies comment mark metadata', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'commentMark', attrs: { commentId: 'c-1', internal: true } }]);
+
+      expect(run.comments).toEqual([{ commentId: 'c-1', internal: true }]);
+    });
+
+    it('dedupes comment annotations by id/importedId', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        { type: 'comment', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+        { type: 'commentMark', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+      ]);
+
+      expect(run.comments).toHaveLength(1);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', importedId: 'imp-1', internal: false });
+    });
+
     it('applies underline mark with default style', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyMarksToRun(run, [{ type: 'underline', attrs: {} }]);
