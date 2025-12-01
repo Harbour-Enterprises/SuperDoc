@@ -172,6 +172,13 @@ const decode = (params, decodedAttrs = {}) => {
       return;
     }
 
+    // Ignore comment range start and end nodes
+    if (child.name === 'w:commentRangeStart' || child.name === 'w:commentRangeEnd') {
+      const commentRangeClone = cloneXmlNode(child);
+      runs.push(commentRangeClone);
+      return;
+    }
+
     const runWrapper = { name: XML_NODE_NAME, elements: [] };
     applyBaseRunProps(runWrapper);
     if (!Array.isArray(runWrapper.elements)) runWrapper.elements = [];
