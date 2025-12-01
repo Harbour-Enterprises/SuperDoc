@@ -5,7 +5,14 @@
  * including style resolution, boolean attributes, and Word layout integration.
  */
 
-import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing, TabStop } from '@superdoc/contracts';
+import type {
+  ParagraphAttrs,
+  ParagraphIndent,
+  ParagraphSpacing,
+  TabStop,
+  DropCapDescriptor,
+  DropCapRun,
+} from '@superdoc/contracts';
 import type { PMNode, StyleNode, StyleContext, ListCounterContext, ListRenderingAttrs } from '../types.js';
 import { resolveStyle } from '@superdoc/style-engine';
 import type {
@@ -160,6 +167,13 @@ export const cloneParagraphAttrs = (attrs?: ParagraphAttrs): ParagraphAttrs | un
   }
   if (attrs.shading) clone.shading = { ...attrs.shading };
   if (attrs.tabs) clone.tabs = attrs.tabs.map((tab) => ({ ...tab }));
+  // Clone drop cap descriptor deeply
+  if (attrs.dropCapDescriptor) {
+    clone.dropCapDescriptor = {
+      ...attrs.dropCapDescriptor,
+      run: { ...attrs.dropCapDescriptor.run },
+    };
+  }
   return clone;
 };
 
@@ -330,6 +344,184 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
     default:
       return undefined;
   }
+};
+
+/**
+ * Default drop cap font size in pixels.
+ * Corresponds to roughly 48pt which is a common drop cap size.
+ */
+const DEFAULT_DROP_CAP_FONT_SIZE_PX = 64;
+
+/**
+ * Default font family for drop cap when none is specified.
+ */
+const DEFAULT_DROP_CAP_FONT_FAMILY = 'Times New Roman';
+
+/**
+ * Extract drop cap run information from a paragraph node.
+ *
+ * Drop cap paragraphs in DOCX typically contain just the drop cap letter(s)
+ * with specific font styling (large font size, vertical position offset, etc.).
+ * This function extracts the text and run properties from the first text node.
+ *
+ * @param para - The paragraph PM node to extract drop cap info from
+ * @returns DropCapRun with text and styling, or null if extraction fails
+ */
+const extractDropCapRunFromParagraph = (para: PMNode): DropCapRun | null => {
+  const content = para.content;
+  if (!Array.isArray(content) || content.length === 0) {
+    return null;
+  }
+
+  // Find the first text content in the paragraph
+  let text = '';
+  let runProperties: Record<string, unknown> = {};
+  let textStyleMarks: Record<string, unknown> = {};
+
+  /**
+   * Maximum recursion depth for extractTextAndStyle to prevent stack overflow.
+   * A depth of 50 should be sufficient for any reasonable document structure.
+   */
+  const MAX_RECURSION_DEPTH = 50;
+
+  const extractTextAndStyle = (nodes: PMNode[], depth = 0): boolean => {
+    // Guard against excessive recursion depth
+    if (depth > MAX_RECURSION_DEPTH) {
+      console.warn(`extractTextAndStyle exceeded max recursion depth (${MAX_RECURSION_DEPTH})`);
+      return false;
+    }
+
+    for (const node of nodes) {
+      if (!node) continue;
+
+      // Check for text node
+      if (node.type === 'text' && typeof node.text === 'string' && node.text.length > 0) {
+        text = node.text;
+        // Extract styling from marks
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        return true;
+      }
+
+      // Check for run node that may contain text
+      if (node.type === 'run') {
+        // Extract run properties
+        if (node.attrs?.runProperties && typeof node.attrs.runProperties === 'object') {
+          runProperties = { ...runProperties, ...(node.attrs.runProperties as Record<string, unknown>) };
+        }
+        // Also check for marks on the run node
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        // Look for text in run's children with incremented depth
+        if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+          return true;
+        }
+      }
+
+      // Look for text in other container nodes with incremented depth
+      if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  extractTextAndStyle(content);
+
+  // If no text found, cannot create a drop cap run
+  if (!text) {
+    return null;
+  }
+
+  // Merge run properties and text style marks to get final styling
+  const mergedStyle = { ...runProperties, ...textStyleMarks };
+
+  // Parse font size - can be in various formats: '117pt', '48px', number, etc.
+  let fontSizePx = DEFAULT_DROP_CAP_FONT_SIZE_PX;
+  const rawFontSize = mergedStyle.fontSize ?? mergedStyle['w:sz'] ?? mergedStyle.sz;
+  if (rawFontSize != null) {
+    if (typeof rawFontSize === 'number') {
+      // If number > 100, assume it's half-points (Word uses half-points for sz)
+      // Half-points: w:sz=234 means 117pt
+      const converted = rawFontSize > 100 ? ptToPx(rawFontSize / 2) : rawFontSize;
+      fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+    } else if (typeof rawFontSize === 'string') {
+      const numericPart = parseFloat(rawFontSize);
+      if (Number.isFinite(numericPart)) {
+        if (rawFontSize.endsWith('pt')) {
+          const converted = ptToPx(numericPart);
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        } else if (rawFontSize.endsWith('px')) {
+          // px values are already in pixels
+          fontSizePx = numericPart;
+        } else {
+          // Plain number string - assume half-points if large
+          const converted = numericPart > 100 ? ptToPx(numericPart / 2) : numericPart;
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        }
+      }
+    }
+  }
+
+  // Parse font family
+  let fontFamily = DEFAULT_DROP_CAP_FONT_FAMILY;
+  const rawFontFamily = mergedStyle.fontFamily ?? mergedStyle['w:rFonts'] ?? mergedStyle.rFonts;
+  if (typeof rawFontFamily === 'string') {
+    fontFamily = rawFontFamily;
+  } else if (rawFontFamily && typeof rawFontFamily === 'object') {
+    // rFonts can be an object with ascii, hAnsi, etc.
+    const rFonts = rawFontFamily as Record<string, unknown>;
+    const ascii = rFonts['w:ascii'] ?? rFonts.ascii;
+    if (typeof ascii === 'string') {
+      fontFamily = ascii;
+    }
+  }
+
+  // Build the drop cap run
+  const dropCapRun: DropCapRun = {
+    text,
+    fontFamily,
+    fontSize: fontSizePx,
+  };
+
+  // Parse optional properties
+  const bold = mergedStyle.bold ?? mergedStyle['w:b'] ?? mergedStyle.b;
+  if (isTruthy(bold)) {
+    dropCapRun.bold = true;
+  }
+
+  const italic = mergedStyle.italic ?? mergedStyle['w:i'] ?? mergedStyle.i;
+  if (isTruthy(italic)) {
+    dropCapRun.italic = true;
+  }
+
+  const color = mergedStyle.color ?? mergedStyle['w:color'] ?? mergedStyle.val;
+  if (typeof color === 'string' && color.length > 0 && color.toLowerCase() !== 'auto') {
+    // Ensure color has # prefix if it's a hex color
+    dropCapRun.color = color.startsWith('#') ? color : `#${color}`;
+  }
+
+  // Parse vertical position offset (from w:position, in half-points, can be negative)
+  const position = mergedStyle.position ?? mergedStyle['w:position'];
+  if (position != null) {
+    const posNum = pickNumber(position);
+    if (posNum != null) {
+      // Convert half-points to pixels
+      dropCapRun.position = ptToPx(posNum / 2);
+    }
+  }
+
+  return dropCapRun;
 };
 
 /**
@@ -813,7 +1005,40 @@ export const computeParagraphAttrs = (
       dropCap != null &&
       (typeof dropCap === 'string' || typeof dropCap === 'number' || typeof dropCap === 'boolean')
     ) {
+      // Keep the legacy dropCap flag for backward compatibility
       paragraphAttrs.dropCap = dropCap;
+
+      // Build structured DropCapDescriptor for enhanced drop cap support
+      const dropCapMode = typeof dropCap === 'string' ? dropCap.toLowerCase() : 'drop';
+      const linesValue = pickNumber(framePr['w:lines'] ?? framePr.lines);
+      const wrapValue = asString(framePr['w:wrap'] ?? framePr.wrap);
+
+      // Extract the drop cap text and run styling from paragraph content
+      const dropCapRunInfo = extractDropCapRunFromParagraph(para);
+
+      if (dropCapRunInfo) {
+        const descriptor: DropCapDescriptor = {
+          mode: dropCapMode === 'margin' ? 'margin' : 'drop',
+          lines: linesValue != null && linesValue > 0 ? linesValue : 3,
+          run: dropCapRunInfo,
+        };
+
+        // Map wrap value to the expected types
+        if (wrapValue) {
+          const normalizedWrap = wrapValue.toLowerCase();
+          if (
+            normalizedWrap === 'around' ||
+            normalizedWrap === 'notbeside' ||
+            normalizedWrap === 'none' ||
+            normalizedWrap === 'tight'
+          ) {
+            descriptor.wrap =
+              normalizedWrap === 'notbeside' ? 'notBeside' : (normalizedWrap as 'around' | 'none' | 'tight');
+          }
+        }
+
+        paragraphAttrs.dropCapDescriptor = descriptor;
+      }
     }
 
     const frame: ParagraphAttrs['frame'] = {};

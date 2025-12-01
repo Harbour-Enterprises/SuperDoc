@@ -110,6 +110,7 @@ export const hydrateParagraphStyleAttrs = (
     tabStops?: unknown;
     keepLines?: boolean;
     keepNext?: boolean;
+    outlineLvl?: number;
   };
   const resolvedExtended = resolved as ExtendedResolvedProps;
   const resolvedAsRecord = resolved as Record<string, unknown>;

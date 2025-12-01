@@ -37,6 +37,7 @@ import type {
   GradientFill,
   SolidFillWithAlpha,
   ShapeTextContent,
+  DropCapDescriptor,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -1403,6 +1404,14 @@ export class DomPainter {
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
 
+      // Render drop cap if present (only on the first fragment, not continuation)
+      const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+      const dropCapMeasure = measure.dropCap;
+      if (dropCapDescriptor && dropCapMeasure && !fragment.continuesFromPrev) {
+        const dropCapEl = this.renderDropCap(dropCapDescriptor, dropCapMeasure);
+        fragmentEl.appendChild(dropCapEl);
+      }
+
       // Remove fragment-level indent so line-level indent handling doesn't double-apply.
       if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
       if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
@@ -1440,6 +1449,16 @@ export class DomPainter {
           markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
           markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
+
+          // Position marker relative to text start
+          // textStart = indentLeft + firstLine - hanging
+          // markerLeft = textStart - markerWidth
+          const indentLeft = paraIndentLeft;
+          const hanging = paraIndent?.hanging ?? 0;
+          const textStartX = indentLeft - hanging;
+          const markerLeftX = textStartX - fragment.markerWidth;
+          markerEl.style.position = 'relative';
+          markerEl.style.left = `${markerLeftX}px`;
 
           // Apply marker run styling
           markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
@@ -1509,6 +1528,66 @@ export class DomPainter {
       el.title = error.message;
     }
     return el;
+  }
+
+  /**
+   * Renders a drop cap element as a floated span at the start of a paragraph.
+   *
+   * Drop caps are large initial letters that span multiple lines of text.
+   * This method creates a floated element with the drop cap letter styled
+   * according to the descriptor's run properties.
+   *
+   * @param descriptor - The drop cap descriptor with text and styling info
+   * @param measure - The measured dimensions of the drop cap
+   * @returns HTMLElement containing the rendered drop cap
+   */
+  private renderDropCap(descriptor: DropCapDescriptor, measure: ParagraphMeasure['dropCap']): HTMLElement {
+    const doc = this.doc!;
+    const { run, mode } = descriptor;
+
+    const dropCapEl = doc.createElement('span');
+    dropCapEl.classList.add('superdoc-drop-cap');
+    dropCapEl.textContent = run.text;
+
+    // Apply styling from the run
+    dropCapEl.style.fontFamily = run.fontFamily;
+    dropCapEl.style.fontSize = `${run.fontSize}px`;
+    if (run.bold) {
+      dropCapEl.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      dropCapEl.style.fontStyle = 'italic';
+    }
+    if (run.color) {
+      dropCapEl.style.color = run.color;
+    }
+
+    // Position the drop cap based on mode
+    if (mode === 'drop') {
+      // Float left so text wraps around it
+      dropCapEl.style.float = 'left';
+      dropCapEl.style.marginRight = '4px'; // Small gap between drop cap and text
+      dropCapEl.style.lineHeight = '1'; // Prevent extra line height from affecting layout
+    } else if (mode === 'margin') {
+      // Position in the margin (left of the text area)
+      dropCapEl.style.position = 'absolute';
+      dropCapEl.style.left = '0';
+      dropCapEl.style.lineHeight = '1';
+    }
+
+    // Apply vertical position offset if specified
+    if (run.position && run.position !== 0) {
+      dropCapEl.style.position = dropCapEl.style.position || 'relative';
+      dropCapEl.style.top = `${run.position}px`;
+    }
+
+    // Set dimensions from measurement
+    if (measure) {
+      dropCapEl.style.width = `${measure.width}px`;
+      dropCapEl.style.height = `${measure.height}px`;
+    }
+
+    return dropCapEl;
   }
 
   private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {

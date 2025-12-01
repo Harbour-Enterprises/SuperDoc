@@ -54,6 +54,7 @@ import type {
   DrawingBlock,
   DrawingMeasure,
   DrawingGeometry,
+  DropCapDescriptor,
 } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
@@ -377,7 +378,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const hanging = indent?.hanging ?? 0;
   const firstLineOffset = firstLine - hanging;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  let availableWidth = Math.max(1, contentWidth - firstLineOffset);
+  const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   const tabStops = buildTabStopsPx(
     indent,
     block.attrs?.tabs as TabStop[],
@@ -394,6 +395,29 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       line.bars = barTabStops.map((stop) => ({ x: stop.pos }));
     }
   };
+
+  // Drop cap handling: measure drop cap and calculate reserved space
+  const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+  let dropCapMeasure: {
+    width: number;
+    height: number;
+    lines: number;
+    mode: 'drop' | 'margin';
+  } | null = null;
+
+  if (dropCapDescriptor) {
+    // Validate required fields before measuring
+    if (!dropCapDescriptor.run || !dropCapDescriptor.run.text || !dropCapDescriptor.lines) {
+      console.warn('Invalid drop cap descriptor - missing required fields:', dropCapDescriptor);
+    } else {
+      const dropCapMeasured = measureDropCap(ctx, dropCapDescriptor, spacing);
+      dropCapMeasure = dropCapMeasured;
+
+      // Update the descriptor with measured dimensions
+      (dropCapDescriptor as DropCapDescriptor).measuredWidth = dropCapMeasured.width;
+      (dropCapDescriptor as DropCapDescriptor).measuredHeight = dropCapMeasured.height;
+    }
+  }
 
   if (block.runs.length === 0) {
     const metrics = calculateTypographyMetrics(12, spacing);
@@ -426,6 +450,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     segments: Line['segments'];
     leaders?: Line['leaders'];
   } | null = null;
+
+  // Helper to calculate effective available width based on current line count.
+  // When drop cap is present in 'drop' mode, reduce width for the first N lines.
+  const getEffectiveWidth = (baseWidth: number): number => {
+    if (dropCapMeasure && lines.length < dropCapMeasure.lines && dropCapMeasure.mode === 'drop') {
+      return Math.max(1, baseWidth - dropCapMeasure.width);
+    }
+    return baseWidth;
+  };
 
   let lastFontSize = 12;
   let tabStopCursor = 0;
@@ -492,7 +525,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       // Start a fresh (currently empty) line after the break. If no further content
       // is added, this placeholder will become a blank line with the appropriate height.
-      const nextLineMaxWidth = currentLine ? contentWidth : availableWidth;
+      const hadPreviousLine = currentLine !== null;
+      const nextLineMaxWidth: number = hadPreviousLine
+        ? getEffectiveWidth(contentWidth)
+        : getEffectiveWidth(initialAvailableWidth);
       currentLine = {
         fromRun: runIndex,
         fromChar: 0,
@@ -503,7 +539,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         maxWidth: nextLineMaxWidth,
         segments: [],
       };
-      availableWidth = contentWidth;
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
@@ -521,7 +556,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1,
           width: 0,
           maxFontSize: 12, // Default font size for tabs
-          maxWidth: availableWidth,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
           segments: [],
         };
       }
@@ -577,7 +612,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1, // Images are treated as single atomic units
           width: imageWidth,
           maxFontSize: imageHeight, // Use image height for line height calculation
-          maxWidth: availableWidth,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
           segments: [
             {
               runIndex,
@@ -587,7 +622,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
-        availableWidth = contentWidth;
         continue;
       }
 
@@ -612,7 +646,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1,
           width: imageWidth,
           maxFontSize: imageHeight,
-          maxWidth: contentWidth,
+          maxWidth: getEffectiveWidth(contentWidth),
           segments: [
             {
               runIndex,
@@ -622,7 +656,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
-        availableWidth = contentWidth;
       } else {
         // Image fits on current line - append it
         currentLine.toRun = runIndex;
@@ -684,7 +717,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: wordEndNoSpace,
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
-            maxWidth: availableWidth,
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
           };
           // If a trailing space exists and fits safely, include it on this line
@@ -697,7 +730,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             // Do not count trailing space at line end
             charPosInRun = wordEndNoSpace;
           }
-          availableWidth = contentWidth;
           continue;
         }
 
@@ -727,7 +759,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: wordEndNoSpace,
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
-            maxWidth: contentWidth,
+            maxWidth: getEffectiveWidth(contentWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
           };
           // If trailing space would fit on the new line, consume it here; otherwise skip it
@@ -796,10 +828,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: charPosInRun,
             width: 0,
             maxFontSize: run.fontSize,
-            maxWidth: availableWidth,
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
             segments: [],
           };
-          availableWidth = contentWidth;
         }
         const originX = currentLine.width;
         const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
@@ -986,6 +1017,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     lines,
     totalHeight,
     ...(markerInfo ? { marker: markerInfo } : {}),
+    ...(dropCapMeasure ? { dropCap: dropCapMeasure } : {}),
   };
 }
 
@@ -1440,7 +1472,8 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
 };
 
 const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
-  const letterSpacing = run.kind === 'text' ? run.letterSpacing || 0 : 0;
+  // TextRun.kind is optional and defaults to 'text', so check for undefined or 'text'
+  const letterSpacing = run.kind === 'text' || run.kind === undefined ? (run as TextRun).letterSpacing || 0 : 0;
   const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
   return roundValue(width);
 };
@@ -1494,6 +1527,61 @@ const sanitizePositive = (value: number | undefined): number =>
 const sanitizeDecimalSeparator = (value: unknown): string => {
   if (value === ',') return ',';
   return DEFAULT_DECIMAL_SEPARATOR;
+};
+
+/**
+ * Default padding around drop cap in pixels.
+ * Applied to the right side of the drop cap box.
+ */
+const DROP_CAP_PADDING_PX = 4;
+
+/**
+ * Measure the drop cap and calculate its dimensions.
+ *
+ * Uses the drop cap run's font properties to measure the text width,
+ * and calculates the height based on the number of lines it should span.
+ *
+ * @param ctx - Canvas context for text measurement
+ * @param descriptor - Drop cap descriptor with run and metadata
+ * @param spacing - Paragraph spacing for line height calculation
+ * @returns Measured drop cap dimensions
+ */
+const measureDropCap = (
+  ctx: CanvasRenderingContext2D,
+  descriptor: DropCapDescriptor,
+  spacing?: ParagraphSpacing,
+): { width: number; height: number; lines: number; mode: 'drop' | 'margin' } => {
+  const { run, lines, mode } = descriptor;
+
+  // Build font string for the drop cap run
+  const { font } = buildFontString({
+    fontFamily: run.fontFamily,
+    fontSize: run.fontSize,
+    bold: run.bold,
+    italic: run.italic,
+  });
+
+  // Measure the text width
+  ctx.font = font;
+  const metrics = ctx.measureText(run.text);
+  const advanceWidth = metrics.width;
+  const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
+  const textWidth = Math.max(advanceWidth, paintedWidth);
+
+  // Add padding for spacing between drop cap and text
+  const width = roundValue(textWidth + DROP_CAP_PADDING_PX);
+
+  // Calculate height based on the number of lines the drop cap should span
+  // This uses the base line height calculation from the paragraph's spacing
+  const baseLineHeight = resolveLineHeight(spacing, run.fontSize * 1.2);
+  const height = roundValue(baseLineHeight * lines);
+
+  return {
+    width,
+    height,
+    lines,
+    mode,
+  };
 };
 
 const resolveIndentLeft = (item: ListBlock['items'][number]): number => {
