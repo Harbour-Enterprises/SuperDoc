@@ -49,7 +49,7 @@ function extractCommentMetadata(blocks: FlowBlock[]): Array<{
     if (block.kind === 'paragraph') {
       // Check for comment metadata in runs
       const hasComment = block.runs?.some((run) => {
-        if (run.kind === 'text' && run.attrs?.commentId) {
+        if (run.kind === 'text' && run.comments && run.comments.length) {
           return true;
         }
         return false;
@@ -58,7 +58,7 @@ function extractCommentMetadata(blocks: FlowBlock[]): Array<{
       if (hasComment) {
         comments.push({
           blockId: block.id,
-          commentId: block.runs?.find((r) => r.kind === 'text' && r.attrs?.commentId)?.attrs?.commentId as
+          commentId: block.runs?.find((r) => r.kind === 'text' && r.comments?.length)?.comments?.[0]?.commentId as
             | string
             | undefined,
         });
@@ -91,10 +91,10 @@ describe('Comments Integration', () => {
       for (const block of blocks) {
         if (block.kind === 'paragraph' && block.runs) {
           for (const run of block.runs) {
-            if (run.kind === 'text' && run.attrs?.commentId) {
+            if (run.kind === 'text' && run.comments?.length) {
               // Comment ID should be a non-empty string
-              expect(typeof run.attrs.commentId).toBe('string');
-              expect(run.attrs.commentId.length).toBeGreaterThan(0);
+              expect(typeof run.comments?.[0]?.commentId).toBe('string');
+              expect((run.comments?.[0]?.commentId as string).length).toBeGreaterThan(0);
             }
           }
         }
@@ -223,8 +223,8 @@ describe('Comments Integration', () => {
               expect(run.text).toBeDefined();
 
               // If comment exists, metadata should be present
-              if (run.attrs?.commentId) {
-                expect(typeof run.attrs.commentId).toBe('string');
+              if (run.comments?.length) {
+                expect(typeof run.comments?.[0]?.commentId).toBe('string');
               }
             }
           }

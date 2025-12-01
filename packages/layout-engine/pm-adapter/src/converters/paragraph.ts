@@ -282,6 +282,23 @@ export const dataAttrsCompatible = (a: TextRun, b: TextRun): boolean => {
   return true;
 };
 
+export const commentsCompatible = (a: TextRun, b: TextRun): boolean => {
+  const aComments = a.comments ?? [];
+  const bComments = b.comments ?? [];
+  if (aComments.length === 0 && bComments.length === 0) return true;
+  if (aComments.length !== bComments.length) return false;
+
+  const normalize = (c: (typeof aComments)[number]) =>
+    `${c.commentId ?? ''}::${c.importedId ?? ''}::${c.internal ? '1' : '0'}`;
+  const aKeys = aComments.map(normalize).sort();
+  const bKeys = bComments.map(normalize).sort();
+
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+  }
+  return true;
+};
+
 /**
  * Merges adjacent text runs with continuous PM positions and compatible styling.
  * Optimization to reduce run fragmentation after PM operations.
@@ -323,7 +340,8 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
       current.highlight === next.highlight &&
       (current.letterSpacing ?? 0) === (next.letterSpacing ?? 0) &&
       trackedChangesCompatible(current, next) &&
-      dataAttrsCompatible(current, next);
+      dataAttrsCompatible(current, next) &&
+      commentsCompatible(current, next);
 
     if (canMerge) {
       // Merge next into current
