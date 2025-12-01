@@ -113,10 +113,31 @@ export const hydrateParagraphStyleAttrs = (
   };
   const resolvedExtended = resolved as ExtendedResolvedProps;
   const resolvedAsRecord = resolved as Record<string, unknown>;
+  let resolvedIndent = cloneIfObject(resolvedAsRecord.indent) as ParagraphIndent | undefined;
+
+  // Word built-in heading styles do NOT inherit Normal's first-line indent.
+  // If the resolved paragraph is a heading (outline level present or styleId starts with headingX)
+  // and no explicit indent was defined on the style/para, normalize indent to zero.
+  const styleIdLower = typeof styleId === 'string' ? styleId.toLowerCase() : '';
+  const isHeadingStyle =
+    typeof resolvedExtended.outlineLvl === 'number' ||
+    styleIdLower.startsWith('heading ') ||
+    styleIdLower.startsWith('heading');
+  const onlyFirstLineIndent =
+    resolvedIndent &&
+    resolvedIndent.firstLine != null &&
+    resolvedIndent.hanging == null &&
+    resolvedIndent.left == null &&
+    resolvedIndent.right == null;
+  if (isHeadingStyle && (!resolvedIndent || Object.keys(resolvedIndent).length === 0 || onlyFirstLineIndent)) {
+    // Clear inherited firstLine/hanging from Normal
+    resolvedIndent = { firstLine: 0, hanging: 0, left: resolvedIndent?.left, right: resolvedIndent?.right };
+  }
+
   const hydrated: ParagraphStyleHydration = {
     resolved,
     spacing: cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined,
-    indent: cloneIfObject(resolvedAsRecord.indent) as ParagraphIndent | undefined,
+    indent: resolvedIndent,
     borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],
     shading: cloneIfObject(resolvedExtended.shading) as ParagraphAttrs['shading'],
     alignment: resolvedExtended.justification as ParagraphAttrs['alignment'],

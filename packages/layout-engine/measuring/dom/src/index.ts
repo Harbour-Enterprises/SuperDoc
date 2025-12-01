@@ -49,6 +49,7 @@ import type {
   TextRun,
   TabRun,
   ImageRun,
+  LineBreakRun,
   TabStop,
   DrawingBlock,
   DrawingMeasure,
@@ -289,6 +290,13 @@ function isImageRun(run: Run): run is ImageRun {
 }
 
 /**
+ * Type guard to check if a run is an explicit line break run
+ */
+function isLineBreakRun(run: Run): run is LineBreakRun {
+  return run.kind === 'lineBreak';
+}
+
+/**
  * Calculate tab width and update the tab run with resolved width
  *
  * @param tabRun - The tab run to resolve
@@ -419,6 +427,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     leaders?: Line['leaders'];
   } | null = null;
 
+  let lastFontSize = 12;
   let tabStopCursor = 0;
   let pendingTabAlignment: { target: number; val: TabStop['val'] } | null = null;
   // Remember the last applied tab alignment so we can clamp end-aligned
@@ -468,6 +477,38 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Process each run
   for (let runIndex = 0; runIndex < block.runs.length; runIndex++) {
     const run = block.runs[runIndex];
+
+    // Handle explicit line breaks (e.g., DOCX <w:br/>)
+    if (isLineBreakRun(run)) {
+      if (currentLine) {
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+      }
+
+      // Start a fresh (currently empty) line after the break. If no further content
+      // is added, this placeholder will become a blank line with the appropriate height.
+      const nextLineMaxWidth = currentLine ? contentWidth : availableWidth;
+      currentLine = {
+        fromRun: runIndex,
+        fromChar: 0,
+        toRun: runIndex,
+        toChar: 0,
+        width: 0,
+        maxFontSize: lastFontSize,
+        maxWidth: nextLineMaxWidth,
+        segments: [],
+      };
+      availableWidth = contentWidth;
+      tabStopCursor = 0;
+      pendingTabAlignment = null;
+      lastAppliedTabAlign = null;
+      continue;
+    }
 
     // Handle tab runs specially
     if (isTabRun(run)) {
@@ -601,6 +642,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     }
 
     // Handle text runs
+    lastFontSize = run.fontSize;
     const { font } = buildFontString(run);
     const tabSegments = run.text.split('\t');
 

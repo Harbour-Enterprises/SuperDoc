@@ -186,6 +186,20 @@ export type TabRun = {
   pmEnd?: number;
 };
 
+export type LineBreakRun = {
+  kind: 'lineBreak';
+  /**
+   * Optional attributes carried through from the source document.
+   * Mirrors OOXML <w:br> attributes (type/clear) to preserve fidelity.
+   */
+  attrs?: {
+    lineBreakType?: string;
+    clear?: string;
+  };
+  pmStart?: number;
+  pmEnd?: number;
+};
+
 /**
  * Inline image run for images that flow with text on the same line.
  * Unlike ImageBlock (anchored/floating images), ImageRun is part of the paragraph's run array
@@ -248,7 +262,7 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun;
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
