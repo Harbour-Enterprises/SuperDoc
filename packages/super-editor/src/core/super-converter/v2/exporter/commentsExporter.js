@@ -18,6 +18,35 @@ export const prepareCommentParaIds = (comment) => {
 };
 
 /**
+ * Recursively extract plain text from a ProseMirror-style node
+ * This is used as a safe fallback when comment content is in a different
+ * schema (e.g. rich-text schema from SuperDoc) than the DOCX schema that
+ * the w:p translator expects.
+ *
+ * @param {Object} node
+ * @returns {string}
+ */
+const extractPlainText = (node) => {
+  if (!node || typeof node !== 'object') return '';
+  if (typeof node.text === 'string') return node.text;
+  if (!Array.isArray(node.content)) return '';
+  return node.content.map((child) => extractPlainText(child)).join('');
+};
+
+/**
+ * Recursively extract plain text from an xml-js style node (comments.xml tree)
+ *
+ * @param {Object} node
+ * @returns {string}
+ */
+const extractPlainTextFromXmlNode = (node) => {
+  if (!node || typeof node !== 'object') return '';
+  if (node.type === 'text' && typeof node.text === 'string') return node.text;
+  const elements = Array.isArray(node.elements) ? node.elements : [];
+  return elements.map((child) => extractPlainTextFromXmlNode(child)).join('');
+};
+
+/**
  * Generate the w:comment node for a comment
  * This is stored in comments.xml
  *
@@ -26,7 +55,85 @@ export const prepareCommentParaIds = (comment) => {
  * @returns {Object} The w:comment node for the comment
  */
 export const getCommentDefinition = (comment, commentId, allComments, editor) => {
-  const translatedText = wPTranslator.decode({ editor, node: comment.commentJSON });
+  // w:p translator handle commentJSON first (Word comments path)
+  let translatedText = null;
+  if (comment.commentJSON) {
+    translatedText = wPTranslator.decode({ editor, node: comment.commentJSON });
+  }
+
+  // If translator produced usable text, return it
+  const existingText = translatedText ? extractPlainTextFromXmlNode(translatedText).trim() : '';
+  if (existingText) {
+    const attributes = {
+      'w:id': String(commentId),
+      'w:author': comment.creatorName || comment.importedAuthor?.name,
+      'w:email': comment.creatorEmail || comment.importedAuthor?.email,
+      'w:date': toIsoNoFractional(comment.createdTime),
+      'w:initials': getInitials(comment.creatorName),
+      'w:done': comment.resolvedTime ? '1' : '0',
+      'w15:paraId': comment.commentParaId,
+      'custom:internalId': comment.commentId || comment.internalId,
+      'custom:trackedChange': comment.trackedChange,
+      'custom:trackedChangeText': comment.trackedChangeText || null,
+      'custom:trackedChangeType': comment.trackedChangeType,
+      'custom:trackedDeletedText': comment.deletedText || null,
+    };
+
+    if (comment?.parentCommentId) {
+      const parentComment = allComments.find((c) => c.commentId === comment.parentCommentId);
+      attributes['w15:paraIdParent'] = parentComment.commentParaId;
+    }
+
+    return {
+      type: 'element',
+      name: 'w:comment',
+      attributes,
+      elements: [translatedText],
+    };
+  }
+
+  // FALLBACK PATH (Google Docs / edge cases): synthesize minimal DOCX paragraph from plain text
+  const rawNode = comment.commentJSON || comment.textJson;
+  let plainText = '';
+
+  // 1) Best-effort plain text from HTML (SuperDoc comments use commentText HTML)
+  if (typeof comment.commentText === 'string' && comment.commentText.length) {
+    const withoutTags = comment.commentText.replace(/<[^>]+>/g, ' ');
+    plainText = withoutTags.replace(/\s+/g, ' ').trim();
+  }
+
+  // 2) Fallback to JSON-based extraction (e.g., direct editor.converter.comments usage)
+  if (!plainText && rawNode) {
+    plainText = extractPlainText(rawNode).trim();
+  }
+
+  const translatedFallback = {
+    type: 'element',
+    name: 'w:p',
+    attributes: {},
+    elements:
+      plainText.length > 0
+        ? [
+            {
+              type: 'element',
+              name: 'w:r',
+              elements: [
+                {
+                  type: 'element',
+                  name: 'w:t',
+                  elements: [
+                    {
+                      type: 'text',
+                      text: plainText,
+                    },
+                  ],
+                },
+              ],
+            },
+          ]
+        : [],
+  };
+
   const attributes = {
     'w:id': String(commentId),
     'w:author': comment.creatorName || comment.importedAuthor?.name,
@@ -52,7 +159,7 @@ export const getCommentDefinition = (comment, commentId, allComments, editor) =>
     type: 'element',
     name: 'w:comment',
     attributes,
-    elements: [translatedText],
+    elements: [translatedFallback],
   };
 };
 
@@ -96,11 +203,15 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
 
   // Re-build the comment definitions
   commentDefs.forEach((commentDef) => {
-    const elements = commentDef.elements[0].elements;
+    // Ensure we always have a paragraph node and attributes container
+    const paraNode = commentDef.elements[0];
+    if (!paraNode.attributes) paraNode.attributes = {};
+
+    const elements = paraNode.elements;
     elements.unshift(COMMENT_REF);
 
     const paraId = commentDef.attributes['w15:paraId'];
-    commentDef.elements[0].attributes['w14:paraId'] = paraId;
+    paraNode.attributes['w14:paraId'] = paraId;
 
     commentDef.attributes = {
       'w:id': commentDef.attributes['w:id'],
