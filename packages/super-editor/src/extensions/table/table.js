@@ -547,7 +547,11 @@ export const Table = Node.create({
           const node = createTable(editor.schema, rows, cols, withHeaderRow);
 
           if (dispatch) {
-            const offset = tr.selection.from + 1;
+            let offset = tr.selection.$from.end() + 1;
+            if (tr.selection.$from.parent?.type?.name === 'run') {
+              // If in a run, we need to insert after the parent paragraph
+              offset = tr.selection.$from.after(tr.selection.$from.depth - 1);
+            }
             tr.replaceSelectionWith(node)
               .scrollIntoView()
               .setSelection(TextSelection.near(tr.doc.resolve(offset)));
