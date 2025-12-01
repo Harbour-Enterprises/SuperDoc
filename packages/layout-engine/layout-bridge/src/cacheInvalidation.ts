@@ -37,8 +37,8 @@ export function computeHeaderFooterContentHash(blocks: FlowBlock[]): string {
 
     if (block.kind === 'paragraph') {
       for (const run of block.runs) {
-        // Only TextRun and TabRun have text property; ImageRun and LineBreakRun do not
-        if (run.kind !== 'image' && run.kind !== 'lineBreak') {
+        // Only TextRun and TabRun have text property; ImageRun does not
+        if (!('src' in run)) {
           parts.push(run.text ?? '');
         }
         if ('bold' in run && run.bold) parts.push('b');

@@ -12,6 +12,7 @@ import type {
   TextRun,
   ImageRun,
   Line,
+  LineSegment,
   ParagraphBlock,
   ParagraphMeasure,
   ImageBlock,
@@ -56,6 +57,7 @@ import {
 } from './styles.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
+import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -1253,7 +1255,7 @@ export class DomPainter {
           current.signature = fragmentSignature(fragment, this.blockLookup);
         }
 
-        this.updateFragmentElement(current.element, fragment);
+        this.updateFragmentElement(current.element, fragment, contextBase.section);
         current.fragment = fragment;
         current.key = key;
         current.context = contextBase;
@@ -1333,10 +1335,10 @@ export class DomPainter {
       return this.renderListItemFragment(fragment, context);
     }
     if (fragment.kind === 'image') {
-      return this.renderImageFragment(fragment);
+      return this.renderImageFragment(fragment, context);
     }
     if (fragment.kind === 'drawing') {
-      return this.renderDrawingFragment(fragment);
+      return this.renderDrawingFragment(fragment, context);
     }
     if (fragment.kind === 'table') {
       return this.renderTableFragment(fragment, context);
@@ -1380,7 +1382,7 @@ export class DomPainter {
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
 
       // Add TOC-specific styling class
       if (isTocEntry) {
@@ -1684,7 +1686,7 @@ export class DomPainter {
     }
   }
 
-  private renderImageFragment(fragment: ImageFragment): HTMLElement {
+  private renderImageFragment(fragment: ImageFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
@@ -1700,7 +1702,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-image-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
@@ -1748,7 +1750,7 @@ export class DomPainter {
     }
   }
 
-  private renderDrawingFragment(fragment: DrawingFragment): HTMLElement {
+  private renderDrawingFragment(fragment: DrawingFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
@@ -1764,7 +1766,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       fragmentEl.style.position = 'absolute';
       fragmentEl.style.overflow = 'hidden';
@@ -2323,13 +2325,19 @@ export class DomPainter {
       throw new Error('DomPainter: document is not available');
     }
 
+    // Wrap applyFragmentFrame to capture section from context
+    // This ensures table cell fragments receive proper section context for PM position validation
+    const applyFragmentFrameWithSection = (el: HTMLElement, frag: Fragment): void => {
+      this.applyFragmentFrame(el, frag, context.section);
+    };
+
     return renderTableFragmentElement({
       doc: this.doc,
       fragment,
       context,
       blockLookup: this.blockLookup,
       renderLine: this.renderLine.bind(this),
-      applyFragmentFrame: this.applyFragmentFrame.bind(this),
+      applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
     });
@@ -2623,6 +2631,10 @@ export class DomPainter {
     // Ensure text renders above tab leaders (leaders are z-index: 0)
     elem.style.zIndex = '1';
     applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
+
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'paragraph text run');
+
     if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
     if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
     if (trackedConfig) {
@@ -2728,6 +2740,9 @@ export class DomPainter {
     // Apply z-index to render above tab leaders
     img.style.zIndex = '1';
 
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'inline image run');
+
     // Apply PM position tracking for cursor placement
     if (run.pmStart != null) {
       img.dataset.pmStart = String(run.pmStart);
@@ -2769,10 +2784,10 @@ export class DomPainter {
       el.dataset.pmEnd = String(lineRange.pmEnd);
     }
 
-    const runs = sliceRunsForLine(block, line);
+    const runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
 
-    if (runs.length === 0) {
+    if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
       span.innerHTML = '&nbsp;';
       el.appendChild(span);
@@ -2834,10 +2849,76 @@ export class DomPainter {
       // When rendering segments, we need to track cumulative X position
       // for segments that don't have explicit X coordinates
       let cumulativeX = 0;
+      const segmentsByRun = new Map<number, LineSegment[]>();
+      line.segments.forEach((segment) => {
+        const list = segmentsByRun.get(segment.runIndex);
+        if (list) {
+          list.push(segment);
+        } else {
+          segmentsByRun.set(segment.runIndex, [segment]);
+        }
+      });
 
-      line.segments.forEach((segment, _segIdx) => {
-        const baseRun = runs[segment.runIndex];
-        if (!baseRun || baseRun.kind === 'tab') return;
+      /**
+       * Finds the X position where the immediate next segment starts after a given run index.
+       * Only returns the X if the very next run has a segment with explicit positioning.
+       * This handles tab-aligned text where right/center alignment causes the text to start
+       * before the tab stop target.
+       *
+       * @param fromRunIndex - The run index to search after
+       * @returns The X position of the immediate next segment, or undefined if not found or not immediate
+       */
+      const findImmediateNextSegmentX = (fromRunIndex: number): number | undefined => {
+        // Only check the immediate next run - don't skip over other tabs
+        const nextRunIdx = fromRunIndex + 1;
+        if (nextRunIdx <= line.toRun) {
+          const nextSegments = segmentsByRun.get(nextRunIdx);
+          if (nextSegments && nextSegments.length > 0) {
+            const firstSegment = nextSegments[0];
+            // Return the segment's explicit X if it has one (from tab alignment)
+            return firstSegment.x;
+          }
+        }
+        return undefined;
+      };
+
+      for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+        const baseRun = block.runs[runIndex];
+        if (!baseRun) continue;
+
+        if (baseRun.kind === 'tab') {
+          // Find where the immediate next content begins (if it's right after this tab)
+          const immediateNextX = findImmediateNextSegmentX(runIndex);
+          const tabStartX = cumulativeX;
+
+          // The tab should span from where previous content ended to where next content begins.
+          // If the immediate next segment has an explicit X (from tab alignment), use that.
+          // Otherwise, use the tab's measured width to calculate the end position.
+          const tabEndX = immediateNextX !== undefined ? immediateNextX : tabStartX + (baseRun.width ?? 0);
+          const actualTabWidth = tabEndX - tabStartX;
+
+          const tabEl = this.doc!.createElement('span');
+          tabEl.style.position = 'absolute';
+          tabEl.style.left = `${tabStartX}px`;
+          tabEl.style.top = '0px';
+          tabEl.style.width = `${actualTabWidth}px`;
+          tabEl.style.height = `${line.lineHeight}px`;
+          tabEl.style.display = 'inline-block';
+          tabEl.style.visibility = 'hidden';
+          tabEl.style.pointerEvents = 'none';
+          tabEl.style.zIndex = '1';
+          if (styleId) {
+            tabEl.setAttribute('styleid', styleId);
+          }
+          if (baseRun.pmStart != null) tabEl.dataset.pmStart = String(baseRun.pmStart);
+          if (baseRun.pmEnd != null) tabEl.dataset.pmEnd = String(baseRun.pmEnd);
+          el.appendChild(tabEl);
+
+          // Update cumulativeX to where the next content begins
+          // This ensures proper positioning for subsequent elements
+          cumulativeX = tabEndX;
+          continue;
+        }
 
         // Handle ImageRun - render as-is (no slicing needed, atomic unit)
         if (this.isImageRun(baseRun)) {
@@ -2846,58 +2927,65 @@ export class DomPainter {
             if (styleId) {
               elem.setAttribute('styleid', styleId);
             }
-            // Images don't need explicit X positioning in tab-aligned content
-            // They flow naturally at their position in the run sequence
             el.appendChild(elem);
           }
-          return;
+          continue;
         }
 
-        // Handle LineBreakRun - skip rendering, handled by measurer
-        if (this.isLineBreakRun(baseRun)) {
-          return;
+        const runSegments = segmentsByRun.get(runIndex);
+        if (!runSegments || runSegments.length === 0) {
+          continue;
         }
 
-        // Extract the text for this segment from the text run
-        const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
-        const segmentRun: TextRun = { ...(baseRun as TextRun), text: segmentText };
+        const baseText = baseRun.text ?? '';
+        const runPmStart = baseRun.pmStart ?? null;
+        const fallbackPmEnd =
+          runPmStart != null && baseRun.pmEnd == null ? runPmStart + baseText.length : (baseRun.pmEnd ?? null);
 
-        const elem = this.renderRun(segmentRun, context, trackedConfig);
-        if (elem) {
-          if (styleId) {
-            elem.setAttribute('styleid', styleId);
-          }
-          // Determine X position for this segment
-          let xPos: number;
-          if (segment.x !== undefined) {
-            // Segment has explicit X position
-            xPos = segment.x;
-          } else {
-            // No explicit X, use cumulative position
-            xPos = cumulativeX;
-          }
+        runSegments.forEach((segment) => {
+          const segmentText = baseText.slice(segment.fromChar, segment.toChar);
+          if (!segmentText) return;
 
-          elem.style.position = 'absolute';
-          elem.style.left = `${xPos}px`;
-          el.appendChild(elem);
+          const pmSliceStart = runPmStart != null ? runPmStart + segment.fromChar : undefined;
+          const pmSliceEnd = runPmStart != null ? runPmStart + segment.toChar : (fallbackPmEnd ?? undefined);
+          const segmentRun: TextRun = {
+            ...(baseRun as TextRun),
+            text: segmentText,
+            pmStart: pmSliceStart,
+            pmEnd: pmSliceEnd,
+          };
 
-          // Update cumulative X for next segment by measuring this element's width
-          // This applies to ALL segments (both with and without explicit X)
-          if (this.doc) {
-            const measureEl = elem.cloneNode(true) as HTMLElement;
-            measureEl.style.position = 'absolute';
-            measureEl.style.visibility = 'hidden';
-            measureEl.style.left = '-9999px';
-            this.doc.body.appendChild(measureEl);
-            const width = measureEl.offsetWidth;
-            this.doc.body.removeChild(measureEl);
+          const elem = this.renderRun(segmentRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Determine X position for this segment
+            const xPos = segment.x !== undefined ? segment.x : cumulativeX;
+
+            elem.style.position = 'absolute';
+            elem.style.left = `${xPos}px`;
+            el.appendChild(elem);
+
+            // Update cumulative X for next segment by measuring this element's width
+            // This applies to ALL segments (both with and without explicit X)
+            let width = segment.width ?? 0;
+            if (width <= 0 && this.doc) {
+              const measureEl = elem.cloneNode(true) as HTMLElement;
+              measureEl.style.position = 'absolute';
+              measureEl.style.visibility = 'hidden';
+              measureEl.style.left = '-9999px';
+              this.doc.body.appendChild(measureEl);
+              width = measureEl.offsetWidth;
+              this.doc.body.removeChild(measureEl);
+            }
             cumulativeX = xPos + width;
           }
-        }
-      });
+        });
+      }
     } else {
       // Use run-based rendering for normal text flow
-      runs.forEach((run) => {
+      runsForLine.forEach((run) => {
         const elem = this.renderRun(run, context, trackedConfig);
         if (elem) {
           if (styleId) {
@@ -2966,8 +3054,18 @@ export class DomPainter {
     }
   }
 
-  private updateFragmentElement(el: HTMLElement, fragment: Fragment): void {
-    this.applyFragmentFrame(el, fragment);
+  /**
+   * Updates an existing fragment element's position and dimensions in place.
+   * Used during incremental updates to efficiently reposition fragments without full re-render.
+   *
+   * @param el - The HTMLElement representing the fragment to update
+   * @param fragment - The fragment data containing updated position and dimensions
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Affects PM position validation - only body sections validate PM positions.
+   *                  If undefined, defaults to 'body' section behavior.
+   */
+  private updateFragmentElement(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
+    this.applyFragmentFrame(el, fragment, section);
     if (fragment.kind === 'image') {
       el.style.height = `${fragment.height}px`;
     }
@@ -2976,13 +3074,32 @@ export class DomPainter {
     }
   }
 
-  private applyFragmentFrame(el: HTMLElement, fragment: Fragment): void {
+  /**
+   * Applies fragment positioning, dimensions, and metadata to an HTML element.
+   * Sets CSS positioning, block ID, and PM position data attributes for paragraph fragments.
+   *
+   * @param el - The HTMLElement to apply fragment properties to
+   * @param fragment - The fragment data containing position, dimensions, and PM position information
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Controls PM position validation behavior:
+   *                  - 'body' or undefined: PM positions are validated and required for paragraph fragments
+   *                  - 'header' or 'footer': PM position validation is skipped (these sections have separate PM coordinate spaces)
+   *                  When undefined, defaults to 'body' section behavior (validation enabled).
+   */
+  private applyFragmentFrame(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
     el.style.left = `${fragment.x}px`;
     el.style.top = `${fragment.y}px`;
     el.style.width = `${fragment.width}px`;
     el.dataset.blockId = fragment.blockId;
 
     if (fragment.kind === 'para') {
+      // Assert PM positions are present for paragraph fragments
+      // Only validate for body sections - header/footer fragments have their own PM coordinate space
+      // Note: undefined section defaults to body section behavior (validation enabled)
+      if (section === 'body' || section === undefined) {
+        assertFragmentPmPositions(fragment, 'paragraph fragment');
+      }
+
       if (fragment.pmStart != null) {
         el.dataset.pmStart = String(fragment.pmStart);
       } else {
@@ -3365,12 +3482,60 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    // Include column widths in version to trigger re-render when table is resized
-    return [
-      block.id,
-      tableBlock.columnWidths ? JSON.stringify(tableBlock.columnWidths) : '',
-      tableBlock.rows.length,
-    ].join('|');
+    // Robust hash across all rows/cells so deep edits invalidate version
+    const hashString = (seed: number, value: string): number => {
+      let hash = seed >>> 0;
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619); // FNV-style mix
+      }
+      return hash >>> 0;
+    };
+    const hashNumber = (seed: number, value: number | undefined | null): number => {
+      const n = Number.isFinite(value) ? (value as number) : 0;
+      let hash = seed ^ n;
+      hash = Math.imul(hash, 16777619);
+      hash ^= hash >>> 13;
+      return hash >>> 0;
+    };
+
+    let hash = 2166136261;
+    hash = hashString(hash, block.id);
+    hash = hashNumber(hash, tableBlock.rows.length);
+    hash = (tableBlock.columnWidths ?? []).reduce((acc, width) => hashNumber(acc, Math.round(width * 1000)), hash);
+
+    // Defensive guards: ensure rows array exists and iterate safely
+    const rows = tableBlock.rows ?? [];
+    for (const row of rows) {
+      if (!row || !Array.isArray(row.cells)) continue;
+      hash = hashNumber(hash, row.cells.length);
+      for (const cell of row.cells) {
+        if (!cell) continue;
+        const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+        hash = hashNumber(hash, cellBlocks.length);
+        // Include cell attributes that affect rendering (rowSpan, colSpan)
+        hash = hashNumber(hash, cell.rowSpan ?? 1);
+        hash = hashNumber(hash, cell.colSpan ?? 1);
+
+        for (const cellBlock of cellBlocks) {
+          hash = hashString(hash, cellBlock?.kind ?? 'unknown');
+          if (cellBlock?.kind === 'paragraph') {
+            const runs = (cellBlock as ParagraphBlock).runs ?? [];
+            hash = hashNumber(hash, runs.length);
+            for (const run of runs) {
+              // Only text runs have .text property; ImageRun does not
+              if ('text' in run && typeof run.text === 'string') {
+                hash = hashString(hash, run.text);
+              }
+              hash = hashNumber(hash, run.pmStart ?? -1);
+              hash = hashNumber(hash, run.pmEnd ?? -1);
+            }
+          }
+        }
+      }
+    }
+
+    return [block.id, tableBlock.rows.length, hash.toString(16)].join('|');
   }
 
   return block.id;

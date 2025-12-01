@@ -366,3 +366,186 @@ export class MetricsCollector {
  * Can be accessed for monitoring and debugging.
  */
 export const globalMetrics = new MetricsCollector();
+
+/**
+ * Layout version telemetry for performance monitoring.
+ * Tracks stale layout usage and fallback behavior.
+ */
+export interface LayoutVersionTelemetry {
+  /** Number of times selection overlay used stale layout */
+  staleLayoutReads: number;
+  /** Number of times geometry fallback was used */
+  geometryFallbacks: number;
+  /** Total staleness duration across all stale periods (ms) */
+  totalStalenessDuration: number;
+  /** Maximum staleness duration observed (ms) */
+  maxStalenessDuration: number;
+  /** Number of PM transactions processed */
+  totalPmTransactions: number;
+  /** Number of layout completions */
+  totalLayoutCompletions: number;
+}
+
+/**
+ * Logger for layout version events.
+ * Guards all logging behind SD_DEBUG_LAYOUT_VERSION flag for zero overhead in production.
+ */
+export const LayoutVersionLogger = {
+  /**
+   * Log when selection overlay attempts to use stale layout.
+   *
+   * @param versionGap - Number of PM versions ahead of layout
+   * @param stalenessDuration - How long layout has been stale (ms)
+   */
+  logStaleLayoutRead(versionGap: number, stalenessDuration: number): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    console.warn(
+      `[LayoutVersion] Selection overlay using STALE layout ` +
+        `(gap: ${versionGap} versions, stale for: ${stalenessDuration}ms)`,
+    );
+  },
+
+  /**
+   * Log when geometry fallback is used due to missing pmStart/pmEnd.
+   *
+   * @param reason - Why fallback was needed
+   * @param pos - PM position that failed
+   */
+  logGeometryFallback(reason: string, pos: number): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    console.warn(`[LayoutVersion] Geometry fallback used: ${reason} (pos: ${pos})`);
+  },
+
+  /**
+   * Log when layout catches up to current PM state.
+   *
+   * @param versionGap - How many versions layout was behind
+   * @param stalenessDuration - Total duration layout was stale (ms)
+   */
+  logLayoutCaughtUp(versionGap: number, stalenessDuration: number): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    if (versionGap > 0) {
+      console.log(`[LayoutVersion] Layout caught up after ${versionGap} versions (stale for ${stalenessDuration}ms)`);
+    }
+  },
+
+  /**
+   * Log PM transaction that increments version.
+   *
+   * @param newVersion - New PM version after transaction
+   */
+  logPmTransaction(newVersion: number): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    console.log(`[LayoutVersion] PM transaction → v${newVersion}`);
+  },
+
+  /**
+   * Log layout completion.
+   *
+   * @param version - Version of the completed layout
+   * @param isStale - Whether layout is still stale after this completion
+   */
+  logLayoutComplete(version: number, isStale: boolean): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    const status = isStale ? 'STALE' : 'CURRENT';
+    console.log(`[LayoutVersion] Layout complete → v${version} (${status})`);
+  },
+};
+
+/**
+ * Metrics collector for layout version telemetry.
+ * Tracks aggregate statistics for monitoring and optimization.
+ */
+export class LayoutVersionMetricsCollector {
+  private telemetry: LayoutVersionTelemetry = {
+    staleLayoutReads: 0,
+    geometryFallbacks: 0,
+    totalStalenessDuration: 0,
+    maxStalenessDuration: 0,
+    totalPmTransactions: 0,
+    totalLayoutCompletions: 0,
+  };
+
+  /**
+   * Record a stale layout read event.
+   *
+   * @param stalenessDuration - Duration layout has been stale (ms)
+   */
+  recordStaleLayoutRead(stalenessDuration: number): void {
+    this.telemetry.staleLayoutReads++;
+    this.telemetry.totalStalenessDuration += stalenessDuration;
+    this.telemetry.maxStalenessDuration = Math.max(this.telemetry.maxStalenessDuration, stalenessDuration);
+  }
+
+  /**
+   * Record a geometry fallback event.
+   */
+  recordGeometryFallback(): void {
+    this.telemetry.geometryFallbacks++;
+  }
+
+  /**
+   * Record a PM transaction.
+   */
+  recordPmTransaction(): void {
+    this.telemetry.totalPmTransactions++;
+  }
+
+  /**
+   * Record a layout completion.
+   */
+  recordLayoutCompletion(): void {
+    this.telemetry.totalLayoutCompletions++;
+  }
+
+  /**
+   * Get current telemetry snapshot.
+   *
+   * @returns Current telemetry data
+   */
+  getTelemetry(): Readonly<LayoutVersionTelemetry> {
+    return { ...this.telemetry };
+  }
+
+  /**
+   * Reset all telemetry counters (for testing or new session).
+   */
+  reset(): void {
+    this.telemetry = {
+      staleLayoutReads: 0,
+      geometryFallbacks: 0,
+      totalStalenessDuration: 0,
+      maxStalenessDuration: 0,
+      totalPmTransactions: 0,
+      totalLayoutCompletions: 0,
+    };
+  }
+
+  /**
+   * Log summary of telemetry data.
+   * Only logs if debugging is enabled.
+   */
+  logSummary(): void {
+    if (!FeatureFlags.DEBUG_LAYOUT_VERSION) return;
+
+    const t = this.telemetry;
+    console.log('[LayoutVersion] Telemetry Summary:', {
+      staleLayoutReads: t.staleLayoutReads,
+      geometryFallbacks: t.geometryFallbacks,
+      avgStalenessDuration: t.staleLayoutReads > 0 ? (t.totalStalenessDuration / t.staleLayoutReads).toFixed(2) : 0,
+      maxStalenessDuration: t.maxStalenessDuration,
+      totalPmTransactions: t.totalPmTransactions,
+      totalLayoutCompletions: t.totalLayoutCompletions,
+    });
+  }
+}
+
+/**
+ * Global layout version metrics collector.
+ */
+export const globalLayoutVersionMetrics = new LayoutVersionMetricsCollector();

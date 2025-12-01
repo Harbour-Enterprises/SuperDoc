@@ -241,7 +241,7 @@ const mutateBlocks = (blocks: FlowBlock[], blockIndex: number, iteration: number
       runIndex === 0
         ? {
             ...run,
-            text: `${run.kind === 'image' || run.kind === 'lineBreak' ? '' : (run.text ?? '')}${token}`,
+            text: `${'text' in run ? (run.text ?? '') : ''}${token}`,
           }
         : run,
     );

@@ -7,6 +7,11 @@ import type {
   ImageFragment,
   Run,
   Line,
+  TableFragment,
+  TableBlock,
+  TableMeasure,
+  ParagraphBlock,
+  ParagraphMeasure,
 } from '@superdoc/contracts';
 import { findCharacterAtX, measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom } from './dom-mapping.js';
@@ -33,6 +38,94 @@ export type { HeaderFooterLayoutResult } from './incrementalLayout';
 export { remeasureParagraph } from './remeasure';
 export { measureCharacterX } from './text-measurement';
 export { clickToPositionDom } from './dom-mapping';
+export { LayoutVersionManager } from './layout-version-manager';
+export type { VersionedLayoutState, LayoutVersionMetrics } from './layout-version-manager';
+export { LayoutVersionLogger, LayoutVersionMetricsCollector, globalLayoutVersionMetrics } from './instrumentation';
+export type { LayoutVersionTelemetry } from './instrumentation';
+
+// Font Metrics Cache
+export { FontMetricsCache } from './font-metrics-cache';
+export type { FontMetrics, FontMetricsCacheConfig } from './font-metrics-cache';
+
+// Paragraph Line Cache
+export { ParagraphLineCache } from './paragraph-line-cache';
+export type { LineInfo, ParagraphLines } from './paragraph-line-cache';
+
+// Cursor Renderer
+export { CursorRenderer } from './cursor-renderer';
+export type { CursorRendererOptions, CursorRect } from './cursor-renderer';
+
+// Local Paragraph Layout
+export { LocalParagraphLayout } from './local-paragraph-layout';
+export type { LocalLayoutResult, TextRun } from './local-paragraph-layout';
+
+// PM DOM Fallback
+export { PmDomFallback } from './pm-dom-fallback';
+export type { PageTransform, PmEditorView } from './pm-dom-fallback';
+
+// Layout Scheduler
+export { LayoutScheduler, Priority } from './layout-scheduler';
+export type { LayoutRequest, ScheduledTask, TaskStatus, QueueStats } from './layout-scheduler';
+
+// Layout Coordinator
+export { LayoutCoordinator } from './layout-coordinator';
+export type { LayoutResult, P0Executor, P1Executor, WorkerExecutor, LayoutCoordinatorDeps } from './layout-coordinator';
+
+// Layout Worker Manager
+export { LayoutWorkerManager } from './layout-worker';
+export type { SerializedDoc, Range, WorkerMessage, WorkerResult, WorkerLayoutResult } from './layout-worker';
+
+// DOM Reconciler
+export { DomReconciler } from './dom-reconciler';
+export type { ReconciliationResult } from './dom-reconciler';
+
+// Layout Pipeline
+export { LayoutPipeline } from './layout-pipeline';
+export type { Transaction, LayoutPipelineConfig } from './layout-pipeline';
+
+// Dirty Tracker
+export { DirtyTracker } from './dirty-tracker';
+export type { DirtyRange } from './dirty-tracker';
+
+// Debounced Pass Manager
+export { DebouncedPassManager } from './debounced-passes';
+export type { DebouncedPass } from './debounced-passes';
+
+// PM Position Validator
+export { PmPositionValidator } from './pm-position-validator';
+export type { ValidationResult, ValidationError } from './pm-position-validator';
+
+// IME Handler
+export { ImeHandler } from './ime-handler';
+export type { ImeState } from './ime-handler';
+
+// Table Handler
+export { TableHandler } from './table-handler';
+export type { TableLayoutState } from './table-handler';
+
+// Track Changes Handler
+export { TrackChangesHandler } from './track-changes-handler';
+export type { TrackChangeSpan } from './track-changes-handler';
+
+// Cache Warmer
+export { CacheWarmer } from './cache-warmer';
+export type { WarmingConfig, ParagraphWarmInfo } from './cache-warmer';
+
+// Performance Metrics
+export { PerformanceMetricsCollector, perfMetrics } from './performance-metrics';
+export type { MetricSample, MetricSummary, TypingPerfMetrics, BudgetViolation } from './performance-metrics';
+
+// Safety Net
+export { SafetyNet } from './safety-net';
+export type { FallbackReason, SafetyConfig } from './safety-net';
+
+// Focus Watchdog
+export { FocusWatchdog } from './focus-watchdog';
+export type { FocusWatchdogConfig } from './focus-watchdog';
+
+// Benchmarks
+export { TypingPerfBenchmark } from './benchmarks';
+export type { BenchmarkResult, BenchmarkScenario } from './benchmarks';
 
 export type Point = { x: number; y: number };
 export type PageHit = { pageIndex: number; page: Layout['pages'][number] };
@@ -60,8 +153,44 @@ const isAtomicFragment = (fragment: Fragment): fragment is AtomicFragment => {
   return fragment.kind === 'drawing' || fragment.kind === 'image';
 };
 
+/**
+ * Click mapping telemetry for tracking DOM vs geometry mapping usage.
+ * Exposed for performance monitoring and optimization decisions.
+ */
+export interface ClickMappingTelemetry {
+  /** Total click mappings attempted */
+  total: number;
+  /** Successful DOM-based mappings */
+  domSuccess: number;
+  /** Successful geometry-based mappings */
+  geometrySuccess: number;
+  /** Failed mappings (returned null) */
+  failed: number;
+}
+
+/**
+ * Global click mapping telemetry instance.
+ * Reset this periodically to avoid unbounded growth.
+ */
+export const clickMappingTelemetry: ClickMappingTelemetry = {
+  total: 0,
+  domSuccess: 0,
+  geometrySuccess: 0,
+  failed: 0,
+};
+
+/**
+ * Resets click mapping telemetry counters.
+ */
+export function resetClickMappingTelemetry(): void {
+  clickMappingTelemetry.total = 0;
+  clickMappingTelemetry.domSuccess = 0;
+  clickMappingTelemetry.geometrySuccess = 0;
+  clickMappingTelemetry.failed = 0;
+}
+
 const logClickStage = (_level: 'log' | 'warn' | 'error', _stage: string, _payload: Record<string, unknown>) => {
-  // Click logging has been removed
+  // No-op in production. Enable for debugging click-to-position mapping.
 };
 
 const blockPmRangeFromAttrs = (block: FlowBlock): { pmStart?: number; pmEnd?: number } => {
@@ -180,6 +309,201 @@ const hitTestAtomicFragment = (
 };
 
 /**
+ * Type for table hit test result containing cell and paragraph info
+ */
+type TableHitResult = {
+  fragment: TableFragment;
+  block: TableBlock;
+  measure: TableMeasure;
+  pageIndex: number;
+  cellRowIndex: number;
+  cellColIndex: number;
+  cellBlock: ParagraphBlock;
+  cellMeasure: ParagraphMeasure;
+  localX: number;
+  localY: number;
+};
+
+/**
+ * Hit-test table fragments to find the cell and paragraph at a click point.
+ *
+ * This function performs a multi-stage spatial lookup to map a 2D coordinate to a specific
+ * paragraph within a table cell. The algorithm handles:
+ * - Tables that span multiple pages (via fragments)
+ * - Cells containing multiple paragraph blocks
+ * - Vertical positioning within cells with padding
+ * - Edge cases where clicks fall outside exact cell boundaries
+ *
+ * Algorithm:
+ * 1. Iterate through all table fragments on the page
+ * 2. Check if the point falls within the fragment's bounding box
+ * 3. Find the corresponding table block and measure from the document structure
+ * 4. Locate the row by accumulating row heights
+ * 5. Locate the column by accumulating cell widths
+ * 6. Within the cell, iterate through paragraph blocks and select the one containing the Y coordinate
+ * 7. Return the paragraph block, its measure, and the local coordinates within that paragraph
+ *
+ * Multi-paragraph selection: When a cell contains multiple paragraphs, the function calculates
+ * the vertical offset of each paragraph block and selects the one whose vertical span contains
+ * the click point. If the click is below all paragraphs, the last paragraph is selected.
+ *
+ * @param pageHit - The page hit result containing the page and fragments
+ * @param blocks - The complete array of flow blocks in the document
+ * @param measures - The complete array of layout measures corresponding to the blocks
+ * @param point - The 2D coordinate to hit-test (in page coordinate space)
+ * @returns TableHitResult containing the fragment, block, measure, cell indices, paragraph, and local coordinates,
+ *          or null if no table fragment contains the point or the cell data is invalid
+ *
+ * Edge cases handled:
+ * - Empty tables with no rows or cells
+ * - Clicks outside cell boundaries (clamped to nearest cell)
+ * - Cells with no paragraph blocks
+ * - Mismatched block and measure arrays
+ * - Invalid cell padding values
+ */
+const hitTestTableFragment = (
+  pageHit: PageHit,
+  blocks: FlowBlock[],
+  measures: Measure[],
+  point: Point,
+): TableHitResult | null => {
+  for (const fragment of pageHit.page.fragments) {
+    if (fragment.kind !== 'table') continue;
+
+    const tableFragment = fragment as TableFragment;
+    const withinX = point.x >= tableFragment.x && point.x <= tableFragment.x + tableFragment.width;
+    const withinY = point.y >= tableFragment.y && point.y <= tableFragment.y + tableFragment.height;
+    if (!withinX || !withinY) continue;
+
+    const blockIndex = blocks.findIndex((block) => block.id === tableFragment.blockId);
+    if (blockIndex === -1) continue;
+
+    const block = blocks[blockIndex];
+    const measure = measures[blockIndex];
+    if (!block || block.kind !== 'table' || !measure || measure.kind !== 'table') continue;
+
+    const tableBlock = block as TableBlock;
+    const tableMeasure = measure as TableMeasure;
+
+    // Calculate local position within the table fragment
+    const localX = point.x - tableFragment.x;
+    const localY = point.y - tableFragment.y;
+
+    // Find the row at localY
+    let rowY = 0;
+    let rowIndex = -1;
+    // Bounds check: skip if table has no rows
+    if (tableMeasure.rows.length === 0 || tableBlock.rows.length === 0) continue;
+    for (let r = tableFragment.fromRow; r < tableFragment.toRow && r < tableMeasure.rows.length; r++) {
+      const rowMeasure = tableMeasure.rows[r];
+      if (localY >= rowY && localY < rowY + rowMeasure.height) {
+        rowIndex = r;
+        break;
+      }
+      rowY += rowMeasure.height;
+    }
+
+    if (rowIndex === -1) {
+      // Click is below all rows, use the last row
+      rowIndex = Math.min(tableFragment.toRow - 1, tableMeasure.rows.length - 1);
+      if (rowIndex < tableFragment.fromRow) continue;
+    }
+
+    const rowMeasure = tableMeasure.rows[rowIndex];
+    const row = tableBlock.rows[rowIndex];
+    if (!rowMeasure || !row) continue;
+
+    // Find the column at localX using column widths
+    let colX = 0;
+    let colIndex = -1;
+    // Bounds check: skip if row has no cells
+    if (rowMeasure.cells.length === 0 || row.cells.length === 0) continue;
+    for (let c = 0; c < rowMeasure.cells.length; c++) {
+      const cellMeasure = rowMeasure.cells[c];
+      if (localX >= colX && localX < colX + cellMeasure.width) {
+        colIndex = c;
+        break;
+      }
+      colX += cellMeasure.width;
+    }
+
+    if (colIndex === -1) {
+      // Click is to the right of all columns, use the last column
+      colIndex = rowMeasure.cells.length - 1;
+      if (colIndex < 0) continue;
+    }
+
+    const cellMeasure = rowMeasure.cells[colIndex];
+    const cell = row.cells[colIndex];
+    if (!cellMeasure || !cell) continue;
+
+    // Get the first paragraph block and measure from the cell
+    const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+    // Runtime validation: filter out null/undefined values instead of unsafe cast
+    const rawMeasures = cellMeasure.blocks ?? (cellMeasure.paragraph ? [cellMeasure.paragraph] : []);
+    const cellBlockMeasures = (Array.isArray(rawMeasures) ? rawMeasures : []).filter(
+      (m): m is Measure => m != null && typeof m === 'object' && 'kind' in m,
+    );
+
+    // Find a paragraph block in the cell, respecting vertical position when multiple blocks exist
+    let blockStartY = 0;
+    const getBlockHeight = (m: Measure | undefined): number => {
+      if (!m) return 0;
+      if ('totalHeight' in m && typeof (m as { totalHeight?: number }).totalHeight === 'number') {
+        return (m as { totalHeight: number }).totalHeight;
+      }
+      if ('height' in m && typeof (m as { height?: number }).height === 'number') {
+        return (m as { height: number }).height;
+      }
+      return 0;
+    };
+
+    for (let i = 0; i < cellBlocks.length && i < cellBlockMeasures.length; i++) {
+      const cellBlock = cellBlocks[i];
+      const cellBlockMeasure = cellBlockMeasures[i];
+      if (cellBlock?.kind !== 'paragraph' || cellBlockMeasure?.kind !== 'paragraph') {
+        blockStartY += getBlockHeight(cellBlockMeasure);
+        continue;
+      }
+
+      const blockHeight = getBlockHeight(cellBlockMeasure);
+      const blockEndY = blockStartY + blockHeight;
+
+      // Calculate position within the cell (accounting for cell padding)
+      const padding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
+      const cellLocalX = localX - colX - (padding.left ?? 4);
+      const cellLocalY = localY - rowY - (padding.top ?? 2);
+      const paragraphBlock = cellBlock as ParagraphBlock;
+      const paragraphMeasure = cellBlockMeasure as ParagraphMeasure;
+
+      // Choose the paragraph whose vertical span contains the click; if none match, fall through to last
+      const isWithinBlock = cellLocalY >= blockStartY && cellLocalY < blockEndY;
+      const isLastParagraph = i === Math.min(cellBlocks.length, cellBlockMeasures.length) - 1;
+      if (isWithinBlock || isLastParagraph) {
+        const unclampedLocalY = cellLocalY - blockStartY;
+        const localYWithinBlock = Math.max(0, Math.min(unclampedLocalY, Math.max(blockHeight, 0)));
+        return {
+          fragment: tableFragment,
+          block: tableBlock,
+          measure: tableMeasure,
+          pageIndex: pageHit.pageIndex,
+          cellRowIndex: rowIndex,
+          cellColIndex: colIndex,
+          cellBlock: paragraphBlock,
+          cellMeasure: paragraphMeasure,
+          localX: Math.max(0, cellLocalX),
+          localY: Math.max(0, localYWithinBlock),
+        };
+      }
+
+      blockStartY = blockEndY;
+    }
+  }
+
+  return null;
+};
+
+/**
  * Map a coordinate click to a ProseMirror position.
  *
  * This function supports two mapping strategies:
@@ -210,6 +534,8 @@ export function clickToPosition(
   clientX?: number,
   clientY?: number,
 ): PositionHit | null {
+  clickMappingTelemetry.total++;
+
   logClickStage('log', 'entry', {
     point: containerPoint,
     pages: layout.pages.length,
@@ -222,6 +548,7 @@ export function clickToPosition(
     const domPos = clickToPositionDom(domContainer, clientX, clientY);
 
     if (domPos != null) {
+      clickMappingTelemetry.domSuccess++;
       // DOM mapping succeeded - we need to construct a PositionHit with metadata
       // Find the block containing this position to get blockId
       let blockId = '';
@@ -334,6 +661,8 @@ export function clickToPosition(
     }
 
     const column = determineColumn(layout, fragment.x);
+    clickMappingTelemetry.geometrySuccess++;
+
     logClickStage('log', 'success', {
       blockId: fragment.blockId,
       pos,
@@ -352,17 +681,82 @@ export function clickToPosition(
     };
   }
 
+  // Try table fragment hit testing
+  const tableHit = hitTestTableFragment(pageHit, blocks, measures, pageRelativePoint);
+  if (tableHit) {
+    const { cellBlock, cellMeasure, localX, localY, pageIndex } = tableHit;
+
+    // Find the line at the local Y position within the cell paragraph
+    const lineIndex = findLineIndexAtY(cellMeasure, localY, 0, cellMeasure.lines.length);
+    if (lineIndex != null) {
+      const line = cellMeasure.lines[lineIndex];
+      const isRTL = isRtlBlock(cellBlock);
+      const pos = mapPointToPm(cellBlock, line, localX, isRTL);
+
+      if (pos != null) {
+        clickMappingTelemetry.geometrySuccess++;
+        logClickStage('log', 'success', {
+          blockId: tableHit.fragment.blockId,
+          pos,
+          pageIndex,
+          column: determineColumn(layout, tableHit.fragment.x),
+          lineIndex,
+          origin: 'table-cell',
+        });
+
+        return {
+          pos,
+          blockId: tableHit.fragment.blockId,
+          pageIndex,
+          column: determineColumn(layout, tableHit.fragment.x),
+          lineIndex,
+        };
+      }
+    }
+
+    // Fallback: return first position in the cell if line/position mapping fails
+    const firstRun = cellBlock.runs?.[0];
+    if (firstRun && firstRun.pmStart != null) {
+      clickMappingTelemetry.geometrySuccess++;
+      logClickStage('log', 'success', {
+        blockId: tableHit.fragment.blockId,
+        pos: firstRun.pmStart,
+        pageIndex,
+        column: determineColumn(layout, tableHit.fragment.x),
+        lineIndex: 0,
+        origin: 'table-cell-fallback',
+      });
+
+      return {
+        pos: firstRun.pmStart,
+        blockId: tableHit.fragment.blockId,
+        pageIndex,
+        column: determineColumn(layout, tableHit.fragment.x),
+        lineIndex: 0,
+      };
+    }
+
+    logClickStage('warn', 'table-cell-no-position', {
+      blockId: tableHit.fragment.blockId,
+      cellRow: tableHit.cellRowIndex,
+      cellCol: tableHit.cellColIndex,
+    });
+  }
+
   const atomicHit = hitTestAtomicFragment(pageHit, blocks, measures, pageRelativePoint);
   if (atomicHit && isAtomicFragment(atomicHit.fragment)) {
     const { fragment, block, pageIndex } = atomicHit;
     const pmRange = getAtomicPmRange(fragment, block);
     const pos = pmRange.pmStart ?? pmRange.pmEnd ?? null;
     if (pos == null) {
+      clickMappingTelemetry.failed++;
       logClickStage('warn', 'atomic-without-range', {
         fragmentId: fragment.blockId,
       });
       return null;
     }
+
+    clickMappingTelemetry.geometrySuccess++;
 
     logClickStage('log', 'success', {
       blockId: fragment.blockId,
@@ -381,6 +775,8 @@ export function clickToPosition(
       lineIndex: -1,
     };
   }
+
+  clickMappingTelemetry.failed++;
 
   logClickStage('warn', 'no-fragment', {
     pageIndex: pageHit.pageIndex,
@@ -499,6 +895,52 @@ export function getFragmentAtPosition(
         continue;
       }
 
+      // Handle table fragments - check if position falls within any cell's content
+      if (fragment.kind === 'table') {
+        if (block.kind !== 'table' || measure.kind !== 'table') continue;
+
+        const tableBlock = block as TableBlock;
+        const _tableMeasure = measure as TableMeasure;
+        const tableFragment = fragment as TableFragment;
+
+        // Calculate the PM range for this table fragment (rows fromRow to toRow)
+        let tableMinPos: number | null = null;
+        let tableMaxPos: number | null = null;
+
+        for (let r = tableFragment.fromRow; r < tableFragment.toRow && r < tableBlock.rows.length; r++) {
+          const row = tableBlock.rows[r];
+          for (const cell of row.cells) {
+            const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+            for (const cellBlock of cellBlocks) {
+              if (cellBlock?.kind === 'paragraph') {
+                const paraBlock = cellBlock as ParagraphBlock;
+                for (const run of paraBlock.runs ?? []) {
+                  if (run.pmStart != null) {
+                    if (tableMinPos === null || run.pmStart < tableMinPos) tableMinPos = run.pmStart;
+                    if (tableMaxPos === null || run.pmStart > tableMaxPos) tableMaxPos = run.pmStart;
+                  }
+                  if (run.pmEnd != null) {
+                    if (tableMinPos === null || run.pmEnd < tableMinPos) tableMinPos = run.pmEnd;
+                    if (tableMaxPos === null || run.pmEnd > tableMaxPos) tableMaxPos = run.pmEnd;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (tableMinPos != null && tableMaxPos != null && pos >= tableMinPos && pos <= tableMaxPos) {
+          return {
+            fragment,
+            block,
+            measure,
+            pageIndex,
+            pageY: 0,
+          };
+        }
+        continue;
+      }
+
       if (isAtomicFragment(fragment)) {
         const { pmStart, pmEnd } = getAtomicPmRange(fragment, block);
         const start = pmStart ?? pmEnd;
@@ -556,7 +998,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.kind === 'image' || run.kind === 'lineBreak' ? '' : (run.text ?? '');
+    const text = 'src' in run ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -681,7 +1123,7 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
     }
 
     // FIXED: ImageRun handling - images are atomic units, no slicing needed
-    if (run.kind === 'image') {
+    if ('src' in run) {
       result.push(run);
       continue;
     }
