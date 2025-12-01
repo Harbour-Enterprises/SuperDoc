@@ -37,6 +37,7 @@ import type {
   GradientFill,
   SolidFillWithAlpha,
   ShapeTextContent,
+  DropCapDescriptor,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -1403,8 +1404,40 @@ export class DomPainter {
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
 
+      // Render drop cap if present (only on the first fragment, not continuation)
+      const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+      const dropCapMeasure = measure.dropCap;
+      if (dropCapDescriptor && dropCapMeasure && !fragment.continuesFromPrev) {
+        const dropCapEl = this.renderDropCap(dropCapDescriptor, dropCapMeasure);
+        fragmentEl.appendChild(dropCapEl);
+      }
+
+      // Remove fragment-level indent so line-level indent handling doesn't double-apply.
+      if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
+      if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
+      if (fragmentEl.style.textIndent) fragmentEl.style.removeProperty('text-indent');
+
+      const paraIndent = block.attrs?.indent;
+      const paraIndentLeft = paraIndent?.left ?? 0;
+      const paraIndentRight = paraIndent?.right ?? 0;
+      const firstLineOffset = (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
+
       lines.forEach((line, index) => {
         const lineEl = this.renderLine(block, line, context);
+
+        // Apply paragraph indent on each rendered line to preserve hanging/first-line offsets
+        if (paraIndentLeft) {
+          lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+        }
+        if (paraIndentRight) {
+          lineEl.style.paddingRight = `${paraIndentRight}px`;
+        }
+        if (!fragment.continuesFromPrev && index === 0 && firstLineOffset) {
+          lineEl.style.textIndent = `${firstLineOffset}px`;
+        } else if (firstLineOffset) {
+          lineEl.style.textIndent = '0px';
+        }
+
         if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
@@ -1416,6 +1449,16 @@ export class DomPainter {
           markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
           markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
+
+          // Position marker relative to text start
+          // textStart = indentLeft + firstLine - hanging
+          // markerLeft = textStart - markerWidth
+          const indentLeft = paraIndentLeft;
+          const hanging = paraIndent?.hanging ?? 0;
+          const textStartX = indentLeft - hanging;
+          const markerLeftX = textStartX - fragment.markerWidth;
+          markerEl.style.position = 'relative';
+          markerEl.style.left = `${markerLeftX}px`;
 
           // Apply marker run styling
           markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
@@ -1485,6 +1528,66 @@ export class DomPainter {
       el.title = error.message;
     }
     return el;
+  }
+
+  /**
+   * Renders a drop cap element as a floated span at the start of a paragraph.
+   *
+   * Drop caps are large initial letters that span multiple lines of text.
+   * This method creates a floated element with the drop cap letter styled
+   * according to the descriptor's run properties.
+   *
+   * @param descriptor - The drop cap descriptor with text and styling info
+   * @param measure - The measured dimensions of the drop cap
+   * @returns HTMLElement containing the rendered drop cap
+   */
+  private renderDropCap(descriptor: DropCapDescriptor, measure: ParagraphMeasure['dropCap']): HTMLElement {
+    const doc = this.doc!;
+    const { run, mode } = descriptor;
+
+    const dropCapEl = doc.createElement('span');
+    dropCapEl.classList.add('superdoc-drop-cap');
+    dropCapEl.textContent = run.text;
+
+    // Apply styling from the run
+    dropCapEl.style.fontFamily = run.fontFamily;
+    dropCapEl.style.fontSize = `${run.fontSize}px`;
+    if (run.bold) {
+      dropCapEl.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      dropCapEl.style.fontStyle = 'italic';
+    }
+    if (run.color) {
+      dropCapEl.style.color = run.color;
+    }
+
+    // Position the drop cap based on mode
+    if (mode === 'drop') {
+      // Float left so text wraps around it
+      dropCapEl.style.float = 'left';
+      dropCapEl.style.marginRight = '4px'; // Small gap between drop cap and text
+      dropCapEl.style.lineHeight = '1'; // Prevent extra line height from affecting layout
+    } else if (mode === 'margin') {
+      // Position in the margin (left of the text area)
+      dropCapEl.style.position = 'absolute';
+      dropCapEl.style.left = '0';
+      dropCapEl.style.lineHeight = '1';
+    }
+
+    // Apply vertical position offset if specified
+    if (run.position && run.position !== 0) {
+      dropCapEl.style.position = dropCapEl.style.position || 'relative';
+      dropCapEl.style.top = `${run.position}px`;
+    }
+
+    // Set dimensions from measurement
+    if (measure) {
+      dropCapEl.style.width = `${measure.width}px`;
+      dropCapEl.style.height = `${measure.height}px`;
+    }
+
+    return dropCapEl;
   }
 
   private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
@@ -2237,7 +2340,7 @@ export class DomPainter {
    * @returns Sanitized link data or null if invalid/missing
    */
   private extractLinkData(run: Run): LinkRenderData | null {
-    if (run.kind === 'tab') {
+    if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
       return null;
     }
     const link = (run as TextRun).link as FlowRunLink | undefined;
@@ -2446,6 +2549,13 @@ export class DomPainter {
     return run.kind === 'image';
   }
 
+  /**
+   * Type guard to check if a run is a line break run.
+   */
+  private isLineBreakRun(run: Run): run is import('@superdoc/contracts').LineBreakRun {
+    return run.kind === 'lineBreak';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
@@ -2454,6 +2564,13 @@ export class DomPainter {
     // Handle ImageRun
     if (this.isImageRun(run)) {
       return this.renderImageRun(run);
+    }
+
+    // Handle LineBreakRun - line breaks are handled by the measurer creating new lines,
+    // so we don't render anything for them in the DOM. They exist in the run array for
+    // proper PM position tracking but don't need visual representation.
+    if (this.isLineBreakRun(run)) {
+      return null;
     }
 
     // Handle TextRun
@@ -2733,6 +2850,11 @@ export class DomPainter {
             // They flow naturally at their position in the run sequence
             el.appendChild(elem);
           }
+          return;
+        }
+
+        // Handle LineBreakRun - skip rendering, handled by measurer
+        if (this.isLineBreakRun(baseRun)) {
           return;
         }
 
@@ -3155,23 +3277,34 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           ].join(',');
         }
 
-        // Handle TextRun and TabRun
+        // Handle LineBreakRun
+        if (run.kind === 'lineBreak') {
+          return ['linebreak', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TabRun
+        if (run.kind === 'tab') {
+          return [run.text ?? '', 'tab', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TextRun (kind is 'text' or undefined)
+        const textRun = run as TextRun;
         return [
-          run.text ?? '',
-          run.kind !== 'tab' ? run.fontFamily : '',
-          run.kind !== 'tab' ? run.fontSize : '',
-          run.kind !== 'tab' && run.bold ? 1 : 0,
-          run.kind !== 'tab' && run.italic ? 1 : 0,
-          run.kind !== 'tab' ? (run.color ?? '') : '',
+          textRun.text ?? '',
+          textRun.fontFamily,
+          textRun.fontSize,
+          textRun.bold ? 1 : 0,
+          textRun.italic ? 1 : 0,
+          textRun.color ?? '',
           // Text decorations - ensures DOM updates when decoration properties change.
-          run.kind !== 'tab' ? (run.underline?.style ?? '') : '',
-          run.kind !== 'tab' ? (run.underline?.color ?? '') : '',
-          run.kind !== 'tab' && run.strike ? 1 : 0,
-          run.kind !== 'tab' ? (run.highlight ?? '') : '',
-          run.kind !== 'tab' && run.letterSpacing != null ? run.letterSpacing : '',
-          run.pmStart ?? '',
-          run.pmEnd ?? '',
-          run.kind !== 'tab' ? (run.token ?? '') : '',
+          textRun.underline?.style ?? '',
+          textRun.underline?.color ?? '',
+          textRun.strike ? 1 : 0,
+          textRun.highlight ?? '',
+          textRun.letterSpacing != null ? textRun.letterSpacing : '',
+          textRun.pmStart ?? '',
+          textRun.pmEnd ?? '',
+          textRun.token ?? '',
         ].join(',');
       })
       .join('|');
@@ -3244,8 +3377,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 };
 
 const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab' || run.kind === 'image') {
-    // Tab and image runs don't have text styling properties
+  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
+    // Tab, image, and lineBreak runs don't have text styling properties
     return;
   }
 
@@ -3435,6 +3568,13 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
       continue;
     }
 
+    // LineBreakRun handling - line breaks don't have text content and are handled
+    // by the measurer creating new lines. Include them for PM position tracking.
+    if (run.kind === 'lineBreak') {
+      result.push(run);
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3505,6 +3645,27 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
       continue;
     }
 
+    // LineBreakRun handling - similar to image runs, treated as atomic units
+    if (run.kind === 'lineBreak') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
@@ -3552,6 +3713,10 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   }
   if (run.kind === 'image') {
     // Image runs don't have text content
+    return '';
+  }
+  if (run.kind === 'lineBreak') {
+    // Line break runs don't render text - the measurer creates new lines for them
     return '';
   }
   if (!runToken) {

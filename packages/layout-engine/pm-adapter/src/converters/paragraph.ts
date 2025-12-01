@@ -1045,7 +1045,24 @@ export function paragraphToFlowBlocks(
           attrs: node.attrs || {},
         });
       }
-      // Non-column line breaks are ignored (soft line breaks within paragraphs)
+      // Inline line break: preserve as a run so measurer can create a new line
+      else {
+        const lineBreakRun: Run = { kind: 'lineBreak', attrs: {} };
+        const lbAttrs: Record<string, string> = {};
+        if (attrs.lineBreakType) lbAttrs.lineBreakType = String(attrs.lineBreakType);
+        if (attrs.clear) lbAttrs.clear = String(attrs.clear);
+        if (Object.keys(lbAttrs).length > 0) {
+          (lineBreakRun as { attrs: Record<string, string> }).attrs = lbAttrs;
+        } else {
+          delete (lineBreakRun as { attrs?: Record<string, string> }).attrs;
+        }
+        const pos = positions.get(node);
+        if (pos) {
+          (lineBreakRun as { pmStart: number }).pmStart = pos.start;
+          (lineBreakRun as { pmEnd: number }).pmEnd = pos.end;
+        }
+        currentRuns.push(lineBreakRun);
+      }
       return;
     }
   };

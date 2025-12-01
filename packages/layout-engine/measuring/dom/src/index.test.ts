@@ -107,6 +107,56 @@ describe('measureBlock', () => {
       expect(measure.lines[0].width).toBeGreaterThanOrEqual(0);
       expect(measure.totalHeight).toBeGreaterThan(0);
     });
+
+    it('creates a new line for explicit lineBreak runs', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Heading text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          { kind: 'lineBreak' },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+
+      expect(measure.lines).toHaveLength(2);
+      expect(measure.lines[0].width).toBeGreaterThan(0);
+      expect(measure.lines[1].width).toBe(0);
+      expect(measure.totalHeight).toBeCloseTo(measure.lines[0].lineHeight + measure.lines[1].lineHeight, 5);
+    });
+
+    it('places following text on the next line after a lineBreak run', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Line one',
+            fontFamily: 'Arial',
+            fontSize: 14,
+          },
+          { kind: 'lineBreak' },
+          {
+            text: 'Line two',
+            fontFamily: 'Arial',
+            fontSize: 14,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+
+      expect(measure.lines).toHaveLength(2);
+      expect(measure.lines[0].width).toBeGreaterThan(0);
+      expect(measure.lines[1].width).toBeGreaterThan(0);
+    });
   });
 
   describe('multi-run blocks', () => {
