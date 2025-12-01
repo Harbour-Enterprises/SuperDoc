@@ -16,8 +16,5 @@
     "@superdoc/contracts": "*",
     "@superdoc/common": "*",
     "@superdoc/geometry-utils": "*"
-  },
-  "devDependencies": {
-    "canvas": "^3.0.0"
   }
 }
