@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, reactive } from 'vue';
 
 const emit = defineEmits(['margin-change']);

@@ -86,11 +86,3 @@ export interface SpecializedCommandAugmentations {
   deleteStructuredContentAtSelection: () => boolean;
   appendRowsToStructuredContentTable: (options: StructuredContentTableAppendOptions) => boolean;
 }
-
-declare module '@core/types/ChainedCommands.js' {
-  interface ExtensionCommandMap extends SpecializedCommandAugmentations {}
-}
-
-declare module '@core/types/ChainedCommands' {
-  interface ExtensionCommandMap extends SpecializedCommandAugmentations {}
-}

@@ -886,7 +886,7 @@ describe('PresentationEditor', () => {
         documentId: 'test-doc',
       });
 
-      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+      const _mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
         (Editor as unknown as MockedEditor).mock.results.length - 1
       ].value;
 
@@ -947,7 +947,7 @@ describe('PresentationEditor', () => {
         documentId: 'test-doc',
       });
 
-      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+      const _mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
         (Editor as unknown as MockedEditor).mock.results.length - 1
       ].value;
 
@@ -1555,6 +1555,7 @@ describe('PresentationEditor', () => {
     let consoleErrorSpy: ReturnType<typeof vi.spyOn> | undefined;
 
     beforeEach(() => {
+      // eslint-disable-next-line @typescript-eslint/no-empty-function -- Intentional no-op to suppress console errors in tests
       consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     });
 
@@ -1756,7 +1757,7 @@ describe('PresentationEditor', () => {
 
           // Call twice
           handler();
-          const firstCallCount = mockAwareness.on.mock.calls.length;
+          const _firstCallCount = mockAwareness.on.mock.calls.length;
 
           // Reset mock to detect second subscription
           mockAwareness.on.mockClear();

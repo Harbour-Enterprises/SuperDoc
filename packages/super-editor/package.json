@@ -45,6 +45,11 @@
     "build": "vite build",
     "build:watch": "vite build --watch",
     "types:check": "tsc --noEmit",
+    "types:check:strict": "tsc -p tsconfig.strict.json",
+    "types:check:extensions": "tsc -p tsconfig.extensions.json",
+    "types:check:vue": "vue-tsc --noEmit",
+    "types:check:test": "tsc -p tsconfig.test.json",
+    "types:check:all": "npm run types:check:strict && npm run types:check:vue && npm run types:check:test",
     "types:build": "tsc -p tsconfig.build.json",
     "test": "vitest",
     "test:debug": "vitest --inspect-brk --pool threads --poolOptions.threads.singleThread",
@@ -53,13 +58,13 @@
     "pack": "rm *.tgz 2>/dev/null || true && npm run build && npm pack && mv harbour-enterprises-super-editor-0.0.1-alpha.0.tgz ./super-editor.tgz"
   },
   "dependencies": {
-    "@superdoc/word-layout": "*",
-    "@superdoc/pm-adapter": "*",
-    "@superdoc/layout-bridge": "*",
-    "@superdoc/url-validation": "*",
-    "@superdoc/painter-dom": "*",
     "@superdoc/contracts": "*",
+    "@superdoc/layout-bridge": "*",
     "@superdoc/measuring-dom": "*",
+    "@superdoc/painter-dom": "*",
+    "@superdoc/pm-adapter": "*",
+    "@superdoc/url-validation": "*",
+    "@superdoc/word-layout": "*",
     "buffer-crc32": "^1.0.0",
     "color2k": "^2.0.3",
     "eventemitter3": "^5.0.1",
@@ -98,6 +103,8 @@
   },
   "devDependencies": {
     "@floating-ui/dom": "^1.7.0",
+    "@typescript-eslint/eslint-plugin": "^8.48.0",
+    "@typescript-eslint/parser": "^8.48.0",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vue/test-utils": "^2.4.6",
     "postcss-nested": "^6.0.1",
@@ -107,6 +114,7 @@
     "typescript": "^5.7.3",
     "vite": "^6.3.5",
     "vite-plugin-node-polyfills": "^0.24.0",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "vue-tsc": "^3.1.5"
   }
 }

@@ -3,16 +3,19 @@ import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
 import type { NodeType, ParseRule, DOMOutputSpec, Node as PmNode } from 'prosemirror-model';
 import type { Plugin } from 'prosemirror-state';
-import type { NodeView, EditorView, Decoration, DecorationSource } from 'prosemirror-view';
 import type { InputRule } from './InputRule.js';
 import type { Editor } from './Editor.js';
-import type { Command } from './types/ChainedCommands.js';
 import type { AttributeSpec } from './Attribute.js';
+
+export interface RenderNodeContext {
+  node: PmNode;
+  htmlAttributes: Record<string, unknown>;
+}
 
 /**
  * Configuration for Node extensions.
  */
-export interface NodeConfig<
+interface NodeConfigBase<
   Options extends Record<string, unknown> = Record<string, never>,
   Storage extends Record<string, unknown> = Record<string, never>,
 > {
@@ -44,7 +47,7 @@ export interface NodeConfig<
   tableRole?: string;
 
   /** ProseMirror string for what content this node accepts */
-  content?: MaybeGetter<string, []>;
+  content?: MaybeGetter<string>;
 
   /** The marks applied to this node */
   marks?: string;
@@ -65,7 +68,7 @@ export interface NodeConfig<
   parseDOM?: MaybeGetter<ParseRule[]>;
 
   /** The DOM rendering function - returns a DOMOutputSpec (allows mutable arrays for JS compatibility) */
-  renderDOM?: MaybeGetter<DOMOutputSpec>;
+  renderDOM?: DOMOutputSpec | ((context: RenderNodeContext) => DOMOutputSpec) | unknown;
 
   /** Function or object to add options to the node */
   addOptions?: MaybeGetter<Options>;
@@ -77,27 +80,19 @@ export interface NodeConfig<
   addAttributes?: MaybeGetter<Record<string, Partial<AttributeSpec>>>;
 
   /** Function or object to add commands to the node */
-  addCommands?: MaybeGetter<Record<string, Command>>;
+  addCommands?: MaybeGetter<Record<string, (...args: unknown[]) => unknown>>;
 
   /** Function or object to add helpers to the node */
   addHelpers?: MaybeGetter<Record<string, (...args: unknown[]) => unknown>>;
 
   /** Function or object to add shortcuts to the node */
-  addShortcuts?: MaybeGetter<Record<string, Command>>;
+  addShortcuts?: MaybeGetter<Record<string, (...args: unknown[]) => unknown>>;
 
   /** Function or object to add input rules to the node */
   addInputRules?: MaybeGetter<InputRule[]>;
 
   /** Function to add a custom node view to the node */
-  addNodeView?: MaybeGetter<
-    (props: {
-      node: PmNode;
-      view: EditorView;
-      getPos: () => number | undefined;
-      decorations: readonly Decoration[];
-      innerDecorations: DecorationSource;
-    }) => NodeView | null
-  >;
+  addNodeView?: MaybeGetter<(...args: unknown[]) => unknown>;
 
   /** Function to add ProseMirror plugins to the node */
   addPmPlugins?: MaybeGetter<Plugin[]>;
@@ -108,6 +103,15 @@ export interface NodeConfig<
   /** Additional config fields - use with caution */
   [key: string]: unknown;
 }
+
+/**
+ * Node configuration with a typed `this` context that points to the Node
+ * instance so config callbacks can access `this.editor`, `this.options`, etc.
+ */
+export type NodeConfig<
+  Options extends Record<string, unknown> = Record<string, never>,
+  Storage extends Record<string, unknown> = Record<string, never>,
+> = NodeConfigBase<Options, Storage> & ThisType<Node<Options, Storage>>;
 
 /**
  * Node class is used to create Node extensions.

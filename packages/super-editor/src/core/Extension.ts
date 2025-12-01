@@ -1,11 +1,12 @@
 import { getExtensionConfigField } from './helpers/getExtensionConfigField.js';
 import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
+import type { Editor } from './Editor.js';
 
 /**
  * Base configuration for extensions.
  */
-export interface ExtensionConfig<
+interface ExtensionConfigBase<
   Options extends Record<string, unknown> = Record<string, never>,
   Storage extends Record<string, unknown> = Record<string, never>,
 > {
@@ -23,6 +24,15 @@ export interface ExtensionConfig<
 }
 
 /**
+ * Extension configuration with a strongly typed `this` context so config
+ * functions can reference the extension instance (options, editor, etc.).
+ */
+export type ExtensionConfig<
+  Options extends Record<string, unknown> = Record<string, never>,
+  Storage extends Record<string, unknown> = Record<string, never>,
+> = ExtensionConfigBase<Options, Storage> & ThisType<Extension<Options, Storage>>;
+
+/**
  * Extension class is used to create extensions.
  * @template Options - Type for extension options
  * @template Storage - Type for extension storage
@@ -38,6 +48,9 @@ export class Extension<
   options: Options;
 
   storage: Storage;
+
+  // Editor instance is injected at runtime by the ExtensionService.
+  editor: Editor | undefined;
 
   config: ExtensionConfig<Options, Storage>;
 

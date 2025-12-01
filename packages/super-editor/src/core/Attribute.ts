@@ -14,7 +14,14 @@ export type AttributePrimitive = string | number | boolean | null | undefined;
 /**
  * Allowed attribute values (recursive to permit nested objects/arrays)
  */
-export type AttributeValue = AttributePrimitive | AttributeValue[] | { [key: string]: AttributeValue };
+export type AttributeValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | AttributeValue[]
+  | { [key: string]: AttributeValue };
 
 /**
  * Supported attribute default value (raw value or lazy getter)

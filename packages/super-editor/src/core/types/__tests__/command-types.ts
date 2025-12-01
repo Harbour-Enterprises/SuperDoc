@@ -16,7 +16,13 @@ type AppendRowsArgs = Parameters<ExtensionCommandMap['appendRowsWithContent']>[0
 type AssertAppendRowsArgs = ExpectTrue<
   Equal<
     AppendRowsArgs,
-    { tablePos?: number | null; tableNode?: unknown; valueRows?: unknown[][]; copyRowStyle?: boolean }
+    {
+      tablePos?: number | null;
+      tableNode?: unknown;
+      valueRows?: unknown[][];
+      copyRowStyle?: boolean;
+      dispatch?: boolean;
+    }
   >
 >;
 

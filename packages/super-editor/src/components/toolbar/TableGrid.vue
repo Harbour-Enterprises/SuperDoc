@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 const emit = defineEmits(['select', 'clickoutside']);

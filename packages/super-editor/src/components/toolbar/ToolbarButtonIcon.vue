@@ -1,19 +1,15 @@
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue';
 
-const props = defineProps({
-  name: {
-    type: String,
-    required: true,
-  },
-  color: {
-    type: String,
-    default: null,
-  },
-  icon: {
-    type: String,
-    default: null,
-  },
+interface Props {
+  name: string;
+  color?: string | null;
+  icon?: string | null;
+}
+
+const props = withDefaults(defineProps<Props>(), {
+  color: null,
+  icon: null,
 });
 
 const getBarColor = computed(() => {

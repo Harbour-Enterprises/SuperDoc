@@ -1,0 +1,20 @@
+import type { NodeType } from 'prosemirror-model';
+import type { Command } from '../types/ChainedCommands.js';
+import { getNodeType } from '../helpers/getNodeType.js';
+import { isNodeActive } from '../helpers/isNodeActive.js';
+
+/**
+ * Toggle a node with another node.
+ * @param typeOrName The type or name of the node.
+ * @param toggleTypeOrName The type or name of the node to toggle.
+ * @param attrs The attrs of the node.
+ */
+export const toggleNode =
+  (typeOrName: string | NodeType, toggleTypeOrName: string | NodeType, attrs: Record<string, unknown> = {}): Command =>
+  ({ state, commands }) => {
+    const type = getNodeType(typeOrName, state.schema);
+    const toggleType = getNodeType(toggleTypeOrName, state.schema);
+    const isActive = isNodeActive(state, type, attrs);
+    if (isActive) return Boolean(commands.setNode(toggleType));
+    return Boolean(commands.setNode(type, attrs));
+  };

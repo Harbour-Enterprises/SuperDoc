@@ -99,6 +99,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       justification: 'left',
       path: [1],
       numberingType: 'decimal',
+      suffix: null,
     });
     expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,
@@ -119,6 +120,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       justification: 'left',
       path: [1, 1],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
     expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 1,
@@ -189,6 +191,7 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       justification: 'left',
       path: [1, 3],
       numberingType: 'lowerLetter',
+      suffix: null,
     });
     expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 1,
@@ -225,6 +228,7 @@ describe('[broken-list.docx] Test list breaking indentation formatting', () => {
       justification: 'left',
       path: [1],
       numberingType: 'decimal',
+      suffix: null,
     });
     expect(attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,

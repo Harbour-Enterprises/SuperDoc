@@ -1,11 +1,12 @@
 import { getExtensionConfigField } from './helpers/getExtensionConfigField.js';
 import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
+import type { Editor } from './Editor.js';
 
 /**
  * Configuration for Mark extensions.
  */
-export interface MarkConfig<
+interface MarkConfigBase<
   Options extends Record<string, unknown> = Record<string, never>,
   Storage extends Record<string, unknown> = Record<string, never>,
 > {
@@ -26,6 +27,14 @@ export interface MarkConfig<
 }
 
 /**
+ * Mark configuration with typed `this` context for mark instance access.
+ */
+export type MarkConfig<
+  Options extends Record<string, unknown> = Record<string, never>,
+  Storage extends Record<string, unknown> = Record<string, never>,
+> = MarkConfigBase<Options, Storage> & ThisType<Mark<Options, Storage>>;
+
+/**
  * Mark class is used to create Mark extensions.
  * @template Options - Type for mark options
  * @template Storage - Type for mark storage
@@ -41,6 +50,9 @@ export class Mark<
   options: Options;
 
   storage: Storage;
+
+  // Editor instance is injected by the ExtensionService at runtime.
+  editor: Editor | undefined;
 
   isExternal: boolean;
 

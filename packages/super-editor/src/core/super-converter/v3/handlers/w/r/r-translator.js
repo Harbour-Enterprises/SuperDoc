@@ -1,4 +1,3 @@
-// @ts-check
 import { NodeTranslator } from '@translator';
 import { translateChildNodes } from '../../../../v2/exporter/helpers/index.js';
 import { cloneMark, cloneXmlNode, applyRunPropertiesTemplate, resolveFontFamily } from './helpers/helpers.js';

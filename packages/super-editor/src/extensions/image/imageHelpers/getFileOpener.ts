@@ -1,0 +1,36 @@
+const ACCEPT_IMAGE_TYPES = ['.jpg', '.jpeg', '.png', 'image/jpeg', 'image/png'];
+
+/**
+ * Creates a file input opener for image selection
+ * @category Helper
+ * @returns {Function} Function that opens file picker and returns selected file
+ * @example
+ * const openFile = getFileOpener();
+ * const result = await openFile();
+ * if (result) console.log(result.file);
+ * @note Only accepts JPEG and PNG images
+ */
+export const getFileOpener = (): (() => Promise<{ file: File } | null>) => {
+  const fileInput = document.createElement('input');
+  fileInput.type = 'file';
+
+  const acceptTypes = ACCEPT_IMAGE_TYPES;
+  fileInput.accept = acceptTypes.join(',');
+
+  const openFile = (): Promise<{ file: File } | null> => {
+    return new Promise((resolve, reject) => {
+      fileInput.onchange = async () => {
+        const files = fileInput.files;
+        if (!files) return resolve(null);
+        const file = files.item(0);
+        if (!file) return resolve(null);
+        return resolve({ file });
+      };
+      fileInput.oncancel = () => resolve(null);
+      fileInput.onerror = reject;
+      fileInput.click();
+    });
+  };
+
+  return openFile;
+};

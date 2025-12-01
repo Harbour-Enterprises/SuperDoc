@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.strict.json",
+  "compilerOptions": {
+    "allowJs": false
+  },
+  "include": ["src/extensions/**/*.ts", "src/extensions/**/*.vue", "src/types/**/*.d.ts"],
+  "exclude": ["src/extensions/**/*.test.ts"]
+}
