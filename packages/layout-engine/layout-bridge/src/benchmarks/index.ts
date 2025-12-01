@@ -159,10 +159,9 @@ async function createSyntheticDocument(targetPages: number, layoutOptions: Layou
     throw new Error('Benchmark: measurement height is zero');
   }
 
-  const contentHeight =
-    (layoutOptions.pageSize ?? LETTER_LAYOUT.pageSize).h -
-    ((layoutOptions.margins?.top ?? LETTER_LAYOUT.margins!.top) +
-      (layoutOptions.margins?.bottom ?? LETTER_LAYOUT.margins!.bottom));
+  const pageSize = layoutOptions.pageSize ?? LETTER_LAYOUT.pageSize!;
+  const margins = layoutOptions.margins ?? LETTER_LAYOUT.margins!;
+  const contentHeight = pageSize.h - (margins.top + margins.bottom);
 
   if (measurement.totalHeight >= contentHeight) {
     throw new Error('Benchmark: base block exceeds page content height; reduce BASE_TEXT');

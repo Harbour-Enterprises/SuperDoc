@@ -998,7 +998,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = 'src' in run ? '' : (run.text ?? '');
+    const text = 'src' in run || run.kind === 'lineBreak' ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
