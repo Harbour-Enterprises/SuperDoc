@@ -132,16 +132,6 @@ const LINK_AND_TOC_STYLES = `
   opacity: 0.8;
 }
 
-/* External link indicator (WCAG 2.4.4 Link Purpose) */
-.superdoc-link[target="_blank"]::after {
-  content: "↗";
-  display: inline-block;
-  margin-left: 0.25em;
-  font-size: 0.85em;
-  text-decoration: none;
-  speak: literal-punctuation; /* Screen readers read the arrow */
-}
-
 /* Print mode: show URLs after links */
 @media print {
   .superdoc-link::after {
@@ -153,11 +143,6 @@ const LINK_AND_TOC_STYLES = `
   /* Don't show URL for anchor-only links */
   .superdoc-link[href^="#"]::after {
     content: "";
-  }
-
-  /* Don't show URL for external link indicator */
-  .superdoc-link[target="_blank"]::after {
-    content: " (" attr(href) ")";
   }
 }
 
@@ -174,13 +159,6 @@ const LINK_AND_TOC_STYLES = `
   .superdoc-link {
     transition: none;
   }
-}
-
-/* RTL layout support */
-.superdoc-layout[dir="rtl"] .superdoc-link[target="_blank"]::after {
-  margin-left: 0;
-  margin-right: 0.25em;
-  content: "↖"; /* Mirror the arrow for RTL */
 }
 
 /* Screen reader only content (WCAG SC 1.3.1) */
