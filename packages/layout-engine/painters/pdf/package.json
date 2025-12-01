@@ -16,6 +16,6 @@
     "@superdoc/contracts": "*"
   },
   "devDependencies": {
-    "vitest": "^3.0.8"
+    "vitest": "^4.0.14"
   }
 }
