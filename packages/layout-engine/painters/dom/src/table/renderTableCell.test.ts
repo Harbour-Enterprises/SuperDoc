@@ -47,7 +47,7 @@ describe('renderTableCell', () => {
     attrs: {},
   };
 
-  const baseDeps = {
+  const createBaseDeps = () => ({
     doc,
     x: 0,
     y: 0,
@@ -59,11 +59,11 @@ describe('renderTableCell', () => {
     applySdtDataset: () => {
       // noop for tests
     },
-  };
+  });
 
   it('centers content when verticalAlign is center', () => {
     const { contentElement } = renderTableCell({
-      ...baseDeps,
+      ...createBaseDeps(),
       cellMeasure: baseCellMeasure,
       cell: { ...baseCell, attrs: { verticalAlign: 'center' } },
     });
@@ -74,7 +74,7 @@ describe('renderTableCell', () => {
 
   it('bottom-aligns content when verticalAlign is bottom', () => {
     const { contentElement } = renderTableCell({
-      ...baseDeps,
+      ...createBaseDeps(),
       cellMeasure: baseCellMeasure,
       cell: { ...baseCell, attrs: { verticalAlign: 'bottom' } },
     });
@@ -85,7 +85,7 @@ describe('renderTableCell', () => {
 
   it('sizes content area to available height', () => {
     const { contentElement } = renderTableCell({
-      ...baseDeps,
+      ...createBaseDeps(),
       cellMeasure: baseCellMeasure,
       cell: baseCell,
     });

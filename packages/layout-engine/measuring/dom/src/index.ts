@@ -369,6 +369,30 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const wordLayout: WordParagraphLayoutOutput | undefined = block.attrs?.wordLayout as
     | WordParagraphLayoutOutput
     | undefined;
+
+  /**
+   * Floating-point tolerance for line breaking decisions (0.5px).
+   *
+   * Why this constant exists:
+   * - Canvas text measurement can have minor floating-point precision differences
+   *   between measurement and rendering contexts
+   * - Different browsers may round sub-pixel measurements slightly differently
+   * - Without a tolerance, lines might break prematurely when text is *almost*
+   *   but not quite at maxWidth
+   *
+   * Why 0.5px was chosen:
+   * - Large enough to absorb typical floating-point rounding errors (0.1-0.3px)
+   * - Small enough to be visually imperceptible at standard screen resolutions
+   * - Conservative value that prevents premature breaking without allowing
+   *   significant overflow
+   *
+   * How it's used in line breaking:
+   * - When checking if a word fits: `width + wordWidth <= maxWidth - WIDTH_FUDGE_PX`
+   * - This gives the layout a 0.5px safety margin before triggering a line break
+   * - Prevents edge cases where measured text at 199.7px breaks on a 200px line
+   *   due to rounding, when it would actually render fine
+   */
+  const WIDTH_FUDGE_PX = 0.5;
   const lines: Line[] = [];
   const indent = block.attrs?.indent;
   const spacing = block.attrs?.spacing;
@@ -808,13 +832,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
           // If a trailing space exists and fits safely, include it on this line
           const ls = (run as TextRun).letterSpacing ?? 0;
-          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth) {
+          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
             charPosInRun = wordEndWithSpace;
           } else {
             // Do not count trailing space at line end
-            charPosInRun = wordEndNoSpace;
+            // but still advance char index to skip over the space for subsequent words
+            charPosInRun = wordEndWithSpace;
           }
           continue;
         }
@@ -824,7 +849,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
         if (
-          currentLine.width + boundarySpacing + wordOnlyWidth > currentLine.maxWidth &&
+          currentLine.width + boundarySpacing + wordOnlyWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
           currentLine.width > 0 &&
           !isTocEntry
         ) {
@@ -849,17 +874,21 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
           };
           // If trailing space would fit on the new line, consume it here; otherwise skip it
-          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth) {
+          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
             charPosInRun = wordEndWithSpace;
           } else {
-            charPosInRun = wordEndNoSpace;
+            // Skip the space in character indexing even if we don't render it
+            charPosInRun = wordEndWithSpace;
           }
         } else {
           currentLine.toRun = runIndex;
           // If adding the trailing space would exceed, commit only the word and finalize line
-          if (!isLastWord && currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth) {
+          if (
+            !isLastWord &&
+            currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX
+          ) {
             currentLine.toChar = wordEndNoSpace;
             currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
             currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
@@ -1112,6 +1141,71 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 
   let columnWidths: number[];
 
+  /**
+   * Scales column widths proportionally to fit within a target width.
+   *
+   * This function is used when table column widths exceed the available page width.
+   * It proportionally reduces all columns to fit the constraint while maintaining
+   * their relative proportions.
+   *
+   * Rounding Adjustment Logic:
+   * - Initial scaling uses Math.round() for each column, which can cause the sum
+   *   to deviate from the target due to accumulated rounding errors
+   * - After scaling, the function adjusts columns one-by-one to reach the exact target
+   * - For excess width (sum > target): decrements columns starting from index 0
+   * - For deficit width (sum < target): increments columns starting from index 0
+   * - Ensures no column goes below 1px minimum width
+   * - Distributes adjustments cyclically to avoid bias toward any single column
+   *
+   * @param widths - Array of column widths in pixels
+   * @param targetWidth - Maximum total width in pixels
+   * @returns Scaled column widths that sum exactly to targetWidth (or original widths if already fit)
+   *
+   * @example
+   * ```typescript
+   * scaleColumnWidths([100, 200, 100], 300)
+   * // Returns: [75, 150, 75] (scaled from 400px down to 300px, maintaining 1:2:1 ratio)
+   *
+   * scaleColumnWidths([50, 50], 200)
+   * // Returns: [50, 50] (already within target, no scaling needed)
+   *
+   * scaleColumnWidths([33, 33, 33], 100)
+   * // Returns: [34, 33, 33] (sum adjusted from 99 to exactly 100)
+   * ```
+   */
+  const scaleColumnWidths = (widths: number[], targetWidth: number): number[] => {
+    const totalWidth = widths.reduce((a, b) => a + b, 0);
+    if (totalWidth <= targetWidth || widths.length === 0) return widths;
+
+    const scale = targetWidth / totalWidth;
+    const scaled = widths.map((w) => Math.max(1, Math.round(w * scale)));
+    const sum = scaled.reduce((a, b) => a + b, 0);
+
+    // Normalize to the exact target to avoid overflows from rounding.
+    if (sum !== targetWidth) {
+      const adjust = (delta: number): void => {
+        let idx = 0;
+        const direction = delta > 0 ? 1 : -1;
+        delta = Math.abs(delta);
+        while (delta > 0 && scaled.length > 0) {
+          const i = idx % scaled.length;
+          if (direction > 0) {
+            scaled[i] += 1;
+            delta -= 1;
+          } else if (scaled[i] > 1) {
+            scaled[i] -= 1;
+            delta -= 1;
+          }
+          idx += 1;
+          if (idx > scaled.length * 2 && delta > 0) break;
+        }
+      };
+      adjust(targetWidth - sum);
+    }
+
+    return scaled;
+  };
+
   // Determine actual column count from table structure
   const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
 
@@ -1128,8 +1222,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       // Scale proportionally only if total width exceeds available width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
       if (totalWidth > maxWidth) {
-        const scale = maxWidth / totalWidth;
-        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
       }
     } else {
       // For auto-layout tables, adjust column widths to match actual column count
@@ -1148,8 +1241,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       // Scale proportionally if total width exceeds available width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
       if (totalWidth > maxWidth) {
-        const scale = maxWidth / totalWidth;
-        columnWidths = columnWidths.map((w) => Math.max(1, Math.floor(w * scale)));
+        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
       }
     }
   } else {
