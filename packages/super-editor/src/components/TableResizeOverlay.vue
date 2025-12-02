@@ -2,19 +2,22 @@
   <!-- Prevent mousedown from propagating to editor - critical for clean resize handle drags -->
   <div v-if="visible && tableMetadata" class="superdoc-table-resize-overlay" :style="overlayStyle" @mousedown.stop>
     <!-- Resize handles for each column boundary segment -->
-    <template v-for="(boundary, boundaryIndex) in resizableBoundaries" :key="`boundary-${boundaryIndex}`">
+    <template
+      v-for="(boundary, resizableBoundaryIndex) in resizableBoundaries"
+      :key="`boundary-${resizableBoundaryIndex}`"
+    >
       <div
         v-for="(segment, segmentIndex) in getBoundarySegments(boundary)"
         :key="`handle-${boundary.type}-${boundary.index}-${segmentIndex}`"
         class="resize-handle"
         :class="{
-          'resize-handle--active': dragState && dragState.boundaryIndex === boundaryIndex,
+          'resize-handle--active': dragState && dragState.resizableBoundaryIndex === resizableBoundaryIndex,
           'resize-handle--edge': boundary.type === 'right-edge',
         }"
-        :data-boundary-index="boundaryIndex"
+        :data-boundary-index="resizableBoundaryIndex"
         :data-boundary-type="boundary.type"
         :style="getSegmentHandleStyle(boundary, segment)"
-        @mousedown="onHandleMouseDown($event, boundaryIndex)"
+        @mousedown="onHandleMouseDown($event, resizableBoundaryIndex)"
       ></div>
     </template>
 
@@ -51,6 +54,7 @@ const props = defineProps({
 
 const emit = defineEmits(['resize-start', 'resize-move', 'resize-end', 'resize-success', 'resize-error']);
 
+const overlayRect = ref(null);
 /**
  * Parsed table metadata from data-table-boundaries attribute
  * @type {import('vue').Ref<{columns: Array<{i: number, x: number, w: number, min: number, r?: number}>} | null>}
@@ -61,10 +65,12 @@ const tableMetadata = ref(null);
  * Drag state tracking
  * @type {import('vue').Ref<{
  *   columnIndex: number,
+ *   resizableBoundaryIndex: number,
+ *   isRightEdge: boolean,
  *   initialX: number,
  *   initialWidths: number[],
  *   leftColumn: {width: number, minWidth: number},
- *   rightColumn: {width: number, minWidth: number},
+ *   rightColumn: {width: number, minWidth: number} | null,
  *   constrainedDelta: number
  * } | null>}
  */
@@ -75,34 +81,138 @@ const dragState = ref(null);
  */
 const forcedCleanup = ref(false);
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+/** Width of the resize handle hit area in pixels */
+const RESIZE_HANDLE_WIDTH_PX = 9;
+
+/** Horizontal offset to center the resize handle on the boundary line */
+const RESIZE_HANDLE_OFFSET_PX = 4;
+
+/** Extension added to overlay width during drag for smooth mouse tracking */
+const DRAG_OVERLAY_EXTENSION_PX = 1000;
+
+/** Minimum overlay width during drag operations */
+const MIN_DRAG_OVERLAY_WIDTH_PX = 2000;
+
+/** Throttle interval for mouse move events (60fps = ~16.67ms) */
+const THROTTLE_INTERVAL_MS = 16;
+
+/** Minimum delta threshold to dispatch a resize transaction (avoids micro-adjustments) */
+const MIN_RESIZE_DELTA_PX = 1;
+
+// ============================================================================
+// State
+// ============================================================================
+
+let rafId = null;
+let isUnmounted = false;
+
+/**
+ * Starts continuous RAF-based tracking of the overlay position.
+ *
+ * Uses requestAnimationFrame to continuously update the overlay's position
+ * relative to the table element. This ensures handles stay aligned during
+ * scrolling, layout changes, and pagination shifts.
+ *
+ * @returns {void}
+ * @sideeffect Sets `rafId` to the current animation frame ID
+ * @sideeffect Calls `updateOverlayRect()` on each animation frame
+ */
+function startOverlayTracking() {
+  if (rafId !== null) return;
+  const step = () => {
+    updateOverlayRect();
+    rafId = requestAnimationFrame(step);
+  };
+  rafId = requestAnimationFrame(step);
+}
+
+/**
+ * Stops the RAF-based overlay position tracking.
+ *
+ * Cancels any pending animation frame and resets the tracking state.
+ * Should be called when the overlay is hidden or component unmounts.
+ *
+ * @returns {void}
+ * @sideeffect Cancels the animation frame identified by `rafId`
+ * @sideeffect Sets `rafId` to null
+ */
+function stopOverlayTracking() {
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId);
+    rafId = null;
+  }
+}
+
 /**
  * Overlay position and size relative to table element
  */
 const overlayStyle = computed(() => {
-  if (!props.tableElement) return {};
+  if (!overlayRect.value || !props.tableElement) return {};
 
-  // Use offsetLeft/offsetTop for position within the parent container
-  // This avoids issues with viewport coordinates from getBoundingClientRect
-  const rect = props.tableElement.getBoundingClientRect();
+  const rect = overlayRect.value;
 
   // During any drag operation, use a very large overlay to ensure smooth mouse tracking
   // This prevents issues when the mouse moves beyond the original table bounds
   let overlayWidth = rect.width;
   if (dragState.value) {
     // Set a fixed large width during drag to avoid reactive resize triggering re-renders
-    overlayWidth = Math.max(rect.width + 1000, 2000);
+    overlayWidth = Math.max(rect.width + DRAG_OVERLAY_EXTENSION_PX, MIN_DRAG_OVERLAY_WIDTH_PX);
   }
 
   return {
     position: 'absolute',
-    left: `${props.tableElement.offsetLeft}px`,
-    top: `${props.tableElement.offsetTop}px`,
+    left: `${rect.left}px`,
+    top: `${rect.top}px`,
     width: `${overlayWidth}px`,
     height: `${rect.height}px`,
     pointerEvents: dragState.value ? 'auto' : 'none',
     zIndex: 10,
   };
 });
+
+/**
+ * Recompute overlay position/size relative to the table's offset parent.
+ * Keeps handles aligned when the table moves (scroll, relayout, pagination shifts).
+ */
+function updateOverlayRect() {
+  if (!props.tableElement) {
+    overlayRect.value = null;
+    return;
+  }
+
+  const parent = props.tableElement.offsetParent;
+  const tableRect = props.tableElement.getBoundingClientRect();
+
+  // Validate rect has non-zero dimensions
+  if (tableRect.width === 0 || tableRect.height === 0) {
+    overlayRect.value = null;
+    return;
+  }
+
+  if (parent) {
+    const parentRect = parent.getBoundingClientRect();
+    const left = tableRect.left - parentRect.left + (parent.scrollLeft || 0);
+    const top = tableRect.top - parentRect.top + (parent.scrollTop || 0);
+    overlayRect.value = {
+      left,
+      top,
+      width: tableRect.width,
+      height: tableRect.height,
+    };
+  } else {
+    // Fallback to offsets if no positioned parent is found
+    overlayRect.value = {
+      left: props.tableElement.offsetLeft,
+      top: props.tableElement.offsetTop,
+      width: tableRect.width,
+      height: tableRect.height,
+    };
+  }
+}
 
 /**
  * Filter to only resizable column boundaries
@@ -207,10 +317,12 @@ function getBoundarySegments(boundary) {
     return [];
   }
 
-  return colSegments.map((seg) => ({
-    y: seg.y,
-    h: seg.h,
-  }));
+  return colSegments
+    .filter((seg) => seg && typeof seg === 'object')
+    .map((seg) => ({
+      y: typeof seg.y === 'number' ? seg.y : 0,
+      h: seg.h !== null && typeof seg.h === 'number' ? seg.h : null,
+    }));
 }
 
 /**
@@ -249,27 +361,9 @@ function getSegmentHandleStyle(boundary, segment) {
     position: 'absolute',
     left: `${boundary.x}px`,
     top: segment.y != null ? `${segment.y}px` : '0',
-    width: '9px',
+    width: `${RESIZE_HANDLE_WIDTH_PX}px`,
     height: segment.h != null ? `${segment.h}px` : '100%',
-    transform: 'translateX(-4px)',
-    cursor: 'col-resize',
-    pointerEvents: 'auto',
-  };
-}
-
-/**
- * Get style for a resize handle (full height - kept for backwards compatibility)
- * @param {{x: number, index: number}} boundary - Column boundary data
- * @returns {Object} Style object
- */
-function getHandleStyle(boundary) {
-  return {
-    position: 'absolute',
-    left: `${boundary.x}px`,
-    top: '0',
-    width: '9px',
-    height: '100%',
-    transform: 'translateX(-4px)',
+    transform: `translateX(-${RESIZE_HANDLE_OFFSET_PX}px)`,
     cursor: 'col-resize',
     pointerEvents: 'auto',
   };
@@ -281,7 +375,7 @@ function getHandleStyle(boundary) {
 const guidelineStyle = computed(() => {
   if (!dragState.value || !tableMetadata.value) return { display: 'none' };
 
-  const initialBoundary = resizableBoundaries.value[dragState.value.boundaryIndex];
+  const initialBoundary = resizableBoundaries.value[dragState.value.resizableBoundaryIndex];
   if (!initialBoundary) return { display: 'none' };
 
   const newX = initialBoundary.x + dragState.value.constrainedDelta;
@@ -299,7 +393,29 @@ const guidelineStyle = computed(() => {
 });
 
 /**
- * Parse table metadata from DOM element
+ * Parses table metadata from the `data-table-boundaries` attribute on the table element.
+ *
+ * Extracts column boundary information including positions, widths, and minimum widths.
+ * Also extracts segment data for merged cell support when present.
+ *
+ * The metadata is validated to ensure:
+ * - Column indices (`i`) are non-negative integers
+ * - Column positions (`x`) are non-negative
+ * - Column widths (`w`) are positive
+ * - Minimum widths (`min`) are positive
+ * - Resize flag (`r`) is 0 or 1
+ *
+ * @returns {void}
+ * @sideeffect Sets `tableMetadata.value` to parsed metadata or null
+ * @emits resize-error When metadata is corrupted, empty after validation, or fails to parse
+ *
+ * @example
+ * ```typescript
+ * // Called automatically when tableElement prop changes
+ * // Metadata format: { columns: [...], segments: [...] }
+ * parseTableMetadata();
+ * // tableMetadata.value = { columns: [{i: 0, x: 0, w: 100, min: 50, r: 1}, ...], segments: [...] }
+ * ```
  */
 function parseTableMetadata() {
   if (!props.tableElement) {
@@ -371,15 +487,15 @@ function parseTableMetadata() {
 /**
  * Handle mouse down on resize handle
  * @param {MouseEvent} event - Mouse event
- * @param {number} boundaryIndex - Index in the resizableBoundaries array
+ * @param {number} resizableBoundaryIndex - Index in the resizableBoundaries array
  */
-function onHandleMouseDown(event, boundaryIndex) {
+function onHandleMouseDown(event, resizableBoundaryIndex) {
   event.preventDefault();
   event.stopPropagation();
 
   if (!tableMetadata.value?.columns) return;
 
-  const boundary = resizableBoundaries.value[boundaryIndex];
+  const boundary = resizableBoundaries.value[resizableBoundaryIndex];
   if (!boundary) return;
 
   const columns = tableMetadata.value.columns;
@@ -391,7 +507,7 @@ function onHandleMouseDown(event, boundaryIndex) {
   // Store initial state
   dragState.value = {
     columnIndex: boundary.index,
-    boundaryIndex,
+    resizableBoundaryIndex,
     isRightEdge,
     initialX: event.clientX,
     initialWidths: columns.map((col) => col.w),
@@ -409,18 +525,31 @@ function onHandleMouseDown(event, boundaryIndex) {
   };
 
   // Disable pointer events on PM view to prevent conflicts
+  if (!props.editor?.view?.dom) {
+    emit('resize-error', { error: 'Editor view not available' });
+    dragState.value = null;
+    return;
+  }
   const pmView = props.editor.view.dom;
   pmView.style.pointerEvents = 'none';
 
   // Add global listeners
-  document.addEventListener('mousemove', onDocumentMouseMove);
-  document.addEventListener('mouseup', onDocumentMouseUp);
+  try {
+    document.addEventListener('mousemove', onDocumentMouseMove);
+    document.addEventListener('mouseup', onDocumentMouseUp);
 
-  emit('resize-start', {
-    columnIndex: boundary.index,
-    isRightEdge,
-    initialWidths: dragState.value.initialWidths,
-  });
+    emit('resize-start', {
+      columnIndex: boundary.index,
+      isRightEdge,
+      initialWidths: dragState.value.initialWidths,
+    });
+  } catch (error) {
+    document.removeEventListener('mousemove', onDocumentMouseMove);
+    document.removeEventListener('mouseup', onDocumentMouseUp);
+    pmView.style.pointerEvents = 'auto';
+    dragState.value = null;
+    emit('resize-error', { error: error instanceof Error ? error.message : String(error) });
+  }
 }
 
 /**
@@ -457,7 +586,7 @@ function throttle(func, limit) {
 
 // Create throttled mouse move handler with cancellation
 const mouseMoveThrottle = throttle((event) => {
-  if (!dragState.value) return;
+  if (isUnmounted || !dragState.value) return;
 
   // Calculate raw delta
   const delta = event.clientX - dragState.value.initialX;
@@ -498,7 +627,7 @@ const mouseMoveThrottle = throttle((event) => {
     columnIndex: dragState.value.columnIndex,
     delta: constrainedDelta,
   });
-}, 16);
+}, THROTTLE_INTERVAL_MS);
 
 /** Handle mouse move during drag (throttled to 16ms for 60fps) */
 const onDocumentMouseMove = mouseMoveThrottle.throttled;
@@ -528,17 +657,15 @@ function onDocumentMouseUp(event) {
   document.removeEventListener('mousemove', onDocumentMouseMove);
   document.removeEventListener('mouseup', onDocumentMouseUp);
 
-  if (props.editor?.view) {
+  if (props.editor?.view?.dom) {
     const pmView = props.editor.view.dom;
-    if (pmView && pmView.style) {
-      pmView.style.pointerEvents = 'auto';
-    }
+    pmView.style.pointerEvents = 'auto';
   }
 
   // Only dispatch transaction if:
   // 1. Not a forced cleanup
-  // 2. Delta is significant (> 1px)
-  if (!forcedCleanup.value && Math.abs(finalDelta) > 1) {
+  // 2. Delta is significant (> MIN_RESIZE_DELTA_PX)
+  if (!forcedCleanup.value && Math.abs(finalDelta) > MIN_RESIZE_DELTA_PX) {
     dispatchResizeTransaction(columnIndex, newWidths);
 
     emit('resize-end', {
@@ -647,7 +774,15 @@ function findTablePosition(state, tableElement) {
     return null;
   }
 
-  const pmStart = parseInt(pmElement.getAttribute('data-pm-start'), 10);
+  const pmStartAttr = pmElement.getAttribute('data-pm-start');
+  if (!pmStartAttr) {
+    return null;
+  }
+
+  const pmStart = parseInt(pmStartAttr, 10);
+  if (!Number.isFinite(pmStart)) {
+    return null;
+  }
 
   // Find the table node that contains this position
   let tablePos = null;
@@ -732,6 +867,12 @@ watch(
   () => props.tableElement,
   () => {
     parseTableMetadata();
+    updateOverlayRect();
+    if (props.visible && props.tableElement) {
+      startOverlayTracking();
+    } else if (!props.tableElement) {
+      stopOverlayTracking();
+    }
   },
   { immediate: true },
 );
@@ -744,7 +885,10 @@ watch(
   (visible) => {
     if (visible) {
       parseTableMetadata();
+      updateOverlayRect();
+      startOverlayTracking();
     } else {
+      stopOverlayTracking();
       // Clean up drag state if overlay is hidden
       if (dragState.value) {
         forcedCleanup.value = true;
@@ -755,12 +899,22 @@ watch(
   },
 );
 
+onMounted(() => {
+  window.addEventListener('scroll', updateOverlayRect, true);
+  window.addEventListener('resize', updateOverlayRect);
+  updateOverlayRect();
+});
+
 /**
  * Clean up on unmount
  */
 onBeforeUnmount(() => {
+  // Set unmounted flag to prevent post-unmount throttled calls
+  isUnmounted = true;
+
   // Cancel any pending throttled calls to prevent memory leaks
   mouseMoveThrottle.cancel();
+  stopOverlayTracking();
 
   if (dragState.value) {
     document.removeEventListener('mousemove', onDocumentMouseMove);
@@ -771,6 +925,9 @@ onBeforeUnmount(() => {
       props.editor.view.dom.style.pointerEvents = 'auto';
     }
   }
+
+  window.removeEventListener('scroll', updateOverlayRect, true);
+  window.removeEventListener('resize', updateOverlayRect);
 });
 </script>
 
