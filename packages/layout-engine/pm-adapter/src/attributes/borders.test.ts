@@ -574,11 +574,12 @@ describe('normalizeParagraphBorders', () => {
 describe('normalizeBorderSide', () => {
   describe('valid border sides', () => {
     it('should normalize complete border side', () => {
-      const input = { val: 'single', size: 2, color: '#FF0000', space: 5 };
+      // size is in OOXML eighths-of-a-point: 16 eighths = 2pt = 2.67px
+      const input = { val: 'single', size: 16, color: '#FF0000', space: 5 };
       const result = normalizeBorderSide(input);
       expect(result).toEqual({
         style: 'solid',
-        width: 2,
+        width: (16 / 8) * (96 / 72), // 2pt in pixels
         color: '#FF0000',
         space: 5,
       });
@@ -591,9 +592,10 @@ describe('normalizeBorderSide', () => {
     });
 
     it('should normalize border with only width', () => {
-      const input = { size: 3 };
+      // size is in OOXML eighths-of-a-point: 24 eighths = 3pt = 4px
+      const input = { size: 24 };
       const result = normalizeBorderSide(input);
-      expect(result).toEqual({ width: 3 });
+      expect(result).toEqual({ width: (24 / 8) * (96 / 72) }); // 3pt in pixels
     });
 
     it('should clamp negative width to zero', () => {
