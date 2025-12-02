@@ -7,8 +7,10 @@ import { SuperDoc } from 'superdoc';
 import { CustomMark } from './custom-mark.js';
 import process from 'process';
 
-const props = defineProps(['filename']);
-console.log(props.filename);
+const props = defineProps({
+  filename: String,
+  onReady: Function,
+});
 
 window.fileData = null;
 const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
@@ -100,6 +102,9 @@ const onReady = () => {
   });
   if (window.superdocReady) {
     window.superdocReady();
+  }
+  if (props.onReady) {
+    props.onReady();
   }
 };
 
