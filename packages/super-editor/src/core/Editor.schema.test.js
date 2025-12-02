@@ -53,11 +53,14 @@ describe('Editor schema utilities', () => {
       { type: 'paragraph', content: [{ type: 'text', text: 'hello' }] },
       { type: 'paragraph', content: [{ type: 'text', text: 'world' }] },
     ];
-    const fragmentNode = editor.validateJSON(fragment);
-    expect(fragmentNode.type.name).toBe(editor.schema.topNodeType.name);
+    const fragmentNodes = editor.validateJSON(fragment);
+    expect(Array.isArray(fragmentNodes)).toBe(true);
+    expect(fragmentNodes).toHaveLength(2);
+    expect(fragmentNodes[0].type.name).toBe('paragraph');
+    expect(fragmentNodes[1].type.name).toBe('paragraph');
 
     const singleNode = { type: 'paragraph', content: [{ type: 'text', text: 'single' }] };
-    const singleNodeDoc = editor.validateJSON(singleNode);
-    expect(singleNodeDoc.type.name).toBe(editor.schema.topNodeType.name);
+    const singleParagraph = editor.validateJSON(singleNode);
+    expect(singleParagraph.type.name).toBe('paragraph');
   });
 });
