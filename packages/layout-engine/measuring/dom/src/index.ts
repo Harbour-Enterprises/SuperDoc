@@ -550,8 +550,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         lines.push(completedLine);
         currentLine = null;
       } else {
-        const fallbackSize =
-          (block.runs.find((r) => (r as TextRun).fontSize)?.['fontSize'] as number | undefined) ?? 12;
+        const textRunWithSize = block.runs.find(
+          (r): r is TextRun =>
+            r.kind !== 'tab' && r.kind !== 'lineBreak' && r.kind !== 'break' && !('src' in r) && 'fontSize' in r,
+        );
+        const fallbackSize = textRunWithSize?.fontSize ?? 12;
         const metrics = calculateTypographyMetrics(fallbackSize, spacing);
         const emptyLine: Line = {
           fromRun: runIndex,
@@ -568,7 +571,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
-      availableWidth = contentWidth;
       continue;
     }
 
@@ -748,6 +750,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         });
       }
 
+      continue;
+    }
+
+    // At this point, we've filtered out break, lineBreak, tab, and image runs.
+    // The remaining run must be TextRun (which has text, fontSize, etc.)
+    if (!('text' in run) || !('fontSize' in run)) {
+      // Safety check - skip if this isn't a TextRun
       continue;
     }
 

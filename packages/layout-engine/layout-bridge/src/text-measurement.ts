@@ -53,8 +53,8 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
  * @returns CSS font string (e.g., "italic bold 16px Arial")
  */
 export function getRunFontString(run: Run): string {
-  // TabRun, ImageRun, and LineBreakRun don't have styling properties, use defaults
-  if (run.kind === 'tab' || run.kind === 'lineBreak' || 'src' in run) {
+  // TabRun, ImageRun, LineBreakRun, and BreakRun don't have styling properties, use defaults
+  if (run.kind === 'tab' || run.kind === 'lineBreak' || run.kind === 'break' || 'src' in run) {
     return 'normal normal 16px Arial';
   }
 
@@ -94,6 +94,12 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
 
     // LineBreakRun handling - line breaks are atomic units, no slicing needed
     if (run.kind === 'lineBreak') {
+      result.push(run);
+      continue;
+    }
+
+    // BreakRun handling - breaks are atomic units, no slicing needed
+    if (run.kind === 'break') {
       result.push(run);
       continue;
     }
@@ -152,7 +158,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if ('src' in run || run.kind === 'lineBreak') return sum;
+        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -176,7 +182,7 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       continue;
     }
 
-    const text = 'src' in run || run.kind === 'lineBreak' ? '' : (run.text ?? '');
+    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
     const runLength = text.length;
 
     // If target character is within this run
@@ -265,8 +271,8 @@ function measureCharacterXSegmentBased(
         return segmentBaseX + (offsetInSegment > 0 ? (segment.width ?? 0) : 0);
       }
 
-      // Handle ImageRun and LineBreakRun - images are atomic, use segment width
-      if ('src' in run || run.kind === 'lineBreak') {
+      // Handle ImageRun, LineBreakRun, and BreakRun - these are atomic, use segment width
+      if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') {
         return segmentBaseX + (offsetInSegment >= segmentChars ? (segment.width ?? 0) : 0);
       }
 
@@ -314,7 +320,7 @@ export function findCharacterAtX(
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if ('src' in run || run.kind === 'lineBreak') return sum;
+        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -353,7 +359,7 @@ export function findCharacterAtX(
       continue;
     }
 
-    const text = 'src' in run || run.kind === 'lineBreak' ? '' : (run.text ?? '');
+    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
     const runLength = text.length;
 
     if (runLength === 0) continue;

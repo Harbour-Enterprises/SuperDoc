@@ -2564,6 +2564,13 @@ export class DomPainter {
     return run.kind === 'lineBreak';
   }
 
+  /**
+   * Type guard to check if a run is a break run.
+   */
+  private isBreakRun(run: Run): run is import('@superdoc/contracts').BreakRun {
+    return run.kind === 'break';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
@@ -2581,8 +2588,13 @@ export class DomPainter {
       return null;
     }
 
+    // Handle BreakRun - similar to LineBreakRun, breaks are handled by the measurer
+    if (this.isBreakRun(run)) {
+      return null;
+    }
+
     // Handle TextRun
-    if (!run.text || !this.doc) {
+    if (!('text' in run) || !run.text || !this.doc) {
       return null;
     }
 
@@ -2943,8 +2955,18 @@ export class DomPainter {
           continue;
         }
 
+        // Handle BreakRun - breaks are handled by line creation, skip here
+        if (this.isBreakRun(baseRun)) {
+          continue;
+        }
+
         const runSegments = segmentsByRun.get(runIndex);
         if (!runSegments || runSegments.length === 0) {
+          continue;
+        }
+
+        // At this point, baseRun must be TextRun (has .text property)
+        if (!('text' in baseRun)) {
           continue;
         }
 
@@ -3553,8 +3575,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 };
 
 const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
-    // Tab, image, and lineBreak runs don't have text styling properties
+  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break') {
+    // Tab, image, lineBreak, and break runs don't have text styling properties
     return;
   }
 
@@ -3751,6 +3773,23 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
       continue;
     }
 
+    // BreakRun handling - similar to LineBreakRun
+    if (run.kind === 'break') {
+      result.push(run);
+      continue;
+    }
+
+    // TabRun handling - tabs don't need slicing
+    if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3766,22 +3805,16 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
 
       const pmSliceStart = runPmStart != null ? runPmStart + start : undefined;
       const pmSliceEnd = runPmStart != null ? runPmStart + end : (fallbackPmEnd ?? undefined);
-      if (run.kind === 'tab') {
-        // Only include the tab run if the slice contains the tab character
-        if (slice.includes('\t')) {
-          result.push(run);
-        }
-      } else {
-        // TextRun: return a sliced TextRun preserving styles
-        const sliced: TextRun = {
-          ...(run as TextRun),
-          text: slice,
-          pmStart: pmSliceStart,
-          pmEnd: pmSliceEnd,
-          comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
-        };
-        result.push(sliced);
-      }
+
+      // TextRun: return a sliced TextRun preserving styles
+      const sliced: TextRun = {
+        ...(run as TextRun),
+        text: slice,
+        pmStart: pmSliceStart,
+        pmEnd: pmSliceEnd,
+        comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
+      };
+      result.push(sliced);
     } else {
       result.push(run);
     }
@@ -3842,6 +3875,53 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
       continue;
     }
 
+    // BreakRun handling - similar to image and lineBreak runs, treated as atomic units
+    if (run.kind === 'break') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // TabRun handling - tabs are atomic units
+    if (run.kind === 'tab') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
+      continue;
+    }
+
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
@@ -3893,6 +3973,14 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   }
   if (run.kind === 'lineBreak') {
     // Line break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (run.kind === 'break') {
+    // Break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (!('text' in run)) {
+    // Safety check - if run doesn't have text property, return empty string
     return '';
   }
   if (!runToken) {
