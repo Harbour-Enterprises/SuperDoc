@@ -87,7 +87,6 @@ describe('TrackChangesImporter', () => {
     ];
 
     const result = handleTrackChangeNode({ docx: {}, nodes, nodeListHandler: defaultNodeListHandler() });
-    console.log('result:', result.nodes[0].content[0]);
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
     expect(result.nodes[0].content[0].marks[0].type).toBe(TrackDeleteMarkName);
