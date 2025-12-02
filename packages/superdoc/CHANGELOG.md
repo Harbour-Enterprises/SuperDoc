@@ -1,3 +1,9 @@
+## [0.34.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.3...v0.34.4) (2025-12-02)
+
+### Bug Fixes
+
+- include tracked change date fix ([#1384](https://github.com/Harbour-Enterprises/SuperDoc/issues/1384)) ([10dbd16](https://github.com/Harbour-Enterprises/SuperDoc/commit/10dbd16e071522ed3f5a6c8be7f2d36d605e9bba))
+
 ## [0.34.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.2...v0.34.3) (2025-12-02)
 
 ### Bug Fixes
