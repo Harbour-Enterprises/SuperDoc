@@ -152,11 +152,31 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     content.style.left = `${x + paddingLeft}px`;
     const availableHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
     content.style.top = `${y + paddingTop}px`;
-    content.style.width = `${Math.max(0, cellMeasure.width - paddingLeft - paddingRight)}px`;
+    // Give the content box a small horizontal buffer so minor measure/paint
+    // differences don't clip the last glyph on a line.
+    const contentWidth = Math.max(0, cellMeasure.width - paddingLeft - paddingRight);
+    content.style.width = `${contentWidth + 1}px`;
     content.style.height = `${availableHeight}px`;
     content.style.display = 'flex';
     content.style.flexDirection = 'column';
-    content.style.overflow = 'hidden';
+    /**
+     * Use 'visible' overflow instead of 'hidden' to prevent text clipping.
+     *
+     * Why 'visible' is used:
+     * - Canvas text measurement and DOM rendering can have minor sub-pixel differences
+     * - The contentWidth includes a +1px buffer (see line above), but this may not always
+     *   be sufficient for glyphs with overhang (italic characters, certain fonts)
+     * - Using 'hidden' would clip the last character on a line if it extends beyond the
+     *   measured width due to actualBoundingBox differences
+     * - Table cells are absolutely positioned, so overflow doesn't affect layout of
+     *   adjacent cells
+     *
+     * Trade-off:
+     * - Pro: Prevents text truncation and ensures full glyph rendering
+     * - Con: Text can technically extend beyond cell boundaries in edge cases
+     * - Decision: Prioritize text visibility over strict boundary enforcement
+     */
+    content.style.overflow = 'visible';
     if (cell?.attrs?.verticalAlign === 'center') {
       content.style.justifyContent = 'center';
     } else if (cell?.attrs?.verticalAlign === 'bottom') {
