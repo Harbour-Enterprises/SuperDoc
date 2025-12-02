@@ -237,6 +237,10 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
         ? { rowHeight }
         : undefined;
 
+  // Note: cantSplit is stored within tableRowProperties.cantSplit (not as a separate attr)
+  // The PM table-row extension has both cantSplit as a top-level attr AND within tableRowProperties
+  // For layout engine, we only need to read from tableRowProperties.cantSplit
+
   return {
     id: context.nextBlockId(`row-${rowIndex}`),
     cells,
@@ -482,6 +486,12 @@ export function tableNodeToBlock(
   const tableLayout = node.attrs?.tableLayout;
   if (tableLayout) {
     tableAttrs.tableLayout = tableLayout;
+  }
+
+  // Preserve tableProperties for floating table detection and other OOXML metadata
+  const tableProperties = node.attrs?.tableProperties;
+  if (tableProperties && typeof tableProperties === 'object') {
+    tableAttrs.tableProperties = tableProperties as Record<string, unknown>;
   }
 
   let columnWidths: number[] | undefined = undefined;

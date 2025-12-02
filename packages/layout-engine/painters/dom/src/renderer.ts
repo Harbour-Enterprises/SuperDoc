@@ -3340,7 +3340,17 @@ const fragmentKey = (fragment: Fragment): string => {
   if (fragment.kind === 'drawing') {
     return `drawing:${fragment.blockId}:${fragment.x}:${fragment.y}`;
   }
-  return `${fragment.kind}:${fragment.blockId}`;
+  if (fragment.kind === 'table') {
+    // Include row range and partial row info to uniquely identify table fragments
+    // This is critical for mid-row splitting where multiple fragments can exist for the same table
+    const partialKey = fragment.partialRow
+      ? `:${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}`
+      : '';
+    return `table:${fragment.blockId}:${fragment.fromRow}:${fragment.toRow}${partialKey}`;
+  }
+  // Exhaustive check - all fragment kinds should be handled above
+  const _exhaustiveCheck: never = fragment;
+  return _exhaustiveCheck;
 };
 
 const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
@@ -3381,6 +3391,23 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
       fragment.geometry.rotation ?? 0,
       fragment.scale ?? 1,
       fragment.zIndex ?? '',
+    ].join('|');
+  }
+  if (fragment.kind === 'table') {
+    // Include all properties that affect table fragment rendering
+    const partialSig = fragment.partialRow
+      ? `${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}-${fragment.partialRow.partialHeight}`
+      : '';
+    return [
+      base,
+      fragment.fromRow,
+      fragment.toRow,
+      fragment.width,
+      fragment.height,
+      fragment.continuesFromPrev ? 1 : 0,
+      fragment.continuesOnNext ? 1 : 0,
+      fragment.repeatHeaderCount ?? 0,
+      partialSig,
     ].join('|');
   }
   return base;
