@@ -118,3 +118,401 @@ describe('StructuredContentTableCommands', () => {
     }
   });
 });
+
+describe('updateStructuredContentById', () => {
+  let editor;
+  let schema;
+  const INLINE_ID = 'structured-inline-1';
+
+  beforeEach(() => {
+    // Use default mode (docx) to ensure structured content extensions are available
+    ({ editor } = initTestEditor());
+    ({ schema } = editor);
+
+    // Create a structured content inline with styled text (bold)
+    const boldMark = schema.marks.bold || schema.marks.strong;
+    const styledText = schema.text('Styled Content', boldMark ? [boldMark.create()] : []);
+    const inlineNode = schema.nodes.structuredContent.create({ id: INLINE_ID }, styledText);
+    const paragraph = schema.nodes.paragraph.create(null, [inlineNode]);
+    const doc = schema.nodes.doc.create(null, [paragraph]);
+
+    const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
+    editor.view.updateState(nextState);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    editor?.destroy();
+    editor = null;
+    schema = null;
+  });
+
+  describe('keepTextNodeStyles option', () => {
+    it('preserves marks from the first text node when keepTextNodeStyles is true', () => {
+      const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
+        text: 'New Content',
+        keepTextNodeStyles: true,
+      });
+
+      expect(didUpdate).toBe(true);
+
+      // Find the updated structured content
+      let updatedNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === INLINE_ID) {
+          updatedNode = node;
+          return false;
+        }
+      });
+
+      expect(updatedNode).not.toBeNull();
+      expect(updatedNode.textContent).toBe('New Content');
+
+      // Check that the bold mark was preserved
+      const firstTextNode = updatedNode.firstChild;
+      expect(firstTextNode.type.name).toBe('text');
+      const boldMark = schema.marks.bold || schema.marks.strong;
+      if (boldMark) {
+        const hasBoldMark = firstTextNode.marks.some((mark) => mark.type === boldMark);
+        expect(hasBoldMark).toBe(true);
+      }
+    });
+
+    it('does not preserve marks when keepTextNodeStyles is false or not provided', () => {
+      const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
+        text: 'New Content',
+        keepTextNodeStyles: false,
+      });
+
+      expect(didUpdate).toBe(true);
+
+      // Find the updated structured content
+      let updatedNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === INLINE_ID) {
+          updatedNode = node;
+          return false;
+        }
+      });
+
+      expect(updatedNode).not.toBeNull();
+      expect(updatedNode.textContent).toBe('New Content');
+
+      // Check that no marks are present
+      const firstTextNode = updatedNode.firstChild;
+      expect(firstTextNode.type.name).toBe('text');
+      expect(firstTextNode.marks.length).toBe(0);
+    });
+
+    it('handles structured content with no text nodes gracefully', () => {
+      // Create a structured content with no text nodes (empty content)
+      const emptyInlineId = 'empty-inline';
+      const emptyInline = schema.nodes.structuredContent.create({ id: emptyInlineId });
+      const paragraph = schema.nodes.paragraph.create(null, [emptyInline]);
+      const doc = schema.nodes.doc.create(null, [paragraph]);
+
+      const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
+      editor.view.updateState(nextState);
+
+      const didUpdate = editor.commands.updateStructuredContentById(emptyInlineId, {
+        text: 'New Content',
+        keepTextNodeStyles: true,
+      });
+
+      expect(didUpdate).toBe(true);
+
+      // Find the updated structured content
+      let updatedNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === emptyInlineId) {
+          updatedNode = node;
+          return false;
+        }
+      });
+
+      expect(updatedNode).not.toBeNull();
+      expect(updatedNode.textContent).toBe('New Content');
+
+      // Should have no marks since there was no text node to copy from
+      const firstTextNode = updatedNode.firstChild;
+      expect(firstTextNode.type.name).toBe('text');
+      expect(firstTextNode.marks.length).toBe(0);
+    });
+  });
+
+  describe('validation before transaction', () => {
+    it('validates the updated node before applying the transaction', () => {
+      // Spy on console.error to verify validation error is logged
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Try to update with invalid JSON that will fail validation
+      // Creating an invalid node structure that violates schema rules
+      const invalidJSON = {
+        type: 'paragraph', // structuredContent inline should contain inline content, not a paragraph
+        content: [{ type: 'text', text: 'Invalid' }],
+      };
+
+      const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
+        json: invalidJSON,
+      });
+
+      // The command should return false due to validation failure
+      expect(didUpdate).toBe(false);
+
+      // Verify that console.error was called with validation error
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls[0][0]).toBe('Invalid content.');
+
+      // Verify the original node was NOT modified
+      let originalNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === INLINE_ID) {
+          originalNode = node;
+          return false;
+        }
+      });
+
+      expect(originalNode).not.toBeNull();
+      expect(originalNode.textContent).toBe('Styled Content'); // Original text unchanged
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('allows valid updates to proceed through validation', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Update with valid content
+      const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
+        text: 'Valid Update',
+      });
+
+      // Should succeed
+      expect(didUpdate).toBe(true);
+
+      // Verify no validation errors were logged
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+      // Verify the node was updated
+      let updatedNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === INLINE_ID) {
+          updatedNode = node;
+          return false;
+        }
+      });
+
+      expect(updatedNode).not.toBeNull();
+      expect(updatedNode.textContent).toBe('Valid Update');
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('prevents transaction when validation throws an error', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Mock validateJSON to throw an error during validation
+      const originalValidateJSON = editor.validateJSON;
+      editor.validateJSON = vi.fn().mockImplementation(() => {
+        return {
+          check: () => {
+            throw new Error('Validation failed: invalid content structure');
+          },
+        };
+      });
+
+      const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
+        text: 'This will fail validation',
+      });
+
+      // Should fail validation and return false
+      expect(didUpdate).toBe(false);
+
+      // Verify validation error was logged
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls[0][0]).toBe('Invalid content.');
+
+      // Verify the original node was NOT modified
+      let originalNode = null;
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent' && node.attrs.id === INLINE_ID) {
+          originalNode = node;
+          return false;
+        }
+      });
+
+      expect(originalNode).not.toBeNull();
+      expect(originalNode.textContent).toBe('Styled Content'); // Original text unchanged
+
+      // Restore mocks
+      editor.validateJSON = originalValidateJSON;
+      consoleErrorSpy.mockRestore();
+    });
+  });
+});
+
+describe('updateStructuredContentByGroup', () => {
+  let editor;
+  let schema;
+  const GROUP_NAME = 'test-group';
+
+  beforeEach(() => {
+    // Use default mode (docx) to ensure structured content extensions are available
+    ({ editor } = initTestEditor());
+    ({ schema } = editor);
+
+    // Create multiple structured content nodes with the same group
+    const boldMark = schema.marks.bold || schema.marks.strong;
+    const styledText1 = schema.text('Styled Content 1', boldMark ? [boldMark.create()] : []);
+    const styledText2 = schema.text('Styled Content 2', boldMark ? [boldMark.create()] : []);
+
+    // Create tag object for group
+    const tagObject = { group: GROUP_NAME };
+    const tagString = JSON.stringify(tagObject);
+
+    const inlineNode1 = schema.nodes.structuredContent.create({ id: 'inline-1', tag: tagString }, styledText1);
+    const inlineNode2 = schema.nodes.structuredContent.create({ id: 'inline-2', tag: tagString }, styledText2);
+
+    const paragraph = schema.nodes.paragraph.create(null, [inlineNode1, schema.text(' '), inlineNode2]);
+    const doc = schema.nodes.doc.create(null, [paragraph]);
+
+    const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
+    editor.view.updateState(nextState);
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    editor?.destroy();
+    editor = null;
+    schema = null;
+  });
+
+  describe('keepTextNodeStyles option', () => {
+    it('preserves marks from the first text node for all nodes in group when keepTextNodeStyles is true', () => {
+      const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
+        text: 'Updated Content',
+        keepTextNodeStyles: true,
+      });
+
+      expect(didUpdate).toBe(true);
+
+      // Find all updated structured content nodes in the group
+      const updatedNodes = [];
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent') {
+          updatedNodes.push(node);
+        }
+      });
+
+      expect(updatedNodes.length).toBe(2);
+
+      // Check that both nodes have the updated text with preserved marks
+      updatedNodes.forEach((node) => {
+        expect(node.textContent).toBe('Updated Content');
+
+        const firstTextNode = node.firstChild;
+        expect(firstTextNode.type.name).toBe('text');
+
+        const boldMark = schema.marks.bold || schema.marks.strong;
+        if (boldMark) {
+          const hasBoldMark = firstTextNode.marks.some((mark) => mark.type === boldMark);
+          expect(hasBoldMark).toBe(true);
+        }
+      });
+    });
+
+    it('does not preserve marks when keepTextNodeStyles is false or not provided', () => {
+      const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
+        text: 'Updated Content',
+        keepTextNodeStyles: false,
+      });
+
+      expect(didUpdate).toBe(true);
+
+      // Find all updated structured content nodes in the group
+      const updatedNodes = [];
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent') {
+          updatedNodes.push(node);
+        }
+      });
+
+      expect(updatedNodes.length).toBe(2);
+
+      // Check that both nodes have the updated text without marks
+      updatedNodes.forEach((node) => {
+        expect(node.textContent).toBe('Updated Content');
+
+        const firstTextNode = node.firstChild;
+        expect(firstTextNode.type.name).toBe('text');
+        expect(firstTextNode.marks.length).toBe(0);
+      });
+    });
+  });
+
+  describe('validation before transaction', () => {
+    it('validates each updated node before applying the transaction', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Try to update with invalid JSON that will fail validation
+      const invalidJSON = {
+        type: 'paragraph',
+        content: [{ type: 'text', text: 'Invalid' }],
+      };
+
+      const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
+        json: invalidJSON,
+      });
+
+      // The command should return true (it continues processing) but nodes won't be updated
+      expect(didUpdate).toBe(true);
+
+      // Verify that console.error was called with validation error
+      expect(consoleErrorSpy).toHaveBeenCalled();
+      expect(consoleErrorSpy.mock.calls[0][0]).toBe('Invalid content.');
+
+      // Verify the original nodes were NOT modified
+      const originalNodes = [];
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent') {
+          originalNodes.push(node);
+        }
+      });
+
+      expect(originalNodes.length).toBe(2);
+      expect(originalNodes[0].textContent).toBe('Styled Content 1'); // Original text unchanged
+      expect(originalNodes[1].textContent).toBe('Styled Content 2'); // Original text unchanged
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it('allows valid updates to proceed through validation for all nodes in group', () => {
+      const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      // Update with valid content
+      const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
+        text: 'Valid Update',
+      });
+
+      // Should succeed
+      expect(didUpdate).toBe(true);
+
+      // Verify no validation errors were logged
+      expect(consoleErrorSpy).not.toHaveBeenCalled();
+
+      // Verify all nodes were updated
+      const updatedNodes = [];
+      editor.state.doc.descendants((node) => {
+        if (node.type.name === 'structuredContent') {
+          updatedNodes.push(node);
+        }
+      });
+
+      expect(updatedNodes.length).toBe(2);
+      updatedNodes.forEach((node) => {
+        expect(node.textContent).toBe('Valid Update');
+      });
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+});
