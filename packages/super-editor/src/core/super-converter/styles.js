@@ -386,6 +386,7 @@ export function getStyleProperties(params, styleId, translator) {
  */
 export function getNumberingProperties(params, ilvl, numId, translator, tries = 0) {
   const { numbering: allDefinitions } = params;
+  if (!allDefinitions) return {};
   const { definitions, abstracts } = allDefinitions;
 
   const propertiesChain = [];
