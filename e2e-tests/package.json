@@ -29,6 +29,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "@fontsource/inter": "^5.2.8",
     "@linear/sdk": "^53.0.0",
     "@playwright/test": "^1.56.0",
     "jszip": "^3.10.1",

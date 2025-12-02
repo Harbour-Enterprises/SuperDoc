@@ -2945,7 +2945,15 @@ export class DomPainter {
             if (styleId) {
               elem.setAttribute('styleid', styleId);
             }
+            // Position image using explicit segment X when available; fallback to cumulative flow
+            const runSegments = segmentsByRun.get(runIndex);
+            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segWidth =
+              (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : elem.offsetWidth) ?? 0;
+            elem.style.position = 'absolute';
+            elem.style.left = `${segX}px`;
             el.appendChild(elem);
+            cumulativeX = segX + segWidth;
           }
           continue;
         }
