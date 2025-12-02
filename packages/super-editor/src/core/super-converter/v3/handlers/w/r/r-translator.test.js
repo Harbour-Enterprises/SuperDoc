@@ -127,7 +127,7 @@ describe('w:r r-translator (node)', () => {
     expect(result.content[2].type).toBe('text');
   });
 
-  it('returns a run node containing a comment range start and end', () => {
+  it('does not wrap a comment range start and end in a run node', () => {
     const params = {
       node: {
         type: 'run',
