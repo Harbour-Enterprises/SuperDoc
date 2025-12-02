@@ -1698,7 +1698,7 @@ describe('paragraph converters', () => {
       it('should handle hardBreak node (page break)', () => {
         const hardBreakNode: PMNode = {
           type: 'hardBreak',
-          attrs: { customAttr: 'value' },
+          attrs: { pageBreakType: 'page', customAttr: 'value' },
         };
         const para: PMNode = {
           type: 'paragraph',
@@ -1709,7 +1709,7 @@ describe('paragraph converters', () => {
 
         expect(blocks).toHaveLength(3);
         expect(blocks[1].kind).toBe('pageBreak');
-        expect(blocks[1].attrs).toEqual({ customAttr: 'value' });
+        expect(blocks[1].attrs).toEqual({ pageBreakType: 'page', customAttr: 'value' });
       });
 
       it('should handle lineBreak with column break type', () => {
@@ -1835,7 +1835,7 @@ describe('paragraph converters', () => {
       });
 
       it('should preserve non-paragraph blocks during tracked changes processing', () => {
-        const hardBreakNode: PMNode = { type: 'hardBreak', attrs: {} };
+        const hardBreakNode: PMNode = { type: 'hardBreak', attrs: { pageBreakType: 'page' } };
         const para: PMNode = {
           type: 'paragraph',
           content: [hardBreakNode],
@@ -1901,9 +1901,11 @@ describe('paragraph converters', () => {
 
     describe('Edge cases', () => {
       it('should create empty paragraph when all content is block nodes', () => {
+        // hardBreak without pageBreakType defaults to line break (inline)
+        // so we use pageBreakType: 'page' to make it a block node
         const para: PMNode = {
           type: 'paragraph',
-          content: [{ type: 'hardBreak', attrs: {} }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         };
 
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
@@ -1919,7 +1921,7 @@ describe('paragraph converters', () => {
           type: 'paragraph',
           content: [
             { type: 'text', text: 'Before' },
-            { type: 'hardBreak', attrs: {} },
+            { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
             { type: 'text', text: 'After' },
           ],
         };
@@ -1936,7 +1938,7 @@ describe('paragraph converters', () => {
           type: 'paragraph',
           content: [
             { type: 'text', text: 'Part1' },
-            { type: 'hardBreak', attrs: {} },
+            { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
             { type: 'text', text: 'Part2' },
           ],
         };

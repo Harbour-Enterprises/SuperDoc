@@ -276,12 +276,13 @@ describe('spacing/indent and rendering polish', () => {
 
   it('ensures paragraph borders are preserved', () => {
     // Test with mock paragraph
+    // size values are in OOXML eighths-of-a-point: 32 eighths = 4pt
     const mockPara = {
       type: { name: 'paragraph' },
       attrs: {
         borders: {
-          top: { val: 'single', size: 4, color: 'FF0000' },
-          bottom: { val: 'single', size: 4, color: '0000FF' },
+          top: { val: 'single', size: 32, color: 'FF0000' },
+          bottom: { val: 'single', size: 32, color: '0000FF' },
         },
       },
     };
@@ -293,8 +294,8 @@ describe('spacing/indent and rendering polish', () => {
 
     const adapterAttrs = computeParagraphAttrs(mockPara, styleContext);
     expect(adapterAttrs?.borders).toEqual({
-      top: { style: 'solid', width: 4, color: '#FF0000' },
-      bottom: { style: 'solid', width: 4, color: '#0000FF' },
+      top: { style: 'solid', width: (32 / 8) * (96 / 72), color: '#FF0000' },
+      bottom: { style: 'solid', width: (32 / 8) * (96 / 72), color: '#0000FF' },
     });
   });
 

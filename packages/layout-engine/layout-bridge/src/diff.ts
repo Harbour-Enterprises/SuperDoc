@@ -136,8 +136,8 @@ const paragraphBlocksEqual = (a: FlowBlock & { kind: 'paragraph' }, b: FlowBlock
     const runA = a.runs[i];
     const runB = b.runs[i];
     if (
-      ('src' in runA || runA.kind === 'lineBreak' ? '' : runA.text) !==
-        ('src' in runB || runB.kind === 'lineBreak' ? '' : runB.text) ||
+      ('src' in runA || runA.kind === 'lineBreak' || runA.kind === 'break' ? '' : runA.text) !==
+        ('src' in runB || runB.kind === 'lineBreak' || runB.kind === 'break' ? '' : runB.text) ||
       ('bold' in runA ? runA.bold : false) !== ('bold' in runB ? runB.bold : false) ||
       ('italic' in runA ? runA.italic : false) !== ('italic' in runB ? runB.italic : false) ||
       ('color' in runA ? runA.color : undefined) !== ('color' in runB ? runB.color : undefined) ||

@@ -191,6 +191,59 @@ describe('DomPainter', () => {
     expect(fragment.textContent).toContain('world');
   });
 
+  it('applies paragraph alignment to line elements', () => {
+    const alignedBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'aligned-block',
+      runs: [{ text: 'Aligned', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'right' },
+    };
+
+    const alignedMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 7,
+          width: 60,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+    };
+
+    const alignedLayout: Layout = {
+      pageSize: { w: 200, h: 200 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'aligned-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 100,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [alignedBlock], measures: [alignedMeasure] });
+    painter.paint(alignedLayout, mount);
+
+    const line = mount.querySelector('.superdoc-line') as HTMLElement;
+    expect(line).toBeTruthy();
+    expect(line.style.textAlign).toBe('right');
+  });
+
   it('emits pm metadata attributes', () => {
     const painter = createDomPainter({ blocks: [block], measures: [measure] });
     painter.paint(layout, mount);

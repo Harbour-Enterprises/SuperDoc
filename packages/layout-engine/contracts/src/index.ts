@@ -262,7 +262,16 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun | LineBreakRun;
+export type BreakRun = {
+  kind: 'break';
+  /** Optional break type (e.g., 'line', 'page', 'column') */
+  breakType?: 'line' | 'page' | 'column' | string;
+  pmStart?: number;
+  pmEnd?: number;
+  sdt?: SdtMetadata;
+};
+
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
@@ -322,7 +331,7 @@ export type CellBorders = {
 export type TableCellAttrs = {
   borders?: CellBorders;
   padding?: BoxSpacing;
-  verticalAlign?: 'top' | 'middle' | 'bottom';
+  verticalAlign?: 'top' | 'middle' | 'center' | 'bottom';
   background?: string;
   tableCellProperties?: Record<string, unknown>;
 };
@@ -349,6 +358,10 @@ export type TableCell = {
 
 export type TableRowAttrs = {
   tableRowProperties?: Record<string, unknown>;
+  rowHeight?: {
+    value: number;
+    rule?: 'auto' | 'atLeast' | 'exact' | string;
+  };
 };
 
 export type TableRow = {
@@ -364,6 +377,10 @@ export type TableBlock = {
   attrs?: TableAttrs;
   /** Column widths in pixels from OOXML w:tblGrid. */
   columnWidths?: number[];
+  /** Anchor positioning for floating tables (from w:tblpPr). */
+  anchor?: TableAnchor;
+  /** Text wrapping for floating tables (from w:tblpPr distances). */
+  wrap?: TableWrap;
 };
 
 export type BoxSpacing = {
@@ -692,6 +709,45 @@ export type ImageWrap = {
   distRight?: number;
   polygon?: number[][];
   behindDoc?: boolean;
+};
+
+/**
+ * Positioning for anchored/floating tables (offsets in CSS px).
+ * Corresponds to OOXML w:tblpPr attributes.
+ */
+export type TableAnchor = {
+  isAnchored?: boolean;
+  /** Horizontal anchor reference: column, page, or margin. Maps from w:horzAnchor. */
+  hRelativeFrom?: 'column' | 'page' | 'margin';
+  /** Vertical anchor reference: paragraph (text), page, or margin. Maps from w:vertAnchor. */
+  vRelativeFrom?: 'paragraph' | 'page' | 'margin';
+  /** Horizontal alignment relative to anchor. Maps from w:tblpXSpec. */
+  alignH?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  /** Vertical alignment relative to anchor. Maps from w:tblpYSpec. */
+  alignV?: 'top' | 'center' | 'bottom' | 'inside' | 'outside' | 'inline';
+  /** Absolute horizontal offset in px. Maps from w:tblpX (twips converted to px). */
+  offsetH?: number;
+  /** Absolute vertical offset in px. Maps from w:tblpY (twips converted to px). */
+  offsetV?: number;
+};
+
+/**
+ * Text wrapping for floating tables (distances in px).
+ * Tables only support Square or None wrapping (not Tight/Through like images).
+ */
+export type TableWrap = {
+  /** Wrap type: Square for text wrapping, None for absolute positioning. */
+  type: 'Square' | 'None';
+  /** Which side(s) text flows on. */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Distance from text above table (px). Maps from w:topFromText. */
+  distTop?: number;
+  /** Distance from text below table (px). Maps from w:bottomFromText. */
+  distBottom?: number;
+  /** Distance from text to left of table (px). Maps from w:leftFromText. */
+  distLeft?: number;
+  /** Distance from text to right of table (px). Maps from w:rightFromText. */
+  distRight?: number;
 };
 
 /** Exclusion zone for text wrapping around anchored images. */

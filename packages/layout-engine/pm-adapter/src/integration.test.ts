@@ -554,7 +554,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -586,7 +586,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -594,7 +594,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -630,7 +630,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -678,7 +678,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -711,7 +711,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
