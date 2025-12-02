@@ -107,7 +107,7 @@ describe('preProcessNodesForFldChar', () => {
     const { processedNodes, unpairedBegin } = preProcessNodesForFldChar(nodes, mockDocx);
     expect(unpairedBegin).toEqual([
       {
-        nodes: [null, { name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'link text' }] }] }],
+        nodes: [{ name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'link text' }] }] }],
         fieldInfo: { instrText: 'HYPERLINK "http://example.com"   ' },
       },
     ]);
@@ -130,6 +130,22 @@ describe('preProcessNodesForFldChar', () => {
         elements: [{ name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'some text' }] }] }],
       },
     ];
+    const { processedNodes } = preProcessNodesForFldChar(nodes, mockDocx);
+    expect(processedNodes).toEqual(nodes);
+  });
+
+  it('preserves fldChar runs when instruction type is unknown', () => {
+    const nodes = [
+      { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'begin' } }] },
+      {
+        name: 'w:r',
+        elements: [{ name: 'w:instrText', elements: [{ type: 'text', text: 'CUSTOMFIELD foo' }] }],
+      },
+      { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'separate' } }] },
+      { name: 'w:r', elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'value' }] }] },
+      { name: 'w:r', elements: [{ name: 'w:fldChar', attributes: { 'w:fldCharType': 'end' } }] },
+    ];
+
     const { processedNodes } = preProcessNodesForFldChar(nodes, mockDocx);
     expect(processedNodes).toEqual(nodes);
   });

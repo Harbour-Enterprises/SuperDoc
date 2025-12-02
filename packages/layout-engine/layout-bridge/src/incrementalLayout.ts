@@ -1,4 +1,11 @@
-import type { FlowBlock, Layout, Measure, HeaderFooterLayout, SectionMetadata } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  Layout,
+  Measure,
+  HeaderFooterLayout,
+  SectionMetadata,
+  ParagraphBlock,
+} from '@superdoc/contracts';
 import {
   layoutDocument,
   type LayoutOptions,
@@ -103,7 +110,7 @@ export async function incrementalLayout(
   const layoutStart = performance.now();
   let layout = layoutDocument(nextBlocks, measures, {
     ...options,
-    remeasureParagraph: (block, maxWidth) => remeasureParagraph(block, maxWidth),
+    remeasureParagraph: (block: FlowBlock, maxWidth: number) => remeasureParagraph(block as ParagraphBlock, maxWidth),
   });
   const layoutEnd = performance.now();
   perfLog(`[Perf] 4.2 Layout document (pagination): ${(layoutEnd - layoutStart).toFixed(2)}ms`);
@@ -144,7 +151,7 @@ export async function incrementalLayout(
       perfLog(`[Perf] 4.3.${iteration + 1} Page tokens resolved: ${tokenResult.affectedBlockIds.size} blocks affected`);
 
       // Log affected blocks
-      const blockSamples = Array.from(tokenResult.affectedBlockIds).slice(0, 5);
+      const blockSamples = Array.from(tokenResult.affectedBlockIds).slice(0, 5) as string[];
       PageTokenLogger.logAffectedBlocks(iteration, tokenResult.affectedBlockIds, blockSamples);
 
       totalAffectedBlocks += tokenResult.affectedBlockIds.size;
@@ -177,7 +184,8 @@ export async function incrementalLayout(
       const relayoutStart = performance.now();
       layout = layoutDocument(currentBlocks, currentMeasures, {
         ...options,
-        remeasureParagraph: (block, maxWidth) => remeasureParagraph(block, maxWidth),
+        remeasureParagraph: (block: FlowBlock, maxWidth: number) =>
+          remeasureParagraph(block as ParagraphBlock, maxWidth),
       });
       const relayoutEnd = performance.now();
       const relayoutTime = relayoutEnd - relayoutStart;

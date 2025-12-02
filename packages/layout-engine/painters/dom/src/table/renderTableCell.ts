@@ -41,6 +41,10 @@ type TableCellRenderDependencies = {
   context: FragmentRenderContext;
   /** Function to apply SDT metadata as data attributes */
   applySdtDataset: (el: HTMLElement | null, metadata?: SdtMetadata | null) => void;
+  /** Starting line index for partial row rendering (inclusive) */
+  fromLine?: number;
+  /** Ending line index for partial row rendering (exclusive), -1 means render to end */
+  toLine?: number;
 };
 
 /**
@@ -105,8 +109,21 @@ export type TableCellRenderResult = {
  * ```
  */
 export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRenderResult => {
-  const { doc, x, y, rowHeight, cellMeasure, cell, borders, useDefaultBorder, renderLine, context, applySdtDataset } =
-    deps;
+  const {
+    doc,
+    x,
+    y,
+    rowHeight,
+    cellMeasure,
+    cell,
+    borders,
+    useDefaultBorder,
+    renderLine,
+    context,
+    applySdtDataset,
+    fromLine,
+    toLine,
+  } = deps;
 
   const cellEl = doc.createElement('div');
   cellEl.style.position = 'absolute';
@@ -115,6 +132,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   cellEl.style.width = `${cellMeasure.width}px`;
   cellEl.style.height = `${rowHeight}px`;
   cellEl.style.boxSizing = 'border-box';
+  cellEl.style.overflow = 'hidden';
 
   if (borders) {
     applyCellBorders(cellEl, borders);
@@ -140,41 +158,114 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const paddingLeft = padding.left ?? 4;
   const paddingTop = padding.top ?? 2;
   const paddingRight = padding.right ?? 4;
+  const paddingBottom = padding.bottom ?? 2;
 
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
-  const blockMeasures = cellMeasure.blocks ?? (cellMeasure.paragraph ? [cellMeasure.paragraph] : []);
+  const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
 
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     const content = doc.createElement('div');
     content.style.position = 'absolute';
     content.style.left = `${x + paddingLeft}px`;
     content.style.top = `${y + paddingTop}px`;
-    content.style.width = `${Math.max(0, cellMeasure.width - paddingLeft - paddingRight)}px`;
 
-    let blockY = 0;
+    const contentWidth = Math.max(0, cellMeasure.width - paddingLeft - paddingRight);
+    const contentHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
+    content.style.width = `${contentWidth + 1}px`;
+    content.style.height = `${contentHeight}px`;
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    // Prevent vertical overflow for partial rows while allowing slight horizontal overhangs
+    content.style.overflowX = 'visible';
+    content.style.overflowY = 'hidden';
+
+    if (cell?.attrs?.verticalAlign === 'center') {
+      content.style.justifyContent = 'center';
+    } else if (cell?.attrs?.verticalAlign === 'bottom') {
+      content.style.justifyContent = 'flex-end';
+    } else {
+      content.style.justifyContent = 'flex-start';
+    }
+
+    // Calculate total lines across all blocks for proper global index mapping
+    const blockLineCounts: number[] = [];
+    for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
+      const bm = blockMeasures[i];
+      if (bm.kind === 'paragraph') {
+        blockLineCounts.push((bm as ParagraphMeasure).lines?.length || 0);
+      } else {
+        blockLineCounts.push(0);
+      }
+    }
+    const totalLines = blockLineCounts.reduce((a, b) => a + b, 0);
+
+    // Determine global line range to render
+    const globalFromLine = fromLine ?? 0;
+    const globalToLine = toLine === -1 || toLine === undefined ? totalLines : toLine;
+
+    let cumulativeLineCount = 0; // Track cumulative line count across blocks
     for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
       const blockMeasure = blockMeasures[i];
       const block = cellBlocks[i];
 
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+        const lines = (blockMeasure as ParagraphMeasure).lines;
+        const blockLineCount = lines?.length || 0;
+
+        // Calculate the global line indices for this block
+        const blockStartGlobal = cumulativeLineCount;
+        const blockEndGlobal = cumulativeLineCount + blockLineCount;
+
+        // Skip blocks entirely before/after the global range
+        if (blockEndGlobal <= globalFromLine) {
+          cumulativeLineCount += blockLineCount;
+          continue;
+        }
+        if (blockStartGlobal >= globalToLine) {
+          cumulativeLineCount += blockLineCount;
+          continue;
+        }
+
+        // Calculate local line indices within this block
+        const localStartLine = Math.max(0, globalFromLine - blockStartGlobal);
+        const localEndLine = Math.min(blockLineCount, globalToLine - blockStartGlobal);
+
         // Create wrapper for this paragraph's SDT metadata
         // Use absolute positioning within the content container to stack blocks vertically
         const paraWrapper = doc.createElement('div');
-        paraWrapper.style.position = 'absolute';
-        paraWrapper.style.top = `${blockY}px`;
+        paraWrapper.style.position = 'relative';
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
 
-        const lines = (blockMeasure as ParagraphMeasure).lines;
-        lines.forEach((line) => {
+        // Calculate height of rendered content for proper block accumulation
+        let renderedHeight = 0;
+
+        // Render only the lines in the local range
+        for (let lineIdx = localStartLine; lineIdx < localEndLine && lineIdx < lines.length; lineIdx++) {
+          const line = lines[lineIdx];
           const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
           paraWrapper.appendChild(lineEl);
-        });
+          renderedHeight += line.lineHeight;
+        }
+
+        // If we rendered the entire paragraph, use measured totalHeight to keep layout aligned with measurement
+        const renderedEntireBlock = localStartLine === 0 && localEndLine >= blockLineCount;
+        if (renderedEntireBlock && blockMeasure.totalHeight && blockMeasure.totalHeight > renderedHeight) {
+          renderedHeight = blockMeasure.totalHeight;
+        }
 
         content.appendChild(paraWrapper);
-        blockY += blockMeasure.totalHeight;
+
+        if (renderedHeight > 0) {
+          paraWrapper.style.height = `${renderedHeight}px`;
+        }
+
+        cumulativeLineCount += blockLineCount;
+      } else {
+        // Non-paragraph block - skip for now
+        cumulativeLineCount += 0;
       }
       // TODO: Handle other block types (list, image) if needed
     }

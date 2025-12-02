@@ -5,7 +5,14 @@
  * including style resolution, boolean attributes, and Word layout integration.
  */
 
-import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing, TabStop } from '@superdoc/contracts';
+import type {
+  ParagraphAttrs,
+  ParagraphIndent,
+  ParagraphSpacing,
+  TabStop,
+  DropCapDescriptor,
+  DropCapRun,
+} from '@superdoc/contracts';
 import type { PMNode, StyleNode, StyleContext, ListCounterContext, ListRenderingAttrs } from '../types.js';
 import { resolveStyle } from '@superdoc/style-engine';
 import type {
@@ -16,6 +23,8 @@ import type {
   ResolvedRunProperties,
   ResolvedTabStop,
   NumberingFormat,
+  WordListJustification,
+  WordListSuffix,
 } from '@superdoc/word-layout';
 import { computeWordParagraphLayout } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
@@ -35,11 +44,198 @@ import { normalizeParagraphBorders, normalizeParagraphShading } from './borders.
 import { mirrorIndentForRtl, ensureBidiIndentPx, DEFAULT_BIDI_INDENT_PX } from './bidi.js';
 import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
 import type { ParagraphStyleHydration } from './paragraph-styles.js';
-import type { ConverterContext } from '../converter-context.js';
+import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 
 const { resolveSpacingIndent } = Engines;
 
 const DEFAULT_DECIMAL_SEPARATOR = '.';
+
+type OoxmlElement = {
+  name?: string;
+  attributes?: Record<string, unknown>;
+  elements?: OoxmlElement[];
+};
+
+const asOoxmlElement = (value: unknown): OoxmlElement | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const element = value as OoxmlElement;
+  if (element.name == null && element.attributes == null && element.elements == null) return undefined;
+  return element;
+};
+
+const findChild = (parent: OoxmlElement | undefined, name: string): OoxmlElement | undefined => {
+  return parent?.elements?.find((child) => child?.name === name);
+};
+
+const getAttribute = (element: OoxmlElement | undefined, key: string): unknown => {
+  if (!element?.attributes) return undefined;
+  const attrs = element.attributes as Record<string, unknown>;
+  return attrs[key] ?? attrs[key.startsWith('w:') ? key.slice(2) : `w:${key}`];
+};
+
+const parseNumberAttr = (value: unknown): number | undefined => {
+  if (value == null) return undefined;
+  const num = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  return Number.isFinite(num) ? num : undefined;
+};
+
+const normalizeNumFmt = (value?: unknown): NumberingFormat | undefined => {
+  if (typeof value !== 'string') return undefined;
+  switch (value) {
+    case 'decimal':
+      return 'decimal';
+    case 'lowerLetter':
+      return 'lowerLetter';
+    case 'upperLetter':
+      return 'upperLetter';
+    case 'lowerRoman':
+      return 'lowerRoman';
+    case 'upperRoman':
+      return 'upperRoman';
+    case 'bullet':
+      return 'bullet';
+    default:
+      return undefined;
+  }
+};
+
+const normalizeSuffix = (value?: unknown): WordListSuffix => {
+  if (typeof value !== 'string') return undefined;
+  if (value === 'tab' || value === 'space' || value === 'nothing') {
+    return value;
+  }
+  return undefined;
+};
+
+const normalizeJustification = (value?: unknown): WordListJustification | undefined => {
+  if (typeof value !== 'string') return undefined;
+  if (value === 'start') return 'left';
+  if (value === 'end') return 'right';
+  if (value === 'left' || value === 'center' || value === 'right') return value;
+  return undefined;
+};
+
+const extractIndentFromLevel = (lvl: OoxmlElement | undefined): ParagraphIndent | undefined => {
+  const pPr = findChild(lvl, 'w:pPr');
+  const ind = findChild(pPr, 'w:ind');
+  if (!ind) return undefined;
+  const left = parseNumberAttr(getAttribute(ind, 'w:left'));
+  const right = parseNumberAttr(getAttribute(ind, 'w:right'));
+  const firstLine = parseNumberAttr(getAttribute(ind, 'w:firstLine'));
+  const hanging = parseNumberAttr(getAttribute(ind, 'w:hanging'));
+  const indent: ParagraphIndent = {};
+  if (left != null) indent.left = left;
+  if (right != null) indent.right = right;
+  if (firstLine != null) indent.firstLine = firstLine;
+  if (hanging != null) indent.hanging = hanging;
+  return Object.keys(indent).length ? indent : undefined;
+};
+
+const normalizeColor = (value?: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'auto') return undefined;
+  const upper = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  return `#${upper.toUpperCase()}`;
+};
+
+const extractMarkerRun = (lvl: OoxmlElement | undefined): ResolvedRunProperties | undefined => {
+  const rPr = findChild(lvl, 'w:rPr');
+  if (!rPr) return undefined;
+
+  const run: Partial<ResolvedRunProperties> = {};
+  const rFonts = findChild(rPr, 'w:rFonts');
+  const font = getAttribute(rFonts, 'w:ascii') ?? getAttribute(rFonts, 'w:hAnsi') ?? getAttribute(rFonts, 'w:eastAsia');
+  if (typeof font === 'string' && font.trim()) {
+    run.fontFamily = font;
+  }
+
+  const sz =
+    parseNumberAttr(getAttribute(findChild(rPr, 'w:sz'), 'w:val')) ??
+    parseNumberAttr(getAttribute(findChild(rPr, 'w:szCs'), 'w:val'));
+  if (sz != null) {
+    run.fontSize = sz / 2; // w:sz is in half-points
+  }
+
+  const color = normalizeColor(getAttribute(findChild(rPr, 'w:color'), 'w:val'));
+  if (color) run.color = color;
+
+  if (findChild(rPr, 'w:b')) run.bold = true;
+  if (findChild(rPr, 'w:i')) run.italic = true;
+
+  const spacingTwips = parseNumberAttr(getAttribute(findChild(rPr, 'w:spacing'), 'w:val'));
+  if (spacingTwips != null && Number.isFinite(spacingTwips)) {
+    run.letterSpacing = twipsToPx(spacingTwips);
+  }
+
+  return Object.keys(run).length ? (run as ResolvedRunProperties) : undefined;
+};
+
+const findNumFmtElement = (lvl: OoxmlElement | undefined): OoxmlElement | undefined => {
+  if (!lvl) return undefined;
+  const direct = findChild(lvl, 'w:numFmt');
+  if (direct) return direct;
+  const alternate = findChild(lvl, 'mc:AlternateContent');
+  const choice = findChild(alternate, 'mc:Choice');
+  if (choice) {
+    return findChild(choice, 'w:numFmt');
+  }
+  return undefined;
+};
+
+const resolveNumberingFromContext = (
+  numId: string | number,
+  ilvl: number,
+  numbering?: ConverterNumberingContext,
+): Partial<AdapterNumberingProps> | undefined => {
+  const definitions = numbering?.definitions as Record<string, unknown> | undefined;
+  const abstracts = numbering?.abstracts as Record<string, unknown> | undefined;
+  if (!definitions || !abstracts) return undefined;
+
+  const numDef = asOoxmlElement(definitions[String(numId)]);
+  if (!numDef) return undefined;
+
+  const abstractId = getAttribute(findChild(numDef, 'w:abstractNumId'), 'w:val');
+  if (abstractId == null) return undefined;
+
+  const abstract = asOoxmlElement(abstracts[String(abstractId)]);
+  if (!abstract) return undefined;
+
+  let levelDef = abstract.elements?.find(
+    (el) => el?.name === 'w:lvl' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
+  );
+
+  const override = numDef.elements?.find(
+    (el) => el?.name === 'w:lvlOverride' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
+  );
+  const overrideLvl = findChild(override, 'w:lvl');
+  if (overrideLvl) {
+    levelDef = overrideLvl;
+  }
+  const startOverride = parseNumberAttr(getAttribute(findChild(override, 'w:startOverride'), 'w:val'));
+
+  if (!levelDef) return undefined;
+
+  const numFmtEl = findNumFmtElement(levelDef);
+  const lvlText = getAttribute(findChild(levelDef, 'w:lvlText'), 'w:val') as string | undefined;
+  const start = startOverride ?? parseNumberAttr(getAttribute(findChild(levelDef, 'w:start'), 'w:val'));
+  const suffix = normalizeSuffix(getAttribute(findChild(levelDef, 'w:suff'), 'w:val'));
+  const lvlJc = normalizeJustification(getAttribute(findChild(levelDef, 'w:lvlJc'), 'w:val'));
+  const indent = extractIndentFromLevel(levelDef);
+  const markerRun = extractMarkerRun(levelDef);
+
+  const numFmt = normalizeNumFmt(getAttribute(numFmtEl, 'w:val'));
+
+  return {
+    format: numFmt,
+    lvlText,
+    start,
+    suffix,
+    lvlJc,
+    resolvedLevelIndent: indent,
+    resolvedMarkerRpr: markerRun,
+  };
+};
 
 /**
  * Check if a value represents a truthy boolean.
@@ -160,6 +356,13 @@ export const cloneParagraphAttrs = (attrs?: ParagraphAttrs): ParagraphAttrs | un
   }
   if (attrs.shading) clone.shading = { ...attrs.shading };
   if (attrs.tabs) clone.tabs = attrs.tabs.map((tab) => ({ ...tab }));
+  // Clone drop cap descriptor deeply
+  if (attrs.dropCapDescriptor) {
+    clone.dropCapDescriptor = {
+      ...attrs.dropCapDescriptor,
+      run: { ...attrs.dropCapDescriptor.run },
+    };
+  }
   return clone;
 };
 
@@ -330,6 +533,184 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
     default:
       return undefined;
   }
+};
+
+/**
+ * Default drop cap font size in pixels.
+ * Corresponds to roughly 48pt which is a common drop cap size.
+ */
+const DEFAULT_DROP_CAP_FONT_SIZE_PX = 64;
+
+/**
+ * Default font family for drop cap when none is specified.
+ */
+const DEFAULT_DROP_CAP_FONT_FAMILY = 'Times New Roman';
+
+/**
+ * Extract drop cap run information from a paragraph node.
+ *
+ * Drop cap paragraphs in DOCX typically contain just the drop cap letter(s)
+ * with specific font styling (large font size, vertical position offset, etc.).
+ * This function extracts the text and run properties from the first text node.
+ *
+ * @param para - The paragraph PM node to extract drop cap info from
+ * @returns DropCapRun with text and styling, or null if extraction fails
+ */
+const extractDropCapRunFromParagraph = (para: PMNode): DropCapRun | null => {
+  const content = para.content;
+  if (!Array.isArray(content) || content.length === 0) {
+    return null;
+  }
+
+  // Find the first text content in the paragraph
+  let text = '';
+  let runProperties: Record<string, unknown> = {};
+  let textStyleMarks: Record<string, unknown> = {};
+
+  /**
+   * Maximum recursion depth for extractTextAndStyle to prevent stack overflow.
+   * A depth of 50 should be sufficient for any reasonable document structure.
+   */
+  const MAX_RECURSION_DEPTH = 50;
+
+  const extractTextAndStyle = (nodes: PMNode[], depth = 0): boolean => {
+    // Guard against excessive recursion depth
+    if (depth > MAX_RECURSION_DEPTH) {
+      console.warn(`extractTextAndStyle exceeded max recursion depth (${MAX_RECURSION_DEPTH})`);
+      return false;
+    }
+
+    for (const node of nodes) {
+      if (!node) continue;
+
+      // Check for text node
+      if (node.type === 'text' && typeof node.text === 'string' && node.text.length > 0) {
+        text = node.text;
+        // Extract styling from marks
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        return true;
+      }
+
+      // Check for run node that may contain text
+      if (node.type === 'run') {
+        // Extract run properties
+        if (node.attrs?.runProperties && typeof node.attrs.runProperties === 'object') {
+          runProperties = { ...runProperties, ...(node.attrs.runProperties as Record<string, unknown>) };
+        }
+        // Also check for marks on the run node
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        // Look for text in run's children with incremented depth
+        if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+          return true;
+        }
+      }
+
+      // Look for text in other container nodes with incremented depth
+      if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  extractTextAndStyle(content);
+
+  // If no text found, cannot create a drop cap run
+  if (!text) {
+    return null;
+  }
+
+  // Merge run properties and text style marks to get final styling
+  const mergedStyle = { ...runProperties, ...textStyleMarks };
+
+  // Parse font size - can be in various formats: '117pt', '48px', number, etc.
+  let fontSizePx = DEFAULT_DROP_CAP_FONT_SIZE_PX;
+  const rawFontSize = mergedStyle.fontSize ?? mergedStyle['w:sz'] ?? mergedStyle.sz;
+  if (rawFontSize != null) {
+    if (typeof rawFontSize === 'number') {
+      // If number > 100, assume it's half-points (Word uses half-points for sz)
+      // Half-points: w:sz=234 means 117pt
+      const converted = rawFontSize > 100 ? ptToPx(rawFontSize / 2) : rawFontSize;
+      fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+    } else if (typeof rawFontSize === 'string') {
+      const numericPart = parseFloat(rawFontSize);
+      if (Number.isFinite(numericPart)) {
+        if (rawFontSize.endsWith('pt')) {
+          const converted = ptToPx(numericPart);
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        } else if (rawFontSize.endsWith('px')) {
+          // px values are already in pixels
+          fontSizePx = numericPart;
+        } else {
+          // Plain number string - assume half-points if large
+          const converted = numericPart > 100 ? ptToPx(numericPart / 2) : numericPart;
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        }
+      }
+    }
+  }
+
+  // Parse font family
+  let fontFamily = DEFAULT_DROP_CAP_FONT_FAMILY;
+  const rawFontFamily = mergedStyle.fontFamily ?? mergedStyle['w:rFonts'] ?? mergedStyle.rFonts;
+  if (typeof rawFontFamily === 'string') {
+    fontFamily = rawFontFamily;
+  } else if (rawFontFamily && typeof rawFontFamily === 'object') {
+    // rFonts can be an object with ascii, hAnsi, etc.
+    const rFonts = rawFontFamily as Record<string, unknown>;
+    const ascii = rFonts['w:ascii'] ?? rFonts.ascii;
+    if (typeof ascii === 'string') {
+      fontFamily = ascii;
+    }
+  }
+
+  // Build the drop cap run
+  const dropCapRun: DropCapRun = {
+    text,
+    fontFamily,
+    fontSize: fontSizePx,
+  };
+
+  // Parse optional properties
+  const bold = mergedStyle.bold ?? mergedStyle['w:b'] ?? mergedStyle.b;
+  if (isTruthy(bold)) {
+    dropCapRun.bold = true;
+  }
+
+  const italic = mergedStyle.italic ?? mergedStyle['w:i'] ?? mergedStyle.i;
+  if (isTruthy(italic)) {
+    dropCapRun.italic = true;
+  }
+
+  const color = mergedStyle.color ?? mergedStyle['w:color'] ?? mergedStyle.val;
+  if (typeof color === 'string' && color.length > 0 && color.toLowerCase() !== 'auto') {
+    // Ensure color has # prefix if it's a hex color
+    dropCapRun.color = color.startsWith('#') ? color : `#${color}`;
+  }
+
+  // Parse vertical position offset (from w:position, in half-points, can be negative)
+  const position = mergedStyle.position ?? mergedStyle['w:position'];
+  if (position != null) {
+    const posNum = pickNumber(position);
+    if (posNum != null) {
+      // Convert half-points to pixels
+      dropCapRun.position = ptToPx(posNum / 2);
+    }
+  }
+
+  return dropCapRun;
 };
 
 /**
@@ -813,7 +1194,40 @@ export const computeParagraphAttrs = (
       dropCap != null &&
       (typeof dropCap === 'string' || typeof dropCap === 'number' || typeof dropCap === 'boolean')
     ) {
+      // Keep the legacy dropCap flag for backward compatibility
       paragraphAttrs.dropCap = dropCap;
+
+      // Build structured DropCapDescriptor for enhanced drop cap support
+      const dropCapMode = typeof dropCap === 'string' ? dropCap.toLowerCase() : 'drop';
+      const linesValue = pickNumber(framePr['w:lines'] ?? framePr.lines);
+      const wrapValue = asString(framePr['w:wrap'] ?? framePr.wrap);
+
+      // Extract the drop cap text and run styling from paragraph content
+      const dropCapRunInfo = extractDropCapRunFromParagraph(para);
+
+      if (dropCapRunInfo) {
+        const descriptor: DropCapDescriptor = {
+          mode: dropCapMode === 'margin' ? 'margin' : 'drop',
+          lines: linesValue != null && linesValue > 0 ? linesValue : 3,
+          run: dropCapRunInfo,
+        };
+
+        // Map wrap value to the expected types
+        if (wrapValue) {
+          const normalizedWrap = wrapValue.toLowerCase();
+          if (
+            normalizedWrap === 'around' ||
+            normalizedWrap === 'notbeside' ||
+            normalizedWrap === 'none' ||
+            normalizedWrap === 'tight'
+          ) {
+            descriptor.wrap =
+              normalizedWrap === 'notbeside' ? 'notBeside' : (normalizedWrap as 'around' | 'none' | 'tight');
+          }
+        }
+
+        paragraphAttrs.dropCapDescriptor = descriptor;
+      }
     }
 
     const frame: ParagraphAttrs['frame'] = {};
@@ -856,6 +1270,32 @@ export const computeParagraphAttrs = (
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
     const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
     const numericNumId = typeof numId === 'number' ? numId : undefined;
+
+    // Resolve numbering definition details (format, text, indent, marker run) from converter context
+    const resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+    if (resolvedLevel) {
+      if (resolvedLevel.format && numberingProps.format == null) {
+        numberingProps.format = resolvedLevel.format;
+      }
+      if (resolvedLevel.lvlText && numberingProps.lvlText == null) {
+        numberingProps.lvlText = resolvedLevel.lvlText;
+      }
+      if (resolvedLevel.start != null && numberingProps.start == null) {
+        numberingProps.start = resolvedLevel.start;
+      }
+      if (resolvedLevel.suffix && numberingProps.suffix == null) {
+        numberingProps.suffix = resolvedLevel.suffix;
+      }
+      if (resolvedLevel.lvlJc && numberingProps.lvlJc == null) {
+        numberingProps.lvlJc = resolvedLevel.lvlJc;
+      }
+      if (resolvedLevel.resolvedLevelIndent && !numberingProps.resolvedLevelIndent) {
+        numberingProps.resolvedLevelIndent = resolvedLevel.resolvedLevelIndent;
+      }
+      if (resolvedLevel.resolvedMarkerRpr && !numberingProps.resolvedMarkerRpr) {
+        numberingProps.resolvedMarkerRpr = resolvedLevel.resolvedMarkerRpr;
+      }
+    }
 
     // Track B: Increment list counter and build path array
     let counterValue = 1;

@@ -135,6 +135,12 @@ export type TextRun = {
   text: string;
   fontFamily: string;
   fontSize: number;
+  /** Comment annotations applied to this run (supports overlapping comments). */
+  comments?: Array<{
+    commentId: string;
+    importedId?: string;
+    internal?: boolean;
+  }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
    */
@@ -176,6 +182,20 @@ export type TabRun = {
   leader?: LeaderType | null;
   decimalChar?: string;
   indent?: ParagraphIndent;
+  pmStart?: number;
+  pmEnd?: number;
+};
+
+export type LineBreakRun = {
+  kind: 'lineBreak';
+  /**
+   * Optional attributes carried through from the source document.
+   * Mirrors OOXML <w:br> attributes (type/clear) to preserve fidelity.
+   */
+  attrs?: {
+    lineBreakType?: string;
+    clear?: string;
+  };
   pmStart?: number;
   pmEnd?: number;
 };
@@ -242,7 +262,16 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun;
+export type BreakRun = {
+  kind: 'break';
+  /** Optional break type (e.g., 'line', 'page', 'column') */
+  breakType?: 'line' | 'page' | 'column' | string;
+  pmStart?: number;
+  pmEnd?: number;
+  sdt?: SdtMetadata;
+};
+
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
@@ -302,7 +331,7 @@ export type CellBorders = {
 export type TableCellAttrs = {
   borders?: CellBorders;
   padding?: BoxSpacing;
-  verticalAlign?: 'top' | 'middle' | 'bottom';
+  verticalAlign?: 'top' | 'middle' | 'center' | 'bottom';
   background?: string;
   tableCellProperties?: Record<string, unknown>;
 };
@@ -329,6 +358,10 @@ export type TableCell = {
 
 export type TableRowAttrs = {
   tableRowProperties?: Record<string, unknown>;
+  rowHeight?: {
+    value: number;
+    rule?: 'auto' | 'atLeast' | 'exact' | string;
+  };
 };
 
 export type TableRow = {
@@ -344,6 +377,10 @@ export type TableBlock = {
   attrs?: TableAttrs;
   /** Column widths in pixels from OOXML w:tblGrid. */
   columnWidths?: number[];
+  /** Anchor positioning for floating tables (from w:tblpPr). */
+  anchor?: TableAnchor;
+  /** Text wrapping for floating tables (from w:tblpPr distances). */
+  wrap?: TableWrap;
 };
 
 export type BoxSpacing = {
@@ -674,6 +711,45 @@ export type ImageWrap = {
   behindDoc?: boolean;
 };
 
+/**
+ * Positioning for anchored/floating tables (offsets in CSS px).
+ * Corresponds to OOXML w:tblpPr attributes.
+ */
+export type TableAnchor = {
+  isAnchored?: boolean;
+  /** Horizontal anchor reference: column, page, or margin. Maps from w:horzAnchor. */
+  hRelativeFrom?: 'column' | 'page' | 'margin';
+  /** Vertical anchor reference: paragraph (text), page, or margin. Maps from w:vertAnchor. */
+  vRelativeFrom?: 'paragraph' | 'page' | 'margin';
+  /** Horizontal alignment relative to anchor. Maps from w:tblpXSpec. */
+  alignH?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  /** Vertical alignment relative to anchor. Maps from w:tblpYSpec. */
+  alignV?: 'top' | 'center' | 'bottom' | 'inside' | 'outside' | 'inline';
+  /** Absolute horizontal offset in px. Maps from w:tblpX (twips converted to px). */
+  offsetH?: number;
+  /** Absolute vertical offset in px. Maps from w:tblpY (twips converted to px). */
+  offsetV?: number;
+};
+
+/**
+ * Text wrapping for floating tables (distances in px).
+ * Tables only support Square or None wrapping (not Tight/Through like images).
+ */
+export type TableWrap = {
+  /** Wrap type: Square for text wrapping, None for absolute positioning. */
+  type: 'Square' | 'None';
+  /** Which side(s) text flows on. */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Distance from text above table (px). Maps from w:topFromText. */
+  distTop?: number;
+  /** Distance from text below table (px). Maps from w:bottomFromText. */
+  distBottom?: number;
+  /** Distance from text to left of table (px). Maps from w:leftFromText. */
+  distLeft?: number;
+  /** Distance from text to right of table (px). Maps from w:rightFromText. */
+  distRight?: number;
+};
+
 /** Exclusion zone for text wrapping around anchored images. */
 export type ExclusionZone = {
   imageBlockId: BlockId;
@@ -737,14 +813,87 @@ export type ParagraphShading = {
   themeTint?: string;
 };
 
+/**
+ * Run styling for drop cap letter.
+ * Contains the text and font properties of the drop cap character(s).
+ */
+export type DropCapRun = {
+  /** The drop cap text (usually a single capital letter). */
+  text: string;
+  /** Font family for the drop cap. */
+  fontFamily: string;
+  /** Font size in pixels (typically much larger than body text, e.g., 117pt). */
+  fontSize: number;
+  /** Bold styling. */
+  bold?: boolean;
+  /** Italic styling. */
+  italic?: boolean;
+  /** Text color. */
+  color?: string;
+  /** Vertical position offset in pixels (from w:position, e.g., -10). */
+  position?: number;
+};
+
+/**
+ * Structured drop cap descriptor for layout engine.
+ *
+ * Drop caps are enlarged initial letters that span multiple lines of text.
+ * OOXML encodes drop caps via w:framePr with @w:dropCap attribute on a separate
+ * paragraph containing just the drop cap letter, followed by the text paragraph.
+ *
+ * Layout engine merges these into a single paragraph with this descriptor
+ * to enable proper measurement and rendering.
+ */
+export type DropCapDescriptor = {
+  /**
+   * Drop cap mode:
+   * - 'drop': Letter drops into the text area (most common)
+   * - 'margin': Letter sits in the left margin
+   */
+  mode: 'drop' | 'margin';
+  /**
+   * Number of lines the drop cap spans (from w:lines attribute, typically 2-5).
+   * Determines the height of the drop cap box.
+   */
+  lines: number;
+  /**
+   * The drop cap run containing text and styling.
+   */
+  run: DropCapRun;
+  /**
+   * Text wrapping mode (from w:wrap attribute on framePr).
+   * - 'around': Text wraps around the drop cap (default)
+   * - 'notBeside': Text does not wrap beside drop cap
+   * - 'none': No special wrapping
+   * - 'tight': Tight wrapping
+   */
+  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  /**
+   * Measured width of the drop cap in pixels (populated during measurement).
+   */
+  measuredWidth?: number;
+  /**
+   * Measured height of the drop cap in pixels (populated during measurement).
+   */
+  measuredHeight?: number;
+};
+
 export type ParagraphAttrs = {
   styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
-  /** Drop cap flag from w:framePr/@w:dropCap. */
+  /**
+   * Legacy drop cap flag from w:framePr/@w:dropCap.
+   * @deprecated Use dropCapDescriptor for full drop cap support.
+   */
   dropCap?: string | number | boolean;
+  /**
+   * Structured drop cap descriptor with full metadata.
+   * When present, layout engine will render the drop cap with proper geometry.
+   */
+  dropCapDescriptor?: DropCapDescriptor;
   frame?: ParagraphFrame;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
@@ -831,6 +980,8 @@ export type Line = {
   ascent: number;
   descent: number;
   lineHeight: number;
+  /** Maximum available width for this line (used during measurement). */
+  maxWidth?: number;
   segments?: LineSegment[];
   leaders?: LeaderDecoration[];
   bars?: BarDecoration[];
@@ -862,6 +1013,20 @@ export type ParagraphMeasure = {
     markerWidth: number;
     markerTextWidth: number;
     indentLeft: number;
+  };
+  /**
+   * Measured drop cap information, populated when the paragraph has a drop cap.
+   * Used by the renderer to position the drop cap element.
+   */
+  dropCap?: {
+    /** Measured width of the drop cap box (including padding). */
+    width: number;
+    /** Measured height of the drop cap (based on lines * lineHeight). */
+    height: number;
+    /** Number of lines the drop cap spans. */
+    lines: number;
+    /** Drop cap mode: 'drop' inside text area, 'margin' in the margin. */
+    mode: 'drop' | 'margin';
   };
 };
 
@@ -1007,6 +1172,16 @@ export type ImageFragmentMetadata = {
   minHeight: number;
 };
 
+export type PartialRowInfo = {
+  rowIndex: number; // Which row is partially split
+  fromLineByCell: number[]; // Per-cell line start (inclusive) - 0 for first part
+  toLineByCell: number[]; // Per-cell line cutoff (exclusive) - -1 means render to end
+  isFirstPart: boolean; // True if this is the first part of a split row
+  isLastPart: boolean; // True if this is the last part of a split row
+  /** Height of this partial row portion in pixels */
+  partialHeight: number;
+};
+
 export type TableFragment = {
   kind: 'table';
   blockId: BlockId;
@@ -1018,6 +1193,8 @@ export type TableFragment = {
   height: number;
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
+  repeatHeaderCount?: number;
+  partialRow?: PartialRowInfo;
   metadata?: TableFragmentMetadata;
 };
 

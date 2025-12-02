@@ -45,6 +45,7 @@ import { BlockNode } from './block-node/index.js';
 import { TableOfContents } from './table-of-contents/index.js';
 import { VectorShape } from './vector-shape/index.js';
 import { ShapeGroup } from './shape-group/index.js';
+import { PassthroughBlock, PassthroughInline } from '@extensions/passthrough/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -106,6 +107,8 @@ const getRichTextExtensions = () => {
     Image,
     NodeResizer,
     CustomSelection,
+    PassthroughInline,
+    PassthroughBlock,
   ];
 };
 
@@ -179,6 +182,8 @@ const getStarterExtensions = () => {
     TextTransform,
     VectorShape,
     ShapeGroup,
+    PassthroughInline,
+    PassthroughBlock,
   ];
 };
 
@@ -246,4 +251,6 @@ export {
   TextTransform,
   VectorShape,
   ShapeGroup,
+  PassthroughInline,
+  PassthroughBlock,
 };

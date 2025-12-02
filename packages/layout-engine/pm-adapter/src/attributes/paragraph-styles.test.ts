@@ -86,6 +86,22 @@ describe('hydrateParagraphStyleAttrs', () => {
     );
   });
 
+  it('zeroes inherited first-line indent for heading styles without explicit indent', () => {
+    vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+      spacing: { after: 200 },
+      indent: { firstLine: 432 }, // inherited from Normal
+      outlineLvl: 1,
+    });
+
+    const para = { attrs: { styleId: 'Heading2' } } as never;
+    const result = hydrateParagraphStyleAttrs(para, {
+      docx: {},
+      numbering: {},
+    });
+
+    expect(result?.indent).toEqual({ firstLine: 0, hanging: 0, left: undefined, right: undefined });
+  });
+
   it('provides empty numbering fallback when context.numbering is undefined', () => {
     vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
       spacing: { after: 200, line: 276, lineRule: 'auto' },

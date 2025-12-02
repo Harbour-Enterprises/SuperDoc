@@ -91,7 +91,7 @@ describe('Cache Invalidation', () => {
 
         const hash = computeSectionMetadataHash(sections);
         expect(hash).toContain('section:1');
-        expect(hash).toContain('lowerRoman');
+        expect(hash).toContain('num:lowerRoman:1');
       });
 
       it('should produce different hashes for different metadata', () => {

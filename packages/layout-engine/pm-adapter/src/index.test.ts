@@ -503,6 +503,8 @@ describe('toFlowBlocks', () => {
     });
 
     it('retains paragraph border definitions on ParagraphBlocks', () => {
+      // size values are in OOXML eighths-of-a-point
+      // 32 eighths = 4pt, 16 eighths = 2pt
       const pmDoc = {
         type: 'doc',
         content: [
@@ -510,8 +512,8 @@ describe('toFlowBlocks', () => {
             type: 'paragraph',
             attrs: {
               borders: {
-                top: { val: 'single', size: 4, color: '00FF00' },
-                left: { val: 'dashed', size: 2, color: '#112233' },
+                top: { val: 'single', size: 32, color: '00FF00' },
+                left: { val: 'dashed', size: 16, color: '#112233' },
               },
             },
             content: [{ type: 'text', text: 'Bordered paragraph' }],
@@ -525,12 +527,12 @@ describe('toFlowBlocks', () => {
       expect(paragraph.kind).toBe('paragraph');
       expect(paragraph.attrs?.borders?.top).toEqual({
         style: 'solid',
-        width: 4,
+        width: (32 / 8) * (96 / 72), // 4pt in pixels
         color: '#00FF00',
       });
       expect(paragraph.attrs?.borders?.left).toEqual({
         style: 'dashed',
-        width: 2,
+        width: (16 / 8) * (96 / 72), // 2pt in pixels
         color: '#112233',
       });
     });
@@ -2798,7 +2800,7 @@ describe('toFlowBlocks', () => {
           },
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }],
+            content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
           },
           {
             type: 'paragraph',
@@ -2825,7 +2827,7 @@ describe('toFlowBlocks', () => {
             type: 'paragraph',
             content: [
               { type: 'text', text: 'Before break' },
-              { type: 'hardBreak' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
               { type: 'text', text: 'After break' },
             ],
           },
@@ -3077,7 +3079,7 @@ describe('toFlowBlocks', () => {
           },
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }],
+            content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
           },
           {
             type: 'paragraph',
@@ -3085,7 +3087,7 @@ describe('toFlowBlocks', () => {
           },
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }],
+            content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
           },
           {
             type: 'paragraph',
@@ -3108,8 +3110,8 @@ describe('toFlowBlocks', () => {
             type: 'paragraph',
             content: [
               { type: 'text', text: 'First page' },
-              { type: 'hardBreak' },
-              { type: 'hardBreak' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
               { type: 'text', text: 'Third page' },
             ],
           },
@@ -3128,7 +3130,10 @@ describe('toFlowBlocks', () => {
         content: [
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }, { type: 'text', text: 'Content after break' }],
+            content: [
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
+              { type: 'text', text: 'Content after break' },
+            ],
           },
         ],
       };
@@ -3147,7 +3152,10 @@ describe('toFlowBlocks', () => {
         content: [
           {
             type: 'paragraph',
-            content: [{ type: 'text', text: 'Content before break' }, { type: 'hardBreak' }],
+            content: [
+              { type: 'text', text: 'Content before break' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
+            ],
           },
         ],
       };
@@ -3170,7 +3178,7 @@ describe('toFlowBlocks', () => {
           },
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }],
+            content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
           },
           {
             type: 'paragraph',
@@ -3201,7 +3209,7 @@ describe('toFlowBlocks', () => {
                 text: 'Bold text',
                 marks: [{ type: 'bold' }],
               },
-              { type: 'hardBreak' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
               {
                 type: 'text',
                 text: 'Italic text',
@@ -3228,7 +3236,10 @@ describe('toFlowBlocks', () => {
         content: [
           {
             type: 'paragraph',
-            content: [{ type: 'text', text: 'Text' }, { type: 'hardBreak' }],
+            content: [
+              { type: 'text', text: 'Text' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
+            ],
           },
         ],
       };
@@ -3264,7 +3275,7 @@ describe('toFlowBlocks', () => {
           },
           {
             type: 'paragraph',
-            content: [{ type: 'hardBreak' }],
+            content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
           },
           {
             type: 'paragraph',
@@ -3296,7 +3307,7 @@ describe('toFlowBlocks', () => {
                   { type: 'text', text: 'Part 2' },
                 ],
               },
-              { type: 'hardBreak' },
+              { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
               {
                 type: 'run',
                 content: [

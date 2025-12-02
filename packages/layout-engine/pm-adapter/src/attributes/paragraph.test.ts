@@ -1019,6 +1019,75 @@ describe('computeParagraphAttrs', () => {
     expect(resetCalls.some((call: PMNode) => call[1] === 3)).toBe(true);
   });
 
+  it('hydrates numbering details from converterContext definitions', () => {
+    const para: PMNode = {
+      attrs: {
+        numberingProperties: { numId: 7, ilvl: 1 },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: { defaultTabIntervalTwips: 720, decimalSeparator: '.' },
+    } as never;
+    const converterContext = {
+      numbering: {
+        definitions: {
+          '7': {
+            name: 'w:num',
+            attributes: { 'w:numId': '7' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '3' } }],
+          },
+        },
+        abstracts: {
+          '3': {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '3' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '1' },
+                elements: [
+                  { name: 'w:start', attributes: { 'w:val': '1' } },
+                  { name: 'w:numFmt', attributes: { 'w:val': 'lowerLetter' } },
+                  { name: 'w:lvlText', attributes: { 'w:val': '%2.' } },
+                  { name: 'w:lvlJc', attributes: { 'w:val': 'left' } },
+                  { name: 'w:suff', attributes: { 'w:val': 'space' } },
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '1440', 'w:hanging': '360' } }],
+                  },
+                  {
+                    name: 'w:rPr',
+                    elements: [
+                      { name: 'w:rFonts', attributes: { 'w:ascii': 'Arial' } },
+                      { name: 'w:color', attributes: { 'w:val': '5C5C5F' } },
+                      { name: 'w:sz', attributes: { 'w:val': '16' } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = computeParagraphAttrs(para, styleContext, undefined, converterContext);
+
+    expect(result?.numberingProperties?.format).toBe('lowerLetter');
+    expect(result?.numberingProperties?.lvlText).toBe('%2.');
+    expect(result?.numberingProperties?.start).toBe(1);
+    expect(result?.numberingProperties?.lvlJc).toBe('left');
+    expect(result?.numberingProperties?.suffix).toBe('space');
+    expect(result?.numberingProperties?.resolvedLevelIndent).toEqual({ left: 1440, hanging: 360 });
+    expect(result?.wordLayout?.marker?.markerText).toBe('a.');
+
+    const markerRun = (result?.numberingProperties as Record<string, unknown>)?.resolvedMarkerRpr as
+      | Record<string, unknown>
+      | undefined;
+    expect(markerRun?.fontFamily).toBe('Arial');
+  });
+
   describe('framePr edge cases and validation', () => {
     const createStyleContext = () =>
       ({
@@ -1291,6 +1360,186 @@ describe('computeParagraphAttrs', () => {
 
       expect(result?.dropCap).toBe('margin');
       expect(result?.floatAlignment).toBe('center');
+    });
+
+    it('should build dropCapDescriptor with mode and lines from framePr', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 3,
+            wrap: 'around',
+          },
+        },
+        content: [
+          {
+            type: 'text',
+            text: 'D',
+            marks: [
+              {
+                type: 'textStyle',
+                attrs: {
+                  fontSize: '156px',
+                  fontFamily: 'Times New Roman',
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.mode).toBe('drop');
+      expect(result?.dropCapDescriptor?.lines).toBe(3);
+      expect(result?.dropCapDescriptor?.wrap).toBe('around');
+      expect(result?.dropCapDescriptor?.run.text).toBe('D');
+      expect(result?.dropCapDescriptor?.run.fontFamily).toBe('Times New Roman');
+      expect(result?.dropCapDescriptor?.run.fontSize).toBe(156);
+    });
+
+    it('should build dropCapDescriptor with margin mode', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            'w:dropCap': 'margin',
+            'w:lines': 2,
+          },
+        },
+        content: [
+          {
+            type: 'text',
+            text: 'W',
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.mode).toBe('margin');
+      expect(result?.dropCapDescriptor?.lines).toBe(2);
+    });
+
+    it('should extract font styling from nested run nodes', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 4,
+          },
+        },
+        content: [
+          {
+            type: 'run',
+            attrs: {
+              runProperties: {
+                fontSize: '117pt',
+                fontFamily: 'Georgia',
+                bold: true,
+                italic: true,
+                color: '0000FF',
+              },
+            },
+            content: [
+              {
+                type: 'text',
+                text: 'A',
+              },
+            ],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.run.text).toBe('A');
+      expect(result?.dropCapDescriptor?.run.fontFamily).toBe('Georgia');
+      expect(result?.dropCapDescriptor?.run.bold).toBe(true);
+      expect(result?.dropCapDescriptor?.run.italic).toBe(true);
+      expect(result?.dropCapDescriptor?.run.color).toBe('#0000FF');
+    });
+
+    it('should default to 3 lines when lines not specified', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+          },
+        },
+        content: [{ type: 'text', text: 'B' }],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor?.lines).toBe(3);
+    });
+
+    it('should not create dropCapDescriptor without content', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 3,
+          },
+        },
+        content: [],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeUndefined();
+    });
+
+    it('should normalize wrap value to proper casing', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            wrap: 'notBeside',
+          },
+        },
+        content: [{ type: 'text', text: 'C' }],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor?.wrap).toBe('notBeside');
+    });
+
+    it('should handle OOXML half-points font size format', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+          },
+        },
+        content: [
+          {
+            type: 'run',
+            attrs: {
+              runProperties: {
+                sz: 234, // Half-points: 234 = 117pt
+              },
+            },
+            content: [{ type: 'text', text: 'E' }],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // 117pt ≈ 156px (at 96dpi)
+      expect(result?.dropCapDescriptor?.run.fontSize).toBeCloseTo(156, 0);
     });
   });
 });

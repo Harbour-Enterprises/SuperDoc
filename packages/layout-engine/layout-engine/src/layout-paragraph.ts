@@ -17,15 +17,9 @@ import { computeFragmentPmRange, normalizeLines, sliceLines, extractBlockPmRange
 import { computeAnchorX } from './floating-objects.js';
 
 const spacingDebugEnabled = false;
-const anchorDebugEnabled = false;
 
 const spacingDebugLog = (..._args: unknown[]): void => {
   if (!spacingDebugEnabled) return;
-};
-
-const anchorDebugLog = (...args: unknown[]): void => {
-  if (!anchorDebugEnabled) return;
-  console.log('[AnchorDebug]', ...args);
 };
 
 export type ParagraphLayoutContext = {
@@ -69,27 +63,59 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
       const state = ensurePage();
-      const baseAnchorY = state.cursorY;
 
-      // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
-      // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
-      const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
+      // Calculate anchor Y position based on vRelativeFrom and alignV
       const vRelativeFrom = entry.block.anchor?.vRelativeFrom;
-      const paragraphAdjustment = vRelativeFrom === 'paragraph' ? firstLineHeight / 2 : 0;
-      const anchorY = baseAnchorY + paragraphAdjustment;
+      const alignV = entry.block.anchor?.alignV;
+      const offsetV = entry.block.anchor?.offsetV ?? 0;
+      const imageHeight = entry.measure.height;
 
-      anchorDebugLog('Positioning anchored image:', {
-        blockId: entry.block.id,
-        baseAnchorY,
-        paragraphAdjustment,
-        anchorY,
-        offsetV: entry.block.anchor?.offsetV,
-        finalY: anchorY + (entry.block.anchor?.offsetV ?? 0),
-        measureHeight: entry.measure.height,
-        measureWidth: entry.measure.width,
-        pageNumber: state.page.number,
-        vRelativeFrom,
-      });
+      // Calculate the content area boundaries
+      const contentTop = state.topMargin;
+      const contentBottom = state.contentBottom;
+      const contentHeight = Math.max(0, contentBottom - contentTop);
+
+      let anchorY: number;
+
+      if (vRelativeFrom === 'margin') {
+        // Position relative to the content area (margin box)
+        if (alignV === 'top') {
+          anchorY = contentTop + offsetV;
+        } else if (alignV === 'bottom') {
+          anchorY = contentBottom - imageHeight + offsetV;
+        } else if (alignV === 'center') {
+          anchorY = contentTop + (contentHeight - imageHeight) / 2 + offsetV;
+        } else {
+          // No alignV specified, use offset from content top
+          anchorY = contentTop + offsetV;
+        }
+      } else if (vRelativeFrom === 'page') {
+        // Position relative to the physical page (0 = top edge)
+        if (alignV === 'top') {
+          anchorY = offsetV;
+        } else if (alignV === 'bottom') {
+          // Would need page height here, approximate with contentBottom + bottom margin
+          const pageHeight = contentBottom + (anchors.pageMargins.bottom ?? 0);
+          anchorY = pageHeight - imageHeight + offsetV;
+        } else if (alignV === 'center') {
+          const pageHeight = contentBottom + (anchors.pageMargins.bottom ?? 0);
+          anchorY = (pageHeight - imageHeight) / 2 + offsetV;
+        } else {
+          anchorY = offsetV;
+        }
+      } else if (vRelativeFrom === 'paragraph') {
+        // vRelativeFrom === 'paragraph' - position relative to anchor paragraph
+        const baseAnchorY = state.cursorY;
+        // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
+        // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
+        const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
+        const paragraphAdjustment = firstLineHeight / 2;
+        anchorY = baseAnchorY + paragraphAdjustment + offsetV;
+      } else {
+        // vRelativeFrom is undefined/null - use simple offset from current cursor (legacy behavior)
+        const baseAnchorY = state.cursorY;
+        anchorY = baseAnchorY + offsetV;
+      }
 
       floatManager.registerDrawing(entry.block, entry.measure, anchorY, state.columnIndex, state.page.number);
 
@@ -138,7 +164,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           kind: 'image',
           blockId: entry.block.id,
           x: anchorX,
-          y: anchorY + (entry.block.anchor?.offsetV ?? 0),
+          y: anchorY,
           width: entry.measure.width,
           height: entry.measure.height,
           isAnchored: true,
@@ -154,7 +180,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           blockId: entry.block.id,
           drawingKind: entry.block.drawingKind,
           x: anchorX,
-          y: anchorY + (entry.block.anchor?.offsetV ?? 0),
+          y: anchorY,
           width: entry.measure.width,
           height: entry.measure.height,
           geometry: entry.measure.geometry,
@@ -232,7 +258,53 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     return;
   }
 
+  // PHASE 1: Scan all lines to find narrowest available width before remeasuring
+  // This ensures text wraps correctly between left and right anchored images
+  let narrowestWidth = columnWidth;
+  let narrowestOffsetX = 0;
   let didRemeasureForFloats = false;
+
+  if (typeof remeasureParagraph === 'function') {
+    const tempState = ensurePage();
+    let tempY = tempState.cursorY;
+
+    // Apply spacing before to get accurate starting Y position for scanning
+    if (!appliedSpacingBefore && spacingBefore > 0) {
+      const prevTrailing = tempState.trailingSpacing ?? 0;
+      const neededSpacingBefore = Math.max(spacingBefore - prevTrailing, 0);
+      tempY += neededSpacingBefore;
+    }
+
+    // Scan through all lines to find the narrowest width
+    for (let i = 0; i < lines.length; i++) {
+      const lineY = tempY;
+      const lineHeight = lines[i]?.lineHeight || 0;
+
+      const { width: availableWidth, offsetX: computedOffset } = floatManager.computeAvailableWidth(
+        lineY,
+        lineHeight,
+        columnWidth,
+        tempState.columnIndex,
+        tempState.page.number,
+      );
+
+      if (availableWidth < narrowestWidth) {
+        narrowestWidth = availableWidth;
+        narrowestOffsetX = computedOffset;
+      }
+
+      tempY += lineHeight;
+    }
+
+    // If we found a narrower width, remeasure the entire paragraph once with that width
+    if (narrowestWidth < columnWidth) {
+      const newMeasure = remeasureParagraph(block, narrowestWidth);
+      lines = normalizeLines(newMeasure);
+      didRemeasureForFloats = true;
+    }
+  }
+
+  // PHASE 2: Layout the paragraph with the remeasured lines
   while (fromLine < lines.length) {
     let state = ensurePage();
     if (state.trailingSpacing == null) state.trailingSpacing = 0;
@@ -321,25 +393,12 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       state = advanceColumn(state);
     }
 
+    // Use the narrowest width and offset if we remeasured
     let effectiveColumnWidth = columnWidth;
     let offsetX = 0;
-    if (!didRemeasureForFloats && typeof remeasureParagraph === 'function') {
-      const firstLineY = state.cursorY;
-      const firstLineHeight = lines[fromLine]?.lineHeight || 0;
-      const { width: adjustedWidth, offsetX: computedOffset } = floatManager.computeAvailableWidth(
-        firstLineY,
-        firstLineHeight,
-        columnWidth,
-        state.columnIndex,
-        state.page.number,
-      );
-      if (adjustedWidth < columnWidth) {
-        const newMeasure = remeasureParagraph(block, adjustedWidth);
-        lines = normalizeLines(newMeasure);
-        didRemeasureForFloats = true;
-        effectiveColumnWidth = adjustedWidth;
-        offsetX = computedOffset;
-      }
+    if (didRemeasureForFloats) {
+      effectiveColumnWidth = narrowestWidth;
+      offsetX = narrowestOffsetX;
     }
 
     const slice = sliceLines(lines, fromLine, state.contentBottom - state.cursorY);
@@ -355,16 +414,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       width: effectiveColumnWidth,
       ...computeFragmentPmRange(block, lines, fromLine, slice.toLine),
     };
-
-    anchorDebugLog('Positioning paragraph fragment:', {
-      blockId: block.id,
-      fragmentY: state.cursorY,
-      fragmentHeight,
-      firstLineHeight: lines[fromLine]?.lineHeight,
-      firstLineAscent: lines[fromLine]?.ascent,
-      firstLineDescent: lines[fromLine]?.descent,
-      pageNumber: state.page.number,
-    });
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;

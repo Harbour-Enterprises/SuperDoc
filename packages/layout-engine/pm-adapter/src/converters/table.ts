@@ -15,6 +15,9 @@ import type {
   TableBorders,
   TableRow,
   TableRowAttrs,
+  TableBlock,
+  TableAnchor,
+  TableWrap,
 } from '@superdoc/contracts';
 import type {
   PMNode,
@@ -29,7 +32,7 @@ import type {
   ListCounterContext,
 } from '../types.js';
 import { extractTableBorders, extractCellBorders, extractCellPadding } from '../attributes/index.js';
-import { pickNumber } from '../utilities.js';
+import { pickNumber, twipsToPx } from '../utilities.js';
 import { hydrateTableStyleAttrs } from './table-styles.js';
 
 type ParagraphConverter = (
@@ -84,6 +87,39 @@ const isTableCellNode = (node: PMNode): boolean =>
   node.type === 'tableHeader' ||
   node.type === 'table_header';
 
+type NormalizedRowHeight =
+  | {
+      value: number;
+      rule: 'exact' | 'atLeast' | 'auto';
+    }
+  | undefined;
+
+const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHeight => {
+  if (!rowProps || typeof rowProps !== 'object') return undefined;
+  const rawRowHeight = (rowProps as Record<string, unknown>).rowHeight;
+  if (!rawRowHeight || typeof rawRowHeight !== 'object') return undefined;
+
+  const heightObj = rawRowHeight as Record<string, unknown>;
+  const rawValue = pickNumber(heightObj.value ?? heightObj.val);
+  if (rawValue == null) return undefined;
+
+  const rawRule = heightObj.rule ?? heightObj.hRule;
+  const rule =
+    rawRule === 'exact' || rawRule === 'atLeast' || rawRule === 'auto'
+      ? (rawRule as 'exact' | 'atLeast' | 'auto')
+      : 'atLeast';
+
+  // Row heights from DOCX are typically in twips. Use a heuristic to avoid double-converting pixel values:
+  // convert when the value looks large enough to be twips (>= 300 twips ≈ 20px).
+  const isLikelyTwips = rawValue >= 300 || Math.abs(rawValue % 15) < 1e-6;
+  const valuePx = isLikelyTwips ? twipsToPx(rawValue) : rawValue;
+
+  return {
+    value: valuePx,
+    rule,
+  };
+};
+
 const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   const { cellNode, rowIndex, cellIndex, context, defaultCellPadding } = args;
   if (!isTableCellNode(cellNode) || !Array.isArray(cellNode.content)) {
@@ -132,8 +168,14 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   if (padding) cellAttrs.padding = padding;
 
   const verticalAlign = cellNode.attrs?.verticalAlign;
-  if (verticalAlign === 'top' || verticalAlign === 'middle' || verticalAlign === 'bottom') {
-    cellAttrs.verticalAlign = verticalAlign;
+  const normalizedVerticalAlign =
+    verticalAlign === 'middle' ? 'center' : verticalAlign === 'center' ? 'center' : verticalAlign;
+  if (
+    normalizedVerticalAlign === 'top' ||
+    normalizedVerticalAlign === 'center' ||
+    normalizedVerticalAlign === 'bottom'
+  ) {
+    cellAttrs.verticalAlign = normalizedVerticalAlign;
   }
 
   const background = cellNode.attrs?.background as { color?: string } | undefined;
@@ -184,12 +226,20 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
   if (cells.length === 0) return null;
 
   const rowProps = rowNode.attrs?.tableRowProperties;
+  const rowHeight = normalizeRowHeight(rowProps as Record<string, unknown> | undefined);
   const attrs: TableRowAttrs | undefined =
     rowProps && typeof rowProps === 'object'
       ? {
           tableRowProperties: rowProps as Record<string, unknown>,
+          ...(rowHeight ? { rowHeight } : {}),
         }
-      : undefined;
+      : rowHeight
+        ? { rowHeight }
+        : undefined;
+
+  // Note: cantSplit is stored within tableRowProperties.cantSplit (not as a separate attr)
+  // The PM table-row extension has both cantSplit as a top-level attr AND within tableRowProperties
+  // For layout engine, we only need to read from tableRowProperties.cantSplit
 
   return {
     id: context.nextBlockId(`row-${rowIndex}`),
@@ -197,6 +247,125 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
     attrs,
   };
 };
+
+/**
+ * Floating table properties from OOXML w:tblpPr.
+ * Values are in twips.
+ */
+type FloatingTableProperties = {
+  leftFromText?: number;
+  rightFromText?: number;
+  topFromText?: number;
+  bottomFromText?: number;
+  tblpX?: number;
+  tblpY?: number;
+  horzAnchor?: 'margin' | 'page' | 'text';
+  vertAnchor?: 'margin' | 'page' | 'text';
+  tblpXSpec?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  tblpYSpec?: 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+};
+
+/**
+ * Extract floating table properties from node attrs and convert to TableAnchor and TableWrap.
+ * Returns undefined values if the table is not floating (no tblpPr).
+ */
+function extractFloatingTableAnchorWrap(node: PMNode): { anchor?: TableAnchor; wrap?: TableWrap } {
+  const tableProperties = node.attrs?.tableProperties as Record<string, unknown> | undefined;
+  const floatingProps = tableProperties?.floatingTableProperties as FloatingTableProperties | undefined;
+
+  if (!floatingProps) {
+    return {};
+  }
+
+  // A table is considered anchored/floating if it has any positioning properties
+  const hasPositioning =
+    floatingProps.tblpX !== undefined ||
+    floatingProps.tblpY !== undefined ||
+    floatingProps.tblpXSpec !== undefined ||
+    floatingProps.tblpYSpec !== undefined ||
+    floatingProps.horzAnchor !== undefined ||
+    floatingProps.vertAnchor !== undefined;
+
+  if (!hasPositioning) {
+    return {};
+  }
+
+  // Map OOXML anchor values to contract types
+  const mapHorzAnchor = (val?: string): TableAnchor['hRelativeFrom'] => {
+    switch (val) {
+      case 'page':
+        return 'page';
+      case 'margin':
+        return 'margin';
+      case 'text':
+      default:
+        return 'column'; // 'text' in OOXML maps to column-relative positioning
+    }
+  };
+
+  const mapVertAnchor = (val?: string): TableAnchor['vRelativeFrom'] => {
+    switch (val) {
+      case 'page':
+        return 'page';
+      case 'margin':
+        return 'margin';
+      case 'text':
+      default:
+        return 'paragraph'; // 'text' in OOXML maps to paragraph-relative positioning
+    }
+  };
+
+  const anchor: TableAnchor = {
+    isAnchored: true,
+    hRelativeFrom: mapHorzAnchor(floatingProps.horzAnchor),
+    vRelativeFrom: mapVertAnchor(floatingProps.vertAnchor),
+  };
+
+  // Set alignment from tblpXSpec/tblpYSpec if present
+  if (floatingProps.tblpXSpec) {
+    anchor.alignH = floatingProps.tblpXSpec;
+  }
+  if (floatingProps.tblpYSpec) {
+    anchor.alignV = floatingProps.tblpYSpec;
+  }
+
+  // Set absolute offsets (convert twips to px)
+  if (floatingProps.tblpX !== undefined) {
+    anchor.offsetH = twipsToPx(floatingProps.tblpX);
+  }
+  if (floatingProps.tblpY !== undefined) {
+    anchor.offsetV = twipsToPx(floatingProps.tblpY);
+  }
+
+  // Build wrap properties from text distances
+  const hasDistances =
+    floatingProps.leftFromText !== undefined ||
+    floatingProps.rightFromText !== undefined ||
+    floatingProps.topFromText !== undefined ||
+    floatingProps.bottomFromText !== undefined;
+
+  const wrap: TableWrap = {
+    type: 'Square', // Floating tables with text distances use square wrapping
+    wrapText: 'bothSides', // Default to text on both sides
+  };
+
+  if (hasDistances) {
+    if (floatingProps.topFromText !== undefined) {
+      wrap.distTop = twipsToPx(floatingProps.topFromText);
+    }
+    if (floatingProps.bottomFromText !== undefined) {
+      wrap.distBottom = twipsToPx(floatingProps.bottomFromText);
+    }
+    if (floatingProps.leftFromText !== undefined) {
+      wrap.distLeft = twipsToPx(floatingProps.leftFromText);
+    }
+    if (floatingProps.rightFromText !== undefined) {
+      wrap.distRight = twipsToPx(floatingProps.rightFromText);
+    }
+  }
+
+  return { anchor, wrap };
+}
 
 /**
  * Convert a ProseMirror table node to a TableBlock
@@ -319,6 +488,12 @@ export function tableNodeToBlock(
     tableAttrs.tableLayout = tableLayout;
   }
 
+  // Preserve tableProperties for floating table detection and other OOXML metadata
+  const tableProperties = node.attrs?.tableProperties;
+  if (tableProperties && typeof tableProperties === 'object') {
+    tableAttrs.tableProperties = tableProperties as Record<string, unknown>;
+  }
+
   let columnWidths: number[] | undefined = undefined;
 
   const twipsToPixels = (twips: number): number => {
@@ -394,13 +569,18 @@ export function tableNodeToBlock(
 
   // Priority 4: Auto-calculate from content (columnWidths remains undefined)
 
-  const tableBlock = {
+  // Extract floating table anchor/wrap properties
+  const { anchor, wrap } = extractFloatingTableAnchorWrap(node);
+
+  const tableBlock: TableBlock = {
     kind: 'table',
     id: nextBlockId('table'),
     rows,
     attrs: Object.keys(tableAttrs).length > 0 ? tableAttrs : undefined,
     columnWidths,
-  } as FlowBlock;
+    ...(anchor ? { anchor } : {}),
+    ...(wrap ? { wrap } : {}),
+  };
 
   return tableBlock;
 }

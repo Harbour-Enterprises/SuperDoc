@@ -282,6 +282,23 @@ export const dataAttrsCompatible = (a: TextRun, b: TextRun): boolean => {
   return true;
 };
 
+export const commentsCompatible = (a: TextRun, b: TextRun): boolean => {
+  const aComments = a.comments ?? [];
+  const bComments = b.comments ?? [];
+  if (aComments.length === 0 && bComments.length === 0) return true;
+  if (aComments.length !== bComments.length) return false;
+
+  const normalize = (c: (typeof aComments)[number]) =>
+    `${c.commentId ?? ''}::${c.importedId ?? ''}::${c.internal ? '1' : '0'}`;
+  const aKeys = aComments.map(normalize).sort();
+  const bKeys = bComments.map(normalize).sort();
+
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+  }
+  return true;
+};
+
 /**
  * Merges adjacent text runs with continuous PM positions and compatible styling.
  * Optimization to reduce run fragmentation after PM operations.
@@ -323,7 +340,8 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
       current.highlight === next.highlight &&
       (current.letterSpacing ?? 0) === (next.letterSpacing ?? 0) &&
       trackedChangesCompatible(current, next) &&
-      dataAttrsCompatible(current, next);
+      dataAttrsCompatible(current, next) &&
+      commentsCompatible(current, next);
 
     if (canMerge) {
       // Merge next into current
@@ -1002,32 +1020,49 @@ export function paragraphToFlowBlocks(
       return;
     }
 
-    // Hard break (page break from DOCX <w:br w:type="page"/>)
-    // Splits the current paragraph and inserts a pageBreak block that forces
-    // layout to start on a new page
-    if (node.type === 'hardBreak') {
-      flushParagraph();
-      blocks.push({
-        kind: 'pageBreak',
-        id: nextId(),
-        attrs: node.attrs || {},
-      });
-      return;
-    }
-
-    // Line break (soft break or column break from DOCX <w:br w:type="column"/>)
-    if (node.type === 'lineBreak') {
+    // Hard / line breaks
+    if (node.type === 'hardBreak' || node.type === 'lineBreak') {
       const attrs = node.attrs ?? {};
-      if (attrs.lineBreakType === 'column') {
-        // Column break: flush current paragraph and emit column break block
+      const breakType = attrs.pageBreakType ?? attrs.lineBreakType ?? 'line';
+
+      if (breakType === 'page') {
+        flushParagraph();
+        blocks.push({
+          kind: 'pageBreak',
+          id: nextId(),
+          attrs: node.attrs || {},
+        });
+        return;
+      }
+
+      if (breakType === 'column') {
         flushParagraph();
         blocks.push({
           kind: 'columnBreak',
           id: nextId(),
           attrs: node.attrs || {},
         });
+        return;
       }
-      // Non-column line breaks are ignored (soft line breaks within paragraphs)
+      // Inline line break: preserve as a run so measurer can create a new line
+      const lineBreakRun: Run = { kind: 'lineBreak', attrs: {} };
+      const lbAttrs: Record<string, string> = {};
+      if (attrs.lineBreakType) lbAttrs.lineBreakType = String(attrs.lineBreakType);
+      if (attrs.clear) lbAttrs.clear = String(attrs.clear);
+      if (Object.keys(lbAttrs).length > 0) {
+        (lineBreakRun as { attrs: Record<string, string> }).attrs = lbAttrs;
+      } else {
+        delete (lineBreakRun as { attrs?: Record<string, string> }).attrs;
+      }
+      const pos = positions.get(node);
+      if (pos) {
+        (lineBreakRun as { pmStart: number }).pmStart = pos.start;
+        (lineBreakRun as { pmEnd: number }).pmEnd = pos.end;
+      }
+      if (activeSdt) {
+        (lineBreakRun as { sdt?: SdtMetadata }).sdt = activeSdt;
+      }
+      currentRuns.push(lineBreakRun);
       return;
     }
   };

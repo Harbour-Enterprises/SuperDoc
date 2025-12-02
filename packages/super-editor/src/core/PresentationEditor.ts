@@ -29,6 +29,9 @@ import type {
   TrackedChangesMode,
   ParaFragment,
   Fragment,
+  TableFragment,
+  TableBlock,
+  TableMeasure,
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
@@ -2241,6 +2244,7 @@ export class PresentationEditor extends EventEmitter {
       event.clientX,
       event.clientY,
     );
+
     event.preventDefault();
 
     // Even if clickToPosition returns null (clicked outside text content),
@@ -2350,11 +2354,8 @@ export class PresentationEditor extends EventEmitter {
       const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
       try {
         this.#editor.view?.dispatch(tr);
-      } catch (error) {
+      } catch {
         // Error dispatching selection - this can happen if the position is invalid
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[PresentationEditor] Failed to dispatch selection at position:', hit.pos, error);
-        }
       }
     }
 
@@ -3582,10 +3583,11 @@ export class PresentationEditor extends EventEmitter {
     if (!lineInfo) return null;
     const { line, index } = lineInfo;
     const range = computeLinePmRange(block, line);
-    if (range.pmStart == null) return null;
-    const charsInLine = Math.max(0, line.toChar - line.fromChar);
-    const offsetChars = Math.max(0, Math.min(charsInLine, pos - range.pmStart));
-    const localX = hit.fragment.x + measureCharacterX(block, line, offsetChars);
+    if (range.pmStart == null || range.pmEnd == null) return null;
+    // Use PM range for accurate character count across all runs
+    const pmCharsInLine = Math.max(1, range.pmEnd - range.pmStart);
+    const pmOffset = Math.max(0, Math.min(pmCharsInLine, pos - range.pmStart));
+    const localX = hit.fragment.x + measureCharacterX(block, line, pmOffset);
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, hit.fragment.fromLine, index);
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const headerLocalY = hit.pageIndex * headerPageHeight + (hit.fragment.y + lineOffset);
@@ -3754,10 +3756,33 @@ export class PresentationEditor extends EventEmitter {
   #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
+
+    // Try DOM-based positioning first - this matches how click-to-position works
+    // and correctly handles segment-based rendering with tab stops
+    const domResult = this.#computeCaretLayoutRectFromDOM(pos);
+    if (domResult) {
+      return domResult;
+    }
+
+    // Fallback to geometry-based calculation
     const hit = getFragmentAtPosition(layout, this.#layoutState.blocks, this.#layoutState.measures, pos);
-    if (!hit) return null;
+    if (!hit) {
+      return null;
+    }
     const block = hit.block;
     const measure = hit.measure;
+
+    // Handle table fragments
+    if (hit.fragment.kind === 'table' && block?.kind === 'table' && measure?.kind === 'table') {
+      return this.#computeTableCaretLayoutRect(
+        pos,
+        hit.fragment as TableFragment,
+        block as TableBlock,
+        measure as TableMeasure,
+        hit.pageIndex,
+      );
+    }
+
     if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph') return null;
     if (hit.fragment.kind !== 'para') {
       return null;
@@ -3765,22 +3790,242 @@ export class PresentationEditor extends EventEmitter {
     const fragment: ParaFragment = hit.fragment;
 
     const lineInfo = this.#findLineContainingPos(block, measure, fragment.fromLine, fragment.toLine, pos);
-    if (!lineInfo) return null;
+    if (!lineInfo) {
+      return null;
+    }
     const { line, index } = lineInfo;
     const range = computeLinePmRange(block, line);
-    if (range.pmStart == null) return null;
+    if (range.pmStart == null || range.pmEnd == null) return null;
 
-    const charsInLine = Math.max(0, line.toChar - line.fromChar);
-    const offsetChars = Math.max(0, Math.min(charsInLine, pos - range.pmStart));
-    const localX = fragment.x + measureCharacterX(block, line, offsetChars);
+    // Calculate character offset from PM position offset
+    const pmCharsInLine = Math.max(1, range.pmEnd - range.pmStart);
+    const pmOffset = Math.max(0, Math.min(pmCharsInLine, pos - range.pmStart));
+
+    const localX = fragment.x + measureCharacterX(block, line, pmOffset);
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
+
     return {
       pageIndex: hit.pageIndex,
       x: localX,
       y: localY,
       height: line.lineHeight,
     };
+  }
+
+  /**
+   * Computes caret position using DOM-based positioning.
+   * This matches how click-to-position mapping works and correctly handles
+   * segment-based rendering with tab stops.
+   *
+   * Returns page-local coordinates (x, y relative to the page element).
+   */
+  #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // Optimization: Try to find the specific page containing this position
+    // This narrows the DOM query scope significantly for large documents
+    let targetPageEl: HTMLElement | null = null;
+    if (this.#layoutState.layout && this.#layoutState.blocks && this.#layoutState.measures) {
+      const fragmentHit = getFragmentAtPosition(
+        this.#layoutState.layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        pos,
+      );
+      if (fragmentHit) {
+        const pageEl = this.#viewportHost.querySelector(
+          `.superdoc-page[data-page-index="${fragmentHit.pageIndex}"]`,
+        ) as HTMLElement | null;
+        if (pageEl) {
+          targetPageEl = pageEl;
+        }
+      }
+    }
+
+    // Query spans - prefer narrowed scope if we found the page, fallback to viewport-wide query
+    const spanEls = Array.from(
+      targetPageEl
+        ? targetPageEl.querySelectorAll('span[data-pm-start][data-pm-end]')
+        : this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]'),
+    );
+
+    for (const spanEl of spanEls) {
+      const pmStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');
+      const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+
+      // Found the span containing this position
+      // Get the page element to compute page-local coordinates
+      const pageEl = spanEl.closest('.superdoc-page') as HTMLElement | null;
+      if (!pageEl) continue;
+
+      const pageIndex = Number(pageEl.dataset.pageIndex ?? '0');
+      const pageRect = pageEl.getBoundingClientRect();
+
+      // Use Range API to get exact character position within the span
+      const textNode = spanEl.firstChild;
+      if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+        // No text node - return span start position
+        const spanRect = spanEl.getBoundingClientRect();
+
+        // Convert to page-local coordinates (unzoomed)
+        return {
+          pageIndex,
+          x: (spanRect.left - pageRect.left) / zoom,
+          y: (spanRect.top - pageRect.top) / zoom,
+          height: spanRect.height / zoom,
+        };
+      }
+
+      // Use Range to find exact character position
+      const text = textNode.textContent ?? '';
+      const charOffset = Math.max(0, Math.min(text.length, pos - pmStart));
+
+      const range = document.createRange();
+      try {
+        range.setStart(textNode, charOffset);
+        range.setEnd(textNode, charOffset);
+      } catch (error) {
+        // Range creation failed - this can happen if charOffset exceeds text length
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Range.setStart/setEnd failed:', {
+            error: error instanceof Error ? error.message : String(error),
+            charOffset,
+            textLength: text.length,
+            pos,
+            pmStart,
+            pmEnd,
+          });
+        }
+
+        // Fall back to span position
+        const spanRect = spanEl.getBoundingClientRect();
+
+        return {
+          pageIndex,
+          x: (spanRect.left - pageRect.left) / zoom,
+          y: (spanRect.top - pageRect.top) / zoom,
+          height: spanRect.height / zoom,
+        };
+      }
+
+      const rangeRect = range.getBoundingClientRect();
+
+      // Get span height for caret (matches font/text size, not full line height)
+      const spanRect = spanEl.getBoundingClientRect();
+
+      // Center the caret vertically within the line if line is taller than text
+      const lineEl = spanEl.closest('.superdoc-line');
+      const lineRect = lineEl ? (lineEl as HTMLElement).getBoundingClientRect() : spanRect;
+
+      // Use span height for caret, but position it vertically centered in the line
+      const caretHeight = spanRect.height;
+      const verticalOffset = (lineRect.height - caretHeight) / 2;
+      const caretY = lineRect.top + verticalOffset;
+
+      // Return page-local coordinates (unzoomed)
+      return {
+        pageIndex,
+        x: (rangeRect.left - pageRect.left) / zoom,
+        y: (caretY - pageRect.top) / zoom,
+        height: caretHeight / zoom,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Computes caret position within a table cell using DOM-based positioning.
+   * This uses the actual rendered DOM elements to get accurate positions,
+   * matching how click-to-position mapping works.
+   */
+  #computeTableCaretLayoutRect(
+    pos: number,
+    _fragment: TableFragment,
+    _tableBlock: TableBlock,
+    _tableMeasure: TableMeasure,
+    pageIndex: number,
+  ): { pageIndex: number; x: number; y: number; height: number } | null {
+    // Use DOM-based positioning for accuracy (matching how click mapping works)
+    // Find the line element with data-pm-start/end that contains this position
+    const lineEls = Array.from(this.#viewportHost.querySelectorAll('.superdoc-line'));
+
+    // Early return if DOM not yet rendered
+    if (lineEls.length === 0) return null;
+
+    for (const lineEl of lineEls) {
+      const pmStart = Number((lineEl as HTMLElement).dataset.pmStart ?? 'NaN');
+      const pmEnd = Number((lineEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+
+      // Found the line containing this position
+      // Now find the span containing the position
+      const spanEls = Array.from(lineEl.querySelectorAll('span[data-pm-start]'));
+
+      for (const spanEl of spanEls) {
+        const spanStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');
+        const spanEnd = Number((spanEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+        if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) continue;
+        if (pos < spanStart || pos > spanEnd) continue;
+
+        // Found the span - use Range API to get exact character position
+        const textNode = spanEl.firstChild;
+        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+          // No text node - return span start position
+          const spanRect = spanEl.getBoundingClientRect();
+          const viewportRect = this.#viewportHost.getBoundingClientRect();
+          const zoom = this.#layoutOptions.zoom ?? 1;
+
+          return {
+            pageIndex,
+            x: (spanRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+            y: (spanRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+            height: spanRect.height / zoom,
+          };
+        }
+
+        // Use Range to find exact character position
+        const text = textNode.textContent ?? '';
+        const charOffset = Math.max(0, Math.min(text.length, pos - spanStart));
+
+        const range = document.createRange();
+        range.setStart(textNode, charOffset);
+        range.setEnd(textNode, charOffset);
+
+        const rangeRect = range.getBoundingClientRect();
+        const viewportRect = this.#viewportHost.getBoundingClientRect();
+        const zoom = this.#layoutOptions.zoom ?? 1;
+        const lineRect = lineEl.getBoundingClientRect();
+
+        return {
+          pageIndex,
+          x: (rangeRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+          y: (lineRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+          height: lineRect.height / zoom,
+        };
+      }
+
+      // Position is in line but no matching span - return line start
+      const lineRect = (lineEl as HTMLElement).getBoundingClientRect();
+      const viewportRect = this.#viewportHost.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      return {
+        pageIndex,
+        x: (lineRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+        y: (lineRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+        height: lineRect.height / zoom,
+      };
+    }
+
+    return null;
   }
 
   #findLineContainingPos(
@@ -3790,16 +4035,33 @@ export class PresentationEditor extends EventEmitter {
     toLine: number,
     pos: number,
   ): { line: Line; index: number } | null {
+    const DEBUG_LINE_SEARCH = true;
+    const log = (...args: unknown[]) => {
+      if (DEBUG_LINE_SEARCH) console.log('[LINE-SEARCH]', ...args);
+    };
+
+    log('Searching for pos:', pos, 'in lines', fromLine, 'to', toLine);
+
     if (measure.kind !== 'paragraph' || block.kind !== 'paragraph') return null;
     for (let lineIndex = fromLine; lineIndex < toLine; lineIndex += 1) {
       const line = measure.lines[lineIndex];
       if (!line) continue;
       const range = computeLinePmRange(block, line);
+      log('Line', lineIndex, ':', {
+        pmStart: range.pmStart,
+        pmEnd: range.pmEnd,
+        fromRun: line.fromRun,
+        toRun: line.toRun,
+        fromChar: line.fromChar,
+        toChar: line.toChar,
+      });
       if (range.pmStart == null || range.pmEnd == null) continue;
       if (pos >= range.pmStart && pos <= range.pmEnd) {
+        log('Found line', lineIndex, 'for pos', pos);
         return { line, index: lineIndex };
       }
     }
+    log('No line found for pos', pos);
     return null;
   }
 

@@ -5,6 +5,8 @@ import type {
   HeaderFooterLayout,
   ImageBlock,
   ImageMeasure,
+  ImageFragment,
+  ImageFragmentMetadata,
   Layout,
   ListMeasure,
   Measure,
@@ -20,7 +22,7 @@ import type {
   DrawingMeasure,
   SectionNumbering,
 } from '@superdoc/contracts';
-import { createFloatingObjectManager } from './floating-objects.js';
+import { createFloatingObjectManager, computeAnchorX } from './floating-objects.js';
 import { computeNextSectionPropsAtBreak } from './section-props';
 import {
   scheduleSectionBreak as scheduleSectionBreakExport,
@@ -30,8 +32,8 @@ import {
 import { layoutParagraphBlock } from './layout-paragraph.js';
 import { layoutImageBlock } from './layout-image.js';
 import { layoutDrawingBlock } from './layout-drawing.js';
-import { layoutTableBlock } from './layout-table.js';
-import { collectAnchoredDrawings } from './anchors.js';
+import { layoutTableBlock, createAnchoredTableFragment } from './layout-table.js';
+import { collectAnchoredDrawings, collectAnchoredTables, collectPreRegisteredAnchors } from './anchors.js';
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
 
 type PageSize = { w: number; h: number };
@@ -657,7 +659,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     // Determine if this section break should force a page break
     const sectionType = block.type ?? 'continuous'; // Default to continuous if not specified
 
-    // Phase 3B: Detect mid-page column changes for continuous section breaks
+    // Detect mid-page column changes for continuous section breaks
     const isColumnsChanging =
       block.columns != null && (block.columns.count !== activeColumns.count || block.columns.gap !== activeColumns.gap);
 
@@ -692,7 +694,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         return { forcePageBreak: true, forceMidPageRegion: false, requiredParity: 'odd' };
       case 'continuous':
       default:
-        // Phase 3B: If continuous and columns are changing, force mid-page region
+        // If continuous and columns are changing, force mid-page region
         if (isColumnsChanging) {
           return { forcePageBreak: false, forceMidPageRegion: true };
         }
@@ -704,9 +706,88 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     }
   };
 
-  // PASS 1B: collect anchored drawings mapped to their anchor paragraphs
+  // Collect anchored drawings mapped to their anchor paragraphs
   const anchoredByParagraph = collectAnchoredDrawings(blocks, measures);
+  // PASS 1C: collect anchored/floating tables mapped to their anchor paragraphs
+  const anchoredTablesByParagraph = collectAnchoredTables(blocks, measures);
   const placedAnchoredIds = new Set<string>();
+  const placedAnchoredTableIds = new Set<string>();
+
+  // Pre-register page/margin-relative anchored images before the layout loop.
+  // These images position themselves relative to the page, not a paragraph, so they
+  // must be registered first so all paragraphs can wrap around them.
+  const preRegisteredAnchors = collectPreRegisteredAnchors(blocks, measures);
+
+  // Map to store pre-computed positions for page-relative anchors (for fragment creation later)
+  const preRegisteredPositions = new Map<string, { anchorX: number; anchorY: number; pageNumber: number }>();
+
+  for (const entry of preRegisteredAnchors) {
+    // Ensure first page exists
+    const state = paginator.ensurePage();
+
+    // Calculate anchor Y position based on vRelativeFrom and alignV
+    const vRelativeFrom = entry.block.anchor?.vRelativeFrom ?? 'paragraph';
+    const alignV = entry.block.anchor?.alignV ?? 'top';
+    const offsetV = entry.block.anchor?.offsetV ?? 0;
+    const imageHeight = entry.measure.height ?? 0;
+
+    // Calculate the content area boundaries
+    const contentTop = state.topMargin;
+    const contentBottom = state.contentBottom;
+    const contentHeight = Math.max(0, contentBottom - contentTop);
+
+    let anchorY: number;
+
+    if (vRelativeFrom === 'margin') {
+      // Position relative to the content area (margin box)
+      if (alignV === 'top') {
+        anchorY = contentTop + offsetV;
+      } else if (alignV === 'bottom') {
+        anchorY = contentBottom - imageHeight + offsetV;
+      } else if (alignV === 'center') {
+        anchorY = contentTop + (contentHeight - imageHeight) / 2 + offsetV;
+      } else {
+        anchorY = contentTop + offsetV;
+      }
+    } else if (vRelativeFrom === 'page') {
+      // Position relative to the physical page (0 = top edge)
+      if (alignV === 'top') {
+        anchorY = offsetV;
+      } else if (alignV === 'bottom') {
+        const pageHeight = contentBottom + margins.bottom;
+        anchorY = pageHeight - imageHeight + offsetV;
+      } else if (alignV === 'center') {
+        const pageHeight = contentBottom + margins.bottom;
+        anchorY = (pageHeight - imageHeight) / 2 + offsetV;
+      } else {
+        anchorY = offsetV;
+      }
+    } else {
+      // Shouldn't happen for pre-registered anchors, but fallback
+      anchorY = contentTop + offsetV;
+    }
+
+    // Compute anchor X position
+    const anchorX = entry.block.anchor
+      ? computeAnchorX(
+          entry.block.anchor,
+          state.columnIndex,
+          normalizeColumns(activeColumns, contentWidth),
+          entry.measure.width,
+          { left: margins.left, right: margins.right },
+          activePageSize.w,
+        )
+      : margins.left;
+
+    // Register with float manager so all paragraphs see this exclusion
+    // NOTE: We only register exclusion zones here, NOT fragments.
+    // Fragments will be created when the image block is encountered in the layout loop.
+    // This prevents the section break logic from seeing "content" on the page and creating a new page.
+    floatManager.registerDrawing(entry.block, entry.measure, anchorY, state.columnIndex, state.page.number);
+
+    // Store pre-computed position for later use when creating the fragment
+    preRegisteredPositions.set(entry.block.id, { anchorX, anchorY, pageNumber: state.page.number });
+  }
 
   // PASS 2: Layout all blocks, consulting float manager for affected paragraphs
   for (let index = 0; index < blocks.length; index += 1) {
@@ -814,7 +895,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         layoutLog(`[Layout] After scheduleSectionBreakCompat: Scheduled pendingSectionRefs:`, pendingSectionRefs);
       }
 
-      // Phase 3B: Handle mid-page region changes
+      // Handle mid-page region changes
       if (breakInfo.forceMidPageRegion && block.columns) {
         const state = paginator.ensurePage();
         // Start a new mid-page region with the new column configuration
@@ -881,6 +962,28 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       }
 
       const anchorsForPara = anchoredByParagraph.get(index);
+
+      // Register anchored tables for this paragraph before layout
+      // so the float manager knows about them when laying out text
+      const tablesForPara = anchoredTablesByParagraph.get(index);
+      if (tablesForPara) {
+        const state = paginator.ensurePage();
+        for (const { block: tableBlock, measure: tableMeasure } of tablesForPara) {
+          if (placedAnchoredTableIds.has(tableBlock.id)) continue;
+
+          // Register the table with the float manager for text wrapping
+          floatManager.registerTable(tableBlock, tableMeasure, state.cursorY, state.columnIndex, state.page.number);
+
+          // Create and place the table fragment at its anchored position
+          const anchorX = tableBlock.anchor?.offsetH ?? columnX(state.columnIndex);
+          const anchorY = state.cursorY + (tableBlock.anchor?.offsetV ?? 0);
+
+          const tableFragment = createAnchoredTableFragment(tableBlock, tableMeasure, anchorX, anchorY);
+          state.page.fragments.push(tableFragment);
+          placedAnchoredTableIds.add(tableBlock.id);
+        }
+      }
+
       layoutParagraphBlock(
         {
           block,
@@ -913,6 +1016,67 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       if (measure.kind !== 'image') {
         throw new Error(`layoutDocument: expected image measure for block ${block.id}`);
       }
+
+      // Check if this is a pre-registered page-relative anchor
+      const preRegPos = preRegisteredPositions.get(block.id);
+      if (
+        preRegPos &&
+        Number.isFinite(preRegPos.anchorX) &&
+        Number.isFinite(preRegPos.anchorY) &&
+        Number.isFinite(preRegPos.pageNumber)
+      ) {
+        // Use pre-computed position for page-relative anchors
+        const state = paginator.ensurePage();
+        const imgBlock = block as ImageBlock;
+        const imgMeasure = measure as ImageMeasure;
+
+        const pageContentHeight = Math.max(0, state.contentBottom - state.topMargin);
+        const relativeFrom = imgBlock.anchor?.hRelativeFrom ?? 'column';
+        const cols = getCurrentColumns();
+        let maxWidth: number;
+        if (relativeFrom === 'page') {
+          maxWidth = cols.count === 1 ? activePageSize.w - margins.left - margins.right : activePageSize.w;
+        } else if (relativeFrom === 'margin') {
+          maxWidth = activePageSize.w - margins.left - margins.right;
+        } else {
+          maxWidth = cols.width;
+        }
+
+        const aspectRatio = imgMeasure.width > 0 && imgMeasure.height > 0 ? imgMeasure.width / imgMeasure.height : 1.0;
+        const minWidth = 20;
+        const minHeight = minWidth / aspectRatio;
+
+        const metadata: ImageFragmentMetadata = {
+          originalWidth: imgMeasure.width,
+          originalHeight: imgMeasure.height,
+          maxWidth,
+          maxHeight: pageContentHeight,
+          aspectRatio,
+          minWidth,
+          minHeight,
+        };
+
+        const fragment: ImageFragment = {
+          kind: 'image',
+          blockId: imgBlock.id,
+          x: preRegPos.anchorX,
+          y: preRegPos.anchorY,
+          width: imgMeasure.width,
+          height: imgMeasure.height,
+          isAnchored: true,
+          zIndex: imgBlock.anchor?.behindDoc ? 0 : 1,
+          metadata,
+        };
+
+        const attrs = imgBlock.attrs as Record<string, unknown> | undefined;
+        if (attrs?.pmStart != null) fragment.pmStart = attrs.pmStart as number;
+        if (attrs?.pmEnd != null) fragment.pmEnd = attrs.pmEnd as number;
+
+        state.page.fragments.push(fragment);
+        placedAnchoredIds.add(imgBlock.id);
+        continue;
+      }
+
       layoutImageBlock({
         block: block as ImageBlock,
         measure: measure as ImageMeasure,

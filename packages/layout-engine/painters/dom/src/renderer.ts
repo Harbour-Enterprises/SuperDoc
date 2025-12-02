@@ -12,6 +12,7 @@ import type {
   TextRun,
   ImageRun,
   Line,
+  LineSegment,
   ParagraphBlock,
   ParagraphMeasure,
   ImageBlock,
@@ -37,6 +38,7 @@ import type {
   GradientFill,
   SolidFillWithAlpha,
   ShapeTextContent,
+  DropCapDescriptor,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -55,6 +57,7 @@ import {
 } from './styles.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
+import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -181,6 +184,9 @@ export type FragmentRenderContext = {
 };
 
 const LIST_MARKER_GAP = 8;
+const COMMENT_EXTERNAL_COLOR = '#B1124B';
+const COMMENT_INTERNAL_COLOR = '#078383';
+const COMMENT_INACTIVE_ALPHA = '22';
 
 type LinkRenderData = {
   href?: string;
@@ -1249,7 +1255,7 @@ export class DomPainter {
           current.signature = fragmentSignature(fragment, this.blockLookup);
         }
 
-        this.updateFragmentElement(current.element, fragment);
+        this.updateFragmentElement(current.element, fragment, contextBase.section);
         current.fragment = fragment;
         current.key = key;
         current.context = contextBase;
@@ -1329,10 +1335,10 @@ export class DomPainter {
       return this.renderListItemFragment(fragment, context);
     }
     if (fragment.kind === 'image') {
-      return this.renderImageFragment(fragment);
+      return this.renderImageFragment(fragment, context);
     }
     if (fragment.kind === 'drawing') {
-      return this.renderDrawingFragment(fragment);
+      return this.renderDrawingFragment(fragment, context);
     }
     if (fragment.kind === 'table') {
       return this.renderTableFragment(fragment, context);
@@ -1376,7 +1382,7 @@ export class DomPainter {
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
 
       // Add TOC-specific styling class
       if (isTocEntry) {
@@ -1400,8 +1406,40 @@ export class DomPainter {
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
 
+      // Render drop cap if present (only on the first fragment, not continuation)
+      const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+      const dropCapMeasure = measure.dropCap;
+      if (dropCapDescriptor && dropCapMeasure && !fragment.continuesFromPrev) {
+        const dropCapEl = this.renderDropCap(dropCapDescriptor, dropCapMeasure);
+        fragmentEl.appendChild(dropCapEl);
+      }
+
+      // Remove fragment-level indent so line-level indent handling doesn't double-apply.
+      if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
+      if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
+      if (fragmentEl.style.textIndent) fragmentEl.style.removeProperty('text-indent');
+
+      const paraIndent = block.attrs?.indent;
+      const paraIndentLeft = paraIndent?.left ?? 0;
+      const paraIndentRight = paraIndent?.right ?? 0;
+      const firstLineOffset = (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
+
       lines.forEach((line, index) => {
         const lineEl = this.renderLine(block, line, context);
+
+        // Apply paragraph indent on each rendered line to preserve hanging/first-line offsets
+        if (paraIndentLeft) {
+          lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+        }
+        if (paraIndentRight) {
+          lineEl.style.paddingRight = `${paraIndentRight}px`;
+        }
+        if (!fragment.continuesFromPrev && index === 0 && firstLineOffset) {
+          lineEl.style.textIndent = `${firstLineOffset}px`;
+        } else if (firstLineOffset) {
+          lineEl.style.textIndent = '0px';
+        }
+
         if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
@@ -1413,6 +1451,16 @@ export class DomPainter {
           markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
           markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
+
+          // Position marker relative to text start
+          // textStart = indentLeft + firstLine - hanging
+          // markerLeft = textStart - markerWidth
+          const indentLeft = paraIndentLeft;
+          const hanging = paraIndent?.hanging ?? 0;
+          const textStartX = indentLeft - hanging;
+          const markerLeftX = textStartX - fragment.markerWidth;
+          markerEl.style.position = 'relative';
+          markerEl.style.left = `${markerLeftX}px`;
 
           // Apply marker run styling
           markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
@@ -1482,6 +1530,66 @@ export class DomPainter {
       el.title = error.message;
     }
     return el;
+  }
+
+  /**
+   * Renders a drop cap element as a floated span at the start of a paragraph.
+   *
+   * Drop caps are large initial letters that span multiple lines of text.
+   * This method creates a floated element with the drop cap letter styled
+   * according to the descriptor's run properties.
+   *
+   * @param descriptor - The drop cap descriptor with text and styling info
+   * @param measure - The measured dimensions of the drop cap
+   * @returns HTMLElement containing the rendered drop cap
+   */
+  private renderDropCap(descriptor: DropCapDescriptor, measure: ParagraphMeasure['dropCap']): HTMLElement {
+    const doc = this.doc!;
+    const { run, mode } = descriptor;
+
+    const dropCapEl = doc.createElement('span');
+    dropCapEl.classList.add('superdoc-drop-cap');
+    dropCapEl.textContent = run.text;
+
+    // Apply styling from the run
+    dropCapEl.style.fontFamily = run.fontFamily;
+    dropCapEl.style.fontSize = `${run.fontSize}px`;
+    if (run.bold) {
+      dropCapEl.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      dropCapEl.style.fontStyle = 'italic';
+    }
+    if (run.color) {
+      dropCapEl.style.color = run.color;
+    }
+
+    // Position the drop cap based on mode
+    if (mode === 'drop') {
+      // Float left so text wraps around it
+      dropCapEl.style.float = 'left';
+      dropCapEl.style.marginRight = '4px'; // Small gap between drop cap and text
+      dropCapEl.style.lineHeight = '1'; // Prevent extra line height from affecting layout
+    } else if (mode === 'margin') {
+      // Position in the margin (left of the text area)
+      dropCapEl.style.position = 'absolute';
+      dropCapEl.style.left = '0';
+      dropCapEl.style.lineHeight = '1';
+    }
+
+    // Apply vertical position offset if specified
+    if (run.position && run.position !== 0) {
+      dropCapEl.style.position = dropCapEl.style.position || 'relative';
+      dropCapEl.style.top = `${run.position}px`;
+    }
+
+    // Set dimensions from measurement
+    if (measure) {
+      dropCapEl.style.width = `${measure.width}px`;
+      dropCapEl.style.height = `${measure.height}px`;
+    }
+
+    return dropCapEl;
   }
 
   private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
@@ -1578,7 +1686,7 @@ export class DomPainter {
     }
   }
 
-  private renderImageFragment(fragment: ImageFragment): HTMLElement {
+  private renderImageFragment(fragment: ImageFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
@@ -1594,7 +1702,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-image-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
@@ -1642,7 +1750,7 @@ export class DomPainter {
     }
   }
 
-  private renderDrawingFragment(fragment: DrawingFragment): HTMLElement {
+  private renderDrawingFragment(fragment: DrawingFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
@@ -1658,7 +1766,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       fragmentEl.style.position = 'absolute';
       fragmentEl.style.overflow = 'hidden';
@@ -2217,13 +2325,19 @@ export class DomPainter {
       throw new Error('DomPainter: document is not available');
     }
 
+    // Wrap applyFragmentFrame to capture section from context
+    // This ensures table cell fragments receive proper section context for PM position validation
+    const applyFragmentFrameWithSection = (el: HTMLElement, frag: Fragment): void => {
+      this.applyFragmentFrame(el, frag, context.section);
+    };
+
     return renderTableFragmentElement({
       doc: this.doc,
       fragment,
       context,
       blockLookup: this.blockLookup,
       renderLine: this.renderLine.bind(this),
-      applyFragmentFrame: this.applyFragmentFrame.bind(this),
+      applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
     });
@@ -2234,7 +2348,7 @@ export class DomPainter {
    * @returns Sanitized link data or null if invalid/missing
    */
   private extractLinkData(run: Run): LinkRenderData | null {
-    if (run.kind === 'tab') {
+    if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
       return null;
     }
     const link = (run as TextRun).link as FlowRunLink | undefined;
@@ -2443,6 +2557,20 @@ export class DomPainter {
     return run.kind === 'image';
   }
 
+  /**
+   * Type guard to check if a run is a line break run.
+   */
+  private isLineBreakRun(run: Run): run is import('@superdoc/contracts').LineBreakRun {
+    return run.kind === 'lineBreak';
+  }
+
+  /**
+   * Type guard to check if a run is a break run.
+   */
+  private isBreakRun(run: Run): run is import('@superdoc/contracts').BreakRun {
+    return run.kind === 'break';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
@@ -2453,8 +2581,20 @@ export class DomPainter {
       return this.renderImageRun(run);
     }
 
+    // Handle LineBreakRun - line breaks are handled by the measurer creating new lines,
+    // so we don't render anything for them in the DOM. They exist in the run array for
+    // proper PM position tracking but don't need visual representation.
+    if (this.isLineBreakRun(run)) {
+      return null;
+    }
+
+    // Handle BreakRun - similar to LineBreakRun, breaks are handled by the measurer
+    if (this.isBreakRun(run)) {
+      return null;
+    }
+
     // Handle TextRun
-    if (!run.text || !this.doc) {
+    if (!('text' in run) || !run.text || !this.doc) {
       return null;
     }
 
@@ -2488,9 +2628,25 @@ export class DomPainter {
 
     // Pass isLink flag to skip applying inline color/decoration styles for links
     applyRunStyles(elem as HTMLElement, run, isActiveLink);
+    const commentColor = getCommentHighlight(run as TextRun);
+    if (commentColor && !(run as TextRun).highlight) {
+      (elem as HTMLElement).style.backgroundColor = commentColor;
+    }
+    const commentAnnotations = (run as TextRun).comments;
+    if (commentAnnotations?.length) {
+      elem.dataset.commentIds = commentAnnotations.map((c) => c.commentId).join(',');
+      if (commentAnnotations.some((c) => c.internal)) {
+        elem.dataset.commentInternal = 'true';
+      }
+      elem.classList.add('superdoc-comment-highlight');
+    }
     // Ensure text renders above tab leaders (leaders are z-index: 0)
     elem.style.zIndex = '1';
     applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
+
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'paragraph text run');
+
     if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
     if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
     if (trackedConfig) {
@@ -2596,6 +2752,9 @@ export class DomPainter {
     // Apply z-index to render above tab leaders
     img.style.zIndex = '1';
 
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'inline image run');
+
     // Apply PM position tracking for cursor placement
     if (run.pmStart != null) {
       img.dataset.pmStart = String(run.pmStart);
@@ -2627,6 +2786,12 @@ export class DomPainter {
     if (styleId) {
       el.setAttribute('styleid', styleId);
     }
+    const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
+    if (alignment === 'center' || alignment === 'right' || alignment === 'justify') {
+      el.style.textAlign = alignment === 'justify' ? 'justify' : alignment;
+    } else {
+      el.style.textAlign = 'left';
+    }
 
     const lineRange = computeLinePmRange(block, line);
 
@@ -2637,10 +2802,10 @@ export class DomPainter {
       el.dataset.pmEnd = String(lineRange.pmEnd);
     }
 
-    const runs = sliceRunsForLine(block, line);
+    const runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
 
-    if (runs.length === 0) {
+    if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
       span.innerHTML = '&nbsp;';
       el.appendChild(span);
@@ -2702,10 +2867,76 @@ export class DomPainter {
       // When rendering segments, we need to track cumulative X position
       // for segments that don't have explicit X coordinates
       let cumulativeX = 0;
+      const segmentsByRun = new Map<number, LineSegment[]>();
+      line.segments.forEach((segment) => {
+        const list = segmentsByRun.get(segment.runIndex);
+        if (list) {
+          list.push(segment);
+        } else {
+          segmentsByRun.set(segment.runIndex, [segment]);
+        }
+      });
 
-      line.segments.forEach((segment, _segIdx) => {
-        const baseRun = runs[segment.runIndex];
-        if (!baseRun || baseRun.kind === 'tab') return;
+      /**
+       * Finds the X position where the immediate next segment starts after a given run index.
+       * Only returns the X if the very next run has a segment with explicit positioning.
+       * This handles tab-aligned text where right/center alignment causes the text to start
+       * before the tab stop target.
+       *
+       * @param fromRunIndex - The run index to search after
+       * @returns The X position of the immediate next segment, or undefined if not found or not immediate
+       */
+      const findImmediateNextSegmentX = (fromRunIndex: number): number | undefined => {
+        // Only check the immediate next run - don't skip over other tabs
+        const nextRunIdx = fromRunIndex + 1;
+        if (nextRunIdx <= line.toRun) {
+          const nextSegments = segmentsByRun.get(nextRunIdx);
+          if (nextSegments && nextSegments.length > 0) {
+            const firstSegment = nextSegments[0];
+            // Return the segment's explicit X if it has one (from tab alignment)
+            return firstSegment.x;
+          }
+        }
+        return undefined;
+      };
+
+      for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+        const baseRun = block.runs[runIndex];
+        if (!baseRun) continue;
+
+        if (baseRun.kind === 'tab') {
+          // Find where the immediate next content begins (if it's right after this tab)
+          const immediateNextX = findImmediateNextSegmentX(runIndex);
+          const tabStartX = cumulativeX;
+
+          // The tab should span from where previous content ended to where next content begins.
+          // If the immediate next segment has an explicit X (from tab alignment), use that.
+          // Otherwise, use the tab's measured width to calculate the end position.
+          const tabEndX = immediateNextX !== undefined ? immediateNextX : tabStartX + (baseRun.width ?? 0);
+          const actualTabWidth = tabEndX - tabStartX;
+
+          const tabEl = this.doc!.createElement('span');
+          tabEl.style.position = 'absolute';
+          tabEl.style.left = `${tabStartX}px`;
+          tabEl.style.top = '0px';
+          tabEl.style.width = `${actualTabWidth}px`;
+          tabEl.style.height = `${line.lineHeight}px`;
+          tabEl.style.display = 'inline-block';
+          tabEl.style.visibility = 'hidden';
+          tabEl.style.pointerEvents = 'none';
+          tabEl.style.zIndex = '1';
+          if (styleId) {
+            tabEl.setAttribute('styleid', styleId);
+          }
+          if (baseRun.pmStart != null) tabEl.dataset.pmStart = String(baseRun.pmStart);
+          if (baseRun.pmEnd != null) tabEl.dataset.pmEnd = String(baseRun.pmEnd);
+          el.appendChild(tabEl);
+
+          // Update cumulativeX to where the next content begins
+          // This ensures proper positioning for subsequent elements
+          cumulativeX = tabEndX;
+          continue;
+        }
 
         // Handle ImageRun - render as-is (no slicing needed, atomic unit)
         if (this.isImageRun(baseRun)) {
@@ -2714,53 +2945,80 @@ export class DomPainter {
             if (styleId) {
               elem.setAttribute('styleid', styleId);
             }
-            // Images don't need explicit X positioning in tab-aligned content
-            // They flow naturally at their position in the run sequence
             el.appendChild(elem);
           }
-          return;
+          continue;
         }
 
-        // Extract the text for this segment from the text run
-        const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
-        const segmentRun: TextRun = { ...(baseRun as TextRun), text: segmentText };
+        // Handle LineBreakRun - line breaks are handled by line creation, skip here
+        if (this.isLineBreakRun(baseRun)) {
+          continue;
+        }
 
-        const elem = this.renderRun(segmentRun, context, trackedConfig);
-        if (elem) {
-          if (styleId) {
-            elem.setAttribute('styleid', styleId);
-          }
-          // Determine X position for this segment
-          let xPos: number;
-          if (segment.x !== undefined) {
-            // Segment has explicit X position
-            xPos = segment.x;
-          } else {
-            // No explicit X, use cumulative position
-            xPos = cumulativeX;
-          }
+        // Handle BreakRun - breaks are handled by line creation, skip here
+        if (this.isBreakRun(baseRun)) {
+          continue;
+        }
 
-          elem.style.position = 'absolute';
-          elem.style.left = `${xPos}px`;
-          el.appendChild(elem);
+        const runSegments = segmentsByRun.get(runIndex);
+        if (!runSegments || runSegments.length === 0) {
+          continue;
+        }
 
-          // Update cumulative X for next segment by measuring this element's width
-          // This applies to ALL segments (both with and without explicit X)
-          if (this.doc) {
-            const measureEl = elem.cloneNode(true) as HTMLElement;
-            measureEl.style.position = 'absolute';
-            measureEl.style.visibility = 'hidden';
-            measureEl.style.left = '-9999px';
-            this.doc.body.appendChild(measureEl);
-            const width = measureEl.offsetWidth;
-            this.doc.body.removeChild(measureEl);
+        // At this point, baseRun must be TextRun (has .text property)
+        if (!('text' in baseRun)) {
+          continue;
+        }
+
+        const baseText = baseRun.text ?? '';
+        const runPmStart = baseRun.pmStart ?? null;
+        const fallbackPmEnd =
+          runPmStart != null && baseRun.pmEnd == null ? runPmStart + baseText.length : (baseRun.pmEnd ?? null);
+
+        runSegments.forEach((segment) => {
+          const segmentText = baseText.slice(segment.fromChar, segment.toChar);
+          if (!segmentText) return;
+
+          const pmSliceStart = runPmStart != null ? runPmStart + segment.fromChar : undefined;
+          const pmSliceEnd = runPmStart != null ? runPmStart + segment.toChar : (fallbackPmEnd ?? undefined);
+          const segmentRun: TextRun = {
+            ...(baseRun as TextRun),
+            text: segmentText,
+            pmStart: pmSliceStart,
+            pmEnd: pmSliceEnd,
+          };
+
+          const elem = this.renderRun(segmentRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Determine X position for this segment
+            const xPos = segment.x !== undefined ? segment.x : cumulativeX;
+
+            elem.style.position = 'absolute';
+            elem.style.left = `${xPos}px`;
+            el.appendChild(elem);
+
+            // Update cumulative X for next segment by measuring this element's width
+            // This applies to ALL segments (both with and without explicit X)
+            let width = segment.width ?? 0;
+            if (width <= 0 && this.doc) {
+              const measureEl = elem.cloneNode(true) as HTMLElement;
+              measureEl.style.position = 'absolute';
+              measureEl.style.visibility = 'hidden';
+              measureEl.style.left = '-9999px';
+              this.doc.body.appendChild(measureEl);
+              width = measureEl.offsetWidth;
+              this.doc.body.removeChild(measureEl);
+            }
             cumulativeX = xPos + width;
           }
-        }
-      });
+        });
+      }
     } else {
       // Use run-based rendering for normal text flow
-      runs.forEach((run) => {
+      runsForLine.forEach((run) => {
         const elem = this.renderRun(run, context, trackedConfig);
         if (elem) {
           if (styleId) {
@@ -2829,8 +3087,18 @@ export class DomPainter {
     }
   }
 
-  private updateFragmentElement(el: HTMLElement, fragment: Fragment): void {
-    this.applyFragmentFrame(el, fragment);
+  /**
+   * Updates an existing fragment element's position and dimensions in place.
+   * Used during incremental updates to efficiently reposition fragments without full re-render.
+   *
+   * @param el - The HTMLElement representing the fragment to update
+   * @param fragment - The fragment data containing updated position and dimensions
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Affects PM position validation - only body sections validate PM positions.
+   *                  If undefined, defaults to 'body' section behavior.
+   */
+  private updateFragmentElement(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
+    this.applyFragmentFrame(el, fragment, section);
     if (fragment.kind === 'image') {
       el.style.height = `${fragment.height}px`;
     }
@@ -2839,13 +3107,32 @@ export class DomPainter {
     }
   }
 
-  private applyFragmentFrame(el: HTMLElement, fragment: Fragment): void {
+  /**
+   * Applies fragment positioning, dimensions, and metadata to an HTML element.
+   * Sets CSS positioning, block ID, and PM position data attributes for paragraph fragments.
+   *
+   * @param el - The HTMLElement to apply fragment properties to
+   * @param fragment - The fragment data containing position, dimensions, and PM position information
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Controls PM position validation behavior:
+   *                  - 'body' or undefined: PM positions are validated and required for paragraph fragments
+   *                  - 'header' or 'footer': PM position validation is skipped (these sections have separate PM coordinate spaces)
+   *                  When undefined, defaults to 'body' section behavior (validation enabled).
+   */
+  private applyFragmentFrame(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
     el.style.left = `${fragment.x}px`;
     el.style.top = `${fragment.y}px`;
     el.style.width = `${fragment.width}px`;
     el.dataset.blockId = fragment.blockId;
 
     if (fragment.kind === 'para') {
+      // Assert PM positions are present for paragraph fragments
+      // Only validate for body sections - header/footer fragments have their own PM coordinate space
+      // Note: undefined section defaults to body section behavior (validation enabled)
+      if (section === 'body' || section === undefined) {
+        assertFragmentPmPositions(fragment, 'paragraph fragment');
+      }
+
       if (fragment.pmStart != null) {
         el.dataset.pmStart = String(fragment.pmStart);
       } else {
@@ -3053,7 +3340,17 @@ const fragmentKey = (fragment: Fragment): string => {
   if (fragment.kind === 'drawing') {
     return `drawing:${fragment.blockId}:${fragment.x}:${fragment.y}`;
   }
-  return `${fragment.kind}:${fragment.blockId}`;
+  if (fragment.kind === 'table') {
+    // Include row range and partial row info to uniquely identify table fragments
+    // This is critical for mid-row splitting where multiple fragments can exist for the same table
+    const partialKey = fragment.partialRow
+      ? `:${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}`
+      : '';
+    return `table:${fragment.blockId}:${fragment.fromRow}:${fragment.toRow}${partialKey}`;
+  }
+  // Exhaustive check - all fragment kinds should be handled above
+  const _exhaustiveCheck: never = fragment;
+  return _exhaustiveCheck;
 };
 
 const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
@@ -3094,6 +3391,23 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
       fragment.geometry.rotation ?? 0,
       fragment.scale ?? 1,
       fragment.zIndex ?? '',
+    ].join('|');
+  }
+  if (fragment.kind === 'table') {
+    // Include all properties that affect table fragment rendering
+    const partialSig = fragment.partialRow
+      ? `${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}-${fragment.partialRow.partialHeight}`
+      : '';
+    return [
+      base,
+      fragment.fromRow,
+      fragment.toRow,
+      fragment.width,
+      fragment.height,
+      fragment.continuesFromPrev ? 1 : 0,
+      fragment.continuesOnNext ? 1 : 0,
+      fragment.repeatHeaderCount ?? 0,
+      partialSig,
     ].join('|');
   }
   return base;
@@ -3140,23 +3454,34 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           ].join(',');
         }
 
-        // Handle TextRun and TabRun
+        // Handle LineBreakRun
+        if (run.kind === 'lineBreak') {
+          return ['linebreak', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TabRun
+        if (run.kind === 'tab') {
+          return [run.text ?? '', 'tab', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TextRun (kind is 'text' or undefined)
+        const textRun = run as TextRun;
         return [
-          run.text ?? '',
-          run.kind !== 'tab' ? run.fontFamily : '',
-          run.kind !== 'tab' ? run.fontSize : '',
-          run.kind !== 'tab' && run.bold ? 1 : 0,
-          run.kind !== 'tab' && run.italic ? 1 : 0,
-          run.kind !== 'tab' ? (run.color ?? '') : '',
+          textRun.text ?? '',
+          textRun.fontFamily,
+          textRun.fontSize,
+          textRun.bold ? 1 : 0,
+          textRun.italic ? 1 : 0,
+          textRun.color ?? '',
           // Text decorations - ensures DOM updates when decoration properties change.
-          run.kind !== 'tab' ? (run.underline?.style ?? '') : '',
-          run.kind !== 'tab' ? (run.underline?.color ?? '') : '',
-          run.kind !== 'tab' && run.strike ? 1 : 0,
-          run.kind !== 'tab' ? (run.highlight ?? '') : '',
-          run.kind !== 'tab' && run.letterSpacing != null ? run.letterSpacing : '',
-          run.pmStart ?? '',
-          run.pmEnd ?? '',
-          run.kind !== 'tab' ? (run.token ?? '') : '',
+          textRun.underline?.style ?? '',
+          textRun.underline?.color ?? '',
+          textRun.strike ? 1 : 0,
+          textRun.highlight ?? '',
+          textRun.letterSpacing != null ? textRun.letterSpacing : '',
+          textRun.pmStart ?? '',
+          textRun.pmEnd ?? '',
+          textRun.token ?? '',
         ].join(',');
       })
       .join('|');
@@ -3217,20 +3542,68 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    // Include column widths in version to trigger re-render when table is resized
-    return [
-      block.id,
-      tableBlock.columnWidths ? JSON.stringify(tableBlock.columnWidths) : '',
-      tableBlock.rows.length,
-    ].join('|');
+    // Robust hash across all rows/cells so deep edits invalidate version
+    const hashString = (seed: number, value: string): number => {
+      let hash = seed >>> 0;
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619); // FNV-style mix
+      }
+      return hash >>> 0;
+    };
+    const hashNumber = (seed: number, value: number | undefined | null): number => {
+      const n = Number.isFinite(value) ? (value as number) : 0;
+      let hash = seed ^ n;
+      hash = Math.imul(hash, 16777619);
+      hash ^= hash >>> 13;
+      return hash >>> 0;
+    };
+
+    let hash = 2166136261;
+    hash = hashString(hash, block.id);
+    hash = hashNumber(hash, tableBlock.rows.length);
+    hash = (tableBlock.columnWidths ?? []).reduce((acc, width) => hashNumber(acc, Math.round(width * 1000)), hash);
+
+    // Defensive guards: ensure rows array exists and iterate safely
+    const rows = tableBlock.rows ?? [];
+    for (const row of rows) {
+      if (!row || !Array.isArray(row.cells)) continue;
+      hash = hashNumber(hash, row.cells.length);
+      for (const cell of row.cells) {
+        if (!cell) continue;
+        const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+        hash = hashNumber(hash, cellBlocks.length);
+        // Include cell attributes that affect rendering (rowSpan, colSpan)
+        hash = hashNumber(hash, cell.rowSpan ?? 1);
+        hash = hashNumber(hash, cell.colSpan ?? 1);
+
+        for (const cellBlock of cellBlocks) {
+          hash = hashString(hash, cellBlock?.kind ?? 'unknown');
+          if (cellBlock?.kind === 'paragraph') {
+            const runs = (cellBlock as ParagraphBlock).runs ?? [];
+            hash = hashNumber(hash, runs.length);
+            for (const run of runs) {
+              // Only text runs have .text property; ImageRun does not
+              if ('text' in run && typeof run.text === 'string') {
+                hash = hashString(hash, run.text);
+              }
+              hash = hashNumber(hash, run.pmStart ?? -1);
+              hash = hashNumber(hash, run.pmEnd ?? -1);
+            }
+          }
+        }
+      }
+    }
+
+    return [block.id, tableBlock.rows.length, hash.toString(16)].join('|');
   }
 
   return block.id;
 };
 
 const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab' || run.kind === 'image') {
-    // Tab and image runs don't have text styling properties
+  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break') {
+    // Tab, image, lineBreak, and break runs don't have text styling properties
     return;
   }
 
@@ -3268,6 +3641,14 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
   }
+};
+
+const getCommentHighlight = (run: TextRun): string | undefined => {
+  const comments = run.comments;
+  if (!comments || comments.length === 0) return undefined;
+  const primary = comments[0];
+  const base = primary.internal ? COMMENT_INTERNAL_COLOR : COMMENT_EXTERNAL_COLOR;
+  return `${base}${COMMENT_INACTIVE_ALPHA}`;
 };
 
 /**
@@ -3412,6 +3793,30 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
       continue;
     }
 
+    // LineBreakRun handling - line breaks don't have text content and are handled
+    // by the measurer creating new lines. Include them for PM position tracking.
+    if (run.kind === 'lineBreak') {
+      result.push(run);
+      continue;
+    }
+
+    // BreakRun handling - similar to LineBreakRun
+    if (run.kind === 'break') {
+      result.push(run);
+      continue;
+    }
+
+    // TabRun handling - tabs don't need slicing
+    if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3427,21 +3832,16 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
 
       const pmSliceStart = runPmStart != null ? runPmStart + start : undefined;
       const pmSliceEnd = runPmStart != null ? runPmStart + end : (fallbackPmEnd ?? undefined);
-      if (run.kind === 'tab') {
-        // Only include the tab run if the slice contains the tab character
-        if (slice.includes('\t')) {
-          result.push(run);
-        }
-      } else {
-        // TextRun: return a sliced TextRun preserving styles
-        const sliced: TextRun = {
-          ...(run as TextRun),
-          text: slice,
-          pmStart: pmSliceStart,
-          pmEnd: pmSliceEnd,
-        };
-        result.push(sliced);
-      }
+
+      // TextRun: return a sliced TextRun preserving styles
+      const sliced: TextRun = {
+        ...(run as TextRun),
+        text: slice,
+        pmStart: pmSliceStart,
+        pmEnd: pmSliceEnd,
+        comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
+      };
+      result.push(sliced);
     } else {
       result.push(run);
     }
@@ -3478,6 +3878,74 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
       if (runIndex === line.toRun) {
         break;
       }
+      continue;
+    }
+
+    // LineBreakRun handling - similar to image runs, treated as atomic units
+    if (run.kind === 'lineBreak') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // BreakRun handling - similar to image and lineBreak runs, treated as atomic units
+    if (run.kind === 'break') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // TabRun handling - tabs are atomic units
+    if (run.kind === 'tab') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
       continue;
     }
 
@@ -3528,6 +3996,18 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   }
   if (run.kind === 'image') {
     // Image runs don't have text content
+    return '';
+  }
+  if (run.kind === 'lineBreak') {
+    // Line break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (run.kind === 'break') {
+    // Break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (!('text' in run)) {
+    // Safety check - if run doesn't have text property, return empty string
     return '';
   }
   if (!runToken) {
