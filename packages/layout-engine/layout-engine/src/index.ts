@@ -32,8 +32,8 @@ import {
 import { layoutParagraphBlock } from './layout-paragraph.js';
 import { layoutImageBlock } from './layout-image.js';
 import { layoutDrawingBlock } from './layout-drawing.js';
-import { layoutTableBlock } from './layout-table.js';
-import { collectAnchoredDrawings, collectPreRegisteredAnchors } from './anchors.js';
+import { layoutTableBlock, createAnchoredTableFragment } from './layout-table.js';
+import { collectAnchoredDrawings, collectAnchoredTables, collectPreRegisteredAnchors } from './anchors.js';
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
 
 type PageSize = { w: number; h: number };
@@ -708,7 +708,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
   // Collect anchored drawings mapped to their anchor paragraphs
   const anchoredByParagraph = collectAnchoredDrawings(blocks, measures);
+  // PASS 1C: collect anchored/floating tables mapped to their anchor paragraphs
+  const anchoredTablesByParagraph = collectAnchoredTables(blocks, measures);
   const placedAnchoredIds = new Set<string>();
+  const placedAnchoredTableIds = new Set<string>();
 
   // Pre-register page/margin-relative anchored images before the layout loop.
   // These images position themselves relative to the page, not a paragraph, so they
@@ -959,6 +962,28 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       }
 
       const anchorsForPara = anchoredByParagraph.get(index);
+
+      // Register anchored tables for this paragraph before layout
+      // so the float manager knows about them when laying out text
+      const tablesForPara = anchoredTablesByParagraph.get(index);
+      if (tablesForPara) {
+        const state = paginator.ensurePage();
+        for (const { block: tableBlock, measure: tableMeasure } of tablesForPara) {
+          if (placedAnchoredTableIds.has(tableBlock.id)) continue;
+
+          // Register the table with the float manager for text wrapping
+          floatManager.registerTable(tableBlock, tableMeasure, state.cursorY, state.columnIndex, state.page.number);
+
+          // Create and place the table fragment at its anchored position
+          const anchorX = tableBlock.anchor?.offsetH ?? columnX(state.columnIndex);
+          const anchorY = state.cursorY + (tableBlock.anchor?.offsetV ?? 0);
+
+          const tableFragment = createAnchoredTableFragment(tableBlock, tableMeasure, anchorX, anchorY);
+          state.page.fragments.push(tableFragment);
+          placedAnchoredTableIds.add(tableBlock.id);
+        }
+      }
+
       layoutParagraphBlock(
         {
           block,

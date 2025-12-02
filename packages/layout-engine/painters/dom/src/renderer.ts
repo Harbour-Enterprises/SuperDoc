@@ -2774,6 +2774,12 @@ export class DomPainter {
     if (styleId) {
       el.setAttribute('styleid', styleId);
     }
+    const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
+    if (alignment === 'center' || alignment === 'right' || alignment === 'justify') {
+      el.style.textAlign = alignment === 'justify' ? 'justify' : alignment;
+    } else {
+      el.style.textAlign = 'left';
+    }
 
     const lineRange = computeLinePmRange(block, line);
 

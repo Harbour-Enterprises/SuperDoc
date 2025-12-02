@@ -1020,49 +1020,49 @@ export function paragraphToFlowBlocks(
       return;
     }
 
-    // Hard break (page break from DOCX <w:br w:type="page"/>)
-    // Splits the current paragraph and inserts a pageBreak block that forces
-    // layout to start on a new page
-    if (node.type === 'hardBreak') {
-      flushParagraph();
-      blocks.push({
-        kind: 'pageBreak',
-        id: nextId(),
-        attrs: node.attrs || {},
-      });
-      return;
-    }
-
-    // Line break (soft break or column break from DOCX <w:br w:type="column"/>)
-    if (node.type === 'lineBreak') {
+    // Hard / line breaks
+    if (node.type === 'hardBreak' || node.type === 'lineBreak') {
       const attrs = node.attrs ?? {};
-      if (attrs.lineBreakType === 'column') {
-        // Column break: flush current paragraph and emit column break block
+      const breakType = attrs.pageBreakType ?? attrs.lineBreakType ?? 'line';
+
+      if (breakType === 'page') {
+        flushParagraph();
+        blocks.push({
+          kind: 'pageBreak',
+          id: nextId(),
+          attrs: node.attrs || {},
+        });
+        return;
+      }
+
+      if (breakType === 'column') {
         flushParagraph();
         blocks.push({
           kind: 'columnBreak',
           id: nextId(),
           attrs: node.attrs || {},
         });
+        return;
       }
       // Inline line break: preserve as a run so measurer can create a new line
-      else {
-        const lineBreakRun: Run = { kind: 'lineBreak', attrs: {} };
-        const lbAttrs: Record<string, string> = {};
-        if (attrs.lineBreakType) lbAttrs.lineBreakType = String(attrs.lineBreakType);
-        if (attrs.clear) lbAttrs.clear = String(attrs.clear);
-        if (Object.keys(lbAttrs).length > 0) {
-          (lineBreakRun as { attrs: Record<string, string> }).attrs = lbAttrs;
-        } else {
-          delete (lineBreakRun as { attrs?: Record<string, string> }).attrs;
-        }
-        const pos = positions.get(node);
-        if (pos) {
-          (lineBreakRun as { pmStart: number }).pmStart = pos.start;
-          (lineBreakRun as { pmEnd: number }).pmEnd = pos.end;
-        }
-        currentRuns.push(lineBreakRun);
+      const lineBreakRun: Run = { kind: 'lineBreak', attrs: {} };
+      const lbAttrs: Record<string, string> = {};
+      if (attrs.lineBreakType) lbAttrs.lineBreakType = String(attrs.lineBreakType);
+      if (attrs.clear) lbAttrs.clear = String(attrs.clear);
+      if (Object.keys(lbAttrs).length > 0) {
+        (lineBreakRun as { attrs: Record<string, string> }).attrs = lbAttrs;
+      } else {
+        delete (lineBreakRun as { attrs?: Record<string, string> }).attrs;
       }
+      const pos = positions.get(node);
+      if (pos) {
+        (lineBreakRun as { pmStart: number }).pmStart = pos.start;
+        (lineBreakRun as { pmEnd: number }).pmEnd = pos.end;
+      }
+      if (activeSdt) {
+        (lineBreakRun as { sdt?: SdtMetadata }).sdt = activeSdt;
+      }
+      currentRuns.push(lineBreakRun);
       return;
     }
   };

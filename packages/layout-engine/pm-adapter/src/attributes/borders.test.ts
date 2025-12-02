@@ -33,31 +33,25 @@ describe('convertBorderSpec', () => {
     it('should convert complete border with all properties', () => {
       const input = { val: 'single', size: 2, color: 'FF0000' };
       const result = convertBorderSpec(input);
-      expect(result).toEqual({
-        style: 'single',
-        width: 2,
-        color: '#FF0000',
-      });
+      expect(result?.style).toBe('single');
+      expect(result?.color).toBe('#FF0000');
+      expect(result?.width).toBeCloseTo(Math.max(0.5, (2 / 8) * (96 / 72)));
     });
 
     it('should add # prefix to color if missing', () => {
       const input = { val: 'double', size: 4, color: '00FF00' };
       const result = convertBorderSpec(input);
-      expect(result).toEqual({
-        style: 'double',
-        width: 4,
-        color: '#00FF00',
-      });
+      expect(result?.style).toBe('double');
+      expect(result?.color).toBe('#00FF00');
+      expect(result?.width).toBeCloseTo(Math.max(0.5, (4 / 8) * (96 / 72)));
     });
 
     it('should preserve # prefix if already present', () => {
       const input = { val: 'single', size: 1, color: '#0000FF' };
       const result = convertBorderSpec(input);
-      expect(result).toEqual({
-        style: 'single',
-        width: 1,
-        color: '#0000FF',
-      });
+      expect(result?.style).toBe('single');
+      expect(result?.color).toBe('#0000FF');
+      expect(result?.width).toBeCloseTo(Math.max(0.5, (1 / 8) * (96 / 72)));
     });
 
     it('should default to black color for auto', () => {
@@ -81,7 +75,7 @@ describe('convertBorderSpec', () => {
     it('should handle fractional width', () => {
       const input = { val: 'single', size: 1.5, color: 'FF0000' };
       const result = convertBorderSpec(input);
-      expect(result?.width).toBe(1.5);
+      expect(result?.width).toBeCloseTo(Math.max(0.5, (1.5 / 8) * (96 / 72)));
     });
 
     it('should convert eighths-of-point sizes to pixels', () => {
@@ -185,11 +179,9 @@ describe('convertTableBorderValue', () => {
     it('should convert complete border with all properties', () => {
       const input = { val: 'single', size: 2, color: 'FF0000' };
       const result = convertTableBorderValue(input);
-      expect(result).toEqual({
-        style: 'single',
-        width: 2,
-        color: '#FF0000',
-      });
+      expect(result?.style).toBe('single');
+      expect(result?.color).toBe('#FF0000');
+      expect(result?.width).toBeCloseTo(Math.max(0.5, (2 / 8) * (96 / 72)));
     });
 
     it('should add # prefix to color if missing', () => {
@@ -286,10 +278,12 @@ describe('extractTableBorders', () => {
         bottom: { val: 'double', size: 4, color: '00FF00' },
       };
       const result = extractTableBorders(input);
-      expect(result).toEqual({
-        top: { style: 'single', width: 2, color: '#FF0000' },
-        bottom: { style: 'double', width: 4, color: '#00FF00' },
-      });
+      expect(result?.top?.style).toBe('single');
+      expect(result?.top?.color).toBe('#FF0000');
+      expect(result?.top?.width).toBeCloseTo(Math.max(0.5, (2 / 8) * (96 / 72)));
+      expect(result?.bottom?.style).toBe('double');
+      expect(result?.bottom?.color).toBe('#00FF00');
+      expect(result?.bottom?.width).toBeCloseTo(Math.max(0.5, (4 / 8) * (96 / 72)));
     });
 
     it('should handle all six border sides from raw OOXML', () => {
@@ -347,12 +341,18 @@ describe('extractCellBorders', () => {
         },
       };
       const result = extractCellBorders(input);
-      expect(result).toEqual({
-        top: { style: 'single', width: 1, color: '#FF0000' },
-        right: { style: 'double', width: 2, color: '#00FF00' },
-        bottom: { style: 'dashed', width: 3, color: '#0000FF' },
-        left: { style: 'dotted', width: 4, color: '#FFFF00' },
-      });
+      expect(result?.top?.style).toBe('single');
+      expect(result?.top?.color).toBe('#FF0000');
+      expect(result?.top?.width).toBeCloseTo(Math.max(0.5, (1 / 8) * (96 / 72)));
+      expect(result?.right?.style).toBe('double');
+      expect(result?.right?.color).toBe('#00FF00');
+      expect(result?.right?.width).toBeCloseTo(Math.max(0.5, (2 / 8) * (96 / 72)));
+      expect(result?.bottom?.style).toBe('dashed');
+      expect(result?.bottom?.color).toBe('#0000FF');
+      expect(result?.bottom?.width).toBeCloseTo(Math.max(0.5, (3 / 8) * (96 / 72)));
+      expect(result?.left?.style).toBe('dotted');
+      expect(result?.left?.color).toBe('#FFFF00');
+      expect(result?.left?.width).toBeCloseTo(Math.max(0.5, (4 / 8) * (96 / 72)));
     });
 
     it('should extract partial cell borders', () => {

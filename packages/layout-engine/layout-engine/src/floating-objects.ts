@@ -1,19 +1,28 @@
 /**
- * Floating-object manager for text wrapping around anchored images.
+ * Floating-object manager for text wrapping around anchored images and tables.
  *
  * This module handles:
- * - Registration of anchored images as exclusion zones
- * - Computing available line width based on image positions
+ * - Registration of anchored images/drawings/tables as exclusion zones
+ * - Computing available line width based on floating object positions
  * - Managing exclusion zones per page/column
  *
  * Architecture:
- * - Registration pass: Registers all anchored images before laying out paragraphs
- * - Layout pass: Queries exclusions during paragraph layout to reduce line widths
- * - Supports rectangular wrapping (Square/TopAndBottom)
- * - Polygon wrapping (Tight/Through) not yet implemented
+ * - Pass 1: Register anchored objects before laying out paragraphs
+ * - Pass 2: Query exclusions during paragraph layout to reduce line widths
+ * - Supports rectangular wrapping (Square/TopAndBottom); polygon wrapping (Tight/Through) is pending
  */
 
-import type { ImageBlock, ImageMeasure, ExclusionZone, DrawingBlock, DrawingMeasure } from '@superdoc/contracts';
+import type {
+  ImageBlock,
+  ImageMeasure,
+  ExclusionZone,
+  DrawingBlock,
+  DrawingMeasure,
+  TableBlock,
+  TableMeasure,
+  TableAnchor,
+  TableWrap,
+} from '@superdoc/contracts';
 
 type FloatBlock = ImageBlock | DrawingBlock;
 type FloatMeasure = ImageMeasure | DrawingMeasure;
@@ -26,6 +35,18 @@ export type FloatingObjectManager = {
   registerDrawing(
     drawingBlock: FloatBlock,
     measure: FloatMeasure,
+    anchorParagraphY: number,
+    columnIndex: number,
+    pageNumber: number,
+  ): void;
+
+  /**
+   * Register an anchored/floating table as an exclusion zone.
+   * Should be called during Layout Pass 1 before laying out paragraphs.
+   */
+  registerTable(
+    tableBlock: TableBlock,
+    measure: TableMeasure,
     anchorParagraphY: number,
     columnIndex: number,
     pageNumber: number,
@@ -116,6 +137,52 @@ export function createFloatingObjectManager(
         },
         wrapMode: computeWrapMode(wrap, anchor),
         polygon: wrap?.polygon,
+      };
+
+      zones.push(zone);
+    },
+
+    registerTable(tableBlock, measure, anchorY, columnIndex, pageNumber) {
+      if (!tableBlock.anchor?.isAnchored) {
+        return; // Not anchored, no exclusion
+      }
+
+      const { wrap, anchor } = tableBlock;
+      const wrapType = wrap?.type ?? 'None';
+
+      if (wrapType === 'None') {
+        // Tables with wrap type 'None' don't create exclusion zones
+        // They are absolutely positioned without text wrapping
+        return;
+      }
+
+      // Compute table dimensions from measure
+      const tableWidth = measure.totalWidth ?? 0;
+      const tableHeight = measure.totalHeight ?? 0;
+
+      // Compute table X position based on anchor alignment
+      const x = computeTableAnchorX(anchor, columnIndex, columns, tableWidth, margins, pageWidth);
+
+      // Compute table Y position (anchor Y + vertical offset)
+      const y = anchorY + (anchor.offsetV ?? 0);
+
+      const zone: ExclusionZone = {
+        imageBlockId: tableBlock.id, // Reusing imageBlockId field for table id
+        pageNumber,
+        columnIndex,
+        bounds: {
+          x,
+          y,
+          width: tableWidth,
+          height: tableHeight,
+        },
+        distances: {
+          top: wrap?.distTop ?? 0,
+          bottom: wrap?.distBottom ?? 0,
+          left: wrap?.distLeft ?? 0,
+          right: wrap?.distRight ?? 0,
+        },
+        wrapMode: computeTableWrapMode(wrap),
       };
 
       zones.push(zone);
@@ -311,6 +378,91 @@ function computeWrapMode(wrap: ImageBlock['wrap'], _anchor: ImageBlock['anchor']
 
   // Map wrapText direction to exclusion side
   // Note: wrapText='left' means "text wraps to the left" → image is on right
+  if (wrapText === 'left') return 'right';
+  if (wrapText === 'right') return 'left';
+  if (wrapText === 'largest') return 'largest';
+
+  // Default: both sides
+  return 'both';
+}
+
+/**
+ * Compute horizontal position of anchored table based on alignment and offsets.
+ * Similar to computeAnchorX but uses TableAnchor type.
+ */
+function computeTableAnchorX(
+  anchor: TableAnchor,
+  columnIndex: number,
+  columns: ColumnLayout,
+  tableWidth: number,
+  margins?: { left?: number; right?: number },
+  pageWidth?: number,
+): number {
+  const alignH = anchor.alignH ?? 'left';
+  const offsetH = anchor.offsetH ?? 0;
+
+  const marginLeft = Math.max(0, margins?.left ?? 0);
+  const marginRight = Math.max(0, margins?.right ?? 0);
+  const contentWidth = pageWidth != null ? Math.max(1, pageWidth - (marginLeft + marginRight)) : columns.width;
+
+  const contentLeft = marginLeft;
+  const columnLeft = contentLeft + columnIndex * (columns.width + columns.gap);
+
+  const relativeFrom = anchor.hRelativeFrom ?? 'column';
+
+  // Base origin and available width based on relativeFrom
+  let baseX: number;
+  let availableWidth: number;
+  if (relativeFrom === 'page') {
+    if (columns.count === 1) {
+      baseX = contentLeft;
+      availableWidth = contentWidth;
+    } else {
+      baseX = 0;
+      availableWidth = pageWidth != null ? pageWidth : contentWidth;
+    }
+  } else if (relativeFrom === 'margin') {
+    baseX = contentLeft;
+    availableWidth = contentWidth;
+  } else {
+    // 'column' (default)
+    baseX = columnLeft;
+    availableWidth = columns.width;
+  }
+
+  // Handle table-specific alignment values (inside/outside map to left/right for now)
+  let effectiveAlignH = alignH;
+  if (alignH === 'inside') effectiveAlignH = 'left';
+  if (alignH === 'outside') effectiveAlignH = 'right';
+
+  const result =
+    effectiveAlignH === 'left'
+      ? baseX + offsetH
+      : effectiveAlignH === 'right'
+        ? baseX + availableWidth - tableWidth - offsetH
+        : effectiveAlignH === 'center'
+          ? baseX + (availableWidth - tableWidth) / 2 + offsetH
+          : baseX;
+
+  return result;
+}
+
+/**
+ * Map TableWrap.wrapText to ExclusionZone.wrapMode.
+ * Determines which side of the table text should wrap.
+ */
+function computeTableWrapMode(wrap: TableWrap | undefined): ExclusionZone['wrapMode'] {
+  if (!wrap) return 'none';
+
+  // Tables only support Square or None wrap types
+  if (wrap.type === 'None') {
+    return 'none';
+  }
+
+  const wrapText = wrap.wrapText ?? 'bothSides';
+
+  // Map wrapText direction to exclusion side
+  // Note: wrapText='left' means "text wraps to the left" → table is on right
   if (wrapText === 'left') return 'right';
   if (wrapText === 'right') return 'left';
   if (wrapText === 'largest') return 'largest';

@@ -1,4 +1,13 @@
-import type { FlowBlock, ImageBlock, ImageMeasure, Measure, DrawingBlock, DrawingMeasure } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  ImageBlock,
+  ImageMeasure,
+  Measure,
+  DrawingBlock,
+  DrawingMeasure,
+  TableBlock,
+  TableMeasure,
+} from '@superdoc/contracts';
 
 /**
  * Represents an anchored image or drawing block with its measurements.
@@ -8,6 +17,13 @@ export type AnchoredDrawing = {
   block: ImageBlock | DrawingBlock;
   measure: ImageMeasure | DrawingMeasure;
 };
+
+export type AnchoredTable = {
+  block: TableBlock;
+  measure: TableMeasure;
+};
+
+export type AnchoredObject = AnchoredDrawing | AnchoredTable;
 
 /**
  * Check if an anchored image should be pre-registered (before any paragraphs are laid out).
@@ -54,24 +70,12 @@ export function collectPreRegisteredAnchors(blocks: FlowBlock[], measures: Measu
 }
 
 /**
- * Collect anchored images that are positioned relative to their anchor paragraph.
- *
- * Images with vRelativeFrom='paragraph' (or undefined) are mapped to the nearest
- * paragraph block using a heuristic: prefer the nearest preceding paragraph,
- * falling back to the nearest following paragraph if none precedes.
- *
- * @param blocks - Array of flow blocks to scan for anchored images
- * @param measures - Corresponding measures for each block
- * @returns Map of paragraph block index to anchored images for that paragraph
+ * Collect anchored drawings (images/drawings) mapped to their anchor paragraph index.
+ * Map of paragraph block index -> anchored images/drawings associated with that paragraph.
  */
 export function collectAnchoredDrawings(blocks: FlowBlock[], measures: Measure[]): Map<number, AnchoredDrawing[]> {
   const map = new Map<number, AnchoredDrawing[]>();
   const len = Math.min(blocks.length, measures.length);
-
-  const paragraphs: number[] = [];
-  for (let i = 0; i < len; i += 1) {
-    if (blocks[i].kind === 'paragraph') paragraphs.push(i);
-  }
 
   const nearestPrevParagraph = (fromIndex: number): number | null => {
     for (let i = fromIndex - 1; i >= 0; i -= 1) {
@@ -113,6 +117,52 @@ export function collectAnchoredDrawings(blocks: FlowBlock[], measures: Measure[]
 
     const list = map.get(anchorParaIndex) ?? [];
     list.push({ block: drawingBlock, measure: drawingMeasure });
+    map.set(anchorParaIndex, list);
+  }
+
+  return map;
+}
+
+/**
+ * Collect anchored/floating tables mapped to their anchor paragraph index.
+ * Map of paragraph block index -> anchored tables associated with that paragraph.
+ */
+export function collectAnchoredTables(blocks: FlowBlock[], measures: Measure[]): Map<number, AnchoredTable[]> {
+  const map = new Map<number, AnchoredTable[]>();
+
+  const nearestPrevParagraph = (fromIndex: number): number | null => {
+    for (let i = fromIndex - 1; i >= 0; i -= 1) {
+      if (blocks[i].kind === 'paragraph') return i;
+    }
+    return null;
+  };
+
+  const nearestNextParagraph = (fromIndex: number): number | null => {
+    for (let i = fromIndex + 1; i < blocks.length; i += 1) {
+      if (blocks[i].kind === 'paragraph') return i;
+    }
+    return null;
+  };
+
+  for (let i = 0; i < blocks.length; i += 1) {
+    const block = blocks[i];
+    const measure = measures[i];
+
+    if (block.kind !== 'table' || measure?.kind !== 'table') continue;
+
+    const tableBlock = block as TableBlock;
+    const tableMeasure = measure as TableMeasure;
+
+    // Check if the table is anchored/floating
+    if (!tableBlock.anchor?.isAnchored) continue;
+
+    // Heuristic: anchor to nearest preceding paragraph, else nearest next paragraph
+    let anchorParaIndex = nearestPrevParagraph(i);
+    if (anchorParaIndex == null) anchorParaIndex = nearestNextParagraph(i);
+    if (anchorParaIndex == null) continue; // no paragraphs at all
+
+    const list = map.get(anchorParaIndex) ?? [];
+    list.push({ block: tableBlock, measure: tableMeasure });
     map.set(anchorParaIndex, list);
   }
 

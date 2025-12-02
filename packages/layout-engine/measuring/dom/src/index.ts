@@ -507,9 +507,70 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     pendingTabAlignment = null;
   };
 
+  // Expand runs to handle inline newlines as explicit break runs
+  const runsToProcess: Run[] = [];
+  for (const run of block.runs as Run[]) {
+    if ((run as TextRun).text && typeof (run as TextRun).text === 'string' && (run as TextRun).text.includes('\n')) {
+      const textRun = run as TextRun;
+      const segments = textRun.text.split('\n');
+      let cursor = textRun.pmStart ?? 0;
+      segments.forEach((seg, idx) => {
+        runsToProcess.push({
+          ...textRun,
+          text: seg,
+          pmStart: cursor,
+          pmEnd: cursor + seg.length,
+        });
+        cursor += seg.length;
+        if (idx !== segments.length - 1) {
+          runsToProcess.push({
+            kind: 'break',
+            breakType: 'line',
+            pmStart: cursor,
+            pmEnd: cursor + 1,
+            sdt: (run as TextRun).sdt,
+          });
+          cursor += 1;
+        }
+      });
+    } else {
+      runsToProcess.push(run as Run);
+    }
+  }
+
   // Process each run
-  for (let runIndex = 0; runIndex < block.runs.length; runIndex++) {
-    const run = block.runs[runIndex];
+  for (let runIndex = 0; runIndex < runsToProcess.length; runIndex++) {
+    const run = runsToProcess[runIndex];
+
+    if ((run as Run).kind === 'break') {
+      if (currentLine) {
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const completedLine: Line = { ...currentLine, ...metrics };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        currentLine = null;
+      } else {
+        const fallbackSize =
+          (block.runs.find((r) => (r as TextRun).fontSize)?.['fontSize'] as number | undefined) ?? 12;
+        const metrics = calculateTypographyMetrics(fallbackSize, spacing);
+        const emptyLine: Line = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 0,
+          width: 0,
+          segments: [],
+          ...metrics,
+        };
+        addBarTabsToLine(emptyLine);
+        lines.push(emptyLine);
+      }
+      tabStopCursor = 0;
+      pendingTabAlignment = null;
+      lastAppliedTabAlign = null;
+      availableWidth = contentWidth;
+      continue;
+    }
 
     // Handle explicit line breaks (e.g., DOCX <w:br/>)
     if (isLineBreakRun(run)) {
@@ -1111,6 +1172,8 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 
   // Measure each cell paragraph with appropriate column width based on colspan
   const rows: TableRowMeasure[] = [];
+  const rowBaseHeights: number[] = new Array(block.rows.length).fill(0);
+  const spanConstraints: Array<{ startRow: number; rowSpan: number; requiredHeight: number }> = [];
   for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
     const row = block.rows[rowIndex];
     const cellMeasures: TableCellMeasure[] = [];
@@ -1202,6 +1265,12 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         rowSpan: rowspan,
       });
 
+      if (rowspan === 1) {
+        rowBaseHeights[rowIndex] = Math.max(rowBaseHeights[rowIndex], totalCellHeight);
+      } else {
+        spanConstraints.push({ startRow: rowIndex, rowSpan: rowspan, requiredHeight: totalCellHeight });
+      }
+
       // Advance grid column position by colspan
       gridColIndex += colspan;
     }
@@ -1213,11 +1282,46 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       }
     }
 
-    const rowHeight = Math.max(0, ...cellMeasures.map((c) => c.height));
-    rows.push({ cells: cellMeasures, height: rowHeight });
+    rows.push({ cells: cellMeasures, height: 0 });
   }
 
-  const totalHeight = rows.reduce((sum, r) => sum + r.height, 0);
+  const rowHeights = [...rowBaseHeights];
+  for (const constraint of spanConstraints) {
+    const { startRow, rowSpan, requiredHeight } = constraint;
+    if (rowSpan <= 0) continue;
+
+    let currentHeight = 0;
+    for (let i = 0; i < rowSpan && startRow + i < rowHeights.length; i++) {
+      currentHeight += rowHeights[startRow + i];
+    }
+
+    if (currentHeight < requiredHeight) {
+      const spanLength = Math.min(rowSpan, rowHeights.length - startRow);
+      const increment = spanLength > 0 ? (requiredHeight - currentHeight) / spanLength : 0;
+      for (let i = 0; i < spanLength; i++) {
+        rowHeights[startRow + i] += increment;
+      }
+    }
+  }
+
+  // Apply explicit row heights (exact / atLeast) from row attributes
+  block.rows.forEach((row, index) => {
+    const spec = row.attrs?.rowHeight as { value?: number; rule?: string } | undefined;
+    if (spec?.value != null && Number.isFinite(spec.value)) {
+      const rule = spec.rule ?? 'atLeast';
+      if (rule === 'exact') {
+        rowHeights[index] = spec.value;
+      } else {
+        rowHeights[index] = Math.max(rowHeights[index], spec.value);
+      }
+    }
+  });
+
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].height = Math.max(0, rowHeights[i]);
+  }
+
+  const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
   const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
   return {
     kind: 'table',
@@ -1534,7 +1638,7 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
     return Math.max(baseLineHeight, raw);
   }
 
-  return raw;
+  return Math.max(baseLineHeight, raw);
 };
 
 const sanitizePositive = (value: number | undefined): number =>

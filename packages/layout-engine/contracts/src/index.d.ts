@@ -129,6 +129,13 @@ export type LineBreakRun = {
   pmStart?: number;
   pmEnd?: number;
 };
+export type BreakRun = {
+  kind: 'break';
+  breakType?: 'line' | 'page' | 'column' | string;
+  pmStart?: number;
+  pmEnd?: number;
+  sdt?: SdtMetadata;
+};
 
 /**
  * An inline image that flows with text within a paragraph.
@@ -165,7 +172,7 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun | LineBreakRun;
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun;
 /**
  * A logical block in the document flow (typically a paragraph).
  *
@@ -270,9 +277,11 @@ export type TableCellAttrs = {
   /** Cell padding/margins */
   padding?: BoxSpacing;
   /** Vertical alignment of cell content */
-  verticalAlign?: 'top' | 'middle' | 'bottom';
+  verticalAlign?: 'top' | 'middle' | 'center' | 'bottom';
   /** Cell background color (hex format with #) */
   background?: string;
+  /** Raw table cell properties (for round-tripping) */
+  tableCellProperties?: Record<string, unknown>;
 };
 /**
  * Table-level attributes.
@@ -298,9 +307,17 @@ export type TableCell = {
   /** Cell-specific attributes */
   attrs?: TableCellAttrs;
 };
+export type TableRowAttrs = {
+  tableRowProperties?: Record<string, unknown>;
+  rowHeight?: {
+    value: number;
+    rule?: 'auto' | 'atLeast' | 'exact' | string;
+  };
+};
 export type TableRow = {
   id: BlockId;
   cells: TableCell[];
+  attrs?: TableRowAttrs;
 };
 export type TableBlock = {
   kind: 'table';
