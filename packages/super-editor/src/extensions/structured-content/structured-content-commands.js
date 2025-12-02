@@ -32,6 +32,7 @@ const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock']
  * @property {string} [html] - Replace content with HTML (only for structured content block)
  * @property {Object} [json] - Replace content with ProseMirror JSON (overrides html)
  * @property {Object} [attrs] - Update attributes only (preserves content)
+ * @property {boolean} [keepTextNodeStyles] - When true, preserves marks from the first text node (only applies with text option)
  */
 
 /**
@@ -217,7 +218,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        * @example
-       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe' });
+       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe', keepTextNodeStyles: true });
        * editor.commands.updateStructuredContentById('123', {
        *  json: { type: 'text', text: 'Jane Doe' },
        * });
@@ -245,7 +246,12 @@ export const StructuredContentCommands = Extension.create({
             let content = null;
 
             if (options.text) {
-              content = schema.text(options.text);
+              // If keepTextNodeStyles is true, use the marks from the first text node
+              // Useful for preserving text styles when updating structured content
+              const firstTextNode =
+                options.keepTextNodeStyles === true ? node.content.content.find((n) => n.type.name === 'text') : null;
+              const textMarks = firstTextNode ? firstTextNode.marks : [];
+              content = schema.text(options.text, textMarks);
             }
 
             if (options.html) {
@@ -263,6 +269,14 @@ export const StructuredContentCommands = Extension.create({
             }
 
             const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+
+            try {
+              const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
+              nodeForValidation.check();
+            } catch (error) {
+              console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
+              return false;
+            }
 
             tr.replaceWith(posFrom, posTo, updatedNode);
           }
@@ -367,7 +381,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {StructuredContentUpdate} options
        * @example
        * // Update all fields in the customer-info group
-       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe' });
+       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe', keepTextNodeStyles: true });
        *
        * // Update block content in a group
        * editor.commands.updateStructuredContentByGroup('terms-section', {
@@ -394,7 +408,12 @@ export const StructuredContentCommands = Extension.create({
               let content = null;
 
               if (options.text) {
-                content = schema.text(options.text);
+                // If keepTextNodeStyles is true, use the marks from the first text node
+                // Useful for preserving text styles when updating structured content
+                const firstTextNode =
+                  options.keepTextNodeStyles === true ? node.content.content.find((n) => n.type.name === 'text') : null;
+                const textMarks = firstTextNode ? firstTextNode.marks : [];
+                content = schema.text(options.text, textMarks);
               }
 
               if (options.html) {
@@ -412,6 +431,14 @@ export const StructuredContentCommands = Extension.create({
               }
 
               const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+
+              try {
+                const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
+                nodeForValidation.check();
+              } catch (error) {
+                console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
+                return false;
+              }
 
               const currentNode = tr.doc.nodeAt(posFrom);
               if (currentNode && node.eq(currentNode)) {
