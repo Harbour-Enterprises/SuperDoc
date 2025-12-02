@@ -2222,4 +2222,418 @@ describe('measureBlock', () => {
       expect((cellMeasure.blocks[0] as any).lines?.[0]).toBeDefined();
     });
   });
+
+  describe('scaleColumnWidths behavior', () => {
+    it('scales column widths proportionally when exceeding target', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'scale-test-1',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 200, 100], // Total 400px, ratio 1:2:1
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 300 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Should scale from 400px to 300px maintaining 1:2:1 ratio
+      // 100 * (300/400) = 75, 200 * (300/400) = 150
+      expect(measure.columnWidths[0]).toBe(75);
+      expect(measure.columnWidths[1]).toBe(150);
+      expect(measure.columnWidths[2]).toBe(75);
+      expect(measure.totalWidth).toBe(300);
+    });
+
+    it('does not scale when widths are within target', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'scale-test-2',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [50, 50], // Total 100px
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 200 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Should not scale - widths are within target
+      expect(measure.columnWidths).toEqual([50, 50]);
+      expect(measure.totalWidth).toBe(100);
+    });
+
+    it('produces exact sum after rounding adjustment', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'scale-test-3',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [34, 33, 34], // Total 101px - exceeds target to trigger scaling
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 100 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Sum should be exactly 100 after rounding adjustment
+      const sum = measure.columnWidths.reduce((a, b) => a + b, 0);
+      expect(sum).toBe(100);
+      expect(measure.totalWidth).toBe(100);
+    });
+
+    it('handles empty array gracefully', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'scale-test-4',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [], // Empty array
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 200 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Should fall back to equal distribution
+      expect(measure.columnWidths).toEqual([200]);
+    });
+
+    it('enforces minimum width of 1px per column', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'scale-test-5',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-3',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-3',
+                    runs: [{ text: 'D', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [1000, 1000, 1000, 1000], // Very wide, will scale down dramatically
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 10 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Each column should be at least 1px
+      measure.columnWidths.forEach((width) => {
+        expect(width).toBeGreaterThanOrEqual(1);
+      });
+      // Total should equal maxWidth
+      expect(measure.totalWidth).toBe(10);
+    });
+  });
+
+  describe('WIDTH_FUDGE_PX tolerance behavior', () => {
+    it('allows text to fit within 0.5px tolerance without breaking line', async () => {
+      // Create a simple test with a single word to verify tolerance behavior
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-1',
+        runs: [
+          {
+            text: 'Word',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure first to get actual width
+      const initialMeasure = expectParagraphMeasure(await measureBlock(block, 1000));
+      const textWidth = initialMeasure.lines[0].width;
+
+      // Now measure with maxWidth equal to text width
+      // The WIDTH_FUDGE_PX tolerance should allow it to still fit
+      const constrainedMeasure = expectParagraphMeasure(await measureBlock(block, textWidth));
+
+      expect(constrainedMeasure.lines).toHaveLength(1);
+      expect(constrainedMeasure.lines[0].width).toBeCloseTo(textWidth, 1);
+    });
+
+    it('breaks line when width exceeds tolerance', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-2',
+        runs: [
+          {
+            text: 'Word1 Word2 Word3',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure to get the width of "Word1 "
+      const word1Block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'word1-measure',
+        runs: [
+          {
+            text: 'Word1 ',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const word1Measure = expectParagraphMeasure(await measureBlock(word1Block, 1000));
+      const word1Width = word1Measure.lines[0].width;
+
+      // Set maxWidth to word1Width + small amount that's still less than adding Word2
+      // This should force "Word2 Word3" to wrap to next line
+      const tightMeasure = expectParagraphMeasure(await measureBlock(block, word1Width + 5));
+
+      // Should break into multiple lines
+      expect(tightMeasure.lines.length).toBeGreaterThan(1);
+    });
+
+    it('prevents premature line breaks with floating-point measurement variations', async () => {
+      // Test that the tolerance absorbs minor measurement differences
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-3',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure the single character
+      const charMeasure = expectParagraphMeasure(await measureBlock(block, 1000));
+      const charWidth = charMeasure.lines[0].width;
+
+      // Set maxWidth to exactly the measured width
+      // Without WIDTH_FUDGE_PX, floating-point rounding could cause unwanted breaks
+      const exactMeasure = expectParagraphMeasure(await measureBlock(block, charWidth));
+
+      // Should still fit on one line
+      expect(exactMeasure.lines).toHaveLength(1);
+    });
+
+    it('applies tolerance consistently for word boundaries', async () => {
+      // Test demonstrates that WIDTH_FUDGE_PX prevents unnecessary line breaks
+      // when measured width is very close to maxWidth
+      const singleWordBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-4a',
+        runs: [
+          {
+            text: 'LongWordHere',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure a single long word
+      const wordMeasure = expectParagraphMeasure(await measureBlock(singleWordBlock, 1000));
+      const wordWidth = wordMeasure.lines[0].width;
+
+      // Set maxWidth to exactly the word width
+      // The WIDTH_FUDGE_PX tolerance allows it to fit without forcing a break
+      const exactFitMeasure = expectParagraphMeasure(await measureBlock(singleWordBlock, wordWidth));
+      expect(exactFitMeasure.lines).toHaveLength(1);
+
+      // Now create a two-word scenario where first word + space fits
+      const twoWordBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-4b',
+        runs: [
+          {
+            text: 'Word1 Word2',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Measure just "Word1 " to know where the break should occur
+      const firstWordBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'fudge-test-4c',
+        runs: [
+          {
+            text: 'Word1 ',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const firstWordMeasure = expectParagraphMeasure(await measureBlock(firstWordBlock, 1000));
+      const firstWordWidth = firstWordMeasure.lines[0].width;
+
+      // Set maxWidth to just after first word - should force second word to new line
+      const breakMeasure = expectParagraphMeasure(await measureBlock(twoWordBlock, firstWordWidth + 2));
+      expect(breakMeasure.lines.length).toBeGreaterThan(1);
+    });
+  });
 });
