@@ -1019,6 +1019,75 @@ describe('computeParagraphAttrs', () => {
     expect(resetCalls.some((call: PMNode) => call[1] === 3)).toBe(true);
   });
 
+  it('hydrates numbering details from converterContext definitions', () => {
+    const para: PMNode = {
+      attrs: {
+        numberingProperties: { numId: 7, ilvl: 1 },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: { defaultTabIntervalTwips: 720, decimalSeparator: '.' },
+    } as never;
+    const converterContext = {
+      numbering: {
+        definitions: {
+          '7': {
+            name: 'w:num',
+            attributes: { 'w:numId': '7' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '3' } }],
+          },
+        },
+        abstracts: {
+          '3': {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '3' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '1' },
+                elements: [
+                  { name: 'w:start', attributes: { 'w:val': '1' } },
+                  { name: 'w:numFmt', attributes: { 'w:val': 'lowerLetter' } },
+                  { name: 'w:lvlText', attributes: { 'w:val': '%2.' } },
+                  { name: 'w:lvlJc', attributes: { 'w:val': 'left' } },
+                  { name: 'w:suff', attributes: { 'w:val': 'space' } },
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '1440', 'w:hanging': '360' } }],
+                  },
+                  {
+                    name: 'w:rPr',
+                    elements: [
+                      { name: 'w:rFonts', attributes: { 'w:ascii': 'Arial' } },
+                      { name: 'w:color', attributes: { 'w:val': '5C5C5F' } },
+                      { name: 'w:sz', attributes: { 'w:val': '16' } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = computeParagraphAttrs(para, styleContext, undefined, converterContext);
+
+    expect(result?.numberingProperties?.format).toBe('lowerLetter');
+    expect(result?.numberingProperties?.lvlText).toBe('%2.');
+    expect(result?.numberingProperties?.start).toBe(1);
+    expect(result?.numberingProperties?.lvlJc).toBe('left');
+    expect(result?.numberingProperties?.suffix).toBe('space');
+    expect(result?.numberingProperties?.resolvedLevelIndent).toEqual({ left: 1440, hanging: 360 });
+    expect(result?.wordLayout?.marker?.markerText).toBe('a.');
+
+    const markerRun = (result?.numberingProperties as Record<string, unknown>)?.resolvedMarkerRpr as
+      | Record<string, unknown>
+      | undefined;
+    expect(markerRun?.fontFamily).toBe('Arial');
+  });
+
   describe('framePr edge cases and validation', () => {
     const createStyleContext = () =>
       ({

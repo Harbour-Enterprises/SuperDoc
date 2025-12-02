@@ -998,7 +998,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = 'src' in run || run.kind === 'lineBreak' ? '' : (run.text ?? '');
+    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -1130,6 +1130,12 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
 
     // LineBreakRun handling - line breaks are atomic units, no slicing needed
     if (run.kind === 'lineBreak') {
+      result.push(run);
+      continue;
+    }
+
+    // BreakRun handling - breaks are atomic units, no slicing needed
+    if (run.kind === 'break') {
       result.push(run);
       continue;
     }

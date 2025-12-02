@@ -24,7 +24,9 @@ const hashRuns = (block: FlowBlock): string => {
   const trackedEnabled = resolveTrackedChangesEnabled(block.attrs, true);
   const runsHash = block.runs
     .map((run) => {
-      const text = normalizeText('src' in run || run.kind === 'lineBreak' ? '' : (run.text ?? ''));
+      const text = normalizeText(
+        'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? ''),
+      );
       const bold = 'bold' in run ? run.bold : false;
       const italic = 'italic' in run ? run.italic : false;
       const color = 'color' in run ? run.color : undefined;

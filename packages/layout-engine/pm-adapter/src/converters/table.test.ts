@@ -357,9 +357,14 @@ describe('table converter', () => {
     });
 
     it('includes cell vertical alignment', () => {
-      const alignments = ['top', 'middle', 'bottom'] as const;
+      // 'middle' is normalized to 'center' in the implementation
+      const alignments = [
+        { input: 'top', expected: 'top' },
+        { input: 'middle', expected: 'center' },
+        { input: 'bottom', expected: 'bottom' },
+      ] as const;
 
-      alignments.forEach((align) => {
+      alignments.forEach(({ input, expected }) => {
         const node: PMNode = {
           type: 'table',
           content: [
@@ -368,7 +373,7 @@ describe('table converter', () => {
               content: [
                 {
                   type: 'tableCell',
-                  attrs: { verticalAlign: align },
+                  attrs: { verticalAlign: input },
                   content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Cell' }] }],
                 },
               ],
@@ -390,7 +395,7 @@ describe('table converter', () => {
           mockParagraphConverter,
         ) as TableBlock;
 
-        expect(result.rows[0].cells[0].attrs?.verticalAlign).toBe(align);
+        expect(result.rows[0].cells[0].attrs?.verticalAlign).toBe(expected);
       });
     });
 

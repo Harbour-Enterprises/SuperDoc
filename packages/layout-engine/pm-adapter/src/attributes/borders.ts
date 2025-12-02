@@ -25,20 +25,19 @@ const MAX_BORDER_SIZE_PX = 100; // Reasonable maximum
 
 /**
  * Convert an OOXML border size (stored in eighths of a point) to pixels.
- * Values smaller than one point are assumed to already be pixel values.
+ *
+ * OOXML defines border size in eights of a point (ST_EighthPointMeasure),
+ * so always convert using size/8 pt → px. This avoids misinterpreting small
+ * values (e.g., size=4 means 0.5pt, not 4px).
+ *
  * Clamps results to reasonable bounds to prevent edge cases.
  */
 const borderSizeToPx = (size?: number): number | undefined => {
   if (!isFiniteNumber(size)) return undefined;
   if (size <= 0) return 0;
 
-  let pixelValue: number;
-  if (size < EIGHTHS_PER_POINT) {
-    pixelValue = size;
-  } else {
-    const points = size / EIGHTHS_PER_POINT;
-    pixelValue = points * PX_PER_PT;
-  }
+  const points = size / EIGHTHS_PER_POINT;
+  const pixelValue = points * PX_PER_PT;
 
   // Clamp to reasonable bounds
   return Math.min(MAX_BORDER_SIZE_PX, Math.max(MIN_BORDER_SIZE_PX, pixelValue));

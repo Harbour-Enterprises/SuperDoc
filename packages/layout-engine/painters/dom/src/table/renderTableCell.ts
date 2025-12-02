@@ -140,6 +140,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const paddingLeft = padding.left ?? 4;
   const paddingTop = padding.top ?? 2;
   const paddingRight = padding.right ?? 4;
+  const paddingBottom = padding.bottom ?? 2;
 
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
@@ -149,10 +150,21 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     const content = doc.createElement('div');
     content.style.position = 'absolute';
     content.style.left = `${x + paddingLeft}px`;
+    const availableHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
     content.style.top = `${y + paddingTop}px`;
     content.style.width = `${Math.max(0, cellMeasure.width - paddingLeft - paddingRight)}px`;
+    content.style.height = `${availableHeight}px`;
+    content.style.display = 'flex';
+    content.style.flexDirection = 'column';
+    content.style.overflow = 'hidden';
+    if (cell?.attrs?.verticalAlign === 'center') {
+      content.style.justifyContent = 'center';
+    } else if (cell?.attrs?.verticalAlign === 'bottom') {
+      content.style.justifyContent = 'flex-end';
+    } else {
+      content.style.justifyContent = 'flex-start';
+    }
 
-    let blockY = 0;
     for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
       const blockMeasure = blockMeasures[i];
       const block = cellBlocks[i];
@@ -161,8 +173,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         // Create wrapper for this paragraph's SDT metadata
         // Use absolute positioning within the content container to stack blocks vertically
         const paraWrapper = doc.createElement('div');
-        paraWrapper.style.position = 'absolute';
-        paraWrapper.style.top = `${blockY}px`;
+        paraWrapper.style.position = 'relative';
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
@@ -174,7 +185,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         });
 
         content.appendChild(paraWrapper);
-        blockY += blockMeasure.totalHeight;
       }
       // TODO: Handle other block types (list, image) if needed
     }

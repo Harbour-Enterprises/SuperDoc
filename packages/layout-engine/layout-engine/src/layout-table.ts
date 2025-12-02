@@ -93,6 +93,14 @@ function generateColumnBoundaries(measure: TableMeasure): TableColumnBoundary[] 
   return boundaries;
 }
 
+/**
+ * Layout an inline (non-floating) table block.
+ *
+ * Anchored/floating tables are NOT handled here - they are positioned by the
+ * float manager and rendered via layoutAnchoredTableFragment().
+ *
+ * @returns true if the table was laid out, false if it was skipped (anchored)
+ */
 export function layoutTableBlock({
   block,
   measure,
@@ -100,7 +108,12 @@ export function layoutTableBlock({
   ensurePage,
   advanceColumn,
   columnX,
-}: TableLayoutContext): void {
+}: TableLayoutContext): boolean {
+  // Skip anchored/floating tables - they are handled by the float manager
+  if (block.anchor?.isAnchored) {
+    return false;
+  }
+
   let state = ensurePage();
   // Push to next column/page if not enough space and page already has content
   if (state.cursorY + measure.totalHeight > state.contentBottom && state.page.fragments.length > 0) {
@@ -129,4 +142,33 @@ export function layoutTableBlock({
   };
   state.page.fragments.push(fragment);
   state.cursorY += height;
+  return true;
+}
+
+/**
+ * Create a table fragment for an anchored/floating table at its computed position.
+ * Called by the layout engine after the float manager computes the table's position.
+ */
+export function createAnchoredTableFragment(
+  block: TableBlock,
+  measure: TableMeasure,
+  x: number,
+  y: number,
+): TableFragment {
+  const metadata: TableFragmentMetadata = {
+    columnBoundaries: generateColumnBoundaries(measure),
+    coordinateSystem: 'fragment',
+  };
+
+  return {
+    kind: 'table',
+    blockId: block.id,
+    fromRow: 0,
+    toRow: block.rows.length,
+    x,
+    y,
+    width: measure.totalWidth ?? 0,
+    height: measure.totalHeight ?? 0,
+    metadata,
+  };
 }
