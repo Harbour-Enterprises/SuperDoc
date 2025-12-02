@@ -1026,24 +1026,14 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Validates a ProseMirror JSON document against the current schema.
    */
-  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode {
+  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode | PmNode[] {
     if (!this.schema) {
       throw new Error('Schema is not initialized.');
     }
 
-    const topNodeName = this.schema.topNodeType?.name || 'doc';
-    const normalizedDoc = Array.isArray(doc) // array of nodes -> wrap into doc.content
-      ? { type: topNodeName, content: doc }
-      : doc && typeof doc === 'object' && doc.type
-        ? doc.type === topNodeName || doc.type === 'doc'
-          ? doc
-          : { type: topNodeName, content: [doc as ProseMirrorJSON] }
-        : (() => {
-            throw new Error('Invalid document shape: expected a node object or an array of node objects.');
-          })();
-
     try {
-      return this.schema.nodeFromJSON(normalizedDoc as ProseMirrorJSON);
+      if (Array.isArray(doc)) return doc.map((d) => this.schema!.nodeFromJSON(d));
+      return this.schema.nodeFromJSON(doc as ProseMirrorJSON);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       const validationError = new Error(`Invalid document for current schema: ${detail}`);
