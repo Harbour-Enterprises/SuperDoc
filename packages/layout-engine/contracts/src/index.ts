@@ -924,6 +924,8 @@ export type Line = {
   ascent: number;
   descent: number;
   lineHeight: number;
+  /** Maximum available width for this line (used during measurement). */
+  maxWidth?: number;
   segments?: LineSegment[];
   leaders?: LeaderDecoration[];
   bars?: BarDecoration[];
