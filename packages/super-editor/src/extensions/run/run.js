@@ -5,6 +5,7 @@ import { splitRunToParagraph, splitRunAtCursor } from './commands/index.js';
 import { cleanupEmptyRunsPlugin } from './cleanupEmptyRunsPlugin.js';
 import { wrapTextInRunsPlugin } from './wrapTextInRunsPlugin.js';
 import { splitRunsAfterMarkPlugin } from './splitRunsAfterMarkPlugin.js';
+import { calculateInlineRunPropertiesPlugin } from './calculateInlineRunPropertiesPlugin.js';
 
 /**
  * Run node emulates OOXML w:r (run) boundaries while remaining transparent to layout.
@@ -69,6 +70,11 @@ export const Run = OxmlNode.create({
     return ['span', base, 0];
   },
   addPmPlugins() {
-    return [wrapTextInRunsPlugin(), splitRunsAfterMarkPlugin, cleanupEmptyRunsPlugin];
+    return [
+      wrapTextInRunsPlugin(),
+      splitRunsAfterMarkPlugin,
+      calculateInlineRunPropertiesPlugin(this.editor),
+      cleanupEmptyRunsPlugin,
+    ];
   },
 });
