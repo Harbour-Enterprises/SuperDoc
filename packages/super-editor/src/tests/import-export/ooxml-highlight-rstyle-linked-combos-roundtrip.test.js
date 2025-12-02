@@ -75,14 +75,6 @@ describe('OOXML highlight + rStyle + linked combinations round-trip', async () =
   const exportedRuns = collectFromExport(exported);
 
   it('preserves inline highlight on export; does not emit for style-only', () => {
-    const overrideExpectations = new Map([
-      ["Styled yellow highlight|  - rStyle='SD_HighlightYellowChar': ", true],
-      ["Styled green shading|  - rStyle='SD_ShadingGreenChar': ", true],
-      ["Styled lightGray highlight|  - rStyle='SD_HighlightLightGrayChar': ", true],
-      ["Linked Char style applied|  - rStyle='SD_LinkedHighlightHeadingChar' => yellow: ", true],
-      ["  - pStyle='SD_LinkedHighlightHeading' (lightGray) + inline 'red' on a run: |Linked Char style applied", true],
-    ]);
-
     const tagOverrides = new Map([
       ["Styled yellow highlight|  - rStyle='SD_HighlightYellowChar': ", 'w:highlight'],
       ["Styled green shading|  - rStyle='SD_ShadingGreenChar': ", 'w:shd'],
@@ -99,7 +91,7 @@ describe('OOXML highlight + rStyle + linked combinations round-trip', async () =
       expect(Boolean(exportedRuns[i].text)).toBe(true);
       const prevText = sourceRuns[i - 1]?.text || '';
       const key = `${sourceRuns[i].text}|${prevText}`;
-      const expected = overrideExpectations.has(key) ? overrideExpectations.get(key) : sourceRuns[i].hasHighlight;
+      const expected = sourceRuns[i].hasHighlight;
       expect(exportedRuns[i].hasHighlight).toBe(expected);
       const expectedTag = tagOverrides.has(key) ? tagOverrides.get(key) : sourceRuns[i].sourceTag;
       expect(exportedRuns[i].highlightTag).toBe(expected ? expectedTag : null);

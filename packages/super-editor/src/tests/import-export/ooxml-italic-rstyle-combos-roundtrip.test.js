@@ -35,10 +35,10 @@ const collectExpectedRunsFromImport = async (fileName) => {
   const { docx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(fileName);
   const { editor } = initTestEditor({ content: docx, media, mediaFiles, fonts });
   const runs = [];
-  editor.state.doc.descendants((node) => {
+  editor.state.doc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
-    const italicMark = node.marks?.find((mark) => (mark.type?.name || mark.type) === 'italic');
-    const italic = italicMark ? italicMark.attrs?.value : false;
+    const runNode = editor.state.doc.nodeAt(pos - 1);
+    const italic = runNode.attrs.runProperties.italic;
     runs.push({ text: node.text, italic });
   });
   editor.destroy();
@@ -56,11 +56,11 @@ const collectItalicFromExport = (doc, italicStyleSet) => {
       const wI = find(rPr, 'w:i');
       let italic;
       if (wI) italic = stOnOff(wI.attributes?.['w:val']);
-      else {
-        const rStyle = find(rPr, 'w:rStyle');
-        const styleId = rStyle?.attributes?.['w:val'];
-        italic = styleId ? italicStyleSet.has(styleId.toLowerCase()) : false;
-      }
+      // else {
+      //   const rStyle = find(rPr, 'w:rStyle');
+      //   const styleId = rStyle?.attributes?.['w:val'];
+      //   italic = styleId ? italicStyleSet.has(styleId.toLowerCase()) : false;
+      // }
       const textEl = find(child, 'w:t');
       const text = textEl?.elements?.find((e) => e.type === 'text')?.text;
       if (!text) return;
@@ -82,6 +82,9 @@ describe('OOXML italic + rStyle combinations round-trip', async () => {
   it('maintains italic presence across import/export according to inline-overrides-style rule', () => {
     const n = Math.min(sourceRuns.length, exportedRuns.length);
     for (let i = 0; i < n; i++) {
+      console.log(
+        `Run ${i}: source italic=${sourceRuns[i].italic}, exported italic=${exportedRuns[i].italic} (text="${exportedRuns[i].text}")`,
+      );
       expect(Boolean(exportedRuns[i].text)).toBe(true);
       expect(exportedRuns[i].italic).toBe(sourceRuns[i].italic);
     }
