@@ -926,13 +926,12 @@ export function decodeRPrFromMarks(marks) {
   }
 
   marks.forEach((mark) => {
-    switch (mark.type.name ?? mark.type) {
+    const type = mark.type.name ?? mark.type;
+    switch (type) {
       case 'strike':
       case 'italic':
       case 'bold':
-        if (mark.attrs.value != null) {
-          runProperties[mark.type] = mark.attrs.value;
-        }
+        runProperties[type] = mark.attrs.value !== '0' && mark.attrs.value !== false;
         break;
       case 'underline': {
         const { underlineType, underlineColor } = mark.attrs;
