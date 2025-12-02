@@ -3844,9 +3844,11 @@ export class PresentationEditor extends EventEmitter {
     }
 
     // Query spans - prefer narrowed scope if we found the page, fallback to viewport-wide query
-    const spanEls = targetPageEl
-      ? targetPageEl.querySelectorAll('span[data-pm-start][data-pm-end]')
-      : this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]');
+    const spanEls = Array.from(
+      targetPageEl
+        ? targetPageEl.querySelectorAll('span[data-pm-start][data-pm-end]')
+        : this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]'),
+    );
 
     for (const spanEl of spanEls) {
       const pmStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');
@@ -3950,7 +3952,7 @@ export class PresentationEditor extends EventEmitter {
   ): { pageIndex: number; x: number; y: number; height: number } | null {
     // Use DOM-based positioning for accuracy (matching how click mapping works)
     // Find the line element with data-pm-start/end that contains this position
-    const lineEls = this.#viewportHost.querySelectorAll('.superdoc-line');
+    const lineEls = Array.from(this.#viewportHost.querySelectorAll('.superdoc-line'));
 
     // Early return if DOM not yet rendered
     if (lineEls.length === 0) return null;
@@ -3964,7 +3966,7 @@ export class PresentationEditor extends EventEmitter {
 
       // Found the line containing this position
       // Now find the span containing the position
-      const spanEls = lineEl.querySelectorAll('span[data-pm-start]');
+      const spanEls = Array.from(lineEl.querySelectorAll('span[data-pm-start]'));
 
       for (const spanEl of spanEls) {
         const spanStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');

@@ -74,7 +74,11 @@ export function handleImageNode(node, params, isAnchor) {
     top: positionVValue,
   };
 
-  const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
+  // Only use wp:simplePos element if the anchor's simplePos attribute is "1" or true.
+  // When simplePos="0", the coordinates in wp:simplePos are legacy/placeholder values
+  // and positioning should come from wp:positionH/wp:positionV instead.
+  const useSimplePos = attributes['simplePos'] === '1' || attributes['simplePos'] === 1;
+  const simplePos = useSimplePos ? node.elements.find((el) => el.name === 'wp:simplePos') : null;
 
   // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
   const wrapNode = isAnchor

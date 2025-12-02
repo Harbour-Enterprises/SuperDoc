@@ -2932,6 +2932,11 @@ export class DomPainter {
           continue;
         }
 
+        // Handle LineBreakRun - line breaks are handled by line creation, skip here
+        if (this.isLineBreakRun(baseRun)) {
+          continue;
+        }
+
         const runSegments = segmentsByRun.get(runIndex);
         if (!runSegments || runSegments.length === 0) {
           continue;

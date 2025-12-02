@@ -7,10 +7,10 @@
  * - Managing exclusion zones per page/column
  *
  * Architecture:
- * - Layout Pass 1: Registers all anchored images before laying out paragraphs
- * - Layout Pass 2: Queries exclusions during paragraph layout to reduce line widths
- * - Supports rectangular wrapping (Square/TopAndBottom) in Phase 4A
- * - Polygon wrapping (Tight/Through) deferred to Phase 4B
+ * - Registration pass: Registers all anchored images before laying out paragraphs
+ * - Layout pass: Queries exclusions during paragraph layout to reduce line widths
+ * - Supports rectangular wrapping (Square/TopAndBottom)
+ * - Polygon wrapping (Tight/Through) not yet implemented
  */
 
 import type { ImageBlock, ImageMeasure, ExclusionZone, DrawingBlock, DrawingMeasure } from '@superdoc/contracts';
@@ -21,7 +21,7 @@ type FloatMeasure = ImageMeasure | DrawingMeasure;
 export type FloatingObjectManager = {
   /**
    * Register an anchored drawing as an exclusion zone.
-   * Should be called during Layout Pass 1 before laying out paragraphs.
+   * Should be called before laying out paragraphs.
    */
   registerDrawing(
     drawingBlock: FloatBlock,
@@ -122,7 +122,7 @@ export function createFloatingObjectManager(
     },
 
     getExclusionsForLine(lineY, lineHeight, columnIndex, pageNumber) {
-      return zones.filter((zone) => {
+      const result = zones.filter((zone) => {
         // Filter by page and column
         if (zone.pageNumber !== pageNumber || zone.columnIndex !== columnIndex) {
           return false;
@@ -134,8 +134,12 @@ export function createFloatingObjectManager(
         const zoneTop = zone.bounds.y - zone.distances.top;
         const zoneBottom = zone.bounds.y + zone.bounds.height + zone.distances.bottom;
 
-        return lineBottom > zoneTop && lineTop < zoneBottom;
+        const overlaps = lineBottom > zoneTop && lineTop < zoneBottom;
+
+        return overlaps;
       });
+
+      return result;
     },
 
     computeAvailableWidth(lineY, lineHeight, baseWidth, columnIndex, pageNumber) {
@@ -157,6 +161,10 @@ export function createFloatingObjectManager(
       const leftFloats: ExclusionZone[] = [];
       const rightFloats: ExclusionZone[] = [];
 
+      // Use absolute coordinates for comparison - columnOrigin is the left edge of content
+      const columnOrigin = marginLeft + columnIndex * (columns.width + columns.gap);
+      const columnCenter = columnOrigin + baseWidth / 2;
+
       for (const zone of wrappingZones) {
         // Determine which side the float is on based on wrapMode and position
         if (zone.wrapMode === 'left') {
@@ -167,8 +175,9 @@ export function createFloatingObjectManager(
           rightFloats.push(zone);
         } else if (zone.wrapMode === 'both' || zone.wrapMode === 'largest') {
           // For 'both' and 'largest', determine side by the zone's center position
+          // Use absolute coordinates for comparison
           const zoneCenter = zone.bounds.x + zone.bounds.width / 2;
-          if (zoneCenter < baseWidth / 2) {
+          if (zoneCenter < columnCenter) {
             leftFloats.push(zone);
           } else {
             rightFloats.push(zone);
@@ -186,8 +195,6 @@ export function createFloatingObjectManager(
         leftBoundary = Math.max(leftBoundary, boundary);
       }
 
-      // Compute column boundaries in absolute coordinates
-      const columnOrigin = marginLeft + columnIndex * (columns.width + columns.gap);
       const columnRightEdge = columnOrigin + baseWidth;
 
       // Find the leftmost boundary from right floats (most intrusive on right)
