@@ -363,6 +363,14 @@ export type ImageBlock = {
   wrap?: ImageWrap;
   attrs?: Record<string, unknown>;
 };
+export type DrawingKind = 'image' | 'vectorShape' | 'shapeGroup';
+export type DrawingGeometry = {
+  width: number;
+  height: number;
+  rotation?: number;
+  flipH?: boolean;
+  flipV?: boolean;
+};
 export type SectionBreakBlock = {
   kind: 'sectionBreak';
   id: BlockId;
@@ -940,6 +948,22 @@ export type ImageFragment = {
   isAnchored?: boolean;
   zIndex?: number;
 };
+export type DrawingFragment = {
+  kind: 'drawing';
+  blockId: BlockId;
+  drawingKind: DrawingKind;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  isAnchored?: boolean;
+  zIndex?: number;
+  geometry: DrawingGeometry;
+  scale: number;
+  drawingContentId?: string;
+  pmStart?: number;
+  pmEnd?: number;
+};
 export type ListItemFragment = {
   kind: 'list-item';
   blockId: BlockId;
@@ -953,7 +977,7 @@ export type ListItemFragment = {
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
 };
-export type Fragment = ParaFragment | ImageFragment | ListItemFragment | TableFragment;
+export type Fragment = ParaFragment | ImageFragment | DrawingFragment | ListItemFragment | TableFragment;
 /**
  * Header/footer classification mirrors Word semantics.
  * - `default`: applies when no other variant is provided

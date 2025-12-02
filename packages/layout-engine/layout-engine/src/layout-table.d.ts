@@ -1,4 +1,4 @@
-import type { TableBlock, TableMeasure } from '@superdoc/contracts';
+import type { TableBlock, TableMeasure, TableFragment } from '@superdoc/contracts';
 
 export type PageState = {
   page: { fragments: unknown[] };
@@ -23,3 +23,9 @@ export declare function layoutTableBlock({
   advanceColumn,
   columnX,
 }: TableLayoutContext): void;
+export declare function createAnchoredTableFragment(
+  block: TableBlock,
+  measure: TableMeasure,
+  x: number,
+  y: number,
+): TableFragment;

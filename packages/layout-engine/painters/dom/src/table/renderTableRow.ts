@@ -1,4 +1,12 @@
-import type { Line, ParagraphBlock, SdtMetadata, TableBlock, TableBorders, TableMeasure } from '@superdoc/contracts';
+import type {
+  Line,
+  ParagraphBlock,
+  PartialRowInfo,
+  SdtMetadata,
+  TableBlock,
+  TableBorders,
+  TableMeasure,
+} from '@superdoc/contracts';
 import { renderTableCell } from './renderTableCell.js';
 import { resolveTableCellBorders, borderValueToSpec } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
@@ -39,6 +47,24 @@ type TableRowRenderDependencies = {
   renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
   /** Function to apply SDT metadata as data attributes */
   applySdtDataset: (el: HTMLElement | null, metadata?: SdtMetadata | null) => void;
+  /**
+   * If true, this row is the first body row of a continuation fragment.
+   * MS Word draws borders at split points to visually close the table on each page,
+   * so we do NOT suppress borders - both fragments draw their edge borders.
+   */
+  continuesFromPrev?: boolean;
+  /**
+   * If true, this row is the last body row before a page break continuation.
+   * MS Word draws borders at split points to visually close the table on each page,
+   * so we do NOT suppress borders - both fragments draw their edge borders.
+   */
+  continuesOnNext?: boolean;
+  /**
+   * Partial row information for mid-row splits.
+   * Contains per-cell line ranges (fromLineByCell, toLineByCell) for rendering
+   * only a portion of the row's content.
+   */
+  partialRow?: PartialRowInfo;
 };
 
 /**
@@ -90,6 +116,9 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     context,
     renderLine,
     applySdtDataset,
+    continuesFromPrev,
+    continuesOnNext,
+    partialRow,
   } = deps;
 
   /**
@@ -194,6 +223,12 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     // 2. Cell has explicit borders → use those, but merge with table borders for edges
     // 3. Table has borders → resolve from table borders (single-owner: top/left + edge bottom/right)
     // 4. Neither → no borders
+    //
+    // CONTINUATION HANDLING (MS Word behavior):
+    // MS Word draws borders at page breaks to visually "close" the table on each page.
+    // - If continuesFromPrev=true: draw TOP border (table's top border) to close the top
+    // - If continuesOnNext=true: draw BOTTOM border (table's bottom border) to close the bottom
+    // This means both fragments at a split have their edge borders drawn.
     let resolvedBorders;
     if (hasBordersAttribute && !hasExplicitBorders) {
       // Cell explicitly has borders={} meaning "no borders"
@@ -206,11 +241,15 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
       const isFirstCol = gridColIndex === 0;
       const isLastCol = gridColIndex === totalCols - 1;
 
+      // For continuation handling: treat split boundaries as table edges
+      const treatAsFirstRow = isFirstRow || continuesFromPrev;
+      const treatAsLastRow = isLastRow || continuesOnNext;
+
       resolvedBorders = {
-        // For top: use cell's if defined, otherwise use table's top for first row
-        top: cellBordersAttr.top ?? borderValueToSpec(isFirstRow ? tableBorders.top : tableBorders.insideH),
-        // For bottom: use cell's if defined, otherwise use table's bottom for last row only
-        bottom: cellBordersAttr.bottom ?? borderValueToSpec(isLastRow ? tableBorders.bottom : undefined),
+        // For top: use cell's if defined, otherwise use table's top border for first row OR continuation
+        top: cellBordersAttr.top ?? borderValueToSpec(treatAsFirstRow ? tableBorders.top : tableBorders.insideH),
+        // For bottom: use cell's if defined, otherwise use table's bottom border for last row OR before continuation
+        bottom: cellBordersAttr.bottom ?? borderValueToSpec(treatAsLastRow ? tableBorders.bottom : undefined),
         // For left: use cell's if defined, otherwise use table's left for first col
         left: cellBordersAttr.left ?? borderValueToSpec(isFirstCol ? tableBorders.left : tableBorders.insideV),
         // For right: use cell's if defined, otherwise use table's right for last col only
@@ -218,16 +257,55 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
       };
     } else if (hasExplicitBorders) {
       // Cell has explicit borders but no table borders to merge with
-      resolvedBorders = cellBordersAttr;
+      // Use cell borders as-is (no table borders to add for continuations)
+      resolvedBorders = {
+        top: cellBordersAttr.top,
+        bottom: cellBordersAttr.bottom,
+        left: cellBordersAttr.left,
+        right: cellBordersAttr.right,
+      };
     } else if (tableBorders) {
-      resolvedBorders = resolveTableCellBorders(tableBorders, rowIndex, gridColIndex, totalRows, totalCols);
+      // For continuation handling: treat split boundaries as table edges
+      const isFirstRow = rowIndex === 0;
+      const isLastRow = rowIndex === totalRows - 1;
+      const treatAsFirstRow = isFirstRow || continuesFromPrev;
+      const treatAsLastRow = isLastRow || continuesOnNext;
+
+      // Get base borders, then override for continuations
+      const baseBorders = resolveTableCellBorders(tableBorders, rowIndex, gridColIndex, totalRows, totalCols);
+
+      if (baseBorders) {
+        resolvedBorders = {
+          // If this is a continuation (continuesFromPrev), use table's top border
+          top: treatAsFirstRow ? borderValueToSpec(tableBorders.top) : baseBorders.top,
+          // If this continues on next (continuesOnNext), use table's bottom border
+          bottom: treatAsLastRow ? borderValueToSpec(tableBorders.bottom) : baseBorders.bottom,
+          left: baseBorders.left,
+          right: baseBorders.right,
+        };
+      } else {
+        resolvedBorders = undefined;
+      }
     } else {
       resolvedBorders = undefined;
     }
 
     // Calculate cell height - use rowspan height if cell spans multiple rows
+    // For partial rows, use the partial height instead
     const rowSpan = cellMeasure.rowSpan ?? 1;
-    const cellHeight = rowSpan > 1 ? calculateRowspanHeight(rowIndex, rowSpan) : rowMeasure.height;
+    let cellHeight: number;
+    if (partialRow) {
+      // Use partial row height for mid-row splits
+      cellHeight = partialRow.partialHeight;
+    } else if (rowSpan > 1) {
+      cellHeight = calculateRowspanHeight(rowIndex, rowSpan);
+    } else {
+      cellHeight = rowMeasure.height;
+    }
+
+    // Get per-cell line range for partial row rendering
+    const fromLine = partialRow?.fromLineByCell?.[cellIndex];
+    const toLine = partialRow?.toLineByCell?.[cellIndex];
 
     // Never use default borders - cells are either explicitly styled or borderless
     // This prevents gray borders on cells with borders={} (intentionally borderless)
@@ -243,6 +321,8 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
       renderLine,
       context,
       applySdtDataset,
+      fromLine,
+      toLine,
     });
 
     container.appendChild(cellElement);

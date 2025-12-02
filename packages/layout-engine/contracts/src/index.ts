@@ -1172,6 +1172,16 @@ export type ImageFragmentMetadata = {
   minHeight: number;
 };
 
+export type PartialRowInfo = {
+  rowIndex: number; // Which row is partially split
+  fromLineByCell: number[]; // Per-cell line start (inclusive) - 0 for first part
+  toLineByCell: number[]; // Per-cell line cutoff (exclusive) - -1 means render to end
+  isFirstPart: boolean; // True if this is the first part of a split row
+  isLastPart: boolean; // True if this is the last part of a split row
+  /** Height of this partial row portion in pixels */
+  partialHeight: number;
+};
+
 export type TableFragment = {
   kind: 'table';
   blockId: BlockId;
@@ -1183,6 +1193,8 @@ export type TableFragment = {
   height: number;
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
+  repeatHeaderCount?: number;
+  partialRow?: PartialRowInfo;
   metadata?: TableFragmentMetadata;
 };
 

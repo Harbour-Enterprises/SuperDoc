@@ -9,7 +9,11 @@ import type { TableBlock, TableMeasure, TableFragment, BlockId } from '@superdoc
 /**
  * Create a mock table block for testing
  */
-function createMockTableBlock(rowCount: number): TableBlock {
+function createMockTableBlock(
+  rowCount: number,
+  rowAttrs?: Array<{ repeatHeader?: boolean; cantSplit?: boolean }>,
+  tableAttrs?: { tableProperties?: { floatingTableProperties?: unknown } },
+): TableBlock {
   const rows = Array.from({ length: rowCount }, (_, i) => ({
     id: `row-${i}` as BlockId,
     cells: [
@@ -30,12 +34,21 @@ function createMockTableBlock(rowCount: number): TableBlock {
         },
       },
     ],
+    attrs: rowAttrs?.[i]
+      ? {
+          tableRowProperties: {
+            repeatHeader: rowAttrs[i].repeatHeader,
+            cantSplit: rowAttrs[i].cantSplit,
+          },
+        }
+      : undefined,
   }));
 
   return {
     kind: 'table',
     id: 'test-table' as BlockId,
     rows,
+    attrs: tableAttrs,
   };
 }
 
@@ -551,6 +564,605 @@ describe('layoutTableBlock', () => {
       const fragment = fragments[0];
       expect(fragment.fromRow).toBe(0);
       expect(fragment.toRow).toBe(5);
+    });
+  });
+
+  describe('countHeaderRows behavior (via layoutTableBlock)', () => {
+    it('should handle tables with no header rows', () => {
+      const block = createMockTableBlock(3, [
+        { repeatHeader: false },
+        { repeatHeader: false },
+        { repeatHeader: false },
+      ]);
+      const measure = createMockTableMeasure([100], [20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      const fragment = fragments[0];
+      expect(fragment.repeatHeaderCount).toBe(0);
+      expect(fragment.fromRow).toBe(0);
+      expect(fragment.toRow).toBe(3);
+    });
+
+    it('should handle tables with single header row', () => {
+      const block = createMockTableBlock(3, [{ repeatHeader: true }, { repeatHeader: false }, { repeatHeader: false }]);
+      const measure = createMockTableMeasure([100], [20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      const fragment = fragments[0];
+      // First fragment sets repeatHeaderCount=0 (headers included in body)
+      expect(fragment.repeatHeaderCount).toBe(0);
+      expect(fragment.fromRow).toBe(0);
+      expect(fragment.toRow).toBe(3);
+    });
+
+    it('should handle tables with multiple contiguous header rows', () => {
+      const block = createMockTableBlock(5, [
+        { repeatHeader: true },
+        { repeatHeader: true },
+        { repeatHeader: true },
+        { repeatHeader: false },
+        { repeatHeader: false },
+      ]);
+      const measure = createMockTableMeasure([100], [20, 20, 20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      const fragment = fragments[0];
+      // First fragment includes headers in body, repeatHeaderCount=0
+      expect(fragment.repeatHeaderCount).toBe(0);
+      expect(fragment.fromRow).toBe(0);
+      expect(fragment.toRow).toBe(5);
+    });
+
+    it('should stop counting headers at first non-header row', () => {
+      const block = createMockTableBlock(5, [
+        { repeatHeader: true },
+        { repeatHeader: true },
+        { repeatHeader: false }, // Stops here
+        { repeatHeader: true }, // Not counted
+        { repeatHeader: false },
+      ]);
+      const measure = createMockTableMeasure([100], [20, 20, 20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      const fragment = fragments[0];
+      expect(fragment.fromRow).toBe(0);
+      expect(fragment.toRow).toBe(5);
+    });
+
+    it('should handle all rows being headers', () => {
+      const block = createMockTableBlock(3, [{ repeatHeader: true }, { repeatHeader: true }, { repeatHeader: true }]);
+      const measure = createMockTableMeasure([100], [20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      // All rows are headers, but table still creates a fragment with all rows
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].fromRow).toBe(0);
+      expect(fragments[0].toRow).toBe(3);
+    });
+
+    it('should handle undefined row attributes (no headers)', () => {
+      const block = createMockTableBlock(3); // No row attrs
+      const measure = createMockTableMeasure([100], [20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      const fragment = fragments[0];
+      expect(fragment.repeatHeaderCount).toBe(0);
+      expect(fragment.fromRow).toBe(0);
+      expect(fragment.toRow).toBe(3);
+    });
+  });
+
+  describe('findSplitPoint behavior (via layoutTableBlock)', () => {
+    it('should split table when all rows fit on one page', () => {
+      const block = createMockTableBlock(5);
+      const measure = createMockTableMeasure([100], [20, 20, 20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000, // Plenty of space
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].fromRow).toBe(0);
+      expect(fragments[0].toRow).toBe(5);
+    });
+
+    it('should split table across multiple pages when rows exceed available height', () => {
+      const block = createMockTableBlock(10);
+      const measure = createMockTableMeasure([100], Array(10).fill(20));
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 100, // Only fits 5 rows at a time (100px / 20px)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0; // Reset cursor for new page
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 100,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(1);
+    });
+
+    it('should handle cantSplit row that does not fit (move to next page)', () => {
+      const block = createMockTableBlock(5, [
+        { cantSplit: false },
+        { cantSplit: false },
+        { cantSplit: true }, // Row 2 can't split
+        { cantSplit: false },
+        { cantSplit: false },
+      ]);
+      const measure = createMockTableMeasure([100], [20, 20, 30, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 50, // Fits rows 0-1 (40px), but not row 2 (30px more)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 100, // More space on next page
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(1);
+      // First fragment should end before the cantSplit row
+      expect(fragments[0].toRow).toBeLessThanOrEqual(2);
+    });
+
+    it('should handle multiple cantSplit rows', () => {
+      const block = createMockTableBlock(6, [
+        { cantSplit: false },
+        { cantSplit: true }, // Row 1
+        { cantSplit: true }, // Row 2
+        { cantSplit: false },
+        { cantSplit: true }, // Row 4
+        { cantSplit: false },
+      ]);
+      const measure = createMockTableMeasure([100], Array(6).fill(20));
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 50, // Fits 2-3 rows at a time
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(0);
+    });
+
+    it('should handle row that exactly fills available space', () => {
+      const block = createMockTableBlock(3);
+      const measure = createMockTableMeasure([100], [50, 50, 50]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 100, // Exactly fits 2 rows (100px / 50px = 2)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 100,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(2);
+      expect(fragments[0].fromRow).toBe(0);
+      expect(fragments[0].toRow).toBe(2);
+      expect(fragments[1].fromRow).toBe(2);
+      expect(fragments[1].toRow).toBe(3);
+    });
+  });
+
+  describe('integration: table splitting scenarios', () => {
+    it('should split multi-page table with basic row boundaries', () => {
+      const block = createMockTableBlock(20);
+      const measure = createMockTableMeasure([100], Array(20).fill(25));
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 250, // Fits 10 rows per page (250px / 25px)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 250,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(2);
+      expect(fragments[0].fromRow).toBe(0);
+      expect(fragments[0].toRow).toBe(10);
+      expect(fragments[1].fromRow).toBe(10);
+      expect(fragments[1].toRow).toBe(20);
+      expect(fragments[0].continuesOnNext).toBe(true);
+      expect(fragments[1].continuesFromPrev).toBe(true);
+    });
+
+    it('should repeat header rows on continuation fragments', () => {
+      const block = createMockTableBlock(10, [
+        { repeatHeader: true },
+        { repeatHeader: true },
+        ...Array(8).fill({ repeatHeader: false }),
+      ]);
+      const measure = createMockTableMeasure([100], Array(10).fill(20));
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 120, // Fits 6 rows (120px / 20px)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 120,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(1);
+      // First fragment starts with headers
+      expect(fragments[0].fromRow).toBe(0);
+      // Continuation fragments should have repeatHeaderCount
+      if (fragments.length > 1) {
+        expect(fragments[1].repeatHeaderCount).toBe(2);
+      }
+    });
+
+    it('should skip header repetition when headers are taller than page', () => {
+      const block = createMockTableBlock(5, [
+        { repeatHeader: true },
+        { repeatHeader: true },
+        { repeatHeader: false },
+        { repeatHeader: false },
+        { repeatHeader: false },
+      ]);
+      const measure = createMockTableMeasure([100], [80, 80, 20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 100, // Headers are 160px, page is 100px
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 100,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should split but not repeat headers (they don't fit)
+      if (fragments.length > 1) {
+        expect(fragments[1].repeatHeaderCount).toBe(0);
+      }
+    });
+
+    it('should not split floating tables', () => {
+      const block = createMockTableBlock(10, undefined, {
+        tableProperties: { floatingTableProperties: { horizontalAnchor: 'page' } },
+      });
+      const measure = createMockTableMeasure([100], Array(10).fill(20));
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 50, // Not enough space for all rows
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      // Floating table should be rendered as single fragment despite limited space
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].fromRow).toBe(0);
+      expect(fragments[0].toRow).toBe(10);
+      expect(fragments[0].continuesOnNext).toBeUndefined();
+    });
+
+    it('should handle cantSplit row forcing move to next page', () => {
+      const block = createMockTableBlock(5, [
+        { cantSplit: false },
+        { cantSplit: false },
+        { cantSplit: true }, // Large row that can't split
+        { cantSplit: false },
+        { cantSplit: false },
+      ]);
+      const measure = createMockTableMeasure([100], [20, 20, 80, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 100,
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 100,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(1);
+      // First fragment should end before cantSplit row
+      expect(fragments[0].toRow).toBe(2);
+      // Second fragment should start with cantSplit row
+      expect(fragments[1].fromRow).toBe(2);
+    });
+
+    it('should handle over-tall row with forced mid-row split', () => {
+      // Create a table with one very tall row that exceeds full page height
+      const block = createMockTableBlock(3);
+      // Row heights: normal (20px), over-tall (600px), normal (20px)
+      const measure = createMockTableMeasure([100], [20, 600, 20]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 500, // Full page is 500px, row is 600px
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 500,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments due to over-tall row
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // At least one fragment should have partialRow defined (when mid-row split is implemented)
+      // For now, the over-tall row will be force-split at row boundaries
+      // Once partialRow rendering is complete, this test should verify partialRow metadata
     });
   });
 });

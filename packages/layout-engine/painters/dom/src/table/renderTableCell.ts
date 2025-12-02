@@ -41,6 +41,10 @@ type TableCellRenderDependencies = {
   context: FragmentRenderContext;
   /** Function to apply SDT metadata as data attributes */
   applySdtDataset: (el: HTMLElement | null, metadata?: SdtMetadata | null) => void;
+  /** Starting line index for partial row rendering (inclusive) */
+  fromLine?: number;
+  /** Ending line index for partial row rendering (exclusive), -1 means render to end */
+  toLine?: number;
 };
 
 /**
@@ -105,8 +109,21 @@ export type TableCellRenderResult = {
  * ```
  */
 export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRenderResult => {
-  const { doc, x, y, rowHeight, cellMeasure, cell, borders, useDefaultBorder, renderLine, context, applySdtDataset } =
-    deps;
+  const {
+    doc,
+    x,
+    y,
+    rowHeight,
+    cellMeasure,
+    cell,
+    borders,
+    useDefaultBorder,
+    renderLine,
+    context,
+    applySdtDataset,
+    fromLine,
+    toLine,
+  } = deps;
 
   const cellEl = doc.createElement('div');
   cellEl.style.position = 'absolute';
@@ -115,6 +132,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   cellEl.style.width = `${cellMeasure.width}px`;
   cellEl.style.height = `${rowHeight}px`;
   cellEl.style.boxSizing = 'border-box';
+  cellEl.style.overflow = 'hidden';
 
   if (borders) {
     applyCellBorders(cellEl, borders);
@@ -144,39 +162,24 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
 
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
-  const blockMeasures = cellMeasure.blocks ?? (cellMeasure.paragraph ? [cellMeasure.paragraph] : []);
+  const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
 
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     const content = doc.createElement('div');
     content.style.position = 'absolute';
     content.style.left = `${x + paddingLeft}px`;
-    const availableHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
     content.style.top = `${y + paddingTop}px`;
-    // Give the content box a small horizontal buffer so minor measure/paint
-    // differences don't clip the last glyph on a line.
+
     const contentWidth = Math.max(0, cellMeasure.width - paddingLeft - paddingRight);
+    const contentHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
     content.style.width = `${contentWidth + 1}px`;
-    content.style.height = `${availableHeight}px`;
+    content.style.height = `${contentHeight}px`;
     content.style.display = 'flex';
     content.style.flexDirection = 'column';
-    /**
-     * Use 'visible' overflow instead of 'hidden' to prevent text clipping.
-     *
-     * Why 'visible' is used:
-     * - Canvas text measurement and DOM rendering can have minor sub-pixel differences
-     * - The contentWidth includes a +1px buffer (see line above), but this may not always
-     *   be sufficient for glyphs with overhang (italic characters, certain fonts)
-     * - Using 'hidden' would clip the last character on a line if it extends beyond the
-     *   measured width due to actualBoundingBox differences
-     * - Table cells are absolutely positioned, so overflow doesn't affect layout of
-     *   adjacent cells
-     *
-     * Trade-off:
-     * - Pro: Prevents text truncation and ensures full glyph rendering
-     * - Con: Text can technically extend beyond cell boundaries in edge cases
-     * - Decision: Prioritize text visibility over strict boundary enforcement
-     */
-    content.style.overflow = 'visible';
+    // Prevent vertical overflow for partial rows while allowing slight horizontal overhangs
+    content.style.overflowX = 'visible';
+    content.style.overflowY = 'hidden';
+
     if (cell?.attrs?.verticalAlign === 'center') {
       content.style.justifyContent = 'center';
     } else if (cell?.attrs?.verticalAlign === 'bottom') {
@@ -185,11 +188,49 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       content.style.justifyContent = 'flex-start';
     }
 
+    // Calculate total lines across all blocks for proper global index mapping
+    const blockLineCounts: number[] = [];
+    for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
+      const bm = blockMeasures[i];
+      if (bm.kind === 'paragraph') {
+        blockLineCounts.push((bm as ParagraphMeasure).lines?.length || 0);
+      } else {
+        blockLineCounts.push(0);
+      }
+    }
+    const totalLines = blockLineCounts.reduce((a, b) => a + b, 0);
+
+    // Determine global line range to render
+    const globalFromLine = fromLine ?? 0;
+    const globalToLine = toLine === -1 || toLine === undefined ? totalLines : toLine;
+
+    let cumulativeLineCount = 0; // Track cumulative line count across blocks
     for (let i = 0; i < Math.min(blockMeasures.length, cellBlocks.length); i++) {
       const blockMeasure = blockMeasures[i];
       const block = cellBlocks[i];
 
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+        const lines = (blockMeasure as ParagraphMeasure).lines;
+        const blockLineCount = lines?.length || 0;
+
+        // Calculate the global line indices for this block
+        const blockStartGlobal = cumulativeLineCount;
+        const blockEndGlobal = cumulativeLineCount + blockLineCount;
+
+        // Skip blocks entirely before/after the global range
+        if (blockEndGlobal <= globalFromLine) {
+          cumulativeLineCount += blockLineCount;
+          continue;
+        }
+        if (blockStartGlobal >= globalToLine) {
+          cumulativeLineCount += blockLineCount;
+          continue;
+        }
+
+        // Calculate local line indices within this block
+        const localStartLine = Math.max(0, globalFromLine - blockStartGlobal);
+        const localEndLine = Math.min(blockLineCount, globalToLine - blockStartGlobal);
+
         // Create wrapper for this paragraph's SDT metadata
         // Use absolute positioning within the content container to stack blocks vertically
         const paraWrapper = doc.createElement('div');
@@ -198,13 +239,33 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
 
-        const lines = (blockMeasure as ParagraphMeasure).lines;
-        lines.forEach((line) => {
+        // Calculate height of rendered content for proper block accumulation
+        let renderedHeight = 0;
+
+        // Render only the lines in the local range
+        for (let lineIdx = localStartLine; lineIdx < localEndLine && lineIdx < lines.length; lineIdx++) {
+          const line = lines[lineIdx];
           const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
           paraWrapper.appendChild(lineEl);
-        });
+          renderedHeight += line.lineHeight;
+        }
+
+        // If we rendered the entire paragraph, use measured totalHeight to keep layout aligned with measurement
+        const renderedEntireBlock = localStartLine === 0 && localEndLine >= blockLineCount;
+        if (renderedEntireBlock && blockMeasure.totalHeight && blockMeasure.totalHeight > renderedHeight) {
+          renderedHeight = blockMeasure.totalHeight;
+        }
 
         content.appendChild(paraWrapper);
+
+        if (renderedHeight > 0) {
+          paraWrapper.style.height = `${renderedHeight}px`;
+        }
+
+        cumulativeLineCount += blockLineCount;
+      } else {
+        // Non-paragraph block - skip for now
+        cumulativeLineCount += 0;
       }
       // TODO: Handle other block types (list, image) if needed
     }
