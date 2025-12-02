@@ -1,3 +1,9 @@
+## [0.34.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.2...v0.34.3) (2025-12-02)
+
+### Bug Fixes
+
+- validateJSON fn ([bf3296e](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf3296e91633d903b7dbdf37715bd9fc1f58f941))
+
 ## [0.34.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.1...v0.34.2) (2025-11-30)
 
 ### Bug Fixes
