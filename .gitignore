@@ -39,6 +39,9 @@ packages/super-editor/src/tests/data/*/
 # Playwright
 test-results
 *.tgz
+e2e-tests/tests/**/*darwin*
+e2e-tests/test-results/**/*darwin*
+e2e-tests/tests/visuals/layout-compare.spec.js-snapshots/*
 
 !examples/chrome-extension/dist
 
