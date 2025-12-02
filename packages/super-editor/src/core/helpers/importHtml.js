@@ -2,6 +2,7 @@
 import { DOMParser } from 'prosemirror-model';
 import { stripHtmlStyles } from './htmlSanitizer.js';
 import { htmlHandler } from '../InputRule.js';
+import { wrapTextsInRuns } from '../inputRules/docx-paste/docx-paste.js';
 
 /**
  * Create a document from HTML content
@@ -29,5 +30,7 @@ export function createDocFromHTML(content, editor, options = {}) {
     parsedContent = content;
   }
 
-  return DOMParser.fromSchema(editor.schema).parse(parsedContent);
+  let doc = DOMParser.fromSchema(editor.schema).parse(parsedContent);
+  doc = wrapTextsInRuns(doc);
+  return doc;
 }

@@ -42,6 +42,14 @@ export * from './insertSectionBreakAtSelection.js';
 export * from './textIndent.js';
 export * from './lineHeight.js';
 
+// Run
+export * from './backspaceEmptyRunParagraph.js';
+export * from './backspaceSkipEmptyRun.js';
+export * from './backspaceNextToRun.js';
+export * from './deleteSkipEmptyRun.js';
+export * from './deleteNextToRun.js';
+export * from './skipTab.js';
+
 // Lists
 export * from './toggleList.js';
 export * from './increaseListIndent.js';

@@ -41,7 +41,7 @@ describe('trackChangesHelpers', () => {
   });
 
   const createDocWithText = (text, marks = []) => {
-    const paragraph = schema.nodes.paragraph.create({}, schema.text(text, marks));
+    const paragraph = schema.nodes.paragraph.create({}, schema.nodes.run.create({}, schema.text(text, marks)));
     return schema.nodes.doc.create({}, paragraph);
   };
 
@@ -61,11 +61,11 @@ describe('trackChangesHelpers', () => {
     });
     const doc = createDocWithText('abc', [mark]);
 
-    const result = documentHelpers.findMarkPosition(doc, 1, TrackInsertMarkName);
+    const result = documentHelpers.findMarkPosition(doc, 2, TrackInsertMarkName);
     expect(result).toEqual(
       expect.objectContaining({
-        from: 1,
-        to: 4,
+        from: 2,
+        to: 5,
         attrs: expect.objectContaining({ id: 'ins-1' }),
       }),
     );
@@ -108,16 +108,16 @@ describe('trackChangesHelpers', () => {
 
     const found = findTrackedMarkBetween({
       tr,
-      from: 1,
-      to: 3,
+      from: 2,
+      to: 4,
       markName: TrackInsertMarkName,
       attrs: { authorEmail: user.email },
     });
 
     expect(found).toEqual(
       expect.objectContaining({
-        from: 1,
-        to: 4,
+        from: 2,
+        to: 5,
         mark: expect.objectContaining({ attrs: expect.objectContaining({ id: 'match-me' }) }),
       }),
     );
@@ -221,7 +221,7 @@ describe('trackChangesHelpers', () => {
     const initialState = createState(createDocWithText('abc'));
 
     // insertion
-    let tr = initialState.tr.insertText('Z', 1);
+    let tr = initialState.tr.insertText('Z', 2);
     tr.setMeta('inputType', 'insertText');
     const trackedInsert = trackedTransaction({ tr, state: initialState, user });
     const insertState = initialState.apply(trackedInsert);
@@ -234,7 +234,7 @@ describe('trackChangesHelpers', () => {
 
     // deletion
     const deleteState = createState(createDocWithText('abc'));
-    let deleteTr = deleteState.tr.delete(1, 2);
+    let deleteTr = deleteState.tr.delete(2, 3);
     deleteTr.setMeta('inputType', 'deleteContentBackward');
     const trackedDelete = trackedTransaction({ tr: deleteTr, state: deleteState, user });
     const finalState = deleteState.apply(trackedDelete);
@@ -259,7 +259,7 @@ describe('trackChangesHelpers', () => {
     let state = createState(createDocWithText('initial'));
 
     // Step 1: Make a normal change that SHOULD be in history
-    let tr1 = state.tr.insertText('normal', 8);
+    let tr1 = state.tr.insertText('normal', 9);
     tr1.setMeta('inputType', 'insertText');
     const tracked1 = trackedTransaction({ tr: tr1, state, user });
     state = state.apply(tracked1);
@@ -328,7 +328,7 @@ describe('trackChangesHelpers', () => {
       const state = createState(createDocWithText('old text'));
 
       // Simulate selecting "old" and typing "new" (a replace operation)
-      const tr = state.tr.replaceWith(1, 4, schema.text('new'));
+      const tr = state.tr.replaceWith(2, 5, schema.text('new'));
       tr.setMeta('inputType', 'insertText');
 
       const tracked = trackedTransaction({ tr, state, user });
@@ -361,7 +361,7 @@ describe('trackChangesHelpers', () => {
       const state = createState(createDocWithText('delete me'));
 
       // Pure deletion without replacement
-      const tr = state.tr.delete(1, 10);
+      const tr = state.tr.delete(2, 11);
       tr.setMeta('inputType', 'deleteContentBackward');
 
       const tracked = trackedTransaction({ tr, state, user });
@@ -387,13 +387,13 @@ describe('trackChangesHelpers', () => {
 
     it('multiple sequential replace operations create different IDs', () => {
       const state1 = createState(createDocWithText('first'));
-      const tr1 = state1.tr.replaceWith(1, 6, schema.text('1st'));
+      const tr1 = state1.tr.replaceWith(2, 7, schema.text('1st'));
       tr1.setMeta('inputType', 'insertText');
       const tracked1 = trackedTransaction({ tr: tr1, state: state1, user });
       const meta1 = tracked1.getMeta(TrackChangesBasePluginKey);
 
       const state2 = createState(createDocWithText('second'));
-      const tr2 = state2.tr.replaceWith(1, 7, schema.text('2nd'));
+      const tr2 = state2.tr.replaceWith(2, 8, schema.text('2nd'));
       tr2.setMeta('inputType', 'insertText');
       const tracked2 = trackedTransaction({ tr: tr2, state: state2, user });
       const meta2 = tracked2.getMeta(TrackChangesBasePluginKey);
@@ -403,7 +403,7 @@ describe('trackChangesHelpers', () => {
 
     it('replace operation maintains author and date consistency', () => {
       const state = createState(createDocWithText('test'));
-      const tr = state.tr.replaceWith(1, 5, schema.text('TEST'));
+      const tr = state.tr.replaceWith(2, 6, schema.text('TEST'));
       tr.setMeta('inputType', 'insertText');
 
       const tracked = trackedTransaction({ tr, state, user });
@@ -418,7 +418,7 @@ describe('trackChangesHelpers', () => {
 
     it('getTrackChanges returns both marks with same ID for replace', () => {
       const state = createState(createDocWithText('original'));
-      const tr = state.tr.replaceWith(1, 9, schema.text('modified'));
+      const tr = state.tr.replaceWith(1, 10, schema.text('modified'));
       tr.setMeta('inputType', 'insertText');
 
       const tracked = trackedTransaction({ tr, state, user });

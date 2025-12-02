@@ -1,4 +1,5 @@
 import { OxmlNode, Attribute } from '@core/index.js';
+import { TextSelection } from 'prosemirror-state';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { splitBlock } from '@core/commands/splitBlock.js';
 import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
@@ -272,7 +273,7 @@ export const Paragraph = OxmlNode.create({
 
             // Not inside a list item, proceed with creating new list
             const { tr } = state;
-            tr.delete(range.from, range.to);
+            tr.delete(range.from, range.to).setSelection(TextSelection.create(tr.doc, range.from));
 
             ListHelpers.createNewList({
               listType: type,

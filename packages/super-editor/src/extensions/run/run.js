@@ -1,7 +1,9 @@
 // @ts-nocheck
 
 import { Attribute, OxmlNode } from '@core/index.js';
-import { splitRun } from './commands/index.js';
+import { splitRunToParagraph, splitRunAtCursor } from './commands/index.js';
+import { cleanupEmptyRunsPlugin } from './cleanupEmptyRunsPlugin.js';
+import { wrapTextInRunsPlugin } from './wrapTextInRunsPlugin.js';
 
 /**
  * Run node emulates OOXML w:r (run) boundaries while remaining transparent to layout.
@@ -52,7 +54,8 @@ export const Run = OxmlNode.create({
   // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
-      splitRun,
+      splitRunToParagraph,
+      splitRunAtCursor,
     };
   },
 
@@ -63,5 +66,8 @@ export const Run = OxmlNode.create({
   renderDOM({ htmlAttributes }) {
     const base = Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes);
     return ['span', base, 0];
+  },
+  addPmPlugins() {
+    return [wrapTextInRunsPlugin(), cleanupEmptyRunsPlugin];
   },
 });
