@@ -1,4 +1,4 @@
-import { DOMParser } from 'prosemirror-model';
+import { DOMParser, Fragment } from 'prosemirror-model';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import {
@@ -11,6 +11,7 @@ import {
 } from '@helpers/pasteListHelpers.js';
 import { normalizeLvlTextChar } from '@superdoc/common/list-numbering';
 import { pointsToTwips } from '@converter/helpers';
+import { decodeRPrFromMarks } from '@converter/styles.js';
 
 /**
  * Main handler for pasted DOCX content.
@@ -145,7 +146,8 @@ export const handleDocxPaste = (html, editor, view) => {
   });
 
   transformWordLists(tempDiv, editor);
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  let doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  doc = wrapTextsInRuns(doc);
 
   tempDiv.remove();
 
@@ -154,6 +156,35 @@ export const handleDocxPaste = (html, editor, view) => {
 
   dispatch(view.state.tr.replaceSelectionWith(doc, true));
   return true;
+};
+
+export const wrapTextsInRuns = (doc) => {
+  const runType = doc.type?.schema?.nodes?.run;
+  if (!runType) return doc;
+
+  const wrapNode = (node, parent) => {
+    if (node.isText) {
+      if (parent?.type?.name === 'run') return node;
+      const runProperties = decodeRPrFromMarks(node.marks);
+      return runType.create({ runProperties }, [node]);
+    }
+
+    if (!node.childCount) return node;
+
+    let changed = false;
+    const wrappedChildren = [];
+    node.forEach((child) => {
+      const wrappedChild = wrapNode(child, node);
+      if (wrappedChild !== child) changed = true;
+      wrappedChildren.push(wrappedChild);
+    });
+
+    if (!changed) return node;
+
+    return node.copy(Fragment.fromArray(wrappedChildren));
+  };
+
+  return wrapNode(doc, null);
 };
 
 const transformWordLists = (container, editor) => {

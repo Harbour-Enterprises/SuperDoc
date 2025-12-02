@@ -5,7 +5,7 @@ import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
-import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+import { handleDocxPaste, wrapTextsInRuns } from './inputRules/docx-paste/docx-paste.js';
 import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { handleGoogleDocsHtml } from './inputRules/google-docs-paste/google-docs-paste.js';
 
@@ -248,7 +248,8 @@ export function handleHtmlPaste(html, editor, source) {
   let cleanedHtml;
   if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
   else cleanedHtml = htmlHandler(html, editor);
-  const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+  let doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+  doc = wrapTextsInRuns(doc);
 
   const { dispatch, state } = editor.view;
   if (!dispatch) return false;

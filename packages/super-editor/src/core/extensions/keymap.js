@@ -4,7 +4,7 @@ import { isMacOS } from '../utilities/isMacOS.js';
 
 export const handleEnter = (editor) => {
   return editor.commands.first(({ commands }) => [
-    () => commands.splitRun(),
+    () => commands.splitRunToParagraph(),
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),
@@ -19,6 +19,9 @@ export const handleBackspace = (editor) => {
       tr.setMeta('inputType', 'deleteContentBackward');
       return false;
     },
+    () => commands.backspaceEmptyRunParagraph(),
+    () => commands.backspaceSkipEmptyRun(),
+    () => commands.backspaceNextToRun(),
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
@@ -28,6 +31,8 @@ export const handleBackspace = (editor) => {
 
 export const handleDelete = (editor) => {
   return editor.commands.first(({ commands }) => [
+    () => commands.deleteSkipEmptyRun(),
+    () => commands.deleteNextToRun(),
     () => commands.deleteSelection(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),
@@ -53,6 +58,8 @@ export const Keymap = Extension.create({
       'Mod-Delete': () => handleDelete(this.editor),
       'Mod-a': () => this.editor.commands.selectAll(),
       Tab: () => this.editor.commands.insertTabNode(),
+      ArrowLeft: () => this.editor.commands.skipTab(-1),
+      ArrowRight: () => this.editor.commands.skipTab(1),
     };
 
     const pcBaseKeymap = {
