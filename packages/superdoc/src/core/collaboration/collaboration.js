@@ -43,13 +43,23 @@ function awarenessHandler(context, { changes = {}, states }) {
  * @returns {Object} The provider and socket
  */
 function createProvider({ config, user, documentId, socket, superdocInstance }) {
+  // If customProvider is provided, use it directly (see ./custom-provider.d.ts for interface)
+  if (config.customProvider) {
+    const { provider, ydoc } = config.customProvider;
+    provider.awareness.setLocalStateField('user', user);
+    provider.awareness.on('update', (changes = {}) => {
+      return awarenessHandler(superdocInstance, { changes, states: provider.awareness.getStates() });
+    });
+    return { provider, ydoc };
+  }
+
   if (!config.providerType) config.providerType = 'superdoc';
 
   const providers = {
     hocuspocus: () => createHocuspocusProvider({ config, user, documentId, socket, superdocInstance }),
     superdoc: () => createSuperDocProvider({ config, user, documentId, socket, superdocInstance }),
   };
-  if (!providers) throw new Error(`Provider type ${config.providerType} is not supported.`);
+  if (!providers[config.providerType]) throw new Error(`Provider type ${config.providerType} is not supported.`);
 
   return providers[config.providerType]();
 }
