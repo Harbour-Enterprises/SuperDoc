@@ -12,7 +12,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 4 : undefined,
-  reporter: [['json', { outputFile: 'test-results/playwright-report.json' }]],
+  reporter: [
+    ['json', { outputFile: 'test-results/playwright-report.json' }],
+    ['./reporters/layout-engine-reporter.js'],
+  ],
   use: {
     trace: 'off',
     baseURL,
