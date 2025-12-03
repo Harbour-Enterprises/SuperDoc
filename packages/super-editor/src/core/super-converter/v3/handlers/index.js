@@ -111,6 +111,7 @@ import { translator as w_wAfter_translator } from './w/wAfter/wAfter-translator.
 import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translator.js';
 import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
 import { translator as w_vAlign_translator } from './w/vAlign/vAlign-translator.js';
+import { translator as w_vertAlign_translator } from './w/vertAlign/vertAlign-translator.js';
 import { translator as w_tcFitText_translator } from './w/tcFitText/tcFitText-translator.js';
 import { translator as w_tcW_translator } from './w/tcW/tcW-translator.js';
 import { translator as w_textDirection_translator } from './w/textDirection/textDirection-translator.js';
@@ -249,6 +250,7 @@ const translatorList = Array.from(
     w_top_translator,
     w_u_translator,
     w_vAlign_translator,
+    w_vertAlign_translator,
     w_vMerge_translator,
     w_wAfter_translator,
     w_wBefore_translator,
