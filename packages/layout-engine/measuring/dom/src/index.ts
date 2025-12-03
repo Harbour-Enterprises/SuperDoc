@@ -1120,11 +1120,23 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     const { font: markerFont } = buildFontString(markerRun);
     const markerText = wordLayout.marker.markerText ?? '';
     const glyphWidth = markerText ? measureText(markerText, markerFont, ctx) : 0;
+    const gutter =
+      typeof wordLayout.marker.gutterWidthPx === 'number' &&
+      isFinite(wordLayout.marker.gutterWidthPx) &&
+      wordLayout.marker.gutterWidthPx >= 0
+        ? wordLayout.marker.gutterWidthPx
+        : LIST_MARKER_GAP;
+
+    // Marker box should match Word's box width when provided; otherwise fall back to glyph + gap.
+    const markerBoxWidth = Math.max(wordLayout.marker.markerBoxWidthPx ?? 0, glyphWidth + LIST_MARKER_GAP);
+
     markerInfo = {
-      markerWidth: Math.max(wordLayout.marker.markerBoxWidthPx ?? 0, glyphWidth + LIST_MARKER_GAP),
+      markerWidth: markerBoxWidth,
       markerTextWidth: glyphWidth,
       indentLeft: wordLayout.indentLeftPx ?? 0,
-    };
+      // For tab sizing in the renderer: expose gutter for word-layout lists
+      gutterWidth: gutter,
+    } as ParagraphMeasure['marker'];
   }
 
   return {

@@ -608,9 +608,361 @@ describe('DomPainter', () => {
     expect(markerEl).toBeTruthy();
     expect(markerEl.textContent).toBe('-');
 
-    // textStart = left + firstLine - hanging = 48 - 24 = 24 → markerLeft = 24 - 20 = 4
-    expect(markerEl.style.left).toBe('4px');
+    const markerContainer = markerEl.parentElement as HTMLElement;
+    expect(markerContainer).toBeTruthy();
+    // Left-justified markers stay inline (no absolute positioning)
+    expect(markerContainer.style.position === '' || markerContainer.style.position === 'relative').toBe(true);
+
     expect(markerEl.style.fontSize).toBe('18px');
+  });
+
+  it('positions nested word-layout markers at the correct outdent without affecting inline flow', () => {
+    const nestedBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'nested-word-layout-block',
+      runs: [{ text: 'Nested list text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        indent: { left: 96, hanging: 24 },
+        numberingProperties: { numId: 6, ilvl: 1 },
+        wordLayout: {
+          indentLeftPx: 96,
+          marker: {
+            markerText: 'a.',
+            glyphWidthPx: 12,
+            markerBoxWidthPx: 24,
+            markerX: 48,
+            textStartX: 72,
+            baselineOffsetPx: 0,
+            justification: 'left',
+            suffix: 'tab',
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const nestedMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 16,
+          width: 120,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 24,
+        markerTextWidth: 12,
+        indentLeft: 96,
+      },
+    };
+
+    const nestedLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'nested-word-layout-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 96,
+              y: 120,
+              width: 300,
+              markerWidth: 24,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [nestedBlock],
+      measures: [nestedMeasure],
+    });
+    painter.paint(nestedLayout, mount);
+
+    const fragment = mount.querySelector('[data-block-id="nested-word-layout-block"]') as HTMLElement;
+    expect(fragment).toBeTruthy();
+    const markerEl = fragment.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+    expect(markerEl).toBeTruthy();
+    expect(markerEl.textContent).toBe('a.');
+
+    const markerContainer = markerEl.parentElement as HTMLElement;
+    expect(markerContainer).toBeTruthy();
+    expect(markerContainer.style.position === '' || markerContainer.style.position === 'relative').toBe(true);
+  });
+
+  it('calculates left-justified marker tab width when marker fits before implicit tab stop', () => {
+    const tabBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'tab-fit-block',
+      runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        indent: { left: 48, hanging: 24 },
+        numberingProperties: { numId: 1, ilvl: 0 },
+        wordLayout: {
+          indentLeftPx: 48,
+          marker: {
+            markerText: '1.',
+            glyphWidthPx: 10,
+            markerBoxWidthPx: 15,
+            markerX: 9,
+            textStartX: 24,
+            baselineOffsetPx: 0,
+            justification: 'left',
+            suffix: 'tab',
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const tabMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 14,
+          width: 120,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 15,
+        markerTextWidth: 10,
+        indentLeft: 48,
+      },
+    };
+
+    const tabLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'tab-fit-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 96,
+              y: 96,
+              width: 300,
+              markerWidth: 15,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [tabBlock],
+      measures: [tabMeasure],
+    });
+    painter.paint(tabLayout, mount);
+
+    const fragment = mount.querySelector('[data-block-id="tab-fit-block"]') as HTMLElement;
+    expect(fragment).toBeTruthy();
+    const tabEl = fragment.querySelector('.superdoc-tab') as HTMLElement;
+    expect(tabEl).toBeTruthy();
+
+    // Tab should reach implicit tab stop at indentLeft (48px)
+    // markerStartPos = paraIndentLeft - hanging = 48 - 24 = 24
+    // currentPos = markerStartPos + markerWidth = 24 + 15 = 39
+    // implicitTabStop = paraIndentLeft = 48
+    // tabWidth = 48 - 39 = 9
+    const expectedTabWidth = 9;
+    expect(tabEl.style.width).toBe(`${expectedTabWidth}px`);
+  });
+
+  it('calculates left-justified marker tab width when marker extends past implicit tab stop', () => {
+    const longMarkerBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'tab-overflow-block',
+      runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        indent: { left: 24, hanging: 12 },
+        numberingProperties: { numId: 1, ilvl: 0 },
+        wordLayout: {
+          indentLeftPx: 24,
+          marker: {
+            markerText: 'VIII.',
+            glyphWidthPx: 40,
+            markerBoxWidthPx: 45,
+            markerX: 0,
+            textStartX: 12,
+            baselineOffsetPx: 0,
+            justification: 'left',
+            suffix: 'tab',
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const longMarkerMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 14,
+          width: 120,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 45,
+        markerTextWidth: 40,
+        indentLeft: 24,
+      },
+    };
+
+    const longMarkerLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'tab-overflow-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 96,
+              y: 96,
+              width: 300,
+              markerWidth: 45,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [longMarkerBlock],
+      measures: [longMarkerMeasure],
+    });
+    painter.paint(longMarkerLayout, mount);
+
+    const fragment = mount.querySelector('[data-block-id="tab-overflow-block"]') as HTMLElement;
+    expect(fragment).toBeTruthy();
+    const tabEl = fragment.querySelector('.superdoc-tab') as HTMLElement;
+    expect(tabEl).toBeTruthy();
+
+    // Marker extends past implicit tab stop, so advance to next default tab interval
+    // markerStartPos = paraIndentLeft - hanging = 24 - 12 = 12
+    // currentPos = markerStartPos + markerWidth = 12 + 45 = 57
+    // implicitTabStop = paraIndentLeft = 24
+    // tabWidth would be negative (24 - 57 = -33), so use default tab interval
+    // tabWidth = 48 - (57 % 48) = 48 - 9 = 39
+    const expectedTabWidth = 39;
+    expect(tabEl.style.width).toBe(`${expectedTabWidth}px`);
+  });
+
+  it('calculates right-justified marker tab width using fragment.markerGutter', () => {
+    const rightMarkerBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'right-marker-block',
+      runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        indent: { left: 48, hanging: 24 },
+        numberingProperties: { numId: 1, ilvl: 0 },
+        wordLayout: {
+          indentLeftPx: 48,
+          marker: {
+            markerText: '1.',
+            glyphWidthPx: 10,
+            markerBoxWidthPx: 20,
+            markerX: 4,
+            textStartX: 24,
+            baselineOffsetPx: 0,
+            justification: 'right',
+            suffix: 'tab',
+            gutterWidthPx: 12,
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const rightMarkerMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 14,
+          width: 120,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 20,
+        markerTextWidth: 10,
+        indentLeft: 48,
+        gutterWidth: 12,
+      },
+    };
+
+    const rightMarkerLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'right-marker-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 96,
+              y: 96,
+              width: 300,
+              markerWidth: 20,
+              markerGutter: 12,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [rightMarkerBlock],
+      measures: [rightMarkerMeasure],
+    });
+    painter.paint(rightMarkerLayout, mount);
+
+    const fragment = mount.querySelector('[data-block-id="right-marker-block"]') as HTMLElement;
+    expect(fragment).toBeTruthy();
+    const tabEl = fragment.querySelector('.superdoc-tab') as HTMLElement;
+    expect(tabEl).toBeTruthy();
+
+    // For right-justified markers, use fragment.markerGutter
+    const expectedTabWidth = 12;
+    expect(tabEl.style.width).toBe(`${expectedTabWidth}px`);
   });
 
   it('reuses fragment DOM nodes when layout geometry changes', () => {

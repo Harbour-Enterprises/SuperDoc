@@ -121,11 +121,8 @@ describe('DomPainter marker suffix rendering', () => {
       expect(markerContainer).toBeTruthy();
       expect(markerContainer?.textContent).toBe('1.');
 
-      // Find the tab element (should be a sibling of the marker)
-      const markerParent = markerContainer?.parentElement;
-      expect(markerParent).toBeTruthy();
-
-      const tabElement = markerParent?.querySelector('.superdoc-tab');
+      // Find the tab element (inline spacer in the line)
+      const tabElement = container.querySelector('.superdoc-tab');
       expect(tabElement).toBeTruthy();
       expect(tabElement?.innerHTML).toBe('&nbsp;');
 
@@ -257,18 +254,11 @@ describe('DomPainter marker suffix rendering', () => {
       const markerContainer = container.querySelector('.superdoc-paragraph-marker');
       expect(markerContainer).toBeTruthy();
 
-      const markerParent = markerContainer?.parentElement;
-      expect(markerParent).toBeTruthy();
-
-      // The space should be a text node containing \u00A0 (non-breaking space)
-      // Check if parent contains the non-breaking space character
-      const parentText = markerParent?.textContent || '';
-      expect(parentText).toContain('2.');
-      // Non-breaking space is rendered as a text node, check it's present
-      expect(markerParent?.childNodes.length).toBeGreaterThan(1);
+      const line = container.querySelector('.superdoc-line');
+      expect(line?.textContent || '').toContain('\u00A0');
 
       // Should NOT have a tab element
-      const tabElement = markerParent?.querySelector('.superdoc-tab');
+      const tabElement = container.querySelector('.superdoc-tab');
       expect(tabElement).toBeFalsy();
     });
 
@@ -289,7 +279,7 @@ describe('DomPainter marker suffix rendering', () => {
       expect(markerParent).toBeTruthy();
 
       // Space suffix doesn't use gutterWidthPx - just adds a non-breaking space
-      const tabElement = markerParent?.querySelector('.superdoc-tab');
+      const tabElement = container.querySelector('.superdoc-tab');
       expect(tabElement).toBeFalsy();
     });
   });
@@ -312,15 +302,11 @@ describe('DomPainter marker suffix rendering', () => {
       expect(markerContainer).toBeTruthy();
       expect(markerContainer?.textContent).toBe('3.');
 
-      const markerParent = markerContainer?.parentElement;
-      expect(markerParent).toBeTruthy();
-
       // Should have only the marker span, no tab or space
-      const tabElement = markerParent?.querySelector('.superdoc-tab');
+      const tabElement = container.querySelector('.superdoc-tab');
       expect(tabElement).toBeFalsy();
 
-      // The parent should only contain the marker span (and possibly the line content)
-      const markerSpans = markerParent?.querySelectorAll('.superdoc-paragraph-marker');
+      const markerSpans = container.querySelectorAll('.superdoc-paragraph-marker');
       expect(markerSpans?.length).toBe(1);
     });
 
@@ -337,11 +323,8 @@ describe('DomPainter marker suffix rendering', () => {
 
       painter.paint(layout, container);
 
-      const markerParent = container.querySelector('.superdoc-paragraph-marker')?.parentElement;
-      expect(markerParent).toBeTruthy();
-
       // No tab element should exist
-      const tabElement = markerParent?.querySelector('.superdoc-tab');
+      const tabElement = container.querySelector('.superdoc-tab');
       expect(tabElement).toBeFalsy();
     });
   });
