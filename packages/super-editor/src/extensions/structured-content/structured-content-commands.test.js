@@ -463,8 +463,8 @@ describe('updateStructuredContentByGroup', () => {
         json: invalidJSON,
       });
 
-      // The command should return true (it continues processing) but nodes won't be updated
-      expect(didUpdate).toBe(true);
+      // The command should return false due to validation failure (all-or-nothing behavior)
+      expect(didUpdate).toBe(false);
 
       // Verify that console.error was called with validation error
       expect(consoleErrorSpy).toHaveBeenCalled();

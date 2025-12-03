@@ -400,10 +400,12 @@ export const StructuredContentCommands = Extension.create({
           const { schema } = editor;
 
           if (dispatch) {
-            structuredContentTags.forEach((structuredContent) => {
+            // First pass: prepare and validate all updates before making any changes
+            // This ensures all-or-nothing behavior - either all nodes update or none do
+            const updates = [];
+
+            for (const structuredContent of structuredContentTags) {
               const { pos, node } = structuredContent;
-              const posFrom = tr.mapping.map(pos);
-              const posTo = tr.mapping.map(pos + node.nodeSize);
 
               let content = null;
 
@@ -432,6 +434,7 @@ export const StructuredContentCommands = Extension.create({
 
               const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
 
+              // Validate the node before adding to updates
               try {
                 const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
                 nodeForValidation.check();
@@ -440,11 +443,19 @@ export const StructuredContentCommands = Extension.create({
                 return false;
               }
 
+              updates.push({ pos, node, updatedNode });
+            }
+
+            // Second pass: apply all updates to the transaction
+            // Use mapping to track position changes as document is modified
+            for (const { pos, node, updatedNode } of updates) {
+              const posFrom = tr.mapping.map(pos);
+              const posTo = tr.mapping.map(pos + node.nodeSize);
               const currentNode = tr.doc.nodeAt(posFrom);
               if (currentNode && node.eq(currentNode)) {
                 tr.replaceWith(posFrom, posTo, updatedNode);
               }
-            });
+            }
           }
 
           return true;
