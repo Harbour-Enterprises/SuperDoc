@@ -18,6 +18,8 @@ import { translator as shdTranslator } from '../shd/shd-translator.js';
 import { translator as langTranslator } from '../lang/lang-translator.js';
 import { translator as letterSpacingTranslator } from '../spacing/letter-spacing-translator.js';
 import { translator as vertAlignTranslator } from '../vertAlign/vertAlign-translator.js';
+import { translator as smallCapsTranslator } from '../smallCaps/smallCaps-translator.js';
+import { translator as snapToGridTranslator } from '../snapToGrid/snapToGrid-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -41,6 +43,8 @@ export const propertyTranslators = [
   langTranslator,
   letterSpacingTranslator,
   vertAlignTranslator,
+  smallCapsTranslator,
+  snapToGridTranslator,
 ];
 
 /**
