@@ -130,6 +130,7 @@ import { translator as w_tcPr_translator } from './w/tcPr/tcPr-translator.js';
 import { translator as w_textAlignment_translator } from './w/textAlignment/textAlignment-translator.js';
 import { translator as w_textBoxTightWrap_translator } from './w/textboxTightWrap/textboxTightWrap-translator.js';
 import { translator as w_topLinePunct_translator } from './w/topLinePunct/topLinePunct-translator.js';
+import { translator as w_vanish_translator } from './w/vanish/vanish-translator.js';
 import { translator as w_widowControl_translator } from './w/widowControl/widowControl-translator.js';
 import { translator as w_wordWrap_translator } from './w/wordWrap/wordWrap-translator.js';
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
@@ -264,6 +265,7 @@ const translatorList = Array.from(
     w_top_translator,
     w_u_translator,
     w_vAlign_translator,
+    w_vanish_translator,
     w_vertAlign_translator,
     w_vMerge_translator,
     w_wAfter_translator,

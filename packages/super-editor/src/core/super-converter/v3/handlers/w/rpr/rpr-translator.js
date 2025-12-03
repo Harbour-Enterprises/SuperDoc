@@ -26,37 +26,39 @@ import { translator as noProofTranslator } from '../noProof/noProof-translator.j
 import { translator as oMathTranslator } from '../oMath/oMath-translator.js';
 import { translator as outlineTranslator } from '../outline/outline-translator.js';
 import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
+import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
 /** @type {import('@translator').NodeTranslatorConfig[]} */
 export const propertyTranslators = [
-  boldTranslator,
   boldCsTranslator,
+  boldTranslator,
   borderTranslator,
-  embossTranslator,
-  italicTranslator,
-  underlineTranslator,
-  strikeTranslator,
-  dStrikeTranslator,
+  capsTranslator,
   colorTranslator,
+  dStrikeTranslator,
+  embossTranslator,
+  fontFamilyTranslator,
+  fontSizeCsTranslator,
+  fontSizeTranslator,
   highlightTranslator,
   imprintTranslator,
-  fontFamilyTranslator,
-  runStyleTranslator,
-  fontSizeTranslator,
-  fontSizeCsTranslator,
-  capsTranslator,
-  shdTranslator,
+  italicTranslator,
   langTranslator,
   letterSpacingTranslator,
   noProofTranslator,
   oMathTranslator,
   outlineTranslator,
-  vertAlignTranslator,
+  runStyleTranslator,
   shadowTranslator,
+  shdTranslator,
   smallCapsTranslator,
   snapToGridTranslator,
+  strikeTranslator,
+  underlineTranslator,
+  vanishTranslator,
+  vertAlignTranslator,
 ];
 
 /**
