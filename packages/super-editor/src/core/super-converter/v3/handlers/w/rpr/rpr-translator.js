@@ -28,6 +28,7 @@ import { translator as outlineTranslator } from '../outline/outline-translator.j
 import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
 import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
 import { translator as effectTranslator } from '../effect/effect-translator.js';
+import { translator as emTranslator } from '../em/em-translator.js';
 import { translator as wTranslator } from '../w/w-translator.js';
 
 // Property translators for w:rPr child elements
@@ -41,6 +42,7 @@ export const propertyTranslators = [
   colorTranslator,
   dStrikeTranslator,
   effectTranslator,
+  emTranslator,
   embossTranslator,
   fontFamilyTranslator,
   fontSizeCsTranslator,
