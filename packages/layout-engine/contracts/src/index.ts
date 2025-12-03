@@ -1013,6 +1013,13 @@ export type ParagraphMeasure = {
     markerWidth: number;
     markerTextWidth: number;
     indentLeft: number;
+    /**
+     * The gutter (spacing) width between the marker text and the paragraph content, in pixels.
+     * Used by the renderer for calculating tab stops in word-layout lists.
+     * When present, this value comes from Word's gutterWidthPx and is used to match Word's
+     * list marker tab alignment behavior.
+     */
+    gutterWidth?: number;
   };
   /**
    * Measured drop cap information, populated when the paragraph has a drop cap.
@@ -1138,6 +1145,13 @@ export type ParaFragment = {
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
   markerWidth?: number;
+  /**
+   * The gutter width for word-layout list markers, in pixels.
+   * This value is propagated from ParagraphMeasure.marker.gutterWidth and is used by the
+   * renderer to calculate tab stop widths for right-justified or centered markers.
+   * Only present for word-layout lists with marker.gutterWidth defined.
+   */
+  markerGutter?: number;
   pmStart?: number;
   pmEnd?: number;
 };

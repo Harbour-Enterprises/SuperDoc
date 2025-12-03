@@ -417,6 +417,10 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;
+      // Preserve gutter info for word-layout lists (used by renderer for tab sizing)
+      if (measure.kind === 'paragraph' && measure.marker?.gutterWidth != null) {
+        fragment.markerGutter = measure.marker.gutterWidth;
+      }
     }
 
     if (fromLine > 0) fragment.continuesFromPrev = true;

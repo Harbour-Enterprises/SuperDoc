@@ -67,6 +67,7 @@ type WordLayoutMarker = {
   markerText?: string;
   justification?: 'left' | 'right' | 'center';
   gutterWidthPx?: number;
+  markerBoxWidthPx?: number;
   suffix?: 'tab' | 'space' | 'nothing';
   run: {
     fontFamily: string;
@@ -84,6 +85,7 @@ type WordLayoutMarker = {
  */
 type MinimalWordLayout = {
   marker?: WordLayoutMarker;
+  indentLeftPx?: number;
 };
 
 /**
@@ -184,6 +186,12 @@ export type FragmentRenderContext = {
 };
 
 const LIST_MARKER_GAP = 8;
+/**
+ * Default tab interval in pixels (0.5 inch at 96 DPI).
+ * Used when calculating tab stops for list markers that extend past the implicit tab stop.
+ * This matches Microsoft Word's default tab interval behavior.
+ */
+const DEFAULT_TAB_INTERVAL_PX = 48;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
 const COMMENT_INTERNAL_COLOR = '#078383';
 const COMMENT_INACTIVE_ALPHA = '22';
@@ -1427,20 +1435,31 @@ export class DomPainter {
       lines.forEach((line, index) => {
         const lineEl = this.renderLine(block, line, context);
 
-        // Apply paragraph indent on each rendered line to preserve hanging/first-line offsets
-        if (paraIndentLeft) {
+        // List first lines handle indentation via marker positioning and tab stops,
+        // not CSS padding/text-indent. This matches Word's rendering model.
+        const isListFirstLine =
+          index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
+
+        // Apply paragraph indent via padding (skip for list first lines)
+        if (paraIndentLeft && !isListFirstLine) {
           lineEl.style.paddingLeft = `${paraIndentLeft}px`;
         }
         if (paraIndentRight) {
           lineEl.style.paddingRight = `${paraIndentRight}px`;
         }
-        if (!fragment.continuesFromPrev && index === 0 && firstLineOffset) {
+        // Apply first-line/hanging text-indent (skip for list first lines)
+        if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
           lineEl.style.textIndent = `${firstLineOffset}px`;
-        } else if (firstLineOffset) {
+        } else if (firstLineOffset && !isListFirstLine) {
           lineEl.style.textIndent = '0px';
         }
 
-        if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
+        if (isListFirstLine && wordLayout?.marker && fragment.markerWidth) {
+          // Position marker at (indentLeft - hanging) from fragment edge.
+          // This matches Word's model where the marker "hangs" into the left margin.
+          const markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
+          lineEl.style.paddingLeft = `${markerStartPos}px`;
+
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
 
@@ -1452,15 +1471,17 @@ export class DomPainter {
           markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
 
-          // Position marker relative to text start
-          // textStart = indentLeft + firstLine - hanging
-          // markerLeft = textStart - markerWidth
-          const indentLeft = paraIndentLeft;
-          const hanging = paraIndent?.hanging ?? 0;
-          const textStartX = indentLeft - hanging;
-          const markerLeftX = textStartX - fragment.markerWidth;
-          markerEl.style.position = 'relative';
-          markerEl.style.left = `${markerLeftX}px`;
+          // Left-justified markers stay inline to share flow with the tab spacer.
+          // Other justifications use absolute positioning.
+          const markerJustification = wordLayout.marker.justification ?? 'left';
+          if (markerJustification === 'left') {
+            markerContainer.style.position = 'relative';
+          } else {
+            const markerLeftX = markerStartPos - fragment.markerWidth;
+            markerContainer.style.position = 'absolute';
+            markerContainer.style.left = `${markerLeftX}px`;
+            markerContainer.style.top = '0';
+          }
 
           // Apply marker run styling
           markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
@@ -1480,17 +1501,55 @@ export class DomPainter {
             const tabEl = this.doc!.createElement('span');
             tabEl.className = 'superdoc-tab';
             tabEl.innerHTML = '&nbsp;';
-            const gutterWidth =
-              typeof wordLayout.marker.gutterWidthPx === 'number' &&
-              isFinite(wordLayout.marker.gutterWidthPx) &&
-              wordLayout.marker.gutterWidthPx > 0
-                ? wordLayout.marker.gutterWidthPx
-                : LIST_MARKER_GAP;
+
+            /**
+             * Calculate the tab width to align the paragraph text after the list marker.
+             *
+             * For left-justified markers:
+             * - Word places an implicit tab stop at indentLeft (where continuation lines align).
+             * - The tab width is calculated to reach this implicit stop from the current position.
+             * - If the marker extends past the implicit stop, we advance to the next default tab
+             *   interval (48px = 0.5 inch at 96 DPI), matching Word's behavior.
+             *
+             * For right-justified or centered markers:
+             * - Use the gutter width from the layout measurement (fragment.markerGutter or
+             *   wordLayout.marker.gutterWidthPx).
+             * - This gutter value is pre-calculated during measurement to match Word's spacing.
+             * - Falls back to LIST_MARKER_GAP if gutter is not available.
+             *
+             * This ensures list marker alignment matches Word and super-editor rendering exactly.
+             */
+            let tabWidth: number;
+            const markerBoxWidth = fragment.markerWidth;
+
+            if ((wordLayout.marker.justification ?? 'left') === 'left') {
+              const currentPos = markerStartPos + markerBoxWidth;
+              const implicitTabStop = paraIndentLeft;
+              tabWidth = implicitTabStop - currentPos;
+
+              // If past the implicit stop, use next default tab interval
+              if (tabWidth < 1) {
+                tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+                if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+              }
+            } else {
+              // For non-left justified markers, use gutter width from layout
+              tabWidth =
+                fragment.markerGutter != null && isFinite(fragment.markerGutter)
+                  ? fragment.markerGutter
+                  : typeof wordLayout.marker.gutterWidthPx === 'number' &&
+                      isFinite(wordLayout.marker.gutterWidthPx) &&
+                      wordLayout.marker.gutterWidthPx > 0
+                    ? wordLayout.marker.gutterWidthPx
+                    : LIST_MARKER_GAP;
+            }
+
             tabEl.style.display = 'inline-block';
-            tabEl.style.width = `${gutterWidth}px`;
-            markerContainer.appendChild(tabEl);
+            tabEl.style.width = `${tabWidth}px`;
+            lineEl.prepend(tabEl);
           } else if (suffix === 'space') {
-            markerContainer.appendChild(this.doc!.createTextNode('\u00A0'));
+            // Insert a non-breaking space in the inline flow to separate marker and text.
+            lineEl.prepend(this.doc!.createTextNode('\u00A0'));
           }
           lineEl.prepend(markerContainer);
         }
