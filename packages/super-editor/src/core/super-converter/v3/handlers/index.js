@@ -8,6 +8,7 @@ import { translator as w_adjustRightInd_translator } from './w/adjustRightInd/ad
 import { translator as w_autoSpaceDE_translator } from './w/autoSpaceDE/autoSpaceDE-translator.js';
 import { translator as w_autoSpaceDN_translator } from './w/autoSpaceDN/autoSpaceDN-translator.js';
 import { translator as w_b_translator } from './w/b/b-translator.js';
+import { translator as w_bdr_translator } from './w/bdr/bdr-translator.js';
 import { translator as w_bar_translator } from './w/bar/bar-translator.js';
 import { translator as w_bCs_translator } from './w/bCs/bCs-translator.js';
 import { translator as w_bidiVisual_translator } from './w/bidiVisual/bidiVisual-translator.js';
@@ -143,6 +144,7 @@ const translatorList = Array.from(
     w_b_translator,
     w_bar_translator,
     w_bCs_translator,
+    w_bdr_translator,
     w_bidiVisual_translator,
     w_bookmarkEnd_translator,
     w_bookmarkStart_translator,
