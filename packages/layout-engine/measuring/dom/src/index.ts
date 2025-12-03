@@ -504,24 +504,29 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     return true;
   };
 
-  const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): void => {
-    if (!pendingTabAlignment || !currentLine) return;
+  /**
+   * Apply a pending tab alignment to the next segment/run given its width.
+   * Returns the aligned starting X position when applied.
+   */
+  const alignPendingTabForWidth = (segmentWidth: number, beforeDecimalWidth?: number): number | undefined => {
+    if (!pendingTabAlignment || !currentLine) return undefined;
+
+    // Guard against negative segment width
+    if (segmentWidth < 0) {
+      segmentWidth = 0;
+    }
+
     const { target, val } = pendingTabAlignment;
     let startX = currentLine.width;
 
     if (val === 'decimal') {
-      const idx = segmentText.indexOf(decimalSeparator);
-      if (idx >= 0) {
-        const beforeText = segmentText.slice(0, idx);
-        const beforeWidth = beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, runContext) : 0;
-        startX = Math.max(0, target - beforeWidth);
-      } else {
-        startX = Math.max(0, target);
-      }
-    } else if (val === 'end' || val === 'center') {
-      const segWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
-      startX = val === 'end' ? Math.max(0, target - segWidth) : Math.max(0, target - segWidth / 2);
-    } else if (val === 'start' || val === 'bar') {
+      const beforeWidth = beforeDecimalWidth ?? 0;
+      startX = Math.max(0, target - beforeWidth);
+    } else if (val === 'end') {
+      startX = Math.max(0, target - segmentWidth);
+    } else if (val === 'center') {
+      startX = Math.max(0, target - segmentWidth / 2);
+    } else {
       startX = Math.max(0, target);
     }
 
@@ -529,6 +534,42 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // Track alignment used for post-segment clamping
     lastAppliedTabAlign = { target, val };
     pendingTabAlignment = null;
+    return startX;
+  };
+
+  /**
+   * Aligns a text segment at a pending tab stop by measuring its width and applying the appropriate alignment.
+   *
+   * This function handles different tab alignment types:
+   * - 'decimal': Aligns text based on the decimal separator position
+   * - 'end': Right-aligns text at the tab stop
+   * - 'center': Centers text at the tab stop
+   * - 'start': Left-aligns text at the tab stop (default)
+   *
+   * @param segmentText - The text content of the segment to align
+   * @param font - CSS font string for measuring text width (e.g., "16px Arial")
+   * @param runContext - The Run object containing styling properties (letterSpacing, etc.)
+   * @returns The aligned starting X position for the segment, or undefined if no tab alignment is pending
+   */
+  const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): number | undefined => {
+    if (!pendingTabAlignment || !currentLine) return undefined;
+    const { val } = pendingTabAlignment;
+
+    let segmentWidth = 0;
+    let beforeDecimalWidth: number | undefined;
+
+    if (val === 'decimal') {
+      const idx = segmentText.indexOf(decimalSeparator);
+      if (idx >= 0) {
+        const beforeText = segmentText.slice(0, idx);
+        beforeDecimalWidth = beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, runContext) : 0;
+      }
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+    } else if (val === 'end' || val === 'center') {
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+    }
+
+    return alignPendingTabForWidth(segmentWidth, beforeDecimalWidth);
   };
 
   // Expand runs to handle inline newlines as explicit break runs
@@ -706,6 +747,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const bottomSpace = run.distBottom ?? 0;
       const imageHeight = run.height + topSpace + bottomSpace;
 
+      // If a tab alignment is pending, apply it to this image run
+      let imageStartX: number | undefined;
+      if (pendingTabAlignment && currentLine) {
+        imageStartX = alignPendingTabForWidth(imageWidth);
+      }
+
       // Initialize line if needed
       if (!currentLine) {
         currentLine = {
@@ -722,11 +769,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               fromChar: 0,
               toChar: 1,
               width: imageWidth,
+              ...(imageStartX !== undefined ? { x: imageStartX } : {}),
             },
           ],
         };
         continue;
       }
+
+      // Preserve the tab alignment before the if-else block to avoid TypeScript narrowing issues
+      const appliedTabAlign: { target: number; val: TabStop['val'] } | null = lastAppliedTabAlign;
 
       // Check if image fits on current line
       if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
@@ -740,6 +791,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         lines.push(completedLine);
         tabStopCursor = 0;
         pendingTabAlignment = null;
+        lastAppliedTabAlign = null;
 
         // Start new line with the image
         currentLine = {
@@ -771,8 +823,18 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           fromChar: 0,
           toChar: 1,
           width: imageWidth,
+          ...(imageStartX !== undefined ? { x: imageStartX } : {}),
         });
       }
+
+      // Clamp width if aligned to an end tab to avoid rounding drift
+      // Note: Using type assertion to work around TypeScript control flow narrowing issue
+      // where TS incorrectly infers `never` type after the if-else block above.
+      const tabAlign = appliedTabAlign as { target: number; val: TabStop['val'] } | null;
+      if (tabAlign && currentLine && tabAlign.val === 'end') {
+        currentLine.width = roundValue(tabAlign.target);
+      }
+      lastAppliedTabAlign = null;
 
       continue;
     }
@@ -799,9 +861,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Align this segment if a tab alignment is pending
       let segmentStartX: number | undefined;
       if (currentLine && pendingTabAlignment) {
-        alignSegmentAtTab(segment, font, run);
+        segmentStartX = alignSegmentAtTab(segment, font, run);
         // After alignment, currentLine.width is the X position where this segment starts
-        segmentStartX = currentLine.width;
+        if (segmentStartX == null) {
+          segmentStartX = currentLine.width;
+        }
       }
 
       for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {

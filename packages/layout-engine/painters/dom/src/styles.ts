@@ -101,14 +101,25 @@ const PRINT_STYLES = `
 `;
 
 const LINK_AND_TOC_STYLES = `
-/* Reset browser default link styling - allow run colors to show through */
+/* Reset browser default link styling - allow run colors to show through from inline styles
+ *
+ * Note: !important was removed from these rules to allow inline styles to take precedence.
+ * This is necessary because OOXML hyperlink character styles apply colors via inline style
+ * attributes on the run elements. The CSS cascade ensures that inline styles (applied via
+ * element.style.color in applyRunStyles) override these class-based rules naturally.
+ *
+ * Implications:
+ * - OOXML hyperlink character styles will correctly display their assigned colors
+ * - Browser default link colors are still reset by these inherit rules
+ * - Inline color styles from run objects override the inherit value as expected
+ */
 .superdoc-link {
-  color: inherit !important;
-  text-decoration: none !important;
+  color: inherit;
+  text-decoration: none;
 }
 
 .superdoc-link:visited {
-  color: inherit !important;
+  color: inherit;
 }
 
 .superdoc-link:hover {

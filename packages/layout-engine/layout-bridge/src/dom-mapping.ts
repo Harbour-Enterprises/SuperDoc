@@ -292,15 +292,17 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
     return null;
   }
 
-  // Find the span (run slice) at the X position
-  const spanEls = Array.from(lineEl.querySelectorAll('span')) as HTMLSpanElement[];
+  // Find the span or anchor (run slice) at the X position
+  // Include both <span> and <a> elements since links are rendered as <a> tags with PM position data
+  const spanEls = Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[];
 
   log(
-    'Spans in line:',
+    'Spans/anchors in line:',
     spanEls.map((el, i) => {
       const rect = el.getBoundingClientRect();
       return {
         index: i,
+        tag: el.tagName,
         pmStart: el.dataset.pmStart,
         pmEnd: el.dataset.pmEnd,
         text: el.textContent?.substring(0, 20) + (el.textContent && el.textContent.length > 20 ? '...' : ''),
@@ -328,43 +330,44 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
     return lineEnd;
   }
 
-  // Find the target span containing or nearest to the X coordinate
-  const targetSpan = findSpanAtX(spanEls, viewX);
-  if (!targetSpan) {
-    log('No target span found, returning lineStart:', lineStart);
+  // Find the target element (span or anchor) containing or nearest to the X coordinate
+  const targetEl = findSpanAtX(spanEls, viewX);
+  if (!targetEl) {
+    log('No target element found, returning lineStart:', lineStart);
     return lineStart;
   }
 
-  const spanStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
-  const spanEnd = Number(targetSpan.dataset.pmEnd ?? 'NaN');
-  const targetRect = targetSpan.getBoundingClientRect();
+  const spanStart = Number(targetEl.dataset.pmStart ?? 'NaN');
+  const spanEnd = Number(targetEl.dataset.pmEnd ?? 'NaN');
+  const targetRect = targetEl.getBoundingClientRect();
 
-  log('Target span:', {
+  log('Target element:', {
+    tag: targetEl.tagName,
     pmStart: spanStart,
     pmEnd: spanEnd,
-    text: targetSpan.textContent?.substring(0, 30),
-    visibility: targetSpan.style.visibility,
+    text: targetEl.textContent?.substring(0, 30),
+    visibility: targetEl.style.visibility,
     rect: { left: targetRect.left, right: targetRect.right, width: targetRect.width },
   });
 
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
-    log('Span has invalid PM positions');
+    log('Element has invalid PM positions');
     return null;
   }
 
   // Get the text node and find the character index
-  const firstChild = targetSpan.firstChild;
+  const firstChild = targetEl.firstChild;
   if (!firstChild || firstChild.nodeType !== Node.TEXT_NODE || !firstChild.textContent) {
-    // Empty span or non-text node: choose closer edge
-    const spanRect = targetSpan.getBoundingClientRect();
-    const closerToLeft = Math.abs(viewX - spanRect.left) <= Math.abs(viewX - spanRect.right);
+    // Empty element or non-text node: choose closer edge
+    const elRect = targetEl.getBoundingClientRect();
+    const closerToLeft = Math.abs(viewX - elRect.left) <= Math.abs(viewX - elRect.right);
     const snapPos = closerToLeft ? spanStart : spanEnd;
-    log('Empty/non-text span, snapping to:', { closerToLeft, snapPos });
+    log('Empty/non-text element, snapping to:', { closerToLeft, snapPos });
     return snapPos;
   }
 
   const textNode = firstChild as Text;
-  const charIndex = findCharIndexAtX(textNode, targetSpan, viewX);
+  const charIndex = findCharIndexAtX(textNode, targetEl, viewX);
   const pos = spanStart + charIndex;
 
   log('Character position:', { charIndex, spanStart, finalPos: pos });
@@ -414,30 +417,31 @@ function findLineAtY(lineEls: HTMLElement[], viewY: number): HTMLElement | null 
 }
 
 /**
- * Finds the span element at a given X coordinate.
+ * Finds the text run element (span or anchor) at a given X coordinate.
  *
- * Iterates through spans to find one whose bounding rectangle contains the X coordinate.
- * If no span contains X, returns the last span encountered (nearest to the right of X).
+ * Iterates through elements to find one whose bounding rectangle contains the X coordinate.
+ * If no element contains X, returns the last element encountered (nearest to the right of X).
  * This handles bidirectional text and overlapping spans correctly.
  *
- * @param spanEls - Array of span elements with `data-pm-start` and `data-pm-end` attributes
+ * @param spanEls - Array of span or anchor elements with `data-pm-start` and `data-pm-end` attributes
  * @param viewX - X coordinate in viewport space
- * @returns The matching or nearest span element, or null if array is empty
+ * @returns The matching or nearest element, or null if array is empty
  *
  * @internal
  */
-function findSpanAtX(spanEls: HTMLSpanElement[], viewX: number): HTMLSpanElement | null {
+function findSpanAtX(spanEls: HTMLElement[], viewX: number): HTMLElement | null {
   if (spanEls.length === 0) {
     return null;
   }
 
-  let targetSpan: HTMLSpanElement = spanEls[0];
+  let targetSpan: HTMLElement = spanEls[0];
 
   for (let i = 0; i < spanEls.length; i++) {
     const span = spanEls[i];
     const rect = span.getBoundingClientRect();
     if (viewX >= rect.left && viewX <= rect.right) {
-      log('findSpanAtX: Found containing span at index', i, {
+      log('findSpanAtX: Found containing element at index', i, {
+        tag: span.tagName,
         pmStart: span.dataset.pmStart,
         pmEnd: span.dataset.pmEnd,
         rect: { left: rect.left, right: rect.right },
@@ -445,13 +449,14 @@ function findSpanAtX(spanEls: HTMLSpanElement[], viewX: number): HTMLSpanElement
       });
       return span;
     }
-    // Track nearest span to the right if none contain X
+    // Track nearest element to the right if none contain X
     if (viewX > rect.right) {
       targetSpan = span;
     }
   }
 
-  log('findSpanAtX: No containing span, using nearest:', {
+  log('findSpanAtX: No containing element, using nearest:', {
+    tag: targetSpan.tagName,
     pmStart: targetSpan.dataset.pmStart,
     pmEnd: targetSpan.dataset.pmEnd,
     viewX,
@@ -468,20 +473,20 @@ function findSpanAtX(spanEls: HTMLSpanElement[], viewX: number): HTMLSpanElement
  * letter-spacing.
  *
  * @param textNode - The Text node containing the characters
- * @param span - The span element containing the text node (for position reference)
+ * @param container - The element containing the text node (span or anchor, for position reference)
  * @param targetX - The target X coordinate in viewport space
  * @returns Character index (0-based) within the text node
  *
  * @example
  * ```typescript
- * const textNode = span.firstChild as Text;
- * const charIndex = findCharIndexAtX(textNode, span, 150);
+ * const textNode = element.firstChild as Text;
+ * const charIndex = findCharIndexAtX(textNode, element, 150);
  * // charIndex might be 5 if the click was near the 5th character
  * ```
  */
-function findCharIndexAtX(textNode: Text, span: HTMLSpanElement, targetX: number): number {
+function findCharIndexAtX(textNode: Text, container: HTMLElement, targetX: number): number {
   const text = textNode.textContent ?? '';
-  const baseLeft = span.getBoundingClientRect().left;
+  const baseLeft = container.getBoundingClientRect().left;
   const range = document.createRange();
 
   // Binary search for the first character where measured X >= target X

@@ -131,14 +131,18 @@ export const applyLinkedStyleToRun = (run: TextRun, options: RunStyleOptions): v
   const finalStyles = Object.assign({}, ...maps);
   const appliedKeys: string[] = [];
 
+  // Apply font family from linked styles (marks will override if they have explicit fontFamily)
   const fontFamily = extractValue(finalStyles['font-family']);
-  if (typeof fontFamily === 'string' && fontFamily && run.fontFamily === options.defaultFont) {
+  if (typeof fontFamily === 'string' && fontFamily) {
     run.fontFamily = fontFamily;
     appliedKeys.push('font-family');
   }
 
+  // Apply font size from linked styles (marks will override if they have explicit fontSize)
+  // Note: We no longer check run.fontSize === defaultSize because this function is now called
+  // BEFORE marks are applied, so marks can properly override linked style values.
   const fontSize = toPxNumber(finalStyles['font-size']);
-  if (fontSize != null && run.fontSize === options.defaultSize) {
+  if (fontSize != null) {
     run.fontSize = fontSize;
     appliedKeys.push('font-size');
   }
