@@ -20,6 +20,7 @@ import { translator as letterSpacingTranslator } from '../spacing/letter-spacing
 import { translator as vertAlignTranslator } from '../vertAlign/vertAlign-translator.js';
 import { translator as smallCapsTranslator } from '../smallCaps/smallCaps-translator.js';
 import { translator as snapToGridTranslator } from '../snapToGrid/snapToGrid-translator.js';
+import { translator as embossTranslator } from '../emboss/emboss-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -28,6 +29,7 @@ export const propertyTranslators = [
   boldTranslator,
   boldCsTranslator,
   borderTranslator,
+  embossTranslator,
   italicTranslator,
   underlineTranslator,
   strikeTranslator,
