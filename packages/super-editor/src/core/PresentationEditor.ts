@@ -43,6 +43,7 @@ import {
   HeaderFooterLayoutAdapter,
   type HeaderFooterDescriptor,
 } from './header-footer/HeaderFooterRegistry.js';
+import { EditorOverlayManager } from './header-footer/EditorOverlayManager.js';
 import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
 
 export type PageSize = {
@@ -391,6 +392,8 @@ export class PresentationEditor extends EventEmitter {
   #footerRegions: Map<number, HeaderFooterRegion> = new Map();
   #session: HeaderFooterSession = { mode: 'body' };
   #activeHeaderFooterEditor: Editor | null = null;
+  #overlayManager: EditorOverlayManager | null = null;
+  #activeEditingPageIndex: number | null = null;
   #hoverOverlay: HTMLElement | null = null;
   #hoverTooltip: HTMLElement | null = null;
   #modeBanner: HTMLElement | null = null;
@@ -2129,9 +2132,19 @@ export class PresentationEditor extends EventEmitter {
     this.#headerFooterManagerCleanups = [];
     this.#headerFooterAdapter?.clear();
     this.#headerFooterManager?.destroy();
+    this.#overlayManager?.destroy();
     this.#session = { mode: 'body' };
     this.#activeHeaderFooterEditor = null;
+    this.#activeEditingPageIndex = null;
     this.#inputBridge?.notifyTargetChanged();
+
+    // Initialize EditorOverlayManager for in-place editing
+    this.#overlayManager = new EditorOverlayManager(this.#painterHost, this.#visibleHost, this.#selectionOverlay);
+    // Set callback for when user clicks on dimming overlay to exit edit mode
+    this.#overlayManager.setOnDimmingClick(() => {
+      this.#exitHeaderFooterMode();
+    });
+
     const converter = (this.#editor as Editor & { converter?: unknown }).converter;
     this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
     this.#headerFooterManager = new HeaderFooterEditorManager(this.#editor);
@@ -2218,13 +2231,24 @@ export class PresentationEditor extends EventEmitter {
 
     // Exit header/footer mode if clicking outside the current region
     if (this.#session.mode !== 'body') {
+      // Check if click is inside the active editor host element (more reliable than coordinate hit testing)
+      const activeEditorHost = this.#overlayManager?.getActiveEditorHost?.();
+      const clickedInsideEditorHost =
+        activeEditorHost && (activeEditorHost.contains(event.target as Node) || activeEditorHost === event.target);
+
+      if (clickedInsideEditorHost) {
+        // Clicked within the active editor host - let the editor handle it, don't interfere
+        return;
+      }
+
+      // Fallback: use coordinate-based hit testing
       const headerFooterRegion = this.#hitTestHeaderFooterRegion(x, y);
       if (!headerFooterRegion) {
         // Clicked outside header/footer region - exit mode and continue to position cursor in body
         this.#exitHeaderFooterMode();
         // Fall through to body click handling below
       } else {
-        // Clicked within header/footer region - maintain mode, ignore single click
+        // Clicked within header/footer region but not in editor host - still let editor handle it
         return;
       }
     }
@@ -2647,6 +2671,16 @@ export class PresentationEditor extends EventEmitter {
     if (region) {
       event.preventDefault();
       event.stopPropagation();
+
+      // Check if header/footer exists, create if not
+      const descriptor = this.#resolveDescriptorForRegion(region);
+      if (!descriptor && this.#headerFooterManager) {
+        // No header/footer exists - create a default one
+        this.#createDefaultHeaderFooter(region);
+        // Refresh the manager to pick up the new descriptor
+        this.#headerFooterManager.refresh();
+      }
+
       this.#activateHeaderFooterRegion(region);
     } else if (this.#session.mode !== 'body') {
       this.#exitHeaderFooterMode();
@@ -2890,6 +2924,11 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #updateSelection() {
+    // In header/footer mode, the ProseMirror editor handles its own caret
+    if (this.#session.mode !== 'body') {
+      return;
+    }
+
     // Only clear local layer, preserve remote cursor layer
     if (!this.#localSelectionLayer) {
       return;
@@ -2901,23 +2940,6 @@ export class PresentationEditor extends EventEmitter {
     this.#localSelectionLayer.innerHTML = '';
 
     if (!selection) {
-      return;
-    }
-
-    if (this.#session.mode !== 'body') {
-      if (!layout) {
-        return;
-      }
-      if (selection.from === selection.to) {
-        const caretLayout = this.#computeHeaderFooterCaretRect(selection.from);
-        if (!caretLayout) {
-          return;
-        }
-        this.#renderCaretOverlay(caretLayout);
-        return;
-      }
-      const rects = this.#computeHeaderFooterSelectionRects(selection.from, selection.to);
-      this.#renderSelectionRects(rects);
       return;
     }
 
@@ -3229,55 +3251,210 @@ export class PresentationEditor extends EventEmitter {
   }
 
   async #enterHeaderFooterMode(region: HeaderFooterRegion) {
-    if (!this.#headerFooterManager) {
-      // Clear hover on early exit to prevent stale hover state
+    try {
+      if (!this.#headerFooterManager || !this.#overlayManager) {
+        // Clear hover on early exit to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+
+      const descriptor = this.#resolveDescriptorForRegion(region);
+      if (!descriptor) {
+        console.warn('[PresentationEditor] No descriptor found for region:', region);
+        // Clear hover on validation failure to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+      if (!descriptor.id) {
+        console.warn('[PresentationEditor] Descriptor missing id:', descriptor);
+        // Clear hover on validation failure to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+
+      // Virtualized pages may not be mounted - scroll into view if needed
+      let pageElement = this.#getPageElement(region.pageIndex);
+      if (!pageElement) {
+        try {
+          this.#scrollPageIntoView(region.pageIndex);
+          const mounted = await this.#waitForPageMount(region.pageIndex, { timeout: 2000 });
+          if (!mounted) {
+            console.error('[PresentationEditor] Failed to mount page for header/footer editing');
+            this.#clearHoverRegion();
+            this.emit('error', {
+              error: new Error('Failed to mount page for editing'),
+              context: 'enterHeaderFooterMode',
+            });
+            return;
+          }
+          pageElement = this.#getPageElement(region.pageIndex);
+        } catch (scrollError) {
+          console.error('[PresentationEditor] Error mounting page:', scrollError);
+          this.#clearHoverRegion();
+          this.emit('error', {
+            error: scrollError,
+            context: 'enterHeaderFooterMode.pageMount',
+          });
+          return;
+        }
+      }
+
+      if (!pageElement) {
+        console.error('[PresentationEditor] Page element not found after mount attempt');
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error('Page element not found after mount'),
+          context: 'enterHeaderFooterMode',
+        });
+        return;
+      }
+
+      const { success, editorHost, reason } = this.#overlayManager.showEditingOverlay(
+        pageElement,
+        region,
+        this.#layoutOptions.zoom ?? 1,
+      );
+      if (!success || !editorHost) {
+        console.error('[PresentationEditor] Failed to create editor host:', reason);
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error(`Failed to create editor host: ${reason}`),
+          context: 'enterHeaderFooterMode.showOverlay',
+        });
+        return;
+      }
+
+      const layout = this.#layoutState.layout;
+      let editor;
+      try {
+        editor = await this.#headerFooterManager.ensureEditor(descriptor, {
+          editorHost,
+          availableWidth: region.width,
+          availableHeight: region.height,
+          currentPageNumber: region.pageNumber,
+          totalPageCount: layout?.pages?.length ?? 1,
+        });
+      } catch (editorError) {
+        console.error('[PresentationEditor] Error creating editor:', editorError);
+        // Clean up overlay on error
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: editorError,
+          context: 'enterHeaderFooterMode.ensureEditor',
+        });
+        return;
+      }
+
+      if (!editor) {
+        console.warn('[PresentationEditor] Failed to ensure editor for descriptor:', descriptor);
+        // Clean up overlay if editor creation failed
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error('Failed to create editor instance'),
+          context: 'enterHeaderFooterMode.ensureEditor',
+        });
+        return;
+      }
+
+      try {
+        editor.setEditable(true);
+        editor.setOptions({ documentMode: 'editing' });
+
+        // Move caret to end of content (better UX than starting at position 0)
+        try {
+          const doc = editor.state?.doc;
+          if (doc) {
+            const endPos = doc.content.size - 1; // Position at end of content
+            editor.commands?.setTextSelection?.(Math.max(1, endPos));
+          }
+        } catch (cursorError) {
+          // Non-critical error, log but continue
+          console.warn('[PresentationEditor] Could not set cursor to end:', cursorError);
+        }
+      } catch (editableError) {
+        console.error('[PresentationEditor] Error setting editor editable:', editableError);
+        // Clean up on error
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: editableError,
+          context: 'enterHeaderFooterMode.setEditable',
+        });
+        return;
+      }
+
+      // Hide layout selection overlay so only the ProseMirror caret is visible
+      this.#overlayManager.hideSelectionOverlay();
+
+      this.#activeHeaderFooterEditor = editor;
+      this.#activeEditingPageIndex = region.pageIndex;
+
+      this.#session = {
+        mode: region.kind,
+        kind: region.kind,
+        headerId: descriptor.id,
+        sectionType: descriptor.variant ?? region.sectionType ?? null,
+        pageIndex: region.pageIndex,
+        pageNumber: region.pageNumber,
+      };
+
       this.#clearHoverRegion();
-      return;
+
+      try {
+        editor.view?.focus();
+      } catch (focusError) {
+        // Non-critical error, log but continue
+        console.warn('[PresentationEditor] Could not focus editor:', focusError);
+      }
+
+      this.#emitHeaderFooterModeChanged();
+      this.#emitHeaderFooterEditingContext(editor);
+      this.#inputBridge?.notifyTargetChanged();
+    } catch (error) {
+      // Catch any unexpected errors and clean up
+      console.error('[PresentationEditor] Unexpected error in enterHeaderFooterMode:', error);
+
+      // Attempt cleanup
+      try {
+        this.#overlayManager?.hideEditingOverlay();
+        this.#overlayManager?.showSelectionOverlay();
+        this.#clearHoverRegion();
+        this.#activeHeaderFooterEditor = null;
+        this.#activeEditingPageIndex = null;
+        this.#session = { mode: 'body' };
+      } catch (cleanupError) {
+        console.error('[PresentationEditor] Error during cleanup:', cleanupError);
+      }
+
+      // Emit error event
+      this.emit('error', {
+        error,
+        context: 'enterHeaderFooterMode',
+      });
     }
-    const descriptor = this.#resolveDescriptorForRegion(region);
-    if (!descriptor) {
-      console.warn('[PresentationEditor] No descriptor found for region:', region);
-      // Clear hover on validation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    if (!descriptor.id) {
-      console.warn('[PresentationEditor] Descriptor missing id:', descriptor);
-      // Clear hover on validation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    const editor = await this.#headerFooterManager.ensureEditor(descriptor);
-    if (!editor) {
-      console.warn('[PresentationEditor] Failed to ensure editor for descriptor:', descriptor);
-      // Clear hover on editor creation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    this.#activeHeaderFooterEditor = editor;
-    this.#session = {
-      mode: region.kind,
-      kind: region.kind,
-      headerId: descriptor.id,
-      sectionType: descriptor.variant ?? region.sectionType ?? null,
-      pageIndex: region.pageIndex,
-      pageNumber: region.pageNumber,
-    };
-    // Clear hover region after successful activation
-    this.#clearHoverRegion();
-    this.#emitHeaderFooterModeChanged();
-    this.#emitHeaderFooterEditingContext(editor);
-    this.#inputBridge?.notifyTargetChanged();
-    editor.view?.focus();
   }
 
   #exitHeaderFooterMode() {
     if (this.#session.mode === 'body') return;
-    this.#session = { mode: 'body' };
+
+    if (this.#activeHeaderFooterEditor) {
+      this.#activeHeaderFooterEditor.setEditable(false);
+      this.#activeHeaderFooterEditor.setOptions({ documentMode: 'viewing' });
+    }
+
+    this.#overlayManager?.hideEditingOverlay();
+    this.#overlayManager?.showSelectionOverlay();
+
     this.#activeHeaderFooterEditor = null;
+    this.#activeEditingPageIndex = null;
+    this.#session = { mode: 'body' };
+
     this.#emitHeaderFooterModeChanged();
     this.#emitHeaderFooterEditingContext(this.#editor);
     this.#inputBridge?.notifyTargetChanged();
+
     this.#editor.view?.focus();
   }
 
@@ -3388,6 +3565,131 @@ export class PresentationEditor extends EventEmitter {
     return descriptors[0];
   }
 
+  /**
+   * Creates a default header or footer when none exists.
+   *
+   * This method is called when a user double-clicks a header/footer region
+   * but no content exists yet. It uses the converter API to create an empty
+   * header/footer document.
+   *
+   * @param region - The header/footer region to create content for
+   */
+  #createDefaultHeaderFooter(region: HeaderFooterRegion): void {
+    const converter = (
+      this.#editor as Editor & {
+        converter?: {
+          createDefaultHeader?: (variant: string) => string;
+          createDefaultFooter?: (variant: string) => string;
+        };
+      }
+    ).converter;
+
+    if (!converter) {
+      console.error('[PresentationEditor] Converter not available for creating header/footer');
+      return;
+    }
+
+    // Determine the variant (default, first, even, odd)
+    const variant = region.sectionType ?? 'default';
+
+    try {
+      if (region.kind === 'header') {
+        if (typeof converter.createDefaultHeader === 'function') {
+          const headerId = converter.createDefaultHeader(variant);
+          console.log(`[PresentationEditor] Created default header: ${headerId}`);
+        } else {
+          console.error('[PresentationEditor] converter.createDefaultHeader is not a function');
+        }
+      } else if (region.kind === 'footer') {
+        if (typeof converter.createDefaultFooter === 'function') {
+          const footerId = converter.createDefaultFooter(variant);
+          console.log(`[PresentationEditor] Created default footer: ${footerId}`);
+        } else {
+          console.error('[PresentationEditor] converter.createDefaultFooter is not a function');
+        }
+      }
+    } catch (error) {
+      console.error('[PresentationEditor] Failed to create default header/footer:', error);
+    }
+  }
+
+  /**
+   * Gets the DOM element for a specific page index.
+   *
+   * @param pageIndex - Zero-based page index
+   * @returns The page element or null if not mounted
+   */
+  #getPageElement(pageIndex: number): HTMLElement | null {
+    if (!this.#painterHost) return null;
+    // Page elements have data-page-index attribute
+    const pageElements = this.#painterHost.querySelectorAll('[data-page-index]');
+    for (let i = 0; i < pageElements.length; i++) {
+      const el = pageElements[i] as HTMLElement;
+      const dataPageIndex = el.getAttribute('data-page-index');
+      if (dataPageIndex && parseInt(dataPageIndex, 10) === pageIndex) {
+        return el;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Scrolls a page into view, triggering virtualization to mount it if needed.
+   *
+   * @param pageIndex - Zero-based page index to scroll to
+   */
+  #scrollPageIntoView(pageIndex: number): void {
+    const layout = this.#layoutState.layout;
+    if (!layout) return;
+
+    const pageHeight = layout.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const virtualGap = this.#layoutOptions.virtualization?.gap ?? 0;
+
+    // Calculate approximate y position for the page
+    const yPosition = pageIndex * (pageHeight + virtualGap);
+
+    // Scroll viewport to the calculated position
+    if (this.#visibleHost) {
+      this.#visibleHost.scrollTop = yPosition;
+    }
+  }
+
+  /**
+   * Waits for a page to be mounted in the DOM after scrolling.
+   *
+   * Polls for the page element using requestAnimationFrame until it appears
+   * or the timeout is exceeded.
+   *
+   * @param pageIndex - Zero-based page index to wait for
+   * @param options - Configuration options
+   * @param options.timeout - Maximum time to wait in milliseconds (default: 2000)
+   * @returns Promise that resolves to true if page was mounted, false if timeout
+   */
+  async #waitForPageMount(pageIndex: number, options: { timeout?: number } = {}): Promise<boolean> {
+    const timeout = options.timeout ?? 2000;
+    const startTime = performance.now();
+
+    return new Promise((resolve) => {
+      const checkPage = () => {
+        const pageElement = this.#getPageElement(pageIndex);
+        if (pageElement) {
+          resolve(true);
+          return;
+        }
+
+        const elapsed = performance.now() - startTime;
+        if (elapsed >= timeout) {
+          resolve(false);
+          return;
+        }
+
+        requestAnimationFrame(checkPage);
+      };
+
+      checkPage();
+    });
+  }
+
   #getBodyPageHeight() {
     return this.#layoutState.layout?.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
   }
@@ -3452,7 +3754,7 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.width = `${region.width * zoom}px`;
     this.#hoverOverlay.style.height = `${region.height * zoom}px`;
 
-    const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'Header' : 'Footer'} (${region.sectionType ?? 'default'})`;
+    const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'header' : 'footer'}`;
     this.#hoverTooltip.textContent = tooltipText;
     this.#hoverTooltip.style.display = 'block';
     this.#hoverTooltip.style.left = `${coords.x}px`;
