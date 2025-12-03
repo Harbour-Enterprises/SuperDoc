@@ -52,7 +52,8 @@ export const handlePassthroughNode = (params) => {
   if (!node) return { nodes: [], consumed: 0 };
 
   // If we already have a v3 translator, this isn't a passthrough candidate
-  if (registeredHandlers[node.name]) {
+  // commentReference is handled with comments list import
+  if (registeredHandlers[node.name] || node.name === 'w:commentReference') {
     return { nodes: [], consumed: 0 };
   }
 
