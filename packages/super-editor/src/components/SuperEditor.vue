@@ -12,6 +12,7 @@ import GenericPopover from './popovers/GenericPopover.vue';
 import LinkInput from './toolbar/LinkInput.vue';
 import TableResizeOverlay from './TableResizeOverlay.vue';
 import ImageResizeOverlay from './ImageResizeOverlay.vue';
+import LinkClickHandler from './link-click/LinkClickHandler.vue';
 import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
@@ -461,6 +462,14 @@ onBeforeUnmount(() => {
         :popoverControls="popoverControls"
         :openPopover="openPopover"
         :closePopover="closePopover"
+      />
+      <!-- Link click handler for layout-engine rendered links -->
+      <LinkClickHandler
+        v-if="editorReady && activeEditor"
+        :editor="activeEditor"
+        :openPopover="openPopover"
+        :closePopover="closePopover"
+        :popoverVisible="popoverControls.visible"
       />
       <!-- Table resize overlay for interactive column resizing -->
       <TableResizeOverlay

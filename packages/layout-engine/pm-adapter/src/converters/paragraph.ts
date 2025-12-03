@@ -742,12 +742,20 @@ export function paragraphToFlowBlocks(
     activeRunStyleId: string | null = null,
   ) => {
     if (node.type === 'text' && node.text) {
+      // Apply styles in correct priority order:
+      // 1. Create run with defaults (lowest priority) - textNodeToRun with empty marks
+      // 2. Apply linked styles from paragraph/character styles (medium priority)
+      // 3. Apply base run defaults (medium-high priority)
+      // 4. Apply marks ONCE (highest priority) - inline marks override everything
+      //
+      // Pass empty array to textNodeToRun to prevent double mark application.
+      // Marks will be applied AFTER linked styles to ensure proper priority.
       const run = textNodeToRun(
         node,
         positions,
         defaultFont,
         defaultSize,
-        inheritedMarks,
+        [], // Empty marks - will be applied after linked styles
         activeSdt,
         hyperlinkConfig,
         themeColors,
@@ -755,6 +763,8 @@ export function paragraphToFlowBlocks(
       const inlineStyleId = getInlineStyleId(inheritedMarks);
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
+      // Apply marks ONCE here - this ensures they override linked styles
+      applyMarksToRun(run, [...(node.marks ?? []), ...(inheritedMarks ?? [])], hyperlinkConfig, themeColors);
       currentRuns.push(run);
       return;
     }

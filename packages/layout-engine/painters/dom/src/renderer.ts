@@ -2617,6 +2617,29 @@ export class DomPainter {
 
     // Ensure link is keyboard accessible (should be default for <a>, but verify)
     elem.setAttribute('tabindex', '0');
+
+    // Add click handler to prevent navigation and dispatch custom event for link editing
+    elem.addEventListener('click', (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Dispatch custom event with link metadata for the editor to handle
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: linkData.href,
+          target: linkData.target,
+          rel: linkData.rel,
+          tooltip: linkData.tooltip,
+          element: elem,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+
+      elem.dispatchEvent(linkClickEvent);
+    });
   }
 
   /**
@@ -3017,7 +3040,15 @@ export class DomPainter {
             if (styleId) {
               elem.setAttribute('styleid', styleId);
             }
+            // Position image using explicit segment X when available; fallback to cumulative flow
+            const runSegments = segmentsByRun.get(runIndex);
+            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segWidth =
+              (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : elem.offsetWidth) ?? 0;
+            elem.style.position = 'absolute';
+            elem.style.left = `${segX}px`;
             el.appendChild(elem);
+            cumulativeX = segX + segWidth;
           }
           continue;
         }
@@ -3674,7 +3705,17 @@ const deriveBlockVersion = (block: FlowBlock): string => {
   return block.id;
 };
 
-const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
+/**
+ * Applies run styling properties to a DOM element.
+ *
+ * @param element - The HTML element to style
+ * @param run - The run object containing styling information
+ * @param _isLink - Whether this run is part of a hyperlink. Note: This parameter
+ *                  is kept for API compatibility but no longer affects behavior -
+ *                  inline colors are now applied to all runs (including links) to
+ *                  ensure OOXML hyperlink character styles appear correctly.
+ */
+const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void => {
   if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break') {
     // Tab, image, lineBreak, and break runs don't have text styling properties
     return;
@@ -3685,10 +3726,8 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (run.bold) element.style.fontWeight = 'bold';
   if (run.italic) element.style.fontStyle = 'italic';
 
-  // For links, skip applying color and text-decoration to allow CSS to handle styling
-  if (!isLink) {
-    if (run.color) element.style.color = run.color;
-  }
+  // Apply inline color even for links so OOXML hyperlink styles appear when CSS is absent
+  if (run.color) element.style.color = run.color;
 
   if (run.letterSpacing != null) {
     element.style.letterSpacing = `${run.letterSpacing}px`;
