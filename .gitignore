@@ -42,7 +42,6 @@ test-results
 e2e-tests/tests/**/*darwin*
 e2e-tests/test-results/**/*darwin*
 e2e-tests/tests/visuals/layout-compare.spec.js-snapshots/*
-e2e-tests/package-lock.json
 
 !examples/chrome-extension/dist
 
