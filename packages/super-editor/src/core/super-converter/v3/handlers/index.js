@@ -70,6 +70,7 @@ import { translator as w_overflowPunct } from './w/overflowPunct/overflowPunct-t
 import { translator as w_p_translator } from './w/p/p-translator.js';
 import { translator as w_pageBreakBefore_translator } from './w/pageBreakBefore/pageBreakBefore-translator.js';
 import { translator as w_pBdr_translator } from './w/pBdr/pBdr-translator.js';
+import { translator as w_position_translator } from './w/position/position-translator.js';
 import { translator as w_pPr_translator } from './w/pPr/pPr-translator.js';
 import { translator as w_pStyle_translator } from './w/pStyle/pStyle-translator.js';
 import { translator as w_r_translator } from './w/r/r-translator.js';
@@ -213,6 +214,7 @@ const translatorList = Array.from(
     w_p_translator,
     w_pageBreakBefore_translator,
     w_pBdr_translator,
+    w_position_translator,
     w_pPr_translator,
     w_pStyle_translator,
     w_r_translator,
