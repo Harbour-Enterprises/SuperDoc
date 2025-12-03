@@ -1,10 +1,7 @@
-name: 🔄 Sync Patches [auto]
+name: 🔄 Sync Patches [disabled]
 
 on:
-  push:
-    branches: [stable, "*.x"]
-    paths:
-      - "packages/**"
+  # Disabled to stop automatic PRs syncing stable/*.x back to main.
   workflow_dispatch:
 
 permissions:
@@ -13,12 +10,9 @@ permissions:
 
 jobs:
   sync-to-main:
+    # Short-circuit to fully disable the workflow.
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    # Skip release commits
-    if: |
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, 'chore(release)') &&
-      !contains(github.event.head_commit.message, 'chore: promote')
 
     steps:
       - name: Generate token
