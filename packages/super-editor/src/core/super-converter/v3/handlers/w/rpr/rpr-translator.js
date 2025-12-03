@@ -27,6 +27,7 @@ import { translator as oMathTranslator } from '../oMath/oMath-translator.js';
 import { translator as outlineTranslator } from '../outline/outline-translator.js';
 import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
 import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
+import { translator as effectTranslator } from '../effect/effect-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -38,6 +39,7 @@ export const propertyTranslators = [
   capsTranslator,
   colorTranslator,
   dStrikeTranslator,
+  effectTranslator,
   embossTranslator,
   fontFamilyTranslator,
   fontSizeCsTranslator,
