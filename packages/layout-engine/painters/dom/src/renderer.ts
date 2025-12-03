@@ -1466,14 +1466,20 @@ export class DomPainter {
           const markerEl = this.doc!.createElement('span');
           markerEl.classList.add('superdoc-paragraph-marker');
           markerEl.textContent = wordLayout.marker.markerText ?? '';
-          markerEl.style.width = `${fragment.markerWidth}px`;
-          markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
-          markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
 
           // Left-justified markers stay inline to share flow with the tab spacer.
           // Other justifications use absolute positioning.
           const markerJustification = wordLayout.marker.justification ?? 'left';
+
+          // For left-justified markers, don't set a fixed width - let the text flow naturally
+          // and the tab will fill to the next tab stop. For other justifications, use the
+          // box width for alignment purposes.
+          if (markerJustification !== 'left') {
+            markerEl.style.width = `${fragment.markerWidth}px`;
+            markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
+            markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+          }
           if (markerJustification === 'left') {
             markerContainer.style.position = 'relative';
           } else {
@@ -1521,9 +1527,16 @@ export class DomPainter {
              */
             let tabWidth: number;
             const markerBoxWidth = fragment.markerWidth;
+            // Use actual marker text width for position calculation (not box width)
+            // This matches Word's behavior where tabs extend from the end of the marker text
+            // Validate that markerTextWidth is a valid positive number before using it
+            const markerTextWidth =
+              fragment.markerTextWidth != null && isFinite(fragment.markerTextWidth) && fragment.markerTextWidth >= 0
+                ? fragment.markerTextWidth
+                : markerBoxWidth;
 
             if ((wordLayout.marker.justification ?? 'left') === 'left') {
-              const currentPos = markerStartPos + markerBoxWidth;
+              const currentPos = markerStartPos + markerTextWidth;
               const implicitTabStop = paraIndentLeft;
               tabWidth = implicitTabStop - currentPos;
 
