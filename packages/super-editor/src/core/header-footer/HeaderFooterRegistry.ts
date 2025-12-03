@@ -213,13 +213,102 @@ export class HeaderFooterEditorManager extends EventEmitter {
    * Handles concurrent calls for the same descriptor by tracking pending creations
    * and returning the same promise to all callers.
    *
-   * @param descriptor - The header or footer descriptor
+   * @param descriptor - The header or footer descriptor. Must have a valid id property.
+   * @param options - Optional configuration for editor creation
+   * @param options.editorHost - The HTMLElement to mount the editor in. If provided, must be a valid HTMLElement.
+   * @param options.availableWidth - The width of the editing region in pixels. Must be a positive number if provided.
+   * @param options.availableHeight - The height of the editing region in pixels. Must be a positive number if provided.
+   * @param options.currentPageNumber - The current page number for PAGE field resolution. Must be a positive integer if provided.
+   * @param options.totalPageCount - The total page count for NUMPAGES field resolution. Must be a positive integer if provided.
    * @returns The editor instance, or null if creation failed
    *
-   * @throws Never throws - errors are logged and emitted as events
+   * @throws Never throws - errors are logged and emitted as events. Invalid parameters return null with error logged.
    */
-  async ensureEditor(descriptor: HeaderFooterDescriptor): Promise<Editor | null> {
+  async ensureEditor(
+    descriptor: HeaderFooterDescriptor,
+    options?: {
+      editorHost?: HTMLElement;
+      availableWidth?: number;
+      availableHeight?: number;
+      currentPageNumber?: number;
+      totalPageCount?: number;
+    },
+  ): Promise<Editor | null> {
     if (!descriptor?.id) return null;
+
+    // Validate options if provided
+    if (options) {
+      // Validate editorHost type
+      if (options.editorHost !== undefined && !(options.editorHost instanceof HTMLElement)) {
+        console.error('[HeaderFooterEditorManager] editorHost must be an HTMLElement');
+        this.emit('error', {
+          descriptor,
+          error: new TypeError('editorHost must be an HTMLElement'),
+        });
+        return null;
+      }
+
+      // Validate numeric parameters
+      if (options.availableWidth !== undefined) {
+        if (
+          typeof options.availableWidth !== 'number' ||
+          !Number.isFinite(options.availableWidth) ||
+          options.availableWidth <= 0
+        ) {
+          console.error('[HeaderFooterEditorManager] availableWidth must be a positive number');
+          this.emit('error', {
+            descriptor,
+            error: new TypeError('availableWidth must be a positive number'),
+          });
+          return null;
+        }
+      }
+
+      if (options.availableHeight !== undefined) {
+        if (
+          typeof options.availableHeight !== 'number' ||
+          !Number.isFinite(options.availableHeight) ||
+          options.availableHeight <= 0
+        ) {
+          console.error('[HeaderFooterEditorManager] availableHeight must be a positive number');
+          this.emit('error', {
+            descriptor,
+            error: new TypeError('availableHeight must be a positive number'),
+          });
+          return null;
+        }
+      }
+
+      if (options.currentPageNumber !== undefined) {
+        if (
+          typeof options.currentPageNumber !== 'number' ||
+          !Number.isInteger(options.currentPageNumber) ||
+          options.currentPageNumber < 1
+        ) {
+          console.error('[HeaderFooterEditorManager] currentPageNumber must be a positive integer');
+          this.emit('error', {
+            descriptor,
+            error: new TypeError('currentPageNumber must be a positive integer'),
+          });
+          return null;
+        }
+      }
+
+      if (options.totalPageCount !== undefined) {
+        if (
+          typeof options.totalPageCount !== 'number' ||
+          !Number.isInteger(options.totalPageCount) ||
+          options.totalPageCount < 1
+        ) {
+          console.error('[HeaderFooterEditorManager] totalPageCount must be a positive integer');
+          this.emit('error', {
+            descriptor,
+            error: new TypeError('totalPageCount must be a positive integer'),
+          });
+          return null;
+        }
+      }
+    }
 
     const existing = this.#editorEntries.get(descriptor.id);
     if (existing) {
@@ -233,6 +322,36 @@ export class HeaderFooterEditorManager extends EventEmitter {
         console.error('[HeaderFooterEditorManager] Editor initialization failed:', error);
         this.emit('error', { descriptor, error });
       });
+
+      // Move editor container to the new editorHost if provided
+      // This is necessary because cached editors may have been appended elsewhere
+      if (existing.container && options?.editorHost) {
+        // Only move if not already in the target host
+        if (existing.container.parentElement !== options.editorHost) {
+          options.editorHost.appendChild(existing.container);
+        }
+      }
+
+      // Update editor options if provided
+      if (existing.editor && options) {
+        const updateOptions: Record<string, unknown> = {};
+        if (options.currentPageNumber !== undefined) {
+          updateOptions.currentPageNumber = options.currentPageNumber;
+        }
+        if (options.totalPageCount !== undefined) {
+          updateOptions.totalPageCount = options.totalPageCount;
+        }
+        if (options.availableWidth !== undefined) {
+          updateOptions.availableWidth = options.availableWidth;
+        }
+        if (options.availableHeight !== undefined) {
+          updateOptions.availableHeight = options.availableHeight;
+        }
+        if (Object.keys(updateOptions).length > 0) {
+          existing.editor.setOptions(updateOptions);
+        }
+      }
+
       return existing.editor;
     }
 
@@ -249,7 +368,7 @@ export class HeaderFooterEditorManager extends EventEmitter {
     // Start creation and track the promise
     const creationPromise = (async () => {
       try {
-        const entry = await this.#createEditor(descriptor);
+        const entry = await this.#createEditor(descriptor, options);
         if (!entry) return null;
 
         this.#editorEntries.set(descriptor.id, entry);
@@ -512,7 +631,16 @@ export class HeaderFooterEditorManager extends EventEmitter {
     this.#editorEntries.clear();
   }
 
-  async #createEditor(descriptor: HeaderFooterDescriptor): Promise<HeaderFooterEditorEntry | null> {
+  async #createEditor(
+    descriptor: HeaderFooterDescriptor,
+    options?: {
+      editorHost?: HTMLElement;
+      availableWidth?: number;
+      availableHeight?: number;
+      currentPageNumber?: number;
+      totalPageCount?: number;
+    },
+  ): Promise<HeaderFooterEditorEntry | null> {
     const json = this.getDocumentJson(descriptor);
     if (!json) return null;
 
@@ -524,11 +652,13 @@ export class HeaderFooterEditorManager extends EventEmitter {
         editor: this.#editor,
         data: json,
         editorContainer: container,
-        appendToBody: true,
+        editorHost: options?.editorHost,
         sectionId: descriptor.id,
         type: descriptor.kind,
-        availableHeight: DEFAULT_HEADER_FOOTER_HEIGHT,
-        currentPageNumber: 1, // Default page number
+        availableWidth: options?.availableWidth,
+        availableHeight: options?.availableHeight ?? DEFAULT_HEADER_FOOTER_HEIGHT,
+        currentPageNumber: options?.currentPageNumber ?? 1,
+        totalPageCount: options?.totalPageCount ?? 1,
       }) as Editor;
     } catch (error) {
       console.error('[HeaderFooterEditorManager] Editor creation failed:', error);
