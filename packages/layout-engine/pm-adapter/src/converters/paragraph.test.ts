@@ -752,13 +752,22 @@ describe('paragraph converters', () => {
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
         expect(blocks).toHaveLength(1);
+        // textNodeToRun receives empty marks - marks are applied separately after linked styles
+        // This ensures marks override linked styles (correct priority order)
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           { type: 'text', text: 'Bold text' },
           positions,
           'Arial',
           16,
-          [{ type: 'bold' }],
+          [], // Empty marks - marks applied separately after linked styles
           undefined,
+          expect.any(Object),
+          undefined,
+        );
+        // Marks including bold are applied via applyMarksToRun after linked styles
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.arrayContaining([{ type: 'bold' }]),
           expect.any(Object),
           undefined,
         );
@@ -784,15 +793,22 @@ describe('paragraph converters', () => {
 
         paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        // Marks are merged as [...innerMarks, ...inheritedMarks]
-        // So italic (from inner run) comes first, then bold (from outer run)
+        // textNodeToRun receives empty marks - marks are applied separately after linked styles
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           { type: 'text', text: 'Bold italic' },
           positions,
           'Arial',
           16,
-          [{ type: 'italic' }, { type: 'bold' }],
+          [], // Empty marks - marks applied separately after linked styles
           undefined,
+          { enableRichHyperlinks: false },
+          undefined,
+        );
+        // Marks are merged as [...nodeMarks, ...inheritedMarks] and applied via applyMarksToRun
+        // So italic (from inner run) comes first, then bold (from outer run)
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.arrayContaining([{ type: 'italic' }, { type: 'bold' }]),
           { enableRichHyperlinks: false },
           undefined,
         );

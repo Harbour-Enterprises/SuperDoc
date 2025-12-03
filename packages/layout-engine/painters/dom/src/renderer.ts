@@ -3681,7 +3681,17 @@ const deriveBlockVersion = (block: FlowBlock): string => {
   return block.id;
 };
 
-const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
+/**
+ * Applies run styling properties to a DOM element.
+ *
+ * @param element - The HTML element to style
+ * @param run - The run object containing styling information
+ * @param _isLink - Whether this run is part of a hyperlink. Note: This parameter
+ *                  is kept for API compatibility but no longer affects behavior -
+ *                  inline colors are now applied to all runs (including links) to
+ *                  ensure OOXML hyperlink character styles appear correctly.
+ */
+const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void => {
   if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break') {
     // Tab, image, lineBreak, and break runs don't have text styling properties
     return;
@@ -3692,10 +3702,8 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (run.bold) element.style.fontWeight = 'bold';
   if (run.italic) element.style.fontStyle = 'italic';
 
-  // For links, skip applying color and text-decoration to allow CSS to handle styling
-  if (!isLink) {
-    if (run.color) element.style.color = run.color;
-  }
+  // Apply inline color even for links so OOXML hyperlink styles appear when CSS is absent
+  if (run.color) element.style.color = run.color;
 
   if (run.letterSpacing != null) {
     element.style.letterSpacing = `${run.letterSpacing}px`;

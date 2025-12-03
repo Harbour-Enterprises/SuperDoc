@@ -15,10 +15,27 @@ import { SuperConverter } from '@converter/SuperConverter.js';
 import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.js';
 
 /**
+ * Properties that must be explicitly overridden by inline formatting.
+ * These properties require special handling because inline w:rPr formatting must
+ * always take precedence over character style (w:rStyle) properties, even though
+ * both are merged in the style chain. This explicit override ensures that direct
+ * formatting (e.g., w:sz for fontSize) always wins over linked character styles.
+ *
+ * Note: fontFamily and color are already handled by combineProperties with full override logic.
+ */
+const INLINE_OVERRIDE_PROPERTIES = ['fontSize', 'bold', 'italic', 'strike', 'underline', 'letterSpacing'];
+
+/**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
- * @param {import('@translator').SCEncoderConfig} params
+ * @param {import('@translator').SCEncoderConfig} params - Converter context containing docx data.
  * @param {Object} inlineRpr - The inline run properties.
  * @param {Object} resolvedPpr - The resolved paragraph properties.
+ * @param {boolean} [isListNumber=false] - Whether this run is a list number marker. When true,
+ *                                         applies special handling for numbering properties and
+ *                                         removes inline underlines.
+ * @param {boolean} [numberingDefinedInline=false] - Whether numbering is defined inline rather than
+ *                                                   in the style definition. When false, inline rPr
+ *                                                   is ignored for list numbers.
  * @returns {Object} The resolved run properties.
  */
 export const resolveRunProperties = (
@@ -77,6 +94,17 @@ export const resolveRunProperties = (
   }
 
   const finalProps = combineProperties(styleChain, ['fontFamily', 'color']);
+
+  // Ensure direct formatting (inline properties) always win over character style properties.
+  // Even though inlineRpr is last in styleChain, we explicitly override to guarantee correctness.
+  // This is critical for properties like fontSize where inline w:sz must override w:rStyle fontSize.
+  // Note: fontFamily and color are already handled by combineProperties with full override.
+  for (const prop of INLINE_OVERRIDE_PROPERTIES) {
+    if (inlineRpr?.[prop] != null) {
+      finalProps[prop] = inlineRpr[prop];
+    }
+  }
+
   return finalProps;
 };
 

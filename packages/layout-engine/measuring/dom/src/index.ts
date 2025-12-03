@@ -776,6 +776,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         continue;
       }
 
+      // Preserve the tab alignment before the if-else block to avoid TypeScript narrowing issues
+      const appliedTabAlign: { target: number; val: TabStop['val'] } | null = lastAppliedTabAlign;
+
       // Check if image fits on current line
       if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
         // Image doesn't fit - finish current line and start new line with image
@@ -825,8 +828,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       }
 
       // Clamp width if aligned to an end tab to avoid rounding drift
-      if (lastAppliedTabAlign && currentLine && lastAppliedTabAlign.val === 'end') {
-        currentLine.width = roundValue(lastAppliedTabAlign.target);
+      // Note: Using type assertion to work around TypeScript control flow narrowing issue
+      // where TS incorrectly infers `never` type after the if-else block above.
+      const tabAlign = appliedTabAlign as { target: number; val: TabStop['val'] } | null;
+      if (tabAlign && currentLine && tabAlign.val === 'end') {
+        currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
 
