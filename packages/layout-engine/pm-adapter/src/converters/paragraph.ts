@@ -626,6 +626,7 @@ export function paragraphToFlowBlocks(
     converterContext,
     paragraphHydration,
   );
+
   if (paragraphAttrs?.spacing) {
     const spacing = { ...(paragraphAttrs.spacing as Record<string, unknown>) };
     const effectiveFontSize = baseRunDefaults.fontSizePx ?? defaultSize;

@@ -1110,6 +1110,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const totalHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
 
   let markerInfo: ParagraphMeasure['marker'];
+
   if (wordLayout?.marker) {
     const markerRun = {
       fontFamily: wordLayout.marker.run.fontFamily,
