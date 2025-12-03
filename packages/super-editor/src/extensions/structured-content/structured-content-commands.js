@@ -11,6 +11,24 @@ import * as structuredContentHelpers from './structuredContentHelpers/index';
 const STRUCTURED_CONTENT_NAMES = ['structuredContent', 'structuredContentBlock'];
 
 /**
+ * Find the first text node within a structured content node, even when wrapped.
+ * Some plugins wrap text in inline nodes (e.g., run), so we need to search descendants.
+ * @param {import('prosemirror-model').Node} node
+ * @returns {import('prosemirror-model').Node | null}
+ */
+const findFirstTextNode = (node) => {
+  let firstTextNode = null;
+  node.descendants((child) => {
+    if (child.isText) {
+      firstTextNode = child;
+      return false;
+    }
+    return true;
+  });
+  return firstTextNode;
+};
+
+/**
  * @typedef {Object} StructuredContentInlineInsert
  * @property {string} [text] - Text content to insert
  * @property {Object} [json] - ProseMirror JSON
@@ -248,8 +266,7 @@ export const StructuredContentCommands = Extension.create({
             if (options.text) {
               // If keepTextNodeStyles is true, use the marks from the first text node
               // Useful for preserving text styles when updating structured content
-              const firstTextNode =
-                options.keepTextNodeStyles === true ? node.content.content.find((n) => n.type.name === 'text') : null;
+              const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
               const textMarks = firstTextNode ? firstTextNode.marks : [];
               content = schema.text(options.text, textMarks);
             }
@@ -412,8 +429,7 @@ export const StructuredContentCommands = Extension.create({
               if (options.text) {
                 // If keepTextNodeStyles is true, use the marks from the first text node
                 // Useful for preserving text styles when updating structured content
-                const firstTextNode =
-                  options.keepTextNodeStyles === true ? node.content.content.find((n) => n.type.name === 'text') : null;
+                const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
                 const textMarks = firstTextNode ? firstTextNode.marks : [];
                 content = schema.text(options.text, textMarks);
               }
