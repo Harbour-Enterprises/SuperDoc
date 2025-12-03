@@ -31,6 +31,8 @@ export default function useComment(params) {
   const creatorImage = params.creatorImage;
   const createdTime = params.createdTime || Date.now();
   const importedAuthor = ref(params.importedAuthor || null);
+  // Preserve original DOCX comment JSON when importing so we can re-export without losing fidelity
+  const docxCommentJSON = params.docxCommentJSON || null;
 
   const commentText = ref(params.commentText || '');
 
@@ -236,6 +238,7 @@ export default function useComment(params) {
       creatorImage,
       createdTime,
       importedAuthor: importedAuthor.value,
+      docxCommentJSON,
       isInternal: isInternal.value,
       commentText: commentText.value,
       selection: selection ? selection.getValues() : null,
@@ -275,6 +278,7 @@ export default function useComment(params) {
     resolvedByEmail,
     resolvedByName,
     importedAuthor,
+    docxCommentJSON,
 
     // Actions
     setText,
