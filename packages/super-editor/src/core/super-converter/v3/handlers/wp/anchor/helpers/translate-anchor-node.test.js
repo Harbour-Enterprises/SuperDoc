@@ -41,8 +41,8 @@ describe('translateAnchorNode', () => {
     }));
   });
 
-  it('should add wp:simplePos if simplePos is true', () => {
-    const params = { node: { attrs: { simplePos: true } } };
+  it('should add wp:simplePos with coordinates and set simplePos attribute', () => {
+    const params = { node: { attrs: { simplePos: { x: '111', y: '222' } } } };
 
     const result = translateAnchorNode(params);
 
@@ -50,10 +50,29 @@ describe('translateAnchorNode', () => {
       expect.arrayContaining([
         expect.objectContaining({
           name: 'wp:simplePos',
-          attributes: { x: 0, y: 0 },
+          attributes: { x: '111', y: '222' },
         }),
       ]),
     );
+    expect(result.attributes.simplePos).toBe('1');
+  });
+
+  it('should keep simplePos="0" and still emit wp:simplePos', () => {
+    const params = {
+      node: {
+        attrs: {
+          simplePos: { x: '0', y: '0' },
+          originalAttributes: { simplePos: '0' },
+        },
+      },
+    };
+
+    const result = translateAnchorNode(params);
+
+    expect(result.attributes.simplePos).toBe('0');
+    const simplePos = result.elements.find((el) => el.name === 'wp:simplePos');
+    expect(simplePos).toBeDefined();
+    expect(simplePos.attributes).toMatchObject({ x: '0', y: '0' });
   });
 
   it('should add wp:positionH with posOffset when marginOffset.horizontal is defined', () => {
