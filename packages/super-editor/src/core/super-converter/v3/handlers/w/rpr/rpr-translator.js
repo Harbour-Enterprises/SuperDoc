@@ -25,6 +25,7 @@ import { translator as imprintTranslator } from '../imprint/imprint-translator.j
 import { translator as noProofTranslator } from '../noProof/noProof-translator.js';
 import { translator as oMathTranslator } from '../oMath/oMath-translator.js';
 import { translator as outlineTranslator } from '../outline/outline-translator.js';
+import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -53,6 +54,7 @@ export const propertyTranslators = [
   oMathTranslator,
   outlineTranslator,
   vertAlignTranslator,
+  shadowTranslator,
   smallCapsTranslator,
   snapToGridTranslator,
 ];
