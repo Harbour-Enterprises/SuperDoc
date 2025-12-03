@@ -1,3 +1,9 @@
+## [0.34.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.5...v0.34.6) (2025-12-03)
+
+### Bug Fixes
+
+- merge SD-379 ([#1401](https://github.com/Harbour-Enterprises/SuperDoc/issues/1401)) ([691ee32](https://github.com/Harbour-Enterprises/SuperDoc/commit/691ee3275b136b894f95f8f8a08e683d45ef058f))
+
 ## [0.34.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.4...v0.34.5) (2025-12-03)
 
 ### Bug Fixes
