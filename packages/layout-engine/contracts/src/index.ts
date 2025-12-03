@@ -1011,8 +1011,29 @@ export type ParagraphMeasure = {
   totalHeight: number;
   marker?: {
     markerWidth: number;
+    /**
+     * The actual rendered text width of the marker glyphs in pixels (e.g., "1." text width).
+     * This represents the precise width of the marker text content, as opposed to markerWidth
+     * which includes padding and represents the full marker box width.
+     *
+     * Used by the renderer for tab positioning calculations to match Word's behavior, where
+     * tabs extend from the end of the actual marker text (not the marker box edge) to the
+     * next tab stop. This ensures proper alignment between the marker and paragraph content.
+     *
+     * When undefined or null, the renderer falls back to using markerWidth for compatibility.
+     *
+     * @see markerWidth - The full marker box width including padding
+     * @see ParagraphFragment.markerTextWidth - The corresponding property in layout fragments
+     */
     markerTextWidth: number;
     indentLeft: number;
+    /**
+     * The gutter (spacing) width between the marker text and the paragraph content, in pixels.
+     * Used by the renderer for calculating tab stops in word-layout lists.
+     * When present, this value comes from Word's gutterWidthPx and is used to match Word's
+     * list marker tab alignment behavior.
+     */
+    gutterWidth?: number;
   };
   /**
    * Measured drop cap information, populated when the paragraph has a drop cap.
@@ -1137,7 +1158,21 @@ export type ParaFragment = {
   width: number;
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
+  /** The marker box width in pixels (includes padding). Used for visual sizing. */
   markerWidth?: number;
+  /**
+   * The actual rendered text width of the marker glyphs in pixels (e.g., "1." text width).
+   * Used for tab width calculation to match Word's behavior where the tab extends from
+   * the end of the actual marker text to the next tab stop, not from the box edge.
+   */
+  markerTextWidth?: number;
+  /**
+   * The gutter width for word-layout list markers, in pixels.
+   * This value is propagated from ParagraphMeasure.marker.gutterWidth and is used by the
+   * renderer to calculate tab stop widths for right-justified or centered markers.
+   * Only present for word-layout lists with marker.gutterWidth defined.
+   */
+  markerGutter?: number;
   pmStart?: number;
   pmEnd?: number;
 };

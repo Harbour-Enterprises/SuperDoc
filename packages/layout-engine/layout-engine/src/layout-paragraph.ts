@@ -250,6 +250,9 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     if (measure.marker) {
       fragment.markerWidth = measure.marker.markerWidth;
+      if (measure.marker.markerTextWidth != null) {
+        fragment.markerTextWidth = measure.marker.markerTextWidth;
+      }
     }
 
     state.page.fragments.push(fragment);
@@ -417,6 +420,14 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;
+      // Preserve actual marker text width for accurate tab calculation in renderer
+      if (measure.marker.markerTextWidth != null) {
+        fragment.markerTextWidth = measure.marker.markerTextWidth;
+      }
+      // Preserve gutter info for word-layout lists (used by renderer for tab sizing)
+      if (measure.kind === 'paragraph' && measure.marker?.gutterWidth != null) {
+        fragment.markerGutter = measure.marker.gutterWidth;
+      }
     }
 
     if (fromLine > 0) fragment.continuesFromPrev = true;
