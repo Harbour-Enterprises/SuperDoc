@@ -2,6 +2,7 @@ import { NodeTranslator } from '@translator';
 import { createNestedPropertiesTranslator } from '@converter/v3/handlers/utils.js';
 import { translator as boldTranslator } from '../b/b-translator.js';
 import { translator as boldCsTranslator } from '../bCs/bCs-translator.js';
+import { translator as borderTranslator } from '../bdr/bdr-translator.js';
 import { translator as italicTranslator } from '../i/i-translator.js';
 import { translator as underlineTranslator } from '../u/u-translator.js';
 import { translator as strikeTranslator } from '../strike/strike-translator.js';
@@ -23,6 +24,7 @@ import { translator as letterSpacingTranslator } from '../spacing/letter-spacing
 export const propertyTranslators = [
   boldTranslator,
   boldCsTranslator,
+  borderTranslator,
   italicTranslator,
   underlineTranslator,
   strikeTranslator,
