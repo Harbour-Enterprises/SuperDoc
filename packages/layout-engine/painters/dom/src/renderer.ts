@@ -2617,6 +2617,29 @@ export class DomPainter {
 
     // Ensure link is keyboard accessible (should be default for <a>, but verify)
     elem.setAttribute('tabindex', '0');
+
+    // Add click handler to prevent navigation and dispatch custom event for link editing
+    elem.addEventListener('click', (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Dispatch custom event with link metadata for the editor to handle
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: linkData.href,
+          target: linkData.target,
+          rel: linkData.rel,
+          tooltip: linkData.tooltip,
+          element: elem,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+
+      elem.dispatchEvent(linkClickEvent);
+    });
   }
 
   /**
