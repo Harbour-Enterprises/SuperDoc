@@ -57,6 +57,35 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
 
   // Check if the selection has a parent node of a given type
   if (selectionHasNodeOrMark(editor.view.state, 'link', { requireEnds: true })) {
+    // Get the link href from the current selection
+    const { state } = editor.view;
+    const { schema, selection } = state;
+    const linkMark = schema.marks.link;
+    let href = '';
+    let anchor = '';
+
+    if (linkMark) {
+      const { $from, empty } = selection;
+      if (empty) {
+        const marks = state.storedMarks || $from.marks();
+        const link = marks.find((mark) => mark.type === linkMark);
+        if (link) {
+          href = link.attrs.href;
+          anchor = link.attrs.anchor;
+        }
+      } else {
+        state.doc.nodesBetween(selection.from, selection.to, (node) => {
+          if (node.marks) {
+            const link = node.marks.find((mark) => mark.type === linkMark);
+            if (link) {
+              href = link.attrs.href;
+              anchor = link.attrs.anchor;
+            }
+          }
+        });
+      }
+    }
+
     // Show popover with link input
     popoverControls.component = LinkInput;
     // Calculate the position of the popover relative to the editor
@@ -65,7 +94,24 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
       top: `${event.clientY - editor.element.getBoundingClientRect().top + 15}px`,
     };
     popoverControls.props = {
+      editor,
       showInput: true,
+      closePopover: () => {
+        popoverControls.visible = false;
+      },
+      goToAnchor: () => {
+        popoverControls.visible = false;
+
+        // Try to get the anchor name from either href or anchor attribute
+        const anchorName = href?.startsWith('#') ? href.slice(1) : anchor;
+
+        if (!anchorName) return;
+
+        // Try using the goToBookmark command if available
+        if (editor.commands?.goToBookmark) {
+          editor.commands.goToBookmark(anchorName);
+        }
+      },
     };
     popoverControls.visible = true;
   }

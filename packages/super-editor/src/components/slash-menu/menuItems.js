@@ -5,6 +5,7 @@ import LinkInput from '../toolbar/LinkInput.vue';
 import { handleClipboardPaste } from '../../core/InputRule.js';
 import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 import { isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
+import { getTrackedPosition } from './position-tracker.js';
 
 /**
  * Check if a module is enabled based on editor options
@@ -83,6 +84,50 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
 
   // Define default sections with isDefault flag
   const defaultSections = [
+    {
+      id: 'table-of-contents',
+      isDefault: true,
+      items: [
+        {
+          id: 'update-toc',
+          label: TEXTS.updateToc,
+          icon: ICONS.updateToc,
+          isDefault: true,
+          action: (editor, context) => {
+            // Get the tracked position which persists across collaborative edits
+            const trackedPos = getTrackedPosition(editor.state);
+            const pos = trackedPos !== null ? trackedPos : context.pos;
+
+            // Pass the position to the command so it can find the TOC
+            // even when the selection hasn't moved to the click location yet
+            editor.commands.updateTableOfContents({ pos });
+          },
+          showWhen: (context) => {
+            const { trigger, isInToc } = context;
+            return trigger === TRIGGERS.click && isInToc;
+          },
+        },
+        {
+          id: 'delete-toc',
+          label: TEXTS.deleteToc,
+          icon: ICONS.deleteToc,
+          isDefault: true,
+          action: (editor, context) => {
+            // Get the tracked position which persists across collaborative edits
+            const trackedPos = getTrackedPosition(editor.state);
+            const pos = trackedPos !== null ? trackedPos : context.pos;
+
+            // Pass the position to the command so it can find the TOC
+            // even when the selection hasn't moved to the click location yet
+            editor.commands.deleteTableOfContents({ pos });
+          },
+          showWhen: (context) => {
+            const { trigger, isInToc } = context;
+            return trigger === TRIGGERS.click && isInToc;
+          },
+        },
+      ],
+    },
     {
       id: 'ai-content',
       isDefault: true,

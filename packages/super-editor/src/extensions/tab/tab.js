@@ -94,18 +94,24 @@ export const TabNode = Node.create({
       key: new PluginKey('tabPlugin'),
       state: {
         init() {
-          return { decorations: false };
+          return { decorations: false, needsRecalc: null };
         },
-        apply(tr, { decorations }, _oldState, newState) {
+        apply(tr, { decorations, needsRecalc }, _oldState, newState) {
+          // Check if this transaction has a meta update for our plugin
+          const meta = tr.getMeta(tabPlugin);
+          if (meta) {
+            return meta;
+          }
+
           // Initialize decorations on first call
           if (!decorations) {
             decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view, helpers));
-            return { decorations };
+            return { decorations, needsRecalc: null };
           }
 
           // Early return for non-document changes
           if (!tr.docChanged || tr.getMeta('blockNodeInitialUpdate')) {
-            return { decorations };
+            return { decorations, needsRecalc };
           }
 
           decorations = decorations.map(tr.mapping, tr.doc);
@@ -165,7 +171,7 @@ export const TabNode = Node.create({
           });
 
           if (rangesToRecalculate.length === 0) {
-            return { decorations };
+            return { decorations, needsRecalc: null };
           }
 
           // Merge overlapping ranges
@@ -179,13 +185,46 @@ export const TabNode = Node.create({
             decorations = decorations.add(newState.doc, newDecorations);
           });
 
-          return { decorations };
+          // Mark ranges for post-DOM-update recalculation
+          return { decorations, needsRecalc: mergedRanges };
         },
       },
       props: {
         decorations(state) {
           return this.getState(state).decorations;
         },
+      },
+      view: (editorView) => {
+        return {
+          update: (view, prevState) => {
+            const pluginState = tabPlugin.getState(view.state);
+
+            // If there are ranges that need recalculation after DOM update
+            if (pluginState?.needsRecalc?.length > 0) {
+              // Schedule recalculation after DOM has been updated
+              requestAnimationFrame(() => {
+                const currentPluginState = tabPlugin.getState(view.state);
+                if (!currentPluginState?.needsRecalc) return;
+
+                const { needsRecalc } = currentPluginState;
+                let decorations = currentPluginState.decorations;
+
+                // Recalculate decorations with fresh DOM measurements
+                needsRecalc.forEach(([start, end]) => {
+                  const oldDecorations = decorations.find(start, end);
+                  decorations = decorations.remove(oldDecorations);
+                  const newDecorations = getTabDecorations(view.state.doc, view, helpers, start, end);
+                  decorations = decorations.add(view.state.doc, newDecorations);
+                });
+
+                // Update plugin state with new decorations and clear needsRecalc flag
+                const tr = view.state.tr;
+                tr.setMeta(tabPlugin, { decorations, needsRecalc: null });
+                view.dispatch(tr);
+              });
+            }
+          },
+        };
       },
     });
     return [tabPlugin];
