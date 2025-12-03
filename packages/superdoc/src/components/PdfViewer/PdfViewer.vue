@@ -3,7 +3,7 @@ import { NSpin } from 'naive-ui';
 import { storeToRefs } from 'pinia';
 import { onMounted, onUnmounted, ref } from 'vue';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
-import { PDFAdapterFactory, createPDFConfig } from './pdf/pdf-adapter.js';
+import { PDFAdapterFactory, createPDFConfig } from './pdf/pdf-adapter';
 import { readFileAsArrayBuffer } from './helpers/read-file.js';
 import useSelection from '@superdoc/helpers/use-selection';
 import './pdf/pdf-viewer.css';
