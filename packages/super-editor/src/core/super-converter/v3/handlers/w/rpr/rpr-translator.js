@@ -28,6 +28,7 @@ import { translator as outlineTranslator } from '../outline/outline-translator.j
 import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
 import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
 import { translator as effectTranslator } from '../effect/effect-translator.js';
+import { translator as wTranslator } from '../w/w-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -61,6 +62,7 @@ export const propertyTranslators = [
   underlineTranslator,
   vanishTranslator,
   vertAlignTranslator,
+  wTranslator,
 ];
 
 /**
