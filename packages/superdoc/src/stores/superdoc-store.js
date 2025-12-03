@@ -162,7 +162,8 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     // Use docx as default if no type provided
     if (!doc.data && doc.url && !doc.type) doc.type = DOCX;
 
-    // If in collaboration mode, return the document as is
+    // If in collaboration mode AND not a new file, skip loading data (it comes from Y.js)
+    // For new files (isNewFile: true), we need to load the initial content so it can be pushed to Y.js
     if (currentConfig.value?.modules.collaboration && !doc.isNewFile) {
       return { ...doc, data: null, url: null };
     }

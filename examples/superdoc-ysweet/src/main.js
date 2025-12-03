@@ -2,22 +2,30 @@ import { SuperDoc } from 'superdoc';
 import 'superdoc/style.css';
 import * as Y from 'yjs';
 import { createYjsProvider } from '@y-sweet/client';
+import { getOrCreateDocAndToken } from '@y-sweet/sdk';
+
+// Import sample document for new collaborative documents
+import sampleDocument from '/sample-document.docx?url';
 
 // ============================================================
-// CONFIGURATION - Replace these with your Y-Sweet credentials
+// CONFIGURATION - set via .env (see .env.example)
 // ============================================================
 
-// Option 1: Use an auth endpoint (recommended for production)
-// This endpoint should return a ClientToken from your backend
-const AUTH_ENDPOINT = '/api/ysweet-auth';
+// Option 1 (recommended for production):
+// Use an auth endpoint that returns a client token
+const AUTH_ENDPOINT = (import.meta.env.VITE_YSWEET_AUTH || '').trim();
 
-// Option 2: Use a direct connection string (for testing only)
-// Get this from your Jamsocket dashboard: https://app.jamsocket.com
-// Format: yss://your-service-id.ysweet.jamsocket.live
-const YSWEET_CONNECTION_STRING = null; // e.g., 'yss://abc123.ysweet.jamsocket.live'
+// Option 2 (dev-friendly):
+// Use an HTTP URL that points at Vite's proxy to local y-sweet.
+// The proxy rewrites /ysweet/* to the local y-sweet server at 127.0.0.1:8080.
+// NOTE: Do not expose a production server token in the browser.
+const envServer =
+  (import.meta.env.VITE_YSWEET_SERVER || import.meta.env.VITE_YSWEET_URL || '').trim();
+const YSWEET_SERVER = envServer || 'http://localhost:5173/ysweet'; // proxied to 127.0.0.1:8080
+const usingDefaultServer = !envServer && !AUTH_ENDPOINT;
 
 // Document ID - in production, this would come from your app's routing
-const DOC_ID = 'superdoc-demo-doc';
+const DOC_ID = (import.meta.env.VITE_DOC_ID || 'superdoc-demo-doc').trim();
 
 // ============================================================
 
@@ -63,20 +71,29 @@ async function init() {
     // The provider handles WebSocket connection, sync, and persistence
     let provider;
 
-    if (YSWEET_CONNECTION_STRING) {
-      // Direct connection (for testing)
-      // Note: In production, always use an auth endpoint
-      provider = await createYjsProvider(ydoc, DOC_ID, async () => {
-        // This would normally call your backend
-        // For now, return a mock token structure
-        return {
-          url: YSWEET_CONNECTION_STRING,
-          docId: DOC_ID,
-        };
-      });
-    } else {
-      // Use auth endpoint (recommended)
+    if (AUTH_ENDPOINT) {
+      // Use auth endpoint (recommended for hosted deployments)
       provider = await createYjsProvider(ydoc, DOC_ID, AUTH_ENDPOINT);
+    } else if (YSWEET_SERVER) {
+      // Dev-only path: use server token to mint a client token in-browser
+      if (usingDefaultServer) {
+        console.info('Using default local Y-Sweet server via proxy at http://localhost:5173/ysweet (proxied to 8080)');
+      }
+      provider = await createYjsProvider(ydoc, DOC_ID, async () => {
+        const token = await getOrCreateDocAndToken(YSWEET_SERVER, DOC_ID);
+        // Replace the server's URLs with our proxy URL to avoid CORS issues
+        // The server returns its own URL (e.g., http://127.0.0.1:8080/d/docId) but we need
+        // to go through the Vite proxy (http://localhost:5173/ysweet/d/docId)
+        if (usingDefaultServer) {
+          if (token.baseUrl) {
+            token.baseUrl = token.baseUrl.replace(/^https?:\/\/[^/]+/, 'http://localhost:5173/ysweet');
+          }
+          if (token.url) {
+            token.url = token.url.replace(/^wss?:\/\/[^/]+/, 'ws://localhost:5173/ysweet');
+          }
+        }
+        return token;
+      });
     }
 
     // Listen for connection status changes
@@ -101,6 +118,14 @@ async function init() {
         name: 'Demo User',
         email: 'demo@example.com',
       },
+      documents: [
+        {
+          id: DOC_ID,
+          type: 'docx',
+          url: sampleDocument, // Initial content for new documents
+          isNewFile: true,
+        },
+      ],
       modules: {
         toolbar: {
           enabled: true,
@@ -140,7 +165,7 @@ async function init() {
           Make sure you have:
           <ol style="text-align: left; margin-top: 8px;">
             <li>Created a Y-Sweet service at <a href="https://app.jamsocket.com" target="_blank">app.jamsocket.com</a></li>
-            <li>Set up your auth endpoint or connection string in src/main.js</li>
+            <li>Set up your auth endpoint or connection string in .env (defaults to ys://localhost:5173/ysweet)</li>
           </ol>
         </div>
       </div>

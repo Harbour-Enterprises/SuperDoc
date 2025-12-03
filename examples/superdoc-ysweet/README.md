@@ -1,81 +1,82 @@
 # SuperDoc + Y-Sweet Example
 
-This example demonstrates how to use SuperDoc with [Y-Sweet](https://y-sweet.dev) for real-time collaboration.
+Real-time collaboration using SuperDoc with a custom [Y-Sweet](https://y-sweet.dev) provider.
 
-## Setup
-
-### 1. Create a Y-Sweet Service
-
-1. Go to [app.jamsocket.com](https://app.jamsocket.com) and create an account
-2. Create a new Y-Sweet service
-3. Generate a connection string and copy it
-
-### 2. Configure the Example
-
-Edit `src/main.js` and set your connection string:
-
-```javascript
-const YSWEET_CONNECTION_STRING = 'yss://your-service-id.ysweet.jamsocket.live';
-```
-
-Or, for production, set up an auth endpoint (see below).
-
-### 3. Install and Run
+## Quick Start (Local)
 
 ```bash
+# Terminal 1: Start Y-Sweet server
 npm install
+npm run ysweet:serve
+
+# Terminal 2: Start the app
 npm run dev
 ```
 
-Open http://localhost:5173 in multiple browser windows to test collaboration.
+Open http://localhost:5173 in multiple windows to test collaboration.
 
-## Production Setup
+## Key Integration Points
 
-For production, you should use an auth endpoint instead of exposing your connection string:
-
-### Backend (Node.js/Express example)
+### 1. Create the Y-Sweet provider and Y.Doc
 
 ```javascript
-import { DocumentManager } from '@y-sweet/sdk';
-import express from 'express';
+import * as Y from 'yjs';
+import { createYjsProvider } from '@y-sweet/client';
 
-const app = express();
-const manager = new DocumentManager(process.env.YSWEET_CONNECTION_STRING);
+const ydoc = new Y.Doc();
+const provider = await createYjsProvider(ydoc, DOC_ID, authEndpointOrTokenFn);
+```
 
-app.post('/api/ysweet-auth', async (req, res) => {
-  const { docId } = req.body;
-  const clientToken = await manager.getOrCreateDocAndToken(docId);
-  res.json(clientToken);
+### 2. Pass them to SuperDoc via `customProvider`
+
+```javascript
+new SuperDoc({
+  documents: [
+    {
+      id: DOC_ID,
+      type: 'docx',
+      url: '/sample-document.docx', // Initial content for new docs
+      isNewFile: true,              // Required for new collaborative docs
+    },
+  ],
+  modules: {
+    collaboration: {
+      customProvider: {
+        provider,  // Y-Sweet provider instance
+        ydoc,      // Y.Doc instance
+      },
+    },
+  },
 });
 ```
 
-### Frontend
+### 3. Required document properties for new files
+
+- `url` or `data`: Initial document content (loaded once, then synced via Y.js)
+- `isNewFile: true`: Tells SuperDoc to push initial content to Y.js
+
+## Configuration
+
+Copy `.env.example` to `.env.local` and configure:
+
+| Variable | Description |
+|----------|-------------|
+| `VITE_YSWEET_AUTH` | Auth endpoint URL (recommended for production) |
+| `VITE_YSWEET_SERVER` | Direct connection string (dev only) |
+| `VITE_DOC_ID` | Document ID (default: `superdoc-demo-doc`) |
+
+## Production Setup
+
+Use an auth endpoint instead of exposing connection strings:
 
 ```javascript
-const AUTH_ENDPOINT = '/api/ysweet-auth';
-const provider = await createYjsProvider(ydoc, docId, AUTH_ENDPOINT);
+// Backend
+app.post('/api/ysweet-auth', async (req, res) => {
+  const { docId } = req.body;
+  const token = await manager.getOrCreateDocAndToken(docId);
+  res.json(token);
+});
+
+// Frontend (.env.local)
+VITE_YSWEET_AUTH=/api/ysweet-auth
 ```
-
-## How It Works
-
-1. **Y-Sweet Provider**: We create a Y-Sweet provider that handles the WebSocket connection, sync, and persistence
-2. **Custom Provider**: We pass the provider and ydoc to SuperDoc via `modules.collaboration.customProvider`
-3. **SuperDoc**: Automatically wires up awareness (user presence) and uses the provider for document sync
-
-## Files
-
-- `src/main.js` - Main application code with Y-Sweet setup
-- `index.html` - HTML template with status indicator
-- `vite.config.js` - Vite configuration
-
-## Troubleshooting
-
-**"Failed to connect to Y-Sweet"**
-- Check your connection string is correct
-- Ensure your Y-Sweet service is running
-- Check browser console for detailed errors
-
-**Users not seeing each other's changes**
-- Verify both users are using the same `DOC_ID`
-- Check the connection status indicator
-- Look for WebSocket errors in the console

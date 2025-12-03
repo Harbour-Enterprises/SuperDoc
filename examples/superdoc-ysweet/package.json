@@ -6,14 +6,17 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "ysweet:serve": "y-sweet serve --host 127.0.0.1 --port 8080 ./ysweet-data"
   },
   "dependencies": {
     "@y-sweet/client": "^0.6.3",
+    "@y-sweet/sdk": "^0.9.1",
     "superdoc": "file:../../packages/superdoc",
     "yjs": "^13.6.19"
   },
   "devDependencies": {
-    "vite": "^5.4.0"
+    "vite": "^5.4.0",
+    "y-sweet": "^0.9.1"
   }
 }
