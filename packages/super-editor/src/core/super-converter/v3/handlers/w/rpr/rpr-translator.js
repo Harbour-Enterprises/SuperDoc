@@ -33,6 +33,7 @@ import { translator as wTranslator } from '../w/w-translator.js';
 import { translator as kernTranslator } from '../kern/kern-translator.js';
 import { translator as positionTranslator } from '../position/position-translator.js';
 import { translator as fitTextTranslator } from '../fitText/fitText-translator.js';
+import { translator as eastAsianLayoutTranslator } from '../eastAsianLayout/eastAsianLayout-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -44,6 +45,7 @@ export const propertyTranslators = [
   capsTranslator,
   colorTranslator,
   dStrikeTranslator,
+  eastAsianLayoutTranslator,
   effectTranslator,
   emTranslator,
   embossTranslator,

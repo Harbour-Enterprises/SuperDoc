@@ -29,7 +29,8 @@ import { translator as w_del_translator } from './w/del/del-translator.js';
 import { translator as w_divId_translator } from './w/divId/divId-translator.js';
 import { translator as w_drawing_translator } from './w/drawing/drawing-translator.js';
 import { translator as w_dstrike_translator } from './w/dstrike/dstrike-translator.js';
-import { translator as w_effect } from './w/effect/effect-translator.js';
+import { translator as w_eastAsianLayout_translator } from './w/eastAsianLayout/eastAsianLayout-translator.js';
+import { translator as w_effect_translator } from './w/effect/effect-translator.js';
 import { translator as w_em_translator } from './w/em/em-translator.js';
 import { translator as w_emboss_translator } from './w/emboss/emboss-translator.js';
 import { translator as w_end_translator } from './w/end/end-translator.js';
@@ -174,7 +175,8 @@ const translatorList = Array.from(
     w_divId_translator,
     w_drawing_translator,
     w_dstrike_translator,
-    w_effect,
+    w_eastAsianLayout_translator,
+    w_effect_translator,
     w_em_translator,
     w_emboss_translator,
     w_end_translator,
