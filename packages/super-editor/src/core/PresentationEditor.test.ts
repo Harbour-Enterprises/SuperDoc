@@ -24,6 +24,7 @@ const {
   createdSectionEditors,
   mockOnHeaderFooterDataUpdate,
   mockUpdateYdocDocxData,
+  mockEditorOverlayManager,
 } = vi.hoisted(() => {
   const createDefaultConverter = () => ({
     headers: {
@@ -83,6 +84,18 @@ const {
       once: emitter.once,
       emit: emitter.emit,
       destroy: vi.fn(),
+      setEditable: vi.fn(),
+      setOptions: vi.fn(),
+      commands: {
+        setTextSelection: vi.fn(),
+      },
+      state: {
+        doc: {
+          content: {
+            size: 10,
+          },
+        },
+      },
       view: {
         dom: document.createElement('div'),
         focus: vi.fn(),
@@ -118,6 +131,19 @@ const {
     createdSectionEditors: editors,
     mockOnHeaderFooterDataUpdate: vi.fn(),
     mockUpdateYdocDocxData: vi.fn(() => Promise.resolve()),
+    mockEditorOverlayManager: vi.fn().mockImplementation(() => ({
+      showEditingOverlay: vi.fn(() => ({
+        success: true,
+        editorHost: document.createElement('div'),
+        reason: null,
+      })),
+      hideEditingOverlay: vi.fn(),
+      showSelectionOverlay: vi.fn(),
+      hideSelectionOverlay: vi.fn(),
+      setOnDimmingClick: vi.fn(),
+      getActiveEditorHost: vi.fn(() => null),
+      destroy: vi.fn(),
+    })),
   };
 });
 
@@ -212,6 +238,10 @@ vi.mock('@extensions/pagination/pagination-helpers.js', () => ({
 
 vi.mock('@extensions/collaboration/collaboration-helpers.js', () => ({
   updateYdocDocxData: mockUpdateYdocDocxData,
+}));
+
+vi.mock('./header-footer/EditorOverlayManager', () => ({
+  EditorOverlayManager: mockEditorOverlayManager,
 }));
 
 describe('PresentationEditor', () => {
@@ -1094,6 +1124,12 @@ describe('PresentationEditor', () => {
       // Wait for the async rendering to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      // Add a mock page element that #getPageElement looks for
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
+
       const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
       const boundingSpy = vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -1145,6 +1181,12 @@ describe('PresentationEditor', () => {
 
       // Wait for the async rendering to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Add a mock page element that #getPageElement looks for
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
 
       const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
       vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({

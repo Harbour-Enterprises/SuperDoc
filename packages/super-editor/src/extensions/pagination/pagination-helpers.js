@@ -80,16 +80,86 @@ const getSectionHeight = async (editor, data) => {
   });
 };
 
+/**
+ * Creates a header or footer editor instance.
+ *
+ * This function creates a ProseMirror editor configured for header/footer editing
+ * with proper styling, dimensions, and page number context.
+ *
+ * @param {Object} params - Configuration parameters
+ * @param {Editor} params.editor - The parent editor instance. Required.
+ * @param {Object} params.data - The ProseMirror document data for the header/footer. Required.
+ * @param {HTMLElement} params.editorContainer - The container element to mount the editor. Required.
+ * @param {HTMLElement} [params.editorHost] - The host element for the editor (optional, for sibling architecture).
+ * @param {string} [params.sectionId] - The section relationship ID for tracking.
+ * @param {('header'|'footer')} [params.type] - The type of section being edited.
+ * @param {number} [params.availableWidth] - The width of the editing region in pixels. Must be positive.
+ * @param {number} [params.availableHeight] - The height of the editing region in pixels. Must be positive.
+ * @param {number} [params.currentPageNumber] - The current page number for PAGE field resolution. Must be a positive integer.
+ * @param {number} [params.totalPageCount] - The total page count for NUMPAGES field resolution. Must be a positive integer.
+ * @returns {Editor} The created header/footer editor instance
+ *
+ * @throws {TypeError} If required parameters are missing or have invalid types
+ * @throws {RangeError} If numeric parameters are out of valid range
+ */
 export const createHeaderFooterEditor = ({
   editor,
   data,
   editorContainer,
-  appendToBody = true,
+  editorHost,
   sectionId,
   type,
+  availableWidth,
   availableHeight,
   currentPageNumber,
+  totalPageCount,
 }) => {
+  // Validate required parameters
+  if (!editor) {
+    throw new TypeError('editor parameter is required');
+  }
+  if (!data) {
+    throw new TypeError('data parameter is required');
+  }
+  if (!editorContainer) {
+    throw new TypeError('editorContainer parameter is required');
+  }
+
+  // Type-check editorContainer as HTMLElement
+  if (!(editorContainer instanceof HTMLElement)) {
+    throw new TypeError('editorContainer must be an HTMLElement');
+  }
+
+  // Type-check editorHost if provided
+  if (editorHost !== undefined && !(editorHost instanceof HTMLElement)) {
+    throw new TypeError('editorHost must be an HTMLElement or undefined');
+  }
+
+  // Range-check numeric parameters
+  if (availableWidth !== undefined) {
+    if (typeof availableWidth !== 'number' || !Number.isFinite(availableWidth) || availableWidth <= 0) {
+      throw new RangeError('availableWidth must be a positive number');
+    }
+  }
+
+  if (availableHeight !== undefined) {
+    if (typeof availableHeight !== 'number' || !Number.isFinite(availableHeight) || availableHeight <= 0) {
+      throw new RangeError('availableHeight must be a positive number');
+    }
+  }
+
+  if (currentPageNumber !== undefined) {
+    if (typeof currentPageNumber !== 'number' || !Number.isInteger(currentPageNumber) || currentPageNumber < 1) {
+      throw new RangeError('currentPageNumber must be a positive integer');
+    }
+  }
+
+  if (totalPageCount !== undefined) {
+    if (typeof totalPageCount !== 'number' || !Number.isInteger(totalPageCount) || totalPageCount < 1) {
+      throw new RangeError('totalPageCount must be a positive integer');
+    }
+  }
+
   const parentStyles = editor.converter.getDocumentDefaultStyles();
   const { fontSizePt, typeface, fontFamilyCss } = parentStyles;
   const fontSizeInPixles = fontSizePt * 1.3333;
@@ -105,22 +175,25 @@ export const createHeaderFooterEditor = ({
     position: 'absolute',
     top: '0',
     left: '0',
-    width: 'auto',
+    width: availableWidth ? `${availableWidth}px` : '100%',
+    height: availableHeight ? `${availableHeight}px` : 'auto',
     maxWidth: 'none',
     fontFamily: fontFamilyCss || typeface,
     fontSize: `${fontSizeInPixles}px`,
     lineHeight: `${lineHeight}px`,
+    overflow: 'hidden',
+    pointerEvents: 'auto', // Critical: enables click interaction
+    backgroundColor: 'white', // Ensure editor has white background
   });
 
-  Object.assign(editorContainer.style, {
-    padding: '0',
-    margin: '0',
-    border: 'none',
-    boxSizing: 'border-box',
-    height: availableHeight + 'px',
-    overflow: 'hidden',
-  });
-  if (appendToBody) document.body.appendChild(editorContainer);
+  // Append to editor host (sibling container) instead of document.body
+  if (editorHost) {
+    editorHost.appendChild(editorContainer);
+  } else {
+    // Fallback to body for backward compatibility (should not happen in new code)
+    console.warn('[createHeaderFooterEditor] No editorHost provided, falling back to document.body');
+    document.body.appendChild(editorContainer);
+  }
 
   const headerFooterEditor = new SuperEditor({
     role: editor.options.role,
@@ -137,9 +210,12 @@ export const createHeaderFooterEditor = ({
     isHeadless: editor.options.isHeadless,
     pagination: false, // Explicitly disable pagination
     annotations: true,
-    currentPageNumber,
+    currentPageNumber: currentPageNumber ?? 1,
+    totalPageCount: totalPageCount ?? 1,
     // Don't set parentEditor to avoid circular reference issues
     // parentEditor: editor,
+    // IMPORTANT: Start with editable: false to prevent triggering update cascades during creation.
+    // PresentationEditor#enterHeaderFooterMode will call setEditable(true) when entering edit mode.
     editable: false,
     documentMode: 'viewing',
     onCreate: (evt) => setEditorToolbar(evt, editor),
@@ -221,18 +297,25 @@ export const onHeaderFooterDataUpdate = async ({ editor, transaction }, mainEdit
   if (!type || !sectionId) return;
 
   const updatedData = editor.getUpdatedJson();
-  mainEditor.converter[`${type}Editors`].forEach((item) => {
-    if (item.id === sectionId) {
+  const editorsList = mainEditor.converter[`${type}Editors`];
+  if (Array.isArray(editorsList)) {
+    editorsList.forEach((item) => {
+      if (item.id === sectionId) {
+        item.editor.setOptions({
+          media: editor.options.media,
+          mediaFiles: editor.options.mediaFiles,
+        });
+        // Only replaceContent on OTHER editors, not the one that triggered this update
+        // Otherwise we get an infinite loop: replaceContent -> update event -> onHeaderFooterDataUpdate -> replaceContent
+        if (item.editor !== editor) {
+          item.editor.replaceContent(updatedData);
+        }
+      }
       item.editor.setOptions({
-        media: editor.options.media,
-        mediaFiles: editor.options.mediaFiles,
+        lastSelection: transaction?.selection,
       });
-      item.editor.replaceContent(updatedData);
-    }
-    item.editor.setOptions({
-      lastSelection: transaction?.selection,
     });
-  });
+  }
   mainEditor.converter[`${type}s`][sectionId] = updatedData;
   mainEditor.setOptions({ isHeaderFooterChanged: editor.docChanged });
 
