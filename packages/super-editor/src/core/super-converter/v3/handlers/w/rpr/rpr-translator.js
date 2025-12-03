@@ -32,6 +32,7 @@ import { translator as emTranslator } from '../em/em-translator.js';
 import { translator as wTranslator } from '../w/w-translator.js';
 import { translator as kernTranslator } from '../kern/kern-translator.js';
 import { translator as positionTranslator } from '../position/position-translator.js';
+import { translator as fitTextTranslator } from '../fitText/fitText-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -46,6 +47,7 @@ export const propertyTranslators = [
   effectTranslator,
   emTranslator,
   embossTranslator,
+  fitTextTranslator,
   fontFamilyTranslator,
   fontSizeCsTranslator,
   fontSizeTranslator,

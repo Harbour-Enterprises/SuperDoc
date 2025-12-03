@@ -34,6 +34,7 @@ import { translator as w_em_translator } from './w/em/em-translator.js';
 import { translator as w_emboss_translator } from './w/emboss/emboss-translator.js';
 import { translator as w_end_translator } from './w/end/end-translator.js';
 import { translator as w_framePr_translator } from './w/framePr/framePr-translator.js';
+import { translator as w_fitText_translator } from './w/fitText/fitText-translator.js';
 import { translator as w_gridAfter_translator } from './w/gridAfter/gridAfter-translator.js';
 import { translator as w_gridBefore_translator } from './w/gridBefore/gridBefore-translator.js';
 import { translator as w_gridCol_translator } from './w/gridCol/gridCol-translator.js';
@@ -177,6 +178,7 @@ const translatorList = Array.from(
     w_em_translator,
     w_emboss_translator,
     w_end_translator,
+    w_fitText_translator,
     w_framePr_translator,
     w_gridAfter_translator,
     w_gridBefore_translator,
