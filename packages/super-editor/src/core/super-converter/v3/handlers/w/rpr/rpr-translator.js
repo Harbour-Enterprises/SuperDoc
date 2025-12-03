@@ -22,6 +22,7 @@ import { translator as smallCapsTranslator } from '../smallCaps/smallCaps-transl
 import { translator as snapToGridTranslator } from '../snapToGrid/snapToGrid-translator.js';
 import { translator as embossTranslator } from '../emboss/emboss-translator.js';
 import { translator as imprintTranslator } from '../imprint/imprint-translator.js';
+import { translator as noProofTranslator } from '../noProof/noProof-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -46,6 +47,7 @@ export const propertyTranslators = [
   shdTranslator,
   langTranslator,
   letterSpacingTranslator,
+  noProofTranslator,
   vertAlignTranslator,
   smallCapsTranslator,
   snapToGridTranslator,

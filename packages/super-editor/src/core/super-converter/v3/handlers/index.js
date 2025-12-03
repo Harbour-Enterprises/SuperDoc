@@ -56,6 +56,7 @@ import { translator as w_kinsoku_translator } from './w/kinsoku/kinsoku-translat
 import { translator as w_lang_translator } from './w/lang/lang-translator.js';
 import { translator as w_mirrorIndents_translator } from './w/mirrorIndents/mirrorIndents-translator.js';
 import { translator as w_left_translator } from './w/left/left-translator.js';
+import { translator as w_noProof_translator } from './w/noProof/noProof-translator.js';
 import { translator as w_noWrap_translator } from './w/noWrap/noWrap-translator.js';
 import { translator as w_numId_translator } from './w/numId/numId-translator.js';
 import { translator as w_numPr_translator } from './w/numPr/numPr-translator.js';
@@ -190,6 +191,7 @@ const translatorList = Array.from(
     w_lang_translator,
     w_left_translator,
     w_mirrorIndents_translator,
+    w_noProof_translator,
     w_noWrap_translator,
     w_numId_translator,
     w_numPr_translator,
