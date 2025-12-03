@@ -95,6 +95,16 @@ export const toggleList =
       updateNumberingProperties(sharedNumberingProperties, node, pos, editor, tr);
     }
 
+    // Preserve selection at the end of the original selection range
+    // This ensures the cursor doesn't jump to an unexpected position after toggling the list
+    const newTo = tr.mapping.map(to);
+    if (newTo >= 0 && newTo <= tr.doc.content.size) {
+      try {
+        tr.setSelection(state.selection.constructor.near(tr.doc.resolve(newTo)));
+      } catch {
+        // Fallback: if selection fails, just leave the selection as-is
+      }
+    }
     if (dispatch) dispatch(tr);
     return true;
   };
