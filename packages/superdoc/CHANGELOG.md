@@ -1,3 +1,9 @@
+## [0.34.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.4...v0.34.5) (2025-12-03)
+
+### Bug Fixes
+
+- persist date on comments extensible ([#1387](https://github.com/Harbour-Enterprises/SuperDoc/issues/1387)) ([85187d5](https://github.com/Harbour-Enterprises/SuperDoc/commit/85187d54147724c1073c25df53e71713fc4399e8))
+
 ## [0.34.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.3...v0.34.4) (2025-12-02)
 
 ### Bug Fixes
