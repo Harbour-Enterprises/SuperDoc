@@ -1,5 +1,4 @@
 import { Node, Attribute } from '@core/index.js';
-import { findParentNode } from '@helpers/index.js';
 import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
 
 /**
@@ -37,7 +36,7 @@ function getPageNumberForPosition(state, pos) {
       break;
     }
 
-    // Count unique page break positions (excluding position 0 which is the first page)
+    // Count unique page break positions
     if (pageBreakPos <= pos) {
       pageNumber += 1;
     }

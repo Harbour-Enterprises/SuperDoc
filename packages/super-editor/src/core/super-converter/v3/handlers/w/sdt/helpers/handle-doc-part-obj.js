@@ -20,10 +20,6 @@ export function handleDocPartObj(params) {
     return null;
   }
 
-  if (!docPartGalleryType || !validGalleryTypeMap[docPartGalleryType]) {
-    return null;
-  }
-
   const content = node?.elements.find((el) => el.name === 'w:sdtContent');
   const handler = validGalleryTypeMap[docPartGalleryType];
   const result = handler({

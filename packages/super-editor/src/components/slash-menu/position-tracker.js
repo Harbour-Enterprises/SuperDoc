@@ -50,7 +50,7 @@ export const createPositionTrackerPlugin = () => {
         }
 
         // Map decorations through document changes
-        if (value.decorations && !value.decorations.eq(DecorationSet.empty)) {
+        if (tr.docChanged && value.decorations && !value.decorations.eq(DecorationSet.empty)) {
           return {
             decorations: value.decorations.map(tr.mapping, tr.doc),
             trackedPosition: value.trackedPosition !== null ? tr.mapping.map(value.trackedPosition) : null,
