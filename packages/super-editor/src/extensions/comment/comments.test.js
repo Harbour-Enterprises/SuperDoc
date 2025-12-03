@@ -154,6 +154,36 @@ describe('comment helpers', () => {
     expect(insertedEnds).toEqual(['root', 'child-0', 'child-1']);
   });
 
+  it('merges fragmented marks for the same comment into one range on export', () => {
+    const schema = createCommentSchema();
+    const mark = schema.marks[CommentMarkName].create({ commentId: 'frag', internal: true });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('Plaintiffs ', [mark]),
+      schema.text('allege', [mark]),
+      schema.text('s', [mark]),
+    ]);
+    const doc = schema.nodes.doc.create(null, [paragraph]);
+    const state = EditorState.create({ schema, doc });
+    const tr = state.tr;
+
+    prepareCommentsForExport(state.doc, tr, schema, []);
+    const applied = state.apply(tr);
+
+    const starts = [];
+    const ends = [];
+    applied.doc.descendants((node, pos) => {
+      if (node.type.name === 'commentRangeStart') starts.push(pos);
+      if (node.type.name === 'commentRangeEnd') ends.push(pos);
+    });
+
+    expect(starts).toHaveLength(1);
+    expect(ends).toHaveLength(1);
+    // The range should span the full "Plaintiffs alleges" from the first char.
+    expect(starts[0]).toBe(1);
+    const totalTextLength = 'Plaintiffs alleges'.length;
+    expect(ends[0]).toBe(1 + totalTextLength + 1); // +1 because positions are exclusive
+  });
+
   it('prepares comments for import by converting nodes into marks', () => {
     const schema = createCommentSchema();
     const doc = schema.nodes.doc.create(null, [
