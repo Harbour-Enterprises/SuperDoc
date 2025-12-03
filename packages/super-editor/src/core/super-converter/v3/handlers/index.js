@@ -54,6 +54,7 @@ import { translator as w_insideV_translator } from './w/insideV/insideV-translat
 import { translator as w_jc_translator } from './w/jc/jc-translator.js';
 import { translator as w_keepLines_translator } from './w/keepLines/keepLines-translator.js';
 import { translator as w_keepNext_translator } from './w/keepNext/keepNext-translator.js';
+import { translator as w_kern_translator } from './w/kern/kern-translator.js';
 import { translator as w_kinsoku_translator } from './w/kinsoku/kinsoku-translator.js';
 import { translator as w_lang_translator } from './w/lang/lang-translator.js';
 import { translator as w_mirrorIndents_translator } from './w/mirrorIndents/mirrorIndents-translator.js';
@@ -196,6 +197,7 @@ const translatorList = Array.from(
     w_jc_translator,
     w_keepLines_translator,
     w_keepNext_translator,
+    w_kern_translator,
     w_kinsoku_translator,
     w_lang_translator,
     w_left_translator,

@@ -30,6 +30,7 @@ import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
 import { translator as effectTranslator } from '../effect/effect-translator.js';
 import { translator as emTranslator } from '../em/em-translator.js';
 import { translator as wTranslator } from '../w/w-translator.js';
+import { translator as kernTranslator } from '../kern/kern-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -50,6 +51,7 @@ export const propertyTranslators = [
   highlightTranslator,
   imprintTranslator,
   italicTranslator,
+  kernTranslator,
   langTranslator,
   letterSpacingTranslator,
   noProofTranslator,
