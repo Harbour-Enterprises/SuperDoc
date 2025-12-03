@@ -12,6 +12,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 4 : undefined,
+  // Disable Playwright's git metadata collection to avoid CI git fetch timeouts.
+  captureGitInfo: { commit: false, diff: false },
   reporter: [
     ['json', { outputFile: 'test-results/playwright-report.json' }],
     ['./reporters/layout-engine-reporter.js'],

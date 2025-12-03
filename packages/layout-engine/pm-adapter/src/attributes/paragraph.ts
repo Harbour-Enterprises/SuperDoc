@@ -1273,6 +1273,7 @@ export const computeParagraphAttrs = (
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
     const resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+
     if (resolvedLevel) {
       if (resolvedLevel.format && numberingProps.format == null) {
         numberingProps.format = resolvedLevel.format;
@@ -1351,6 +1352,7 @@ export const computeParagraphAttrs = (
     }
 
     const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+
     if (wordLayout) {
       if (wordLayout.marker) {
         if (listRendering?.markerText) {
