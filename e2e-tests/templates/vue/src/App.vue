@@ -10,6 +10,7 @@ import process from 'process';
 const props = defineProps({
   filename: String,
   onReady: Function,
+  superDocConfig: Object,
 });
 
 window.fileData = null;
@@ -50,6 +51,9 @@ const init = async () => {
             tooltip: 'Insert Custom Mark',
             group: 'center',
             icon: '🎧',
+            attributes: {
+              ariaLabel: 'Insert Custom Mark',
+            },
           },
         ],
       },
@@ -91,7 +95,7 @@ const init = async () => {
 
   process.nextTick(() => {
     if (!config.modules) config.modules = {};
-    superdoc.value = new SuperDoc(config);
+    superdoc.value = new SuperDoc({ ...config, ...props.superDocConfig });
   });
 };
 
