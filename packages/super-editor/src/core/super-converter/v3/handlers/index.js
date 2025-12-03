@@ -71,6 +71,7 @@ import { translator as w_rStyle_translator } from './w/rStyle/rstyle-translator.
 import { translator as w_right_translator } from './w/right/right-translator.js';
 import { translator as w_sdt_translator } from './w/sdt/sdt-translator.js';
 import { translator as w_shd_translator } from './w/shd/shd-translator.js';
+import { translator as w_smallCaps_translator } from './w/smallCaps/smallCaps-translator.js';
 import { translator as w_snapToGrid_translator } from './w/snapToGrid/snapToGrid-translator.js';
 import { translator as w_start_translator } from './w/start/start-translator.js';
 import { translator as w_strike_translator } from './w/strike/strike-translator.js';
@@ -202,6 +203,7 @@ const translatorList = Array.from(
     w_right_translator,
     w_sdt_translator,
     w_shd_translator,
+    w_smallCaps_translator,
     w_snapToGrid_translator,
     w_spacing_translator,
     w_suppressAutoHyphens_translator,
