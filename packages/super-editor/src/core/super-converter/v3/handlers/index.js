@@ -61,6 +61,7 @@ import { translator as w_noWrap_translator } from './w/noWrap/noWrap-translator.
 import { translator as w_numId_translator } from './w/numId/numId-translator.js';
 import { translator as w_numPr_translator } from './w/numPr/numPr-translator.js';
 import { translator as w_oMath_translator } from './w/oMath/oMath-translator.js';
+import { translator as w_outline_translator } from './w/outline/outline-translator.js';
 import { translator as w_outlineLvl_translator } from './w/outlineLvl/outlineLvl-translator.js';
 import { translator as w_overflowPunct } from './w/overflowPunct/overflowPunct-translator.js';
 import { translator as w_p_translator } from './w/p/p-translator.js';
@@ -196,6 +197,7 @@ const translatorList = Array.from(
     w_noWrap_translator,
     w_numId_translator,
     w_numPr_translator,
+    w_outline_translator,
     w_outlineLvl_translator,
     w_overflowPunct,
     w_oMath_translator,
