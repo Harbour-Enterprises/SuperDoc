@@ -57,7 +57,17 @@ describe('toggleList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     editor = { converter: {} };
-    tr = { docChanged: false };
+    tr = {
+      docChanged: false,
+      mapping: {
+        map: vi.fn((pos) => pos),
+      },
+      doc: {
+        content: { size: 1000 },
+        resolve: vi.fn(() => ({})),
+      },
+      setSelection: vi.fn(),
+    };
     dispatch = vi.fn();
   });
 

@@ -44,7 +44,32 @@ const hashRuns = (block: FlowBlock): string => {
       return `${text}:${marks}${trackedKey}`;
     })
     .join('|');
-  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}`;
+
+  // Include list/numbering properties in hash to invalidate cache when list status changes
+  let numberingKey = '';
+  if (block.attrs) {
+    const attrs = block.attrs as {
+      numberingProperties?: { numId?: number | string; ilvl?: number };
+      wordLayout?: { marker?: { markerText?: string } };
+    };
+    if (attrs.numberingProperties) {
+      const np = attrs.numberingProperties;
+      // Use distinct sentinel values to avoid hash collision:
+      // - "<NULL>" for missing marker (wordLayout.marker not present)
+      // - "<EMPTY>" for empty marker text (marker exists but markerText is empty string)
+      // - actual marker text otherwise
+      let markerTextKey: string;
+      if (!attrs.wordLayout?.marker) {
+        markerTextKey = '<NULL>';
+      } else {
+        const markerText = attrs.wordLayout.marker.markerText;
+        markerTextKey = markerText === '' ? '<EMPTY>' : (markerText ?? '<NULL>');
+      }
+      numberingKey = `|num:${np.numId ?? ''}:${np.ilvl ?? 0}:${markerTextKey}`;
+    }
+  }
+
+  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}${numberingKey}`;
 };
 
 /**

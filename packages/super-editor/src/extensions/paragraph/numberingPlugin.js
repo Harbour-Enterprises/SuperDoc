@@ -108,24 +108,17 @@ export function createNumberingPlugin(editor) {
           markerText = docxNumberingHelpers.normalizeLvlTextChar(lvlText);
         }
 
-        if (
-          JSON.stringify(node.attrs.listRendering) !==
-          JSON.stringify({
-            markerText,
-            suffix,
-            justification,
-            path,
-            numberingType: listNumberingType,
-          })
-        ) {
+        const newListRendering = {
+          markerText,
+          suffix,
+          justification,
+          path,
+          numberingType: listNumberingType,
+        };
+
+        if (JSON.stringify(node.attrs.listRendering) !== JSON.stringify(newListRendering)) {
           // Updating rendering attrs for node view usage
-          tr.setNodeAttribute(pos, 'listRendering', {
-            markerText,
-            suffix,
-            justification,
-            path,
-            numberingType: listNumberingType,
-          });
+          tr.setNodeAttribute(pos, 'listRendering', newListRendering);
         }
 
         return false; // no need to descend into a paragraph

@@ -3467,6 +3467,7 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
       fragment.pmEnd ?? '',
       fragment.continuesFromPrev ? 1 : 0,
       fragment.continuesOnNext ? 1 : 0,
+      fragment.markerWidth ?? '', // Include markerWidth to trigger re-render when list status changes
     ].join('|');
   }
   if (fragment.kind === 'list-item') {

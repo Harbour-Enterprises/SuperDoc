@@ -92,6 +92,7 @@ export async function incrementalLayout(
       continue;
     }
     const cached = measureCache.get(block, measurementWidth, measurementHeight);
+
     if (cached) {
       measures.push(cached);
       cacheHits++;
