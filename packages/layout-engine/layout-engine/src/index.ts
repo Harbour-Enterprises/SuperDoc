@@ -922,11 +922,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       let effectiveBlock: SectionBreakBlock = block as SectionBreakBlock;
       const ahead = nextSectionPropsAtBreak.get(index);
       const hasSectionIndex = typeof effectiveBlock.attrs?.sectionIndex === 'number';
-      const appliedLookahead = Boolean(ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex);
       // Only adjust properties for breaks originating from DOCX sectPr (end-tagged semantics).
       // Skip the lookahead for PM-adapter blocks that already embed upcoming section metadata
       // via sectionIndex; those blocks have pre-resolved properties and don't need the map.
-      if (appliedLookahead) {
+      if (ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex) {
         effectiveBlock = {
           ...effectiveBlock,
           margins: ahead.margins
