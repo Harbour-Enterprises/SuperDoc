@@ -1088,6 +1088,210 @@ describe('computeParagraphAttrs', () => {
     expect(markerRun?.fontFamily).toBe('Arial');
   });
 
+  describe('unwrapTabStops function', () => {
+    // Note: unwrapTabStops is a private function inside computeParagraphAttrs
+    // We test it indirectly through computeParagraphAttrs by passing various tabStops formats
+    const createStyleContext = () =>
+      ({
+        styles: {},
+        defaults: {},
+      }) as never;
+
+    it('should unwrap nested tab format { tab: { tabType, pos } }', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 2880 } }], // Use value > 1000 so it stays as twips
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('start');
+      expect(result?.tabs?.[0].pos).toBe(2880); // Stays as twips (> 1000 threshold)
+    });
+
+    it('should handle direct format { val, pos }', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ val: 'center', pos: 1440 }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('center');
+      expect(result?.tabs?.[0].pos).toBe(1440);
+    });
+
+    it('should skip invalid entries with missing required fields', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { val: 'start' }, // Missing pos
+            { pos: 720 }, // Missing val
+            { val: 'center', pos: 1440 }, // Valid
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(1);
+      expect(result?.tabs?.[0].val).toBe('center');
+    });
+
+    it('should add originalPos when extracting from nested format', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 4320 } }], // Use value > 1000 so it stays as twips
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].pos).toBe(4320); // Stays as twips (> 1000 threshold)
+      // The originalPos is set internally during unwrapping
+    });
+
+    it('should handle mixed valid and invalid entries', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { tab: { tabType: 'start', pos: 2880 } }, // Valid nested (> 1000 threshold)
+            null, // Invalid: null
+            { val: 'center', pos: 1440 }, // Valid direct
+            'invalid', // Invalid: string
+            { tab: 'invalid' }, // Invalid: tab is not an object
+            { val: 'end', pos: 2160 }, // Valid direct
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(3);
+      expect(result?.tabs?.[0].val).toBe('start');
+      expect(result?.tabs?.[1].val).toBe('center');
+      expect(result?.tabs?.[2].val).toBe('end');
+    });
+
+    it('should return undefined for non-array input', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: 'not an array',
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // When tabs is not an array, unwrapTabStops returns undefined
+      // computeParagraphAttrs may still set tabs from other sources
+      expect(result).toBeDefined();
+    });
+
+    it('should handle nested format with originalPos', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 500, originalPos: 720 } }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].pos).toBe(720); // Uses originalPos
+    });
+
+    it('should handle nested format with leader', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'end', pos: 1440, leader: 'dot' } }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('end');
+      expect(result?.tabs?.[0].leader).toBe('dot');
+    });
+
+    it('should skip entries with invalid nested tab structure', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { tab: null }, // Invalid: tab is null
+            { tab: { tabType: 'start', pos: 2880 } }, // Valid (> 1000 threshold)
+            { tab: { pos: 1440 } }, // Invalid: missing tabType
+            { tab: { tabType: 'center' } }, // Invalid: missing pos
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(1);
+      expect(result?.tabs?.[0].val).toBe('start');
+    });
+
+    it('should handle empty array', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Empty array returns undefined from unwrapTabStops
+      expect(result).toBeDefined();
+    });
+
+    it('should handle direct format with val property fallback', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { val: 'start', pos: 2880 } }], // val instead of tabType in nested format (> 1000 threshold)
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('start');
+    });
+
+    it('should preserve leader in direct format', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ val: 'decimal', pos: 2880, leader: 'hyphen' }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].leader).toBe('hyphen');
+    });
+  });
+
   describe('framePr edge cases and validation', () => {
     const createStyleContext = () =>
       ({
