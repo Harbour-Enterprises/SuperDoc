@@ -9,8 +9,8 @@ import {
     type HttpProviderConfig,
     type OpenAIProviderConfig,
     type AnthropicProviderConfig
-} from './providers';
-import type { AIProvider, AIMessage } from './types';
+} from '../../providers';
+import type { AIProvider, AIMessage } from '../../shared/types';
 
 describe('providers', () => {
     describe('isAIProvider', () => {
@@ -92,7 +92,7 @@ describe('providers', () => {
 
         it('should throw for unsupported provider type', () => {
             const config = { type: 'unsupported' } as any;
-            expect(() => createAIProvider(config)).toThrow('Unsupported AI provider');
+            expect(() => createAIProvider(config)).toThrow('Unsupported provider type');
         });
     });
 

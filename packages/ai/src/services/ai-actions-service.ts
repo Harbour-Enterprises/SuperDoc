@@ -1,28 +1,28 @@
-import {AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage} from './types';
-import {EditorAdapter} from './editor-adapter';
-import {validateInput, parseJSON} from './utils';
+import {AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage} from '../shared';
+import {EditorAdapter} from '../editor';
+import {validateInput, parseJSON} from '../shared';
 import {
     buildFindPrompt,
     buildReplacePrompt,
     buildSummaryPrompt,
     buildInsertContentPrompt,
     SYSTEM_PROMPTS
-} from './prompts';
+} from '../shared/prompts';
 
 /**
  * AI-powered document actions
  * All methods are pure - they receive dependencies and return results
  */
 export class AIActionsService {
-    private adapter: EditorAdapter;
+    private readonly adapter: EditorAdapter;
 
     constructor(
-        private provider: AIProvider,
-        private editor: Editor | null,
-        private documentContextProvider: () => string,
-        private enableLogging: boolean = false,
-        private onStreamChunk?: (partialResult: string) => void,
-        private streamPreference?: boolean,
+      private provider: AIProvider,
+      private editor: Editor | null,
+      private documentContextProvider: () => string,
+      private enableLogging: boolean = false,
+      private onStreamChunk?: (partialResult: string) => void,
+      private readonly streamPreference?: boolean,
     ) {
         this.adapter = new EditorAdapter(this.editor);
         if (!this.adapter) {
@@ -62,7 +62,7 @@ export class AIActionsService {
      * @private
      */
     private async executeFindQuery(query: string, findAll: boolean): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -105,8 +105,8 @@ export class AIActionsService {
             // Scroll to the found text
             const firstMatch = result.results[0];
             if (firstMatch?.positions && firstMatch.positions.length > 0) {
-                const { from, to } = firstMatch.positions[0];
-                this.adapter.scrollToPosition(from, to);
+                const { from } = firstMatch.positions[0];
+                this.adapter.scrollToPosition(from);
             }
         }
 
@@ -326,12 +326,10 @@ export class AIActionsService {
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
         const replacements = await this.fetchAIReplacements(query, multiple);
-
         if (!replacements.length) {
             return [];
         }
         const searchResults = this.adapter.findResults(replacements);
-        
         if (!multiple) {
             return await this.executeSingleOperation(searchResults, operationFn);
         }
@@ -355,7 +353,7 @@ export class AIActionsService {
      * @throws Error if query is empty
      */
     async replace(query: string): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -383,7 +381,7 @@ export class AIActionsService {
      * @throws Error if query is empty
      */
     async replaceAll(query: string): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -403,10 +401,138 @@ export class AIActionsService {
     }
 
     /**
+     * Performs a deterministic literal find-and-replace using editor search commands (no AI).
+     *
+     * @param findText - Literal text to locate
+     * @param replacementText - Text that should replace each match (empty string deletes the match)
+     * @param options - Additional options such as case sensitivity
+     */
+    async literalReplace(
+        findText: string,
+        replacementText: string,
+        options?: {
+            caseSensitive?: boolean;
+            trackChanges?: boolean;
+        }
+    ): Promise<Result> {
+        if (!validateInput(findText)) {
+            throw new Error('Find text cannot be empty');
+        }
+        if (!replacementText) {
+            throw new Error('Replacement text must be a string (use an empty string to delete text).');
+        }
+
+        const applied: FoundMatch[] = [];
+
+        // Automatically detect if there's an active selection that matches findText
+        // This optimizes by replacing directly without searching the document
+        const viewState = this.editor?.view?.state ?? this.editor?.state;
+        const selection = viewState?.selection;
+        const doc = viewState?.doc;
+
+        if (selection && !selection.empty && doc) {
+            try {
+                const selectionText = doc.textBetween(selection.from, selection.to, '', '');
+                const textMatches = options?.caseSensitive
+                    ? selectionText === findText
+                    : selectionText.toLowerCase() === findText.toLowerCase();
+
+                if (textMatches && selection.from >= 0 && selection.to <= doc.content.size) {
+                    // Direct replacement optimization - replace selection without search
+                    let changeId: string | undefined;
+                    if (options?.trackChanges) {
+                        changeId = this.adapter.createTrackedChange(
+                            selection.from,
+                            selection.to,
+                            replacementText
+                        );
+                    } else {
+                        this.adapter.replaceText(selection.from, selection.to, replacementText);
+                    }
+
+                    applied.push({
+                        originalText: selectionText,
+                        suggestedText: replacementText,
+                        positions: [{ from: selection.from, to: selection.to }],
+                        changeId,
+                    });
+
+                    return {
+                        success: true,
+                        results: applied,
+                    };
+                }
+            } catch (error) {
+                // If selection check fails, fall through to document search
+                if (this.enableLogging) {
+                    console.warn('[AIActionsService] Selection check failed, falling back to search:', error);
+                }
+            }
+        }
+
+        const normalizedFind = options?.caseSensitive ? findText : findText.toLowerCase();
+        const normalizedReplace = options?.caseSensitive ? replacementText : replacementText.toLowerCase();
+        if (normalizedFind === normalizedReplace) {
+            return { success: false, results: [] };
+        }
+
+        const maxPasses = 10;
+        let pass = 0;
+
+        const collectMatches = () => this.adapter.findLiteralMatches(findText, Boolean(options?.caseSensitive));
+
+        while (pass < maxPasses) {
+            const normalizedMatches = collectMatches();
+            if (!normalizedMatches.length) {
+                break;
+            }
+
+            const descending = [...normalizedMatches].sort((a, b) => b.from - a.from);
+            const replacementsThisPass: FoundMatch[] = [];
+
+            for (const match of descending) {
+                if (options?.trackChanges) {
+                    const changeId = this.adapter.createTrackedChange(match.from, match.to, replacementText);
+                    replacementsThisPass.push({
+                        originalText: match.text,
+                        suggestedText: replacementText,
+                        positions: [{ from: match.from, to: match.to }],
+                        changeId,
+                    } as FoundMatch);
+                } else {
+                    this.adapter.replaceText(match.from, match.to, replacementText);
+                    replacementsThisPass.push({
+                        originalText: match.text,
+                        suggestedText: replacementText,
+                        positions: [{ from: match.from, to: match.to }],
+                    });
+                }
+            }
+
+            if (!replacementsThisPass.length) {
+                break;
+            }
+
+            replacementsThisPass.reverse();
+            applied.push(...replacementsThisPass);
+            pass++;
+        }
+
+        if (!applied.length) {
+            return { success: false, results: [] };
+        }
+
+        return {
+            success: true,
+            results: applied,
+        };
+    }
+
+    /**
      * Insert a single tracked change
      */
     async insertTrackedChange(query: string): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -433,7 +559,7 @@ export class AIActionsService {
      * Insert multiple tracked changes
      */
     async insertTrackedChanges(query: string): Promise<Result> {
-        if (!validateInput(query, 'query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -460,7 +586,7 @@ export class AIActionsService {
      * Insert a single comment
      */
     async insertComment(query: string): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -485,7 +611,7 @@ export class AIActionsService {
      * Insert multiple comments
      */
     async insertComments(query: string): Promise<Result> {
-        if (!validateInput(query, 'Query')) {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -544,10 +670,14 @@ export class AIActionsService {
     /**
      * Inserts new content into the document.
      * @param query - Natural language query for content generation
+     * @param options - in reference to the current document position, where to insert the content.
      * @returns Result with inserted content location
      */
-    async insertContent(query: string): Promise<Result> {
-        if (!validateInput(query, 'query')) {
+    async insertContent(
+        query: string,
+        options?: { position?: 'before' | 'after' | 'replace' }
+    ): Promise<Result> {
+        if (!validateInput(query)) {
             throw new Error('Query cannot be empty');
         }
 
@@ -560,6 +690,8 @@ export class AIActionsService {
 
         const useStreaming = this.streamPreference !== false;
         let streamingInsertedLength = 0;
+        const insertionMode = options?.position === 'before' || options?.position === 'after' ? options.position : 'replace';
+
         const response = await this.runCompletion([
             {
                 role: 'system',
@@ -574,11 +706,11 @@ export class AIActionsService {
 
             this.onStreamChunk?.(extraction.text);
 
-            if (extraction.text.length > streamingInsertedLength) {
+            if (insertionMode === 'replace' && extraction.text.length > streamingInsertedLength) {
                 const delta = extraction.text.slice(streamingInsertedLength);
                 streamingInsertedLength = extraction.text.length;
                 if (delta) {
-                    await this.adapter.insertText(delta);
+                    this.adapter.insertText(delta, { position: insertionMode });
                 }
             }
             return true;
@@ -595,14 +727,14 @@ export class AIActionsService {
             if (!suggestedResult || !suggestedResult.suggestedText) {
                 return {success: false, results: []};
             }
-            if (useStreaming) {
+            if (useStreaming && insertionMode === 'replace') {
                 const decoded = suggestedResult.suggestedText;
                 if (streamingInsertedLength < decoded.length) {
-                    await this.adapter.insertText(decoded.slice(streamingInsertedLength));
+                    this.adapter.insertText(decoded.slice(streamingInsertedLength), { position: insertionMode });
                 }
                 this.onStreamChunk?.(decoded);
             } else {
-                await this.adapter.insertText(suggestedResult.suggestedText);
+                this.adapter.insertText(suggestedResult.suggestedText, { position: insertionMode });
                 this.onStreamChunk?.(suggestedResult.suggestedText);
             }
 
@@ -659,7 +791,6 @@ export class AIActionsService {
             }
         } catch (error) {
             if (!aggregated) {
-                // No progress, fallback to non-streaming completion so callers still get a response.
                 const fallbackResponse = await this.provider.getCompletion(messages);
                 if (this.enableLogging) {
                     console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });

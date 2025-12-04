@@ -1,4 +1,4 @@
-import packageJson from '../package.json';
+import packageJson from '../../package.json';
 
 const LOG_PREFIX = '🦋 🦸‍♀️ [superdoc-ai]';
 const PACKAGE_NAME = '@superdoc-dev/ai';
