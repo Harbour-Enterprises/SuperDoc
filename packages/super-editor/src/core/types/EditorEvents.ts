@@ -62,8 +62,23 @@ export interface EditorEventMap extends DefaultEventMap {
   /** Called before editor creation */
   beforeCreate: [{ editor: Editor }];
 
+  /** Called when a document open begins */
+  opening: [{ editor: Editor; requestId: number; source?: unknown }];
+
   /** Called after editor creation */
   create: [{ editor: Editor }];
+
+  /** Called when a document is ready after open */
+  ready: [{ editor: Editor; requestId?: number }];
+
+  /** Called when a document close begins */
+  closing: [{ editor: Editor }];
+
+  /** Called after a document close completes */
+  closed: [{ editor: Editor }];
+
+  /** Called when open fails */
+  openError: [{ editor: Editor; error: Error }];
 
   /** Called when editor content updates */
   update: [{ editor: Editor; transaction: Transaction }];

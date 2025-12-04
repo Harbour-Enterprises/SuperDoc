@@ -216,6 +216,18 @@ export class Editor extends EventEmitter<EditorEventMap> {
   };
 
   /**
+   * Lifecycle state for the current document session.
+   */
+  lifecycle: 'idle' | 'opening' | 'ready' | 'closing' | 'destroyed' = 'idle';
+
+  /**
+   * Internal flags for managing repeated initialization.
+   */
+  #coreInitialized: boolean = false;
+  #eventsBound: boolean = false;
+  #openRequestId: number = 0;
+
+  /**
    * Create a new Editor instance
    * @param options - Editor configuration options
    */
@@ -226,8 +238,22 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.#checkHeadless(options);
     this.setOptions(options);
 
+    const { setHighContrastMode } = useHighContrastMode();
+    this.setHighContrastMode = setHighContrastMode;
+
     const modes: Record<string, () => void> = {
-      docx: () => this.#init(),
+      docx: () => {
+        this.#ensureDocxCore();
+
+        // Backward compatibility: if a document payload was provided up front, initialize immediately.
+        if (this.#hasInitialDocument(options)) {
+          this.lifecycle = 'opening';
+          this.emit('opening', { editor: this, requestId: ++this.#openRequestId, source: 'constructor' });
+          this.#init();
+          this.lifecycle = 'ready';
+          this.emit('ready', { editor: this, requestId: this.#openRequestId });
+        }
+      },
       text: () => this.#initRichText(),
       html: () => this.#initRichText(),
       default: () => {
@@ -236,9 +262,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
     };
 
     const initMode = modes[this.options.mode!] ?? modes.default;
-
-    const { setHighContrastMode } = useHighContrastMode();
-    this.setHighContrastMode = setHighContrastMode;
     initMode();
   }
 
@@ -246,6 +269,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Getter which indicates if any changes happen in Editor
    */
   get docChanged(): boolean {
+    if (!this.options.initialState || !this.state) return false;
+
     return (
       this.options.isHeaderFooterChanged ||
       this.options.isCustomXmlChanged ||
@@ -281,24 +306,45 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Initialize the editor with the given options
+   * Determine whether the constructor received enough data to bootstrap a document immediately.
+   *
+   * @param options - Editor options to check for initial document data
+   * @returns True if the options contain enough data to initialize a document
    */
-  #init(): void {
+  #hasInitialDocument(options: Partial<EditorOptions> = this.options): boolean {
+    const { content, html, markdown, jsonOverride, fragment, loadFromSchema } = options;
+    const hasContent = Array.isArray(content) ? content.length > 0 : Boolean(content);
+    return Boolean(hasContent || html || markdown || jsonOverride || fragment || loadFromSchema);
+  }
+
+  /**
+   * Initialize core services and lifecycle listeners once for DOCX mode.
+   * This method is idempotent and will only initialize once.
+   *
+   * @returns void
+   */
+  #ensureDocxCore(): void {
+    if (this.#coreInitialized) return;
+
     this.#createExtensionService();
     this.#createCommandService();
     this.#createSchema();
-    this.#createConverter();
-    this.#initMedia();
+    this.#bindLifecycleEvents();
 
-    if (!this.options.isHeadless) {
-      this.#initFonts();
-    }
+    this.#coreInitialized = true;
+  }
+
+  /**
+   * Bind lifecycle event handlers (idempotent).
+   * This method registers all lifecycle event listeners exactly once.
+   *
+   * @returns void
+   */
+  #bindLifecycleEvents(): void {
+    if (this.#eventsBound) return;
 
     this.on('beforeCreate', this.options.onBeforeCreate!);
-    this.emit('beforeCreate', { editor: this });
     this.on('contentError', this.options.onContentError!);
-
-    this.mount(this.options.element!);
 
     this.on('create', this.options.onCreate!);
     this.on('update', this.options.onUpdate!);
@@ -317,6 +363,25 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.on('list-definitions-change', this.options.onListDefinitionsChange!);
     this.on('fonts-resolved', this.options.onFontsResolved!);
     this.on('exception', this.options.onException!);
+
+    this.#eventsBound = true;
+  }
+
+  /**
+   * Initialize the editor with the given options
+   */
+  #init(): void {
+    this.#ensureDocxCore();
+    this.#createConverter();
+    this.#initMedia();
+
+    if (!this.options.isHeadless) {
+      this.#initFonts();
+    }
+
+    this.emit('beforeCreate', { editor: this });
+
+    this.mount(this.options.element!);
 
     if (!this.options.isHeadless) {
       this.initializeCollaborationData();
@@ -384,7 +449,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.#createView(el);
 
     window.setTimeout(() => {
-      if (this.isDestroyed) return;
+      if (this.lifecycle !== 'ready') return;
       this.emit('create', { editor: this });
     }, 0);
   }
@@ -394,6 +459,283 @@ export class Editor extends EventEmitter<EditorEventMap> {
       this.view.destroy();
     }
     this.view = undefined!;
+  }
+
+  /**
+   * Open a DOCX file into an existing editor instance.
+   *
+   * This method loads a document into the editor, transitioning the lifecycle from 'idle' to 'opening' to 'ready'.
+   * It supports multiple input formats including binary files, pre-extracted DOCX content, and pre-parsed document data.
+   *
+   * Race condition handling:
+   * - Prevents concurrent open() calls by checking for 'opening' state
+   * - Uses internal request ID tracking to ignore stale async operations
+   * - Automatically closes any existing document before opening a new one
+   *
+   * @param file - The document to open. Accepts multiple formats:
+   *   - Binary: File, Blob, Buffer, ArrayBuffer, or Uint8Array (will be extracted)
+   *   - Extracted: DocxFileEntry[] (pre-extracted XML entries)
+   *   - Pre-parsed: Object with content, media, mediaFiles, fonts, and optional fileSource
+   * @returns A promise that resolves when the document is fully loaded and ready
+   * @throws {Error} If called in 'destroyed' lifecycle state
+   * @throws {Error} If another open() operation is already in progress
+   * @throws {Error} If open() is called in non-docx mode
+   * @throws {Error} If file extraction or initialization fails
+   *
+   * @example
+   * // Open from a File object
+   * const file = new File([blob], 'document.docx');
+   * await editor.open(file);
+   *
+   * @example
+   * // Open from pre-extracted content
+   * const extracted = await Editor.loadXmlData(file);
+   * await editor.open(extracted);
+   *
+   * @example
+   * // Open from pre-parsed data
+   * await editor.open({
+   *   content: xmlArray,
+   *   media: mediaFiles,
+   *   mediaFiles: mediaFilesBase64,
+   *   fonts: fontFiles,
+   * });
+   */
+  async open(
+    file:
+      | File
+      | Blob
+      | Buffer
+      | ArrayBuffer
+      | Uint8Array
+      | DocxFileEntry[]
+      | {
+          content: EditorOptions['content'];
+          media?: Record<string, unknown>;
+          mediaFiles?: Record<string, unknown>;
+          fonts?: Record<string, unknown>;
+          fileSource?: File | Blob | Buffer | ArrayBuffer | Uint8Array | null;
+        },
+  ): Promise<void> {
+    if (this.options.mode !== 'docx') {
+      throw new Error('open() is only supported in docx mode.');
+    }
+
+    if (this.lifecycle === 'destroyed') {
+      throw new Error('Cannot open a document on a destroyed editor instance.');
+    }
+
+    if (this.lifecycle === 'opening') {
+      throw new Error('An open operation is already in progress.');
+    }
+
+    if (this.lifecycle === 'ready') {
+      this.close();
+    }
+
+    this.lifecycle = 'opening';
+    const requestId = ++this.#openRequestId;
+    this.emit('opening', { editor: this, requestId, source: file });
+
+    try {
+      const { content, media, mediaFiles, fonts, fileSource } = await this.#resolveDocSource(file);
+      if (requestId !== this.#openRequestId) return;
+
+      const normalizedFileSource =
+        fileSource ?? (this.#isBinarySource(file) ? (file as File | Blob | Buffer | ArrayBuffer | Uint8Array) : null);
+
+      this.setOptions({
+        content,
+        media: media ?? {},
+        mediaFiles: mediaFiles ?? {},
+        fonts: fonts ?? {},
+        fileSource: normalizedFileSource as File | Blob | Buffer | null,
+        customUpdatedFiles: {},
+        isHeaderFooterChanged: false,
+        isCustomXmlChanged: false,
+        initialState: null,
+        replacedFile: false,
+        collaborationIsReady: false,
+      });
+
+      this.#init();
+      this.lifecycle = 'ready';
+      this.emit('ready', { editor: this, requestId });
+    } catch (error) {
+      if (requestId === this.#openRequestId) {
+        this.lifecycle = 'idle';
+        const err = error instanceof Error ? error : new Error(String(error));
+        this.emit('openError', { editor: this, error: err });
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Close the current document without destroying the Editor instance.
+   *
+   * This method transitions the editor from 'ready' to 'closing' to 'idle', cleaning up all document-specific
+   * resources while preserving the editor instance for reuse. After closing, the editor can open a new document
+   * via the open() method.
+   *
+   * Cleanup operations performed:
+   * - Destroys header/footer child editors
+   * - Ends collaboration session (provider disconnect, ydoc destroy)
+   * - Unmounts ProseMirror view
+   * - Clears document content, media, fonts, and converter state
+   * - Resets collaboration flags and initial state
+   * - Clears isFocused flag and fontsImported array
+   *
+   * @returns void
+   *
+   * @example
+   * // Close current document and open a new one
+   * editor.close();
+   * await editor.open(newFile);
+   *
+   * @example
+   * // Close is idempotent - safe to call multiple times
+   * editor.close();
+   * editor.close(); // No-op, already closed
+   */
+  close(): void {
+    if (this.lifecycle === 'closing' || this.lifecycle === 'idle') return;
+    this.emit('closing', { editor: this });
+    this.lifecycle = 'closing';
+
+    this.destroyHeaderFooterEditors();
+    this.#endCollaboration();
+    this.unmount();
+
+    this.setOptions({
+      content: null,
+      media: {},
+      mediaFiles: {},
+      fonts: {},
+      customUpdatedFiles: {},
+      fileSource: null,
+      initialState: null,
+      isHeaderFooterChanged: false,
+      isCustomXmlChanged: false,
+      replacedFile: false,
+      collaborationIsReady: false,
+      isNewFile: false,
+      ydoc: null,
+      collaborationProvider: null,
+    });
+    this.options.shouldLoadComments = false;
+    this.originalState = undefined;
+
+    // Clear additional state
+    this.converter = undefined!;
+    this.fontsImported = [];
+    this.isFocused = false;
+
+    this.lifecycle = 'idle';
+    this.emit('closed', { editor: this });
+  }
+
+  #isBinarySource(input: unknown): input is File | Blob | Buffer | ArrayBuffer | Uint8Array {
+    if (!input) return false;
+    if (typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function' && Buffer.isBuffer(input)) return true;
+    if (typeof Blob !== 'undefined' && input instanceof Blob) return true;
+    if (typeof ArrayBuffer !== 'undefined' && input instanceof ArrayBuffer) return true;
+    if (typeof Uint8Array !== 'undefined' && input instanceof Uint8Array) return true;
+    // File is a subclass of Blob; keep an explicit check for clarity
+    if (typeof File !== 'undefined' && input instanceof File) return true;
+    return false;
+  }
+
+  /**
+   * Type guard to validate pre-extracted document object structure.
+   * Checks that the input is an object with a valid 'content' property.
+   *
+   * @param input - Value to validate
+   * @returns True if input is a valid pre-extracted document object
+   */
+  #isPreExtractedDoc(input: unknown): input is {
+    content: EditorOptions['content'];
+    media?: Record<string, unknown>;
+    mediaFiles?: Record<string, unknown>;
+    fonts?: Record<string, unknown>;
+    fileSource?: File | Blob | Buffer | ArrayBuffer | Uint8Array | null;
+  } {
+    if (!input || Array.isArray(input)) return false;
+    if (typeof input !== 'object') return false;
+
+    const candidate = input as { content?: unknown };
+    if (!('content' in candidate)) return false;
+
+    const { content } = candidate;
+    // Content must be an array or a string
+    return Array.isArray(content) || typeof content === 'string';
+  }
+
+  /**
+   * Normalize various open() inputs into the tuple expected by the converter.
+   */
+  async #resolveDocSource(
+    file:
+      | File
+      | Blob
+      | Buffer
+      | ArrayBuffer
+      | Uint8Array
+      | DocxFileEntry[]
+      | {
+          content: EditorOptions['content'];
+          media?: Record<string, unknown>;
+          mediaFiles?: Record<string, unknown>;
+          fonts?: Record<string, unknown>;
+          fileSource?: File | Blob | Buffer | ArrayBuffer | Uint8Array | null;
+        },
+  ): Promise<{
+    content: EditorOptions['content'];
+    media: Record<string, unknown>;
+    mediaFiles: Record<string, unknown>;
+    fonts: Record<string, unknown>;
+    fileSource?: File | Blob | Buffer | ArrayBuffer | Uint8Array | null;
+  }> {
+    if (!file) {
+      throw new Error('No file provided to open().');
+    }
+
+    if (Array.isArray(file)) {
+      return {
+        content: file,
+        media: {},
+        mediaFiles: {},
+        fonts: {},
+        fileSource: null,
+      };
+    }
+
+    if (this.#isPreExtractedDoc(file)) {
+      const { content, media = {}, mediaFiles = {}, fonts = {}, fileSource = null } = file;
+      return {
+        content,
+        media,
+        mediaFiles,
+        fonts,
+        fileSource,
+      };
+    }
+
+    const isNodeEnv = Boolean(this.options.isHeadless);
+    const [docx, media, mediaFiles, fonts] =
+      (await Editor.loadXmlData(file as File | Blob | Buffer | ArrayBuffer | Uint8Array, isNodeEnv)) || [];
+
+    if (!docx) {
+      throw new Error('Unable to load DOCX data.');
+    }
+
+    return {
+      content: docx,
+      media: media ?? {},
+      mediaFiles: mediaFiles ?? {},
+      fonts: fonts ?? {},
+      fileSource: file as File | Blob | Buffer | ArrayBuffer | Uint8Array,
+    };
   }
 
   /**
@@ -480,7 +822,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Check if editor is destroyed.
    */
   get isDestroyed(): boolean {
-    return this.view?.isDestroyed ?? true;
+    return this.lifecycle === 'destroyed';
   }
 
   /**
@@ -940,7 +1282,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Load the data from DOCX to be used in the schema.
    * Expects a DOCX file.
-   * @param fileSource - The DOCX file to load (File/Blob in browser, Buffer in Node.js)
+   * @param fileSource - The DOCX file to load (File/Blob in browser, Buffer/ArrayBuffer/Uint8Array in Node.js)
    * @param isNode - Whether the method is being called in a Node.js environment
    * @returns A promise that resolves to an array containing:
    *   - [0] xmlFiles - Array of XML files extracted from the DOCX
@@ -949,7 +1291,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    *   - [3] fonts - Object containing font files from the DOCX
    */
   static async loadXmlData(
-    fileSource: File | Blob | Buffer,
+    fileSource: File | Blob | Buffer | ArrayBuffer | Uint8Array,
     isNode: boolean = false,
   ): Promise<[DocxFileEntry[], Record<string, unknown>, Record<string, unknown>, Record<string, unknown>] | undefined> {
     if (!fileSource) return;
@@ -1878,13 +2220,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Destroy the editor and clean up resources
    */
   destroy(): void {
+    if (this.lifecycle === 'destroyed') return;
     this.emit('destroy');
-
-    this.unmount();
-
-    this.destroyHeaderFooterEditors();
-    this.#endCollaboration();
+    this.close();
     this.removeAllListeners();
+    this.lifecycle = 'destroyed';
   }
 
   destroyHeaderFooterEditors(): void {

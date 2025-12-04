@@ -64,3 +64,13 @@ AGENTS.md
 codex.config.json
 perf-baseline-results.json
 .claude
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# SDK example outputs
+sdks/**/example/output.docx
+sdks/**/test-output.docx
+sdks/**/test-sdk-output.docx
