@@ -14,7 +14,7 @@
     "test": "npx playwright test",
     "test:ui": "npx playwright test --ui -g",
     "test:layout:docker": "docker run --rm --cpus=4 --memory=8gb -e LAYOUT_ENGINE=1 -e PLAYWRIGHT_ARGS='tests/visuals/layout-engine.spec.js' -v ./test-results:/app/test-results -v ./tests:/app/tests -v ./reporters:/app/reporters playwright",
-    "test:layout": "LAYOUT_ENGINE=1 npx playwright test tests/visuals/layout-engine.spec.js",
+    "test:layout": "LAYOUT_ENGINE=1 npx playwright test tests/visuals/layout-engine.spec.js --reporter=list",
     "template": "cd templates/vue && npm run dev",
     "build:superdoc": "cd ../ && npm run pack && cp ./packages/superdoc/superdoc.tgz ./e2e-tests/superdoc.tgz && cd e2e-tests/templates/vue && npm install file:../../superdoc.tgz",
     "reinstall": "npm run build:superdoc",

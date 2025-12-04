@@ -121,8 +121,8 @@ export function buildSectionRangesFromParagraphs(
       headerRefs: sectionData.headerRefs,
       footerRefs: sectionData.footerRefs,
       numbering: sectionData.numbering,
+      vAlign: sectionData.vAlign,
     };
-    // Range diagnostics removed to reduce debug noise
     ranges.push(range);
 
     currentStart = item.index + 1;
@@ -195,6 +195,7 @@ export function createFinalSectionFromBodySectPr(
     titlePg: bodySectionData.titlePg ?? false,
     headerRefs: bodySectionData.headerRefs,
     footerRefs: bodySectionData.footerRefs,
+    vAlign: bodySectionData.vAlign,
   };
 }
 

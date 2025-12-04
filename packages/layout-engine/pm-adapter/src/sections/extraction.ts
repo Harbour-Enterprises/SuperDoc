@@ -46,6 +46,7 @@ type SectionType = 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
 type Orientation = 'portrait' | 'landscape';
 type HeaderRefType = Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
 type NumberingFormat = 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+type VerticalAlign = 'top' | 'center' | 'bottom' | 'both';
 
 interface SectionElement {
   name: string;
@@ -200,7 +201,58 @@ function extractColumns(elements: SectionElement[]): { count: number; gap: numbe
 }
 
 /**
- * Extract section data (margins, type, page size, orientation, columns) from a paragraph node.
+ * Extract vertical alignment from <w:vAlign> element.
+ * Controls how content is positioned vertically within the page.
+ *
+ * OOXML values:
+ * - 'top': Content aligned to top of text area (default)
+ * - 'center': Content vertically centered in text area
+ * - 'bottom': Content aligned to bottom of text area
+ * - 'both': Content justified vertically (distributed)
+ *
+ * @param elements - Array of section property elements from w:sectPr
+ * @returns The vertical alignment value if valid w:vAlign element found, undefined otherwise
+ *
+ * @example
+ * ```typescript
+ * const elements = [
+ *   { name: 'w:vAlign', attributes: { 'w:val': 'center' } }
+ * ];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: 'center'
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Missing vAlign element
+ * const elements = [{ name: 'w:pgSz', attributes: { 'w:w': '12240' } }];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: undefined
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Invalid vAlign value
+ * const elements = [
+ *   { name: 'w:vAlign', attributes: { 'w:val': 'invalid' } }
+ * ];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: undefined
+ * ```
+ */
+function extractVerticalAlign(elements: SectionElement[]): VerticalAlign | undefined {
+  const vAlign = elements.find((el) => el?.name === 'w:vAlign');
+  if (!vAlign?.attributes) return undefined;
+
+  const val = vAlign.attributes['w:val'];
+  if (val === 'top' || val === 'center' || val === 'bottom' || val === 'both') {
+    return val;
+  }
+  return undefined;
+}
+
+/**
+ * Extract section data (margins, type, page size, orientation, columns, vAlign) from a paragraph node.
  * Prefers normalized attrs.sectionMargins (inches), falls back to raw sectPr parsing (twips).
  */
 export function extractSectionData(para: PMNode): {
@@ -214,6 +266,7 @@ export function extractSectionData(para: PMNode): {
   headerRefs?: HeaderRefType;
   footerRefs?: HeaderRefType;
   numbering?: { format?: NumberingFormat; start?: number };
+  vAlign?: VerticalAlign;
 } | null {
   const attrs = (para.attrs ?? {}) as Record<string, unknown>;
 
@@ -247,7 +300,20 @@ export function extractSectionData(para: PMNode): {
   const footerRefs = extractHeaderFooterRefs(sectPrElements, 'w:footerReference');
   const numbering = extractPageNumbering(sectPrElements);
   const columnsPx = extractColumns(sectPrElements);
+  const vAlign = extractVerticalAlign(sectPrElements);
 
   // When sectPrElements exist, always return data (even if minimal) since type defaults to 'nextPage'
-  return { headerPx, footerPx, type, pageSizePx, orientation, columnsPx, titlePg, headerRefs, footerRefs, numbering };
+  return {
+    headerPx,
+    footerPx,
+    type,
+    pageSizePx,
+    orientation,
+    columnsPx,
+    titlePg,
+    headerRefs,
+    footerRefs,
+    numbering,
+    vAlign,
+  };
 }

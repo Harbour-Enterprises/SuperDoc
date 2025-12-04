@@ -1,4 +1,4 @@
-import type { FlowBlock } from '@superdoc/contracts';
+import type { FlowBlock, SectionVerticalAlign } from '@superdoc/contracts';
 
 /**
  * Section-level formatting properties that control page layout.
@@ -11,12 +11,14 @@ import type { FlowBlock } from '@superdoc/contracts';
  * @property pageSize - Page dimensions in pixels (width and height)
  * @property columns - Multi-column layout configuration
  * @property orientation - Page orientation (portrait or landscape)
+ * @property vAlign - Vertical alignment of content within the section's pages
  */
 export type SectionProps = {
   margins?: { header?: number; footer?: number };
   pageSize?: { w: number; h: number };
   columns?: { count: number; gap: number };
   orientation?: 'portrait' | 'landscape';
+  vAlign?: SectionVerticalAlign;
 };
 
 /**
@@ -47,6 +49,10 @@ const _snapshotSectionProps = (block: FlowBlock): SectionProps | null => {
   if (block.orientation) {
     hasProps = true;
     props.orientation = block.orientation;
+  }
+  if (block.vAlign) {
+    hasProps = true;
+    props.vAlign = block.vAlign;
   }
   return hasProps ? props : null;
 };
@@ -111,6 +117,9 @@ export function computeNextSectionPropsAtBreak(blocks: FlowBlock[]): Map<number,
     }
     if (source.orientation) {
       props.orientation = source.orientation;
+    }
+    if (source.vAlign) {
+      props.vAlign = source.vAlign;
     }
     return props;
   };
