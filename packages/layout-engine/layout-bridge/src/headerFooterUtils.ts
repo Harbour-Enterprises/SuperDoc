@@ -271,11 +271,12 @@ export function getHeaderFooterTypeForSection(
   pageNumber: number,
   sectionIndex: number,
   identifier: MultiSectionHeaderFooterIdentifier,
-  options?: { kind?: 'header' | 'footer' },
+  options?: { kind?: 'header' | 'footer'; sectionPageNumber?: number },
 ): HeaderFooterType | null {
   if (pageNumber <= 0) return null;
 
   const kind = options?.kind ?? 'header';
+  const sectionPageNumber = options?.sectionPageNumber ?? pageNumber;
 
   // Get section-specific IDs, falling back to legacy IDs for backward compatibility
   const sectionIds =
@@ -293,10 +294,9 @@ export function getHeaderFooterTypeForSection(
   const sectionTitlePg = identifier.sectionTitlePg.get(sectionIndex) ?? identifier.titlePg;
   const titlePgEnabled = sectionTitlePg && hasFirst;
 
-  // Note: Word's titlePg behavior applies only to page 1 of the document, not the first page
-  // of each section. This matches the OOXML spec where titlePg is a document-level setting.
-  const isFirstPage = pageNumber === 1;
-  if (isFirstPage && titlePgEnabled) {
+  // Use the section-relative page number to determine "first page" variants
+  const isFirstPageOfSection = sectionPageNumber === 1;
+  if (isFirstPageOfSection && titlePgEnabled) {
     return 'first';
   }
 
@@ -338,13 +338,17 @@ export function getHeaderFooterTypeForSection(
 export function getHeaderFooterIdForPage(
   page: Page,
   identifier: MultiSectionHeaderFooterIdentifier,
-  options?: { kind?: 'header' | 'footer' },
+  options?: { kind?: 'header' | 'footer'; sectionPageNumber?: number },
 ): string | null {
   const kind = options?.kind ?? 'header';
   const sectionIndex = page.sectionIndex ?? 0;
+  const sectionPageNumber = options?.sectionPageNumber ?? page.number;
 
   // Determine which variant type to use (default, first, even, odd)
-  const variantType = getHeaderFooterTypeForSection(page.number, sectionIndex, identifier, { kind });
+  const variantType = getHeaderFooterTypeForSection(page.number, sectionIndex, identifier, {
+    kind,
+    sectionPageNumber,
+  });
   if (!variantType) return null;
 
   // First try to get from page's sectionRefs (most specific, stamped during layout)
@@ -411,13 +415,22 @@ export function resolveHeaderFooterForPageAndSection(
   const kind = options?.kind ?? 'header';
   const sectionIndex = page.sectionIndex ?? 0;
   const pageNumber = page.number;
+  const sectionFirstPageNumbers = new Map<number, number>();
+  for (const layoutPage of layout.pages) {
+    const idx = layoutPage.sectionIndex ?? 0;
+    if (!sectionFirstPageNumbers.has(idx)) {
+      sectionFirstPageNumbers.set(idx, layoutPage.number);
+    }
+  }
+  const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
+  const sectionPageNumber = typeof firstPageInSection === 'number' ? pageNumber - firstPageInSection + 1 : pageNumber;
 
   // Determine variant type for this section
-  const type = getHeaderFooterTypeForSection(pageNumber, sectionIndex, identifier, { kind });
+  const type = getHeaderFooterTypeForSection(pageNumber, sectionIndex, identifier, { kind, sectionPageNumber });
   if (!type) return null;
 
   // Get content ID for this page/section
-  const contentId = getHeaderFooterIdForPage(page, identifier, { kind });
+  const contentId = getHeaderFooterIdForPage(page, identifier, { kind, sectionPageNumber });
 
   // Look up the header/footer layout slot
   const slot = layout.headerFooter?.[type];

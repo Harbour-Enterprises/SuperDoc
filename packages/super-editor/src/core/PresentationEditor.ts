@@ -3200,12 +3200,22 @@ export class PresentationEditor extends EventEmitter {
     const legacyIdentifier =
       this.#headerFooterIdentifier ??
       extractIdentifierFromConverter((this.#editor as Editor & { converter?: unknown }).converter);
+    const sectionFirstPageNumbers = new Map<number, number>();
+    for (const p of layout.pages) {
+      const idx = p.sectionIndex ?? 0;
+      if (!sectionFirstPageNumbers.has(idx)) {
+        sectionFirstPageNumbers.set(idx, p.number);
+      }
+    }
 
     return (pageNumber, pageMargins, page) => {
       // Use section-aware type resolution when we have a multi-section identifier and page section info
       const sectionIndex = page?.sectionIndex ?? 0;
+      const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
+      const sectionPageNumber =
+        typeof firstPageInSection === 'number' ? pageNumber - firstPageInSection + 1 : pageNumber;
       const headerFooterType = multiSectionId
-        ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind })
+        ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
         : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
 
       // Get the section-specific rId for this page (from sectionRefs stamped during layout)
