@@ -701,7 +701,36 @@ export function filterOutRootInlineNodes(content = []) {
     'structuredContent',
   ]);
 
-  return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+  const PRESERVABLE_INLINE_XML_NAMES = {
+    bookmarkStart: 'w:bookmarkStart',
+    bookmarkEnd: 'w:bookmarkEnd',
+  };
+
+  const result = [];
+
+  content.forEach((node) => {
+    if (!node || typeof node.type !== 'string') return;
+    const type = node.type;
+    const preservableNodeName = PRESERVABLE_INLINE_XML_NAMES[type];
+
+    if (!INLINE_TYPES.has(type)) {
+      result.push(node);
+    } else if (preservableNodeName) {
+      result.push({
+        type: 'passthroughBlock',
+        attrs: {
+          originalName: preservableNodeName,
+          originalXml: {
+            name: preservableNodeName,
+            attributes: { ...(node.attrs || {}) },
+            elements: [],
+          },
+        },
+      });
+    }
+  });
+
+  return result;
 }
 
 /**

@@ -30,13 +30,13 @@ describe('filterOutRootInlineNodes', () => {
     const result = filterOutRootInlineNodes(input);
     const types = result.map((x) => x.type);
 
-    expect(types).toEqual(['paragraph', 'table']);
+    expect(types).toEqual(['passthroughBlock', 'passthroughBlock', 'paragraph', 'table']);
   });
 
   it('returns an empty array when only inline nodes are provided', () => {
     const input = [n('text'), n('bookmarkStart'), n('bookmarkEnd'), n('lineBreak'), n('mention')];
     const result = filterOutRootInlineNodes(input);
-    expect(result).toEqual([]);
+    expect(result.map((n) => n.type)).toEqual(['passthroughBlock', 'passthroughBlock']);
   });
 
   it('returns the same array when there are no inline nodes', () => {
@@ -63,7 +63,7 @@ describe('filterOutRootInlineNodes', () => {
     const input = [n('text'), n('bookmarkStart'), n('paragraph'), n('lineBreak'), n('table')];
     const result = filterOutRootInlineNodes(input, editor);
     const types = result.map((x) => x.type);
-    expect(types).toEqual(['paragraph', 'table']);
+    expect(types).toEqual(['passthroughBlock', 'paragraph', 'table']);
   });
 });
 
