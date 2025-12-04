@@ -1440,16 +1440,65 @@ export class DomPainter {
         const isListFirstLine =
           index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
 
+        /**
+         * Determines if this line contains segments with explicit X positioning (typically from tabs).
+         * When segments have explicit X positions, they are rendered with absolute positioning,
+         * which means CSS textIndent has no effect on their placement.
+         */
+        const hasExplicitSegmentPositioning = line.segments?.some((seg) => seg.x !== undefined);
+
+        /**
+         * Identifies first lines with hanging indents that require special handling.
+         * Hanging indents (e.g., w:ind w:left="360" w:hanging="360") normally use CSS textIndent
+         * to pull the first line back. However, when combined with explicit segment positioning,
+         * the segments are already calculated at the correct X position, so we need to adjust
+         * paddingLeft instead of using textIndent.
+         */
+        const isFirstLineWithHanging = index === 0 && !fragment.continuesFromPrev && (paraIndent?.hanging ?? 0) > 0;
+
         // Apply paragraph indent via padding (skip for list first lines)
         if (paraIndentLeft && !isListFirstLine) {
-          lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+          /**
+           * Special handling for first lines with both hanging indent AND explicit segment positioning.
+           *
+           * In Word, hanging indents work by:
+           * 1. Setting leftIndent (e.g., 360 twips)
+           * 2. Pulling the first line back by hanging amount (e.g., 360 twips)
+           * 3. Result: first line starts at leftIndent - hanging = 0
+           *
+           * Normally we implement this with:
+           * - paddingLeft = leftIndent
+           * - textIndent = -hanging
+           *
+           * However, when tabs are present, segments have explicit X positions calculated
+           * during layout that are already relative to the correct start position (leftIndent - hanging).
+           * Since these segments use absolute positioning, textIndent doesn't affect them.
+           *
+           * Therefore, we must reduce paddingLeft by the hanging amount to match where the
+           * absolutely positioned segments expect to start.
+           *
+           * Example:
+           * - leftIndent=360, hanging=360
+           * - Normal case: paddingLeft=360px, textIndent=-360px → first line at 0
+           * - With tabs: paddingLeft=0px, no textIndent → segments already positioned at correct X
+           */
+          if (isFirstLineWithHanging && hasExplicitSegmentPositioning) {
+            const adjustedPadding = paraIndentLeft - (paraIndent?.hanging ?? 0);
+            lineEl.style.paddingLeft = `${adjustedPadding}px`;
+          } else {
+            lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+          }
         }
         if (paraIndentRight) {
           lineEl.style.paddingRight = `${paraIndentRight}px`;
         }
-        // Apply first-line/hanging text-indent (skip for list first lines)
+        // Apply first-line/hanging text-indent (skip for list first lines and lines with explicit positioning)
+        // When using explicit segment positioning, segments are absolutely positioned and textIndent
+        // has no effect, so we skip it to avoid confusion.
         if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
-          lineEl.style.textIndent = `${firstLineOffset}px`;
+          if (!hasExplicitSegmentPositioning) {
+            lineEl.style.textIndent = `${firstLineOffset}px`;
+          }
         } else if (firstLineOffset && !isListFirstLine) {
           lineEl.style.textIndent = '0px';
         }
