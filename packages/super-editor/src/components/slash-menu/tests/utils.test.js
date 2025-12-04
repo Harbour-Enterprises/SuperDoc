@@ -96,6 +96,8 @@ describe('utils.js', () => {
         isInTable: false,
         isInList: false,
         isInSectionNode: false,
+        isInToc: false,
+        tocNode: null,
         currentNodeType: 'paragraph',
         activeMarks: [],
 
@@ -289,6 +291,156 @@ describe('utils.js', () => {
 
       expect(context.documentMode).toBe('viewing');
       expect(context.isEditable).toBe(false);
+    });
+
+    it('should detect TOC nodes in document structure', async () => {
+      const mockEvent = { clientX: 100, clientY: 200 };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 25 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'paragraph' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 2,
+        node: (depth) => {
+          if (depth === 2) {
+            return { type: { name: 'tableOfContents' } };
+          }
+          return { type: { name: 'doc' } };
+        },
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.isInToc).toBe(true);
+      expect(context.tocNode).toBeDefined();
+      expect(context.tocNode.type.name).toBe('tableOfContents');
+    });
+
+    it('should detect TOC via documentPartObject with docPartGallery attribute', async () => {
+      const mockEvent = { clientX: 150, clientY: 250 };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 30 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'paragraph' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 3,
+        node: (depth) => {
+          if (depth === 3) {
+            return {
+              type: { name: 'documentPartObject' },
+              attrs: { docPartGallery: 'Table of Contents' },
+            };
+          }
+          if (depth === 2) {
+            return { type: { name: 'paragraph' } };
+          }
+          return { type: { name: 'doc' } };
+        },
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.isInToc).toBe(true);
+      expect(context.tocNode).toBeDefined();
+      expect(context.tocNode.type.name).toBe('documentPartObject');
+    });
+
+    it('should detect TOC via paragraph with TOC styleId', async () => {
+      const mockEvent = { clientX: 200, clientY: 300 };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 35 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 2,
+        node: (depth) => {
+          if (depth === 2) {
+            return {
+              type: { name: 'paragraph' },
+              attrs: {
+                paragraphProperties: { styleId: 'TOC1' },
+                isTocEntry: true,
+              },
+            };
+          }
+          return { type: { name: 'doc' } };
+        },
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.isInToc).toBe(true);
+      expect(context.tocNode).toBeDefined();
+      expect(context.tocNode.type.name).toBe('paragraph');
+    });
+
+    it('should detect TOC via paragraph with isTocEntry attribute', async () => {
+      const mockEvent = { clientX: 250, clientY: 350 };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 40 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 2,
+        node: (depth) => {
+          if (depth === 2) {
+            return {
+              type: { name: 'paragraph' },
+              attrs: {
+                isTocEntry: true,
+              },
+            };
+          }
+          return { type: { name: 'doc' } };
+        },
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.isInToc).toBe(true);
+      expect(context.tocNode).toBeDefined();
+    });
+
+    it('should not detect TOC when not in TOC structure', async () => {
+      const mockEvent = { clientX: 100, clientY: 200 };
+
+      mockReadFromClipboard.mockResolvedValue({ html: null, text: null });
+      mockSelectionHasNodeOrMark.mockReturnValue(false);
+      mockEditor.view.posAtCoords.mockReturnValue({ pos: 15 });
+      mockEditor.view.state.doc.nodeAt.mockReturnValue({ type: { name: 'text' } });
+      mockEditor.view.state.doc.resolve.mockImplementation(() => ({
+        depth: 2,
+        node: (depth) => {
+          if (depth === 2) {
+            return { type: { name: 'paragraph' }, attrs: {} };
+          }
+          return { type: { name: 'doc' } };
+        },
+        marks: () => [],
+        nodeBefore: null,
+        nodeAfter: null,
+      }));
+
+      const context = await getEditorContext(mockEditor, mockEvent);
+
+      expect(context.isInToc).toBe(false);
+      expect(context.tocNode).toBeNull();
     });
 
     it('should derive canUndo/canRedo from editor command availability', async () => {
@@ -512,7 +664,13 @@ describe('utils.js', () => {
       const result = __getStructureFromResolvedPosForTest(state, 42);
 
       expect(state.doc.resolve).toHaveBeenCalledWith(42);
-      expect(result).toEqual({ isInTable: true, isInList: false, isInSectionNode: false });
+      expect(result).toEqual({
+        isInTable: true,
+        isInList: false,
+        isInSectionNode: false,
+        isInToc: false,
+        tocNode: null,
+      });
     });
 
     it('should return null when position resolution fails', () => {
