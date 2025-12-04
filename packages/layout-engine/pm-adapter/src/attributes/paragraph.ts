@@ -927,7 +927,10 @@ export const computeParagraphAttrs = (
           typeof tabObj.tabType === 'string' ? tabObj.tabType : typeof tabObj.val === 'string' ? tabObj.val : undefined;
 
         // Validate and extract pos (position in twips)
-        const pos = pickNumber(tabObj.originalPos ?? tabObj.pos);
+        // Priority: originalPos > pos. If originalPos is absent, preserve pos as both pos and originalPos
+        // so downstream normalization (which doesn't know about nesting) keeps twips and skips px heuristics.
+        const originalPos = pickNumber(tabObj.originalPos);
+        const pos = originalPos ?? pickNumber(tabObj.pos);
 
         // Skip entry if required fields are missing or invalid
         if (!val || pos == null) {
@@ -937,16 +940,17 @@ export const computeParagraphAttrs = (
         // Build normalized tab stop object with validated properties
         const normalized: Record<string, unknown> = { val, pos };
 
+        // Set originalPos when available; if absent, mirror pos to preserve twips through later flattening
+        if (originalPos != null && Number.isFinite(originalPos)) {
+          normalized.originalPos = originalPos;
+        } else {
+          normalized.originalPos = pos;
+        }
+
         // Validate and add optional leader property
         const leader = tabObj.leader;
         if (typeof leader === 'string' && leader.length > 0) {
           normalized.leader = leader;
-        }
-
-        // Validate and add optional originalPos property
-        const originalPos = pickNumber(tabObj.originalPos);
-        if (originalPos != null && Number.isFinite(originalPos)) {
-          normalized.originalPos = originalPos;
         }
 
         unwrapped.push(normalized);
