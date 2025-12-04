@@ -302,10 +302,12 @@ describe('DomPainter hanging indent with tabs', () => {
       const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
       expect(lineEl).toBeTruthy();
 
-      // Normal paddingLeft (no hanging)
-      expect(lineEl.style.paddingLeft).toBe('360px');
+      // With explicit positioning, paddingLeft includes firstLine offset: 360 + 720 = 1080
+      // This is because absolutely positioned segments are not affected by textIndent,
+      // so we must incorporate the firstLine offset into paddingLeft instead.
+      expect(lineEl.style.paddingLeft).toBe('1080px');
 
-      // With explicit positioning, textIndent is skipped
+      // With explicit positioning, textIndent is skipped (it doesn't affect absolute positioning)
       expect(lineEl.style.textIndent).toBe('');
     });
   });
@@ -499,8 +501,10 @@ describe('DomPainter hanging indent with tabs', () => {
       const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
       expect(lineEl).toBeTruthy();
 
-      // Negative hanging is treated as 0 by the (paraIndent?.hanging ?? 0) > 0 check
-      expect(lineEl.style.paddingLeft).toBe('360px');
+      // Negative hanging (-100) behaves like positive firstLine (+100).
+      // firstLineOffset = firstLine(0) - hanging(-100) = 100
+      // With explicit positioning: paddingLeft = left(360) + firstLineOffset(100) = 460
+      expect(lineEl.style.paddingLeft).toBe('460px');
     });
 
     it('should handle very large indent values', () => {

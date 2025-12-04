@@ -1448,44 +1448,42 @@ export class DomPainter {
         const hasExplicitSegmentPositioning = line.segments?.some((seg) => seg.x !== undefined);
 
         /**
-         * Identifies first lines with hanging indents that require special handling.
-         * Hanging indents (e.g., w:ind w:left="360" w:hanging="360") normally use CSS textIndent
-         * to pull the first line back. However, when combined with explicit segment positioning,
-         * the segments are already calculated at the correct X position, so we need to adjust
-         * paddingLeft instead of using textIndent.
+         * Identifies first lines that require special indent handling.
+         * This includes both hanging indents (negative firstLineOffset) and positive firstLine indents.
+         * When combined with explicit segment positioning, we must adjust paddingLeft instead of
+         * using textIndent, since absolutely positioned segments are not affected by textIndent.
          */
-        const isFirstLineWithHanging = index === 0 && !fragment.continuesFromPrev && (paraIndent?.hanging ?? 0) > 0;
+        const isFirstLine = index === 0 && !fragment.continuesFromPrev;
 
         // Apply paragraph indent via padding (skip for list first lines)
-        if (paraIndentLeft && !isListFirstLine) {
+        if (!isListFirstLine) {
           /**
-           * Special handling for first lines with both hanging indent AND explicit segment positioning.
+           * Special handling for first lines with explicit segment positioning.
            *
-           * In Word, hanging indents work by:
-           * 1. Setting leftIndent (e.g., 360 twips)
-           * 2. Pulling the first line back by hanging amount (e.g., 360 twips)
-           * 3. Result: first line starts at leftIndent - hanging = 0
-           *
-           * Normally we implement this with:
+           * Normally we implement first-line/hanging indents with:
            * - paddingLeft = leftIndent
-           * - textIndent = -hanging
+           * - textIndent = firstLine - hanging (positive for firstLine, negative for hanging)
            *
            * However, when tabs are present, segments have explicit X positions calculated
-           * during layout that are already relative to the correct start position (leftIndent - hanging).
-           * Since these segments use absolute positioning, textIndent doesn't affect them.
+           * during layout that are relative to the content area start. Since these segments
+           * use absolute positioning, CSS textIndent doesn't affect them.
            *
-           * Therefore, we must reduce paddingLeft by the hanging amount to match where the
-           * absolutely positioned segments expect to start.
+           * Therefore, we must incorporate the firstLineOffset into paddingLeft to match
+           * where the absolutely positioned segments expect to start.
            *
-           * Example:
-           * - leftIndent=360, hanging=360
-           * - Normal case: paddingLeft=360px, textIndent=-360px → first line at 0
-           * - With tabs: paddingLeft=0px, no textIndent → segments already positioned at correct X
+           * Examples:
+           * - leftIndent=360, hanging=360 (firstLineOffset=-360)
+           *   Normal: paddingLeft=360px, textIndent=-360px → first line content at 0px
+           *   With tabs: paddingLeft=0px, no textIndent → segments positioned correctly
+           *
+           * - leftIndent=360, firstLine=720 (firstLineOffset=+720)
+           *   Normal: paddingLeft=360px, textIndent=720px → first line content at 1080px
+           *   With tabs: paddingLeft=1080px, no textIndent → segments positioned correctly
            */
-          if (isFirstLineWithHanging && hasExplicitSegmentPositioning) {
-            const adjustedPadding = paraIndentLeft - (paraIndent?.hanging ?? 0);
+          if (isFirstLine && hasExplicitSegmentPositioning && firstLineOffset !== 0) {
+            const adjustedPadding = paraIndentLeft + firstLineOffset;
             lineEl.style.paddingLeft = `${adjustedPadding}px`;
-          } else {
+          } else if (paraIndentLeft) {
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
           }
         }
