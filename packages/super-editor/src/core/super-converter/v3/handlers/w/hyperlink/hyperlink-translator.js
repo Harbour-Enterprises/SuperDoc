@@ -34,8 +34,9 @@ const validXmlAttributes = [
   {
     xmlName: 'w:history',
     sdName: 'history',
-    encode: (attributes) => attributes['w:history'] === '1' || attributes['w:history'] === 'true',
-    decode: (attributes) => (attributes['history'] ? '1' : '0'),
+    encode: (attributes) =>
+      attributes['w:history'] == null ? null : attributes['w:history'] === '1' || attributes['w:history'] === 'true',
+    decode: (attributes) => (attributes['history'] == null ? null : attributes['history'] ? '1' : '0'),
   },
   _createAttributeHandler('w:tooltip', 'tooltip'),
   _createAttributeHandler('r:id', 'rId'),
