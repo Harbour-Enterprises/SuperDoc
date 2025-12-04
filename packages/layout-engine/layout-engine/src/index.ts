@@ -934,6 +934,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           pageSize: ahead.pageSize ?? effectiveBlock.pageSize,
           columns: ahead.columns ?? effectiveBlock.columns,
           orientation: ahead.orientation ?? effectiveBlock.orientation,
+          vAlign: ahead.vAlign ?? effectiveBlock.vAlign,
         };
       }
 
@@ -1327,8 +1328,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         fragmentBottom += fragment.height;
       } else {
         // Para and list-item fragments don't have a height property
-        // Use a default estimate for vertical alignment calculations
-        fragmentBottom += DEFAULT_PARAGRAPH_LINE_HEIGHT_PX;
+        // Calculate height based on number of lines spanned by the fragment
+        const lineCount = fragment.toLine - fragment.fromLine;
+        fragmentBottom += lineCount * DEFAULT_PARAGRAPH_LINE_HEIGHT_PX;
       }
 
       if (fragmentBottom > maxY) maxY = fragmentBottom;
