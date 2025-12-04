@@ -84,6 +84,22 @@ const layoutLog = (...args: unknown[]): void => {
   console.log(...args);
 };
 
+/**
+ * Format a page number according to the specified numbering style.
+ *
+ * Converts a numeric page number into the requested format for display in headers/footers
+ * and page navigation. Supports multiple numbering styles commonly found in word processing
+ * documents.
+ *
+ * @param num - The numeric page number to format (1-based, positive integer)
+ * @param format - The numbering format style to apply
+ *   - 'decimal': Standard numeric format (1, 2, 3, ...)
+ *   - 'lowerLetter': Lowercase alphabetic (a, b, c, ..., z, aa, ab, ...)
+ *   - 'upperLetter': Uppercase alphabetic (A, B, C, ..., Z, AA, AB, ...)
+ *   - 'lowerRoman': Lowercase Roman numerals (i, ii, iii, iv, v, ...)
+ *   - 'upperRoman': Uppercase Roman numerals (I, II, III, IV, V, ...)
+ * @returns The formatted page number as a string
+ */
 function formatPageNumber(
   num: number,
   format: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman',
@@ -104,6 +120,30 @@ function formatPageNumber(
   }
 }
 
+/**
+ * Convert a numeric value to alphabetic representation (Excel-style column naming).
+ *
+ * Converts positive integers to alphabetic sequences using base-26 representation
+ * where A=1, B=2, ..., Z=26, AA=27, AB=28, etc. This mimics the column naming
+ * convention used in spreadsheet applications.
+ *
+ * Algorithm: Uses division by 26 with adjustment for 1-based indexing (no zero digit).
+ * Each iteration computes the rightmost letter and shifts the remaining value.
+ *
+ * Edge cases:
+ * - Values less than 1 are treated as 1 (returns 'a' or 'A')
+ * - Non-integer values are floored before conversion
+ *
+ * @param num - The numeric value to convert (positive integer expected)
+ * @param uppercase - If true, returns uppercase letters (A, B, C); if false, lowercase (a, b, c)
+ * @returns The alphabetic representation as a string
+ * @example
+ * toLetter(1, true)   // Returns 'A'
+ * toLetter(26, true)  // Returns 'Z'
+ * toLetter(27, true)  // Returns 'AA'
+ * toLetter(52, true)  // Returns 'AZ'
+ * toLetter(702, true) // Returns 'ZZ'
+ */
 function toLetter(num: number, uppercase: boolean): string {
   let result = '';
   let n = Math.max(1, Math.floor(num));
@@ -116,6 +156,30 @@ function toLetter(num: number, uppercase: boolean): string {
   return result;
 }
 
+/**
+ * Convert a numeric value to Roman numeral representation.
+ *
+ * Converts positive integers to uppercase Roman numerals using standard Roman numeral
+ * notation with subtractive notation (e.g., IV for 4, IX for 9, XL for 40, etc.).
+ *
+ * Algorithm: Uses a greedy approach with a lookup table of value-numeral pairs ordered
+ * from largest to smallest. Repeatedly subtracts the largest possible value and appends
+ * the corresponding numeral until the number is reduced to zero.
+ *
+ * Supported range: 1 to 3999 (standard Roman numeral range)
+ * - Values less than 1 are treated as 1 (returns 'I')
+ * - Values greater than 3999 will produce non-standard extended Roman numerals
+ * - Non-integer values are floored before conversion
+ *
+ * @param num - The numeric value to convert (positive integer expected, typically 1-3999)
+ * @returns The Roman numeral representation as an uppercase string
+ * @example
+ * toRoman(1)    // Returns 'I'
+ * toRoman(4)    // Returns 'IV'
+ * toRoman(9)    // Returns 'IX'
+ * toRoman(58)   // Returns 'LVIII'
+ * toRoman(1994) // Returns 'MCMXCIV'
+ */
 function toRoman(num: number): string {
   const lookup: Array<[number, string]> = [
     [1000, 'M'],
@@ -814,11 +878,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       // after this break uses the upcoming section's layout (page size, margins, columns).
       let effectiveBlock: SectionBreakBlock = block as SectionBreakBlock;
       const ahead = nextSectionPropsAtBreak.get(index);
+      const hasSectionIndex = typeof effectiveBlock.attrs?.sectionIndex === 'number';
+      const appliedLookahead = Boolean(ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex);
       // Only adjust properties for breaks originating from DOCX sectPr (end-tagged semantics).
       // Skip the lookahead for PM-adapter blocks that already embed upcoming section metadata
       // via sectionIndex; those blocks have pre-resolved properties and don't need the map.
-      const hasSectionIndex = typeof effectiveBlock.attrs?.sectionIndex === 'number';
-      if (ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex) {
+      if (appliedLookahead) {
         effectiveBlock = {
           ...effectiveBlock,
           margins: ahead.margins
@@ -897,9 +962,31 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
       // Handle mid-page region changes
       if (breakInfo.forceMidPageRegion && block.columns) {
-        const state = paginator.ensurePage();
+        let state = paginator.ensurePage();
+        const columnIndexBefore = state.columnIndex;
+
+        // Validate and normalize column count to ensure it's a positive integer
+        const rawCount = block.columns.count;
+        const validatedCount =
+          typeof rawCount === 'number' && Number.isFinite(rawCount) && rawCount > 0
+            ? Math.max(1, Math.floor(rawCount))
+            : 1;
+
+        // Validate and normalize gap to ensure it's non-negative
+        const rawGap = block.columns.gap;
+        const validatedGap =
+          typeof rawGap === 'number' && Number.isFinite(rawGap) && rawGap >= 0 ? Math.max(0, rawGap) : 0;
+
+        const newColumns = { count: validatedCount, gap: validatedGap };
+
+        // If we reduce column count and are currently in a column that won't exist
+        // in the new layout, start a fresh page to avoid overwriting earlier columns.
+        if (columnIndexBefore >= newColumns.count) {
+          state = paginator.startNewPage();
+        }
+
         // Start a new mid-page region with the new column configuration
-        startMidPageRegion(state, { count: block.columns.count, gap: block.columns.gap });
+        startMidPageRegion(state, newColumns);
       }
 
       // Handle forced page breaks
@@ -1285,6 +1372,40 @@ export function layoutHeaderFooter(
 
 // moved layouters and PM helpers to dedicated modules
 
+/**
+ * Normalize and validate column layout configuration, computing individual column widths.
+ *
+ * Takes raw column layout parameters and the available content width, then calculates
+ * the actual width each column should have after accounting for gaps. Handles edge cases
+ * like invalid column counts, excessive gaps, and degenerate layouts.
+ *
+ * Algorithm:
+ * 1. Validate and normalize column count (floor to integer, ensure >= 1)
+ * 2. Validate and normalize gap width (ensure >= 0)
+ * 3. Calculate total gap space: gap * (count - 1)
+ * 4. Calculate per-column width: (contentWidth - totalGap) / count
+ * 5. If resulting width is too small (≤ epsilon), fallback to single-column layout
+ *
+ * Edge cases handled:
+ * - Undefined or missing input: Defaults to single column, no gap
+ * - Invalid count (NaN, negative, zero): Defaults to 1
+ * - Negative gap: Clamps to 0
+ * - Column width too small (gaps consume all space): Falls back to single column
+ * - Non-integer count: Floors to nearest integer
+ *
+ * @param input - The column layout configuration (count and gap) or undefined
+ * @param contentWidth - The total available width for content in pixels (must be positive)
+ * @returns Normalized column configuration with computed width per column
+ * @example
+ * // Two columns with 48px gap in 612px content area
+ * normalizeColumns({ count: 2, gap: 48 }, 612)
+ * // Returns { count: 2, gap: 48, width: 282 }
+ *
+ * @example
+ * // Excessive gap causes fallback to single column
+ * normalizeColumns({ count: 3, gap: 500 }, 600)
+ * // Returns { count: 1, gap: 0, width: 600 }
+ */
 function normalizeColumns(input: ColumnLayout | undefined, contentWidth: number): NormalizedColumns {
   const rawCount = Number.isFinite(input?.count) ? Math.floor(input!.count) : 1;
   const count = Math.max(1, rawCount || 1);
