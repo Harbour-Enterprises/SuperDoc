@@ -393,7 +393,6 @@ export class PresentationEditor extends EventEmitter {
   #session: HeaderFooterSession = { mode: 'body' };
   #activeHeaderFooterEditor: Editor | null = null;
   #overlayManager: EditorOverlayManager | null = null;
-  #activeEditingPageIndex: number | null = null;
   #hoverOverlay: HTMLElement | null = null;
   #hoverTooltip: HTMLElement | null = null;
   #modeBanner: HTMLElement | null = null;
@@ -2135,7 +2134,6 @@ export class PresentationEditor extends EventEmitter {
     this.#overlayManager?.destroy();
     this.#session = { mode: 'body' };
     this.#activeHeaderFooterEditor = null;
-    this.#activeEditingPageIndex = null;
     this.#inputBridge?.notifyTargetChanged();
 
     // Initialize EditorOverlayManager for in-place editing
@@ -3389,7 +3387,6 @@ export class PresentationEditor extends EventEmitter {
       this.#overlayManager.hideSelectionOverlay();
 
       this.#activeHeaderFooterEditor = editor;
-      this.#activeEditingPageIndex = region.pageIndex;
 
       this.#session = {
         mode: region.kind,
@@ -3422,7 +3419,6 @@ export class PresentationEditor extends EventEmitter {
         this.#overlayManager?.showSelectionOverlay();
         this.#clearHoverRegion();
         this.#activeHeaderFooterEditor = null;
-        this.#activeEditingPageIndex = null;
         this.#session = { mode: 'body' };
       } catch (cleanupError) {
         console.error('[PresentationEditor] Error during cleanup:', cleanupError);
@@ -3448,7 +3444,6 @@ export class PresentationEditor extends EventEmitter {
     this.#overlayManager?.showSelectionOverlay();
 
     this.#activeHeaderFooterEditor = null;
-    this.#activeEditingPageIndex = null;
     this.#session = { mode: 'body' };
 
     this.#emitHeaderFooterModeChanged();
@@ -3870,35 +3865,6 @@ export class PresentationEditor extends EventEmitter {
         height: rect.height,
       };
     });
-  }
-
-  #computeHeaderFooterCaretRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
-    const context = this.#getHeaderFooterContext();
-    if (!context) return null;
-    const hit = getFragmentAtPosition(context.layout, context.blocks, context.measures, pos);
-    if (!hit) return null;
-    const block = hit.block;
-    const measure = hit.measure;
-    if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph' || hit.fragment.kind !== 'para')
-      return null;
-    const lineInfo = this.#findLineContainingPos(block, measure, hit.fragment.fromLine, hit.fragment.toLine, pos);
-    if (!lineInfo) return null;
-    const { line, index } = lineInfo;
-    const range = computeLinePmRange(block, line);
-    if (range.pmStart == null || range.pmEnd == null) return null;
-    // Use PM range for accurate character count across all runs
-    const pmCharsInLine = Math.max(1, range.pmEnd - range.pmStart);
-    const pmOffset = Math.max(0, Math.min(pmCharsInLine, pos - range.pmStart));
-    const localX = hit.fragment.x + measureCharacterX(block, line, pmOffset);
-    const lineOffset = this.#lineHeightBeforeIndex(measure.lines, hit.fragment.fromLine, index);
-    const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
-    const headerLocalY = hit.pageIndex * headerPageHeight + (hit.fragment.y + lineOffset);
-    return {
-      pageIndex: context.region.pageIndex,
-      x: context.region.localX + localX,
-      y: context.region.localY + headerLocalY,
-      height: line.lineHeight,
-    };
   }
 
   #syncTrackedChangesPreferences(): boolean {
