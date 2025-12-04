@@ -401,23 +401,20 @@ describe('AIActionsService', () => {
             await expect(actions.literalReplace('', 'value')).rejects.toThrow('Find text cannot be empty');
         });
 
-        it('should loop through multiple passes until all matches are replaced', async () => {
-            literalSpy
-                .mockReturnValueOnce([
-                    { from: 0, to: 1, text: 'A' },
-                    { from: 10, to: 11, text: 'A' },
-                ])
-                .mockReturnValueOnce([
-                    { from: 30, to: 31, text: 'A' },
-                ])
-                .mockReturnValue([]);
+        it('should find and replace all matches in a single pass', async () => {
+            // For simple replacements (where replacement doesn't contain search text),
+            // all matches should be found and replaced in a single pass
+            literalSpy.mockReturnValueOnce([
+                { from: 0, to: 1, text: 'A' },
+                { from: 10, to: 11, text: 'A' },
+            ]);
 
             const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
             const result = await actions.literalReplace('A', 'B');
 
-            expect(literalSpy).toHaveBeenCalled();
+            expect(literalSpy).toHaveBeenCalledTimes(1); // Only called once (single pass)
             expect(result.success).toBe(true);
-            expect(result.results).toHaveLength(3);
+            expect(result.results).toHaveLength(2); // Both matches replaced
         });
 
         it('should NOT replace same match multiple times (regression test)', async () => {
