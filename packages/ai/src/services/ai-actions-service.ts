@@ -476,7 +476,11 @@ export class AIActionsService {
             return { success: false, results: [] };
         }
 
-        const maxPasses = 10;
+        const replacementContainsSearch = options?.caseSensitive
+            ? replacementText.includes(findText)
+            : replacementText.toLowerCase().includes(findText.toLowerCase());
+
+        const maxPasses = replacementContainsSearch ? 10 : 1;
         let pass = 0;
 
         const collectMatches = () => this.adapter.findLiteralMatches(findText, Boolean(options?.caseSensitive));
@@ -516,6 +520,10 @@ export class AIActionsService {
             replacementsThisPass.reverse();
             applied.push(...replacementsThisPass);
             pass++;
+
+            if (!replacementContainsSearch) {
+                break;
+            }
         }
 
         if (!applied.length) {

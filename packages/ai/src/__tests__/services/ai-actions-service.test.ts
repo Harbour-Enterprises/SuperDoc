@@ -419,6 +419,33 @@ describe('AIActionsService', () => {
             expect(result.success).toBe(true);
             expect(result.results).toHaveLength(3);
         });
+
+        it('should NOT replace same match multiple times (regression test)', async () => {
+            const match = { from: 5, to: 6, text: 'A' };
+            literalSpy.mockReturnValue([match]);
+            trackedSpy.mockReturnValue('change-1');
+
+            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const result = await actions.literalReplace('A', 'B', { trackChanges: true });
+
+            expect(result.success).toBe(true);
+            expect(result.results).toHaveLength(1);
+            expect(trackedSpy).toHaveBeenCalledTimes(1);
+            expect(literalSpy).toHaveBeenCalledTimes(1);
+        });
+
+        it('should loop multiple passes when replacement contains search text', async () => {
+            literalSpy
+                .mockReturnValueOnce([{ from: 0, to: 3, text: 'cat' }])
+                .mockReturnValueOnce([{ from: 0, to: 3, text: 'cat' }])
+                .mockReturnValue([]);
+
+            const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+            const result = await actions.literalReplace('cat', 'category');
+
+            expect(result.success).toBe(true);
+            expect(literalSpy.mock.calls.length).toBeGreaterThan(1);
+        });
     });
 
     describe('insertTrackedChange', () => {

@@ -2,8 +2,16 @@
   "name": "@superdoc-dev/ai",
   "version": "0.1.6-next.10",
   "description": "AI integration package for SuperDoc",
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
