@@ -77,6 +77,12 @@ export type SectionSignature = {
 } | null;
 
 /**
+ * Vertical alignment of content within a section/page.
+ * Maps to OOXML w:vAlign values in sectPr.
+ */
+export type SectionVerticalAlign = 'top' | 'center' | 'bottom' | 'both';
+
+/**
  * Section range represents a contiguous section in the document.
  * Word uses "end-tagged" section semantics: a paragraph's sectPr defines
  * properties for the section ENDING at that paragraph, not starting after it.
@@ -95,4 +101,5 @@ export interface SectionRange {
   headerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
   footerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
   numbering?: { format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman'; start?: number };
+  vAlign?: SectionVerticalAlign;
 }

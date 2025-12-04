@@ -130,6 +130,7 @@ export function createSectionBreakBlock(
     ...(section.numbering ? { numbering: section.numbering } : {}),
     ...(section.headerRefs && { headerRefs: section.headerRefs }),
     ...(section.footerRefs && { footerRefs: section.footerRefs }),
+    ...(section.vAlign && { vAlign: section.vAlign }),
   } as SectionBreakBlock;
 
   return result;

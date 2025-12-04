@@ -616,6 +616,12 @@ export type ImageDrawing = DrawingBlockBase &
 
 export type DrawingBlock = VectorShapeDrawing | ShapeGroupDrawing | ImageDrawing;
 
+/**
+ * Vertical alignment of content within a section/page.
+ * Maps to OOXML w:vAlign values in sectPr.
+ */
+export type SectionVerticalAlign = 'top' | 'center' | 'bottom' | 'both';
+
 export type SectionBreakBlock = {
   kind: 'sectionBreak';
   id: BlockId;
@@ -649,6 +655,14 @@ export type SectionBreakBlock = {
     gap: number;
     equalWidth?: boolean;
   };
+  /**
+   * Vertical alignment of content within the section's pages.
+   * - 'top': Content starts at top margin (default behavior)
+   * - 'center': Content is vertically centered between margins
+   * - 'bottom': Content is aligned to bottom margin
+   * - 'both': Content is vertically justified (distributed)
+   */
+  vAlign?: SectionVerticalAlign;
   attrs?: {
     source?: string;
     requirePageBoundary?: boolean;
@@ -1145,6 +1159,11 @@ export type Page = {
     headerRefs?: { default?: string; first?: string; even?: string; odd?: string };
     footerRefs?: { default?: string; first?: string; even?: string; odd?: string };
   };
+  /**
+   * Vertical alignment of content within this page.
+   * Used for post-layout adjustment of fragment Y positions.
+   */
+  vAlign?: SectionVerticalAlign;
 };
 
 /** A paragraph fragment positioned on a page. */

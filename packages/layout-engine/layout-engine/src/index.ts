@@ -17,9 +17,11 @@ import type {
   SectionBreakBlock,
   TableBlock,
   TableMeasure,
+  TableFragment,
   SectionMetadata,
   DrawingBlock,
   DrawingMeasure,
+  DrawingFragment,
   SectionNumbering,
 } from '@superdoc/contracts';
 import { createFloatingObjectManager, computeAnchorX } from './floating-objects.js';
@@ -47,6 +49,24 @@ type Margins = {
 };
 
 type NormalizedColumns = ColumnLayout & { width: number };
+
+/**
+ * Default paragraph line height in pixels used for vertical alignment calculations
+ * when actual height is not available in the measure data.
+ * This is a fallback estimate for paragraph and list-item fragments.
+ */
+const DEFAULT_PARAGRAPH_LINE_HEIGHT_PX = 20;
+
+/**
+ * Type guard to check if a fragment has a height property.
+ * Image, Drawing, and Table fragments all have a required height property.
+ *
+ * @param fragment - The fragment to check
+ * @returns True if the fragment is ImageFragment, DrawingFragment, or TableFragment
+ */
+function hasHeight(fragment: Fragment): fragment is ImageFragment | DrawingFragment | TableFragment {
+  return fragment.kind === 'image' || fragment.kind === 'drawing' || fragment.kind === 'table';
+}
 
 // ConstraintBoundary and PageState now come from paginator
 
@@ -257,6 +277,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let activeOrientation: 'portrait' | 'landscape' | null = null;
   let pendingOrientation: 'portrait' | 'landscape' | null = null;
 
+  // Track active and pending vertical alignment for sections
+  type VerticalAlign = 'top' | 'center' | 'bottom' | 'both';
+  let activeVAlign: VerticalAlign | null = null;
+  let pendingVAlign: VerticalAlign | null = null;
+
   // Create floating-object manager for anchored image tracking
   const floatManager = createFloatingObjectManager(
     normalizeColumns(activeColumns, contentWidth),
@@ -388,6 +413,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     if (activeOrientation) {
       page.orientation = activeOrientation;
     }
+    // Set vertical alignment from active section state
+    if (activeVAlign && activeVAlign !== 'top') {
+      page.vAlign = activeVAlign;
+    }
     return page;
   };
 
@@ -479,6 +508,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         if (pendingSectionRefs) {
           activeSectionRefs = pendingSectionRefs;
           pendingSectionRefs = null;
+        }
+        // Apply pending vertical alignment
+        if (pendingVAlign !== null) {
+          activeVAlign = pendingVAlign;
+          pendingVAlign = null;
         }
         pageCount += 1;
         return;
@@ -642,6 +676,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         activeColumns = { count: block.columns.count, gap: block.columns.gap };
         pendingColumns = null; // Clear pending since we applied directly
       }
+      if (block.vAlign) {
+        activeVAlign = block.vAlign;
+        pendingVAlign = null; // Clear pending since we applied directly
+      }
       // Initial numbering for very first page
       if (sectionMetadata?.numbering) {
         if (sectionMetadata.numbering.format) activeNumberFormat = sectionMetadata.numbering.format;
@@ -690,6 +728,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     // Schedule orientation change if present
     if (block.orientation) {
       pendingOrientation = block.orientation;
+    }
+
+    // Schedule vertical alignment change if present
+    if (block.vAlign) {
+      pendingVAlign = block.vAlign;
     }
 
     // Schedule numbering changes (apply at next page boundary)
@@ -950,6 +993,19 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       pendingColumns = updatedState.pendingColumns;
       activeOrientation = updatedState.activeOrientation;
       pendingOrientation = updatedState.pendingOrientation;
+
+      // Handle vAlign from section break (not part of SectionState, handled separately)
+      if (effectiveBlock.vAlign) {
+        const isFirstSection = effectiveBlock.attrs?.isFirstSection && states.length === 0;
+        if (isFirstSection) {
+          // First section: apply immediately
+          activeVAlign = effectiveBlock.vAlign;
+          pendingVAlign = null;
+        } else {
+          // Non-first section: schedule for next page
+          pendingVAlign = effectiveBlock.vAlign;
+        }
+      }
 
       // Schedule section refs (handled outside of SectionState since they're module-level vars)
       if (effectiveBlock.headerRefs || effectiveBlock.footerRefs) {
@@ -1242,6 +1298,82 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   // a final blank page for continuous final sections.
   while (pages.length > 0 && pages[pages.length - 1].fragments.length === 0) {
     pages.pop();
+  }
+
+  // Post-process pages with vertical alignment (center, bottom, both)
+  // For each page, calculate content bounds and apply Y offset to all fragments
+  for (const page of pages) {
+    if (!page.vAlign || page.vAlign === 'top') continue;
+    if (page.fragments.length === 0) continue;
+
+    // Get page dimensions
+    const pageSizeForPage = page.size ?? pageSize;
+    const contentTop = page.margins?.top ?? margins.top;
+    const contentBottom = pageSizeForPage.h - (page.margins?.bottom ?? margins.bottom);
+    const contentHeight = contentBottom - contentTop;
+
+    // Calculate the actual content bounds (min and max Y of all fragments)
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const fragment of page.fragments) {
+      if (fragment.y < minY) minY = fragment.y;
+
+      // Calculate fragment bottom based on type
+      // Image, Drawing, and Table fragments have a height property
+      // Para and ListItem fragments do not have height in their contract
+      let fragmentBottom = fragment.y;
+      if (hasHeight(fragment)) {
+        // Type guard ensures fragment.height exists
+        fragmentBottom += fragment.height;
+      } else {
+        // Para and list-item fragments don't have a height property
+        // Use a default estimate for vertical alignment calculations
+        fragmentBottom += DEFAULT_PARAGRAPH_LINE_HEIGHT_PX;
+      }
+
+      if (fragmentBottom > maxY) maxY = fragmentBottom;
+    }
+
+    // Content takes space from minY to maxY
+    const actualContentHeight = maxY - minY;
+    const availableSpace = contentHeight - actualContentHeight;
+
+    if (availableSpace <= 0) {
+      continue; // Content fills or exceeds page, no adjustment needed
+    }
+
+    // Calculate Y offset based on vAlign
+    let yOffset = 0;
+    if (page.vAlign === 'center') {
+      yOffset = availableSpace / 2;
+    } else if (page.vAlign === 'bottom') {
+      yOffset = availableSpace;
+    } else if (page.vAlign === 'both') {
+      // LIMITATION: 'both' (vertical justification) is currently treated as 'center'
+      //
+      // The 'both' value in OOXML means content should be vertically justified:
+      // space should be distributed evenly between paragraphs/blocks throughout
+      // the page (similar to text-align: justify but in the vertical direction).
+      //
+      // Full implementation would require:
+      // 1. Identifying gaps between content blocks (paragraphs, tables, images)
+      // 2. Calculating total inter-block spacing
+      // 3. Distributing available space proportionally across all gaps
+      // 4. Adjusting Y positions of each fragment based on cumulative spacing
+      //
+      // This would need significant refactoring of the layout flow to track
+      // block boundaries and inter-block relationships during pagination.
+      // For now, center alignment provides a reasonable approximation.
+      yOffset = availableSpace / 2;
+    }
+
+    // Apply Y offset to all fragments on this page
+    if (yOffset > 0) {
+      for (const fragment of page.fragments) {
+        fragment.y += yOffset;
+      }
+    }
   }
 
   return {
