@@ -1,0 +1,21 @@
+# Source files (only ship dist/)
+src/
+*.ts
+!*.d.ts
+tsconfig.json
+
+# Tests
+test-*.js
+test-*.docx
+*.test.*
+*.spec.*
+__tests__/
+
+# Examples (users can view on GitHub)
+example/
+
+# Development
+node_modules/
+.DS_Store
+*.log
+*.map

@@ -1,0 +1,32 @@
+# The build script (scripts/build_wheel.py) handles bundling.
+# This MANIFEST.in is for the generated superdoc_sdk/ package.
+
+# Include the bundled Node.js service (created by build script)
+recursive-include superdoc_sdk/service *
+
+# Include type marker
+include superdoc_sdk/py.typed
+
+# Include documentation
+include README.md
+
+# Exclude development files
+global-exclude *.pyc
+global-exclude __pycache__
+global-exclude .DS_Store
+global-exclude *.map
+recursive-exclude tests *
+recursive-exclude example *
+recursive-exclude scripts *
+
+# Exclude TypeScript source (we only need compiled JS)
+recursive-exclude superdoc_sdk/service/src *
+exclude superdoc_sdk/service/tsconfig.json
+
+# Exclude unnecessary node_modules files to reduce size
+recursive-exclude superdoc_sdk/service/node_modules *.md
+recursive-exclude superdoc_sdk/service/node_modules *.ts
+recursive-exclude superdoc_sdk/service/node_modules *.map
+recursive-exclude superdoc_sdk/service/node_modules LICENSE*
+recursive-exclude superdoc_sdk/service/node_modules CHANGELOG*
+recursive-exclude superdoc_sdk/service/node_modules .github *

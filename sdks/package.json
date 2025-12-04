@@ -1,0 +1,8 @@
+{
+  "name": "@superdoc-dev/sdk-service",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@superdoc-dev/superdoc-sdk": "file:./langs/node"
+  }
+}

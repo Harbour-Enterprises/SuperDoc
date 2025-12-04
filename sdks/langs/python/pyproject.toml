@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "superdoc-sdk"
+version = "0.2.0"
+description = "Python SDK for SuperDoc - headless DOCX document operations"
+readme = "README.md"
+license = {text = "AGPL-3.0"}
+authors = [
+    {name = "SuperDoc Team"}
+]
+keywords = ["superdoc", "docx", "document", "editor", "headless", "word"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: GNU Affero General Public License v3",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Text Processing :: Markup",
+    "Typing :: Typed",
+]
+requires-python = ">=3.8"
+
+[project.optional-dependencies]
+async = ["aiohttp>=3.8.0"]
+dev = [
+    "aiohttp>=3.8.0",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "build>=1.0.0",
+    "twine>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/nicksuperdocs/superdoc"
+Documentation = "https://github.com/nicksuperdocs/superdoc#readme"
+Repository = "https://github.com/nicksuperdocs/superdoc"
+Issues = "https://github.com/nicksuperdocs/superdoc/issues"
+
+# Package configuration
+# Note: The actual package is built by scripts/build_wheel.py which:
+# 1. Creates superdoc_sdk/ directory
+# 2. Copies superdoc_sdk.py into it
+# 3. Bundles the Node.js service (dist/ + node_modules/)
+# 4. Runs python -m build
+
+[tool.setuptools]
+packages = ["superdoc_sdk"]
+
+[tool.setuptools.package-data]
+superdoc_sdk = [
+    "py.typed",
+    "service/**/*",
+]
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

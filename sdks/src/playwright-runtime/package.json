@@ -1,0 +1,33 @@
+{
+  "name": "@superdoc/playwright-runtime",
+  "version": "0.1.0",
+  "description": "Playwright-based headless runtime for SuperDoc document operations",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "dev": "tsc && node dist/index.js"
+  },
+  "dependencies": {
+    "@harbour-enterprises/super-editor": "*",
+    "playwright-core": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/superdoc.git"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/superdoc/issues"
+  },
+  "homepage": "https://github.com/your-org/superdoc#readme"
+}

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SuperDoc Runtime</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    #editor-container {
+      width: 100%;
+      min-height: 100vh;
+    }
+  </style>
+
+  <!-- Import map to resolve external dependencies -->
+  <script type="importmap">
+    {
+      "imports": {
+        "vue": "https://cdn.jsdelivr.net/npm/vue@3.5.20/dist/vue.esm-browser.prod.js",
+        "yjs": "https://cdn.jsdelivr.net/npm/yjs@13.6.19/+esm",
+        "y-protocols": "https://cdn.jsdelivr.net/npm/y-protocols@1.0.6/+esm"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="editor-container"></div>
+
+  <script type="module">
+    // Initialize editor ready flag
+    window.editorLoaded = false;
+  </script>
+</body>
+</html>

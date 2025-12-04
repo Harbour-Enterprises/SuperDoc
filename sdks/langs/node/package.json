@@ -1,0 +1,53 @@
+{
+  "name": "@superdoc-dev/superdoc-sdk",
+  "version": "0.1.0",
+  "description": "Official SuperDoc SDK for Node.js",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "postinstall.js"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch",
+    "postinstall": "node postinstall.js",
+    "test": "node test-sdk.js"
+  },
+  "keywords": [
+    "superdoc",
+    "docx",
+    "document",
+    "editor",
+    "headless"
+  ],
+  "author": "SuperDoc Team",
+  "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/example/superdoc.git",
+    "directory": "sdks/langs/node"
+  },
+  "homepage": "https://github.com/example/superdoc/tree/main/sdks/langs/node#readme",
+  "bugs": {
+    "url": "https://github.com/example/superdoc/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@superdoc/playwright-runtime": "file:../../src/playwright-runtime",
+    "playwright-core": "^1.48.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.7.3"
+  }
+}

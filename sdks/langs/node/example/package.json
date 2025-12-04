@@ -1,0 +1,15 @@
+{
+  "name": "superdoc-sdk-example",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Example usage of the SuperDoc SDK",
+  "scripts": {
+    "start": "node index.mjs",
+    "test": "node index.mjs"
+  },
+  "dependencies": {
+    "@superdoc-dev/superdoc-sdk": "file:..",
+    "superdoc": "file:../../packages/superdoc"
+  }
+}
