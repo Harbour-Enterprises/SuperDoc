@@ -872,6 +872,9 @@ export const computeParagraphAttrs = (
    * 1. Nested format: `{ tab: { tabType: 'start', pos: 720 } }` (OOXML-style)
    * 2. Direct format: `{ val: 'start', pos: 720 }` (normalized)
    *
+   * For nested format entries, the function automatically sets originalPos to preserve
+   * the position value in twips, preventing heuristic conversions in downstream processing.
+   *
    * Performs runtime validation to ensure:
    * - Input is an array
    * - Each entry is an object with valid structure
@@ -935,18 +938,12 @@ export const computeParagraphAttrs = (
         }
 
         // Build normalized tab stop object with validated properties
-        const normalized: Record<string, unknown> = { val, pos };
+        const normalized: Record<string, unknown> = { val, pos, originalPos: pos }; // preserve twips so heuristics are skipped
 
         // Validate and add optional leader property
         const leader = tabObj.leader;
         if (typeof leader === 'string' && leader.length > 0) {
           normalized.leader = leader;
-        }
-
-        // Validate and add optional originalPos property
-        const originalPos = pickNumber(tabObj.originalPos);
-        if (originalPos != null && Number.isFinite(originalPos)) {
-          normalized.originalPos = originalPos;
         }
 
         unwrapped.push(normalized);

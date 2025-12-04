@@ -606,21 +606,31 @@ export function encodeCSSFromPPr(paragraphProperties, hasPreviousParagraph, next
     const hasIndentValue = Object.values(indent).some((value) => value != null && Number(value) !== 0);
     if (hasIndentValue) {
       const { left, right, firstLine, hanging } = indent;
+
+      // DEBUG: Log indent CSS generation
+      console.log('[CSS DEBUG encodeCSSFromPPr] indent:', JSON.stringify(indent));
+
       if (left != null) {
         css['margin-left'] = `${twipsToPixels(left)}px`;
+        console.log('[CSS DEBUG encodeCSSFromPPr] margin-left:', css['margin-left']);
       }
       if (right != null) {
         css['margin-right'] = `${twipsToPixels(right)}px`;
       }
       if (firstLine != null && !hanging) {
         css['text-indent'] = `${twipsToPixels(firstLine)}px`;
+        console.log('[CSS DEBUG encodeCSSFromPPr] text-indent (firstLine only):', css['text-indent']);
       }
       if (firstLine != null && hanging != null) {
         css['text-indent'] = `${twipsToPixels(firstLine - hanging)}px`;
+        console.log('[CSS DEBUG encodeCSSFromPPr] text-indent (firstLine - hanging):', css['text-indent']);
       }
       if (firstLine == null && hanging != null) {
         css['text-indent'] = `${twipsToPixels(-hanging)}px`;
+        console.log('[CSS DEBUG encodeCSSFromPPr] text-indent (hanging only):', css['text-indent']);
       }
+
+      console.log('[CSS DEBUG encodeCSSFromPPr] Final indent CSS:', JSON.stringify(css));
     }
   }
 

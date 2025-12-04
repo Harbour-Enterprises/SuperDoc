@@ -60,13 +60,16 @@ export function calculateTabStyle(
 
     const indentWidth = paragraphContext.indentWidth;
     const hanging = twipsToPixels(Number(paragraphContext.indent.hanging) || 0);
+
     if (hanging > 0) {
-      // Word places an implicit tab stop at the hanging indent position
-      tabStops.unshift({ val: 'start', pos: indentWidth + hanging });
+      // Word places an implicit tab stop at the left indent position (where text would start without hanging)
+      const leftIndentPx = twipsToPixels(Number(paragraphContext.indent.left) || 0);
+      tabStops.unshift({ val: 'start', pos: leftIndentPx });
     }
+
     const accumulatedTabWidth = paragraphContext.accumulatedTabWidth || 0;
-    const currentWidth =
-      indentWidth + measureRangeWidth(view, startPos + 1, pos, coordCache, domPosCache) + accumulatedTabWidth;
+    const rangeWidth = measureRangeWidth(view, startPos + 1, pos, coordCache, domPosCache);
+    const currentWidth = indentWidth + rangeWidth + accumulatedTabWidth;
 
     let tabWidth;
     if (tabStops.length) {
@@ -152,6 +155,7 @@ export function findParagraphContext($pos, cache, helpers) {
 
 export function extractParagraphContext(node, startPos, helpers, depth = 0) {
   const paragraphProperties = getResolvedParagraphProperties(node);
+
   // Map OOXML alignment values to internal values (for RTL support)
   const alignmentAliases = { left: 'start', right: 'end' };
   let tabStops = [];
@@ -177,7 +181,7 @@ export function extractParagraphContext(node, startPos, helpers, depth = 0) {
     paragraph: node,
     paragraphDepth: depth,
     startPos,
-    indent: paragraphProperties.indent || {},
+    indent: paragraphProperties?.indent || {},
     tabStops: tabStops,
     flattened: entries,
     positionMap: positionMap, // Store position map for O(1) lookups

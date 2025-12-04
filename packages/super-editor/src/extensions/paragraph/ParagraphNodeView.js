@@ -39,6 +39,7 @@ export class ParagraphNodeView {
     this.dom = document.createElement('p');
     this.contentDOM = document.createElement('span');
     this.dom.appendChild(this.contentDOM);
+
     if (this.#checkIsList()) {
       this.#initList(node.attrs.listRendering);
       this.#scheduleAnimation(() => {

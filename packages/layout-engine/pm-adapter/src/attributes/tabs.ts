@@ -94,16 +94,22 @@ export const normalizeOoxmlTabs = (tabs: unknown): TabStop[] | undefined => {
     const rawEntry = entry as Record<string, unknown>;
 
     // Handle super-editor's nested format: { tab: { tabType, pos, leader } }
-    const source =
-      rawEntry.tab && typeof rawEntry.tab === 'object' ? (rawEntry.tab as Record<string, unknown>) : rawEntry;
+    // When using nested format, positions are ALWAYS in twips (from OOXML)
+    const isNestedFormat = Boolean(rawEntry.tab && typeof rawEntry.tab === 'object');
+    const source = isNestedFormat ? (rawEntry.tab as Record<string, unknown>) : rawEntry;
 
     // Resolve position: prefer originalPos (twips), fallback to pos/position/offset
-    const posTwips = resolveTabPosition(source);
-    if (posTwips == null) continue;
+    // For nested format (super-editor), positions are already in twips - skip heuristic conversion
+    const posTwips = resolveTabPosition(source, isNestedFormat);
+    if (posTwips == null) {
+      continue;
+    }
 
     // Support 'tabType' from super-editor in addition to 'val'/'align'/'type'
     const val = normalizeTabVal(source.val ?? source.align ?? source.alignment ?? source.type ?? source.tabType);
-    if (!val) continue;
+    if (!val) {
+      continue;
+    }
 
     const tab: TabStop = {
       val,
@@ -126,14 +132,15 @@ export const normalizeOoxmlTabs = (tabs: unknown): TabStop[] | undefined => {
  * 1. originalPos (already in twips from OOXML)
  * 2. pos/position/offset (may be px or twips, auto-detected)
  *
- * Auto-detection heuristic:
+ * Auto-detection heuristic (only used when alreadyTwips is false):
  * - Values > 1000 are assumed to be twips (super-editor format)
  * - Values <= 1000 are assumed to be pixels and converted (SuperConverter format)
  *
  * @param source - Tab stop object with position properties
+ * @param alreadyTwips - If true, skip heuristic and treat pos as twips (for nested super-editor format)
  * @returns Position in twips, or undefined if no valid position found
  */
-const resolveTabPosition = (source: Record<string, unknown>): number | undefined => {
+const resolveTabPosition = (source: Record<string, unknown>, alreadyTwips = false): number | undefined => {
   // Prefer originalPos (exact OOXML twips)
   const originalPos = pickNumber(source.originalPos);
   if (originalPos != null) {
@@ -144,6 +151,11 @@ const resolveTabPosition = (source: Record<string, unknown>): number | undefined
   const posValue = pickNumber(source.pos ?? source.position ?? source.offset);
   if (posValue == null) {
     return undefined;
+  }
+
+  // If source is from nested format (super-editor), positions are already in twips
+  if (alreadyTwips) {
+    return posValue;
   }
 
   // Heuristic: if pos > 1000, it's likely twips; otherwise px

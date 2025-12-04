@@ -83,8 +83,12 @@ export function createLayoutRequest(doc, paragraphPos, view, helpers, revision, 
   const tabStops = Array.isArray(effectiveContext.tabStops) ? [...effectiveContext.tabStops] : [];
 
   const hangingPx = twipsToPixels(Number(effectiveContext.indent?.hanging) || 0);
-  if (hangingPx > 0 && effectiveContext.indentWidth != null) {
-    tabStops.unshift({ val: 'start', pos: effectiveContext.indentWidth + hangingPx, leader: 'none' });
+  const leftIndentPx = twipsToPixels(Number(effectiveContext.indent?.left) || 0);
+
+  // Word behavior: paragraphs with hanging indent get an implicit tab stop at the left indent position.
+  // This allows the first tab press to align text at the left indent (where subsequent lines start).
+  if (hangingPx > 0) {
+    tabStops.unshift({ val: 'start', pos: leftIndentPx, leader: 'none' });
   }
 
   const paragraphWidth =
