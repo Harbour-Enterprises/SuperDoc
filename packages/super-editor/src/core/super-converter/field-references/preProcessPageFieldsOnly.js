@@ -5,19 +5,19 @@ import { preProcessPageInstruction } from './fld-preprocessors/page-preprocessor
 import { preProcessNumPagesInstruction } from './fld-preprocessors/num-pages-preprocessor.js';
 
 /**
- * Pre-processes nodes to convert ONLY PAGE and NUMPAGES field codes.
- * Unlike the full preProcessNodesForFldChar, this function:
- * - Converts PAGE fields to sd:autoPageNumber
- * - Converts NUMPAGES fields to sd:totalPageNumber
- * - Leaves ALL other field types completely untouched (including DOCPROPERTY, HYPERLINK, etc.)
+ * Pre-processes nodes to convert PAGE and NUMPAGES field codes for header/footer rendering.
  *
- * This is specifically designed for header/footer processing where we need page number
- * fields to work while preserving other field types for proper round-trip export.
+ * This function specifically handles:
+ * - PAGE fields → sd:autoPageNumber (displays current page number)
+ * - NUMPAGES fields → sd:totalPageNumber (displays total page count)
+ *
+ * Other field types (DOCPROPERTY, HYPERLINK, etc.) are preserved unchanged
+ * to maintain proper round-trip export fidelity.
  *
  * @param {OpenXmlNode[]} nodes - The nodes to process.
  * @returns {{ processedNodes: OpenXmlNode[] }} The processed nodes.
  */
-export const preProcessPageFieldsOnly = (nodes = []) => {
+export const preProcessPageFieldsOnly = (nodes = [], depth = 0) => {
   const processedNodes = [];
   let i = 0;
 
@@ -51,7 +51,7 @@ export const preProcessPageFieldsOnly = (nodes = []) => {
             const passNode = nodes[j];
             // Recursively process child elements
             if (Array.isArray(passNode.elements)) {
-              const childResult = preProcessPageFieldsOnly(passNode.elements);
+              const childResult = preProcessPageFieldsOnly(passNode.elements, depth + 1);
               passNode.elements = childResult.processedNodes;
             }
             processedNodes.push(passNode);
@@ -64,7 +64,7 @@ export const preProcessPageFieldsOnly = (nodes = []) => {
 
     // Not a field or incomplete field - recursively process children and add
     if (Array.isArray(node.elements)) {
-      const childResult = preProcessPageFieldsOnly(node.elements);
+      const childResult = preProcessPageFieldsOnly(node.elements, depth + 1);
       node.elements = childResult.processedNodes;
     }
     processedNodes.push(node);

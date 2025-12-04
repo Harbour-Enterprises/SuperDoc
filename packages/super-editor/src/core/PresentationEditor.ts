@@ -13,8 +13,17 @@ import {
   getHeaderFooterType,
   getBucketForPageNumber,
   getBucketRepresentative,
+  buildMultiSectionIdentifier,
+  getHeaderFooterTypeForSection,
+  layoutHeaderFooterWithCache,
+  computeDisplayPageNumber,
 } from '@superdoc/layout-bridge';
-import type { HeaderFooterIdentifier, HeaderFooterLayoutResult, PositionHit } from '@superdoc/layout-bridge';
+import type {
+  HeaderFooterIdentifier,
+  HeaderFooterLayoutResult,
+  PositionHit,
+  MultiSectionHeaderFooterIdentifier,
+} from '@superdoc/layout-bridge';
 import { createDomPainter } from '@superdoc/painter-dom';
 import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
 import { measureBlock } from '@superdoc/measuring-dom';
@@ -383,8 +392,12 @@ export class PresentationEditor extends EventEmitter {
   #headerFooterManager: HeaderFooterEditorManager | null = null;
   #headerFooterAdapter: HeaderFooterLayoutAdapter | null = null;
   #headerFooterIdentifier: HeaderFooterIdentifier | null = null;
+  #multiSectionIdentifier: MultiSectionHeaderFooterIdentifier | null = null;
   #headerLayoutResults: HeaderFooterLayoutResult[] | null = null;
   #footerLayoutResults: HeaderFooterLayoutResult[] | null = null;
+  // Per-rId layout results for multi-section support
+  #headerLayoutsByRId: Map<string, HeaderFooterLayoutResult> = new Map();
+  #footerLayoutsByRId: Map<string, HeaderFooterLayoutResult> = new Map();
   #headerDecorationProvider: PageDecorationProvider | undefined;
   #footerDecorationProvider: PageDecorationProvider | undefined;
   #headerFooterManagerCleanups: Array<() => void> = [];
@@ -392,8 +405,8 @@ export class PresentationEditor extends EventEmitter {
   #footerRegions: Map<number, HeaderFooterRegion> = new Map();
   #session: HeaderFooterSession = { mode: 'body' };
   #activeHeaderFooterEditor: Editor | null = null;
-  #overlayManager: EditorOverlayManager | null = null;
   #activeEditingPageIndex: number | null = null;
+  #overlayManager: EditorOverlayManager | null = null;
   #hoverOverlay: HTMLElement | null = null;
   #hoverTooltip: HTMLElement | null = null;
   #modeBanner: HTMLElement | null = null;
@@ -1533,8 +1546,11 @@ export class PresentationEditor extends EventEmitter {
       this.#headerFooterManager = null;
     }, 'Header/footer manager');
     this.#headerFooterIdentifier = null;
+    this.#multiSectionIdentifier = null;
     this.#headerLayoutResults = null;
     this.#footerLayoutResults = null;
+    this.#headerLayoutsByRId.clear();
+    this.#footerLayoutsByRId.clear();
     this.#headerDecorationProvider = undefined;
     this.#footerDecorationProvider = undefined;
     this.#session = { mode: 'body' };
@@ -2834,9 +2850,17 @@ export class PresentationEditor extends EventEmitter {
     }
 
     this.#sectionMetadata = sectionMetadata;
+    // Build multi-section identifier from section metadata for section-aware header/footer selection
+    const converter = (this.#editor as Editor & { converter?: { pageStyles?: { alternateHeaders?: boolean } } })
+      .converter;
+    this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles);
     this.#layoutState = { blocks, measures, layout };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
+
+    // Process per-rId header/footer content for multi-section support
+    await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
+
     this.#updateDecorationProviders(layout);
 
     const painter = this.#ensurePainter(blocks, measures);
@@ -2853,6 +2877,11 @@ export class PresentationEditor extends EventEmitter {
         headerMeasures.push(...headerResult.measures);
       }
     }
+    // Also include per-rId header blocks for multi-section support
+    for (const rIdResult of this.#headerLayoutsByRId.values()) {
+      headerBlocks.push(...rIdResult.blocks);
+      headerMeasures.push(...rIdResult.measures);
+    }
 
     const footerBlocks: FlowBlock[] = [];
     const footerMeasures: Measure[] = [];
@@ -2861,6 +2890,11 @@ export class PresentationEditor extends EventEmitter {
         footerBlocks.push(...footerResult.blocks);
         footerMeasures.push(...footerResult.measures);
       }
+    }
+    // Also include per-rId footer blocks for multi-section support
+    for (const rIdResult of this.#footerLayoutsByRId.values()) {
+      footerBlocks.push(...rIdResult.blocks);
+      footerMeasures.push(...rIdResult.measures);
     }
 
     // Pass all blocks (main document + headers + footers) to the painter
@@ -3006,7 +3040,10 @@ export class PresentationEditor extends EventEmitter {
     }
     const headerBlocks = this.#headerFooterAdapter.getBatch('header');
     const footerBlocks = this.#headerFooterAdapter.getBatch('footer');
-    if (!headerBlocks && !footerBlocks) {
+    // Also get all blocks by rId for multi-section support
+    const headerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('header');
+    const footerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('footer');
+    if (!headerBlocks && !footerBlocks && !headerBlocksByRId && !footerBlocksByRId) {
       return null;
     }
     const constraints = this.#computeHeaderFooterConstraints();
@@ -3016,6 +3053,8 @@ export class PresentationEditor extends EventEmitter {
     return {
       headerBlocks,
       footerBlocks,
+      headerBlocksByRId,
+      footerBlocksByRId,
       constraints,
     };
   }
@@ -3040,6 +3079,108 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
+  /**
+   * Lays out per-rId header/footer content for multi-section documents.
+   *
+   * This method processes header/footer content for each unique rId, enabling
+   * different sections to have different header/footer content. The layouts
+   * are stored in #headerLayoutsByRId and #footerLayoutsByRId for use by
+   * the decoration provider.
+   */
+  async #layoutPerRIdHeaderFooters(
+    headerFooterInput: {
+      headerBlocks?: unknown;
+      footerBlocks?: unknown;
+      headerBlocksByRId: Map<string, FlowBlock[]> | undefined;
+      footerBlocksByRId: Map<string, FlowBlock[]> | undefined;
+      constraints: { width: number; height: number; pageWidth: number; margins: { left: number; right: number } };
+    } | null,
+    layout: Layout,
+    sectionMetadata: SectionMetadata[],
+  ): Promise<void> {
+    this.#headerLayoutsByRId.clear();
+    this.#footerLayoutsByRId.clear();
+
+    if (!headerFooterInput) return;
+
+    const { headerBlocksByRId, footerBlocksByRId, constraints } = headerFooterInput;
+
+    // Build section-aware display page numbers using computeDisplayPageNumber
+    // This handles format (roman, decimal, letter) and restart numbering per section
+    const displayPages = computeDisplayPageNumber(layout.pages, sectionMetadata);
+    const totalPages = layout.pages.length;
+
+    // Build page resolver that uses section-aware display text
+    const pageResolver = (pageNumber: number): { displayText: string; totalPages: number } => {
+      const pageIndex = pageNumber - 1;
+      const displayInfo = displayPages[pageIndex];
+      return {
+        displayText: displayInfo?.displayText ?? String(pageNumber),
+        totalPages,
+      };
+    };
+
+    // Process header blocks by rId
+    if (headerBlocksByRId) {
+      for (const [rId, blocks] of headerBlocksByRId) {
+        if (!blocks || blocks.length === 0) continue;
+
+        try {
+          const batchResult = await layoutHeaderFooterWithCache(
+            { default: blocks }, // Treat each rId as a 'default' variant
+            constraints,
+            (block: FlowBlock, c: { maxWidth: number; maxHeight: number }) => measureBlock(block, c),
+            undefined, // Use shared cache
+            undefined, // No legacy totalPages
+            pageResolver,
+          );
+
+          if (batchResult.default) {
+            this.#headerLayoutsByRId.set(rId, {
+              kind: 'header',
+              type: 'default',
+              layout: batchResult.default.layout,
+              blocks: batchResult.default.blocks,
+              measures: batchResult.default.measures,
+            });
+          }
+        } catch (error) {
+          console.warn(`[PresentationEditor] Failed to layout header rId=${rId}:`, error);
+        }
+      }
+    }
+
+    // Process footer blocks by rId
+    if (footerBlocksByRId) {
+      for (const [rId, blocks] of footerBlocksByRId) {
+        if (!blocks || blocks.length === 0) continue;
+
+        try {
+          const batchResult = await layoutHeaderFooterWithCache(
+            { default: blocks }, // Treat each rId as a 'default' variant
+            constraints,
+            (block: FlowBlock, c: { maxWidth: number; maxHeight: number }) => measureBlock(block, c),
+            undefined, // Use shared cache
+            undefined, // No legacy totalPages
+            pageResolver,
+          );
+
+          if (batchResult.default) {
+            this.#footerLayoutsByRId.set(rId, {
+              kind: 'footer',
+              type: 'default',
+              layout: batchResult.default.layout,
+              blocks: batchResult.default.blocks,
+              measures: batchResult.default.measures,
+            });
+          }
+        } catch (error) {
+          console.warn(`[PresentationEditor] Failed to layout footer rId=${rId}:`, error);
+        }
+      }
+    }
+  }
+
   #updateDecorationProviders(layout: Layout) {
     this.#headerDecorationProvider = this.#createDecorationProvider('header', layout);
     this.#footerDecorationProvider = this.#createDecorationProvider('footer', layout);
@@ -3048,17 +3189,77 @@ export class PresentationEditor extends EventEmitter {
 
   #createDecorationProvider(kind: 'header' | 'footer', layout: Layout): PageDecorationProvider | undefined {
     const results = kind === 'header' ? this.#headerLayoutResults : this.#footerLayoutResults;
-    if (!results || results.length === 0) {
+    const layoutsByRId = kind === 'header' ? this.#headerLayoutsByRId : this.#footerLayoutsByRId;
+
+    // Allow per-rId fallback even if variant results are empty
+    if ((!results || results.length === 0) && layoutsByRId.size === 0) {
       return undefined;
     }
-    const identifier =
+    // Use multi-section identifier if available for section-aware header/footer selection
+    const multiSectionId = this.#multiSectionIdentifier;
+    const legacyIdentifier =
       this.#headerFooterIdentifier ??
       extractIdentifierFromConverter((this.#editor as Editor & { converter?: unknown }).converter);
+
     return (pageNumber, pageMargins, page) => {
-      const headerFooterType = getHeaderFooterType(pageNumber, identifier, { kind });
+      // Use section-aware type resolution when we have a multi-section identifier and page section info
+      const sectionIndex = page?.sectionIndex ?? 0;
+      const headerFooterType = multiSectionId
+        ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind })
+        : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
+
+      // Get the section-specific rId for this page (from sectionRefs stamped during layout)
+      const sectionRId =
+        page?.sectionRefs && kind === 'header'
+          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
+          : page?.sectionRefs && kind === 'footer'
+            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
+            : undefined;
+
       if (!headerFooterType) {
         return null;
       }
+
+      // PRIORITY 1: Try per-rId layout if we have a section-specific rId
+      if (sectionRId && layoutsByRId.has(sectionRId)) {
+        const rIdLayout = layoutsByRId.get(sectionRId)!;
+        const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
+        if (slotPage) {
+          const fragments = slotPage.fragments ?? [];
+          const pageHeight =
+            page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+          const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+          const box = this.#computeDecorationBox(kind, margins, pageHeight);
+          return {
+            fragments,
+            height: box.height,
+            contentHeight: rIdLayout.layout.height ?? box.height,
+            offset: box.offset,
+            marginLeft: box.x,
+            contentWidth: box.width,
+            headerId: sectionRId,
+            sectionType: headerFooterType,
+            box: {
+              x: box.x,
+              y: box.offset,
+              width: box.width,
+              height: box.height,
+            },
+            hitRegion: {
+              x: box.x,
+              y: box.offset,
+              width: box.width,
+              height: box.height,
+            },
+          };
+        }
+      }
+
+      // PRIORITY 2: Fall back to variant-based layout (legacy behavior)
+      if (!results || results.length === 0) {
+        return null;
+      }
+
       const variant = results.find((entry) => entry.type === headerFooterType);
       if (!variant || !variant.layout?.pages?.length) {
         return null;
@@ -3072,14 +3273,8 @@ export class PresentationEditor extends EventEmitter {
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
-      const headerId =
-        page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
-          : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
-            : undefined;
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
-      const finalHeaderId = headerId ?? fallbackId ?? undefined;
+      const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
       return {
         fragments,
         height: box.height,
@@ -3367,7 +3562,8 @@ export class PresentationEditor extends EventEmitter {
           const doc = editor.state?.doc;
           if (doc) {
             const endPos = doc.content.size - 1; // Position at end of content
-            editor.commands?.setTextSelection?.(Math.max(1, endPos));
+            const pos = Math.max(1, endPos);
+            editor.commands?.setTextSelection?.({ from: pos, to: pos });
           }
         } catch (cursorError) {
           // Non-critical error, log but continue
@@ -3870,35 +4066,6 @@ export class PresentationEditor extends EventEmitter {
         height: rect.height,
       };
     });
-  }
-
-  #computeHeaderFooterCaretRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
-    const context = this.#getHeaderFooterContext();
-    if (!context) return null;
-    const hit = getFragmentAtPosition(context.layout, context.blocks, context.measures, pos);
-    if (!hit) return null;
-    const block = hit.block;
-    const measure = hit.measure;
-    if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph' || hit.fragment.kind !== 'para')
-      return null;
-    const lineInfo = this.#findLineContainingPos(block, measure, hit.fragment.fromLine, hit.fragment.toLine, pos);
-    if (!lineInfo) return null;
-    const { line, index } = lineInfo;
-    const range = computeLinePmRange(block, line);
-    if (range.pmStart == null || range.pmEnd == null) return null;
-    // Use PM range for accurate character count across all runs
-    const pmCharsInLine = Math.max(1, range.pmEnd - range.pmStart);
-    const pmOffset = Math.max(0, Math.min(pmCharsInLine, pos - range.pmStart));
-    const localX = hit.fragment.x + measureCharacterX(block, line, pmOffset);
-    const lineOffset = this.#lineHeightBeforeIndex(measure.lines, hit.fragment.fromLine, index);
-    const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
-    const headerLocalY = hit.pageIndex * headerPageHeight + (hit.fragment.y + lineOffset);
-    return {
-      pageIndex: context.region.pageIndex,
-      x: context.region.localX + localX,
-      y: context.region.localY + headerLocalY,
-      height: line.lineHeight,
-    };
   }
 
   #syncTrackedChangesPreferences(): boolean {

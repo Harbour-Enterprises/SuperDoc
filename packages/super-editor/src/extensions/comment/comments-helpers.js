@@ -65,8 +65,7 @@ export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
     commentMap.set(c.commentId, c);
   });
 
-  // Create a map to track which comments are parents
-  const parentCommentIds = new Set(comments.filter((c) => c.parentCommentId).map((c) => c.parentCommentId));
+  // Note: Parent/child relationships are tracked via comment.parentCommentId property
   const startNodes = [];
   const endNodes = [];
   const seen = new Set();

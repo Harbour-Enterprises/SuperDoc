@@ -14,8 +14,6 @@
  */
 
 // Styling constants - extracted for maintainability and consistency
-const DIMMING_OVERLAY_OPACITY = 0.15;
-const DIMMING_OVERLAY_Z_INDEX = '5';
 const EDITOR_HOST_Z_INDEX = '10';
 const BORDER_LINE_Z_INDEX = '15';
 const BORDER_LINE_COLOR = '#4472c4';
@@ -76,12 +74,6 @@ type ShowOverlayResult = {
  * ```
  */
 export class EditorOverlayManager {
-  /** Host element for the painter (contains page elements) */
-  #painterHost: HTMLElement;
-
-  /** Visible host element (for overlay positioning) */
-  #visibleHost: HTMLElement;
-
   /** Selection overlay element (for hiding during editing) */
   #selectionOverlay: HTMLElement | null;
 
@@ -97,7 +89,8 @@ export class EditorOverlayManager {
   /** Current editing region */
   #activeRegion: HeaderFooterRegion | null = null;
 
-  /** Callback for when dimming overlay is clicked (to exit edit mode) */
+  /** Callback for when dimming overlay is clicked (to exit edit mode) - reserved for future dimming overlay feature */
+  // eslint-disable-next-line no-unused-private-class-members
   #onDimmingClick: (() => void) | null = null;
 
   /** Full-width border line element (MS Word style) */
@@ -136,8 +129,6 @@ export class EditorOverlayManager {
       throw new Error('visibleHost must be connected to the DOM');
     }
 
-    this.#painterHost = painterHost;
-    this.#visibleHost = visibleHost;
     this.#selectionOverlay = selectionOverlay;
   }
 
@@ -436,7 +427,7 @@ export class EditorOverlayManager {
     editorHost: HTMLElement,
     region: HeaderFooterRegion,
     decorationContainer: HTMLElement,
-    zoom: number,
+    _zoom: number,
   ): void {
     // Get decoration container bounds
     const decorationRect = decorationContainer.getBoundingClientRect();
@@ -474,47 +465,6 @@ export class EditorOverlayManager {
         editorHost.dataset.contentOffset = String(fragmentTop);
       }
     }
-  }
-
-  /**
-   * Shows the dimming overlay over body content.
-   *
-   * Creates a semi-transparent overlay that covers the visible host area
-   * to visually indicate that body content is inactive during header/footer editing.
-   * Clicking the overlay exits edit mode.
-   */
-  #showDimmingOverlay(): void {
-    if (this.#dimmingOverlay) {
-      // Already exists, just show it
-      this.#dimmingOverlay.style.display = 'block';
-      return;
-    }
-
-    // Create dimming overlay
-    this.#dimmingOverlay = document.createElement('div');
-    this.#dimmingOverlay.className = 'presentation-editor__dimming-overlay';
-
-    Object.assign(this.#dimmingOverlay.style, {
-      position: 'absolute',
-      inset: '0',
-      backgroundColor: `rgba(0, 0, 0, ${DIMMING_OVERLAY_OPACITY})`,
-      pointerEvents: 'auto',
-      zIndex: DIMMING_OVERLAY_Z_INDEX, // Below selection overlay (z-index: 10) but above content
-      cursor: 'default',
-    });
-
-    // Click handler to exit edit mode
-    this.#dimmingOverlay.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
-      // Call the callback to exit edit mode
-      if (this.#onDimmingClick) {
-        this.#onDimmingClick();
-      }
-    });
-
-    // Append to visible host
-    this.#visibleHost.appendChild(this.#dimmingOverlay);
   }
 
   /**

@@ -582,9 +582,54 @@ export function layoutTableBlock({
 
   // 3. Initialize state
   let state = ensurePage();
+
+  // Check if we need to advance column/page before starting the table
+  // If the table doesn't fit in the current position and there's already content on the page,
+  // move to the next column/page to avoid starting a table that immediately needs to split
+  const availableHeight = state.contentBottom - state.cursorY;
+
+  // Determine minimum height needed to start the table
+  // Use the first row height if available, otherwise fall back to totalHeight for tables
+  // with empty measure.rows arrays
+  let minRequiredHeight = 0;
+  if (measure.rows.length > 0) {
+    minRequiredHeight = sumRowHeights(measure.rows, 0, 1);
+  } else if (measure.totalHeight > 0) {
+    // Fallback: use total height for tables with no row measurements
+    minRequiredHeight = measure.totalHeight;
+  }
+
+  if (minRequiredHeight > availableHeight && state.page.fragments.length > 0) {
+    state = advanceColumn(state);
+  }
+
   let currentRow = 0;
   let isTableContinuation = false;
   let pendingPartialRow: PartialRowInfo | null = null;
+
+  // Handle edge case: table with no rows but non-zero totalHeight
+  // This can occur in test scenarios or with placeholder tables
+  if (block.rows.length === 0 && measure.totalHeight > 0) {
+    const height = Math.min(measure.totalHeight, state.contentBottom - state.cursorY);
+    const metadata: TableFragmentMetadata = {
+      columnBoundaries: generateColumnBoundaries(measure),
+      coordinateSystem: 'fragment',
+    };
+    const fragment: TableFragment = {
+      kind: 'table',
+      blockId: block.id,
+      fromRow: 0,
+      toRow: 0,
+      x: columnX(state.columnIndex),
+      y: state.cursorY,
+      width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+      height,
+      metadata,
+    };
+    state.page.fragments.push(fragment);
+    state.cursorY += height;
+    return;
+  }
 
   // 4. Loop until all rows processed (including pending partial rows)
   while (currentRow < block.rows.length || pendingPartialRow !== null) {

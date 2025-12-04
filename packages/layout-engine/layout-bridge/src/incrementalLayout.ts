@@ -260,7 +260,6 @@ export async function incrementalLayout(
       ? (pageNumber: number): { displayText: string; totalPages: number } => {
           const pageIndex = pageNumber - 1;
           const displayInfo = numberingCtx.displayPages[pageIndex];
-
           return {
             displayText: displayInfo?.displayText ?? String(pageNumber),
             totalPages: numberingCtx.totalPages,

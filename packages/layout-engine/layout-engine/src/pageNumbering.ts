@@ -250,15 +250,16 @@ export function computeDisplayPageNumber(pages: Page[], sections: SectionMetadat
   // Track running page counter across sections
   let runningCounter = 1;
   let currentSectionIndex = -1;
+  // Reserved for future per-section page counting (e.g., "Page X of Y in this section")
   let _pagesInCurrentSection = 0;
 
   for (let i = 0; i < pages.length; i++) {
     const page = pages[i];
 
-    // Determine which section this page belongs to.
-    // Currently uses a simplified approach: look at sectionRefs or assume section 0.
-    // TODO: Enhance when section tracking becomes more explicit.
-    const pageSectionIndex = 0;
+    // Determine which section this page belongs to using page.sectionIndex
+    // which is stamped during layout based on section breaks.
+    // Falls back to 0 for backward compatibility with documents without section tracking.
+    const pageSectionIndex = page.sectionIndex ?? 0;
 
     // Check if we're entering a new section
     if (pageSectionIndex !== currentSectionIndex) {

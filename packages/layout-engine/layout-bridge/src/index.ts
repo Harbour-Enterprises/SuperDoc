@@ -22,8 +22,18 @@ export {
   getHeaderFooterType,
   defaultHeaderFooterIdentifier,
   resolveHeaderFooterForPage,
+  // Multi-section header/footer support
+  buildMultiSectionIdentifier,
+  defaultMultiSectionIdentifier,
+  getHeaderFooterTypeForSection,
+  getHeaderFooterIdForPage,
+  resolveHeaderFooterForPageAndSection,
 } from './headerFooterUtils';
-export type { HeaderFooterIdentifier } from './headerFooterUtils';
+export type {
+  HeaderFooterIdentifier,
+  MultiSectionHeaderFooterIdentifier,
+  SectionHeaderFooterIds,
+} from './headerFooterUtils';
 export {
   layoutHeaderFooterWithCache,
   type HeaderFooterBatchResult,
@@ -35,6 +45,8 @@ export { findWordBoundaries, findParagraphBoundaries } from './text-boundaries';
 export type { BoundaryRange } from './text-boundaries';
 export { incrementalLayout, measureCache } from './incrementalLayout';
 export type { HeaderFooterLayoutResult } from './incrementalLayout';
+// Re-export computeDisplayPageNumber from layout-engine for section-aware page numbering
+export { computeDisplayPageNumber, type DisplayPageInfo } from '../../layout-engine/src/index';
 export { remeasureParagraph } from './remeasure';
 export { measureCharacterX } from './text-measurement';
 export { clickToPositionDom } from './dom-mapping';

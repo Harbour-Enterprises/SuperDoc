@@ -347,6 +347,23 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         };
         layoutLog(`[Layout] First section: Scheduled pendingSectionRefs:`, pendingSectionRefs);
       }
+      // Set section index for first section
+      const firstSectionIndexRaw = block.attrs?.sectionIndex;
+      const firstMetadataIndex =
+        typeof firstSectionIndexRaw === 'number' ? firstSectionIndexRaw : Number(firstSectionIndexRaw ?? NaN);
+      if (Number.isFinite(firstMetadataIndex)) {
+        activeSectionIndex = firstMetadataIndex;
+      }
+      // Set numbering for first section from metadata
+      const firstSectionMetadata = Number.isFinite(firstMetadataIndex)
+        ? sectionMetadataList[firstMetadataIndex]
+        : undefined;
+      if (firstSectionMetadata?.numbering) {
+        if (firstSectionMetadata.numbering.format) activeNumberFormat = firstSectionMetadata.numbering.format;
+        if (typeof firstSectionMetadata.numbering.start === 'number') {
+          activePageCounter = firstSectionMetadata.numbering.start;
+        }
+      }
       return { decision: { forcePageBreak: false, forceMidPageRegion: false }, state: next };
     }
     const headerPx = block.margins?.header;
@@ -365,8 +382,18 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     const isColumnsChanging =
       !!block.columns &&
       (block.columns.count !== next.activeColumns.count || block.columns.gap !== next.activeColumns.gap);
-    // Schedule numbering change for next page
-    if (block.numbering) {
+    // Schedule section index change for next page (enables section-aware page numbering)
+    const sectionIndexRaw = block.attrs?.sectionIndex;
+    const metadataIndex = typeof sectionIndexRaw === 'number' ? sectionIndexRaw : Number(sectionIndexRaw ?? NaN);
+    if (Number.isFinite(metadataIndex)) {
+      pendingSectionIndex = metadataIndex;
+    }
+    // Get section metadata for numbering if available
+    const sectionMetadata = Number.isFinite(metadataIndex) ? sectionMetadataList[metadataIndex] : undefined;
+    // Schedule numbering change for next page - prefer metadata over block
+    if (sectionMetadata?.numbering) {
+      pendingNumbering = { ...sectionMetadata.numbering };
+    } else if (block.numbering) {
       pendingNumbering = { ...block.numbering };
     }
     // Schedule section refs changes (apply at next page boundary)
@@ -449,6 +476,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       ...(initialSectionMetadata.footerRefs && { footerRefs: initialSectionMetadata.footerRefs }),
     };
   }
+  // Section index tracking for multi-section page numbering and header/footer selection
+  let activeSectionIndex: number = initialSectionMetadata?.sectionIndex ?? 0;
+  let pendingSectionIndex: number | null = null;
 
   const paginator = createPaginator({
     margins: { left: margins.left, right: margins.right },
@@ -509,6 +539,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           activeSectionRefs = pendingSectionRefs;
           pendingSectionRefs = null;
         }
+        // Apply pending section index
+        if (pendingSectionIndex !== null) {
+          activeSectionIndex = pendingSectionIndex;
+          pendingSectionIndex = null;
+        }
         // Apply pending vertical alignment
         if (pendingVAlign !== null) {
           activeVAlign = pendingVAlign;
@@ -518,9 +553,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         return;
       }
 
-      // second callback: after page creation -> stamp display number, section refs, and advance counter
+      // second callback: after page creation -> stamp display number, section refs, section index, and advance counter
       if (state?.page) {
         state.page.numberText = formatPageNumber(activePageCounter, activeNumberFormat);
+        // Stamp section index on the page for section-aware page numbering and header/footer selection
+        state.page.sectionIndex = activeSectionIndex;
+        layoutLog(`[Layout] Page ${state.page.number}: Stamped sectionIndex:`, activeSectionIndex);
         // Stamp section refs on the page for per-section header/footer selection
         if (activeSectionRefs) {
           state.page.sectionRefs = {
@@ -687,6 +725,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           activePageCounter = sectionMetadata.numbering.start;
         }
       }
+      // Set section index for first section
+      if (Number.isFinite(metadataIndex)) {
+        activeSectionIndex = metadataIndex;
+        layoutLog(`[Layout] First section break: Set activeSectionIndex:`, activeSectionIndex);
+      }
       if (sectionMetadata?.headerRefs || sectionMetadata?.footerRefs) {
         activeSectionRefs = {
           ...(sectionMetadata.headerRefs && { headerRefs: sectionMetadata.headerRefs }),
@@ -740,6 +783,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       pendingNumbering = { ...sectionMetadata.numbering };
     } else if (block.numbering) {
       pendingNumbering = { ...block.numbering };
+    }
+
+    // Schedule section index change (apply at next page boundary)
+    if (Number.isFinite(metadataIndex)) {
+      pendingSectionIndex = metadataIndex;
+      layoutLog(`[Layout] Section break: Scheduled pendingSectionIndex:`, pendingSectionIndex);
     }
 
     // Schedule section refs changes (apply at next page boundary)
@@ -1014,6 +1063,43 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           ...(effectiveBlock.footerRefs && { footerRefs: effectiveBlock.footerRefs }),
         };
         layoutLog(`[Layout] After scheduleSectionBreakCompat: Scheduled pendingSectionRefs:`, pendingSectionRefs);
+      }
+
+      // Schedule section index and numbering (handled outside of SectionState since they're module-level vars)
+      const sectionIndexRaw = effectiveBlock.attrs?.sectionIndex;
+      const metadataIndex = typeof sectionIndexRaw === 'number' ? sectionIndexRaw : Number(sectionIndexRaw ?? NaN);
+      const isFirstSection = effectiveBlock.attrs?.isFirstSection && states.length === 0;
+      if (Number.isFinite(metadataIndex)) {
+        if (isFirstSection) {
+          // First section: apply immediately
+          activeSectionIndex = metadataIndex;
+        } else {
+          // Non-first section: schedule for next page
+          pendingSectionIndex = metadataIndex;
+        }
+      }
+      // Get section metadata for numbering if available
+      const sectionMetadata = Number.isFinite(metadataIndex) ? sectionMetadataList[metadataIndex] : undefined;
+      if (sectionMetadata?.numbering) {
+        if (isFirstSection) {
+          // First section: apply immediately
+          if (sectionMetadata.numbering.format) activeNumberFormat = sectionMetadata.numbering.format;
+          if (typeof sectionMetadata.numbering.start === 'number') {
+            activePageCounter = sectionMetadata.numbering.start;
+          }
+        } else {
+          // Non-first section: schedule for next page
+          pendingNumbering = { ...sectionMetadata.numbering };
+        }
+      } else if (effectiveBlock.numbering) {
+        if (isFirstSection) {
+          if (effectiveBlock.numbering.format) activeNumberFormat = effectiveBlock.numbering.format;
+          if (typeof effectiveBlock.numbering.start === 'number') {
+            activePageCounter = effectiveBlock.numbering.start;
+          }
+        } else {
+          pendingNumbering = { ...effectiveBlock.numbering };
+        }
       }
 
       // Handle mid-page region changes
