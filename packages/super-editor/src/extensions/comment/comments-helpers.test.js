@@ -17,8 +17,8 @@ describe('prepareCommentsForImport', () => {
   const schema = new Schema({
     nodes: {
       doc: { content: 'inline*' },
-      commentRangeStart: { name: 'commentRangeStart', groups: ['inline'], isBlock: false },
-      commentRangeEnd: { name: 'commentRangeEnd', groups: ['inline'], isBlock: false },
+      commentRangeStart: { groups: ['inline'] },
+      commentRangeEnd: { groups: ['inline'] },
       text: { group: 'inline' },
     },
   });
