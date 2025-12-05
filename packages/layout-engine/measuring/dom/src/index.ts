@@ -68,6 +68,9 @@ import {
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
 export { installNodeCanvasPolyfill } from './setup.js';
 import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
+import { getFontMetrics, clearFontMetricsCache, type FontInfo } from './fontMetricsCache.js';
+
+export { clearFontMetricsCache };
 
 const { computeTabStops } = Engines;
 
@@ -171,7 +174,15 @@ const roundValue = (value: number): number =>
 // }
 
 /**
- * Get or create a canvas 2D context for text measurement
+ * Get or create a canvas 2D context for text measurement.
+ *
+ * Lazily creates and caches a canvas 2D context for efficient text measurement.
+ * The context is reused across multiple measurements to avoid the overhead of
+ * repeated canvas creation.
+ *
+ * @returns A cached CanvasRenderingContext2D instance
+ * @throws {Error} If canvas is not available (non-DOM environment without polyfill)
+ * @throws {Error} If 2D context creation fails
  */
 function getCanvasContext(): CanvasRenderingContext2D {
   if (!canvasContext) {
@@ -253,27 +264,83 @@ function measureText(
 /**
  * Calculate typography metrics for a given font size
  *
- * Uses approximations documented in the file header.
+ * When fontInfo is provided, uses actual Canvas TextMetrics API to get precise
+ * ascent/descent values from actualBoundingBoxAscent/Descent. This prevents
+ * text clipping that occurs when using hardcoded approximations (0.8/0.2 ratios)
+ * which don't account for font-specific glyph heights.
+ *
+ * Falls back to approximations (0.8/0.2) only when:
+ * - fontInfo is not provided (empty paragraphs)
+ * - Browser doesn't support actualBoundingBox* metrics (legacy browsers)
  */
 const MIN_SINGLE_LINE_PX = (12 * 96) / 72; // 240 twips = 12pt
+
+/**
+ * Safety margin added to line height to prevent text clipping at the edges.
+ * This accounts for sub-pixel rendering differences between measurement and display.
+ */
+const LINE_HEIGHT_SAFETY_MARGIN_PX = 1;
 
 function calculateTypographyMetrics(
   fontSize: number,
   spacing?: ParagraphSpacing,
+  fontInfo?: FontInfo,
 ): {
   ascent: number;
   descent: number;
   lineHeight: number;
 } {
-  const ascent = roundValue(fontSize * 0.8);
-  const descent = roundValue(fontSize * 0.2);
-  const baseLineHeight = Math.max(fontSize, MIN_SINGLE_LINE_PX);
+  let ascent: number;
+  let descent: number;
+
+  if (fontInfo) {
+    // Use actual font metrics from Canvas API for accurate measurements
+    const ctx = getCanvasContext();
+    const metrics = getFontMetrics(ctx, fontInfo, measurementConfig.mode, measurementConfig.fonts);
+    ascent = roundValue(metrics.ascent);
+    descent = roundValue(metrics.descent);
+  } else {
+    // Fallback approximations for empty paragraphs or missing font info
+    ascent = roundValue(fontSize * 0.8);
+    descent = roundValue(fontSize * 0.2);
+  }
+
+  // Add safety margin to prevent edge clipping from sub-pixel rendering differences
+  const baseLineHeight = Math.max(ascent + descent + LINE_HEIGHT_SAFETY_MARGIN_PX, MIN_SINGLE_LINE_PX);
   const lineHeight = roundValue(resolveLineHeight(spacing, baseLineHeight));
+
   return {
     ascent,
     descent,
     lineHeight,
   };
+}
+
+/**
+ * Extract FontInfo from a TextRun for typography metrics calculation.
+ */
+function getFontInfoFromRun(run: TextRun): FontInfo {
+  return {
+    fontFamily: run.fontFamily,
+    fontSize: run.fontSize,
+    bold: run.bold,
+    italic: run.italic,
+  };
+}
+
+/**
+ * Update maxFontInfo when a new run has a larger font size.
+ * Returns the updated FontInfo if this run has the max font size, otherwise returns the existing info.
+ */
+function updateMaxFontInfo(
+  currentMaxSize: number,
+  currentMaxInfo: FontInfo | undefined,
+  newRun: TextRun,
+): FontInfo | undefined {
+  if (newRun.fontSize >= currentMaxSize) {
+    return getFontInfoFromRun(newRun);
+  }
+  return currentMaxInfo;
 }
 
 /**
@@ -400,7 +467,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const indentRight = sanitizePositive(indent?.right);
   const firstLine = indent?.firstLine ?? 0;
   const hanging = indent?.hanging ?? 0;
-  const firstLineOffset = firstLine - hanging;
+  // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
+  // suppressFirstLineIndent=true for these cases.
+  const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
+  const firstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   const tabStops = buildTabStopsPx(
@@ -470,6 +540,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     toChar: number;
     width: number;
     maxFontSize: number;
+    /** Font info for the run with maxFontSize, used for accurate typography metrics */
+    maxFontInfo?: FontInfo;
     maxWidth: number;
     segments: Line['segments'];
     leaders?: Line['leaders'];
@@ -609,7 +681,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
     if ((run as Run).kind === 'break') {
       if (currentLine) {
-        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
         const completedLine: Line = { ...currentLine, ...metrics };
         addBarTabsToLine(completedLine);
         lines.push(completedLine);
@@ -642,7 +714,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // Handle explicit line breaks (e.g., DOCX <w:br/>)
     if (isLineBreakRun(run)) {
       if (currentLine) {
-        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
         const completedLine: Line = {
           ...currentLine,
           ...metrics,
@@ -782,7 +854,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Check if image fits on current line
       if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
         // Image doesn't fit - finish current line and start new line with image
-        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
         const completedLine: Line = {
           ...currentLine,
           ...metrics,
@@ -891,6 +963,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: wordEndNoSpace,
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
             maxWidth: getEffectiveWidth(initialAvailableWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
           };
@@ -917,7 +990,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           currentLine.width > 0 &&
           !isTocEntry
         ) {
-          const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+          const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
           const completedLine: Line = {
             ...currentLine,
             ...metrics,
@@ -934,6 +1007,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: wordEndNoSpace,
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
             maxWidth: getEffectiveWidth(contentWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
           };
@@ -955,10 +1029,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ) {
             currentLine.toChar = wordEndNoSpace;
             currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
+            currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
             currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
             appendSegment(currentLine.segments, runIndex, wordStartChar, wordEndNoSpace, wordOnlyWidth, segmentStartX);
             // finish current line and start a new one on next iteration
-            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
             const completedLine: Line = { ...currentLine, ...metrics };
             addBarTabsToLine(completedLine);
             lines.push(completedLine);
@@ -980,6 +1055,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               wordCommitWidth +
               (isLastWord ? 0 : ((run as TextRun).letterSpacing ?? 0)),
           );
+          currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
           currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
           appendSegment(currentLine.segments, runIndex, wordStartChar, newToChar, wordCommitWidth, explicitX);
         }
@@ -1007,6 +1083,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             toChar: charPosInRun,
             width: 0,
             maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
             maxWidth: getEffectiveWidth(initialAvailableWidth),
             segments: [],
           };
@@ -1016,6 +1093,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         tabStopCursor = nextIndex;
         const tabAdvance = Math.max(0, target - currentLine.width);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
+        currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
         currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
         currentLine.toRun = runIndex;
         currentLine.toChar = charPosInRun;
@@ -1162,7 +1240,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   }
 
   if (currentLine) {
-    const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing);
+    const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
     const finalLine: Line = {
       ...currentLine,
       ...metrics,

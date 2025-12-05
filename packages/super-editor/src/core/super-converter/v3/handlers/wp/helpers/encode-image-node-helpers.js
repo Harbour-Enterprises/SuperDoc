@@ -7,6 +7,19 @@ const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingS
 const GROUP_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
 
 /**
+ * Normalize a relationship target to a relative media path.
+ * Strips leading slashes and collapses duplicated "word/" prefixes so lookups
+ * match the media keys we store (e.g., "word/media/image.png").
+ */
+const normalizeTargetPath = (targetPath = '') => {
+  if (!targetPath) return targetPath;
+  const trimmed = targetPath.replace(/^\/+/, ''); // remove leading slash(es)
+  if (trimmed.startsWith('word/')) return trimmed;
+  if (trimmed.startsWith('media/')) return `word/${trimmed}`;
+  return `word/${trimmed}`;
+};
+
+/**
  * Default dimensions for vector shapes when size is not specified.
  * These values provide reasonable fallback dimensions while maintaining a square aspect ratio.
  */
@@ -25,23 +38,24 @@ const DEFAULT_SHAPE_HEIGHT = 100;
  * @returns {{ type: string, attrs: Object }|null} An editor node (image, vectorShape, shapeGroup, or contentBlock) or null if parsing fails
  */
 export function handleImageNode(node, params, isAnchor) {
+  if (!node) return null;
   const { docx, filename } = params;
-  const { attributes } = node;
+  const attributes = node?.attributes || {};
   const padding = {
-    top: emuToPixels(attributes['distT']),
-    bottom: emuToPixels(attributes['distB']),
-    left: emuToPixels(attributes['distL']),
-    right: emuToPixels(attributes['distR']),
+    top: emuToPixels(attributes?.['distT']),
+    bottom: emuToPixels(attributes?.['distB']),
+    left: emuToPixels(attributes?.['distL']),
+    right: emuToPixels(attributes?.['distR']),
   };
 
-  const extent = node.elements.find((el) => el.name === 'wp:extent');
+  const extent = node?.elements?.find((el) => el.name === 'wp:extent');
   const size = {
     width: emuToPixels(extent?.attributes?.cx),
     height: emuToPixels(extent?.attributes?.cy),
   };
 
   let transformData = {};
-  const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
+  const effectExtent = node?.elements?.find((el) => el.name === 'wp:effectExtent');
   if (effectExtent) {
     const sanitizeEmuValue = (value) => {
       if (value === null || value === undefined) return 0;
@@ -57,13 +71,13 @@ export function handleImageNode(node, params, isAnchor) {
     };
   }
 
-  const positionHTag = node.elements.find((el) => el.name === 'wp:positionH');
-  const positionH = positionHTag?.elements.find((el) => el.name === 'wp:posOffset');
+  const positionHTag = node?.elements?.find((el) => el.name === 'wp:positionH');
+  const positionH = positionHTag?.elements?.find((el) => el.name === 'wp:posOffset');
   const positionHValue = emuToPixels(positionH?.elements[0]?.text);
   const hRelativeFrom = positionHTag?.attributes?.relativeFrom;
-  const alignH = positionHTag?.elements.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
+  const alignH = positionHTag?.elements?.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
 
-  const positionVTag = node.elements.find((el) => el.name === 'wp:positionV');
+  const positionVTag = node?.elements?.find((el) => el.name === 'wp:positionV');
   const positionV = positionVTag?.elements?.find((el) => el.name === 'wp:posOffset');
   const positionVValue = emuToPixels(positionV?.elements[0]?.text);
   const vRelativeFrom = positionVTag?.attributes?.relativeFrom;
@@ -77,11 +91,11 @@ export function handleImageNode(node, params, isAnchor) {
   // Capture wp:simplePos node for round-tripping; only use it for positioning when simplePos is enabled.
   const useSimplePos =
     attributes['simplePos'] === '1' || attributes['simplePos'] === 1 || attributes['simplePos'] === true;
-  const simplePosNode = node.elements.find((el) => el.name === 'wp:simplePos');
+  const simplePosNode = node?.elements?.find((el) => el.name === 'wp:simplePos');
 
   // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
   const wrapNode = isAnchor
-    ? node.elements.find((el) =>
+    ? node?.elements?.find((el) =>
         ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
       )
     : null;
@@ -224,11 +238,8 @@ export function handleImageNode(node, params, isAnchor) {
   const { attributes: relAttributes } = rel;
   const targetPath = relAttributes['Target'];
 
-  let path = `word/${targetPath}`;
-
-  // Some images may appear out of the word folder
-  if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) path = targetPath.substring(1);
-  const extension = targetPath.substring(targetPath.lastIndexOf('.') + 1);
+  const path = normalizeTargetPath(targetPath);
+  const extension = path.substring(path.lastIndexOf('.') + 1);
 
   return {
     type: 'image',
@@ -247,8 +258,8 @@ export function handleImageNode(node, params, isAnchor) {
       transformData,
       ...(useSimplePos && {
         simplePos: {
-          x: simplePosNode.attributes?.x,
-          y: simplePosNode.attributes?.y,
+          x: simplePosNode?.attributes?.x,
+          y: simplePosNode?.attributes?.y,
         },
       }),
       wrap,
@@ -260,12 +271,12 @@ export function handleImageNode(node, params, isAnchor) {
       wrapTopAndBottom: wrap.type === 'TopAndBottom',
       shouldStretch,
       originalPadding: {
-        distT: attributes['distT'],
-        distB: attributes['distB'],
-        distL: attributes['distL'],
-        distR: attributes['distR'],
+        distT: attributes?.['distT'],
+        distB: attributes?.['distB'],
+        distL: attributes?.['distL'],
+        distR: attributes?.['distR'],
       },
-      originalAttributes: node.attributes,
+      originalAttributes: node?.attributes || {},
       rId: relAttributes['Id'],
     },
   };
@@ -522,11 +533,8 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
       if (!rel) return null;
 
-      const targetPath = rel.attributes?.['Target'];
-      let path = `word/${targetPath}`;
-      if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) {
-        path = targetPath.substring(1);
-      }
+      const targetPath = normalizeTargetPath(rel.attributes?.['Target']);
+      const path = targetPath;
 
       // Extract picture name and ID
       const nvPicPr = pic.elements?.find((el) => el.name === 'pic:nvPicPr');

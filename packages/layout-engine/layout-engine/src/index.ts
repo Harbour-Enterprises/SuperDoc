@@ -76,6 +76,15 @@ export type LayoutOptions = {
   columns?: ColumnLayout;
   remeasureParagraph?: (block: ParagraphBlock, maxWidth: number) => ParagraphMeasure;
   sectionMetadata?: SectionMetadata[];
+  /**
+   * Actual measured header content heights per variant type.
+   * When provided, the layout engine will ensure body content starts below
+   * the header content, preventing overlap when headers exceed their allocated margin space.
+   *
+   * Keys correspond to header variant types: 'default', 'first', 'even', 'odd'
+   * Values are the actual content heights in pixels.
+   */
+  headerContentHeights?: Partial<Record<'default' | 'first' | 'even' | 'odd', number>>;
 };
 
 export type HeaderFooterConstraints = {
@@ -256,7 +265,40 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     throw new Error('layoutDocument: pageSize and margins yield non-positive content area');
   }
 
-  let activeTopMargin = margins.top;
+  /**
+   * Validates and normalizes a header height value to ensure it is a non-negative finite number.
+   *
+   * @param height - The header height value to validate (may be undefined)
+   * @returns A valid non-negative number, or 0 if the input is invalid
+   */
+  const validateHeaderHeight = (height: number | undefined): number => {
+    if (height === undefined) return 0;
+    if (!Number.isFinite(height) || height < 0) return 0;
+    return height;
+  };
+
+  // Calculate the maximum header content height across all variants.
+  // This ensures body content always starts below header content, regardless of which variant is used.
+  const headerContentHeights = options.headerContentHeights;
+  const maxHeaderContentHeight = headerContentHeights
+    ? Math.max(
+        0,
+        validateHeaderHeight(headerContentHeights.default),
+        validateHeaderHeight(headerContentHeights.first),
+        validateHeaderHeight(headerContentHeights.even),
+        validateHeaderHeight(headerContentHeights.odd),
+      )
+    : 0;
+
+  // Calculate effective top margin: ensure body content starts below header content.
+  // The header starts at headerDistance (margins.header) from the page top.
+  // Body content must start at headerDistance + actualHeaderHeight (at minimum).
+  // We take the max of the document's top margin and the header-required space.
+  const headerDistance = margins.header ?? margins.top;
+  const effectiveTopMargin =
+    maxHeaderContentHeight > 0 ? Math.max(margins.top, headerDistance + maxHeaderContentHeight) : margins.top;
+
+  let activeTopMargin = effectiveTopMargin;
   let activeBottomMargin = margins.bottom;
   let pendingTopMargin: number | null = null;
   let pendingBottomMargin: number | null = null;
@@ -308,7 +350,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     state: SectionState;
   } => {
     if (typeof scheduleSectionBreakExport === 'function') {
-      return scheduleSectionBreakExport(block, state, baseMargins);
+      return scheduleSectionBreakExport(block, state, baseMargins, maxHeaderContentHeight);
     }
     // Fallback inline logic (mirrors section-breaks.ts)
     const next = { ...state };
@@ -322,10 +364,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         next.pendingOrientation = null;
       }
       if (block.margins?.header !== undefined) {
-        const headerDistance = Math.max(0, block.margins.header);
-        next.activeHeaderDistance = headerDistance;
-        next.pendingHeaderDistance = headerDistance;
-        next.activeTopMargin = Math.max(baseMargins.top, headerDistance);
+        const headerDist = Math.max(0, block.margins.header);
+        next.activeHeaderDistance = headerDist;
+        next.pendingHeaderDistance = headerDist;
+        // Account for actual header content height
+        const requiredTop = maxHeaderContentHeight > 0 ? headerDist + maxHeaderContentHeight : headerDist;
+        next.activeTopMargin = Math.max(baseMargins.top, requiredTop);
         next.pendingTopMargin = next.activeTopMargin;
       }
       if (block.margins?.footer !== undefined) {
@@ -368,14 +412,27 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     }
     const headerPx = block.margins?.header;
     const footerPx = block.margins?.footer;
+    const topPx = block.margins?.top;
     const nextTop = next.pendingTopMargin ?? next.activeTopMargin;
     const nextBottom = next.pendingBottomMargin ?? next.activeBottomMargin;
     const nextHeader = next.pendingHeaderDistance ?? next.activeHeaderDistance;
     const nextFooter = next.pendingFooterDistance ?? next.activeFooterDistance;
-    next.pendingTopMargin = typeof headerPx === 'number' ? Math.max(baseMargins.top, headerPx) : nextTop;
-    next.pendingBottomMargin = typeof footerPx === 'number' ? Math.max(baseMargins.bottom, footerPx) : nextBottom;
+
+    // Update header/footer distances first
     next.pendingHeaderDistance = typeof headerPx === 'number' ? Math.max(0, headerPx) : nextHeader;
     next.pendingFooterDistance = typeof footerPx === 'number' ? Math.max(0, footerPx) : nextFooter;
+
+    // Account for actual header content height when calculating top margin
+    // Recalculate if either top or header margin changes
+    if (typeof headerPx === 'number' || typeof topPx === 'number') {
+      const sectionTop = topPx ?? baseMargins.top;
+      const sectionHeader = next.pendingHeaderDistance;
+      const requiredTop = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
+      next.pendingTopMargin = Math.max(sectionTop, requiredTop);
+    } else {
+      next.pendingTopMargin = nextTop;
+    }
+    next.pendingBottomMargin = typeof footerPx === 'number' ? Math.max(baseMargins.bottom, footerPx) : nextBottom;
     if (block.pageSize) next.pendingPageSize = { w: block.pageSize.w, h: block.pageSize.h };
     if (block.orientation) next.pendingOrientation = block.orientation;
     const sectionType = block.type ?? 'continuous';
@@ -697,10 +754,17 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         pendingOrientation = null; // Clear pending since we applied directly
       }
       if (block.margins?.header !== undefined) {
-        const headerDistance = Math.max(0, block.margins.header);
-        activeHeaderDistance = headerDistance;
-        pendingHeaderDistance = headerDistance;
-        activeTopMargin = Math.max(margins.top, headerDistance);
+        const headerDist = Math.max(0, block.margins.header);
+        activeHeaderDistance = headerDist;
+        pendingHeaderDistance = headerDist;
+      }
+      // Handle top margin - always recalculate with header content height if applicable
+      if (block.margins?.top !== undefined || block.margins?.header !== undefined) {
+        const sectionTop = block.margins?.top ?? margins.top;
+        const sectionHeader = block.margins?.header ?? activeHeaderDistance;
+        // Account for actual header content height when calculating top margin
+        const requiredTopMargin = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
+        activeTopMargin = Math.max(sectionTop, requiredTopMargin);
         pendingTopMargin = activeTopMargin;
       }
       if (block.margins?.footer !== undefined) {
@@ -752,16 +816,27 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     // We process all properties before deciding whether to force a page break.
     const headerPx = block.margins?.header;
     const footerPx = block.margins?.footer;
+    const topPx = block.margins?.top;
     const nextTop = pendingTopMargin ?? activeTopMargin;
     const nextBottom = pendingBottomMargin ?? activeBottomMargin;
     const nextHeader = pendingHeaderDistance ?? activeHeaderDistance;
     const nextFooter = pendingFooterDistance ?? activeFooterDistance;
 
-    // Update pending margins (take max to ensure space for header/footer)
-    pendingTopMargin = typeof headerPx === 'number' ? Math.max(margins.top, headerPx) : nextTop;
-    pendingBottomMargin = typeof footerPx === 'number' ? Math.max(margins.bottom, footerPx) : nextBottom;
+    // Update header/footer distances first
     pendingHeaderDistance = typeof headerPx === 'number' ? Math.max(0, headerPx) : nextHeader;
     pendingFooterDistance = typeof footerPx === 'number' ? Math.max(0, footerPx) : nextFooter;
+
+    // Update pending margins (take max to ensure space for header/footer and header content)
+    // Recalculate if either top or header margin changes
+    if (typeof headerPx === 'number' || typeof topPx === 'number') {
+      const sectionTop = topPx ?? margins.top;
+      const sectionHeader = pendingHeaderDistance;
+      const requiredForHeader = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
+      pendingTopMargin = Math.max(sectionTop, requiredForHeader);
+    } else {
+      pendingTopMargin = nextTop;
+    }
+    pendingBottomMargin = typeof footerPx === 'number' ? Math.max(margins.bottom, footerPx) : nextBottom;
 
     // Schedule page size change if present
     if (block.pageSize) {

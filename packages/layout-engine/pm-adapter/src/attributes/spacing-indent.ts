@@ -170,6 +170,11 @@ export const normalizeAlignment = (value: unknown): ParagraphAttrs['alignment'] 
     case 'right':
     case 'justify':
       return value;
+    case 'both':
+    case 'distribute':
+    case 'numTab':
+    case 'thaiDistribute':
+      return 'justify';
     case 'end':
       return 'right';
     case 'start':

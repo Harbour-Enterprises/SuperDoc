@@ -55,10 +55,16 @@ describe('measureBlock', () => {
         toRun: 0,
       });
       expect(measure.lines[0].width).toBeGreaterThan(0);
-      expect(measure.lines[0].ascent).toBe(16 * 0.8);
-      expect(measure.lines[0].descent).toBe(16 * 0.2);
-      expect(measure.lines[0].lineHeight).toBe(16);
-      expect(measure.totalHeight).toBe(16);
+      // Ascent/descent now use actual font metrics from Canvas API instead of
+      // hardcoded 0.8/0.2 approximations. This prevents text clipping.
+      // Values vary by font, so we check for reasonable ranges.
+      expect(measure.lines[0].ascent).toBeGreaterThan(0);
+      expect(measure.lines[0].ascent).toBeLessThan(16 * 1.2); // Should be reasonable for 16px font
+      expect(measure.lines[0].descent).toBeGreaterThan(0);
+      expect(measure.lines[0].descent).toBeLessThan(16 * 0.5);
+      // lineHeight should be at least ascent + descent (+ safety margin)
+      expect(measure.lines[0].lineHeight).toBeGreaterThanOrEqual(measure.lines[0].ascent + measure.lines[0].descent);
+      expect(measure.totalHeight).toBe(measure.lines[0].lineHeight);
     });
 
     it('breaks lines when text exceeds maxWidth', async () => {
@@ -79,7 +85,9 @@ describe('measureBlock', () => {
       const measure = expectParagraphMeasure(await measureBlock(block, 100));
 
       expect(measure.lines.length).toBeGreaterThan(1);
-      expect(measure.totalHeight).toBe(measure.lines.length * 16);
+      // totalHeight should equal sum of all line heights (which now use actual font metrics)
+      const expectedHeight = measure.lines.reduce((sum, line) => sum + line.lineHeight, 0);
+      expect(measure.totalHeight).toBe(expectedHeight);
 
       // All lines except maybe the last should be near maxWidth
       for (let i = 0; i < measure.lines.length - 1; i++) {
@@ -499,8 +507,10 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      const base = 16;
-      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * base, 3);
+      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
+      // The multiplier (1.5) is applied to this base
+      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
+      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * actualBase, 1);
     });
 
     it('applies higher auto multipliers to the baseline line height', async () => {
@@ -520,8 +530,9 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      const base = 16;
-      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * base, 3);
+      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
+      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
+      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * actualBase, 1);
     });
 
     it('treats large auto values as absolute pixel heights', async () => {
@@ -601,9 +612,14 @@ describe('measureBlock', () => {
 
       const measure = expectParagraphMeasure(await measureBlock(block, 1000));
 
-      expect(measure.lines[0].ascent).toBe(20 * 0.8); // 16
-      expect(measure.lines[0].descent).toBe(20 * 0.2); // 4
-      expect(measure.lines[0].lineHeight).toBe(20); // Base clamps to font size
+      // Typography metrics now use actual Canvas API measurements instead of hardcoded ratios
+      // This prevents text clipping for fonts with non-standard ascent/descent ratios
+      expect(measure.lines[0].ascent).toBeGreaterThan(0);
+      expect(measure.lines[0].ascent).toBeLessThan(20 * 1.2); // Reasonable for 20px font
+      expect(measure.lines[0].descent).toBeGreaterThan(0);
+      expect(measure.lines[0].descent).toBeLessThan(20 * 0.5);
+      // lineHeight should be at least ascent + descent
+      expect(measure.lines[0].lineHeight).toBeGreaterThanOrEqual(measure.lines[0].ascent + measure.lines[0].descent);
     });
 
     it('uses the largest fontSize in a line for metrics', async () => {
@@ -628,8 +644,9 @@ describe('measureBlock', () => {
       const measure = expectParagraphMeasure(await measureBlock(block, 1000));
 
       // Should use the larger font size (24) for line metrics
-      expect(measure.lines[0].lineHeight).toBe(24);
-      expect(measure.lines[0].ascent).toBe(24 * 0.8);
+      // With actual font metrics, lineHeight is based on actual glyph bounds, not fontSize
+      expect(measure.lines[0].lineHeight).toBeGreaterThan(20); // Should be based on 24px font
+      expect(measure.lines[0].ascent).toBeGreaterThan(16); // Should reflect larger font
     });
   });
 

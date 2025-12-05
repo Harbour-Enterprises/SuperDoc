@@ -108,9 +108,65 @@ export async function incrementalLayout(
     `[Perf] 4.1 Measure all blocks: ${(measureEnd - measureStart).toFixed(2)}ms (${cacheMisses} measured, ${cacheHits} cached)`,
   );
 
+  // Pre-layout headers to get their actual content heights BEFORE body layout.
+  // This prevents header content from overlapping with body content when headers
+  // exceed their allocated margin space.
+  let headerContentHeights: Partial<Record<'default' | 'first' | 'even' | 'odd', number>> | undefined;
+
+  if (headerFooter?.constraints && headerFooter.headerBlocks) {
+    const hfPreStart = performance.now();
+    const measureFn = headerFooter.measure ?? measureBlock;
+
+    // Invalidate header/footer cache if content or constraints changed
+    invalidateHeaderFooterCache(
+      headerMeasureCache,
+      headerFooterCacheState,
+      headerFooter.headerBlocks,
+      headerFooter.footerBlocks,
+      headerFooter.constraints,
+      options.sectionMetadata,
+    );
+
+    /**
+     * Placeholder page count used during header pre-layout for height measurement.
+     * The actual page count is not yet known at this stage, but it doesn't affect
+     * header height calculations. A value of 1 is sufficient as a placeholder.
+     */
+    const HEADER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT = 1;
+
+    // Layout headers to get their heights (without page tokens for now - heights won't change)
+    const preHeaderLayouts = await layoutHeaderFooterWithCache(
+      headerFooter.headerBlocks,
+      headerFooter.constraints,
+      measureFn,
+      headerMeasureCache,
+      HEADER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT,
+      undefined, // No page resolver needed for height calculation
+    );
+
+    // Type guard to check if a key is a valid header variant type
+    type HeaderVariantType = 'default' | 'first' | 'even' | 'odd';
+    const isValidHeaderType = (key: string): key is HeaderVariantType => {
+      return ['default', 'first', 'even', 'odd'].includes(key);
+    };
+
+    // Extract actual content heights from each variant
+    headerContentHeights = {};
+    for (const [type, value] of Object.entries(preHeaderLayouts)) {
+      if (!isValidHeaderType(type)) continue;
+      if (value?.layout && typeof value.layout.height === 'number') {
+        headerContentHeights[type] = value.layout.height;
+      }
+    }
+
+    const hfPreEnd = performance.now();
+    perfLog(`[Perf] 4.1.5 Pre-layout headers for height: ${(hfPreEnd - hfPreStart).toFixed(2)}ms`);
+  }
+
   const layoutStart = performance.now();
   let layout = layoutDocument(nextBlocks, measures, {
     ...options,
+    headerContentHeights, // Pass header heights to prevent overlap
     remeasureParagraph: (block: FlowBlock, maxWidth: number) => remeasureParagraph(block as ParagraphBlock, maxWidth),
   });
   const layoutEnd = performance.now();
@@ -185,6 +241,7 @@ export async function incrementalLayout(
       const relayoutStart = performance.now();
       layout = layoutDocument(currentBlocks, currentMeasures, {
         ...options,
+        headerContentHeights, // Pass header heights to prevent overlap
         remeasureParagraph: (block: FlowBlock, maxWidth: number) =>
           remeasureParagraph(block as ParagraphBlock, maxWidth),
       });
