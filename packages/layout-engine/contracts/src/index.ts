@@ -688,6 +688,8 @@ export type SectionMetadata = {
   headerRefs?: Partial<Record<SectionRefType, string>>;
   footerRefs?: Partial<Record<SectionRefType, string>>;
   numbering?: SectionNumbering;
+  /** Whether first page has a different header/footer (w:titlePg in OOXML) */
+  titlePg?: boolean;
 };
 
 export type PageBreakBlock = {

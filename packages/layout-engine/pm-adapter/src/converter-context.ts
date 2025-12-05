@@ -8,6 +8,8 @@
  * should always guard for undefined fields and degrade gracefully.
  */
 
+import type { ParagraphSpacing } from '@superdoc/contracts';
+
 export type ConverterNumberingContext = {
   definitions?: Record<string, unknown>;
   abstracts?: Record<string, unknown>;
@@ -21,10 +23,27 @@ export type ConverterLinkedStyle = {
   };
 };
 
+/**
+ * Paragraph properties from a table style that should be applied to
+ * paragraphs inside table cells as part of the OOXML style cascade.
+ */
+export type TableStyleParagraphProps = {
+  spacing?: ParagraphSpacing;
+};
+
 export type ConverterContext = {
   docx?: Record<string, unknown>;
   numbering?: ConverterNumberingContext;
   linkedStyles?: ConverterLinkedStyle[];
+  /**
+   * Paragraph properties inherited from the containing table's style.
+   * Per OOXML spec, table styles can define pPr that applies to all
+   * paragraphs within the table. This is set by the table converter
+   * and read by paragraph converters inside table cells.
+   *
+   * Style cascade: docDefaults → tableStyleParagraphProps → paragraph style → direct formatting
+   */
+  tableStyleParagraphProps?: TableStyleParagraphProps;
 };
 
 /**

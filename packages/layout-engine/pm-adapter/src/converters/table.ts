@@ -70,6 +70,8 @@ type ParseTableCellArgs = {
   cellIndex: number;
   context: TableParserDependencies;
   defaultCellPadding?: BoxSpacing;
+  /** Table style paragraph props to pass to paragraph converter for style cascade */
+  tableStyleParagraphProps?: import('../converter-context.js').TableStyleParagraphProps;
 };
 
 type ParseTableRowArgs = {
@@ -77,6 +79,8 @@ type ParseTableRowArgs = {
   rowIndex: number;
   context: TableParserDependencies;
   defaultCellPadding?: BoxSpacing;
+  /** Table style paragraph props to pass to paragraph converter for style cascade */
+  tableStyleParagraphProps?: import('../converter-context.js').TableStyleParagraphProps;
 };
 
 const isTableRowNode = (node: PMNode): boolean => node.type === 'tableRow' || node.type === 'table_row';
@@ -121,7 +125,7 @@ const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHe
 };
 
 const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
-  const { cellNode, rowIndex, cellIndex, context, defaultCellPadding } = args;
+  const { cellNode, rowIndex, cellIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableCellNode(cellNode) || !Array.isArray(cellNode.content)) {
     return null;
   }
@@ -130,8 +134,19 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   // Note: Table cells can only contain paragraphs, images, and drawings (not nested tables)
   const blocks: (ParagraphBlock | ImageBlock | DrawingBlock)[] = [];
 
+  // Create enhanced converter context with table style paragraph props for the style cascade
+  // This allows paragraphs inside table cells to inherit table style's pPr
+  const cellConverterContext: ConverterContext | undefined = tableStyleParagraphProps
+    ? {
+        ...context.converterContext,
+        tableStyleParagraphProps,
+      }
+    : context.converterContext;
+
   for (const childNode of cellNode.content) {
     if (childNode.type === 'paragraph') {
+      // Note: The wrapper function in internal.ts has 12 params (no 'converters'),
+      // so converterContext is at position 12, not 13
       const paragraphBlocks = context.paragraphToFlowBlocks(
         childNode,
         context.nextBlockId,
@@ -139,12 +154,12 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
         context.defaultFont,
         context.defaultSize,
         context.styleContext,
-        undefined,
+        undefined, // listCounterContext
         context.trackedChanges,
         context.bookmarks,
         context.hyperlinkConfig,
         context.themeColors,
-        context.converterContext,
+        cellConverterContext, // converterContext at position 12
       );
       const paragraph = paragraphBlocks.find((b): b is ParagraphBlock => b.kind === 'paragraph');
       if (paragraph) {
@@ -204,7 +219,7 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
 };
 
 const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
-  const { rowNode, rowIndex, context, defaultCellPadding } = args;
+  const { rowNode, rowIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableRowNode(rowNode) || !Array.isArray(rowNode.content)) {
     return null;
   }
@@ -217,6 +232,7 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
       cellIndex,
       context,
       defaultCellPadding,
+      tableStyleParagraphProps,
     });
     if (parsedCell) {
       cells.push(parsedCell);
@@ -428,6 +444,7 @@ export function tableNodeToBlock(
 
   const hydratedTableStyle = hydrateTableStyleAttrs(node, converterContext);
   const defaultCellPadding = hydratedTableStyle?.cellPadding;
+  const tableStyleParagraphProps = hydratedTableStyle?.paragraphProps;
 
   const rows: TableRow[] = [];
   node.content.forEach((rowNode, rowIndex) => {
@@ -436,6 +453,7 @@ export function tableNodeToBlock(
       rowIndex,
       context: parserDeps,
       defaultCellPadding,
+      tableStyleParagraphProps,
     });
     if (parsedRow) {
       rows.push(parsedRow);

@@ -146,6 +146,7 @@ export function publishSectionMetadata(sectionRanges: SectionRange[], options?: 
       headerRefs: section.headerRefs,
       footerRefs: section.footerRefs,
       numbering: section.numbering,
+      titlePg: section.titlePg,
     });
   });
 }
