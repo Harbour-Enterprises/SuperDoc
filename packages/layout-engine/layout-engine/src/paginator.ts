@@ -62,6 +62,7 @@ export function createPaginator(opts: PaginatorOptions) {
 
     const contentBottom = currentPageSize.h - bottomMargin;
     const contentHeight = contentBottom - topMargin;
+
     if (contentHeight <= 0) {
       throw new Error('layoutDocument: pageSize and margins yield non-positive content area');
     }

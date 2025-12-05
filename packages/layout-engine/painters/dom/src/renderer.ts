@@ -1105,6 +1105,7 @@ export class DomPainter {
     const offset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
     const marginLeft = data.marginLeft ?? 0;
     const marginRight = page.margins?.right ?? 0;
+
     container.style.position = 'absolute';
     container.style.left = `${marginLeft}px`;
     if (typeof data.contentWidth === 'number') {
