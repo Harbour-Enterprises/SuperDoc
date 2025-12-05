@@ -223,10 +223,13 @@ export async function layoutHeaderFooterWithCache(
   const useBucketing = FeatureFlags.HF_DIGIT_BUCKETING && docTotalPages >= MIN_PAGES_FOR_BUCKETING;
 
   for (const [type, blocks] of Object.entries(sections) as [keyof HeaderFooterBatch, FlowBlock[] | undefined][]) {
-    if (!blocks || blocks.length === 0) continue;
+    if (!blocks || blocks.length === 0) {
+      continue;
+    }
 
     // Fast path: if variant has no page tokens, create one layout for all pages
-    if (!hasPageTokens(blocks)) {
+    const hasTokens = hasPageTokens(blocks);
+    if (!hasTokens) {
       const measures = await cache.measureBlocks(blocks, constraints, measureBlock);
       const layout = layoutHeaderFooter(blocks, measures, constraints);
       result[type] = { blocks, measures, layout };
@@ -267,7 +270,9 @@ export async function layoutHeaderFooterWithCache(
 
       // Resolve page number tokens for this specific page
       const { displayText, totalPages: totalPagesForPage } = pageResolver(pageNum);
-      resolveHeaderFooterTokens(clonedBlocks, parseInt(displayText, 10) || pageNum, totalPagesForPage);
+      const resolvedPageNum = parseInt(displayText, 10) || pageNum;
+
+      resolveHeaderFooterTokens(clonedBlocks, resolvedPageNum, totalPagesForPage);
 
       // Measure and layout
       const measures = await cache.measureBlocks(clonedBlocks, constraints, measureBlock);

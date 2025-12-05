@@ -4,8 +4,12 @@ import {
   defaultHeaderFooterIdentifier,
   extractIdentifierFromConverter,
   getHeaderFooterType,
+  getHeaderFooterTypeForSection,
   resolveHeaderFooterForPage,
+  resolveHeaderFooterForPageAndSection,
+  buildMultiSectionIdentifier,
 } from '../src/headerFooterUtils';
+import type { SectionMetadata } from '@superdoc/contracts';
 
 const makeLayout = (): Layout => ({
   pageSize: { w: 600, h: 800 },
@@ -191,6 +195,56 @@ describe('headerFooterUtils', () => {
       expect(getHeaderFooterType(1, identifier, { kind: 'footer' })).toBe('first');
       expect(getHeaderFooterType(2, identifier, { kind: 'footer' })).toBe('default');
       expect(getHeaderFooterType(3, identifier, { kind: 'footer' })).toBe('default');
+    });
+  });
+
+  describe('multi-section first-page variants', () => {
+    const sectionMetadata: SectionMetadata[] = [
+      { sectionIndex: 0, headerRefs: { default: 'h0-default', first: 'h0-first' } },
+      { sectionIndex: 1, headerRefs: { default: 'h1-default', first: 'h1-first' } },
+    ];
+    const layout: Layout = {
+      pageSize: { w: 600, h: 800 },
+      pages: [
+        { number: 1, fragments: [], sectionIndex: 0 },
+        { number: 2, fragments: [], sectionIndex: 0 },
+        { number: 3, fragments: [], sectionIndex: 1 },
+        { number: 4, fragments: [], sectionIndex: 1 },
+      ],
+      headerFooter: {
+        default: {
+          height: 36,
+          pages: [{ number: 1, fragments: [] }],
+        },
+        first: {
+          height: 40,
+          pages: [{ number: 1, fragments: [] }],
+        },
+      },
+    };
+
+    it('treats the first page of a later section as a first-page header/footer', () => {
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+      const sectionFirstPageType = getHeaderFooterTypeForSection(3, 1, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(sectionFirstPageType).toBe('first');
+
+      const secondPageType = getHeaderFooterTypeForSection(4, 1, identifier, {
+        kind: 'header',
+        sectionPageNumber: 2,
+      });
+      expect(secondPageType).toBe('default');
+    });
+
+    it('resolves layout info with section-aware first-page detection', () => {
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+      const resolved = resolveHeaderFooterForPageAndSection(layout, 2, identifier, { kind: 'header' });
+
+      expect(resolved?.sectionIndex).toBe(1);
+      expect(resolved?.type).toBe('first');
+      expect(resolved?.contentId).toBe('h1-first');
     });
   });
 });

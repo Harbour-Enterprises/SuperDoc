@@ -214,11 +214,21 @@ vi.mock('@superdoc/layout-bridge', () => ({
     extractHeaderId: vi.fn(() => 'rId-header-default'),
     extractFooterId: vi.fn(() => 'rId-footer-default'),
   })),
+  buildMultiSectionIdentifier: vi.fn(() => ({ sections: [] })),
+  getHeaderFooterTypeForSection: vi.fn(() => 'default'),
   getHeaderFooterType: vi.fn((_pageNumber, _identifier, _options) => {
     // Returns the type of header/footer for a given page
     // For simplicity, we return 'default' for all pages
     return 'default';
   }),
+  layoutHeaderFooterWithCache: vi.fn(async () => ({
+    default: {
+      layout: { pages: [{ fragments: [], number: 1 }], height: 0 },
+      blocks: [],
+      measures: [],
+    },
+  })),
+  computeDisplayPageNumber: vi.fn((pages) => pages.map((p) => ({ displayText: String(p.number ?? 1) }))),
 }));
 
 // Mock painter-dom

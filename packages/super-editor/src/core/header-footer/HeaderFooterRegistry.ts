@@ -1027,6 +1027,54 @@ export class HeaderFooterLayoutAdapter {
   }
 
   /**
+   * Retrieves FlowBlocks for ALL header/footer content, keyed by relationship ID.
+   *
+   * Unlike getBatch() which only returns content for variant-associated IDs,
+   * this method returns content for ALL registered header/footer IDs. This is
+   * essential for multi-section documents where different sections may use
+   * different content for the same variant type.
+   *
+   * @param kind - The type of section to retrieve: 'header' or 'footer'
+   * @returns A Map of rId to FlowBlock arrays, or undefined if no content exists
+   *
+   * @example
+   * ```typescript
+   * const footersByRId = adapter.getBlocksByRId('footer');
+   * if (footersByRId) {
+   *   // footersByRId.get('rId14') - blocks for footer with rId14
+   *   // footersByRId.get('rId18') - blocks for footer with rId18 (different section)
+   * }
+   * ```
+   */
+  getBlocksByRId(kind: HeaderFooterKind): Map<string, FlowBlock[]> | undefined {
+    const descriptors = this.#manager.getDescriptors(kind);
+    if (!descriptors.length) return undefined;
+
+    const blocksMap = new Map<string, FlowBlock[]>();
+
+    descriptors.forEach((descriptor) => {
+      const blocks = this.#getBlocks(descriptor);
+      if (blocks && blocks.length > 0) {
+        blocksMap.set(descriptor.id, blocks);
+      }
+    });
+
+    return blocksMap.size > 0 ? blocksMap : undefined;
+  }
+
+  /**
+   * Retrieves FlowBlocks for a specific header/footer by its relationship ID.
+   *
+   * @param rId - The relationship ID (e.g., 'rId14')
+   * @returns FlowBlock array for the specified rId, or undefined if not found
+   */
+  getBlocksForRId(rId: string): FlowBlock[] | undefined {
+    const descriptor = this.#manager.getDescriptorById(rId);
+    if (!descriptor) return undefined;
+    return this.#getBlocks(descriptor);
+  }
+
+  /**
    * Invalidates the cached FlowBlocks for a specific header/footer section.
    *
    * Call this method when the content of a specific section changes to force

@@ -161,6 +161,10 @@ function extractHeaderFooterRefs(
 
 /**
  * Extract page numbering format and start number from <w:pgNumType>.
+ *
+ * Per OOXML spec, when w:fmt is absent the format defaults to 'decimal'.
+ * When w:start is present, it restarts page numbering from that value.
+ * If neither attribute is present, the element has no effect on numbering.
  */
 function extractPageNumbering(elements: SectionElement[]):
   | {
@@ -178,8 +182,11 @@ function extractPageNumbering(elements: SectionElement[]):
   const startRaw = pgNumType.attributes['w:start'];
   const startNum = startRaw != null ? Number(startRaw) : undefined;
 
+  // Per OOXML spec, when w:start restarts numbering without w:fmt, default to decimal (Arabic numerals)
+  const effectiveFormat = fmt ?? (Number.isFinite(startNum) ? 'decimal' : undefined);
+
   return {
-    format: fmt,
+    format: effectiveFormat,
     ...(Number.isFinite(startNum) ? { start: Number(startNum) } : {}),
   };
 }
