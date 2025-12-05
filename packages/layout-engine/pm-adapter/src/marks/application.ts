@@ -670,6 +670,12 @@ export const applyTextStyleMark = (
       run.letterSpacing = spacing;
     }
   }
+  if (typeof attrs.textTransform === 'string') {
+    const transform = attrs.textTransform as string;
+    if (transform === 'uppercase' || transform === 'lowercase' || transform === 'capitalize' || transform === 'none') {
+      run.textTransform = transform;
+    }
+  }
 };
 
 /**

@@ -57,6 +57,24 @@ describe('w:t translator', () => {
       });
     });
 
+    it('preserves non-breaking spaces (U+00A0) used for alignment', () => {
+      // Word uses NBSP for intentional spacing/alignment and doesn't add xml:space="preserve"
+      const nbsp = '\u00A0';
+      const params = {
+        extraParams: {
+          node: {
+            elements: [{ text: `${nbsp} ${nbsp} ${nbsp} Address: ` }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      const result = config.encode(params);
+      // NBSP should be preserved, only trailing regular space is trimmed
+      expect(result.text).toBe(`${nbsp} ${nbsp} ${nbsp} Address:`);
+    });
+
     it('preserves whitespace when xml:space="preserve"', () => {
       const params = {
         extraParams: {

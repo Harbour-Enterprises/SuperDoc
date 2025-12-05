@@ -2636,4 +2636,280 @@ describe('measureBlock', () => {
       expect(breakMeasure.lines.length).toBeGreaterThan(1);
     });
   });
+
+  describe('table cell measurement with spacing.after', () => {
+    it('should add spacing.after to content height for all paragraphs', async () => {
+      const table: FlowBlock = {
+        kind: 'table',
+        id: 'table-spacing',
+        attrs: {},
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                attrs: {},
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'First paragraph', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 10 } },
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Last paragraph', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 20 } },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = await measureBlock(table, 1000);
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      const block0Measure = cellMeasure.blocks[0];
+      const block1Measure = cellMeasure.blocks[1];
+
+      // Content height should include both paragraph heights and both spacing.after values
+      // First paragraph: height + 10px spacing
+      // Last paragraph: height + 20px spacing (even though it's the last paragraph)
+      expect(block0Measure.kind).toBe('paragraph');
+      expect(block1Measure.kind).toBe('paragraph');
+
+      const para0Height = block0Measure.kind === 'paragraph' ? block0Measure.totalHeight : 0;
+      const para1Height = block1Measure.kind === 'paragraph' ? block1Measure.totalHeight : 0;
+
+      // Cell height includes: para0Height + 10 + para1Height + 20 + padding (default 2 top + 2 bottom)
+      const expectedCellHeight = para0Height + 10 + para1Height + 20 + 4;
+      expect(cellMeasure.height).toBe(expectedCellHeight);
+    });
+
+    it('should only add spacing when greater than 0', async () => {
+      const table: FlowBlock = {
+        kind: 'table',
+        id: 'table-zero-spacing',
+        attrs: {},
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                attrs: {},
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Zero spacing', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 0 } },
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Negative spacing', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: -5 } },
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'Positive spacing', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 15 } },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = await measureBlock(table, 1000);
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      const block0 = cellMeasure.blocks[0];
+      const block1 = cellMeasure.blocks[1];
+      const block2 = cellMeasure.blocks[2];
+
+      const para0Height = block0.kind === 'paragraph' ? block0.totalHeight : 0;
+      const para1Height = block1.kind === 'paragraph' ? block1.totalHeight : 0;
+      const para2Height = block2.kind === 'paragraph' ? block2.totalHeight : 0;
+
+      // Only positive spacing should be added
+      // Zero and negative spacing should not be added
+      // Cell height = para0 + para1 + para2 + 15 (positive spacing) + 4 (padding)
+      const expectedCellHeight = para0Height + para1Height + para2Height + 15 + 4;
+      expect(cellMeasure.height).toBe(expectedCellHeight);
+    });
+
+    it('should handle cells without spacing.after', async () => {
+      const table: FlowBlock = {
+        kind: 'table',
+        id: 'table-no-spacing',
+        attrs: {},
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                attrs: {},
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'No spacing', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: {},
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = await measureBlock(table, 1000);
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      const block0 = cellMeasure.blocks[0];
+
+      const paraHeight = block0.kind === 'paragraph' ? block0.totalHeight : 0;
+
+      // Cell height should just be paragraph height + padding (no spacing.after)
+      const expectedCellHeight = paraHeight + 4;
+      expect(cellMeasure.height).toBe(expectedCellHeight);
+    });
+
+    it('should handle type safety for spacing.after', async () => {
+      const table: FlowBlock = {
+        kind: 'table',
+        id: 'table-type-safety',
+        attrs: {},
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                attrs: {},
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Valid number', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 10 } },
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Invalid string', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: '10' as unknown as number } },
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'Undefined', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: undefined } },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = await measureBlock(table, 1000);
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+      const block0 = cellMeasure.blocks[0];
+      const block1 = cellMeasure.blocks[1];
+      const block2 = cellMeasure.blocks[2];
+
+      const para0Height = block0.kind === 'paragraph' ? block0.totalHeight : 0;
+      const para1Height = block1.kind === 'paragraph' ? block1.totalHeight : 0;
+      const para2Height = block2.kind === 'paragraph' ? block2.totalHeight : 0;
+
+      // Only the valid number should add spacing
+      // Cell height = para0 + 10 (valid spacing) + para1 + para2 + 4 (padding)
+      const expectedCellHeight = para0Height + 10 + para1Height + para2Height + 4;
+      expect(cellMeasure.height).toBe(expectedCellHeight);
+    });
+
+    it('should handle mixed block types with spacing', async () => {
+      const table: FlowBlock = {
+        kind: 'table',
+        id: 'table-mixed-blocks',
+        attrs: {},
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                attrs: {},
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Paragraph with spacing', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 10 } },
+                  },
+                  {
+                    kind: 'image',
+                    id: 'img-0',
+                    src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+                    width: 100,
+                    height: 100,
+                  },
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'Another paragraph', fontFamily: 'Arial', fontSize: 16 }],
+                    attrs: { spacing: { after: 5 } },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const measure = await measureBlock(table, 1000);
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      const cellMeasure = measure.rows[0].cells[0];
+
+      // Should handle mixed block types correctly
+      // Paragraphs should have spacing.after applied, image should not
+      expect(cellMeasure.blocks).toHaveLength(3);
+      expect(cellMeasure.blocks[0].kind).toBe('paragraph');
+      expect(cellMeasure.blocks[1].kind).toBe('image');
+      expect(cellMeasure.blocks[2].kind).toBe('paragraph');
+
+      const block0 = cellMeasure.blocks[0];
+      const block1 = cellMeasure.blocks[1];
+      const block2 = cellMeasure.blocks[2];
+
+      const para0Height = block0.kind === 'paragraph' ? block0.totalHeight : 0;
+      const imageHeight = block1.kind === 'image' ? block1.height : 0;
+      const para1Height = block2.kind === 'paragraph' ? block2.totalHeight : 0;
+
+      // Cell height = para0 + 10 + image + para1 + 5 + 4 (padding)
+      const expectedCellHeight = para0Height + 10 + imageHeight + para1Height + 5 + 4;
+      expect(cellMeasure.height).toBe(expectedCellHeight);
+    });
+  });
 });

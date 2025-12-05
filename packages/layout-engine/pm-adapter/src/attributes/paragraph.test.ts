@@ -29,6 +29,7 @@ import {
   computeParagraphAttrs,
   mergeParagraphAttrs,
   convertListParagraphAttrs,
+  mergeSpacingSources,
 } from './paragraph.js';
 import type { ListCounterContext } from '../types.js';
 import { twipsToPx } from '../utilities.js';
@@ -1744,6 +1745,250 @@ describe('computeParagraphAttrs', () => {
 
       // 117pt ≈ 156px (at 96dpi)
       expect(result?.dropCapDescriptor?.run.fontSize).toBeCloseTo(156, 0);
+    });
+  });
+});
+
+describe('mergeSpacingSources', () => {
+  describe('priority order', () => {
+    it('should prioritize attrs over paragraphProps and base', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15, after: 15 };
+      const attrs = { before: 20, line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from attrs (highest priority)
+        after: 15, // from paragraphProps (middle priority)
+        line: 2.0, // from attrs
+      });
+    });
+
+    it('should prioritize paragraphProps over base when attrs is empty', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15, line: 1.5 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 15, // from paragraphProps (overrides base)
+        after: 10, // from base (not overridden)
+        line: 1.5, // from paragraphProps (overrides base)
+      });
+    });
+
+    it('should use base when paragraphProps and attrs are empty', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = {};
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 10,
+        line: 1.0,
+      });
+    });
+
+    it('should handle correct priority chain: base < paragraphProps < attrs', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15 };
+      const attrs = { line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 15, // from paragraphProps (overrides base)
+        after: 10, // from base (not overridden)
+        line: 2.0, // from attrs (highest priority)
+      });
+    });
+  });
+
+  describe('partial overrides', () => {
+    it('should allow partial override from attrs (only line)', () => {
+      const base = { before: 10, after: 10 };
+      const paragraphProps = {};
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10, // inherited from base
+        after: 10, // inherited from base
+        line: 1.5, // from attrs
+      });
+    });
+
+    it('should allow partial override from paragraphProps (only before)', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 20 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from paragraphProps (overrides base)
+        after: 10, // inherited from base
+        line: 1.0, // inherited from base
+      });
+    });
+
+    it('should merge multiple partial overrides correctly', () => {
+      const base = { before: 10, after: 10, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 20, after: 20 };
+      const attrs = { line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from paragraphProps
+        after: 20, // from paragraphProps
+        line: 2.0, // from attrs
+        lineRule: 'auto', // inherited from base
+      });
+    });
+
+    it('should handle single property from each source', () => {
+      const base = { before: 10 };
+      const paragraphProps = { after: 20 };
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 20,
+        line: 1.5,
+      });
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should return undefined when all sources are null', () => {
+      const result = mergeSpacingSources(null, null, null);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when all sources are undefined', () => {
+      const result = mergeSpacingSources(undefined, undefined, undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when all sources are empty objects', () => {
+      const result = mergeSpacingSources({}, {}, {});
+      expect(result).toBeUndefined();
+    });
+
+    it('should handle null base gracefully', () => {
+      const result = mergeSpacingSources(null, { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle null paragraphProps gracefully', () => {
+      const result = mergeSpacingSources({ before: 10 }, null, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle null attrs gracefully', () => {
+      const result = mergeSpacingSources({ before: 10 }, { after: 20 }, null);
+      expect(result).toEqual({ before: 10, after: 20 });
+    });
+
+    it('should handle undefined sources gracefully', () => {
+      const result = mergeSpacingSources(undefined, { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle non-object values (treat as empty)', () => {
+      const result = mergeSpacingSources('not an object', { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should preserve zero values through merge priority', () => {
+      const base = { before: 10 };
+      const paragraphProps = { before: 0 }; // explicit zero overrides base
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+      expect(result).toEqual({ before: 0 });
+    });
+
+    it('should handle negative values correctly', () => {
+      const base = { before: 10 };
+      const paragraphProps = { after: -5 };
+      const attrs = { line: -1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+      expect(result).toEqual({
+        before: 10,
+        after: -5,
+        line: -1.5,
+      });
+    });
+  });
+
+  describe('real-world OOXML scenarios', () => {
+    it('should handle docDefaults + partial style override', () => {
+      const base = { before: 0, after: 0, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { after: 10 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 0,
+        after: 10,
+        line: 1.0,
+        lineRule: 'auto',
+      });
+    });
+
+    it('should handle direct paragraph override of only line spacing', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = {};
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 10,
+        line: 1.5,
+      });
+    });
+
+    it('should handle three-tier override chain', () => {
+      const base = { before: 0, after: 0, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 12 };
+      const attrs = { after: 8, line: 1.2 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 12, // from paragraphProps
+        after: 8, // from attrs
+        line: 1.2, // from attrs
+        lineRule: 'auto', // from base
+      });
+    });
+
+    it('should handle complete direct override', () => {
+      const base = { before: 10, after: 10, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 20, after: 20 };
+      const attrs = { before: 5, after: 5, line: 1.5, lineRule: 'exact' };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 5,
+        after: 5,
+        line: 1.5,
+        lineRule: 'exact',
+      });
     });
   });
 });
