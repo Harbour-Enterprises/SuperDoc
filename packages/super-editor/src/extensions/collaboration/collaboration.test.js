@@ -271,6 +271,53 @@ describe('collaboration helpers', () => {
 
     expect(ydoc.transact).not.toHaveBeenCalled();
   });
+
+  it('initializes docx metadata even when exported content matches initial content', async () => {
+    const initialContent = [
+      { name: 'word/document.xml', content: '<doc />' },
+      { name: 'word/styles.xml', content: '<styles />' },
+    ];
+    // No docx entry exists in meta map (hasDocx: false)
+    const ydoc = createYDocStub({ hasDocx: false });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-1' }, content: initialContent },
+      // Export returns identical content to initial
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<doc />',
+        'word/styles.xml': '<styles />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    // Transaction should still happen to initialize the docx metadata for collaborators
+    expect(ydoc.transact).toHaveBeenCalled();
+    expect(metas.set).toHaveBeenCalledWith('docx', initialContent);
+  });
+
+  it('initializes docx metadata for new documents with no changes', async () => {
+    const initialContent = [{ name: 'word/document.xml', content: '<empty />' }];
+    const ydoc = createYDocStub({ hasDocx: false });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'new-user' }, content: initialContent },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<empty />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    // Even with no content changes, the metadata must be persisted for collaborators
+    expect(ydoc.transact).toHaveBeenCalledWith(expect.any(Function), {
+      event: 'docx-update',
+      user: editor.options.user,
+    });
+    expect(metas.set).toHaveBeenCalledWith('docx', initialContent);
+  });
 });
 
 describe('collaboration extension', () => {
