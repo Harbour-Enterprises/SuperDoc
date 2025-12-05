@@ -82,6 +82,11 @@ export const lineStyles = (lineHeight: number): Partial<CSSStyleDeclaration> => 
   position: 'relative',
   display: 'block',
   whiteSpace: 'pre',
+  // Allow text to overflow the line container as a safety net.
+  // The primary fix uses accurate font metrics from Canvas API, but this
+  // provides defense-in-depth against any remaining sub-pixel rendering
+  // differences between measurement and display.
+  overflow: 'visible',
 });
 
 const PRINT_STYLES = `
