@@ -220,6 +220,348 @@ describe('collaboration.createProvider', () => {
     expect(warnSpy).toHaveBeenCalled();
     warnSpy.mockRestore();
   });
+
+  describe('customProvider', () => {
+    let mockCustomProvider;
+    let mockYdoc;
+    let mockAwareness;
+    let context;
+    let user;
+
+    beforeEach(() => {
+      mockAwareness = {
+        setLocalStateField: vi.fn(),
+        on: vi.fn((event, handler) => {
+          if (event === 'update') mockAwareness._updateHandler = handler;
+        }),
+        getStates: vi.fn(() => new Map([[1, { user: { name: 'Custom User' } }]])),
+      };
+
+      mockCustomProvider = {
+        on: vi.fn(),
+        off: vi.fn(),
+        disconnect: vi.fn(),
+        destroy: vi.fn(),
+        awareness: mockAwareness,
+      };
+
+      mockYdoc = new MockYDoc();
+      context = { emit: vi.fn() };
+      user = { name: 'Test User', email: 'test@example.com' };
+    });
+
+    it('uses customProvider when provided', () => {
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      const result = collaborationModule.createProvider({
+        config,
+        user,
+        documentId: 'doc-custom',
+        superdocInstance: context,
+      });
+
+      expect(result.provider).toBe(mockCustomProvider);
+      expect(result.ydoc).toBe(mockYdoc);
+      expect(mockAwareness.setLocalStateField).toHaveBeenCalledWith('user', user);
+      expect(mockAwareness.on).toHaveBeenCalledWith('update', expect.any(Function));
+    });
+
+    it('integrates awareness with customProvider', () => {
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      collaborationModule.createProvider({
+        config,
+        user,
+        documentId: 'doc-custom',
+        superdocInstance: context,
+      });
+
+      // Trigger awareness update
+      awarenessStatesToArrayMock.mockReturnValueOnce([{ name: 'Custom User' }]);
+      mockAwareness._updateHandler({ added: [1], removed: [] });
+
+      expect(mockAwareness.getStates).toHaveBeenCalled();
+      expect(awarenessStatesToArrayMock).toHaveBeenCalled();
+      expect(context.emit).toHaveBeenCalledWith(
+        'awareness-update',
+        expect.objectContaining({
+          states: [{ name: 'Custom User' }],
+          added: [1],
+          removed: [],
+        }),
+      );
+    });
+
+    it('customProvider takes precedence over providerType', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+        providerType: 'hocuspocus',
+      };
+
+      const result = collaborationModule.createProvider({
+        config,
+        user,
+        documentId: 'doc-custom',
+        superdocInstance: context,
+      });
+
+      expect(result.provider).toBe(mockCustomProvider);
+      expect(result.ydoc).toBe(mockYdoc);
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[superdoc] Both customProvider and providerType are specified. customProvider takes precedence and providerType will be ignored.',
+      );
+      warnSpy.mockRestore();
+    });
+
+    it('throws error when customProvider.provider is missing', () => {
+      const config = {
+        customProvider: {
+          ydoc: mockYdoc,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('customProvider.provider is required and must be an object');
+    });
+
+    it('throws error when customProvider.ydoc is missing', () => {
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('customProvider.ydoc is required and must be an object');
+    });
+
+    it('throws error when provider is not an object', () => {
+      const config = {
+        customProvider: {
+          provider: 'not-an-object',
+          ydoc: mockYdoc,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('customProvider.provider is required and must be an object');
+    });
+
+    it('throws error when ydoc is not an object', () => {
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: 'not-an-object',
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('customProvider.ydoc is required and must be an object');
+    });
+
+    it('validates required provider methods', () => {
+      const requiredMethods = ['on', 'off', 'disconnect', 'destroy'];
+
+      requiredMethods.forEach((method) => {
+        const invalidProvider = { ...mockCustomProvider };
+        delete invalidProvider[method];
+
+        const config = {
+          customProvider: {
+            provider: invalidProvider,
+            ydoc: mockYdoc,
+          },
+        };
+
+        expect(() =>
+          collaborationModule.createProvider({
+            config,
+            user,
+            documentId: 'doc-custom',
+            superdocInstance: context,
+          }),
+        ).toThrow(`customProvider.provider must have a '${method}' method`);
+      });
+    });
+
+    it('throws error when awareness object is missing', () => {
+      const invalidProvider = { ...mockCustomProvider };
+      delete invalidProvider.awareness;
+
+      const config = {
+        customProvider: {
+          provider: invalidProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('customProvider.provider.awareness is required and must be an object');
+    });
+
+    it('validates required awareness methods', () => {
+      const requiredMethods = ['setLocalStateField', 'on', 'getStates'];
+
+      requiredMethods.forEach((method) => {
+        const invalidAwareness = { ...mockAwareness };
+        delete invalidAwareness[method];
+
+        const invalidProvider = {
+          ...mockCustomProvider,
+          awareness: invalidAwareness,
+        };
+
+        const config = {
+          customProvider: {
+            provider: invalidProvider,
+            ydoc: mockYdoc,
+          },
+        };
+
+        expect(() =>
+          collaborationModule.createProvider({
+            config,
+            user,
+            documentId: 'doc-custom',
+            superdocInstance: context,
+          }),
+        ).toThrow(`customProvider.provider.awareness must have a '${method}' method`);
+      });
+    });
+
+    it('handles error when setLocalStateField throws', () => {
+      mockAwareness.setLocalStateField.mockImplementation(() => {
+        throw new Error('Awareness error');
+      });
+
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('Failed to set user in customProvider awareness: Awareness error');
+    });
+
+    it('handles error when awareness.on throws', () => {
+      mockAwareness.on.mockImplementation(() => {
+        throw new Error('Registration error');
+      });
+
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      expect(() =>
+        collaborationModule.createProvider({
+          config,
+          user,
+          documentId: 'doc-custom',
+          superdocInstance: context,
+        }),
+      ).toThrow('Failed to register customProvider awareness update handler: Registration error');
+    });
+
+    it('handles error in awareness update callback', () => {
+      const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      mockAwareness.getStates.mockImplementation(() => {
+        throw new Error('getStates error');
+      });
+
+      const config = {
+        customProvider: {
+          provider: mockCustomProvider,
+          ydoc: mockYdoc,
+        },
+      };
+
+      collaborationModule.createProvider({
+        config,
+        user,
+        documentId: 'doc-custom',
+        superdocInstance: context,
+      });
+
+      // Trigger awareness update - should not throw but log error
+      mockAwareness._updateHandler({ added: [1], removed: [] });
+
+      expect(errorSpy).toHaveBeenCalledWith(
+        '[superdoc] Error in customProvider awareness update handler:',
+        expect.any(Error),
+      );
+      expect(context.emit).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+  });
+
+  it('throws error with available types when providerType is unsupported', () => {
+    const config = { providerType: 'invalid-type' };
+    const user = { name: 'Test', email: 'test@example.com' };
+
+    expect(() =>
+      collaborationModule.createProvider({
+        config,
+        user,
+        documentId: 'doc-1',
+        superdocInstance: { emit: vi.fn() },
+      }),
+    ).toThrow('Provider type "invalid-type" is not supported. Available types: hocuspocus, superdoc');
+  });
 });
 
 describe('collaboration helpers', () => {

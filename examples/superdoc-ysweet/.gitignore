@@ -1,0 +1,4 @@
+.env*
+ysweet-data
+node_modules
+dist
