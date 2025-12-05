@@ -183,6 +183,94 @@ describe('collaboration helpers', () => {
     ]);
     expect(optionsYdoc._maps.metas.set).not.toHaveBeenCalled();
   });
+
+  it('skips transaction when docx content has not changed', async () => {
+    const existingDocx = [
+      { name: 'word/document.xml', content: '<same />' },
+      { name: 'word/styles.xml', content: '<styles />' },
+    ];
+    const ydoc = createYDocStub({ docxValue: existingDocx });
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-1' } },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<same />',
+        'word/styles.xml': '<styles />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(editor.exportDocx).toHaveBeenCalledWith({ getUpdatedDocs: true });
+    expect(ydoc.transact).not.toHaveBeenCalled();
+  });
+
+  it('updates only changed files and triggers transaction', async () => {
+    const existingDocx = [
+      { name: 'word/document.xml', content: '<old />' },
+      { name: 'word/styles.xml', content: '<styles />' },
+    ];
+    const ydoc = createYDocStub({ docxValue: existingDocx });
+    const metas = ydoc._maps.metas;
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-1' } },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<new />',
+        'word/styles.xml': '<styles />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(ydoc.transact).toHaveBeenCalled();
+    expect(metas.set).toHaveBeenCalledWith(
+      'docx',
+      expect.arrayContaining([
+        { name: 'word/styles.xml', content: '<styles />' },
+        { name: 'word/document.xml', content: '<new />' },
+      ]),
+    );
+  });
+
+  it('triggers transaction when new file is added', async () => {
+    const existingDocx = [{ name: 'word/document.xml', content: '<doc />' }];
+    const ydoc = createYDocStub({ docxValue: existingDocx });
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-1' } },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<doc />',
+        'word/numbering.xml': '<numbering />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(ydoc.transact).toHaveBeenCalled();
+  });
+
+  it('skips transaction when multiple files all remain unchanged', async () => {
+    const existingDocx = [
+      { name: 'word/document.xml', content: '<doc />' },
+      { name: 'word/styles.xml', content: '<styles />' },
+      { name: 'word/numbering.xml', content: '<numbering />' },
+    ];
+    const ydoc = createYDocStub({ docxValue: existingDocx });
+
+    const editor = {
+      options: { ydoc, user: { id: 'user-1' } },
+      exportDocx: vi.fn().mockResolvedValue({
+        'word/document.xml': '<doc />',
+        'word/styles.xml': '<styles />',
+        'word/numbering.xml': '<numbering />',
+      }),
+    };
+
+    await updateYdocDocxData(editor);
+
+    expect(ydoc.transact).not.toHaveBeenCalled();
+  });
 });
 
 describe('collaboration extension', () => {
