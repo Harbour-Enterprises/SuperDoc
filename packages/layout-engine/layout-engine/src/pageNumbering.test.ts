@@ -479,13 +479,13 @@ describe('computeDisplayPageNumber', () => {
   });
 
   describe('complex multi-section scenarios', () => {
-    it('should handle mixed formats across sections', () => {
+    it('should handle mixed formats across sections using page.sectionIndex', () => {
       const pages: Page[] = [
-        { number: 1, fragments: [] },
-        { number: 2, fragments: [] },
-        { number: 3, fragments: [] },
-        { number: 4, fragments: [] },
-        { number: 5, fragments: [] },
+        { number: 1, fragments: [], sectionIndex: 0 }, // Section 0: lowerRoman
+        { number: 2, fragments: [], sectionIndex: 0 }, // Section 0: lowerRoman
+        { number: 3, fragments: [], sectionIndex: 1 }, // Section 1: decimal (restart at 1)
+        { number: 4, fragments: [], sectionIndex: 1 }, // Section 1: decimal
+        { number: 5, fragments: [], sectionIndex: 2 }, // Section 2: upperLetter (restart at 1)
       ];
       const sections: SectionMetadata[] = [
         {
@@ -504,10 +504,89 @@ describe('computeDisplayPageNumber', () => {
 
       const result = computeDisplayPageNumber(pages, sections);
 
-      // Simplified section tracking means all pages use section 0
-      // This test documents current behavior
       expect(result).toHaveLength(5);
-      expect(result.every((info) => info.sectionIndex === 0)).toBe(true);
+      // Section 0: pages 1-2 in lowerRoman
+      expect(result[0]).toEqual({
+        physicalPage: 1,
+        displayNumber: 1,
+        displayText: 'i',
+        sectionIndex: 0,
+      });
+      expect(result[1]).toEqual({
+        physicalPage: 2,
+        displayNumber: 2,
+        displayText: 'ii',
+        sectionIndex: 0,
+      });
+      // Section 1: pages 3-4 in decimal (restarted at 1)
+      expect(result[2]).toEqual({
+        physicalPage: 3,
+        displayNumber: 1,
+        displayText: '1',
+        sectionIndex: 1,
+      });
+      expect(result[3]).toEqual({
+        physicalPage: 4,
+        displayNumber: 2,
+        displayText: '2',
+        sectionIndex: 1,
+      });
+      // Section 2: page 5 in upperLetter (restarted at 1)
+      expect(result[4]).toEqual({
+        physicalPage: 5,
+        displayNumber: 1,
+        displayText: 'A',
+        sectionIndex: 2,
+      });
+    });
+
+    it('should continue numbering when section has no restart', () => {
+      const pages: Page[] = [
+        { number: 1, fragments: [], sectionIndex: 0 },
+        { number: 2, fragments: [], sectionIndex: 0 },
+        { number: 3, fragments: [], sectionIndex: 1 }, // Section 1: no restart, continues from previous
+        { number: 4, fragments: [], sectionIndex: 1 },
+      ];
+      const sections: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          numbering: { format: 'decimal', start: 1 },
+        },
+        {
+          sectionIndex: 1,
+          // No start value - should continue from previous section
+          numbering: { format: 'decimal' },
+        },
+      ];
+
+      const result = computeDisplayPageNumber(pages, sections);
+
+      // Pages should continue 1, 2, 3, 4 without restart
+      expect(result[0].displayNumber).toBe(1);
+      expect(result[1].displayNumber).toBe(2);
+      expect(result[2].displayNumber).toBe(3);
+      expect(result[3].displayNumber).toBe(4);
+    });
+
+    it('should fall back to section 0 when page has no sectionIndex', () => {
+      // Backward compatibility: pages without sectionIndex default to section 0
+      const pages: Page[] = [
+        { number: 1, fragments: [] }, // No sectionIndex, defaults to 0
+        { number: 2, fragments: [] },
+      ];
+      const sections: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          numbering: { format: 'upperRoman', start: 1 },
+        },
+      ];
+
+      const result = computeDisplayPageNumber(pages, sections);
+
+      expect(result[0].displayText).toBe('I');
+      expect(result[0].sectionIndex).toBe(0);
+      expect(result[1].displayText).toBe('II');
+      expect(result[1].sectionIndex).toBe(0);
     });
   });
 });

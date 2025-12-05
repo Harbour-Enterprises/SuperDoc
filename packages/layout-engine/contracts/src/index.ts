@@ -1165,6 +1165,12 @@ export type Page = {
    * Used for post-layout adjustment of fragment Y positions.
    */
   vAlign?: SectionVerticalAlign;
+  /**
+   * Index of the section this page belongs to.
+   * Used for section-aware page numbering and header/footer selection.
+   * Sections are 0-indexed, matching the sectionIndex in SectionMetadata.
+   */
+  sectionIndex?: number;
 };
 
 /** A paragraph fragment positioned on a page. */

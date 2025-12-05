@@ -122,6 +122,7 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
   const idPrefix = normalizePrefix(options?.blockIdPrefix);
 
   const doc = pmDoc as PMNode;
+
   const docAttrs = (typeof doc.attrs === 'object' && doc.attrs !== null ? doc.attrs : {}) as Record<string, unknown>;
   const docDecimalSeparator = pickDecimalSeparator(doc.attrs?.decimalSeparator);
   const docLang = pickLang(docAttrs.lang ?? docAttrs.language ?? docAttrs.locale);
