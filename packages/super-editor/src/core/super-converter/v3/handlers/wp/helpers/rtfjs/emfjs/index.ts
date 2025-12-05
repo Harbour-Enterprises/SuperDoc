@@ -25,5 +25,6 @@ SOFTWARE.
 
 */
 
-export { Renderer, IRendererSettings } from './Renderer';
+export { Renderer } from './Renderer';
+export type { IRendererSettings } from './Renderer';
 export { EMFJSError as Error, loggingEnabled } from './Helper';
