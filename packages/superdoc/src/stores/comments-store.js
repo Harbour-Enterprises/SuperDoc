@@ -438,6 +438,8 @@ export const useCommentsStore = defineStore('comments', () => {
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
+        // Preserve original DOCX-schema comment JSON so exporter can reuse it
+        docxCommentJSON: comment.textJson,
         commentId: comment.commentId,
         isInternal: false,
         parentCommentId: comment.parentCommentId,
@@ -515,7 +517,9 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList.value.forEach((comment) => {
       const values = comment.getValues();
       const richText = values.commentText;
-      const schema = convertHtmlToSchema(richText);
+      // Prefer the original DOCX comment JSON captured at import time (Word/Google Docs),
+      // otherwise rebuild from the stored rich-text HTML.
+      const schema = values.docxCommentJSON || convertHtmlToSchema(richText);
       processedComments.push({
         ...values,
         commentJSON: schema,

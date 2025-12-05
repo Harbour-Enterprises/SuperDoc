@@ -85,7 +85,16 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
   if (!comments?.length) return [];
 
   const commentsExtended = docx['word/commentsExtended.xml'];
-  if (!commentsExtended) return comments.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
+  if (!commentsExtended) {
+    // Google Docs uses nested comment ranges in document.xml to indicate threading
+    // A child comment's range is nested inside the parent comment's range
+    const commentRanges = extractCommentRangesFromDocument(docx);
+
+    // Detect threading based on nested ranges
+    const commentsWithThreading = detectThreadingFromRanges(comments, commentRanges);
+
+    return commentsWithThreading.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
+  }
 
   const { elements: initialElements = [] } = commentsExtended;
   if (!initialElements?.length) return comments.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
@@ -124,4 +133,116 @@ const getExtendedDetails = (commentEx) => {
   const isDone = attributes['w15:done'] === '1' ? true : false;
   const paraIdParent = attributes['w15:paraIdParent'];
   return { paraId, isDone, paraIdParent };
+};
+
+/**
+ * Extract comment range order from document.xml
+ * Google Docs uses nested comment ranges to indicate threading:
+ * If comment B's range starts after comment A's range starts but before A's range ends,
+ * then B is a child of A
+ *
+ * @param {Object} docx The parsed docx object
+ * @returns {Array} Array of comment range events in order
+ */
+const extractCommentRangesFromDocument = (docx) => {
+  const documentXml = docx['word/document.xml'];
+  if (!documentXml) {
+    return [];
+  }
+
+  const pendingComments = [];
+
+  /**
+   * Recursively walk through the document structure to find comment ranges
+   * @param {Array} elements The XML elements to traverse
+   */
+  const walkElements = (elements) => {
+    if (!elements || !Array.isArray(elements)) return;
+
+    elements.forEach((element) => {
+      if (element.name === 'w:commentRangeStart') {
+        const commentId = element.attributes?.['w:id'];
+        if (commentId !== undefined) {
+          pendingComments.push({
+            type: 'start',
+            commentId: String(commentId),
+          });
+        }
+      } else if (element.name === 'w:commentRangeEnd') {
+        const commentId = element.attributes?.['w:id'];
+        if (commentId !== undefined) {
+          pendingComments.push({
+            type: 'end',
+            commentId: String(commentId),
+          });
+        }
+      }
+
+      // Recursively process child elements
+      if (element.elements && Array.isArray(element.elements)) {
+        walkElements(element.elements);
+      }
+    });
+  };
+
+  if (documentXml.elements && documentXml.elements.length > 0) {
+    const body = documentXml.elements[0];
+    if (body.elements) {
+      walkElements(body.elements);
+    }
+  }
+
+  return pendingComments;
+};
+
+/**
+ * Detect threading relationships based on nested comment ranges
+ * In Google Docs, a child comment's range is nested inside the parent's range.
+ * We track the order of commentRangeStart/End events to detect nesting.
+ *
+ * @param {Array} comments Array of comment objects
+ * @param {Array} rangeEvents Array of comment range events (start/end) in document order
+ * @returns {Array} Comments with parentCommentId relationships established
+ */
+const detectThreadingFromRanges = (comments, rangeEvents) => {
+  if (!rangeEvents || rangeEvents.length === 0) {
+    return comments;
+  }
+
+  // Build a stack to track which comment ranges are currently open
+  // When we see a start event, push it onto the stack
+  // When we see an end event, pop until we find the matching start
+  // Comments that start while another comment is on the stack are children of that comment
+  const openRanges = [];
+  const parentMap = new Map();
+
+  rangeEvents.forEach((event) => {
+    if (event.type === 'start') {
+      if (openRanges.length > 0) {
+        const parentCommentId = openRanges[openRanges.length - 1];
+        parentMap.set(event.commentId, parentCommentId);
+      }
+      openRanges.push(event.commentId);
+    } else if (event.type === 'end') {
+      const index = openRanges.lastIndexOf(event.commentId);
+      if (index !== -1) {
+        openRanges.splice(index, 1);
+      }
+    }
+  });
+
+  // Apply parent relationships to comments
+  return comments.map((comment) => {
+    const parentCommentId = parentMap.get(comment.importedId);
+    if (parentCommentId) {
+      const parentComment = comments.find((c) => c.importedId === parentCommentId);
+      if (parentComment) {
+        return {
+          ...comment,
+          parentCommentId: parentComment.commentId,
+        };
+      }
+    }
+    return comment;
+  });
 };
