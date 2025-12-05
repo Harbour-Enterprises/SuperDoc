@@ -8,9 +8,12 @@ import type {
     AIActionsOptions,
     SuperDocInstance,
     SuperDoc,
-} from './types';
-import {AIActionsService} from './ai-actions-service';
-import {createAIProvider, isAIProvider} from './providers';
+} from '../shared';
+import {AIActionsService} from '../services';
+import {createAIProvider, isAIProvider} from '../providers';
+import {ERROR_MESSAGES, LOG_PREFIXES, MAX_PROMPT_LENGTH} from '../shared';
+import {validateInput, getErrorMessage} from '../shared';
+import {extractSelectionText, getDocumentText, isEditorReady} from '../editor';
 
 /**
  * Primary entry point for SuperDoc AI capabilities. Wraps a SuperDoc instance,
@@ -45,6 +48,7 @@ export class AIActions {
     private isReady = false;
     private initializationPromise: Promise<void> | null = null;
     private readonly commands: AIActionsService;
+    private selectionContextOverride: string | null = null;
 
     public readonly action = {
         find: async (instruction: string) => {
@@ -62,6 +66,15 @@ export class AIActions {
         replaceAll: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.replaceAll(instruction));
         },
+        literalReplace: async (
+            findText: string,
+            replaceText: string,
+            options?: {caseSensitive?: boolean; trackChanges?: boolean}
+        ) => {
+            return this.executeActionWithCallbacks(() =>
+                this.commands.literalReplace(findText, replaceText, options)
+            );
+        },
         insertTrackedChange: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.insertTrackedChange(instruction));
         },
@@ -78,8 +91,8 @@ export class AIActions {
         summarize: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.summarize(instruction));
         },
-        insertContent: async (instruction: string) => {
-            return this.executeActionWithCallbacks(() => this.commands.insertContent(instruction));
+        insertContent: async (instruction: string, options?: {position?: 'before' | 'after' | 'replace'}) => {
+            return this.executeActionWithCallbacks(() => this.commands.insertContent(instruction, options));
         },
     };
 
@@ -88,14 +101,40 @@ export class AIActions {
      *
      * @param superdoc - SuperDoc instance to wrap
      * @param options - Configuration including provider, user, and callbacks
+     * @throws {Error} If SuperDoc instance is invalid or editor is not available
+     * 
+     * @example
+     * ```typescript
+     * const ai = new AIActions(superdoc, {
+     *   user: { displayName: 'AI Assistant', userId: 'ai-1' },
+     *   provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
+     *   enableLogging: true,
+     *   onReady: () => console.log('AI ready'),
+     *   onError: (error) => console.error('AI error:', error)
+     * });
      * ```
      */
     constructor(superdoc: SuperDocInstance, options: AIActionsOptions) {
+        if (!superdoc) {
+            throw new Error('AIActions requires a valid SuperDoc instance');
+        }
+
+        if (!options || typeof options !== 'object') {
+            throw new Error('AIActions requires valid options configuration');
+        }
+
+        if (!options.user || !options.user.displayName || !options.user.userId) {
+            throw new Error('AIActions requires valid user configuration with displayName and userId');
+        }
+
+        if (!options.provider) {
+            throw new Error(ERROR_MESSAGES.NO_PROVIDER);
+        }
+
         this.superdoc = superdoc;
 
         const {onReady, onStreamingStart, onStreamingPartialResult, onStreamingEnd, onError, provider, ...config} =
             options;
-        let streamResults = provider.streamResults;
 
         const aiProvider = isAIProvider(provider) ? provider : createAIProvider(provider);
 
@@ -115,17 +154,25 @@ export class AIActions {
         };
 
         const editor = this.getEditor();
-        if (!editor) {
-            throw new Error('AIActions requires an active editor before initialization');
+        if (!isEditorReady(editor)) {
+            throw new Error(ERROR_MESSAGES.EDITOR_REQUIRED);
         }
 
-        editor.setOptions({
-            user: {
-                id: this.config.user.userId,
-                name: this.config.user.displayName,
-                image: this.config.user.profileUrl,
-            },
-        });
+        // Set user options on editor
+        try {
+            editor.setOptions({
+                user: {
+                    id: this.config.user.userId,
+                    name: this.config.user.displayName,
+                    image: this.config.user.profileUrl,
+                },
+            });
+        } catch (error) {
+            if (this.config.enableLogging) {
+                console.warn(`${LOG_PREFIXES.ACTIONS} Failed to set editor user options:`, error);
+            }
+            // Don't throw - editor might still work without user options
+        }
 
         this.commands = new AIActionsService(
             this.config.provider,
@@ -133,7 +180,7 @@ export class AIActions {
             () => this.getDocumentContext(),
             this.config.enableLogging,
             (partial) => this.callbacks.onStreamingPartialResult?.({partialResult: partial}),
-            streamResults,
+            provider.streamResults,
         );
 
         this.initializationPromise = this.initialize();
@@ -157,34 +204,37 @@ export class AIActions {
     }
 
     /**
-     * Validates that a provider is configured.
+     * Validates that a provider is configured
      * @private
-     * @throws Error if no provider is present
+     * @throws {Error} If no provider is present
      */
     private isProviderAvailable(): void {
         if (!this.config.provider) {
-            throw new Error('AI provider is required');
+            throw new Error(ERROR_MESSAGES.NO_PROVIDER);
         }
     }
 
     /**
      * Executes an action with full callback lifecycle support
      * @private
+     * @param fn - Function that executes the action
+     * @returns Promise resolving to the action result
+     * @throws {Error} If editor is not available or action fails
      */
     private async executeActionWithCallbacks<T extends Result>(
         fn: () => Promise<T>
     ): Promise<T> {
         const editor = this.getEditor();
-        if (!editor) {
-            throw new Error('No active SuperDoc editor available for AI actions');
+        if (!isEditorReady(editor)) {
+            throw new Error(ERROR_MESSAGES.NO_EDITOR_FOR_ACTION);
         }
+        
         try {
             this.callbacks.onStreamingStart?.();
             const result: T = await fn();
             this.callbacks.onStreamingEnd?.({fullResult: result});
-
             return result;
-        } catch (error: Error | any) {
+        } catch (error) {
             this.handleError(error as Error);
             throw error;
         }
@@ -193,14 +243,52 @@ export class AIActions {
 
 
     /**
-     * Gets the default system prompt.
+     * Gets the default system prompt
      * @private
      * @returns Default system prompt string
      */
     private getDefaultSystemPrompt(): string {
         return `You are an AI assistant integrated with SuperDoc, a document collaboration platform.
-                Your role is to help users find, analyze, and understand document content.
-                When searching for content, provide precise locations and relevant context.`;
+Your role is to help users find, analyze, and understand document content.
+When searching for content, provide precise locations and relevant context.`;
+    }
+
+    /**
+     * Validates a prompt for completion requests
+     * @private
+     * @param prompt - Prompt to validate
+     * @throws {Error} If prompt is invalid
+     */
+    private validatePrompt(prompt: string): void {
+        if (!this.isReady) {
+            throw new Error(ERROR_MESSAGES.NOT_READY);
+        }
+        
+        if (!validateInput(prompt)) {
+            throw new Error(ERROR_MESSAGES.EMPTY_PROMPT);
+        }
+        
+        if (prompt.length > MAX_PROMPT_LENGTH) {
+            throw new Error(ERROR_MESSAGES.PROMPT_TOO_LONG);
+        }
+    }
+
+    /**
+     * Builds messages array for AI completion
+     * @private
+     * @param prompt - User prompt
+     * @returns Array of messages for AI provider
+     */
+    private buildMessages(prompt: string): Array<{role: 'system' | 'user'; content: string}> {
+        const documentContext = this.getDocumentContext();
+        const userContent = documentContext 
+            ? `${prompt}\n\nDocument context:\n${documentContext}` 
+            : prompt;
+
+        return [
+            {role: 'system' as const, content: this.config.systemPrompt || ''},
+            {role: 'user' as const, content: userContent},
+        ];
     }
     
     /**
@@ -229,26 +317,23 @@ export class AIActions {
     }
 
     /**
-     * Streams AI completion with real-time updates via callbacks.
-     * Includes document context automatically.
+     * Streams AI completion with real-time updates via callbacks
+     * Includes document context automatically
      *
      * @param prompt - User prompt
      * @param options - Optional completion configuration
      * @returns Promise resolving to complete response
+     * @throws {Error} If not ready, prompt is invalid, or streaming fails
      *
+     * @example
+     * ```typescript
+     * const response = await ai.streamCompletion('Explain this section');
+     * console.log(response);
+     * ```
      */
     public async streamCompletion(prompt: string, options?: StreamOptions): Promise<string> {
-        if (!this.isReady) {
-            throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
-        }
-
-        const documentContext = this.getDocumentContext();
-        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
-
-        const messages = [
-            {role: 'system' as const, content: this.config.systemPrompt || ''},
-            {role: 'user' as const, content: userContent},
-        ];
+        this.validatePrompt(prompt);
+        const messages = this.buildMessages(prompt);
 
         let accumulated = '';
 
@@ -271,26 +356,23 @@ export class AIActions {
     }
 
     /**
-     * Gets a complete AI response (non-streaming).
-     * Includes document context automatically.
+     * Gets a complete AI response (non-streaming)
+     * Includes document context automatically
      *
      * @param prompt - User prompt
      * @param options - Optional completion configuration
-     * 
      * @returns Promise resolving to complete response
+     * @throws {Error} If not ready, prompt is invalid, or completion fails
+     * 
+     * @example
+     * ```typescript
+     * const response = await ai.getCompletion('Summarize this document');
+     * console.log(response);
+     * ```
      */
     public async getCompletion(prompt: string, options?: CompletionOptions): Promise<string> {
-        if (!this.isReady) {
-            throw new Error('AIActions is not ready yet. Call waitUntilReady() first.');
-        }
-
-        const documentContext = this.getDocumentContext();
-        const userContent = documentContext ? `${prompt}\n\nDocument context:\n${documentContext}` : prompt;
-
-        const messages = [
-            {role: 'system' as const, content: this.config.systemPrompt || ''},
-            {role: 'user' as const, content: userContent},
-        ];
+        this.validatePrompt(prompt);
+        const messages = this.buildMessages(prompt);
 
         try {
             return await this.config.provider.getCompletion(messages, options);
@@ -302,48 +384,81 @@ export class AIActions {
 
     /**
      * Retrieves the current document context for AI processing.
-     * Returns selected text if there is a selection, otherwise returns full document content.
+     * Priority: override > selection > full document
      *
      * @returns Document context string
+     * 
+     * @example
+     * ```typescript
+     * const context = ai.getDocumentContext();
+     * console.log('Current context:', context);
+     * ```
      */
     public getDocumentContext(): string {
+        if (this.selectionContextOverride) {
+            return this.selectionContextOverride;
+        }
+
         const editor = this.getEditor();
-        if (!editor || !editor.view?.state) {
-            return '';
+        const selectionText = extractSelectionText(editor, this.config.enableLogging);
+        if (selectionText) {
+            return selectionText;
         }
 
-        // Access state through view to ensure we get the latest selection
-        const { state } = editor.view;
-        const { selection, doc } = state;
-
-        if (!doc) {
-            return '';
-        }
-
-        // If there's a text selection, return only the selected text
-        if (selection && !selection.empty && typeof selection.from === 'number' && typeof selection.to === 'number') {
-            return doc.textBetween(selection.from, selection.to, ' ').trim() || '';
-        }
-
-        // Otherwise, return the full document content
-        return doc.textContent?.trim() || '';
+        return getDocumentText(editor, this.config.enableLogging);
     }
-    
+
     /**
-     * Handles errors by logging and invoking error callback.
+     * Freezes the current editor selection as the context override until cleared.
+     * Useful when you need to preserve selection state across multiple operations.
+     * 
+     * @example
+     * ```typescript
+     * ai.preserveCurrentSelectionContext();
+     * // Selection is now preserved even if user changes selection
+     * await ai.action.summarize('Summarize');
+     * ai.clearSelectionContextOverride();
+     * ```
+     */
+    public preserveCurrentSelectionContext(): void {
+        const editor = this.getEditor();
+        const text = extractSelectionText(editor, this.config.enableLogging);
+        this.selectionContextOverride = text || null;
+    }
+
+
+    /**
+     * Clears any preserved selection context override.
+     * After this, AI will use the current editor selection/document.
+     * 
+     * @example
+     * ```typescript
+     * ai.clearSelectionContextOverride();
+     * // AI now uses current selection again
+     * ```
+     */
+    public clearSelectionContextOverride(): void {
+        this.selectionContextOverride = null;
+    }
+
+    /**
+     * Handles errors by logging and invoking error callback
      * @private
      * @param error - Error to handle
      */
     private handleError(error: Error): void {
+        const errorMessage = getErrorMessage(error);
+        
         if (this.config.enableLogging) {
-            console.error('[AIActions Error]:', error);
+            console.error(`${LOG_PREFIXES.ACTIONS}:`, errorMessage, error);
         }
 
         this.callbacks.onError?.(error);
     }
 
     /**
-     * Gets the active editor from the SuperDoc instance.
+     * Gets the active editor from the SuperDoc instance
+     * @private
      * @returns Editor instance or null
      */
     private getEditor(): Editor | null {

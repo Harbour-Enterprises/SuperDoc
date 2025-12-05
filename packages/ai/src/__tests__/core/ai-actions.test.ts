@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { AIActions } from './ai-actions';
-import type { AIProvider, AIActionsOptions, SuperDoc, Editor } from './types';
+import { AIActions } from '../../core/ai-actions';
+import type { AIProvider, AIActionsOptions, SuperDoc, Editor } from '../../shared/types';
 
 describe('AIActions', () => {
     let mockProvider: AIProvider;
@@ -90,7 +90,7 @@ describe('AIActions', () => {
     describe('constructor', () => {
         it('should initialize with provider config', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -103,7 +103,7 @@ describe('AIActions', () => {
         it('should call onReady callback when initialized', async () => {
             const onReady = vi.fn();
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
                 onReady
             };
@@ -120,7 +120,7 @@ describe('AIActions', () => {
 
         it('should use custom system prompt if provided', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
                 systemPrompt: 'Custom system prompt'
             };
@@ -145,7 +145,7 @@ describe('AIActions', () => {
 
         it('should use default system prompt if not provided', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -170,7 +170,7 @@ describe('AIActions', () => {
     describe('waitUntilReady', () => {
         it('should resolve immediately if already ready', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -186,7 +186,7 @@ describe('AIActions', () => {
 
         it('should wait for initialization if not ready', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -201,7 +201,7 @@ describe('AIActions', () => {
     describe('getCompletion', () => {
         it('should get completion with document context', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -224,7 +224,7 @@ describe('AIActions', () => {
 
         it('should throw if not ready', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -240,7 +240,7 @@ describe('AIActions', () => {
 
         it('should pass options to provider', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -271,7 +271,7 @@ describe('AIActions', () => {
             };
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: errorProvider,
                 onError
             };
@@ -291,7 +291,7 @@ describe('AIActions', () => {
             const onStreamingEnd = vi.fn();
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
                 onStreamingStart,
                 onStreamingPartialResult,
@@ -313,7 +313,7 @@ describe('AIActions', () => {
             const partialResults: string[] = [];
             
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
                 onStreamingPartialResult: (ctx) => {
                     partialResults.push(ctx.partialResult);
@@ -334,7 +334,7 @@ describe('AIActions', () => {
 
         it('should throw if not ready', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -357,7 +357,7 @@ describe('AIActions', () => {
             };
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: errorProvider,
                 onError
             };
@@ -373,7 +373,7 @@ describe('AIActions', () => {
     describe('getDocumentContext', () => {
         it('should return document text content when no selection', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -393,7 +393,7 @@ describe('AIActions', () => {
 
         it('should return selected text when there is a selection', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -415,20 +415,21 @@ describe('AIActions', () => {
             expect(mockEditor.view.state.doc.textBetween).toHaveBeenCalledWith(0, 6, ' ');
         });
 
-        it('should return empty string when editor view state is missing', async () => {
+        it('should return document text when editor view state is missing but state exists', async () => {
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
             const ai = new AIActions(mockSuperdoc, options);
             await ai.waitUntilReady();
 
-            // Remove view state
+            // Remove view state (but editor.state still exists as fallback)
             (mockEditor as any).view = null;
 
             const context = ai.getDocumentContext();
-            expect(context).toBe('');
+            // Should fall back to editor.state.doc.textContent
+            expect(context).toBe('Sample document text');
         });
 
         it('throws during construction when no editor is available', () => {
@@ -437,7 +438,7 @@ describe('AIActions', () => {
             } as any;
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
             };
 
@@ -455,7 +456,7 @@ describe('AIActions', () => {
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider
             };
 
@@ -468,7 +469,7 @@ describe('AIActions', () => {
 
     it('rejects action calls when the active editor is missing', async () => {
         const options: AIActionsOptions = {
-            user: { displayName: 'AI Bot' },
+            user: { displayName: 'AI Bot', userId: 'bot-123' },
             provider: mockProvider,
         };
 
@@ -492,7 +493,7 @@ describe('AIActions', () => {
             mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: mockProvider,
                 onStreamingStart,
                 onStreamingEnd
@@ -522,7 +523,7 @@ describe('AIActions', () => {
             };
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: errorProvider,
                 enableLogging: true
             };
@@ -532,7 +533,8 @@ describe('AIActions', () => {
 
             await expect(ai.getCompletion('test')).rejects.toThrow();
             expect(consoleSpy).toHaveBeenCalledWith(
-                '[AIActions Error]:',
+                '[AIActions]:',
+                expect.any(String),
                 expect.any(Error)
             );
 
@@ -552,7 +554,7 @@ describe('AIActions', () => {
             };
 
             const options: AIActionsOptions = {
-                user: { displayName: 'AI Bot' },
+                user: { displayName: 'AI Bot', userId: 'bot-123' },
                 provider: errorProvider,
                 enableLogging: false
             };

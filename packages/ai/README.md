@@ -198,6 +198,44 @@ Insert a single comment.
 await ai.action.insertComment('suggest improvements to introduction');
 ```
 
+## AIBuilder: Prompt → Plan → Action
+
+When you need low-level control over AI-driven workflows, the `AIBuilder` class lets you turn a natural language prompt into a concrete plan and apply it with formatting-safe primitives.
+
+```ts
+import { AIBuilder } from '@superdoc-dev/ai';
+
+const builder = new AIBuilder({
+  provider: {
+    type: 'openai',
+    apiKey: process.env.OPENAI_API_KEY!,
+    model: 'gpt-4o-mini',
+  },
+  editor: superdoc.activeEditor,
+  documentContextProvider: () => {
+    // Include the current selection when available, otherwise share full text
+    const { state } = superdoc.activeEditor;
+    return state.doc.textBetween(state.selection.from, state.selection.to || state.doc.content.size, ' ').trim();
+  },
+  maxContextLength: 8000,
+  enableLogging: true,
+});
+
+const result = await builder.execute('Add tracked changes that tighten the executive summary.');
+
+console.log(result.executedTools); // e.g. ['insertTrackedChanges', 'respond']
+console.log(result.response); // Builder’s textual reply (if any)
+```
+
+### AIBuilder Highlights
+
+- **Planning Prompt** – Builder sends the document text, JSON, and schema summary (when available) to the LLM and asks for a JSON plan (`tool`, `instruction`).
+- **Tool Registry** – Built-in tools cover find/highlight, replace (single/all), tracked changes, comments, summaries, content insertion, and a `respond` fallback. You can inject your own tool definitions if needed.
+- **Formatting Preservation** – Every editing tool is backed by the `EditorAdapter`, which maintains marks and inline styling via `replaceText`, tracked changes, and comment helpers.
+- **Execution Results** – `execute` returns whether the run succeeded, which tools ran, any textual response, the parsed plan, and warnings for skipped steps.
+
+Use `AIBuilder` when you want prompt → plan → action orchestration (redlining, drafting, reviews) while keeping full control over the resulting document edits.
+
 #### `insertComments(instruction)`
 
 Insert multiple comments.

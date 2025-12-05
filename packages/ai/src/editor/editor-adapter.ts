@@ -1,7 +1,6 @@
-import type { Editor, FoundMatch, MarkType } from './types';
+import type { Editor, FoundMatch, MarkType } from '../shared';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
-import {generateId} from "./utils";
-import { TextSelection } from 'prosemirror-state';
+import {generateId} from '../shared';
 
 /**
  * Default highlight color for text selections.
@@ -73,6 +72,52 @@ export class EditorAdapter {
     }
 
     /**
+     * Performs a literal text search across the entire document without mutating editor state.
+     *
+     * @param query - Exact text to find
+     * @param caseSensitive - Whether the search should be case sensitive
+     */
+    findLiteralMatches(query: string, caseSensitive: boolean = false): Array<{from: number; to: number; text: string}> {
+        const doc = this.editor?.state?.doc;
+        if (!doc || !query) {
+            return [];
+        }
+
+        query = caseSensitive ? query : query.toLowerCase();
+        if (!query.length) {
+            return [];
+        }
+
+        const matches: Array<{from: number; to: number; text: string}> = [];
+        const step = query.length || 1;
+
+        doc.descendants((node: any, pos: any) => {
+            if (!node.isText || typeof node.text !== 'string') {
+                return true;
+            }
+
+            const textValue = node.text;
+            const textValueStandard = caseSensitive ? textValue : textValue.toLowerCase();
+            let index = textValueStandard.indexOf(query);
+
+            while (index !== -1) {
+                const from = pos + index;
+                const to = from + query.length;
+                matches.push({
+                    from,
+                    to,
+                    text: textValue.slice(index, index + query.length),
+                });
+                index = textValueStandard.indexOf(query, index + step);
+            }
+
+            return true;
+        });
+
+        return matches;
+    }
+
+    /**
      * Creates a highlight mark at the specified document range.
      * Automatically scrolls to bring the highlighted range into view.
      *
@@ -82,16 +127,15 @@ export class EditorAdapter {
      */
     createHighlight(from: number, to: number, inlineColor: string = DEFAULT_HIGHLIGHT_COLOR): void {
         this.editor.chain().setTextSelection({ from, to }).setHighlight(inlineColor).run();
-        this.scrollToPosition(from, to);
+        this.scrollToPosition(from);
     }
 
     /**
      * Scrolls the editor view to bring a specific position range into view.
      *
      * @param from - Start position to scroll to
-     * @param to - End position to scroll to
      */
-    scrollToPosition(from: number, to: number): void {
+    scrollToPosition(from: number): void {
         const { state, view } = this.editor;
         if (!state || !view) {
             return;
@@ -548,13 +592,73 @@ export class EditorAdapter {
      * Preserves marks from the surrounding context at the insertion point.
      *
      * @param suggestedText - The text to insert
+     * @param options
      */
-    insertText(suggestedText: string): void {
+    insertText(
+        suggestedText: string,
+        options?: { position?: 'before' | 'after' | 'replace' }
+    ): void {
         const position = this.getSelectionRange();
         if (!position) {
             return;
         }
 
-        this.applyPatch(position.from, position.to, suggestedText);
+        const mode = options?.position ?? 'replace';
+        let from = position.from;
+        let to = position.to;
+
+        if (mode === 'before') {
+            to = from;
+        } else if (mode === 'after') {
+            from = to;
+        }
+
+        const normalizedText =
+            mode === 'replace'
+                ? suggestedText
+                : this.normalizeBlockInsertionText(suggestedText, mode, from, to);
+
+        this.applyPatch(from, to, normalizedText);
+    }
+
+    private normalizeBlockInsertionText(
+        text: string,
+        position: 'before' | 'after',
+        from: number,
+        to: number
+    ): string {
+        if (!text) {
+            return '';
+        }
+
+        const state = this.editor?.state;
+        const doc = state?.doc;
+        if (!doc) {
+            return text;
+        }
+
+        const charBefore = from > 0 ? doc.textBetween(from - 1, from, '', '') : '';
+        const charAfter = to < doc.content.size ? doc.textBetween(to, to + 1, '', '') : '';
+
+        let prefix = '';
+        let suffix = '';
+
+        if (position === 'before') {
+            if (from > 0 && charBefore !== '\n') {
+                prefix = '\n';
+            }
+            if (!text.endsWith('\n')) {
+                suffix = '\n';
+            }
+        } else {
+            if (!text.startsWith('\n')) {
+                prefix = '\n';
+            }
+            if (to < doc.content.size && charAfter !== '\n') {
+                suffix = '\n';
+            }
+        }
+
+        return `${prefix}${text}${suffix}`;
     }
 }

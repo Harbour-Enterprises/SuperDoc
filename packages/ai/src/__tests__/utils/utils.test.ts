@@ -4,8 +4,8 @@ import {
     parseJSON,
     removeMarkdownCodeBlocks,
     generateId
-} from './utils';
-import type { Result } from './types';
+} from '../../shared/utils';
+import type { Result } from '../../shared/types';
 
 describe('utils', () => {
     describe('validateInput', () => {
