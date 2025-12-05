@@ -187,6 +187,11 @@ export const Image = Node.create({
 
       extension: { rendered: false },
 
+      // Preserve original EMF/WMF format info when converting to SVG for display.
+      // Used during DOCX export to restore the original metafile format.
+      originalExtension: { rendered: false },
+      originalSrc: { rendered: false },
+
       shouldStretch: {
         default: false,
         rendered: false,
@@ -194,13 +199,11 @@ export const Image = Node.create({
 
       size: {
         default: {},
-        renderDOM: ({ size, extension, shouldStretch }) => {
+        renderDOM: ({ size, shouldStretch }) => {
           let style = '';
           let { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height && ['emf', 'wmf'].includes(extension))
-            style += `height: ${height}px; border: 1px solid black; position: absolute;`;
-          else if (height && shouldStretch) {
+          if (height && shouldStretch) {
             // When shouldStretch is true (from <a:stretch><a:fillRect/>),
             // stretch the image to fill both dimensions without preserving aspect ratio
             style += `height: ${height}px; object-fit: fill;`;

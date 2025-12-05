@@ -1,6 +1,7 @@
 import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { extractStrokeWidth, extractStrokeColor, extractFillColor } from './vector-shape-helpers';
+import { convertMetafileToSvg, isMetafileExtension, setMetafileDomEnvironment } from './metafile-converter.js';
 
 const DRAWING_XML_TAG = 'w:drawing';
 const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
@@ -39,7 +40,7 @@ const DEFAULT_SHAPE_HEIGHT = 100;
  */
 export function handleImageNode(node, params, isAnchor) {
   if (!node) return null;
-  const { docx, filename } = params;
+  const { docx, filename, converter } = params;
   const attributes = node?.attributes || {};
   const padding = {
     top: emuToPixels(attributes?.['distT']),
@@ -177,6 +178,9 @@ export function handleImageNode(node, params, isAnchor) {
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
   const { uri } = graphicData?.attributes || {};
+  if (!graphicData) {
+    return null;
+  }
 
   if (uri === SHAPE_URI) {
     const shapeMarginOffset = {
@@ -197,11 +201,15 @@ export function handleImageNode(node, params, isAnchor) {
   }
 
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
-  if (!picture || !picture.elements) return null;
+  if (!picture || !picture.elements) {
+    return null;
+  }
 
   const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
   const blip = blipFill?.elements.find((el) => el.name === 'a:blip');
-  if (!blip) return null;
+  if (!blip) {
+    return null;
+  }
 
   // Check for stretch fill mode
   const stretch = blipFill?.elements.find((el) => el.name === 'a:stretch');
@@ -223,7 +231,9 @@ export function handleImageNode(node, params, isAnchor) {
 
   const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
-  if (!rEmbed) return null;
+  if (!rEmbed) {
+    return null;
+  }
 
   const currentFile = filename || 'document.xml';
   let rels = docx[`word/_rels/${currentFile}.rels`];
@@ -233,7 +243,9 @@ export function handleImageNode(node, params, isAnchor) {
   const { elements } = relationships || [];
 
   const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
-  if (!rel) return null;
+  if (!rel) {
+    return null;
+  }
 
   const { attributes: relAttributes } = rel;
   const targetPath = relAttributes['Target'];
@@ -241,44 +253,82 @@ export function handleImageNode(node, params, isAnchor) {
   const path = normalizeTargetPath(targetPath);
   const extension = path.substring(path.lastIndexOf('.') + 1);
 
+  // Convert EMF/WMF metafiles to SVG for display
+  let finalSrc = path;
+  let finalExtension = extension;
+  let wasConverted = false;
+
+  if (isMetafileExtension(extension)) {
+    // Get the media data for this image path from converter.media
+    // converter.media contains base64 data or data URIs depending on environment
+    const mediaData = converter?.media?.[path];
+
+    if (mediaData) {
+      if (converter?.domEnvironment) {
+        setMetafileDomEnvironment(converter.domEnvironment);
+      }
+      // Convert EMF/WMF metafile to SVG. Returns { dataUri, format } on success, null on failure.
+      const conversionResult = convertMetafileToSvg(mediaData, extension, size);
+      if (conversionResult?.dataUri) {
+        finalSrc = conversionResult.dataUri;
+        finalExtension = conversionResult.format || 'svg';
+        wasConverted = true;
+      }
+    }
+  }
+
+  // For converted metafile images (EMF+/WMF+ placeholders), we want them to render
+  // as block-level images, not inline. We use the original wrap type if available,
+  // otherwise default to the original wrap settings.
+  // NOTE: Setting wrap to undefined causes ProseMirror to use the default { type: 'Inline' },
+  // which is not what we want for placeholder images that should maintain their original layout.
+  const wrapValue = wrap;
+
+  const nodeAttrs = {
+    src: finalSrc,
+    alt:
+      isMetafileExtension(extension) && !wasConverted
+        ? 'Unable to render EMF/WMF image'
+        : docPr?.attributes?.name || 'Image',
+    extension: finalExtension,
+    // Store original path and extension for potential round-tripping
+    ...(wasConverted && { originalSrc: path, originalExtension: extension }),
+    id: docPr?.attributes?.id || '',
+    title: docPr?.attributes?.descr || 'Image',
+    inline: true, // Always true; wrap.type controls actual layout behavior
+    padding,
+    marginOffset,
+    size,
+    anchorData,
+    isAnchor,
+    transformData,
+    ...(useSimplePos && {
+      simplePos: {
+        x: simplePosNode.attributes?.x,
+        y: simplePosNode.attributes?.y,
+      },
+    }),
+    wrap: wrapValue,
+    ...(wrap.type === 'Square' && wrap.attrs.wrapText
+      ? {
+          wrapText: wrap.attrs.wrapText,
+        }
+      : {}),
+    wrapTopAndBottom: wrap.type === 'TopAndBottom',
+    shouldStretch,
+    originalPadding: {
+      distT: attributes['distT'],
+      distB: attributes['distB'],
+      distL: attributes['distL'],
+      distR: attributes['distR'],
+    },
+    originalAttributes: node.attributes,
+    rId: relAttributes['Id'],
+  };
+
   return {
     type: 'image',
-    attrs: {
-      src: path,
-      alt: ['emf', 'wmf'].includes(extension) ? 'Unable to render EMF/WMF image' : docPr?.attributes?.name || 'Image',
-      extension,
-      id: docPr?.attributes?.id || '',
-      title: docPr?.attributes?.descr || 'Image',
-      inline: true,
-      padding,
-      marginOffset,
-      size,
-      anchorData,
-      isAnchor,
-      transformData,
-      ...(useSimplePos && {
-        simplePos: {
-          x: simplePosNode?.attributes?.x,
-          y: simplePosNode?.attributes?.y,
-        },
-      }),
-      wrap,
-      ...(wrap.type === 'Square' && wrap.attrs.wrapText
-        ? {
-            wrapText: wrap.attrs.wrapText,
-          }
-        : {}),
-      wrapTopAndBottom: wrap.type === 'TopAndBottom',
-      shouldStretch,
-      originalPadding: {
-        distT: attributes?.['distT'],
-        distB: attributes?.['distB'],
-        distL: attributes?.['distL'],
-        distR: attributes?.['distR'],
-      },
-      originalAttributes: node?.attributes || {},
-      rId: relAttributes['Id'],
-    },
+    attrs: nodeAttrs,
   };
 }
 
