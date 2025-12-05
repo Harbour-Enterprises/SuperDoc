@@ -130,7 +130,35 @@ export type FlowRunLink = {
   history?: boolean;
 };
 
-export type TextRun = {
+/**
+ * Common formatting marks that can be applied to any run type.
+ * Used by TextRun, TabRun, and other run types that support inline formatting.
+ */
+export type RunMarks = {
+  /** Bold text styling. */
+  bold?: boolean;
+  /** Italic text styling. */
+  italic?: boolean;
+  /** Additional letter spacing in pixels (positive for expanded, negative for condensed). */
+  letterSpacing?: number;
+  /** Text color as hex string (e.g., "#FF0000"). */
+  color?: string;
+  /** Underline decoration with optional style and color. */
+  underline?: {
+    /** Underline style (defaults to 'single'). */
+    style?: 'single' | 'double' | 'dotted' | 'dashed' | 'wavy';
+    /** Underline color as hex string (defaults to text color). */
+    color?: string;
+  };
+  /** Strikethrough text decoration. */
+  strike?: boolean;
+  /** Highlight (background) color as hex string. */
+  highlight?: string;
+  /** Text transformation (case modification). */
+  textTransform?: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
+};
+
+export type TextRun = RunMarks & {
   kind?: 'text';
   text: string;
   fontFamily: string;
@@ -146,17 +174,6 @@ export type TextRun = {
    */
   dataAttrs?: Record<string, string>;
   sdt?: SdtMetadata;
-  bold?: boolean;
-  italic?: boolean;
-  letterSpacing?: number;
-  color?: string;
-  underline?: {
-    style?: 'single' | 'double' | 'dotted' | 'dashed' | 'wavy';
-    color?: string;
-  };
-  strike?: boolean;
-  highlight?: string;
-  textTransform?: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
   link?: FlowRunLink;
   /** Token annotations for dynamic content (page numbers, etc.). */
   token?: 'pageNumber' | 'totalPageCount' | 'pageReference';
@@ -173,7 +190,7 @@ export type TextRun = {
   trackedChange?: TrackedChangeMeta;
 };
 
-export type TabRun = {
+export type TabRun = RunMarks & {
   kind: 'tab';
   text: '\t';
   /** Width in pixels (assigned by measurer/resolver). */
