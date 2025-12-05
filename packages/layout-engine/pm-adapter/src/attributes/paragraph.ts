@@ -1437,7 +1437,9 @@ export const computeParagraphAttrs = (
 
       // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
       // This ensures the renderer uses the correct level-specific indent for padding
-      if (enrichedNumberingProps.resolvedLevelIndent) {
+      // Only apply numbering-level indent when the paragraph didn't specify its own.
+      // When a paragraph provides an explicit indent, it should win over the numbering definition.
+      if (enrichedNumberingProps.resolvedLevelIndent && !hasExplicitIndent) {
         const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
         paragraphAttrs.indent = {
           ...paragraphAttrs.indent,

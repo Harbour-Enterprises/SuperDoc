@@ -843,6 +843,30 @@ describe('computeParagraphAttrs', () => {
     expect(result?.alignment).toBe('center');
   });
 
+  it('should keep explicit indent when numbering resolvedLevelIndent is present', () => {
+    const para: PMNode = {
+      attrs: {
+        indent: { left: 24, firstLine: 12 },
+        numberingProperties: {
+          numId: 1,
+          ilvl: 2,
+          resolvedLevelIndent: { left: 1440, hanging: 720 },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+
+    // Explicit indent (24px) should not be replaced by the numbering indent (~96px)
+    expect(result?.indent?.left).toBeDefined();
+    expect(result?.indent?.left).toBeLessThan(twipsToPx(1440));
+    expect(result?.indent?.left).toBeCloseTo(24);
+  });
+
   it('should normalize paragraph borders', () => {
     const para: PMNode = {
       attrs: {
