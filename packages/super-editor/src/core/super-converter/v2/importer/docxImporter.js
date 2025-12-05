@@ -27,6 +27,8 @@ import { preProcessNodesForFldChar } from '../../field-references';
 import { preProcessPageFieldsOnly } from '../../field-references/preProcessPageFieldsOnly.js';
 import { ensureNumberingCache } from './numberingCache.js';
 import { commentRangeStartHandlerEntity, commentRangeEndHandlerEntity } from './commentRangeImporter.js';
+import bookmarkStartAttrConfigs from '@converter/v3/handlers/w/bookmark-start/attributes/index.js';
+import bookmarkEndAttrConfigs from '@converter/v3/handlers/w/bookmark-end/attributes/index.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -701,8 +703,61 @@ export function filterOutRootInlineNodes(content = []) {
     'structuredContent',
   ]);
 
-  return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+  const PRESERVABLE_INLINE_XML_NAMES = {
+    bookmarkStart: 'w:bookmarkStart',
+    bookmarkEnd: 'w:bookmarkEnd',
+  };
+
+  const result = [];
+
+  content.forEach((node) => {
+    if (!node || typeof node.type !== 'string') return;
+    const type = node.type;
+    const preservableNodeName = PRESERVABLE_INLINE_XML_NAMES[type];
+
+    if (!INLINE_TYPES.has(type)) {
+      result.push(node);
+    } else if (preservableNodeName) {
+      const originalXml = buildOriginalXml(type, node.attrs, PRESERVABLE_INLINE_XML_NAMES);
+      result.push({
+        type: 'passthroughBlock',
+        attrs: {
+          originalName: preservableNodeName,
+          ...(originalXml ? { originalXml } : {}),
+        },
+      });
+    }
+  });
+
+  return result;
 }
+
+/**
+ * Reconstruct original OOXML for preservable inline nodes using their attribute decoders.
+ *
+ * @param {'bookmarkStart'|'bookmarkEnd'} type
+ * @param {Record<string, any>} attrs
+ * @returns {{name: string, attributes?: Object, elements: []}|null}
+ */
+const buildOriginalXml = (type, attrs, preservableTags) => {
+  const attrConfigsByType = {
+    bookmarkStart: bookmarkStartAttrConfigs,
+    bookmarkEnd: bookmarkEndAttrConfigs,
+  };
+
+  const configs = attrConfigsByType[type];
+  if (!configs) return null;
+  const xmlAttrs = {};
+  configs.forEach((cfg) => {
+    const val = cfg.decode(attrs || {});
+    if (val !== undefined) {
+      xmlAttrs[cfg.xmlName] = val;
+    }
+  });
+  const attributes = Object.keys(xmlAttrs).length ? xmlAttrs : undefined;
+  const name = preservableTags[type];
+  return { name, ...(attributes ? { attributes } : {}), elements: [] };
+};
 
 /**
  * Inline passthrough nodes render as zero-width spans. If the text before ends
