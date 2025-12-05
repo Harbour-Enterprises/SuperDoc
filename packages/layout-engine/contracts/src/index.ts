@@ -156,6 +156,7 @@ export type TextRun = {
   };
   strike?: boolean;
   highlight?: string;
+  textTransform?: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
   link?: FlowRunLink;
   /** Token annotations for dynamic content (page numbers, etc.). */
   token?: 'pageNumber' | 'totalPageCount' | 'pageReference';

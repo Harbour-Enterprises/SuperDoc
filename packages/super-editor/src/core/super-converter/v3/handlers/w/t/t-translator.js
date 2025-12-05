@@ -39,7 +39,8 @@ const encode = (params, encodedAttrs = {}) => {
     text = elements[0].text;
     const xmlSpace = encodedAttrs.xmlSpace ?? elements[0]?.attributes?.['xml:space'];
     if (xmlSpace !== 'preserve' && typeof text === 'string') {
-      text = text.replace(/^\s+/, '').replace(/\s+$/, '');
+      // Only trim regular ASCII whitespace, not NBSP (U+00A0) which is used intentionally for alignment
+      text = text.replace(/^[ \t\n\r]+/, '').replace(/[ \t\n\r]+$/, '');
     }
     // Handle the removal of a temporary wrapper that we added to preserve empty spaces
     text = text.replace(/\[\[sdspace\]\]/g, '');

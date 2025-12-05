@@ -1421,12 +1421,22 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 
       const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
 
-      for (const block of cellBlocks) {
+      for (let blockIndex = 0; blockIndex < cellBlocks.length; blockIndex++) {
+        const block = cellBlocks[blockIndex];
         const measure = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity });
         blockMeasures.push(measure);
         // Get height from different measure types
         const blockHeight = 'totalHeight' in measure ? measure.totalHeight : 'height' in measure ? measure.height : 0;
         contentHeight += blockHeight;
+
+        // Add paragraph spacing.after to content height for all paragraphs.
+        // Word applies spacing.after even to the last paragraph in a cell, creating space at the bottom.
+        if (block.kind === 'paragraph') {
+          const spacingAfter = (block as ParagraphBlock).attrs?.spacing?.after;
+          if (typeof spacingAfter === 'number' && spacingAfter > 0) {
+            contentHeight += spacingAfter;
+          }
+        }
       }
 
       // Total cell height includes vertical padding

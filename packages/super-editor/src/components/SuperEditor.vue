@@ -107,10 +107,114 @@ const imageResizeState = reactive({
 });
 
 /**
- * Update table resize overlay visibility based on mouse position
- * Shows overlay when hovering over tables with data-table-boundaries attribute
+ * Threshold in pixels for showing table resize handles.
+ * Handles only appear when mouse is within this distance of a column boundary.
+ */
+const TABLE_RESIZE_HOVER_THRESHOLD = 8;
+
+/**
+ * Throttle interval in milliseconds for updateTableResizeOverlay.
+ * Limits how frequently the overlay visibility is recalculated during mousemove.
+ */
+const TABLE_RESIZE_THROTTLE_MS = 16; // ~60fps
+
+/**
+ * Timestamp of last updateTableResizeOverlay execution for throttling.
+ */
+let lastUpdateTableResizeTimestamp = 0;
+
+/**
+ * Check if mouse position is near any column boundary in the table.
+ * Returns true if within threshold of a boundary that has segments at the mouse Y position.
+ *
+ * @param {MouseEvent} event - The mouse event containing clientX and clientY coordinates
+ * @param {HTMLElement} tableElement - The table DOM element with data-table-boundaries attribute
+ * @returns {boolean} True if the mouse is near a column boundary, false otherwise
+ */
+const isNearColumnBoundary = (event, tableElement) => {
+  // Input validation: event must have clientX and clientY properties
+  if (!event || typeof event.clientX !== 'number' || typeof event.clientY !== 'number') {
+    console.warn('[isNearColumnBoundary] Invalid event: missing clientX or clientY', event);
+    return false;
+  }
+
+  // Input validation: tableElement must be a valid DOM element
+  if (!tableElement || !(tableElement instanceof HTMLElement)) {
+    console.warn('[isNearColumnBoundary] Invalid tableElement: not an HTMLElement', tableElement);
+    return false;
+  }
+
+  const boundariesAttr = tableElement.getAttribute('data-table-boundaries');
+  if (!boundariesAttr) return false;
+
+  try {
+    const metadata = JSON.parse(boundariesAttr);
+    if (!metadata.columns || !Array.isArray(metadata.columns)) return false;
+
+    const tableRect = tableElement.getBoundingClientRect();
+    const mouseX = event.clientX - tableRect.left;
+    const mouseY = event.clientY - tableRect.top;
+
+    // Check each column boundary
+    for (let i = 0; i < metadata.columns.length; i++) {
+      const col = metadata.columns[i];
+      // The boundary x position is at (col.x + col.w) - the right edge of the column
+      const boundaryX = col.x + col.w;
+
+      // Check if mouse is horizontally near this boundary
+      if (Math.abs(mouseX - boundaryX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+        // Check if there's a segment at this Y position (boundary exists here, not merged)
+        const segmentColIndex = i + 1; // segments are indexed by boundary, not column
+        const segments = metadata.segments?.[segmentColIndex];
+
+        // If no segments data, assume boundary exists everywhere
+        if (!segments || segments.length === 0) {
+          // For right-edge (last column), always show
+          if (i === metadata.columns.length - 1) return true;
+          // For interior boundaries with no segments, boundary is fully merged - skip
+          continue;
+        }
+
+        // Check if mouse Y is within any segment
+        for (const seg of segments) {
+          const segTop = seg.y || 0;
+          const segBottom = seg.h != null ? segTop + seg.h : tableRect.height;
+          if (mouseY >= segTop && mouseY <= segBottom) {
+            return true;
+          }
+        }
+      }
+    }
+
+    // Also check left edge of table (x = 0)
+    if (Math.abs(mouseX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+      return true;
+    }
+
+    return false;
+  } catch (e) {
+    // Log parsing errors for debugging while falling back to safe default
+    console.warn('[isNearColumnBoundary] Failed to parse table boundary metadata:', e);
+    return false;
+  }
+};
+
+/**
+ * Update table resize overlay visibility based on mouse position.
+ * Shows overlay only when hovering near column boundaries, not anywhere in the table.
+ * Throttled to run at most once per TABLE_RESIZE_THROTTLE_MS milliseconds.
+ *
+ * @param {MouseEvent} event - The mouse event containing target and coordinates
+ * @returns {void}
  */
 const updateTableResizeOverlay = (event) => {
+  // Throttle: skip if called too frequently
+  const now = Date.now();
+  if (now - lastUpdateTableResizeTimestamp < TABLE_RESIZE_THROTTLE_MS) {
+    return;
+  }
+  lastUpdateTableResizeTimestamp = now;
+
   if (!editorElem.value) return;
 
   let target = event.target;
@@ -123,8 +227,14 @@ const updateTableResizeOverlay = (event) => {
     }
 
     if (target.classList?.contains('superdoc-table-fragment') && target.hasAttribute('data-table-boundaries')) {
-      tableResizeState.visible = true;
-      tableResizeState.tableElement = target;
+      // Only show overlay if mouse is near a column boundary
+      if (isNearColumnBoundary(event, target)) {
+        tableResizeState.visible = true;
+        tableResizeState.tableElement = target;
+      } else {
+        tableResizeState.visible = false;
+        tableResizeState.tableElement = null;
+      }
       return;
     }
     target = target.parentElement;

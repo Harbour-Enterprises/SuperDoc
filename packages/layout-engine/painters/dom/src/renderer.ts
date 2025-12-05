@@ -3782,6 +3782,9 @@ const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void =
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
   }
+  if (run.textTransform) {
+    element.style.textTransform = run.textTransform;
+  }
 
   // Apply text decorations from the run. Even for links, inline decorations should reflect
   // the document styling (tests assert underline presence on anchors).

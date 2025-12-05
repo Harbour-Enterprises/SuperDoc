@@ -657,6 +657,135 @@ describe('mark application', () => {
       expect(run.fontSize).toBe(14);
       expect(run.letterSpacing).toBe(1.5);
     });
+
+    describe('textTransform extraction', () => {
+      it('applies uppercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('applies lowercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'lowercase' });
+
+        expect(run.textTransform).toBe('lowercase');
+      });
+
+      it('applies capitalize textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'capitalize' });
+
+        expect(run.textTransform).toBe('capitalize');
+      });
+
+      it('applies none textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'none' });
+
+        expect(run.textTransform).toBe('none');
+      });
+
+      it('filters out invalid textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'invalid' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores non-string textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 123 });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores null textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: null });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores undefined textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: undefined });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores empty string textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: '' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects UPPERCASE)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'UPPERCASE' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects Capitalize)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'Capitalize' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects values with whitespace', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ' uppercase ' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects boolean values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: true });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects object values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: { value: 'uppercase' } });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects array values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ['uppercase'] });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('works together with other style properties', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, {
+          color: 'FF0000',
+          fontFamily: 'Courier',
+          fontSize: 16,
+          textTransform: 'uppercase',
+        });
+
+        expect(run.color).toBe('#FF0000');
+        expect(run.fontFamily).toBe('Courier');
+        expect(run.fontSize).toBe(16);
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('overwrites existing textTransform value', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, textTransform: 'lowercase' };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+    });
   });
 
   describe('applyMarksToRun', () => {
