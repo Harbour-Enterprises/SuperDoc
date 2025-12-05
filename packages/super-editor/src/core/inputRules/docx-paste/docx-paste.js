@@ -64,6 +64,8 @@ export const handleDocxPaste = (html, editor, view) => {
     if (msoListMatch) {
       const [, abstractId, level, numId] = msoListMatch;
       const numberingStyles = extractListLevelStyles(css, abstractId, level, numId) || {};
+      const markerFontFamily = numberingStyles?.['font-family'] ?? normalStyles?.['font-family'];
+      delete numberingStyles['font-family'];
       if (numberingDefinedInline) {
         styleChain = { ...normalStyles, ...paragraphStyles, ...numberingStyles };
       } else {
@@ -90,6 +92,7 @@ export const handleDocxPaste = (html, editor, view) => {
         start = startMap[numId];
       }
 
+      item.setAttribute('data-marker-font-family', markerFontFamily);
       item.setAttribute('data-num-id', numId);
       item.setAttribute('data-list-level', parseInt(level) - 1);
       item.setAttribute('data-start', start);
@@ -228,6 +231,7 @@ const transformWordLists = (container, editor) => {
     const numFmt = item.getAttribute('data-num-fmt');
     const start = item.getAttribute('data-start');
     const lvlText = item.getAttribute('data-lvl-text');
+    const markerFontFamily = item.getAttribute('data-marker-font-family');
 
     // MS Word copy-pasted lists always start with num Id 1 and increment from there.
     // Which way not match the target documents numbering.xml lists
@@ -245,6 +249,7 @@ const transformWordLists = (container, editor) => {
       fmt: numFmt,
       text: lvlText,
       editor,
+      markerFontFamily,
     });
 
     if (!lists[id]) lists[id] = { levels: {} };
