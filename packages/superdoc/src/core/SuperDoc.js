@@ -654,7 +654,9 @@ export class SuperDoc extends EventEmitter {
       suggesting: () => this.#setModeSuggesting(),
     };
 
-    if (types[type]) types[type]();
+    if (types[type]) {
+      types[type]();
+    }
   }
 
   /**
@@ -740,8 +742,8 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Disable tracked changes for viewing mode (show final document)
-    this.setTrackedChangesPreferences({ mode: 'final', enabled: false });
+    // Disable tracked changes for viewing mode (show original document without change markers)
+    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
 
     this.superdocStore.documents.forEach((doc) => {
       doc.removeComments();

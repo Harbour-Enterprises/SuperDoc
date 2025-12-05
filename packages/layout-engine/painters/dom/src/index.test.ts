@@ -6536,4 +6536,366 @@ describe('applyRunDataAttributes', () => {
       }).not.toThrow();
     });
   });
+
+  describe('list marker version detection', () => {
+    let mount: HTMLElement;
+
+    beforeEach(() => {
+      mount = document.createElement('div');
+    });
+
+    it('rebuilds fragment DOM when list marker text changes via setData (indent change)', () => {
+      // Initial block at indent level 0 with marker "1."
+      const listBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-1',
+        runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 14 }],
+        attrs: {
+          numberingProperties: { numId: 1, ilvl: 0 },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      const listMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 14,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+        marker: { markerWidth: 15, markerTextWidth: 10, indentLeft: 24 },
+      };
+
+      const listLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'list-block-1',
+                fromLine: 0,
+                toLine: 1,
+                x: 24,
+                y: 24,
+                width: 300,
+                markerWidth: 15,
+                pmStart: 0,
+                pmEnd: 14,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [listBlock], measures: [listMeasure] });
+      painter.paint(listLayout, mount);
+
+      const fragmentBefore = mount.querySelector('.superdoc-fragment') as HTMLElement;
+      const markerBefore = mount.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+      expect(markerBefore?.textContent).toBe('1.');
+
+      // Updated block at indent level 1 with marker "a." (same text content, different marker)
+      const updatedListBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-1',
+        runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 14 }],
+        attrs: {
+          numberingProperties: { numId: 1, ilvl: 1 },
+          wordLayout: {
+            marker: {
+              markerText: 'a.',
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      painter.setData?.([updatedListBlock], [listMeasure]);
+      painter.paint(listLayout, mount);
+
+      const fragmentAfter = mount.querySelector('.superdoc-fragment') as HTMLElement;
+      const markerAfter = mount.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+
+      // Fragment should be rebuilt because marker changed
+      expect(fragmentAfter).not.toBe(fragmentBefore);
+      expect(markerAfter?.textContent).toBe('a.');
+    });
+
+    it('rebuilds fragment DOM when ilvl changes even if markerText is the same', () => {
+      // Edge case: marker text might be same at different levels (e.g., both "1." at level 0 and level 2)
+      const listBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-2',
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          numberingProperties: { numId: 2, ilvl: 0 },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      const listMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 40,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+        marker: { markerWidth: 15, markerTextWidth: 10, indentLeft: 24 },
+      };
+
+      const listLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'list-block-2',
+                fromLine: 0,
+                toLine: 1,
+                x: 24,
+                y: 24,
+                width: 300,
+                markerWidth: 15,
+                pmStart: 0,
+                pmEnd: 4,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [listBlock], measures: [listMeasure] });
+      painter.paint(listLayout, mount);
+
+      const fragmentBefore = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Update only ilvl, keep markerText the same
+      const updatedListBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-2',
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          numberingProperties: { numId: 2, ilvl: 2 }, // Changed from 0 to 2
+          wordLayout: {
+            marker: {
+              markerText: '1.', // Same marker text
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      painter.setData?.([updatedListBlock], [listMeasure]);
+      painter.paint(listLayout, mount);
+
+      const fragmentAfter = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Fragment should be rebuilt because ilvl changed (even if markerText is same)
+      expect(fragmentAfter).not.toBe(fragmentBefore);
+    });
+
+    it('does not rebuild fragment when list properties are unchanged', () => {
+      const listBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-3',
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          numberingProperties: { numId: 3, ilvl: 0 },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      const listMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 40,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+        marker: { markerWidth: 15, markerTextWidth: 10, indentLeft: 24 },
+      };
+
+      const listLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'list-block-3',
+                fromLine: 0,
+                toLine: 1,
+                x: 24,
+                y: 24,
+                width: 300,
+                markerWidth: 15,
+                pmStart: 0,
+                pmEnd: 4,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [listBlock], measures: [listMeasure] });
+      painter.paint(listLayout, mount);
+
+      const fragmentBefore = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Set identical data
+      painter.setData?.([listBlock], [listMeasure]);
+      painter.paint(listLayout, mount);
+
+      const fragmentAfter = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Fragment should be reused (same reference) since nothing changed
+      expect(fragmentAfter).toBe(fragmentBefore);
+    });
+
+    it('rebuilds fragment DOM when numId changes even if ilvl and markerText are the same', () => {
+      // Edge case: Different list styles (numId) may have same marker text at same level
+      const listBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-4',
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          numberingProperties: { numId: 1, ilvl: 0 },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      const listMeasure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 40,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+        marker: { markerWidth: 15, markerTextWidth: 10, indentLeft: 24 },
+      };
+
+      const listLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId: 'list-block-4',
+                fromLine: 0,
+                toLine: 1,
+                x: 24,
+                y: 24,
+                width: 300,
+                markerWidth: 15,
+                pmStart: 0,
+                pmEnd: 4,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [listBlock], measures: [listMeasure] });
+      painter.paint(listLayout, mount);
+
+      const fragmentBefore = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Update numId only, keep ilvl and markerText the same
+      const updatedListBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'list-block-4',
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          numberingProperties: { numId: 2, ilvl: 0 }, // Changed from 1 to 2
+          wordLayout: {
+            marker: {
+              markerText: '1.', // Same marker text
+              justification: 'left',
+              suffix: 'tab',
+              run: { fontFamily: 'Arial', fontSize: 16 },
+            },
+          },
+        },
+      };
+
+      painter.setData?.([updatedListBlock], [listMeasure]);
+      painter.paint(listLayout, mount);
+
+      const fragmentAfter = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+      // Fragment should be rebuilt because numId changed (different list style)
+      expect(fragmentAfter).not.toBe(fragmentBefore);
+    });
+  });
 });
