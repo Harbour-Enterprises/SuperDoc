@@ -899,6 +899,8 @@ export type ParagraphAttrs = {
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
+  /** Word quirk: justified paragraphs ignore first-line indent. Set by pm-adapter. */
+  suppressFirstLineIndent?: boolean;
   /**
    * Legacy drop cap flag from w:framePr/@w:dropCap.
    * @deprecated Use dropCapDescriptor for full drop cap support.

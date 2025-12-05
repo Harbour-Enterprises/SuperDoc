@@ -335,6 +335,22 @@ describe('normalizeAlignment', () => {
     expect(normalizeAlignment('Right')).toBeUndefined();
     expect(normalizeAlignment('JUSTIFY')).toBeUndefined();
   });
+
+  it('should convert "both" to "justify"', () => {
+    expect(normalizeAlignment('both')).toBe('justify');
+  });
+
+  it('should convert "distribute" to "justify"', () => {
+    expect(normalizeAlignment('distribute')).toBe('justify');
+  });
+
+  it('should convert "numTab" to "justify"', () => {
+    expect(normalizeAlignment('numTab')).toBe('justify');
+  });
+
+  it('should convert "thaiDistribute" to "justify"', () => {
+    expect(normalizeAlignment('thaiDistribute')).toBe('justify');
+  });
 });
 
 describe('normalizeParagraphSpacing', () => {
