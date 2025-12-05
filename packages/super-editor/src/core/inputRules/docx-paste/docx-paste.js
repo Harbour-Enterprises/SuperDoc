@@ -32,7 +32,7 @@ export const handleDocxPaste = (html, editor, view) => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanedHtml;
 
-  const data = tempDiv.querySelectorAll('p, li');
+  const data = tempDiv.querySelectorAll('p, li, ' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `h${n}`).join(', '));
 
   const startMap = {};
 
@@ -47,9 +47,18 @@ export const handleDocxPaste = (html, editor, view) => {
     const styleAttr = item.getAttribute('style') || '';
     const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
     const css = tempDiv.querySelector('style').innerHTML;
-    const normalStyles = extractParagraphStyles(css, 'MsoNormal');
-    const paragraphStyles = extractParagraphStyles(css, item.getAttribute('class'));
-    let styleChain = { ...normalStyles, ...paragraphStyles };
+    const normalStyles = extractParagraphStyles(css, '.MsoNormal');
+    let styleId = item.getAttribute('class');
+    let charStyles = {};
+    if (item.localName.startsWith('h') && !styleId) {
+      styleId = item.localName;
+      const level = styleId.substring(1);
+      charStyles = extractParagraphStyles(css, `.Heading${level}Char`);
+    } else if (styleId) {
+      styleId = `.${styleId}`;
+    }
+    const paragraphStyles = extractParagraphStyles(css, styleId);
+    let styleChain = { ...normalStyles, ...paragraphStyles, ...charStyles };
     const numberingDefinedInline = !paragraphStyles || !paragraphStyles['mso-list'];
 
     if (msoListMatch) {
@@ -139,6 +148,27 @@ export const handleDocxPaste = (html, editor, view) => {
         }
       });
       item.setAttribute('data-text-styles', JSON.stringify(textStyles));
+
+      for (const child of item.children) {
+        if (child.style) {
+          Object.keys(textStyles).forEach((key) => {
+            const styleValue = textStyles[key];
+            if (styleValue) {
+              child.style[key] = styleValue;
+            }
+          });
+        }
+      }
+    }
+
+    // Marks
+    if (resolvedStyle['font-weight'] === 'bold') {
+      item.style.fontWeight = 'bold';
+      for (const child of item.children) {
+        if (child.style) {
+          child.style.fontWeight = 'bold';
+        }
+      }
     }
 
     // Strip literal prefix inside conditional span
@@ -254,6 +284,11 @@ const transformWordLists = (container, editor) => {
         const styleValue = textStyles[key];
         if (styleValue) {
           pElement.style[key] = styleValue;
+          for (const child of pElement.children) {
+            if (child.style) {
+              child.style[key] = styleValue;
+            }
+          }
         }
       });
     }
