@@ -405,7 +405,6 @@ export class PresentationEditor extends EventEmitter {
   #footerRegions: Map<number, HeaderFooterRegion> = new Map();
   #session: HeaderFooterSession = { mode: 'body' };
   #activeHeaderFooterEditor: Editor | null = null;
-  #activeEditingPageIndex: number | null = null;
   #overlayManager: EditorOverlayManager | null = null;
   #hoverOverlay: HTMLElement | null = null;
   #hoverTooltip: HTMLElement | null = null;
@@ -2151,7 +2150,6 @@ export class PresentationEditor extends EventEmitter {
     this.#overlayManager?.destroy();
     this.#session = { mode: 'body' };
     this.#activeHeaderFooterEditor = null;
-    this.#activeEditingPageIndex = null;
     this.#inputBridge?.notifyTargetChanged();
 
     // Initialize EditorOverlayManager for in-place editing
@@ -3595,7 +3593,6 @@ export class PresentationEditor extends EventEmitter {
       this.#overlayManager.hideSelectionOverlay();
 
       this.#activeHeaderFooterEditor = editor;
-      this.#activeEditingPageIndex = region.pageIndex;
 
       this.#session = {
         mode: region.kind,
@@ -3628,7 +3625,6 @@ export class PresentationEditor extends EventEmitter {
         this.#overlayManager?.showSelectionOverlay();
         this.#clearHoverRegion();
         this.#activeHeaderFooterEditor = null;
-        this.#activeEditingPageIndex = null;
         this.#session = { mode: 'body' };
       } catch (cleanupError) {
         console.error('[PresentationEditor] Error during cleanup:', cleanupError);
@@ -3654,7 +3650,6 @@ export class PresentationEditor extends EventEmitter {
     this.#overlayManager?.showSelectionOverlay();
 
     this.#activeHeaderFooterEditor = null;
-    this.#activeEditingPageIndex = null;
     this.#session = { mode: 'body' };
 
     this.#emitHeaderFooterModeChanged();

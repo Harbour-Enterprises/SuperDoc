@@ -77,9 +77,6 @@ export class EditorOverlayManager {
   /** Selection overlay element (for hiding during editing) */
   #selectionOverlay: HTMLElement | null;
 
-  /** Currently active dimming overlay element */
-  #dimmingOverlay: HTMLElement | null = null;
-
   /** Currently active editor host element */
   #activeEditorHost: HTMLElement | null = null;
 
@@ -88,10 +85,6 @@ export class EditorOverlayManager {
 
   /** Current editing region */
   #activeRegion: HeaderFooterRegion | null = null;
-
-  /** Callback for when dimming overlay is clicked (to exit edit mode) - reserved for future dimming overlay feature */
-  // eslint-disable-next-line no-unused-private-class-members
-  #onDimmingClick: (() => void) | null = null;
 
   /** Full-width border line element (MS Word style) */
   #borderLine: HTMLElement | null = null;
@@ -139,8 +132,8 @@ export class EditorOverlayManager {
    *
    * @param callback - Function to call when dimming overlay is clicked
    */
-  setOnDimmingClick(callback: () => void): void {
-    this.#onDimmingClick = callback;
+  setOnDimmingClick(_callback: () => void): void {
+    // No-op: dimming overlay functionality not yet implemented
   }
 
   /**
@@ -290,9 +283,6 @@ export class EditorOverlayManager {
     // Remove border line
     this.#hideHeaderFooterBorder();
 
-    // Remove dimming overlay (if any)
-    this.#hideDimmingOverlay();
-
     // Clear active references
     this.#activeEditorHost = null;
     this.#activeDecorationContainer = null;
@@ -339,12 +329,11 @@ export class EditorOverlayManager {
   /**
    * Destroys the overlay manager and cleans up all resources.
    *
-   * Removes the dimming overlay and clears all references.
+   * Clears all references.
    * Editor host elements are left in the DOM as they're children of page elements
    * that will be cleaned up by the virtualization system.
    */
   destroy(): void {
-    this.#hideDimmingOverlay();
     this.#hideHeaderFooterBorder();
     this.#activeEditorHost = null;
     this.#activeDecorationContainer = null;
@@ -464,16 +453,6 @@ export class EditorOverlayManager {
         // Store this offset so the editor container can use it
         editorHost.dataset.contentOffset = String(fragmentTop);
       }
-    }
-  }
-
-  /**
-   * Hides and removes the dimming overlay.
-   */
-  #hideDimmingOverlay(): void {
-    if (this.#dimmingOverlay) {
-      this.#dimmingOverlay.remove();
-      this.#dimmingOverlay = null;
     }
   }
 
