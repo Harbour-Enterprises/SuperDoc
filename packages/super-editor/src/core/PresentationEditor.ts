@@ -2965,6 +2965,12 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#localSelectionLayer) {
       return;
     }
+
+    // In viewing mode, don't render caret or selection highlights
+    if (this.#documentMode === 'viewing') {
+      this.#localSelectionLayer.innerHTML = '';
+      return;
+    }
     const layout = this.#layoutState.layout;
     const selection = this.getActiveEditor().state?.selection;
 

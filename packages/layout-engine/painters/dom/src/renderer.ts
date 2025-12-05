@@ -3565,6 +3565,54 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
 };
 
 /**
+ * Type guard to validate list marker attributes structure.
+ *
+ * @param attrs - The paragraph attributes to validate
+ * @returns True if the attrs contain valid list marker properties
+ */
+const hasListMarkerProperties = (
+  attrs: unknown,
+): attrs is {
+  numberingProperties: { numId?: number | string; ilvl?: number };
+  wordLayout?: { marker?: { markerText?: string } };
+} => {
+  if (!attrs || typeof attrs !== 'object') return false;
+  const obj = attrs as Record<string, unknown>;
+
+  if (!obj.numberingProperties || typeof obj.numberingProperties !== 'object') return false;
+  const numProps = obj.numberingProperties as Record<string, unknown>;
+
+  // Validate numId is number or string if present
+  if ('numId' in numProps) {
+    const numId = numProps.numId;
+    if (typeof numId !== 'number' && typeof numId !== 'string') return false;
+  }
+
+  // Validate ilvl is number if present
+  if ('ilvl' in numProps) {
+    const ilvl = numProps.ilvl;
+    if (typeof ilvl !== 'number') return false;
+  }
+
+  // Validate wordLayout structure if present
+  if ('wordLayout' in obj && obj.wordLayout !== undefined) {
+    if (typeof obj.wordLayout !== 'object' || obj.wordLayout === null) return false;
+    const wordLayout = obj.wordLayout as Record<string, unknown>;
+
+    if ('marker' in wordLayout && wordLayout.marker !== undefined) {
+      if (typeof wordLayout.marker !== 'object' || wordLayout.marker === null) return false;
+      const marker = wordLayout.marker as Record<string, unknown>;
+
+      if ('markerText' in marker && marker.markerText !== undefined) {
+        if (typeof marker.markerText !== 'string') return false;
+      }
+    }
+  }
+
+  return true;
+};
+
+/**
  * Derives a version string for a flow block based on its content and styling properties.
  *
  * This version string is used for cache invalidation - when any visual property of the block
@@ -3577,6 +3625,7 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
  * - Spacing (letterSpacing)
  * - Position markers (pmStart, pmEnd)
  * - Special tokens (page numbers, etc.)
+ * - List marker properties (numId, ilvl, markerText) - for list indent changes
  *
  * @param block - The flow block to generate a version string for
  * @returns A pipe-delimited string representing all visual properties of the block.
@@ -3584,7 +3633,12 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
  */
 const deriveBlockVersion = (block: FlowBlock): string => {
   if (block.kind === 'paragraph') {
-    return block.runs
+    // Include list marker info in version to detect indent/marker changes
+    const markerVersion = hasListMarkerProperties(block.attrs)
+      ? `marker:${block.attrs.numberingProperties.numId ?? ''}:${block.attrs.numberingProperties.ilvl ?? 0}:${block.attrs.wordLayout?.marker?.markerText ?? ''}`
+      : '';
+
+    const runsVersion = block.runs
       .map((run) => {
         // Handle ImageRun
         if (run.kind === 'image') {
@@ -3636,6 +3690,9 @@ const deriveBlockVersion = (block: FlowBlock): string => {
         ].join(',');
       })
       .join('|');
+
+    // Combine marker version with runs version
+    return markerVersion ? `${markerVersion}|${runsVersion}` : runsVersion;
   }
 
   if (block.kind === 'list') {
