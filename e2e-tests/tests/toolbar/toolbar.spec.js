@@ -556,9 +556,12 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+I');
 
       // Ensure the text is italic
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe(
-        'italic',
-      );
+      await sleep(500);
+      expect(
+        await superEditor.getByText('Hello').evaluate((el) => {
+          return window.getComputedStyle(el).fontStyle;
+        }),
+      ).toBe('italic');
     });
 
     test('should add underline mark to selected text with mod + u', async ({ page }) => {
