@@ -7,4 +7,10 @@ export default defineConfig({
   optimizeDeps: {
     exclude: ['superdoc'],
   },
+  resolve: {
+    alias: {
+      '@': 'superdoc/super-editor',
+      '@superdoc': 'superdoc',
+    },
+  },
 })

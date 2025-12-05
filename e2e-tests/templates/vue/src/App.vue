@@ -1,14 +1,21 @@
 <script setup>
-import 'superdoc/style.css';
+import '@/style.css';
 import BlankDOCX from './data/blank.docx?url';
 import { onMounted, shallowRef } from 'vue';
-import { SuperDoc } from 'superdoc';
+import { SuperDoc } from '@superdoc';
 
 import { CustomMark } from './custom-mark.js';
-import { nextTick } from 'process';
+import process from 'process';
+
+const props = defineProps({
+  filename: String,
+  onReady: Function,
+  superDocConfig: Object,
+});
 
 window.fileData = null;
 const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
+
 const superdoc = shallowRef(null);
 const init = async () => {
   if (superdoc.value) superdoc.value.destroy();
@@ -44,6 +51,9 @@ const init = async () => {
             tooltip: 'Insert Custom Mark',
             group: 'center',
             icon: '🎧',
+            attributes: {
+              ariaLabel: 'Insert Custom Mark',
+            },
           },
         ],
       },
@@ -83,9 +93,9 @@ const init = async () => {
     }
   }
 
-  nextTick(() => {
+  process.nextTick(() => {
     if (!config.modules) config.modules = {};
-    superdoc.value = new SuperDoc(config);
+    superdoc.value = new SuperDoc({ ...config, ...props.superDocConfig });
   });
 };
 
@@ -96,6 +106,9 @@ const onReady = () => {
   });
   if (window.superdocReady) {
     window.superdocReady();
+  }
+  if (props.onReady) {
+    props.onReady();
   }
 };
 
@@ -134,8 +147,11 @@ const onFontsResolved = ({ documentFonts, unsupportedFonts }) => {
   }
 };
 
-onMounted(() => {
-  init();
+onMounted(async () => {
+  if (props.filename) {
+    window.fileData = await getFileObject(props.filename);
+  }
+  await init();
 });
 </script>
 

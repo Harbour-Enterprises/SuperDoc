@@ -1,4 +1,4 @@
-import { Extensions } from 'superdoc/super-editor';
+import { Extensions } from '@';
 
 const { Attribute } = Extensions;
 export const CustomMark = Extensions.Mark.create({

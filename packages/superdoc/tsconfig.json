@@ -16,5 +16,5 @@
     },
     "typeRoots": ["./node_modules/@types/*", "../../node_modules/@types/*"]
   },
-  "exclude": ["node_modules", "dist", "**/*.test.js", "**/*.test.ts"]
+  "exclude": ["node_modules", "dist", "**/*.test.js", "**/*.test.ts", "**/*.stories.js", "**/*.stories.ts"]
 }
