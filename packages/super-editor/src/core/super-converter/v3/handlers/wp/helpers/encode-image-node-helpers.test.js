@@ -231,6 +231,41 @@ describe('handleImageNode', () => {
     expect(result.attrs.extension).toBe('gif');
   });
 
+  it('handles absolute targets and missing dist attributes without crashing', () => {
+    const minimalNode = {
+      attributes: {},
+      elements: [
+        { name: 'wp:extent', attributes: { cx: '2000', cy: '4000' } },
+        {
+          name: 'a:graphic',
+          elements: [
+            {
+              name: 'a:graphicData',
+              attributes: { uri: 'pic' },
+              elements: [
+                {
+                  name: 'pic:pic',
+                  elements: [
+                    {
+                      name: 'pic:blipFill',
+                      elements: [{ name: 'a:blip', attributes: { 'r:embed': 'rId1' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { name: 'wp:docPr', attributes: { id: '7', name: 'Absolute', descr: 'Abs image' } },
+      ],
+    };
+
+    const result = handleImageNode(minimalNode, makeParams('/word/media/mId1.jpg'), false);
+    expect(result).not.toBeNull();
+    expect(result?.attrs?.src).toBe('word/media/mId1.jpg');
+    expect(result?.attrs?.padding?.top).toBe(0);
+  });
+
   it('returns alt text for EMF/WMF', () => {
     const node = makeNode();
     const params = makeParams('media/pic.emf');
