@@ -18,9 +18,13 @@ export const handleDrawingNode = (params) => {
   if (mainNode.name === 'w:drawing') node = mainNode;
   else node = mainNode.elements.find((el) => el.name === 'w:drawing');
 
-  if (!node) return { nodes: [], consumed: 0 };
+  if (!node) {
+    return { nodes: [], consumed: 0 };
+  }
 
-  const schemaNode = wDrawingNodeTranslator.encode(params);
+  // Ensure params.nodes[0] is the w:drawing node for the translator
+  const translatorParams = { ...params, nodes: [node] };
+  const schemaNode = wDrawingNodeTranslator.encode(translatorParams);
   const newNodes = schemaNode ? [schemaNode] : [];
   return { nodes: newNodes, consumed: 1 };
 };

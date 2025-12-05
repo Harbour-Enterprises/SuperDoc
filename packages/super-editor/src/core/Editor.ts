@@ -862,6 +862,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
         telemetry: this.options.telemetry,
         fileSource: this.options.fileSource,
         documentId: this.options.documentId,
+        mockWindow: this.options.mockWindow ?? null,
+        mockDocument: this.options.mockDocument ?? null,
       });
     }
   }

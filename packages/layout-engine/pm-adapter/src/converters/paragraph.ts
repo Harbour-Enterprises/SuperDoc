@@ -112,15 +112,24 @@ export function isInlineImage(node: PMNode): boolean {
   const rawWrapType = wrap?.type;
 
   // If wrap type is explicitly 'Inline', treat as inline
-  if (rawWrapType === 'Inline') return true;
+  if (rawWrapType === 'Inline') {
+    return true;
+  }
 
   // If wrap type is any OTHER value (Tight, Square, None, etc.), treat as block
   // This takes precedence over the legacy `inline` attribute
-  if (rawWrapType && rawWrapType !== 'Inline') return false;
+  if (rawWrapType && rawWrapType !== 'Inline') {
+    return false;
+  }
 
   // Fallback checks for other inline indicators (only when wrap type is not specified)
-  if (attrs.inline === true) return true;
-  if (attrs.display === 'inline') return true;
+  if (attrs.inline === true) {
+    return true;
+  }
+
+  if (attrs.display === 'inline') {
+    return true;
+  }
 
   return false;
 }
@@ -935,8 +944,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'image') {
+      const isInline = isInlineImage(node);
+
       // Check if this image should be inline (ImageRun) or block (ImageBlock)
-      if (isInlineImage(node)) {
+      if (isInline) {
         // Inline image: add to current runs WITHOUT flushing paragraph
         const imageRun = imageNodeToRun(node, positions, activeSdt);
         if (imageRun) {

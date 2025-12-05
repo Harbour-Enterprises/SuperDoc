@@ -1,4 +1,4 @@
-import type { FlowBlock } from '@superdoc/contracts';
+import type { FlowBlock, ImageRun } from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
 
 /**
@@ -17,6 +17,17 @@ const BYTES_PER_ENTRY_ESTIMATE = 5_000; // ~5KB per entry
 const NORMALIZED_WHITESPACE = /\s+/g;
 const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ');
 
+/**
+ * Generates a cache key hash from a block's runs, incorporating content and formatting.
+ *
+ * For image runs, includes the image source (first 50 chars) and dimensions to ensure
+ * cache invalidation when image properties change. This is critical for converted
+ * metafiles (WMF/EMF) where placeholder images may have different dimensions than
+ * the original, preventing stale cached measurements from being served.
+ *
+ * @param block - The flow block to generate a hash for
+ * @returns A string hash representing the block's run content and formatting
+ */
 const hashRuns = (block: FlowBlock): string => {
   if (block.kind !== 'paragraph') return block.id;
   const trackedMode =
@@ -24,6 +35,15 @@ const hashRuns = (block: FlowBlock): string => {
   const trackedEnabled = resolveTrackedChangesEnabled(block.attrs, true);
   const runsHash = block.runs
     .map((run) => {
+      // For image runs, include src hash and dimensions in the cache key.
+      // This ensures cache invalidation when image source or size changes.
+      if (run.kind === 'image') {
+        const imgRun = run as ImageRun;
+        // Hash the src (first 50 chars to keep key manageable) + dimensions
+        const srcHash = imgRun.src.slice(0, 50);
+        return `img:${srcHash}:${imgRun.width}x${imgRun.height}`;
+      }
+
       const text = normalizeText(
         'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? ''),
       );
