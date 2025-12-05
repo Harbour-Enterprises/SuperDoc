@@ -654,7 +654,9 @@ export class SuperDoc extends EventEmitter {
       suggesting: () => this.#setModeSuggesting(),
     };
 
-    if (types[type]) types[type]();
+    if (types[type]) {
+      types[type]();
+    }
   }
 
   /**
