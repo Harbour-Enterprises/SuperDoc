@@ -809,6 +809,10 @@ export class SuperToolbar extends EventEmitter {
     }
 
     const { state } = this.activeEditor;
+    if (!state) {
+      this.#deactivateAll();
+      return;
+    }
     const selection = state.selection;
     const selectionTrackedChanges = this.#enrichTrackedChanges(
       collectTrackedChanges({ state, from: selection.from, to: selection.to }),
