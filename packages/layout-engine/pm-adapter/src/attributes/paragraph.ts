@@ -160,8 +160,17 @@ const extractMarkerRun = (lvl: OoxmlElement | undefined): ResolvedRunProperties 
   const color = normalizeColor(getAttribute(findChild(rPr, 'w:color'), 'w:val'));
   if (color) run.color = color;
 
-  if (findChild(rPr, 'w:b')) run.bold = true;
-  if (findChild(rPr, 'w:i')) run.italic = true;
+  const boldEl = findChild(rPr, 'w:b');
+  if (boldEl) {
+    const boldVal = getAttribute(boldEl, 'w:val');
+    if (boldVal == null || isTruthy(boldVal)) run.bold = true;
+  }
+
+  const italicEl = findChild(rPr, 'w:i');
+  if (italicEl) {
+    const italicVal = getAttribute(italicEl, 'w:val');
+    if (italicVal == null || isTruthy(italicVal)) run.italic = true;
+  }
 
   const spacingTwips = parseNumberAttr(getAttribute(findChild(rPr, 'w:spacing'), 'w:val'));
   if (spacingTwips != null && Number.isFinite(spacingTwips)) {
