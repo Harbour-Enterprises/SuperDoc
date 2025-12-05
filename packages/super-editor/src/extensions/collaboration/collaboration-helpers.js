@@ -50,8 +50,8 @@ export const updateYdocDocxData = async (editor, ydoc) => {
       });
     });
 
-    // Only transact if there were actual changes
-    if (hasChanges) {
+    // Only transact if there were actual changes OR this is initial setup
+    if (hasChanges || !docxValue) {
       ydoc.transact(
         () => {
           metaMap.set('docx', docx);
