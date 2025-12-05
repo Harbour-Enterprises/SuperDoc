@@ -2130,7 +2130,12 @@ export class PresentationEditor extends EventEmitter {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
     const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#inputBridge = new PresentationInputBridge(win as Window, this.#visibleHost, () => this.#getActiveDomTarget());
+    this.#inputBridge = new PresentationInputBridge(
+      win as Window,
+      this.#visibleHost,
+      () => this.#getActiveDomTarget(),
+      () => this.#documentMode !== 'viewing',
+    );
     this.#inputBridge.bind();
   }
 
@@ -2963,6 +2968,12 @@ export class PresentationEditor extends EventEmitter {
 
     // Only clear local layer, preserve remote cursor layer
     if (!this.#localSelectionLayer) {
+      return;
+    }
+
+    // In viewing mode, don't render caret or selection highlights
+    if (this.#documentMode === 'viewing') {
+      this.#localSelectionLayer.innerHTML = '';
       return;
     }
     const layout = this.#layoutState.layout;
@@ -4670,22 +4681,41 @@ class PresentationInputBridge {
   #windowRoot: Window;
   #layoutSurfaces: Set<EventTarget>;
   #getTargetDom: () => HTMLElement | null;
+  /** Callback that returns whether the editor is in an editable mode (editing/suggesting vs viewing) */
+  #isEditable: () => boolean;
   #onTargetChanged?: (target: HTMLElement | null) => void;
   #listeners: Array<{ type: string; handler: EventListener; target: EventTarget; useCapture: boolean }>;
   #currentTarget: HTMLElement | null = null;
   #destroyed = false;
   #useWindowFallback: boolean;
 
+  /**
+   * Creates a new PresentationInputBridge that forwards user input events from the visible layout
+   * surface to the hidden editor DOM. This enables input handling when the actual editor is not
+   * directly visible to the user.
+   *
+   * @param windowRoot - The window object containing the layout surface and editor target
+   * @param layoutSurface - The visible HTML element that receives user input events (e.g., keyboard, mouse)
+   * @param getTargetDom - Callback that returns the hidden editor's DOM element where events should be forwarded
+   * @param isEditable - Callback that returns whether the editor is in an editable mode (editing/suggesting).
+   *                     When this returns false (e.g., in viewing mode), keyboard, text, and composition
+   *                     events will not be forwarded to prevent document modification.
+   * @param onTargetChanged - Optional callback invoked when the target editor DOM element changes
+   * @param options - Optional configuration including:
+   *                  - useWindowFallback: Whether to attach window-level event listeners as fallback
+   */
   constructor(
     windowRoot: Window,
     layoutSurface: HTMLElement,
     getTargetDom: () => HTMLElement | null,
+    isEditable: () => boolean,
     onTargetChanged?: (target: HTMLElement | null) => void,
     options?: { useWindowFallback?: boolean },
   ) {
     this.#windowRoot = windowRoot;
     this.#layoutSurfaces = new Set<EventTarget>([layoutSurface]);
     this.#getTargetDom = getTargetDom;
+    this.#isEditable = isEditable;
     this.#onTargetChanged = onTargetChanged;
     this.#listeners = [];
     this.#useWindowFallback = options?.useWindowFallback ?? false;
@@ -4792,6 +4822,9 @@ class PresentationInputBridge {
    * @param event - The keyboard event from the layout surface
    */
   #forwardKeyboardEvent(event: KeyboardEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4828,6 +4861,9 @@ class PresentationInputBridge {
    * @param event - The input event from the layout surface
    */
   #forwardTextEvent(event: InputEvent | TextEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4868,6 +4904,9 @@ class PresentationInputBridge {
    * @param event - The composition event from the layout surface
    */
   #forwardCompositionEvent(event: CompositionEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4894,6 +4933,9 @@ class PresentationInputBridge {
    * @param event - The context menu event from the layout surface
    */
   #forwardContextMenu(event: MouseEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }

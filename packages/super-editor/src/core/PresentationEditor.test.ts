@@ -847,6 +847,249 @@ describe('PresentationEditor', () => {
     });
   });
 
+  describe('input blocking in viewing mode', () => {
+    it('should not forward keyboard events in viewing mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test special key (Enter)
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test keyboard shortcut (Ctrl+B)
+      const ctrlBEvent = new KeyboardEvent('keydown', {
+        key: 'b',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(ctrlBEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward text/input events in viewing mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test beforeinput event
+      const beforeInputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(beforeInputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test input event
+      const inputEvent = new InputEvent('input', {
+        data: 'b',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward composition events in viewing mode', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test compositionstart
+      const compStartEvent = new CompositionEvent('compositionstart', {
+        data: 'あ',
+        bubbles: true,
+      });
+      container.dispatchEvent(compStartEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test compositionupdate
+      const compUpdateEvent = new CompositionEvent('compositionupdate', {
+        data: 'あい',
+        bubbles: true,
+      });
+      container.dispatchEvent(compUpdateEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test compositionend
+      const compEndEvent = new CompositionEvent('compositionend', {
+        data: 'あいう',
+        bubbles: true,
+      });
+      container.dispatchEvent(compEndEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward context menu events in viewing mode', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      const contextMenuEvent = new MouseEvent('contextmenu', {
+        clientX: 10,
+        clientY: 20,
+      });
+      container.dispatchEvent(contextMenuEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should forward events normally when switching back to editing mode', async () => {
+      // Start in viewing mode
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Verify events are blocked in viewing mode
+      const enterEvent1 = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent1);
+      await Promise.resolve();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Switch to editing mode
+      editor.setDocumentMode('editing');
+
+      // Clear the spy to track new calls
+      dispatchSpy.mockClear();
+
+      // Verify events are now forwarded
+      const enterEvent2 = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent2);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown', key: 'Enter' }));
+
+      // Test beforeinput
+      dispatchSpy.mockClear();
+      const inputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'beforeinput' }));
+
+      // Test composition
+      dispatchSpy.mockClear();
+      const compEvent = new CompositionEvent('compositionstart', {
+        data: 'あ',
+        bubbles: true,
+      });
+      container.dispatchEvent(compEvent);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'compositionstart' }));
+
+      // Test context menu
+      dispatchSpy.mockClear();
+      const contextMenuEvent = new MouseEvent('contextmenu', {
+        clientX: 10,
+        clientY: 20,
+      });
+      container.dispatchEvent(contextMenuEvent);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'contextmenu' }));
+    });
+
+    it('should forward events in suggesting mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'suggesting',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Keyboard events should be forwarded
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown' }));
+
+      // Input events should be forwarded
+      dispatchSpy.mockClear();
+      const inputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'beforeinput' }));
+    });
+  });
+
   describe('click-to-type behavior', () => {
     it('should focus editor and set cursor to position 0 when clicking before layout is ready', () => {
       // Mock layout not ready (null)

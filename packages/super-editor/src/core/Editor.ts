@@ -526,6 +526,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
+
     // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
       this.commands.toggleTrackChangesShowOriginal();
@@ -749,10 +750,29 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Set whether the editor is editable
+   * Set whether the editor is editable.
+   *
+   * When setting to non-editable, this method:
+   * - Forces ProseMirror to re-evaluate the editable prop from the Editable plugin
+   * - Blurs the editor to remove the cursor
+   *
+   * @param editable - Whether the editor should accept user input (default: true)
+   * @param emitUpdate - Whether to emit an update event after changing editability (default: true)
    */
   setEditable(editable: boolean = true, emitUpdate: boolean = true): void {
     this.setOptions({ editable });
+
+    // Force ProseMirror to re-evaluate the editable prop from the Editable plugin.
+    // ProseMirror only updates the editable state when setProps is called,
+    // even if the underlying editor.options.editable value has changed.
+    if (this.view) {
+      this.view.setProps({});
+
+      // When setting to non-editable, blur the editor to remove cursor
+      if (!editable && this.view.dom) {
+        this.view.dom.blur();
+      }
+    }
 
     if (emitUpdate) {
       this.emit('update', { editor: this, transaction: this.state.tr });
