@@ -31,23 +31,30 @@ export const toggleList =
     const { from, to } = selection;
     let firstListNode = null;
     let hasNonListParagraphs = false;
-    let paragraphsInSelection = [];
+    let allParagraphsInSelection = [];
     state.doc.nodesBetween(from, to, (node, pos) => {
       if (node.type.name === 'paragraph') {
-        // Skip visually empty paragraphs (e.g., paragraphs with only an empty run)
-        // when creating a list from multiple paragraphs
-        if (!isVisuallyEmptyParagraph(node)) {
-          paragraphsInSelection.push({ node, pos });
-          if (!firstListNode && predicate(node)) {
-            firstListNode = node;
-          } else if (!predicate(node)) {
-            hasNonListParagraphs = true;
-          }
-        }
+        allParagraphsInSelection.push({ node, pos });
         return false; // stop iterating this paragraph's children
       }
       return true;
     });
+
+    // Skip visually empty paragraphs (e.g., paragraphs with only an empty run)
+    // but only when creating a list from multiple paragraphs.
+    // If only a single paragraph is selected (even if empty), we should still apply the list.
+    let paragraphsInSelection =
+      allParagraphsInSelection.length === 1
+        ? allParagraphsInSelection
+        : allParagraphsInSelection.filter(({ node }) => !isVisuallyEmptyParagraph(node));
+
+    for (const { node } of paragraphsInSelection) {
+      if (!firstListNode && predicate(node)) {
+        firstListNode = node;
+      } else if (!predicate(node)) {
+        hasNonListParagraphs = true;
+      }
+    }
     // 2. If not found, check if the paragraph right before the selection is a list of the same type
     if (!firstListNode && from > 0) {
       const $from = state.doc.resolve(from);
