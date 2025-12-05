@@ -48,4 +48,10 @@ describe('passthrough node importer', () => {
     const { nodes } = handlePassthroughNode(createParams(node, { path: pathChain }));
     expect(nodes[0].type).toBe('passthroughInline');
   });
+
+  it('treats unknown nodes inside paragraphs as inline context', () => {
+    const node = { name: 'w:unknown', elements: [] };
+    const { nodes } = handlePassthroughNode(createParams(node, { path: [{ name: 'w:p' }] }));
+    expect(nodes[0].type).toBe('passthroughInline');
+  });
 });
