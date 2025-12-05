@@ -1446,14 +1446,20 @@ export const computeParagraphAttrs = (
       paragraphAttrs.wordLayout = wordLayout;
 
       // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
-      // This ensures the renderer uses the correct level-specific indent for padding
-      // Only apply numbering-level indent when the paragraph didn't specify its own.
-      // When a paragraph provides an explicit indent, it should win over the numbering definition.
-      if (enrichedNumberingProps.resolvedLevelIndent && !hasExplicitIndent) {
+      // Per OOXML spec, paragraph indent MERGES with numbering definition:
+      // - Numbering definition provides base values (left, hanging from level)
+      // - Paragraph's explicit indent properties override specific values
+      // - Missing paragraph indent properties inherit from numbering definition
+      // This fixes cases where a paragraph only specifies w:hanging but should
+      // inherit w:left from the numbering level definition.
+      if (enrichedNumberingProps.resolvedLevelIndent) {
         const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+        const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+
+        // Merge: numbering definition as base, paragraph explicit values override
         paragraphAttrs.indent = {
-          ...paragraphAttrs.indent,
-          ...(resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent),
+          ...baseIndent,
+          ...(normalizedIndent ?? {}),
         };
       }
     }
