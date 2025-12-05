@@ -1,11 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MeasureCache } from '../src/cache';
-import type { FlowBlock } from '@superdoc/contracts';
+import type { FlowBlock, ImageRun } from '@superdoc/contracts';
 
 const block = (id: string, text: string): FlowBlock => ({
   kind: 'paragraph',
   id,
   runs: [{ text, fontFamily: 'Arial', fontSize: 16 }],
+});
+
+const imageRun = (src: string, width: number, height: number): ImageRun => ({
+  kind: 'image',
+  src,
+  width,
+  height,
+});
+
+const blockWithImage = (id: string, imgRun: ImageRun): FlowBlock => ({
+  kind: 'paragraph',
+  id,
+  runs: [imgRun],
 });
 
 describe('MeasureCache', () => {
@@ -129,6 +142,109 @@ describe('MeasureCache', () => {
       expect(() => cache.set(undefined as any, 100, 200, { totalHeight: 10 })).not.toThrow();
       // Should not be retrievable
       expect(cache.get(undefined as any, 100, 200)).toBeUndefined();
+    });
+  });
+
+  describe('image run caching', () => {
+    it('creates different cache keys for images with different dimensions', () => {
+      const block1 = blockWithImage('p1', imageRun('data:image/png;base64,abc', 100, 50));
+      const block2 = blockWithImage('p1', imageRun('data:image/png;base64,abc', 200, 100));
+
+      cache.set(block1, 400, 600, { totalHeight: 20 });
+      // Different dimensions should result in cache miss
+      expect(cache.get(block2, 400, 600)).toBeUndefined();
+    });
+
+    it('creates cache hit for images with same dimensions', () => {
+      const block1 = blockWithImage('p1', imageRun('data:image/png;base64,abc', 100, 50));
+      const block2 = blockWithImage('p1', imageRun('data:image/png;base64,abc', 100, 50));
+
+      cache.set(block1, 400, 600, { totalHeight: 20 });
+      // Same dimensions should result in cache hit
+      expect(cache.get(block2, 400, 600)).toEqual({ totalHeight: 20 });
+    });
+
+    it('creates different cache keys for images with different sources', () => {
+      const block1 = blockWithImage('p1', imageRun('data:image/png;base64,abc', 100, 50));
+      const block2 = blockWithImage('p1', imageRun('data:image/png;base64,xyz', 100, 50));
+
+      cache.set(block1, 400, 600, { totalHeight: 20 });
+      // Different src should result in cache miss
+      expect(cache.get(block2, 400, 600)).toBeUndefined();
+    });
+
+    it('uses first 50 chars of src for hash (long sources)', () => {
+      const longSrc1 = 'data:image/svg+xml;base64,' + 'A'.repeat(100);
+      const longSrc2 = 'data:image/svg+xml;base64,' + 'A'.repeat(100);
+      // These should match because first 50 chars are the same
+      const block1 = blockWithImage('p1', imageRun(longSrc1, 100, 50));
+      const block2 = blockWithImage('p1', imageRun(longSrc2, 100, 50));
+
+      cache.set(block1, 400, 600, { totalHeight: 20 });
+      expect(cache.get(block2, 400, 600)).toEqual({ totalHeight: 20 });
+    });
+
+    it('differentiates when first 50 chars differ (long sources)', () => {
+      const longSrc1 = 'data:image/svg+xml;base64,AAAA' + 'X'.repeat(100);
+      const longSrc2 = 'data:image/svg+xml;base64,BBBB' + 'X'.repeat(100);
+      // First 50 chars differ, should be cache miss
+      const block1 = blockWithImage('p1', imageRun(longSrc1, 100, 50));
+      const block2 = blockWithImage('p1', imageRun(longSrc2, 100, 50));
+
+      cache.set(block1, 400, 600, { totalHeight: 20 });
+      expect(cache.get(block2, 400, 600)).toBeUndefined();
+    });
+
+    it('handles paragraphs with mixed text and image runs', () => {
+      const mixedBlock1: FlowBlock = {
+        kind: 'paragraph',
+        id: 'p1',
+        runs: [
+          { text: 'Hello ', fontFamily: 'Arial', fontSize: 12 },
+          imageRun('data:image/png;base64,abc', 100, 50),
+          { text: ' World', fontFamily: 'Arial', fontSize: 12 },
+        ],
+      };
+      const mixedBlock2: FlowBlock = {
+        kind: 'paragraph',
+        id: 'p1',
+        runs: [
+          { text: 'Hello ', fontFamily: 'Arial', fontSize: 12 },
+          imageRun('data:image/png;base64,abc', 200, 100), // Different dimensions
+          { text: ' World', fontFamily: 'Arial', fontSize: 12 },
+        ],
+      };
+
+      cache.set(mixedBlock1, 400, 600, { totalHeight: 30 });
+      // Image dimensions changed, should be cache miss
+      expect(cache.get(mixedBlock2, 400, 600)).toBeUndefined();
+    });
+
+    it('handles paragraphs with multiple images', () => {
+      const multiImageBlock1: FlowBlock = {
+        kind: 'paragraph',
+        id: 'p1',
+        runs: [imageRun('img1.png', 100, 50), imageRun('img2.png', 80, 40)],
+      };
+      const multiImageBlock2: FlowBlock = {
+        kind: 'paragraph',
+        id: 'p1',
+        runs: [
+          imageRun('img1.png', 100, 50),
+          imageRun('img2.png', 80, 60), // Second image height changed
+        ],
+      };
+
+      cache.set(multiImageBlock1, 400, 600, { totalHeight: 25 });
+      expect(cache.get(multiImageBlock2, 400, 600)).toBeUndefined();
+    });
+
+    it('invalidates image blocks by block id', () => {
+      const imgBlock = blockWithImage('img-block', imageRun('test.png', 100, 100));
+      cache.set(imgBlock, 400, 600, { totalHeight: 50 });
+
+      cache.invalidate(['img-block']);
+      expect(cache.get(imgBlock, 400, 600)).toBeUndefined();
     });
   });
 });

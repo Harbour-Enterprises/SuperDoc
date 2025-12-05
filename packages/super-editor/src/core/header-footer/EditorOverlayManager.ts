@@ -89,6 +89,9 @@ export class EditorOverlayManager {
   /** Full-width border line element (MS Word style) */
   #borderLine: HTMLElement | null = null;
 
+  /** Dimming overlay element (for dimming body content during editing) */
+  #dimmingOverlay: HTMLElement | null = null;
+
   /**
    * Creates a new EditorOverlayManager instance.
    *
@@ -102,12 +105,12 @@ export class EditorOverlayManager {
    * @throws {Error} If painterHost is not connected to the DOM
    * @throws {Error} If visibleHost is not connected to the DOM
    */
-  constructor(painterHost: HTMLElement, visibleHost: HTMLElement, selectionOverlay: HTMLElement | null = null) {
+  constructor(_painterHost: HTMLElement, _visibleHost: HTMLElement, selectionOverlay: HTMLElement | null = null) {
     // Validate that hosts are HTMLElements
-    if (!(painterHost instanceof HTMLElement)) {
+    if (!(_painterHost instanceof HTMLElement)) {
       throw new TypeError('painterHost must be an HTMLElement');
     }
-    if (!(visibleHost instanceof HTMLElement)) {
+    if (!(_visibleHost instanceof HTMLElement)) {
       throw new TypeError('visibleHost must be an HTMLElement');
     }
     if (selectionOverlay !== null && !(selectionOverlay instanceof HTMLElement)) {
@@ -115,10 +118,10 @@ export class EditorOverlayManager {
     }
 
     // Validate that hosts are connected to DOM
-    if (!painterHost.isConnected) {
+    if (!_painterHost.isConnected) {
       throw new Error('painterHost must be connected to the DOM');
     }
-    if (!visibleHost.isConnected) {
+    if (!_visibleHost.isConnected) {
       throw new Error('visibleHost must be connected to the DOM');
     }
 
@@ -453,6 +456,18 @@ export class EditorOverlayManager {
         // Store this offset so the editor container can use it
         editorHost.dataset.contentOffset = String(fragmentTop);
       }
+    }
+  }
+
+  /**
+   * Hides and removes the dimming overlay.
+   * @internal Reserved for future implementation of body dimming during header/footer editing.
+   */
+  // eslint-disable-next-line no-unused-private-class-members
+  #hideDimmingOverlay(): void {
+    if (this.#dimmingOverlay) {
+      this.#dimmingOverlay.remove();
+      this.#dimmingOverlay = null;
     }
   }
 

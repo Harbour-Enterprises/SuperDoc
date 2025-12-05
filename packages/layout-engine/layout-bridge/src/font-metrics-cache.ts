@@ -222,8 +222,10 @@ export class FontMetricsCache {
    */
   private measureFont(fontKey: string): FontMetrics {
     if (!this.ctx) {
-      // Canvas not available, return default metrics
-      return this.createDefaultMetrics();
+      // Canvas not available, return and cache default metrics so callers still get usable values
+      const fallbackMetrics = this.createDefaultMetrics(fontKey);
+      this.cache.set(fontKey, fallbackMetrics);
+      return fallbackMetrics;
     }
 
     const { family, size, weight, style } = FontMetricsCache.parseFontKey(fontKey);
@@ -301,8 +303,8 @@ export class FontMetricsCache {
    * @returns Default font metrics
    * @private
    */
-  private createDefaultMetrics(): FontMetrics {
-    const size = 16; // Default font size
+  private createDefaultMetrics(fontKey?: string): FontMetrics {
+    const { size } = FontMetricsCache.parseFontKey(fontKey ?? '');
     return {
       charWidths: new Map(),
       spaceWidth: size * 0.25,

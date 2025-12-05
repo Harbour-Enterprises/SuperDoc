@@ -165,6 +165,12 @@ class SuperConverter {
     // Suppress logging when true
     this.debug = params?.debug || false;
 
+    // Optional DOM environment for server-side usage (e.g., JSDOM)
+    this.domEnvironment = {
+      mockWindow: params?.mockWindow || null,
+      mockDocument: params?.mockDocument || null,
+    };
+
     // Important docx pieces
     this.declaration = null;
     this.documentAttributes = null;

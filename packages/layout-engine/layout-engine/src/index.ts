@@ -1049,7 +1049,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       // Only adjust properties for breaks originating from DOCX sectPr (end-tagged semantics).
       // Skip the lookahead for PM-adapter blocks that already embed upcoming section metadata
       // via sectionIndex; those blocks have pre-resolved properties and don't need the map.
-      if (ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex) {
+      if (ahead && effectiveBlock.attrs?.source === 'sectPr' && !hasSectionIndex && ahead) {
         effectiveBlock = {
           ...effectiveBlock,
           margins: ahead.margins
