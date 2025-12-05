@@ -309,7 +309,7 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
 
     // Never use default borders - cells are either explicitly styled or borderless
     // This prevents gray borders on cells with borders={} (intentionally borderless)
-    const { cellElement, contentElement } = renderTableCell({
+    const { cellElement } = renderTableCell({
       doc,
       x,
       y,
@@ -326,8 +326,5 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     });
 
     container.appendChild(cellElement);
-    if (contentElement) {
-      container.appendChild(contentElement);
-    }
   }
 };

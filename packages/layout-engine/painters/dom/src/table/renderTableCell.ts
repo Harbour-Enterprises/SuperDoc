@@ -51,30 +51,27 @@ type TableCellRenderDependencies = {
  * Result of rendering a table cell.
  */
 export type TableCellRenderResult = {
-  /** The cell container element (with borders, background, sizing) */
+  /** The cell container element (with borders, background, sizing, and content as child) */
   cellElement: HTMLElement;
-  /** The content element (paragraph lines), or undefined if cell is empty */
-  contentElement?: HTMLElement;
 };
 
 /**
- * Renders a table cell as DOM elements.
+ * Renders a table cell as a DOM element.
  *
- * Creates two elements:
- * 1. cellElement: Absolutely-positioned container with borders, background, and sizing
- * 2. contentElement: Absolutely-positioned content container with paragraph lines and padding
+ * Creates a single cell element with content as a child:
+ * - cellElement: Absolutely-positioned container with borders, background, sizing, padding,
+ *   and content rendered inside. Cell uses overflow:hidden to clip any overflow.
  *
  * Handles:
  * - Cell borders (explicit or default)
  * - Background colors
  * - Vertical alignment (top, center, bottom)
- * - Cell padding
+ * - Cell padding (applied directly to cell element)
  * - Empty cells
  *
  * **Multi-Block Cell Rendering:**
  * - Iterates through all blocks in the cell (cell.blocks or cell.paragraph)
  * - Each block is rendered sequentially and stacked vertically
- * - Block positions are accumulated using absolute positioning within the content container
  * - Only paragraph blocks are currently rendered (other block types are ignored)
  *
  * **Backward Compatibility:**
@@ -83,15 +80,15 @@ export type TableCellRenderResult = {
  * - Handles mismatches between blockMeasures and cellBlocks arrays using bounds checking
  *
  * **Empty Cell Handling:**
- * - Cells with no blocks render only the cellElement (no contentElement)
+ * - Cells with no blocks render only the cell container (no content inside)
  * - Empty blocks arrays are safe (no content rendered)
  *
  * @param deps - All dependencies required for rendering
- * @returns Object containing cellElement and optional contentElement
+ * @returns Object containing cellElement (content is rendered inside as child)
  *
  * @example
  * ```typescript
- * const { cellElement, contentElement } = renderTableCell({
+ * const { cellElement } = renderTableCell({
  *   doc: document,
  *   x: 100,
  *   y: 50,
@@ -105,7 +102,6 @@ export type TableCellRenderResult = {
  *   applySdtDataset
  * });
  * container.appendChild(cellElement);
- * if (contentElement) container.appendChild(contentElement);
  * ```
  */
 export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRenderResult => {
@@ -125,6 +121,13 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     toLine,
   } = deps;
 
+  const attrs = cell?.attrs;
+  const padding = attrs?.padding || { top: 2, left: 4, right: 4, bottom: 2 };
+  const paddingLeft = padding.left ?? 4;
+  const paddingTop = padding.top ?? 2;
+  const paddingRight = padding.right ?? 4;
+  const paddingBottom = padding.bottom ?? 2;
+
   const cellEl = doc.createElement('div');
   cellEl.style.position = 'absolute';
   cellEl.style.left = `${x}px`;
@@ -132,7 +135,13 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   cellEl.style.width = `${cellMeasure.width}px`;
   cellEl.style.height = `${rowHeight}px`;
   cellEl.style.boxSizing = 'border-box';
+  // Cell clips all overflow - no scrollbars, content just gets clipped at boundaries
   cellEl.style.overflow = 'hidden';
+  // Apply padding directly to cell so content is positioned correctly
+  cellEl.style.paddingLeft = `${paddingLeft}px`;
+  cellEl.style.paddingTop = `${paddingTop}px`;
+  cellEl.style.paddingRight = `${paddingRight}px`;
+  cellEl.style.paddingBottom = `${paddingBottom}px`;
 
   if (borders) {
     applyCellBorders(cellEl, borders);
@@ -144,41 +153,19 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     cellEl.style.backgroundColor = cell.attrs.background;
   }
 
-  if (cell?.attrs?.verticalAlign) {
-    cellEl.style.display = 'flex';
-    cellEl.style.flexDirection = 'column';
-    cellEl.style.justifyContent =
-      cell.attrs.verticalAlign === 'top' ? 'flex-start' : cell.attrs.verticalAlign === 'bottom' ? 'flex-end' : 'center';
-  }
-
-  let contentElement: HTMLElement | undefined;
-
-  const attrs = cell?.attrs;
-  const padding = attrs?.padding || { top: 2, left: 4, right: 4, bottom: 2 };
-  const paddingLeft = padding.left ?? 4;
-  const paddingTop = padding.top ?? 2;
-  const paddingRight = padding.right ?? 4;
-  const paddingBottom = padding.bottom ?? 2;
-
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
 
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
+    // Content is a child of the cell, positioned relative to it
+    // Cell's overflow:hidden handles clipping, no explicit width needed
     const content = doc.createElement('div');
-    content.style.position = 'absolute';
-    content.style.left = `${x + paddingLeft}px`;
-    content.style.top = `${y + paddingTop}px`;
-
-    const contentWidth = Math.max(0, cellMeasure.width - paddingLeft - paddingRight);
-    const contentHeight = Math.max(0, rowHeight - paddingTop - paddingBottom);
-    content.style.width = `${contentWidth + 1}px`;
-    content.style.height = `${contentHeight}px`;
+    content.style.position = 'relative';
+    content.style.width = '100%';
+    content.style.height = '100%';
     content.style.display = 'flex';
     content.style.flexDirection = 'column';
-    // Prevent vertical overflow for partial rows while allowing slight horizontal overhangs
-    content.style.overflowX = 'visible';
-    content.style.overflowY = 'hidden';
 
     if (cell?.attrs?.verticalAlign === 'center') {
       content.style.justifyContent = 'center';
@@ -187,6 +174,9 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     } else {
       content.style.justifyContent = 'flex-start';
     }
+
+    // Append content to cell (content is now a child, not a sibling)
+    cellEl.appendChild(content);
 
     // Calculate total lines across all blocks for proper global index mapping
     const blockLineCounts: number[] = [];
@@ -262,6 +252,15 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
           paraWrapper.style.height = `${renderedHeight}px`;
         }
 
+        // Apply paragraph spacing.after as margin-bottom for all paragraphs.
+        // Word applies spacing.after even to the last paragraph in a cell, creating space at the bottom.
+        if (renderedEntireBlock) {
+          const spacingAfter = (block as ParagraphBlock).attrs?.spacing?.after;
+          if (typeof spacingAfter === 'number' && spacingAfter > 0) {
+            paraWrapper.style.marginBottom = `${spacingAfter}px`;
+          }
+        }
+
         cumulativeLineCount += blockLineCount;
       } else {
         // Non-paragraph block - skip for now
@@ -269,9 +268,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
       // TODO: Handle other block types (list, image) if needed
     }
-
-    contentElement = content;
   }
 
-  return { cellElement: cellEl, contentElement };
+  return { cellElement: cellEl };
 };

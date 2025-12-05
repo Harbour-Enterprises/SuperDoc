@@ -79,6 +79,64 @@ const parseNumberAttr = (value: unknown): number | undefined => {
   return Number.isFinite(num) ? num : undefined;
 };
 
+/**
+ * Merges spacing from multiple sources with increasing priority.
+ *
+ * In OOXML, a paragraph can have partial spacing overrides (e.g., only `line`)
+ * while inheriting other properties (e.g., `before`, `after`) from docDefaults
+ * or styles. This function merges all sources so that explicit values override
+ * defaults, but missing values fall back to lower-priority sources.
+ *
+ * Priority (lowest to highest): base (docDefaults/styles) < paragraphProps < attrs
+ *
+ * @param base - Spacing from hydrated styles (includes docDefaults)
+ * @param paragraphProps - Spacing from paragraphProperties
+ * @param attrs - Spacing from direct paragraph attrs (highest priority)
+ * @returns Merged spacing object, or undefined if all sources are empty
+ *
+ * @example
+ * ```typescript
+ * // Partial override: attrs only specifies 'line', inherits 'before' and 'after' from base
+ * mergeSpacingSources(
+ *   { before: 10, after: 10 },
+ *   {},
+ *   { line: 1.5 }
+ * )
+ * // Returns: { before: 10, after: 10, line: 1.5 }
+ *
+ * // Full override: attrs overrides all properties from base
+ * mergeSpacingSources(
+ *   { before: 10, after: 10, line: 1.0 },
+ *   {},
+ *   { before: 20, after: 20, line: 2.0 }
+ * )
+ * // Returns: { before: 20, after: 20, line: 2.0 }
+ *
+ * // Empty sources: returns undefined
+ * mergeSpacingSources({}, {}, {})
+ * // Returns: undefined
+ * ```
+ */
+export const mergeSpacingSources = (
+  base: unknown,
+  paragraphProps: unknown,
+  attrs: unknown,
+): Record<string, unknown> | undefined => {
+  const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object';
+
+  const baseObj = isObject(base) ? base : {};
+  const propsObj = isObject(paragraphProps) ? paragraphProps : {};
+  const attrsObj = isObject(attrs) ? attrs : {};
+
+  // If none of the sources have any data, return undefined
+  if (Object.keys(baseObj).length === 0 && Object.keys(propsObj).length === 0 && Object.keys(attrsObj).length === 0) {
+    return undefined;
+  }
+
+  // Merge with increasing priority: base < paragraphProps < attrs
+  return { ...baseObj, ...propsObj, ...attrsObj };
+};
+
 const normalizeNumFmt = (value?: unknown): NumberingFormat | undefined => {
   if (typeof value !== 'string') return undefined;
   switch (value) {
@@ -862,14 +920,11 @@ export const computeParagraphAttrs = (
       ? (attrs.paragraphProperties as Record<string, unknown>)
       : {};
   const hydrated = hydrationOverride ?? hydrateParagraphStyleAttrs(para, converterContext);
-  // Prefer explicit spacing from attrs even if it's null/empty - don't fall back to hydrated
-  const spacingSource =
-    attrs.spacing !== undefined
-      ? attrs.spacing
-      : paragraphProps.spacing !== undefined
-        ? paragraphProps.spacing
-        : hydrated?.spacing;
-  const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
+  // Merge spacing from all sources: hydrated (docDefaults/styles) < paragraphProps < attrs
+  // This ensures that a partial spacing override (e.g., only line) doesn't discard
+  // defaults for unspecified fields (e.g., before/after from docDefaults).
+  const mergedSpacing = mergeSpacingSources(hydrated?.spacing, paragraphProps.spacing, attrs.spacing);
+  const normalizedSpacing = normalizeParagraphSpacing(mergedSpacing);
   const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
     normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
