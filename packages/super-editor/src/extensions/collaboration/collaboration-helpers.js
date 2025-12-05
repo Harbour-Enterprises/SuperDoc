@@ -29,8 +29,18 @@ export const updateYdocDocxData = async (editor, ydoc) => {
     const newXml = await editor.exportDocx({ getUpdatedDocs: true });
     if (!newXml || typeof newXml !== 'object') return;
 
+    let hasChanges = false;
+
     Object.keys(newXml).forEach((key) => {
       const fileIndex = docx.findIndex((item) => item.name === key);
+      const existingContent = fileIndex > -1 ? docx[fileIndex].content : null;
+
+      // Skip if content hasn't changed
+      if (existingContent === newXml[key]) {
+        return;
+      }
+
+      hasChanges = true;
       if (fileIndex > -1) {
         docx.splice(fileIndex, 1);
       }
@@ -40,12 +50,15 @@ export const updateYdocDocxData = async (editor, ydoc) => {
       });
     });
 
-    ydoc.transact(
-      () => {
-        metaMap.set('docx', docx);
-      },
-      { event: 'docx-update', user: editor.options.user },
-    );
+    // Only transact if there were actual changes
+    if (hasChanges) {
+      ydoc.transact(
+        () => {
+          metaMap.set('docx', docx);
+        },
+        { event: 'docx-update', user: editor.options.user },
+      );
+    }
   } catch (error) {
     console.warn('[collaboration] Failed to update Ydoc docx data', error);
   }
