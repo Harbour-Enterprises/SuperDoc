@@ -912,6 +912,74 @@ describe('computeParagraphAttrs', () => {
     expect(result?.decimalSeparator).toBe(',');
   });
 
+  it('suppresses first-line indent for all justified paragraphs with firstLine indent', () => {
+    const para: PMNode = {
+      content: { firstChild: { type: { name: 'text' } } },
+      attrs: {
+        alignment: 'justify',
+        paragraphProperties: { indent: { firstLine: 720 } },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect((result as Record<string, unknown>).suppressFirstLineIndent).toBe(true);
+  });
+
+  it('does not suppress first-line indent for non-justified paragraphs', () => {
+    const para: PMNode = {
+      content: { firstChild: { type: { name: 'text' } } },
+      attrs: {
+        alignment: 'left',
+        paragraphProperties: { indent: { firstLine: 720 } },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect((result as Record<string, unknown>).suppressFirstLineIndent).toBeUndefined();
+  });
+
+  it('does not suppress first-line indent for justified paragraphs without firstLine', () => {
+    const para: PMNode = {
+      content: { firstChild: { type: { name: 'text' } } },
+      attrs: {
+        alignment: 'justify',
+        paragraphProperties: { indent: { left: 720 } },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect((result as Record<string, unknown>).suppressFirstLineIndent).toBeUndefined();
+  });
+
+  it('does not suppress first-line indent for justified paragraphs with negative firstLine', () => {
+    const para: PMNode = {
+      content: { firstChild: { type: { name: 'text' } } },
+      attrs: {
+        alignment: 'justify',
+        paragraphProperties: { indent: { firstLine: -720 } },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect((result as Record<string, unknown>).suppressFirstLineIndent).toBeUndefined();
+  });
+
   it('should extract floatAlignment from framePr', () => {
     const para: PMNode = {
       attrs: {

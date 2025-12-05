@@ -1093,6 +1093,16 @@ export const computeParagraphAttrs = (
     paragraphAttrs.alignment = computed.paragraph.alignment;
   }
 
+  // Word quirk: fully justified paragraphs ignore first-line indent.
+  // This behavior occurs even when the paragraph starts with plain text.
+  // See: https://answers.microsoft.com/en-us/msoffice/forum/all/first-line-indent-ignored-in-justified-paragraphs
+  const isJustified = paragraphAttrs.alignment === 'justify' || paragraphAttrs.alignment === 'both';
+  const hasFirstLineIndent = normalizedIndent?.firstLine && normalizedIndent.firstLine > 0;
+
+  if (isJustified && hasFirstLineIndent) {
+    paragraphAttrs.suppressFirstLineIndent = true;
+  }
+
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);
   if (spacingPx) paragraphAttrs.spacing = spacingPx;
   if (normalizedSpacing?.beforeAutospacing != null || normalizedSpacing?.afterAutospacing != null) {

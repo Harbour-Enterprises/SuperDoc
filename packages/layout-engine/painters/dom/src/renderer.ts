@@ -1431,7 +1431,10 @@ export class DomPainter {
       const paraIndent = block.attrs?.indent;
       const paraIndentLeft = paraIndent?.left ?? 0;
       const paraIndentRight = paraIndent?.right ?? 0;
-      const firstLineOffset = (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
+      // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
+      // suppressFirstLineIndent=true for these cases.
+      const suppressFirstLineIndent = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
+      const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
 
       lines.forEach((line, index) => {
         const lineEl = this.renderLine(block, line, context);

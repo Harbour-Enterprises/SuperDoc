@@ -227,7 +227,8 @@ describe('handleImageNode', () => {
     const node = makeNode();
     const params = makeParams('/media/pic.gif');
     const result = handleImageNode(node, params, false);
-    expect(result.attrs.src).toBe('media/pic.gif');
+    // Paths starting with /media are prefixed with word/ to match media storage keys
+    expect(result.attrs.src).toBe('word/media/pic.gif');
     expect(result.attrs.extension).toBe('gif');
   });
 
