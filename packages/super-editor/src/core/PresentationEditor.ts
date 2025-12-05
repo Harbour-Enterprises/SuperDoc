@@ -4520,33 +4520,16 @@ export class PresentationEditor extends EventEmitter {
     toLine: number,
     pos: number,
   ): { line: Line; index: number } | null {
-    const DEBUG_LINE_SEARCH = true;
-    const log = (...args: unknown[]) => {
-      if (DEBUG_LINE_SEARCH) console.log('[LINE-SEARCH]', ...args);
-    };
-
-    log('Searching for pos:', pos, 'in lines', fromLine, 'to', toLine);
-
     if (measure.kind !== 'paragraph' || block.kind !== 'paragraph') return null;
     for (let lineIndex = fromLine; lineIndex < toLine; lineIndex += 1) {
       const line = measure.lines[lineIndex];
       if (!line) continue;
       const range = computeLinePmRange(block, line);
-      log('Line', lineIndex, ':', {
-        pmStart: range.pmStart,
-        pmEnd: range.pmEnd,
-        fromRun: line.fromRun,
-        toRun: line.toRun,
-        fromChar: line.fromChar,
-        toChar: line.toChar,
-      });
       if (range.pmStart == null || range.pmEnd == null) continue;
       if (pos >= range.pmStart && pos <= range.pmEnd) {
-        log('Found line', lineIndex, 'for pos', pos);
         return { line, index: lineIndex };
       }
     }
-    log('No line found for pos', pos);
     return null;
   }
 

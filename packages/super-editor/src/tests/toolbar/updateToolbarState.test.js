@@ -315,6 +315,17 @@ describe('updateToolbarState', () => {
     });
   });
 
+  it('should deactivate toolbar items when active editor has no state', () => {
+    toolbar.activeEditor = { ...mockEditor, state: null };
+
+    toolbar.updateToolbarState();
+
+    toolbar.toolbarItems.forEach((item) => {
+      expect(item.setDisabled).toHaveBeenCalledWith(true);
+    });
+    expect(toolbar.activeEditor).toBeNull();
+  });
+
   it('should prioritize active mark over linked styles (font family)', () => {
     mockGetActiveFormatting.mockReturnValue([
       { name: 'fontFamily', attrs: { fontFamily: 'Roboto' } },
