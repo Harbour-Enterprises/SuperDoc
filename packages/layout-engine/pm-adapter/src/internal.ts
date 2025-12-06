@@ -233,7 +233,6 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       bookmarks,
       hyperlinkConfig,
       themeColorsParam ?? themeColors,
-      undefined, // converters - not needed for table cell paragraphs
       converterCtx ?? converterContext,
     );
 
