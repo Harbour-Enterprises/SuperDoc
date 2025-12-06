@@ -353,7 +353,7 @@ export function hitTestFragment(
 
   for (const fragment of fragments) {
     if (fragment.kind !== 'para') continue;
-    const blockIndex = blocks.findIndex((block) => block.id === fragment.blockId);
+    const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId);
     if (blockIndex === -1) continue;
     const block = blocks[blockIndex];
     const measure = measures[blockIndex];
@@ -394,7 +394,7 @@ const hitTestAtomicFragment = (
     const withinY = point.y >= fragment.y && point.y <= fragment.y + fragment.height;
     if (!withinX || !withinY) continue;
 
-    const blockIndex = blocks.findIndex((block) => block.id === fragment.blockId);
+    const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId);
     if (blockIndex === -1) continue;
     const block = blocks[blockIndex];
     const measure = measures[blockIndex];
@@ -675,7 +675,7 @@ export function clickToPosition(
               pageIndex = pi;
               column = determineColumn(layout, fragment.x);
               // Find line index if possible
-              const blockIndex = blocks.findIndex((b) => b.id === fragment.blockId);
+              const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId);
               if (blockIndex !== -1) {
                 const measure = measures[blockIndex];
                 if (measure && measure.kind === 'paragraph') {
@@ -906,6 +906,80 @@ export function clickToPosition(
 }
 
 /**
+ * Find a block by fragment blockId, handling continuation fragments.
+ * When paragraphs split across pages, continuation fragments get suffixed IDs
+ * (e.g., "5-paragraph-1") while the blocks array uses the base ID ("5-paragraph").
+ *
+ * When a page break is inserted (CMD+ENTER), the paragraph splits into multiple blocks
+ * with the same base ID but different PM ranges. The targetPmRange helps find the
+ * correct block by checking which one contains the target range.
+ *
+ * @param blocks - Array of flow blocks to search through
+ * @param fragmentBlockId - The block ID from the fragment (may include continuation suffix like "-1")
+ * @param targetPmRange - Optional PM range {from, to} to disambiguate when multiple blocks share the same ID
+ * @returns The index of the matching block, or -1 if not found
+ */
+function findBlockIndexByFragmentId(
+  blocks: FlowBlock[],
+  fragmentBlockId: string,
+  targetPmRange?: { from: number; to: number },
+): number {
+  // Try exact match first, but skip pageBreak/sectionBreak blocks that may share IDs with continuation paragraphs.
+  // This allows drawings, images, tables, and paragraphs to match while avoiding structural break blocks.
+  const index = blocks.findIndex(
+    (block) => block.id === fragmentBlockId && block.kind !== 'pageBreak' && block.kind !== 'sectionBreak',
+  );
+  if (index !== -1) {
+    return index;
+  }
+
+  // If no match, try stripping continuation suffix (e.g., "5-paragraph-1" -> "5-paragraph")
+  const baseBlockId = fragmentBlockId.replace(/-\d+$/, '');
+  if (baseBlockId === fragmentBlockId) {
+    return -1; // No suffix to strip, nothing more to try
+  }
+
+  // Find all paragraph blocks with matching base ID.
+  // Note: continuation suffixes (-1, -2) are only used for paragraphs split across pages.
+  const matchingIndices: number[] = [];
+  blocks.forEach((block, idx) => {
+    if (block.id === baseBlockId && block.kind === 'paragraph') {
+      matchingIndices.push(idx);
+    }
+  });
+
+  if (matchingIndices.length === 0) {
+    return -1;
+  }
+
+  // If only one match, return it
+  if (matchingIndices.length === 1) {
+    return matchingIndices[0];
+  }
+
+  // Multiple blocks with same ID - use target PM range to disambiguate
+  if (targetPmRange) {
+    for (const idx of matchingIndices) {
+      const block = blocks[idx];
+      // Extra safety check - should always be true due to filtering above
+      if (block.kind !== 'paragraph') continue;
+
+      // Check if any run in this block overlaps the target range
+      const hasOverlap = block.runs.some((run) => {
+        if (run.pmStart == null || run.pmEnd == null) return false;
+        return run.pmEnd > targetPmRange.from && run.pmStart < targetPmRange.to;
+      });
+      if (hasOverlap) {
+        return idx;
+      }
+    }
+  }
+
+  // Fallback to first matching block
+  return matchingIndices[0];
+}
+
+/**
  * Given a PM range [from, to), return selection rectangles for highlighting.
  */
 export function selectionToRects(
@@ -921,11 +995,14 @@ export function selectionToRects(
 
   const rects: Rect[] = [];
   const debugEntries: Record<string, unknown>[] = [];
+
   layout.pages.forEach((page, pageIndex) => {
     page.fragments.forEach((fragment) => {
       if (fragment.kind === 'para') {
-        const blockIndex = blocks.findIndex((block) => block.id === fragment.blockId);
-        if (blockIndex === -1) return;
+        const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId, { from, to });
+        if (blockIndex === -1) {
+          return;
+        }
         const block = blocks[blockIndex];
         const measure = measures[blockIndex];
         if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph') {
@@ -1020,7 +1097,7 @@ export function selectionToRects(
       }
 
       if (isAtomicFragment(fragment)) {
-        const blockIndex = blocks.findIndex((block) => block.id === fragment.blockId);
+        const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId, { from, to });
         if (blockIndex === -1) return;
         const block = blocks[blockIndex];
         const pmRange = getAtomicPmRange(fragment, block);
@@ -1060,7 +1137,7 @@ export function getFragmentAtPosition(
     for (const fragment of page.fragments) {
       // Debug fragment checks removed to reduce noise
 
-      const blockIndex = blocks.findIndex((block) => block.id === fragment.blockId);
+      const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId);
       if (blockIndex === -1) {
         continue;
       }

@@ -213,6 +213,8 @@ export const Paragraph = OxmlNode.create({
   },
 
   addNodeView() {
+    // Skip custom node view when the editor isn't using the docx pipeline (e.g. SuperInput rich text)
+    if (this.editor.options?.mode !== 'docx' || !this.editor.converter) return null;
     if (shouldSkipNodeView(this.editor)) return null;
     return ({ node, editor, getPos, decorations, extensionAttrs }) => {
       return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
