@@ -135,9 +135,40 @@ export const hydrateParagraphStyleAttrs = (
     resolvedIndent = { firstLine: 0, hanging: 0, left: resolvedIndent?.left, right: resolvedIndent?.right };
   }
 
+  // Get resolved spacing from style cascade (docDefaults → paragraph style)
+  let resolvedSpacing = cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined;
+
+  // Apply table style paragraph properties if present
+  // Per OOXML spec, table style pPr applies between docDefaults and paragraph style
+  // But since we can't easily inject into the style resolver, we apply table style
+  // spacing as a base that can be overridden by explicit paragraph properties
+  const tableStyleParagraphProps = context.tableStyleParagraphProps;
+  if (tableStyleParagraphProps?.spacing) {
+    const tableSpacing = tableStyleParagraphProps.spacing;
+
+    // Only apply table style spacing for properties NOT explicitly set on the paragraph
+    // This maintains the cascade: table style wins over docDefaults, but paragraph wins over table style
+    const paragraphHasExplicitSpacing = Boolean(spacing);
+
+    if (!paragraphHasExplicitSpacing) {
+      // No explicit paragraph spacing - use table style spacing as base, merged with resolved
+      resolvedSpacing = {
+        ...resolvedSpacing,
+        ...tableSpacing,
+      };
+    } else {
+      // Paragraph has explicit spacing - it should win, but fill in missing values from table style
+      // This ensures partial paragraph spacing (e.g., only 'line') still gets 'before'/'after' from table style
+      resolvedSpacing = {
+        ...tableSpacing,
+        ...resolvedSpacing,
+      };
+    }
+  }
+
   const hydrated: ParagraphStyleHydration = {
     resolved,
-    spacing: cloneIfObject(resolvedAsRecord.spacing) as ParagraphSpacing | undefined,
+    spacing: resolvedSpacing,
     indent: resolvedIndent,
     borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],
     shading: cloneIfObject(resolvedExtended.shading) as ParagraphAttrs['shading'],

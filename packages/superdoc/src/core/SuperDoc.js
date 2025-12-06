@@ -583,7 +583,6 @@ export class SuperDoc extends EventEmitter {
    */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
-    this.#log('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });

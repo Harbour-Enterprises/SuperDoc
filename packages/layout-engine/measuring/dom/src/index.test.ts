@@ -95,6 +95,43 @@ describe('measureBlock', () => {
       }
     });
 
+    it('uses content width for wordLayout list first lines with hanging indent', async () => {
+      const maxWidth = 200;
+      const indentLeft = 32;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'wordlayout-list',
+        runs: [
+          {
+            text: 'List item text that should wrap correctly even with a hanging indent marker present',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: indentLeft, hanging: indentLeft },
+          wordLayout: {
+            indentLeftPx: indentLeft,
+            marker: {
+              markerText: '1.',
+              markerBoxWidthPx: 20,
+              gutterWidthPx: 12,
+              run: {
+                fontFamily: 'Times New Roman',
+                fontSize: 16,
+                bold: false,
+                italic: false,
+                letterSpacing: 0,
+              },
+            },
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft);
+    });
+
     it('measures empty block correctly', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',

@@ -200,8 +200,8 @@ describe('headerFooterUtils', () => {
 
   describe('multi-section first-page variants', () => {
     const sectionMetadata: SectionMetadata[] = [
-      { sectionIndex: 0, headerRefs: { default: 'h0-default', first: 'h0-first' } },
-      { sectionIndex: 1, headerRefs: { default: 'h1-default', first: 'h1-first' } },
+      { sectionIndex: 0, headerRefs: { default: 'h0-default', first: 'h0-first' }, titlePg: true },
+      { sectionIndex: 1, headerRefs: { default: 'h1-default', first: 'h1-first' }, titlePg: true },
     ];
     const layout: Layout = {
       pageSize: { w: 600, h: 800 },
@@ -245,6 +245,78 @@ describe('headerFooterUtils', () => {
       expect(resolved?.sectionIndex).toBe(1);
       expect(resolved?.type).toBe('first');
       expect(resolved?.contentId).toBe('h1-first');
+    });
+  });
+
+  describe('titlePg behavior (regression test for OOXML compliance)', () => {
+    it('should NOT use first header when titlePg is false, even if first header reference exists', () => {
+      // This tests the OOXML spec: w:headerReference type="first" defines what header to use IF titlePg is enabled,
+      // but the w:titlePg element must be present in sectPr for it to actually be used.
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          titlePg: false, // Explicitly false - first page header should NOT be used
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use default header, NOT first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('default');
+
+      // Verify sectionTitlePg is false
+      expect(identifier.sectionTitlePg.get(0)).toBeUndefined();
+      expect(identifier.titlePg).toBe(false);
+    });
+
+    it('should NOT use first header when titlePg is omitted (undefined)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          // titlePg omitted - should default to false
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use default header, NOT first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('default');
+    });
+
+    it('should use first header only when titlePg is explicitly true', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          titlePg: true, // Explicitly true - first page header SHOULD be used
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('first');
+
+      // Second page should use default header
+      const secondPageType = getHeaderFooterTypeForSection(2, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 2,
+      });
+      expect(secondPageType).toBe('default');
     });
   });
 });
