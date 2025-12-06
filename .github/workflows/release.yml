@@ -5,10 +5,10 @@ on:
     branches:
       - main
       - stable
-      - "*.x" # Maintenance branches
+      - '*.x' # Maintenance branches
     paths:
-      - "packages/**"
-      - "!**.md"
+      - 'packages/**'
+      - '!**.md'
   workflow_dispatch:
 
 permissions:
@@ -39,10 +39,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          registry-url: "https://registry.npmjs.org"
-
-      - name: Install canvas system dependencies
-        run: sudo apt-get update && sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+          registry-url: 'https://registry.npmjs.org'
 
       - name: Install dependencies
         run: npm ci
@@ -60,73 +57,22 @@ jobs:
           npx semantic-release
           echo "released=$?" >> $GITHUB_OUTPUT
 
-  sync-main-branch:
-    needs: release
-    if: github.ref == 'refs/heads/stable'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Generate token
-        id: generate_token
-        uses: actions/create-github-app-token@v2
-        with:
-          app-id: ${{ secrets.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+      # Sync stable back to main after stable release
+      # - name: Sync stable to main
+      #   if: github.ref == 'refs/heads/stable'
+      #   env:
+      #     GH_TOKEN: ${{ steps.generate_token.outputs.token }}
+      #   run: |
+      #     # Configure git
+      #     git config user.name "github-actions[bot]"
+      #     git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-          token: ${{ steps.generate_token.outputs.token }}
+      #     # Fetch latest main
+      #     git fetch origin main
 
-      - name: Configure Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      #     # Checkout main and merge stable
+      #     git checkout main
+      #     git merge stable -m "chore: sync stable release to main [skip ci]"
 
-      - name: Sync main with stable
-        env:
-          GH_TOKEN: ${{ steps.generate_token.outputs.token }}
-        run: |
-          set -euo pipefail
-
-          git fetch origin main stable
-
-          if git merge-base --is-ancestor origin/main origin/stable; then
-            echo "✓ Fast-forwarding main to stable"
-            git checkout -B main origin/main
-            git merge --ff-only origin/stable
-            git push origin main
-            echo "✓ Successfully synced main with stable"
-          else
-            echo "⚠ main has diverged from stable; creating sync PR"
-
-            STABLE_SHA=$(git rev-parse origin/stable)
-            SYNC_BRANCH="sync-stable-${STABLE_SHA:0:7}"
-
-            # Check if PR already exists
-            if gh pr list --head "$SYNC_BRANCH" --base main --json number --jq 'length' | grep -q '^0$'; then
-              echo "Creating new branch and PR..."
-              git checkout -b "$SYNC_BRANCH" origin/stable
-              git push origin "$SYNC_BRANCH"
-
-              gh pr create \
-                --base main \
-                --head "$SYNC_BRANCH" \
-                --title "🔄 Sync stable → main (${STABLE_SHA:0:7})" \
-                --body "## Stable branch has diverged from main
-
-              This PR syncs the latest stable release back to main.
-
-              **Details:**
-              - Branch: \`$SYNC_BRANCH\`
-              - Stable commit: \`$STABLE_SHA\`
-              - Triggered by: ${{ github.event.head_commit.message }}
-
-              Please review and merge to keep branches aligned." \
-                --label "patch-sync"
-
-              echo "✓ Created PR for manual review"
-            else
-              echo "ℹ PR already exists for $SYNC_BRANCH"
-              gh pr list --head "$SYNC_BRANCH" --base main
-            fi
-          fi
+      #     # Push changes back to main
+      #     git push origin main
