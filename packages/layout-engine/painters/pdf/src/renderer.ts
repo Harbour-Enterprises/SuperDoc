@@ -442,6 +442,13 @@ export class PdfPainter {
     const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
     const fragmentHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
 
+    // Check if the paragraph ends with a lineBreak run.
+    // In Word, justified text stretches all lines EXCEPT the true last line of a paragraph.
+    // However, if the paragraph ends with a <w:br/> (lineBreak), the visible text before
+    // the break should still be justified because the "last line" is the empty line after the break.
+    const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+    const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
     const textContent = lines
       .map((line, index) => {
         const absoluteLineIndex = fragment.fromLine + index;
@@ -450,7 +457,23 @@ export class PdfPainter {
         const lineX = fragment.x + paddingLeft + indentOffset + alignOffset;
         const baseline = yCursor + line.lineHeight - line.descent;
         yCursor += line.lineHeight;
-        return this.renderLine(block, line, lineX, baseline, pageHeightPx, context);
+
+        // Determine if this is the true last line of the paragraph that should skip justification.
+        // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
+        const isLastLineOfFragment = index === lines.length - 1;
+        const isLastLineOfParagraph = isLastLineOfFragment && !fragment.continuesOnNext;
+        const shouldSkipJustifyForLastLine = isLastLineOfParagraph && !paragraphEndsWithLineBreak;
+
+        return this.renderLine(
+          block,
+          line,
+          lineX,
+          baseline,
+          pageHeightPx,
+          context,
+          availableWidth,
+          shouldSkipJustifyForLastLine,
+        );
       })
       .join('');
 
@@ -567,10 +590,20 @@ export class PdfPainter {
     const fragmentHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
 
     const paragraphContent = lines
-      .map((line) => {
+      .map((line, idx) => {
         const baseline = yCursor + line.lineHeight - line.descent;
         yCursor += line.lineHeight;
-        return this.renderLine(item.paragraph, line, fragment.x, baseline, pageHeightPx, context);
+        // List paragraphs should not be justified - pass true for skipJustify
+        return this.renderLine(
+          item.paragraph,
+          line,
+          fragment.x,
+          baseline,
+          pageHeightPx,
+          context,
+          fragment.width,
+          true, // skipJustify: list content should always be left-aligned
+        );
       })
       .join('');
 
@@ -670,6 +703,19 @@ export class PdfPainter {
     return markerParts.join('\n') + '\n' + content;
   }
 
+  /**
+   * Renders a single line of a paragraph block.
+   *
+   * @param block - The paragraph block containing the line
+   * @param line - The line measurement data
+   * @param x - The x-coordinate for the line start
+   * @param baseline - The baseline y-coordinate for the line
+   * @param pageHeightPx - The page height in pixels for coordinate conversion
+   * @param context - Rendering context with fragment information
+   * @param availableWidthOverride - Optional override for available width used in justification calculations
+   * @param skipJustify - When true, prevents justification even if alignment is 'justify'
+   * @returns The rendered line as PDF content stream commands
+   */
   private renderLine(
     block: ParagraphBlock,
     line: Line,
@@ -677,11 +723,19 @@ export class PdfPainter {
     baseline: number,
     pageHeightPx: number,
     context: FragmentRenderContext,
+    availableWidthOverride?: number,
+    skipJustify?: boolean,
   ): string {
     const runs = sliceRunsForLine(block, line);
     if (runs.length === 0) {
       return '';
     }
+    const textSlices =
+      runs.length > 0
+        ? runs
+            .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
+            .map((r) => r.text)
+        : gatherTextSlicesForLine(block, line);
 
     const parts: string[] = [];
     const trackedConfig = this.resolveTrackedChangesConfig(block);
@@ -756,7 +810,30 @@ export class PdfPainter {
 
     // Render text: prefer segment-based positioning if any segment carries an explicit X
     const hasExplicitSegments = Array.isArray(line.segments) && line.segments.some((s) => s.x !== undefined);
+    const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
+    const isJustify = (block.attrs as ParagraphAttrs | undefined)?.alignment === 'justify';
+    let justifyWordSpacing: number | undefined;
+    if (isJustify && !hasExplicitSegments && !skipJustify) {
+      const spaceCount = textSlices.reduce(
+        (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
+        0,
+      );
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack > 0) {
+        const extraPerSpacePx = slack / spaceCount;
+        const runWithFontSize = runs.find((r) => 'fontSize' in r && typeof (r as TextRun).fontSize === 'number') as
+          | TextRun
+          | undefined;
+        const baseFontSizePx = runWithFontSize?.fontSize ?? getPrimaryRun(block).fontSize;
+        if (baseFontSizePx && Number.isFinite(baseFontSizePx) && baseFontSizePx > 0) {
+          justifyWordSpacing = extraPerSpacePx / baseFontSizePx;
+        }
+      }
+    }
     parts.push('BT');
+    if (justifyWordSpacing && Number.isFinite(justifyWordSpacing) && justifyWordSpacing > 0) {
+      parts.push(`${justifyWordSpacing.toFixed(4)} Tw`);
+    }
     if (hasExplicitSegments && line.segments) {
       // Segment-aware rendering:
       // - For segments with explicit X (tab-aligned), position with Tm to absolute X.
@@ -806,6 +883,9 @@ export class PdfPainter {
         const text = resolveRunText(run, context);
         if (text) parts.push(toPdfTextOperand(text));
       });
+    }
+    if (justifyWordSpacing && Number.isFinite(justifyWordSpacing) && justifyWordSpacing > 0) {
+      parts.push('0 Tw');
     }
     parts.push('ET');
     return parts.join('\n') + '\n';
@@ -2069,6 +2149,31 @@ const calculateAlignmentOffset = (
     default:
       return 0;
   }
+};
+
+/**
+ * Extracts text content from all runs within a line for justification calculations.
+ *
+ * @param block - The paragraph block containing the runs
+ * @param line - The line definition with run and character boundaries
+ * @returns Array of text slices from the line, used to count spaces for justification
+ */
+const gatherTextSlicesForLine = (block: ParagraphBlock, line: Line): string[] => {
+  const slices: string[] = [];
+  const startRun = line.fromRun ?? 0;
+  const endRun = line.toRun ?? startRun;
+  for (let runIndex = startRun; runIndex <= endRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run || (run.kind !== 'text' && run.kind !== undefined) || !('text' in run) || !run.text) continue;
+    const isFirst = runIndex === startRun;
+    const isLast = runIndex === endRun;
+    const start = isFirst ? (line.fromChar ?? 0) : 0;
+    const end = isLast ? (line.toChar ?? run.text.length) : run.text.length;
+    if (start >= end) continue;
+    const slice = run.text.slice(start, end);
+    if (slice) slices.push(slice);
+  }
+  return slices;
 };
 
 const sanitizePositive = (value: number | undefined): number =>
