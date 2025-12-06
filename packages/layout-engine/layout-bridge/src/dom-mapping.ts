@@ -10,11 +10,11 @@
  * @module dom-mapping
  */
 
-// Debug logging for click-to-position pipeline
+// Debug logging for click-to-position pipeline (disabled - enable for debugging)
 const DEBUG_CLICK_MAPPING = false;
 const log = (...args: unknown[]) => {
   if (DEBUG_CLICK_MAPPING) {
-    console.log('[DOM-MAPPING]', ...args);
+    console.log('[DOM-MAP]', ...args);
   }
 };
 
@@ -176,6 +176,27 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
     pmStart: fragmentEl.dataset.pmStart,
     pmEnd: fragmentEl.dataset.pmEnd,
   });
+
+  // For table fragments (or any fragment without direct PM positions), check if the hit chain
+  // contains a line element with valid PM positions. This handles the case where table cells
+  // contain lines that have PM positions but the table fragment itself doesn't.
+  const hitChainLine = hitChain.find(
+    (el) =>
+      el.classList?.contains?.(CLASS_NAMES.line) &&
+      (el as HTMLElement).dataset?.pmStart !== undefined &&
+      (el as HTMLElement).dataset?.pmEnd !== undefined,
+  ) as HTMLElement | null;
+
+  if (hitChainLine) {
+    log('Using hit chain line directly:', {
+      pmStart: hitChainLine.dataset.pmStart,
+      pmEnd: hitChainLine.dataset.pmEnd,
+    });
+    const result = processLineElement(hitChainLine, viewX);
+    log('=== clickToPositionDom END (hitChainLine) ===', { result });
+    return result;
+  }
+
   const result = processFragment(fragmentEl, viewX, viewY);
   log('=== clickToPositionDom END ===', { result });
   return result;
@@ -294,7 +315,10 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
 
   // Find the span or anchor (run slice) at the X position
   // Include both <span> and <a> elements since links are rendered as <a> tags with PM position data
-  const spanEls = Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[];
+  // Filter to only elements with PM position data (excludes nested content spans like annotation-content)
+  const spanEls = (Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[]).filter(
+    (el) => el.dataset.pmStart !== undefined && el.dataset.pmEnd !== undefined,
+  );
 
   log(
     'Spans/anchors in line:',
@@ -350,6 +374,119 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
     rect: { left: targetRect.left, right: targetRect.right, width: targetRect.width },
     pageX: viewX,
     pageY: viewY,
+  });
+
+  if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
+    log('Element has invalid PM positions');
+    return null;
+  }
+
+  // Get the text node and find the character index
+  const firstChild = targetEl.firstChild;
+  if (!firstChild || firstChild.nodeType !== Node.TEXT_NODE || !firstChild.textContent) {
+    // Empty element or non-text node: choose closer edge
+    const elRect = targetEl.getBoundingClientRect();
+    const closerToLeft = Math.abs(viewX - elRect.left) <= Math.abs(viewX - elRect.right);
+    const snapPos = closerToLeft ? spanStart : spanEnd;
+    log('Empty/non-text element, snapping to:', { closerToLeft, snapPos });
+    return snapPos;
+  }
+
+  const textNode = firstChild as Text;
+  const charIndex = findCharIndexAtX(textNode, targetEl, viewX);
+  const pos = spanStart + charIndex;
+
+  log('Character position:', { charIndex, spanStart, finalPos: pos });
+
+  return pos;
+}
+
+/**
+ * Processes a line element directly to extract the PM position from a click X coordinate.
+ *
+ * This is used when we have a direct hit on a line element (e.g., from elementsFromPoint)
+ * and don't need to search for the line by Y coordinate.
+ *
+ * @param lineEl - The line element with `data-pm-start` and `data-pm-end` attributes
+ * @param viewX - X coordinate in viewport space
+ * @returns ProseMirror position, or null if processing fails
+ *
+ * @internal
+ */
+function processLineElement(lineEl: HTMLElement, viewX: number): number | null {
+  const lineStart = Number(lineEl.dataset.pmStart ?? 'NaN');
+  const lineEnd = Number(lineEl.dataset.pmEnd ?? 'NaN');
+  const lineRect = lineEl.getBoundingClientRect();
+
+  log('processLineElement:', {
+    pmStart: lineStart,
+    pmEnd: lineEnd,
+    rect: { top: lineRect.top, bottom: lineRect.bottom, left: lineRect.left, right: lineRect.right },
+  });
+
+  if (!Number.isFinite(lineStart) || !Number.isFinite(lineEnd)) {
+    log('Line has invalid PM positions');
+    return null;
+  }
+
+  // Find the span or anchor (run slice) at the X position
+  // Filter to only elements with PM position data (excludes nested content spans)
+  const spanEls = (Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[]).filter(
+    (el) => el.dataset.pmStart !== undefined && el.dataset.pmEnd !== undefined,
+  );
+
+  log(
+    'Spans/anchors in line:',
+    spanEls.map((el, i) => {
+      const rect = el.getBoundingClientRect();
+      return {
+        index: i,
+        tag: el.tagName,
+        pmStart: el.dataset.pmStart,
+        pmEnd: el.dataset.pmEnd,
+        text: el.textContent?.substring(0, 20) + (el.textContent && el.textContent.length > 20 ? '...' : ''),
+        visibility: el.style.visibility,
+        rect: { left: rect.left, right: rect.right, width: rect.width },
+      };
+    }),
+  );
+
+  if (spanEls.length === 0) {
+    log('No spans in line, returning lineStart:', lineStart);
+    return lineStart;
+  }
+
+  // Check if click is before first span or after last span
+  const firstRect = spanEls[0].getBoundingClientRect();
+  if (viewX <= firstRect.left) {
+    log('Click before first span, returning lineStart:', lineStart);
+    return lineStart;
+  }
+
+  const lastRect = spanEls[spanEls.length - 1].getBoundingClientRect();
+  if (viewX >= lastRect.right) {
+    log('Click after last span, returning lineEnd:', lineEnd);
+    return lineEnd;
+  }
+
+  // Find the target element containing or nearest to the X coordinate
+  const targetEl = findSpanAtX(spanEls, viewX);
+  if (!targetEl) {
+    log('No target element found, returning lineStart:', lineStart);
+    return lineStart;
+  }
+
+  const spanStart = Number(targetEl.dataset.pmStart ?? 'NaN');
+  const spanEnd = Number(targetEl.dataset.pmEnd ?? 'NaN');
+  const targetRect = targetEl.getBoundingClientRect();
+
+  log('Target element:', {
+    tag: targetEl.tagName,
+    pmStart: spanStart,
+    pmEnd: spanEnd,
+    text: targetEl.textContent?.substring(0, 30),
+    visibility: targetEl.style.visibility,
+    rect: { left: targetRect.left, right: targetRect.right, width: targetRect.width },
   });
 
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {

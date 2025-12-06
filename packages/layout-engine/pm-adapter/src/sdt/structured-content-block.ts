@@ -5,10 +5,10 @@
  * paragraphs and tables while preserving their content structure.
  */
 
-import type { ParagraphBlock } from '@superdoc/contracts';
+import type { ParagraphBlock, TableBlock } from '@superdoc/contracts';
 import type { PMNode, NodeHandlerContext } from '../types.js';
 import { resolveNodeSdtMetadata } from './metadata.js';
-import { applySdtMetadataToParagraphBlocks } from './metadata.js';
+import { applySdtMetadataToParagraphBlocks, applySdtMetadataToTableBlock } from './metadata.js';
 
 /**
  * Handle structured content block nodes.
@@ -65,9 +65,25 @@ export function handleStructuredContentBlockNode(node: PMNode, context: NodeHand
         recordBlockKind(block.kind);
       });
     } else if (child.type === 'table') {
-      // Note: Table conversion requires tableNodeToBlock which needs to be passed via converters
-      // For now, tables in structured content blocks are not converted
-      // This can be extended to support tables in SDT blocks if needed
+      const tableNodeToBlock = converters?.tableNodeToBlock;
+      if (tableNodeToBlock) {
+        const tableBlock = tableNodeToBlock(
+          child,
+          nextBlockId,
+          positions,
+          defaultFont,
+          defaultSize,
+          styleContext,
+          trackedChangesConfig,
+          bookmarks,
+          hyperlinkConfig,
+        );
+        if (tableBlock) {
+          applySdtMetadataToTableBlock(tableBlock as TableBlock, structuredContentMetadata);
+          blocks.push(tableBlock);
+          recordBlockKind(tableBlock.kind);
+        }
+      }
     }
   });
 }

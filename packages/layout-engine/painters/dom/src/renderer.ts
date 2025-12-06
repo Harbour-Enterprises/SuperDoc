@@ -11,6 +11,7 @@ import type {
   Run,
   TextRun,
   ImageRun,
+  FieldAnnotationRun,
   Line,
   LineSegment,
   ParagraphBlock,
@@ -53,11 +54,14 @@ import {
   ensurePrintStyles,
   ensureLinkStyles,
   ensureTrackChangeStyles,
+  ensureSdtContainerStyles,
+  ensureFieldAnnotationStyles,
   type PageStyles,
 } from './styles.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
+import { applySdtContainerStyling } from './utils/sdt-helpers.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -737,6 +741,8 @@ export class DomPainter {
     ensurePrintStyles(doc);
     ensureLinkStyles(doc);
     ensureTrackChangeStyles(doc);
+    ensureFieldAnnotationStyles(doc);
+    ensureSdtContainerStyles(doc);
     mount.classList.add(CLASS_NAMES.container);
 
     if (this.mount && this.mount !== mount) {
@@ -1385,9 +1391,15 @@ export class DomPainter {
       const isTocEntry = block.attrs?.isTocEntry;
       // For fragments with markers, allow overflow to show markers positioned at negative left
       const hasMarker = !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
+      // SDT containers need overflow visible for tooltips/labels positioned above
+      const hasSdtContainer =
+        block.attrs?.sdt?.type === 'documentSection' ||
+        block.attrs?.sdt?.type === 'structuredContent' ||
+        block.attrs?.containerSdt?.type === 'documentSection' ||
+        block.attrs?.containerSdt?.type === 'structuredContent';
       const styles = isTocEntry
         ? { ...fragmentStyles, whiteSpace: 'nowrap' }
-        : hasMarker
+        : hasMarker || hasSdtContainer
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
@@ -1414,6 +1426,10 @@ export class DomPainter {
       }
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
+
+      // Apply SDT container styling (document sections, structured content blocks)
+      // TODO: Track actual container boundaries across fragments when same sdt.id spans multiple fragments
+      applySdtContainerStyling(this.doc, fragmentEl, block.attrs?.sdt, block.attrs?.containerSdt);
 
       // Render drop cap if present (only on the first fragment, not continuation)
       const dropCapDescriptor = block.attrs?.dropCapDescriptor;
@@ -1770,6 +1786,9 @@ export class DomPainter {
 
       const paragraphMetadata = item.paragraph.attrs?.sdt;
       this.applySdtDataset(fragmentEl, paragraphMetadata);
+
+      // Apply SDT container styling (document sections, structured content blocks)
+      applySdtContainerStyling(this.doc, fragmentEl, paragraphMetadata, item.paragraph.attrs?.containerSdt);
 
       if (fragment.continuesFromPrev) {
         fragmentEl.dataset.continuesFromPrev = 'true';
@@ -2755,6 +2774,13 @@ export class DomPainter {
     return run.kind === 'break';
   }
 
+  /**
+   * Type guard to check if a run is a field annotation run.
+   */
+  private isFieldAnnotationRun(run: Run): run is FieldAnnotationRun {
+    return run.kind === 'fieldAnnotation';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
@@ -2763,6 +2789,11 @@ export class DomPainter {
     // Handle ImageRun
     if (this.isImageRun(run)) {
       return this.renderImageRun(run);
+    }
+
+    // Handle FieldAnnotationRun - inline pill-styled form fields
+    if (this.isFieldAnnotationRun(run)) {
+      return this.renderFieldAnnotationRun(run);
     }
 
     // Handle LineBreakRun - line breaks are handled by the measurer creating new lines,
@@ -2956,6 +2987,246 @@ export class DomPainter {
     }
 
     return img;
+  }
+
+  /**
+   * Renders a FieldAnnotationRun as an inline "pill" element matching super-editor's visual appearance.
+   *
+   * Field annotations are styled inline elements that display form fields with:
+   * - Outer span with border, border-radius, padding, and background color
+   * - Inner span containing the displayLabel or type-specific content (image, link, etc.)
+   *
+   * @param run - The FieldAnnotationRun to render containing field configuration and styling
+   * @returns HTMLElement (span) or null if document is not available
+   *
+   * @example
+   * ```typescript
+   * // Text variant
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'text', displayLabel: 'Full Name', fieldColor: '#980043' })
+   * // Returns: <span class="annotation" style="border: 2px solid #b015b3; ..."><span class="annotation-content">Full Name</span></span>
+   *
+   * // Image variant with imageSrc
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'image', displayLabel: 'Photo', imageSrc: 'data:image/png;...' })
+   * // Returns: <span class="annotation"><span class="annotation-content"><img src="..." /></span></span>
+   *
+   * // Link variant
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'link', displayLabel: 'Website', linkUrl: 'https://example.com' })
+   * // Returns: <span class="annotation"><span class="annotation-content"><a href="...">https://example.com</a></span></span>
+   * ```
+   */
+  private renderFieldAnnotationRun(run: FieldAnnotationRun): HTMLElement | null {
+    if (!this.doc) {
+      return null;
+    }
+
+    // Handle hidden fields
+    if (run.hidden) {
+      const hidden = this.doc.createElement('span');
+      hidden.style.display = 'none';
+      if (run.pmStart != null) hidden.dataset.pmStart = String(run.pmStart);
+      if (run.pmEnd != null) hidden.dataset.pmEnd = String(run.pmEnd);
+      return hidden;
+    }
+
+    // Default styling values (matching super-editor's FieldAnnotationView)
+    const defaultBorderColor = '#b015b3';
+    const defaultFieldColor = '#980043';
+
+    // Create outer annotation wrapper
+    const annotation = this.doc.createElement('span');
+    annotation.classList.add('annotation');
+    annotation.setAttribute('aria-label', 'Field annotation');
+
+    // Apply pill styling (unless highlighted is explicitly false)
+    const showHighlight = run.highlighted !== false;
+    if (showHighlight) {
+      const borderColor = run.borderColor || defaultBorderColor;
+      annotation.style.border = `2px solid ${borderColor}`;
+      annotation.style.borderRadius = '2px';
+      annotation.style.padding = '1px 2px';
+      annotation.style.boxSizing = 'border-box';
+
+      // Apply background color with alpha
+      const fieldColor = run.fieldColor || defaultFieldColor;
+      // Add alpha to make it semi-transparent (matching super-editor's behavior)
+      const bgColor = fieldColor.length === 7 ? `${fieldColor}33` : fieldColor;
+      // textHighlight takes precedence over fieldColor
+      if (run.textHighlight) {
+        annotation.style.backgroundColor = run.textHighlight;
+      } else {
+        annotation.style.backgroundColor = bgColor;
+      }
+    }
+
+    // Apply visibility
+    if (run.visibility === 'hidden') {
+      annotation.style.visibility = 'hidden';
+    }
+
+    // Apply explicit size if present
+    if (run.size) {
+      if (run.size.width) {
+        annotation.style.width = `${run.size.width}px`;
+        annotation.style.display = 'inline-block';
+        annotation.style.overflow = 'hidden';
+      }
+      if (run.size.height) {
+        annotation.style.height = `${run.size.height}px`;
+      }
+    }
+
+    // Apply typography to the annotation element
+    if (run.fontFamily) {
+      annotation.style.fontFamily = run.fontFamily;
+    }
+    if (run.fontSize) {
+      const fontSize = typeof run.fontSize === 'number' ? `${run.fontSize}pt` : run.fontSize;
+      annotation.style.fontSize = fontSize;
+    }
+    if (run.textColor) {
+      annotation.style.color = run.textColor;
+    }
+    if (run.bold) {
+      annotation.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      annotation.style.fontStyle = 'italic';
+    }
+    if (run.underline) {
+      annotation.style.textDecoration = 'underline';
+    }
+
+    // Apply z-index for proper layering
+    annotation.style.zIndex = '1';
+
+    // Create inner content wrapper
+    const content = this.doc.createElement('span');
+    content.classList.add('annotation-content');
+    content.style.pointerEvents = 'none';
+    content.setAttribute('contenteditable', 'false');
+
+    // Render type-specific content
+    switch (run.variant) {
+      case 'image':
+      case 'signature': {
+        if (run.imageSrc) {
+          const img = this.doc.createElement('img');
+          // SECURITY: Validate data URLs
+          const isDataUrl = run.imageSrc.startsWith('data:');
+          if (isDataUrl) {
+            if (run.imageSrc.length <= MAX_DATA_URL_LENGTH && VALID_IMAGE_DATA_URL.test(run.imageSrc)) {
+              img.src = run.imageSrc;
+            } else {
+              // Invalid data URL - fall back to displayLabel
+              content.textContent = run.displayLabel;
+              break;
+            }
+          } else {
+            const sanitized = sanitizeHref(run.imageSrc);
+            if (sanitized) {
+              img.src = sanitized.href;
+            } else {
+              content.textContent = run.displayLabel;
+              break;
+            }
+          }
+          img.alt = run.displayLabel;
+          img.style.height = 'auto';
+          img.style.maxWidth = '100%';
+          img.style.pointerEvents = 'none';
+          img.style.verticalAlign = 'middle';
+          if (run.variant === 'signature') {
+            img.style.maxHeight = '28px';
+          }
+          content.appendChild(img);
+          annotation.style.display = 'inline-block';
+          content.style.display = 'inline-block';
+        } else {
+          content.textContent = run.displayLabel || (run.variant === 'signature' ? 'Signature' : '');
+        }
+        break;
+      }
+
+      case 'link': {
+        if (run.linkUrl) {
+          const link = this.doc.createElement('a');
+          const sanitized = sanitizeHref(run.linkUrl);
+          if (sanitized) {
+            link.href = sanitized.href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = run.linkUrl;
+            link.style.textDecoration = 'none';
+            content.style.pointerEvents = 'all';
+            content.appendChild(link);
+          } else {
+            content.textContent = run.displayLabel;
+          }
+        } else {
+          content.textContent = run.displayLabel;
+        }
+        break;
+      }
+
+      case 'html': {
+        if (run.rawHtml && typeof run.rawHtml === 'string') {
+          // Note: For security, HTML content should be sanitized before rendering
+          // In headless/layout mode, we just render the displayLabel for safety
+          content.textContent = run.displayLabel;
+          annotation.style.display = 'inline-block';
+          content.style.display = 'inline-block';
+        } else {
+          content.textContent = run.displayLabel;
+        }
+        break;
+      }
+
+      case 'text':
+      case 'checkbox':
+      default: {
+        content.textContent = run.displayLabel;
+        break;
+      }
+    }
+
+    annotation.appendChild(content);
+
+    // Apply data attributes for field tracking
+    annotation.dataset.type = run.variant;
+    if (run.fieldId) {
+      annotation.dataset.fieldId = run.fieldId;
+    }
+    if (run.fieldType) {
+      annotation.dataset.fieldType = run.fieldType;
+    }
+
+    // Make field annotation draggable (matching super-editor behavior)
+    annotation.draggable = true;
+    annotation.dataset.draggable = 'true';
+
+    // Store additional data for drag operations
+    if (run.displayLabel) {
+      annotation.dataset.displayLabel = run.displayLabel;
+    }
+    if (run.variant) {
+      annotation.dataset.variant = run.variant;
+    }
+
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'field annotation run');
+
+    // Apply PM position tracking
+    if (run.pmStart != null) {
+      annotation.dataset.pmStart = String(run.pmStart);
+    }
+    if (run.pmEnd != null) {
+      annotation.dataset.pmEnd = String(run.pmEnd);
+    }
+
+    // Apply SDT metadata
+    this.applySdtDataset(annotation, run.sdt);
+
+    return annotation;
   }
 
   /**
@@ -3217,6 +3488,25 @@ export class DomPainter {
           continue;
         }
 
+        // Handle FieldAnnotationRun - render as-is (no slicing needed, atomic unit like images)
+        if (this.isFieldAnnotationRun(baseRun)) {
+          const elem = this.renderRun(baseRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Position using explicit segment X when available; fallback to cumulative flow
+            const runSegments = segmentsByRun.get(runIndex);
+            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segWidth = (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : 0) ?? 0;
+            elem.style.position = 'absolute';
+            elem.style.left = `${segX}px`;
+            el.appendChild(elem);
+            cumulativeX = segX + segWidth;
+          }
+          continue;
+        }
+
         const runSegments = segmentsByRun.get(runIndex);
         if (!runSegments || runSegments.length === 0) {
           continue;
@@ -3275,7 +3565,29 @@ export class DomPainter {
       }
     } else {
       // Use run-based rendering for normal text flow
+      // Track current inline SDT wrapper to group adjacent runs with the same SDT id
+      let currentInlineSdtWrapper: HTMLElement | null = null;
+      let currentInlineSdtId: string | null = null;
+
+      const closeCurrentWrapper = () => {
+        if (currentInlineSdtWrapper) {
+          el.appendChild(currentInlineSdtWrapper);
+          currentInlineSdtWrapper = null;
+          currentInlineSdtId = null;
+        }
+      };
+
       runsForLine.forEach((run) => {
+        // Check if this run has inline structuredContent SDT
+        const runSdt = (run as TextRun).sdt;
+        const isInlineSdt = runSdt?.type === 'structuredContent' && runSdt?.scope === 'inline';
+        const runSdtId = isInlineSdt && runSdt?.id ? String(runSdt.id) : null;
+
+        // If SDT context changed, close the current wrapper
+        if (runSdtId !== currentInlineSdtId) {
+          closeCurrentWrapper();
+        }
+
         // Special handling for TabRuns (e.g., signature lines with underlines)
         if (run.kind === 'tab') {
           const tabEl = this.doc!.createElement('span');
@@ -3323,9 +3635,45 @@ export class DomPainter {
           if (styleId) {
             elem.setAttribute('styleid', styleId);
           }
-          el.appendChild(elem);
+
+          // If this run has inline SDT, add to or create wrapper
+          if (isInlineSdt && runSdtId && this.doc) {
+            if (!currentInlineSdtWrapper) {
+              // Create new wrapper for this SDT group
+              currentInlineSdtWrapper = this.doc.createElement('span');
+              currentInlineSdtWrapper.className = 'superdoc-structured-content-inline';
+              currentInlineSdtId = runSdtId;
+              // Apply SDT metadata to wrapper
+              this.applySdtDataset(currentInlineSdtWrapper, runSdt);
+              // Add label element for hover display
+              const alias = (runSdt as { alias?: string })?.alias || 'Inline content';
+              const labelEl = this.doc.createElement('span');
+              labelEl.className = 'superdoc-structured-content-inline__label';
+              labelEl.textContent = alias;
+              currentInlineSdtWrapper.appendChild(labelEl);
+            }
+            // Update PM positions on wrapper to span all contained runs
+            const wrapperPmStart = currentInlineSdtWrapper.dataset.pmStart;
+            const wrapperPmEnd = currentInlineSdtWrapper.dataset.pmEnd;
+            if (run.pmStart != null) {
+              if (!wrapperPmStart || run.pmStart < parseInt(wrapperPmStart, 10)) {
+                currentInlineSdtWrapper.dataset.pmStart = String(run.pmStart);
+              }
+            }
+            if (run.pmEnd != null) {
+              if (!wrapperPmEnd || run.pmEnd > parseInt(wrapperPmEnd, 10)) {
+                currentInlineSdtWrapper.dataset.pmEnd = String(run.pmEnd);
+              }
+            }
+            currentInlineSdtWrapper.appendChild(elem);
+          } else {
+            el.appendChild(elem);
+          }
         }
       });
+
+      // Close any remaining wrapper at end of line
+      closeCurrentWrapper();
     }
 
     // Post-process: Apply tooltip accessibility for any links with pending tooltips
@@ -3969,8 +4317,14 @@ const deriveBlockVersion = (block: FlowBlock): string => {
  *                  ensure OOXML hyperlink character styles appear correctly.
  */
 const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void => {
-  if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break') {
-    // Tab, image, lineBreak, and break runs don't have text styling properties
+  if (
+    run.kind === 'tab' ||
+    run.kind === 'image' ||
+    run.kind === 'lineBreak' ||
+    run.kind === 'break' ||
+    run.kind === 'fieldAnnotation'
+  ) {
+    // Tab, image, lineBreak, break, and fieldAnnotation runs don't have text styling properties
     return;
   }
 
@@ -4201,6 +4555,12 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
 
     // TabRun handling - tabs don't need slicing
     if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // FieldAnnotationRun handling - field annotations are atomic units like images
+    if (run.kind === 'fieldAnnotation') {
       result.push(run);
       continue;
     }

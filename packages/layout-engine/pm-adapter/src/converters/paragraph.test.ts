@@ -1011,8 +1011,8 @@ describe('paragraph converters', () => {
         );
       });
 
-      it('should render fieldAnnotation inner content when present', () => {
-        paragraphToFlowBlocks(
+      it('should render fieldAnnotation as FieldAnnotationRun with inner content as displayLabel', () => {
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1029,20 +1029,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Field value' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Field value',
+        });
       });
 
       it('should use displayLabel when fieldAnnotation has no content', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1060,20 +1059,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Display Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Display Text',
+        });
       });
 
       it('should fallback to defaultDisplayLabel when displayLabel not present', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1091,20 +1089,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Default Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Default Text',
+        });
       });
 
       it('should use alias as final fallback for fieldAnnotation', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1122,24 +1119,27 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Alias Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Alias Text',
+        });
       });
 
       it('should propagate SDT metadata from fieldAnnotation', () => {
-        const fieldMetadata = { kind: 'field' as const };
+        const fieldMetadata = {
+          type: 'fieldAnnotation' as const,
+          fieldId: 'test-field-123',
+          variant: 'text' as const,
+        };
 
         vi.mocked(resolveNodeSdtMetadata).mockReturnValue(fieldMetadata);
 
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1156,16 +1156,15 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          expect.any(Object),
-          positions,
-          'Arial',
-          16,
-          [],
-          fieldMetadata,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          displayLabel: 'Field',
+          sdt: fieldMetadata,
+        });
       });
     });
 

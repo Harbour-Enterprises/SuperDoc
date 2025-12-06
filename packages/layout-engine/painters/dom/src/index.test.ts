@@ -1068,6 +1068,129 @@ describe('DomPainter', () => {
     expect(fragment.dataset.sdtContainerSectionLocked).toBe('true');
   });
 
+  it('wraps inline structuredContent runs in container element and groups adjacent runs with same SDT id', () => {
+    // Test case: Multiple runs with the same inline SDT id should be grouped into ONE wrapper
+    const inlineScBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'inline-sc-para',
+      runs: [
+        { text: 'Before ', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 },
+        {
+          text: 'controlled',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          pmStart: 7,
+          pmEnd: 17,
+          sdt: {
+            type: 'structuredContent',
+            scope: 'inline',
+            id: 'sc-inline-1',
+            tag: 'dropdown',
+            alias: 'Test Dropdown',
+          },
+        },
+        {
+          text: ' ',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          pmStart: 17,
+          pmEnd: 18,
+          sdt: {
+            type: 'structuredContent',
+            scope: 'inline',
+            id: 'sc-inline-1',
+            tag: 'dropdown',
+            alias: 'Test Dropdown',
+          },
+        },
+        {
+          text: 'text',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          pmStart: 18,
+          pmEnd: 22,
+          sdt: {
+            type: 'structuredContent',
+            scope: 'inline',
+            id: 'sc-inline-1',
+            tag: 'dropdown',
+            alias: 'Test Dropdown',
+          },
+        },
+        { text: ' after', fontFamily: 'Arial', fontSize: 16, pmStart: 22, pmEnd: 28 },
+      ],
+      attrs: {},
+    };
+
+    const inlineScMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 4,
+          toChar: 6,
+          width: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+    };
+
+    const inlineScLayout: Layout = {
+      pageSize: { w: 612, h: 792 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'inline-sc-para',
+              fromLine: 0,
+              toLine: 1,
+              x: 30,
+              y: 40,
+              width: 552,
+              pmStart: 0,
+              pmEnd: 28,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [inlineScBlock], measures: [inlineScMeasure] });
+    painter.paint(inlineScLayout, mount);
+
+    // Should have exactly ONE wrapper for the grouped runs
+    const wrappers = mount.querySelectorAll('.superdoc-structured-content-inline');
+    expect(wrappers.length).toBe(1);
+
+    const wrapper = wrappers[0] as HTMLElement;
+    expect(wrapper.tagName.toLowerCase()).toBe('span');
+    expect(wrapper.dataset.sdtType).toBe('structuredContent');
+    expect(wrapper.dataset.sdtScope).toBe('inline');
+    expect(wrapper.dataset.sdtId).toBe('sc-inline-1');
+    expect(wrapper.dataset.sdtTag).toBe('dropdown');
+
+    // The wrapper should span all contained runs (pmStart=7 to pmEnd=22)
+    expect(wrapper.dataset.pmStart).toBe('7');
+    expect(wrapper.dataset.pmEnd).toBe('22');
+
+    // The wrapper should contain all three inner text spans plus the label span
+    const innerSpans = wrapper.querySelectorAll('span');
+    expect(innerSpans.length).toBe(4); // 3 text spans + 1 label span
+
+    // Verify the label span exists
+    const labelSpan = wrapper.querySelector('.superdoc-structured-content-inline__label');
+    expect(labelSpan).toBeTruthy();
+
+    // Verify text content (label text + run text)
+    expect(wrapper.textContent).toContain('controlled text');
+  });
+
   it('positions word-layout markers relative to the text start', () => {
     const markerBlock: FlowBlock = {
       kind: 'paragraph',
@@ -7436,6 +7559,158 @@ describe('applyRunDataAttributes', () => {
 
       // Fragment should be rebuilt because numId changed (different list style)
       expect(fragmentAfter).not.toBe(fragmentBefore);
+    });
+
+    describe('block-level structuredContent styling', () => {
+      it('adds superdoc-structured-content-block class for block-level structuredContent', () => {
+        const blockSdtBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'block-sdt-test',
+          runs: [{ text: 'Content in block SDT', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 20 }],
+          attrs: {
+            sdt: {
+              type: 'structuredContent',
+              scope: 'block',
+              id: 'scb-block-1',
+              tag: 'dropdown',
+              alias: 'Block Content Control',
+            },
+          },
+        };
+
+        const blockSdtMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 20,
+              width: 180,
+              ascent: 12,
+              descent: 4,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        };
+
+        const blockSdtLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'block-sdt-test',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 20,
+                  y: 30,
+                  width: 320,
+                  pmStart: 0,
+                  pmEnd: 20,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [blockSdtBlock], measures: [blockSdtMeasure] });
+        painter.paint(blockSdtLayout, mount);
+
+        const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+        // Should have the block SDT class
+        expect(fragment.classList.contains('superdoc-structured-content-block')).toBe(true);
+
+        // Should have SDT metadata
+        expect(fragment.dataset.sdtType).toBe('structuredContent');
+        expect(fragment.dataset.sdtScope).toBe('block');
+        expect(fragment.dataset.sdtId).toBe('scb-block-1');
+
+        // Should have the label element
+        const label = fragment.querySelector('.superdoc-structured-content__label') as HTMLElement;
+        expect(label).toBeTruthy();
+        expect(label.textContent).toBe('Block Content Control');
+
+        // Should have container boundary markers
+        expect(fragment.dataset.sdtContainerStart).toBe('true');
+        expect(fragment.dataset.sdtContainerEnd).toBe('true');
+      });
+
+      it('does not add block SDT styling for inline-scoped structuredContent', () => {
+        const inlineSdtBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'inline-sdt-test',
+          runs: [{ text: 'Content in inline SDT', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 21 }],
+          attrs: {
+            sdt: {
+              type: 'structuredContent',
+              scope: 'inline',
+              id: 'sc-inline-test',
+              tag: 'text',
+              alias: 'Inline Control',
+            },
+          },
+        };
+
+        const inlineSdtMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 21,
+              width: 190,
+              ascent: 12,
+              descent: 4,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        };
+
+        const inlineSdtLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'inline-sdt-test',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 20,
+                  y: 30,
+                  width: 320,
+                  pmStart: 0,
+                  pmEnd: 21,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [inlineSdtBlock], measures: [inlineSdtMeasure] });
+        painter.paint(inlineSdtLayout, mount);
+
+        const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
+
+        // Should NOT have the block SDT class (only inline scope)
+        expect(fragment.classList.contains('superdoc-structured-content-block')).toBe(false);
+
+        // Should still have the inline SDT metadata
+        expect(fragment.dataset.sdtType).toBe('structuredContent');
+        expect(fragment.dataset.sdtScope).toBe('inline');
+
+        // Should NOT have the label element
+        const label = fragment.querySelector('.superdoc-structured-content__label');
+        expect(label).toBeFalsy();
+      });
     });
   });
 });

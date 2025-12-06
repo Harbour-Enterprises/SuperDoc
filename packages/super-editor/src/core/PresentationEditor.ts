@@ -19,12 +19,14 @@ import {
   computeDisplayPageNumber,
   findWordBoundaries,
   findParagraphBoundaries,
+  createDragHandler,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
   HeaderFooterLayoutResult,
   PositionHit,
   MultiSectionHeaderFooterIdentifier,
+  DropEvent,
 } from '@superdoc/layout-bridge';
 import { createDomPainter } from '@superdoc/painter-dom';
 import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
@@ -255,6 +257,54 @@ type HeaderFooterLayoutContext = {
   region: HeaderFooterRegion;
 };
 
+/**
+ * Attributes for a field annotation node
+ */
+interface FieldAnnotationAttributes {
+  fieldId: string;
+  fieldType: string;
+  displayLabel: string;
+  type: string;
+  fieldColor?: string;
+}
+
+/**
+ * Information about the source field being dragged
+ */
+interface SourceFieldInfo {
+  fieldId: string;
+  fieldType: string;
+  annotationType: string;
+}
+
+/**
+ * Payload structure for field annotation drag-and-drop data
+ */
+interface FieldAnnotationDragPayload {
+  /** Attributes to apply to the inserted field annotation */
+  attributes?: FieldAnnotationAttributes;
+  /** Source field information for tracking drop origin */
+  sourceField?: SourceFieldInfo;
+}
+
+/**
+ * Type guard to validate field annotation attributes
+ * @param attrs - Unknown value to validate
+ * @returns True if attrs is a valid FieldAnnotationAttributes object
+ */
+function isValidFieldAnnotationAttributes(attrs: unknown): attrs is FieldAnnotationAttributes {
+  if (!attrs || typeof attrs !== 'object') return false;
+  const a = attrs as Record<string, unknown>;
+  return (
+    typeof a.fieldId === 'string' &&
+    typeof a.fieldType === 'string' &&
+    typeof a.displayLabel === 'string' &&
+    typeof a.type === 'string'
+  );
+}
+
+const FIELD_ANNOTATION_DATA_TYPE = 'fieldAnnotation' as const;
+
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter @ 72dpi
 const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 };
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
@@ -373,6 +423,7 @@ export class PresentationEditor extends EventEmitter {
   #layoutOptions: LayoutEngineOptions;
   #layoutState: LayoutState = { blocks: [], measures: [], layout: null };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
+  #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
   #layoutErrorState: 'healthy' | 'degraded' | 'failed' = 'healthy';
   #errorBanner: HTMLElement | null = null;
@@ -629,6 +680,7 @@ export class PresentationEditor extends EventEmitter {
       this.#applyZoom();
       this.#setupEditorListeners();
       this.#setupPointerHandlers();
+      this.#setupDragHandlers();
       this.#setupInputBridge();
       this.#syncTrackedChangesPreferences();
 
@@ -1518,6 +1570,8 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost?.removeEventListener('pointermove', this.#handlePointerMove);
     this.#viewportHost?.removeEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost?.removeEventListener('pointerleave', this.#handlePointerLeave);
+    this.#viewportHost?.removeEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost?.removeEventListener('drop', this.#handleDrop);
     this.#visibleHost?.removeEventListener('keydown', this.#handleKeyDown);
     this.#inputBridge?.notifyTargetChanged();
     this.#inputBridge?.destroy();
@@ -1564,6 +1618,8 @@ export class PresentationEditor extends EventEmitter {
     this.#activeHeaderFooterEditor = null;
 
     this.#domPainter = null;
+    this.#dragHandlerCleanup?.();
+    this.#dragHandlerCleanup = null;
     this.#selectionOverlay?.remove();
     this.#painterHost?.remove();
     this.#hiddenHost?.remove();
@@ -2132,7 +2188,145 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost.addEventListener('pointermove', this.#handlePointerMove);
     this.#viewportHost.addEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost.addEventListener('pointerleave', this.#handlePointerLeave);
+    this.#viewportHost.addEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost.addEventListener('drop', this.#handleDrop);
     this.#visibleHost.addEventListener('keydown', this.#handleKeyDown);
+  }
+
+  /**
+   * Sets up drag and drop handlers for field annotations in the layout engine view.
+   * Uses the DragHandler from layout-bridge to handle drag events and map drop
+   * coordinates to ProseMirror positions.
+   */
+  #setupDragHandlers() {
+    // Clean up any existing handler
+    this.#dragHandlerCleanup?.();
+    this.#dragHandlerCleanup = null;
+
+    // Set up drag handler on the painter host (where layout engine renders)
+    this.#dragHandlerCleanup = createDragHandler(this.#painterHost, {
+      onDragOver: (event) => {
+        if (!event.hasFieldAnnotation || event.event.clientX === 0) {
+          return;
+        }
+
+        const activeEditor = this.getActiveEditor();
+        if (!activeEditor?.isEditable) {
+          return;
+        }
+
+        // Use the layout engine's hit testing to get the PM position
+        const hit = this.hitTest(event.clientX, event.clientY);
+        const doc = activeEditor.state?.doc;
+        if (!hit || !doc) {
+          return;
+        }
+
+        // Clamp position to valid range
+        const pos = Math.min(Math.max(hit.pos, 1), doc.content.size);
+
+        // Skip if cursor hasn't moved
+        const currentSelection = activeEditor.state.selection;
+        if (currentSelection instanceof TextSelection && currentSelection.from === pos && currentSelection.to === pos) {
+          return;
+        }
+
+        // Update the selection to show caret at drop position
+        try {
+          const tr = activeEditor.state.tr.setSelection(TextSelection.create(doc, pos)).setMeta('addToHistory', false);
+          activeEditor.view?.dispatch(tr);
+          this.#scheduleSelectionUpdate();
+        } catch {
+          // Position may be invalid during layout updates - ignore
+        }
+      },
+      onDrop: (event: DropEvent) => {
+        // Prevent other drop handlers from double-processing
+        event.event.preventDefault();
+        event.event.stopPropagation();
+
+        if (event.pmPosition === null) {
+          return;
+        }
+
+        const activeEditor = this.getActiveEditor();
+        const { state, view } = activeEditor;
+        if (!state || !view) {
+          return;
+        }
+
+        // If the source has fieldId (meaning it was dragged from an existing position),
+        // we MOVE the field annotation (delete from old, insert at new)
+        const fieldId = event.data.fieldId;
+        if (fieldId) {
+          const targetPos = event.pmPosition;
+
+          // Find the field annotation in the current document by fieldId
+          // This handles stale position data from DOM attributes after document edits
+          let sourceStart: number | null = null;
+          let sourceEnd: number | null = null;
+          let sourceNode: typeof state.doc extends { nodeAt: (p: number) => infer N } ? N : never = null;
+
+          state.doc.descendants((node, pos) => {
+            if (node.type.name === 'fieldAnnotation' && (node.attrs as { fieldId?: string }).fieldId === fieldId) {
+              sourceStart = pos;
+              sourceEnd = pos + node.nodeSize;
+              sourceNode = node;
+              return false; // Stop traversal
+            }
+            return true;
+          });
+
+          if (sourceStart === null || sourceEnd === null || !sourceNode) {
+            return;
+          }
+
+          // Skip if dropping at the same position (or immediately adjacent)
+          if (targetPos >= sourceStart && targetPos <= sourceEnd) {
+            return;
+          }
+
+          // Create a transaction to move the field annotation
+          const tr = state.tr;
+
+          // First delete the source annotation
+          tr.delete(sourceStart, sourceEnd);
+
+          // Use ProseMirror's mapping to get the correct target position after the delete
+          // This properly handles document structure changes and edge cases
+          const mappedTarget = tr.mapping.map(targetPos);
+
+          // Validate the mapped position is within document bounds
+          if (mappedTarget < 0 || mappedTarget > tr.doc.content.size) {
+            return;
+          }
+
+          // Then insert the same node at the mapped target position
+          tr.insert(mappedTarget, sourceNode);
+          tr.setMeta('uiEvent', 'drop');
+
+          view.dispatch(tr);
+          return;
+        }
+
+        // No source position - this is a new drop from outside, insert directly if attributes look valid
+        const attrs = event.data.attributes;
+        if (attrs && isValidFieldAnnotationAttributes(attrs)) {
+          const inserted = activeEditor.commands?.addFieldAnnotation?.(event.pmPosition, attrs, true);
+          if (inserted) {
+            this.#scheduleSelectionUpdate();
+          }
+          return;
+        }
+
+        // Fallback: emit event for any external handlers
+        activeEditor.emit('fieldAnnotationDropped', {
+          sourceField: event.data,
+          editor: activeEditor,
+          coordinates: { pos: event.pmPosition },
+        });
+      },
+    });
   }
 
   #setupInputBridge() {
@@ -2210,10 +2404,18 @@ export class PresentationEditor extends EventEmitter {
     if (event.button !== 0) {
       return;
     }
+
+    // Check if clicking on a draggable field annotation - if so, don't preventDefault
+    // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
+    const target = event.target as HTMLElement;
+    const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
+
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
       // so the user can immediately begin typing
-      event.preventDefault();
+      if (!isDraggableAnnotation) {
+        event.preventDefault();
+      }
 
       // Blur any currently focused element
       if (document.activeElement instanceof HTMLElement) {
@@ -2287,7 +2489,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const hit = clickToPosition(
+    const rawHit = clickToPosition(
       this.#layoutState.layout,
       this.#layoutState.blocks,
       this.#layoutState.measures,
@@ -2297,7 +2499,15 @@ export class PresentationEditor extends EventEmitter {
       event.clientY,
     );
 
-    event.preventDefault();
+    // Clamp hit position to valid document bounds to handle stale layout data
+    // (e.g., after drag-drop moves content, layout may briefly have old positions)
+    const doc = this.#editor.state?.doc;
+    const hit = rawHit && doc ? { ...rawHit, pos: Math.max(0, Math.min(rawHit.pos, doc.content.size)) } : rawHit;
+
+    // Don't preventDefault for draggable annotations - allows mousedown to fire for native drag
+    if (!isDraggableAnnotation) {
+      event.preventDefault();
+    }
 
     // Even if clickToPosition returns null (clicked outside text content),
     // we still want to focus the editor so the user can start typing
@@ -2466,11 +2676,11 @@ export class PresentationEditor extends EventEmitter {
     }
 
     if (!handledByDepth) {
-      const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
       try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
         this.#editor.view?.dispatch(tr);
       } catch {
-        // Error dispatching selection - this can happen if the position is invalid
+        // Position may be invalid during layout updates (e.g., after drag-drop) - ignore
       }
     }
 
@@ -2862,6 +3072,158 @@ export class PresentationEditor extends EventEmitter {
     // the first click must persist to the second click) and for shift+click
     // to extend selection in the same mode (word/para) after a multi-click
     this.#isDragging = false;
+  };
+
+  /**
+   * Handles dragover events for field annotation drag-and-drop operations.
+   * Updates the cursor position during drag to provide visual feedback.
+   *
+   * @param event - The dragover event from the browser
+   *
+   * Side effects:
+   * - Prevents default browser drag behavior
+   * - Sets dropEffect to 'copy' to indicate the drag operation type
+   * - Updates the editor's text selection to follow the drag cursor
+   * - Triggers selection overlay updates via #scheduleSelectionUpdate
+   *
+   * Early returns:
+   * - If the editor is not editable
+   * - If no field annotation data is present in the drag
+   * - If hit testing fails or document is unavailable
+   * - If the cursor position hasn't changed
+   */
+  #handleDragOver = (event: DragEvent) => {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+
+    const dt = event.dataTransfer;
+    const hasFieldAnnotation =
+      dt?.types?.includes(FIELD_ANNOTATION_DATA_TYPE) || Boolean(dt?.getData?.(FIELD_ANNOTATION_DATA_TYPE));
+    if (!hasFieldAnnotation) {
+      return;
+    }
+
+    const hit = this.hitTest(event.clientX, event.clientY);
+    const doc = activeEditor.state?.doc;
+    if (!hit || !doc) {
+      return;
+    }
+
+    const pos = Math.min(Math.max(hit.pos, 1), doc.content.size);
+    const currentSelection = activeEditor.state.selection;
+    const isSameCursor =
+      currentSelection instanceof TextSelection && currentSelection.from === pos && currentSelection.to === pos;
+
+    if (isSameCursor) {
+      return;
+    }
+
+    try {
+      const tr = activeEditor.state.tr.setSelection(TextSelection.create(doc, pos)).setMeta('addToHistory', false);
+      activeEditor.view?.dispatch(tr);
+      this.#scheduleSelectionUpdate();
+    } catch (error) {
+      // Position may be invalid during layout updates - expected during re-layout
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[PresentationEditor] Drag position update skipped:', error);
+      }
+    }
+  };
+
+  /**
+   * Handles drop events for field annotation drag-and-drop operations.
+   * Inserts a field annotation at the drop position and emits events for tracking.
+   *
+   * @param event - The drop event from the browser
+   *
+   * Side effects:
+   * - Prevents default browser drop behavior and stops event propagation
+   * - Inserts a field annotation node at the drop position
+   * - Moves the cursor to just after the inserted node
+   * - Emits 'fieldAnnotationDropped' event with drop metadata
+   * - Focuses the editor view
+   * - Triggers selection overlay updates via #scheduleSelectionUpdate
+   *
+   * Early returns:
+   * - If the editor is not editable
+   * - If no field annotation data is present in the drop
+   * - If JSON parsing of the payload fails
+   * - If hit testing and fallback position both fail
+   * - If the parsed attributes fail validation
+   *
+   * Fallback behavior:
+   * - If hit testing fails (e.g., during a reflow), falls back to current selection position
+   * - If selection is unavailable, falls back to end of document
+   */
+  #handleDrop = (event: DragEvent) => {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) {
+      return;
+    }
+
+    // Internal layout-engine drags use a custom MIME type and are handled by #setupDragHandlers.
+    if (event.dataTransfer?.types?.includes('application/x-field-annotation')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const fieldAnnotationData = event.dataTransfer?.getData(FIELD_ANNOTATION_DATA_TYPE);
+    if (!fieldAnnotationData) {
+      return;
+    }
+
+    const hit = this.hitTest(event.clientX, event.clientY);
+    // If layout hit testing fails (e.g., during a reflow), fall back to the current selection.
+    const selection = activeEditor.state?.selection;
+    const fallbackPos = selection?.from ?? activeEditor.state?.doc?.content.size ?? null;
+    const pos = hit?.pos ?? fallbackPos;
+    if (pos == null) {
+      return;
+    }
+
+    let parsedData: FieldAnnotationDragPayload | null = null;
+    try {
+      parsedData = JSON.parse(fieldAnnotationData) as FieldAnnotationDragPayload;
+    } catch {
+      return;
+    }
+
+    const { attributes, sourceField } = parsedData ?? {};
+
+    activeEditor.emit?.('fieldAnnotationDropped', {
+      sourceField,
+      editor: activeEditor,
+      coordinates: hit,
+      pos,
+    });
+
+    // Validate attributes before attempting insertion
+    if (attributes && isValidFieldAnnotationAttributes(attributes)) {
+      activeEditor.commands?.addFieldAnnotation?.(pos, attributes, true);
+
+      // Move the caret to just after the inserted node so subsequent drops append instead of replacing.
+      const posAfter = Math.min(pos + 1, activeEditor.state?.doc?.content.size ?? pos + 1);
+      const tr = activeEditor.state?.tr.setSelection(TextSelection.create(activeEditor.state.doc, posAfter));
+      if (tr) {
+        activeEditor.view?.dispatch(tr);
+      }
+
+      this.#scheduleSelectionUpdate();
+    }
+
+    const editorDom = activeEditor.view?.dom as HTMLElement | undefined;
+    if (editorDom) {
+      editorDom.focus();
+      activeEditor.view?.focus();
+    }
   };
 
   #handleDoubleClick = (event: MouseEvent) => {

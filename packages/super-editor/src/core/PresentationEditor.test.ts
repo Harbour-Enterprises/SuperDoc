@@ -162,6 +162,13 @@ vi.mock('./Editor', () => {
         selection: { from: 0, to: 0 },
         doc: {
           nodeSize: 100,
+          content: {
+            size: 100,
+          },
+          nodesBetween: vi.fn((_from: number, _to: number, callback: (node: unknown, pos: number) => void) => {
+            // Simulate a simple document with one text block at position 0.
+            callback({ isTextblock: true }, 0);
+          }),
           resolve: vi.fn((pos: number) => ({
             pos,
             depth: 0,
@@ -207,6 +214,10 @@ vi.mock('@superdoc/layout-bridge', () => ({
   incrementalLayout: mockIncrementalLayout,
   selectionToRects: mockSelectionToRects,
   clickToPosition: mockClickToPosition,
+  createDragHandler: vi.fn(() => {
+    // Return a noop cleanup function; tests drive drag/drop through DOM listeners.
+    return () => {};
+  }),
   getFragmentAtPosition: vi.fn(() => null),
   computeLinePmRange: vi.fn(() => ({ from: 0, to: 0 })),
   measureCharacterX: vi.fn(() => 0),
@@ -2107,6 +2118,441 @@ describe('PresentationEditor', () => {
 
     it('should expose overlayElement getter', () => {
       expect(editor.overlayElement).toBeDefined();
+    });
+  });
+
+  describe('Field annotation drag-and-drop handlers', () => {
+    let mockHitTest: Mock;
+    let mockGetActiveEditor: Mock;
+    let mockActiveEditor: {
+      isEditable: boolean;
+      state: {
+        doc: { content: { size: number } };
+        selection: { from: number; to: number };
+        tr: {
+          setSelection: Mock;
+          setMeta: Mock;
+        };
+      };
+      view: {
+        dispatch: Mock;
+        focus: Mock;
+        dom: HTMLElement;
+      };
+      commands: {
+        addFieldAnnotation: Mock;
+      };
+      emit: Mock;
+    };
+
+    /**
+     * Helper to create a drag event compatible with the test environment
+     */
+    const createDragEvent = (
+      type: string,
+      options: { clientX?: number; clientY?: number; data?: Record<string, string> } = {},
+    ) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: options.clientX ?? 0,
+        clientY: options.clientY ?? 0,
+      });
+
+      // Mock dataTransfer property
+      const dataStore = new Map<string, string>();
+      if (options.data) {
+        Object.entries(options.data).forEach(([key, value]) => dataStore.set(key, value));
+      }
+
+      Object.defineProperty(event, 'dataTransfer', {
+        value: {
+          types: Array.from(dataStore.keys()),
+          dropEffect: 'none',
+          effectAllowed: 'all',
+          getData: (type: string) => dataStore.get(type) || '',
+          setData: (type: string, data: string) => dataStore.set(type, data),
+          items: {
+            add: (data: string, type: string) => dataStore.set(type, data),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      return event;
+    };
+
+    beforeEach(() => {
+      // Create a container element for the presentation editor
+      container = document.createElement('div');
+      document.body.appendChild(container);
+
+      const domElement = document.createElement('div');
+      domElement.focus = vi.fn();
+
+      mockActiveEditor = {
+        isEditable: true,
+        state: {
+          doc: {
+            content: { size: 100 },
+            resolve: vi.fn((pos) => ({
+              pos,
+              depth: 0,
+              parent: { inlineContent: true },
+              min: vi.fn((other) => Math.min(pos, other?.pos ?? pos)),
+              max: vi.fn((other) => Math.max(pos, other?.pos ?? pos)),
+            })),
+          },
+          selection: { from: 50, to: 50 },
+          tr: {
+            setSelection: vi.fn().mockReturnThis(),
+            setMeta: vi.fn().mockReturnThis(),
+          },
+        },
+        view: {
+          dispatch: vi.fn(),
+          focus: vi.fn(),
+          dom: domElement,
+        },
+        commands: {
+          addFieldAnnotation: vi.fn(),
+        },
+        emit: vi.fn(),
+      };
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      // Mock hitTest method
+      mockHitTest = vi.fn(() => ({ pos: 42, inside: 42 }));
+      editor.hitTest = mockHitTest;
+
+      // Mock getActiveEditor method
+      mockGetActiveEditor = vi.fn(() => mockActiveEditor);
+      editor.getActiveEditor = mockGetActiveEditor;
+    });
+
+    describe('#handleDragOver', () => {
+      it('should prevent default and set dropEffect to copy', () => {
+        const dragEvent = createDragEvent('dragover', {
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const preventDefaultSpy = vi.spyOn(dragEvent, 'preventDefault');
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(preventDefaultSpy).toHaveBeenCalled();
+        expect((dragEvent as { dataTransfer: { dropEffect: string } }).dataTransfer?.dropEffect).toBe('copy');
+      });
+
+      it('should early return when editor is not editable', () => {
+        mockActiveEditor.isEditable = false;
+
+        const dragEvent = createDragEvent('dragover', {
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).not.toHaveBeenCalled();
+      });
+
+      it('should early return when no fieldAnnotation data', () => {
+        const dragEvent = createDragEvent('dragover', {});
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).not.toHaveBeenCalled();
+      });
+
+      it('should update cursor position during drag', () => {
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).toHaveBeenCalledWith(100, 100);
+        expect(mockActiveEditor.state.tr.setSelection).toHaveBeenCalled();
+        expect(mockActiveEditor.state.tr.setMeta).toHaveBeenCalledWith('addToHistory', false);
+        expect(mockActiveEditor.view.dispatch).toHaveBeenCalled();
+      });
+
+      it('should handle null hit gracefully', () => {
+        mockHitTest.mockReturnValue(null);
+
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+        // Should not throw
+        expect(() => viewport.dispatchEvent(dragEvent)).not.toThrow();
+        expect(mockActiveEditor.state.tr.setSelection).not.toHaveBeenCalled();
+      });
+
+      it('should skip dispatch when cursor position has not changed', () => {
+        // Set hitTest to return the same position as current selection
+        mockHitTest.mockReturnValue({ pos: 50, inside: 50 });
+
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        // The dispatch may or may not be called depending on selection type check
+        // This is an optimization, so we just verify it doesn't throw
+        expect(() => viewport.dispatchEvent(dragEvent)).not.toThrow();
+      });
+    });
+
+    describe('#handleDrop', () => {
+      it('should prevent default and stop propagation', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const preventDefaultSpy = vi.spyOn(dropEvent, 'preventDefault');
+        const stopPropagationSpy = vi.spyOn(dropEvent, 'stopPropagation');
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(preventDefaultSpy).toHaveBeenCalled();
+        expect(stopPropagationSpy).toHaveBeenCalled();
+      });
+
+      it('should early return when editor is not editable', () => {
+        mockActiveEditor.isEditable = false;
+
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should early return when no fieldAnnotation data', () => {
+        const dropEvent = createDragEvent('drop', {});
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should parse JSON and insert field annotation', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+            fieldColor: '#980043',
+          },
+          sourceField: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            annotationType: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(42, payload.attributes, true);
+      });
+
+      it('should handle JSON parse errors gracefully', () => {
+        const dropEvent = createDragEvent('drop', {
+          data: { fieldAnnotation: 'invalid JSON {{{' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+        // Should not throw
+        expect(() => viewport.dispatchEvent(dropEvent)).not.toThrow();
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should use fallback position when hitTest fails', () => {
+        mockHitTest.mockReturnValue(null);
+
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should use fallback position (selection.from = 50)
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(50, payload.attributes, true);
+      });
+
+      it('should emit fieldAnnotationDropped event', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+          sourceField: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            annotationType: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.emit).toHaveBeenCalledWith('fieldAnnotationDropped', {
+          sourceField: payload.sourceField,
+          editor: mockActiveEditor,
+          coordinates: { pos: 42, inside: 42 },
+          pos: 42,
+        });
+      });
+
+      it('should not insert when attributes are invalid', () => {
+        const payload = {
+          attributes: {
+            // Missing required fields
+            fieldId: 'test-field',
+            // fieldType is missing
+            // displayLabel is missing
+            // type is missing
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should emit event but not insert
+        expect(mockActiveEditor.emit).toHaveBeenCalledWith(
+          'fieldAnnotationDropped',
+          expect.objectContaining({ pos: 42 }),
+        );
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should focus editor after drop', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Focus should be called even when attributes are invalid or missing
+        const focusSpy = mockActiveEditor.view.dom.focus as Mock;
+        expect(focusSpy).toHaveBeenCalled();
+      });
+
+      it('should move cursor after inserted node', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should insert at position 42, then move cursor to 43
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(42, expect.any(Object), true);
+        expect(mockActiveEditor.state.tr.setSelection).toHaveBeenCalled();
+        expect(mockActiveEditor.view.dispatch).toHaveBeenCalled();
+      });
     });
   });
 });

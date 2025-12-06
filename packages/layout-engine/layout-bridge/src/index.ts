@@ -139,6 +139,20 @@ export type { FocusWatchdogConfig } from './focus-watchdog';
 export { TypingPerfBenchmark } from './benchmarks';
 export type { BenchmarkResult, BenchmarkScenario } from './benchmarks';
 
+// Drag Handler
+export { DragHandler, createDragHandler } from './drag-handler';
+export type {
+  FieldAnnotationDragData,
+  DragStartEvent,
+  DropEvent,
+  DragOverEvent,
+  DragStartCallback,
+  DropCallback,
+  DragOverCallback,
+  DragEndCallback,
+  DragHandlerConfig,
+} from './drag-handler';
+
 export type Point = { x: number; y: number };
 export type PageHit = { pageIndex: number; page: Layout['pages'][number] };
 export type FragmentHit = {
@@ -270,7 +284,8 @@ const buildLineText = (block: FlowBlock, line: Line): string => {
   let text = '';
   for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
     const run = block.runs[runIndex];
-    if (!run || 'src' in run || run.kind === 'lineBreak' || run.kind === 'break') continue;
+    if (!run || 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation')
+      continue;
     const runText = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -950,7 +965,8 @@ export function selectionToRects(
 
           if (SELECTION_DEBUG_ENABLED) {
             const runs = block.runs.slice(line.fromRun, line.toRun + 1).map((run, idx) => {
-              const isAtomic = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break';
+              const isAtomic =
+                'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation';
               const text = isAtomic ? '' : (run.text ?? '');
               return {
                 idx: line.fromRun + idx,
@@ -1170,7 +1186,10 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const text =
+      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
@@ -1242,7 +1261,10 @@ export function pmPosToCharOffset(block: FlowBlock, line: Line, pmPos: number): 
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const text =
+      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const runTextLength = text.length;
     const runPmStart = run.pmStart ?? null;
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runTextLength : null);
@@ -1432,6 +1454,12 @@ const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
 
     // BreakRun handling - breaks are atomic units, no slicing needed
     if (run.kind === 'break') {
+      result.push(run);
+      continue;
+    }
+
+    // FieldAnnotationRun handling - field annotations are atomic units, no slicing needed
+    if (run.kind === 'fieldAnnotation') {
       result.push(run);
       continue;
     }

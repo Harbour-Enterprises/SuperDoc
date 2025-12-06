@@ -244,9 +244,255 @@ const TRACK_CHANGE_STYLES = `
 }
 `;
 
+/**
+ * SDT Container Styles - Styling for document sections and structured content containers.
+ *
+ * These CSS rules provide visual styling for Structured Document Tag (SDT) containers,
+ * matching the appearance in super-editor. SDTs are Word/OOXML content controls that
+ * wrap regions of the document to provide semantic structure and metadata.
+ *
+ * **Supported SDT Types:**
+ * - Document Section (.superdoc-document-section): Gray bordered regions with hover tooltip
+ * - Structured Content Block (.superdoc-structured-content-block): Blue bordered regions with label
+ * - Structured Content Inline (.superdoc-structured-content-inline): Inline blue border with tooltip
+ *
+ * **Container Continuation:**
+ * When an SDT spans multiple page fragments, visual continuity is maintained via data attributes:
+ * - [data-sdt-container-start="true"]: First fragment gets top borders/radius
+ * - [data-sdt-container-end="true"]: Last fragment gets bottom borders/radius
+ * - Middle fragments: No top border, no border radius (seamless continuation)
+ *
+ * **Accessibility:**
+ * - Labels/tooltips are pointer-events: none to avoid interfering with selection
+ * - Print mode hides all visual SDT styling (borders, backgrounds, labels)
+ *
+ * **Implementation Note:**
+ * These styles are injected once per document via ensureSdtContainerStyles() to avoid
+ * duplication. The DOM painter applies corresponding classes via applySdtContainerStyling().
+ */
+const SDT_CONTAINER_STYLES = `
+/* Document Section - Block-level container with gray border and hover tooltip */
+.superdoc-document-section {
+  background-color: #fafafa;
+  border: 1px solid #ababab;
+  border-radius: 4px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Document section tooltip - positioned above the fragment */
+.superdoc-document-section__tooltip {
+  position: absolute;
+  top: -19px;
+  left: -1px;
+  max-width: 100px;
+  min-width: 0;
+  height: 18px;
+  border: 1px solid #ababab;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 0 8px;
+  align-items: center;
+  font-size: 10px;
+  display: none;
+  z-index: 100;
+  background-color: #fafafa;
+  pointer-events: none;
+}
+
+.superdoc-document-section__tooltip span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Show tooltip on hover - adjust border radius to connect with tooltip tab */
+.superdoc-document-section:hover {
+  border-radius: 0 4px 4px 4px;
+}
+
+.superdoc-document-section:hover .superdoc-document-section__tooltip {
+  display: flex;
+  align-items: center;
+}
+
+/* Continuation styling: first fragment has top corners, last has bottom corners */
+.superdoc-document-section[data-sdt-container-start="true"] {
+  border-radius: 4px 4px 0 0;
+}
+
+.superdoc-document-section[data-sdt-container-end="true"] {
+  border-radius: 0 0 4px 4px;
+}
+
+.superdoc-document-section[data-sdt-container-start="true"][data-sdt-container-end="true"] {
+  border-radius: 4px;
+}
+
+.superdoc-document-section[data-sdt-container-start="true"]:hover {
+  border-radius: 0 4px 0 0;
+}
+
+/* Middle fragments have no border radius */
+.superdoc-document-section:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
+  border-radius: 0;
+  border-top: none;
+}
+
+/* Structured Content Block - Blue border container */
+.superdoc-structured-content-block {
+  padding: 1px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #629be7;
+  position: relative;
+}
+
+/* Structured content drag handle/label - positioned above */
+.superdoc-structured-content__label {
+  font-size: 10px;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 2px;
+  top: -19px;
+  width: calc(100% - 4px);
+  max-width: 110px;
+  min-width: 0;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid #629be7;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background-color: #629be7dd;
+  box-sizing: border-box;
+  z-index: 10;
+  display: none;
+  pointer-events: none;
+}
+
+.superdoc-structured-content__label span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.superdoc-structured-content-block:hover .superdoc-structured-content__label {
+  display: inline-flex;
+}
+
+/* Continuation styling for structured content blocks */
+.superdoc-structured-content-block[data-sdt-container-start="true"] {
+  border-radius: 4px 4px 0 0;
+}
+
+.superdoc-structured-content-block[data-sdt-container-end="true"] {
+  border-radius: 0 0 4px 4px;
+}
+
+.superdoc-structured-content-block[data-sdt-container-start="true"][data-sdt-container-end="true"] {
+  border-radius: 4px;
+}
+
+.superdoc-structured-content-block:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
+  border-radius: 0;
+  border-top: none;
+}
+
+/* Structured Content Inline - Inline wrapper with blue border */
+.superdoc-structured-content-inline {
+  padding: 1px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #629be7;
+  position: relative;
+  display: inline;
+}
+
+/* Hover effect for inline structured content */
+.superdoc-structured-content-inline:hover {
+  background-color: rgba(98, 155, 231, 0.15);
+  border-color: #4a8ad9;
+}
+
+/* Inline structured content label - shown on hover */
+.superdoc-structured-content-inline__label {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  padding: 2px 6px;
+  background-color: #629be7dd;
+  color: white;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 100;
+  display: none;
+  pointer-events: none;
+}
+
+.superdoc-structured-content-inline:hover .superdoc-structured-content-inline__label {
+  display: block;
+}
+
+/* Print mode: hide visual styling for SDT containers */
+@media print {
+  .superdoc-document-section,
+  .superdoc-structured-content-block,
+  .superdoc-structured-content-inline {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .superdoc-document-section__tooltip,
+  .superdoc-structured-content__label,
+  .superdoc-structured-content-inline__label {
+    display: none !important;
+  }
+}
+`;
+
+const FIELD_ANNOTATION_STYLES = `
+/* Field annotation draggable styles */
+.superdoc-layout .annotation[data-draggable="true"] {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.superdoc-layout .annotation[data-draggable="true"]:hover {
+  opacity: 0.9;
+}
+
+.superdoc-layout .annotation[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Drag over indicator for drop targets */
+.superdoc-layout.drag-over {
+  outline: 2px dashed #b015b3;
+  outline-offset: -2px;
+}
+
+/* Drop zone indicator */
+.superdoc-layout .superdoc-drop-indicator {
+  position: absolute;
+  width: 2px;
+  background-color: #b015b3;
+  pointer-events: none;
+  z-index: 1000;
+}
+`;
+
 let printStylesInjected = false;
 let linkStylesInjected = false;
 let trackChangeStylesInjected = false;
+let sdtContainerStylesInjected = false;
+let fieldAnnotationStylesInjected = false;
 
 export const ensurePrintStyles = (doc: Document | null | undefined) => {
   if (printStylesInjected || !doc) return;
@@ -273,4 +519,22 @@ export const ensureTrackChangeStyles = (doc: Document | null | undefined) => {
   styleEl.textContent = TRACK_CHANGE_STYLES;
   doc.head?.appendChild(styleEl);
   trackChangeStylesInjected = true;
+};
+
+export const ensureSdtContainerStyles = (doc: Document | null | undefined) => {
+  if (sdtContainerStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-sdt-container-styles', 'true');
+  styleEl.textContent = SDT_CONTAINER_STYLES;
+  doc.head?.appendChild(styleEl);
+  sdtContainerStylesInjected = true;
+};
+
+export const ensureFieldAnnotationStyles = (doc: Document | null | undefined) => {
+  if (fieldAnnotationStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-field-annotation-styles', 'true');
+  styleEl.textContent = FIELD_ANNOTATION_STYLES;
+  doc.head?.appendChild(styleEl);
+  fieldAnnotationStylesInjected = true;
 };
