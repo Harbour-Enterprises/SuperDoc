@@ -1,6 +1,15 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { createDomPainter, sanitizeUrl, linkMetrics, applyRunDataAttributes } from './index.js';
-import type { FlowBlock, Measure, Layout, ParagraphMeasure, FlowRunLink, Fragment } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  Measure,
+  Layout,
+  ParagraphMeasure,
+  FlowRunLink,
+  Fragment,
+  TableBlock,
+  TableMeasure,
+} from '@superdoc/contracts';
 
 const block: FlowBlock = {
   kind: 'paragraph',
@@ -242,6 +251,537 @@ describe('DomPainter', () => {
     const line = mount.querySelector('.superdoc-line') as HTMLElement;
     expect(line).toBeTruthy();
     expect(line.style.textAlign).toBe('right');
+  });
+
+  it('applies justified spacing to non-last lines only (Word behavior)', () => {
+    const justifyBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'justify-block',
+      runs: [
+        { text: 'a b', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'c d', fontFamily: 'Arial', fontSize: 16 },
+      ],
+      attrs: { alignment: 'justify' },
+    };
+
+    const justifyMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 3,
+          width: 60,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 3,
+          width: 50,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const justifyLayout: Layout = {
+      pageSize: { w: 200, h: 200 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'justify-block',
+              fromLine: 0,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 100,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [justifyBlock], measures: [justifyMeasure] });
+    painter.paint(justifyLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(2);
+    // First line should be justified (word-spacing > 0)
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    // Last line should NOT be justified (Word behavior: last line of paragraph is left-aligned)
+    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('justifies last visible line when paragraph ends with lineBreak', () => {
+    // When a paragraph ends with <w:br/> (lineBreak), the visible text before the break
+    // should still be justified because the "last line" is the empty line after the break.
+    const justifyWithBreakBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'justify-break-block',
+      runs: [
+        { text: 'a b', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'c d', fontFamily: 'Arial', fontSize: 16 },
+        { kind: 'lineBreak' }, // Trailing lineBreak means last visible line should be justified
+      ],
+      attrs: { alignment: 'justify' },
+    };
+
+    const justifyWithBreakMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 3,
+          width: 60,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 3,
+          width: 50,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const justifyWithBreakLayout: Layout = {
+      pageSize: { w: 200, h: 200 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'justify-break-block',
+              fromLine: 0,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 100,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [justifyWithBreakBlock], measures: [justifyWithBreakMeasure] });
+    painter.paint(justifyWithBreakLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(2);
+    // Both lines should be justified because paragraph ends with lineBreak
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBeGreaterThan(0);
+  });
+
+  it('does not justify single-line paragraph (features_lists case)', () => {
+    // A single-line paragraph like "A list of list features:" should NOT be justified
+    // because that single line is also the last line.
+    const singleLineBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'single-line-block',
+      runs: [{ text: 'A list of list features:', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'justify' },
+    };
+
+    const singleLineMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 24,
+          width: 150,
+          maxWidth: 400,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+    };
+
+    const singleLineLayout: Layout = {
+      pageSize: { w: 500, h: 500 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'single-line-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 400,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [singleLineBlock], measures: [singleLineMeasure] });
+    painter.paint(singleLineLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(1);
+    // Single line = last line, should NOT be justified
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('justifies single-line paragraph when it ends with lineBreak', () => {
+    // A single-line paragraph that ends with <w:br/> SHOULD be justified
+    // because the empty line after the break is the "true" last line.
+    const singleLineWithBreakBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'single-line-break-block',
+      runs: [{ text: 'Justified single line', fontFamily: 'Arial', fontSize: 16 }, { kind: 'lineBreak' }],
+      attrs: { alignment: 'justify' },
+    };
+
+    const singleLineWithBreakMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 21,
+          width: 150,
+          maxWidth: 400,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+    };
+
+    const singleLineWithBreakLayout: Layout = {
+      pageSize: { w: 500, h: 500 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'single-line-break-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 400,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [singleLineWithBreakBlock], measures: [singleLineWithBreakMeasure] });
+    painter.paint(singleLineWithBreakLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(1);
+    // Ends with lineBreak, so this visible line SHOULD be justified
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+  });
+
+  it('justifies last line of fragment when paragraph continues to next fragment', () => {
+    // When a paragraph spans multiple fragments (pages), the last line of an
+    // intermediate fragment should still be justified because it's not the
+    // true last line of the paragraph.
+    const multiFragmentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'multi-fragment-block',
+      runs: [
+        { text: 'First line text', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'Second line text', fontFamily: 'Arial', fontSize: 16 },
+      ],
+      attrs: { alignment: 'justify' },
+    };
+
+    const multiFragmentMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 15,
+          width: 100,
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 16,
+          width: 110,
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const multiFragmentLayout: Layout = {
+      pageSize: { w: 300, h: 100 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'multi-fragment-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 200,
+              continuesOnNext: true, // Paragraph continues to next page
+            },
+          ],
+        },
+        {
+          number: 2,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'multi-fragment-block',
+              fromLine: 1,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 200,
+              continuesFromPrev: true,
+              // No continuesOnNext = this is the final fragment
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [multiFragmentBlock], measures: [multiFragmentMeasure] });
+    painter.paint(multiFragmentLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(2);
+    // First fragment's last line SHOULD be justified (continuesOnNext=true)
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    // Second fragment's last line should NOT be justified (true last line of paragraph)
+    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('preserves right/center alignment for single-line paragraphs', () => {
+    // Right/center aligned paragraphs should maintain their alignment
+    // even when it's a single line (the skipJustify logic should not affect them).
+    const rightAlignBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'right-align-block',
+      runs: [{ text: 'Right aligned text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'right' },
+    };
+
+    const centerAlignBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'center-align-block',
+      runs: [{ text: 'Center aligned text', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'center' },
+    };
+
+    const singleLineMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 18,
+          width: 120,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+    };
+
+    const rightAlignLayout: Layout = {
+      pageSize: { w: 300, h: 100 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'right-align-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 200,
+            },
+          ],
+        },
+      ],
+    };
+
+    const centerAlignLayout: Layout = {
+      pageSize: { w: 300, h: 100 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'center-align-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 200,
+            },
+          ],
+        },
+      ],
+    };
+
+    // Test right alignment
+    const rightPainter = createDomPainter({ blocks: [rightAlignBlock], measures: [singleLineMeasure] });
+    rightPainter.paint(rightAlignLayout, mount);
+    let line = mount.querySelector('.superdoc-line') as HTMLElement;
+    expect(line.style.textAlign).toBe('right');
+
+    // Clear and test center alignment
+    mount.innerHTML = '';
+    const centerPainter = createDomPainter({ blocks: [centerAlignBlock], measures: [singleLineMeasure] });
+    centerPainter.paint(centerAlignLayout, mount);
+    line = mount.querySelector('.superdoc-line') as HTMLElement;
+    expect(line.style.textAlign).toBe('center');
+  });
+
+  it('does not justify text inside table cells (Word quirk)', () => {
+    // Word does not justify text inside table cells, even if jc="both" is specified.
+    // This test verifies that table cell paragraphs have no word-spacing applied.
+    const tableBlock: TableBlock = {
+      kind: 'table',
+      id: 'table-block',
+      rows: [
+        {
+          id: 'row-1',
+          cells: [
+            {
+              id: 'cell-1',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'cell-para',
+                  runs: [{ text: 'Cell text with spaces here', fontFamily: 'Arial', fontSize: 16 }],
+                  attrs: { alignment: 'justify' }, // Justify is specified but should be ignored
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const tableMeasure: TableMeasure = {
+      kind: 'table',
+      rows: [
+        {
+          height: 30,
+          cells: [
+            {
+              width: 200,
+              height: 30,
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  lines: [
+                    {
+                      fromRun: 0,
+                      fromChar: 0,
+                      toRun: 0,
+                      toChar: 26,
+                      width: 150,
+                      maxWidth: 200,
+                      ascent: 12,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                  ],
+                  totalHeight: 20,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [200],
+      totalWidth: 200,
+      totalHeight: 30,
+    };
+
+    const tableLayout: Layout = {
+      pageSize: { w: 300, h: 300 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'table',
+              blockId: 'table-block',
+              x: 0,
+              y: 0,
+              width: 200,
+              height: 30,
+              fromRow: 0,
+              toRow: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [tableBlock], measures: [tableMeasure] });
+    painter.paint(tableLayout, mount);
+
+    // Find the line inside the table cell
+    const line = mount.querySelector('.superdoc-line') as HTMLElement;
+    expect(line).toBeTruthy();
+    // Table cell text should NOT be justified (word-spacing should be 0 or empty)
+    expect(parseFloat(line.style.wordSpacing || '0')).toBe(0);
   });
 
   it('emits pm metadata attributes', () => {
