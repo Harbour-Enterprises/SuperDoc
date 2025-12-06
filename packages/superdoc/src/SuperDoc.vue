@@ -209,6 +209,19 @@ const onEditorReady = ({ editor, presentationEditor }) => {
   presentationEditor.onTelemetry((telemetryPayload) => {
     proxy.$superdoc.captureLayoutPipelineEvent(telemetryPayload);
   });
+
+  // Listen for fresh comment positions from the layout engine.
+  // PresentationEditor emits this after every layout with PM positions collected
+  // from the current document, ensuring positions are never stale.
+  presentationEditor.on('commentPositions', ({ positions }) => {
+    const commentsConfig = proxy.$superdoc.config.modules?.comments;
+    if (!commentsConfig || commentsConfig === false) return;
+    if (!positions || Object.keys(positions).length === 0) return;
+
+    // Map PM positions to visual layout coordinates
+    const mappedPositions = presentationEditor.getCommentBounds(positions, layers.value);
+    handleEditorLocationsUpdate(mappedPositions);
+  });
 };
 
 const onEditorDestroy = () => {
@@ -420,19 +433,28 @@ const editorOptions = (doc) => {
 
 /**
  * Trigger a comment-positions location update
- * This is called when the editor has updated the comment locations
+ * This is called when the PM plugin emits comment locations.
+ *
+ * Note: When using the layout engine, PresentationEditor emits authoritative
+ * positions via the 'commentPositions' event after each layout. This handler
+ * primarily serves as a fallback for non-layout-engine mode.
  *
  * @returns {void}
  */
 const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
+
   const presentation = PresentationEditor.getInstance(doc.id);
   if (!presentation) {
-    // PresentationEditor not yet initialized; pass through raw positions
+    // Non-layout-engine mode: pass through raw positions
     handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
     return;
   }
+
+  // Layout engine mode: map PM positions to visual layout coordinates.
+  // Note: PresentationEditor's 'commentPositions' event provides fresh positions
+  // after every layout, so this is mainly for the initial load before layout completes.
   const mappedPositions = presentation.getCommentBounds(allCommentPositions, layers.value);
   handleEditorLocationsUpdate(mappedPositions, activeThreadId);
 };
