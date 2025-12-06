@@ -7,6 +7,27 @@ import { layoutTableBlock } from './layout-table.js';
 import type { TableBlock, TableMeasure, TableFragment, BlockId } from '@superdoc/contracts';
 
 /**
+ * Creates a dummy table fragment for test scenarios where prior page content is needed.
+ *
+ * This helper is used to simulate a page that already has content (fragments.length > 0),
+ * which triggers specific layout behaviors like the table start preflight check. The dummy
+ * fragment represents existing content that occupies space on the page before the table.
+ *
+ * @returns A minimal TableFragment with zero dimensions that serves as a placeholder
+ */
+const createDummyFragment = (): TableFragment => ({
+  kind: 'table',
+  blockId: 'dummy' as BlockId,
+  fromRow: 0,
+  toRow: 0,
+  x: 0,
+  y: 0,
+  width: 0,
+  height: 0,
+  metadata: { columnBoundaries: [], coordinateSystem: 'fragment' },
+});
+
+/**
  * Create a mock table block for testing
  */
 function createMockTableBlock(
@@ -53,14 +74,30 @@ function createMockTableBlock(
 }
 
 /**
- * Create a mock table measure
+ * Create a mock table measure for testing table layout scenarios.
+ *
+ * @param columnWidths - Array of column widths in pixels
+ * @param rowHeights - Array of row heights in pixels
+ * @param lineHeightsPerRow - Optional 2D array specifying line heights for each row's cells.
+ *   Format: lineHeightsPerRow[rowIndex] = [lineHeight1, lineHeight2, ...]
+ *   If omitted, cells will have no lines. This parameter enables testing of mid-row
+ *   splitting behavior where rows are split at line boundaries.
+ * @returns A TableMeasure object with mocked cell, row, and line data
  */
-function createMockTableMeasure(columnWidths: number[], rowHeights: number[]): TableMeasure {
+function createMockTableMeasure(
+  columnWidths: number[],
+  rowHeights: number[],
+  lineHeightsPerRow?: number[][],
+): TableMeasure {
   return {
     kind: 'table',
-    rows: rowHeights.map((height) => ({
+    rows: rowHeights.map((height, rowIdx) => ({
       cells: columnWidths.map((width) => ({
-        paragraph: { kind: 'paragraph', lines: [], totalHeight: height },
+        paragraph: {
+          kind: 'paragraph',
+          lines: (lineHeightsPerRow?.[rowIdx] ?? []).map((lineHeight) => ({ lineHeight })),
+          totalHeight: height,
+        },
         width,
         height,
       })),
@@ -286,6 +323,187 @@ describe('layoutTableBlock', () => {
 
       const fragment = fragments[0];
       expect(fragment.metadata?.rowBoundaries).toBeUndefined();
+    });
+  });
+
+  describe('table start preflight', () => {
+    it('starts a splittable first row on the current page when some content fits', () => {
+      const block = createMockTableBlock(1, [{ cantSplit: false }]);
+      const measure = createMockTableMeasure([100], [200], [[10, 10, 10, 10, 10]]);
+
+      const fragments: TableFragment[] = [createDummyFragment()];
+      let advanced = false;
+      const contentBottom = 40; // Only 30px remaining on the current page
+
+      // Create a persistent state object that can be mutated
+      const pageState = {
+        page: { fragments },
+        columnIndex: 0,
+        cursorY: 10, // Prior content occupies space
+        contentBottom,
+      };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => pageState,
+        advanceColumn: (state) => {
+          advanced = true;
+          pageState.cursorY = 0;
+          return pageState;
+        },
+        columnX: () => 0,
+      });
+
+      // Should start on current page (not advance during preflight)
+      expect(fragments[1]).toBeDefined();
+      expect(fragments[1].y).toBe(10); // First fragment starts at current cursor position
+      // Should eventually advance after rendering what fits on current page
+      expect(advanced).toBe(true);
+      expect(fragments.length).toBeGreaterThan(2); // Dummy + first partial + continuation(s)
+    });
+
+    it('advances when the first row is cantSplit and does not fit the remaining space', () => {
+      const block = createMockTableBlock(1, [{ cantSplit: true }]);
+      const measure = createMockTableMeasure([100], [200], [[10, 10, 10, 10, 10, 10]]);
+
+      const fragments: TableFragment[] = [createDummyFragment()];
+      let cursorY = 20;
+      let contentBottom = 60; // Only 40px remaining; row needs 200px
+      let advanced = false;
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: { fragments },
+          columnIndex: 0,
+          cursorY,
+          contentBottom,
+        }),
+        advanceColumn: () => {
+          advanced = true;
+          cursorY = 0;
+          contentBottom = 300; // New page with enough space
+          return {
+            page: { fragments },
+            columnIndex: 0,
+            cursorY,
+            contentBottom,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(advanced).toBe(true);
+      expect(fragments.length).toBeGreaterThan(1);
+      expect(fragments[1].y).toBe(0);
+    });
+
+    it('handles zero available space with prior fragments', () => {
+      const block = createMockTableBlock(1, [{ cantSplit: false }]);
+      const measure = createMockTableMeasure([100], [100], [[10, 10, 10]]);
+
+      const fragments: TableFragment[] = [createDummyFragment()];
+      let advanced = false;
+      const contentBottom = 20;
+
+      const pageState = {
+        page: { fragments },
+        columnIndex: 0,
+        cursorY: 20, // Cursor at bottom - zero available space
+        contentBottom,
+      };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => pageState,
+        advanceColumn: (state) => {
+          advanced = true;
+          pageState.cursorY = 0;
+          pageState.page = { fragments };
+          return pageState;
+        },
+        columnX: () => 0,
+      });
+
+      // Should advance immediately since no space available
+      expect(advanced).toBe(true);
+      expect(fragments[1].y).toBe(0); // Table starts on new page
+    });
+
+    it('does not advance when no prior fragments regardless of available space', () => {
+      const block = createMockTableBlock(1, [{ cantSplit: false }]);
+      const measure = createMockTableMeasure([100], [100], [[10, 10, 10]]);
+
+      const fragments: TableFragment[] = []; // No prior fragments
+      let advanced = false;
+      const contentBottom = 50;
+
+      const pageState = {
+        page: { fragments },
+        columnIndex: 0,
+        cursorY: 10,
+        contentBottom,
+      };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => pageState,
+        advanceColumn: (state) => {
+          advanced = true;
+          pageState.cursorY = 0;
+          return pageState;
+        },
+        columnX: () => 0,
+      });
+
+      // Should not advance during preflight when page is empty (no prior fragments)
+      // Preflight check only applies when there's already content on the page
+      expect(fragments[0]).toBeDefined();
+      expect(fragments[0].y).toBe(10); // Table starts at current cursor position
+    });
+
+    it('handles first row with empty paragraphs (no lines)', () => {
+      const block = createMockTableBlock(1, [{ cantSplit: false }]);
+      // No lineHeightsPerRow provided - cells will have no lines
+      const measure = createMockTableMeasure([100], [50]);
+
+      const fragments: TableFragment[] = [createDummyFragment()];
+      let advanced = false;
+      const contentBottom = 100;
+
+      const pageState = {
+        page: { fragments },
+        columnIndex: 0,
+        cursorY: 10,
+        contentBottom,
+      };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => pageState,
+        advanceColumn: (state) => {
+          advanced = true;
+          pageState.cursorY = 0;
+          return pageState;
+        },
+        columnX: () => 0,
+      });
+
+      // Empty paragraphs (no lines) should be handled gracefully
+      // The row should still be rendered with its measured height
+      expect(fragments.length).toBeGreaterThan(1);
+      expect(fragments[1]).toBeDefined();
+      expect(fragments[1].height).toBeGreaterThan(0);
     });
   });
 
