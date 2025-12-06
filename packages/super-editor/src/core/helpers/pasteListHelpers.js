@@ -17,8 +17,8 @@ export const extractListLevelStyles = (cssText, listId, level, numId) => {
   return styleMap;
 };
 
-export const extractParagraphStyles = (cssText, className) => {
-  const pattern = new RegExp(`\\.(${className})\\s*\\{([^}]+)\\}`, 'i');
+export const extractParagraphStyles = (cssText, selector) => {
+  const pattern = new RegExp(`(${selector})\\s*\\{([^}]+)\\}`, 'i');
   const match = cssText.match(pattern);
   if (!match) return null;
   const rawStyles = match[2]

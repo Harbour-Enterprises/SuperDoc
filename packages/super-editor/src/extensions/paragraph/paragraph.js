@@ -12,6 +12,7 @@ import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
 import { createDropcapPlugin } from './dropcapPlugin.js';
 import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
+import { parseAttrs } from './helpers/parseAttrs.js';
 
 /**
  * Input rule regex that matches a bullet list marker (-, +, or *)
@@ -136,56 +137,7 @@ export const Paragraph = OxmlNode.create({
     return [
       {
         tag: 'p',
-        getAttrs: (node) => {
-          const numberingProperties = {};
-          let indent, spacing;
-          const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
-            if (attr.name === 'data-num-id') {
-              numberingProperties.numId = parseInt(attr.value);
-            } else if (attr.name === 'data-level') {
-              numberingProperties.ilvl = parseInt(attr.value);
-            } else if (attr.name === 'data-indent') {
-              try {
-                indent = JSON.parse(attr.value);
-                // Ensure numeric values
-                Object.keys(indent).forEach((key) => {
-                  indent[key] = Number(indent[key]);
-                });
-              } catch {
-                // ignore invalid indent value
-              }
-            } else if (attr.name === 'data-spacing') {
-              try {
-                spacing = JSON.parse(attr.value);
-                // Ensure numeric values
-                Object.keys(spacing).forEach((key) => {
-                  spacing[key] = Number(spacing[key]);
-                });
-              } catch {
-                // ignore invalid spacing value
-              }
-            } else {
-              acc[attr.name] = attr.value;
-            }
-            return acc;
-          }, {});
-
-          if (Object.keys(numberingProperties).length > 0) {
-            return {
-              paragraphProperties: {
-                numberingProperties,
-                indent,
-                spacing,
-                styleId: styleId || null,
-              },
-              extraAttrs,
-            };
-          }
-
-          return {
-            extraAttrs,
-          };
-        },
+        getAttrs: parseAttrs,
       },
       {
         tag: 'div',
@@ -203,7 +155,16 @@ export const Paragraph = OxmlNode.create({
       },
       ...this.options.headingLevels.map((level) => ({
         tag: `h${level}`,
-        attrs: { level, paragraphProperties: { styleId: `Heading${level}` } },
+        getAttrs: (node) => {
+          let attrs = parseAttrs(node);
+          return {
+            ...attrs,
+            paragraphProperties: {
+              ...attrs.paragraphProperties,
+              styleId: `Heading${level}`,
+            },
+          };
+        },
       })),
     ];
   },
