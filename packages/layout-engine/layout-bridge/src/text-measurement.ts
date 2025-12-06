@@ -53,8 +53,14 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
  * @returns CSS font string (e.g., "italic bold 16px Arial")
  */
 export function getRunFontString(run: Run): string {
-  // TabRun, ImageRun, LineBreakRun, and BreakRun don't have styling properties, use defaults
-  if (run.kind === 'tab' || run.kind === 'lineBreak' || run.kind === 'break' || 'src' in run) {
+  // TabRun, ImageRun, LineBreakRun, BreakRun, and FieldAnnotationRun don't have full styling properties, use defaults
+  if (
+    run.kind === 'tab' ||
+    run.kind === 'lineBreak' ||
+    run.kind === 'break' ||
+    run.kind === 'fieldAnnotation' ||
+    'src' in run
+  ) {
     return 'normal normal 16px Arial';
   }
 
@@ -100,6 +106,12 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
 
     // BreakRun handling - breaks are atomic units, no slicing needed
     if (run.kind === 'break') {
+      result.push(run);
+      continue;
+    }
+
+    // FieldAnnotationRun handling - field annotations are atomic units, no slicing needed
+    if (run.kind === 'fieldAnnotation') {
       result.push(run);
       continue;
     }
@@ -158,7 +170,8 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') return sum;
+        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation')
+          return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -182,7 +195,10 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
       continue;
     }
 
-    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const text =
+      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const runLength = text.length;
 
     // If target character is within this run
@@ -271,8 +287,8 @@ function measureCharacterXSegmentBased(
         return segmentBaseX + (offsetInSegment > 0 ? (segment.width ?? 0) : 0);
       }
 
-      // Handle ImageRun, LineBreakRun, and BreakRun - these are atomic, use segment width
-      if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') {
+      // Handle ImageRun, LineBreakRun, BreakRun, and FieldAnnotationRun - these are atomic, use segment width
+      if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation') {
         return segmentBaseX + (offsetInSegment >= segmentChars ? (segment.width ?? 0) : 0);
       }
 
@@ -357,7 +373,10 @@ export function charOffsetToPm(block: FlowBlock, line: Line, charOffset: number,
 
   for (const run of runs) {
     const isTab = isTabRun(run);
-    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const text =
+      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const runLength = isTab ? TAB_CHAR_LENGTH : text.length;
 
     const runPmStart = typeof run.pmStart === 'number' ? run.pmStart : null;
@@ -407,7 +426,8 @@ export function findCharacterAtX(
       1,
       runs.reduce((sum, run) => {
         if (isTabRun(run)) return sum + TAB_CHAR_LENGTH;
-        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break') return sum;
+        if ('src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation')
+          return sum;
         return sum + (run.text ?? '').length;
       }, 0),
     );
@@ -446,7 +466,10 @@ export function findCharacterAtX(
       continue;
     }
 
-    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const text =
+      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const runLength = text.length;
 
     if (runLength === 0) continue;
@@ -505,7 +528,13 @@ export function findCharacterAtX(
 
 const computeLetterSpacingWidth = (run: Run, precedingChars: number, runLength: number): number => {
   // Only text runs support letter spacing (older data may omit kind on text runs).
-  if (isTabRun(run) || 'src' in run || !('letterSpacing' in run) || !run.letterSpacing) {
+  if (
+    isTabRun(run) ||
+    'src' in run ||
+    run.kind === 'fieldAnnotation' ||
+    !('letterSpacing' in run) ||
+    !run.letterSpacing
+  ) {
     return 0;
   }
   const maxGaps = Math.max(runLength - 1, 0);

@@ -45,7 +45,9 @@ const hashRuns = (block: FlowBlock): string => {
       }
 
       const text = normalizeText(
-        'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? ''),
+        'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+          ? ''
+          : (run.text ?? ''),
       );
       const bold = 'bold' in run ? run.bold : false;
       const italic = 'italic' in run ? run.italic : false;

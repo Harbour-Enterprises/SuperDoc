@@ -206,7 +206,7 @@ const extractTableStyleParagraphProps = (
 
     const result = Object.keys(spacing).length > 0 ? { spacing } : undefined;
     return result;
-  } catch (err) {
+  } catch {
     // Gracefully handle any parsing errors
     return undefined;
   }

@@ -10,6 +10,7 @@ import type {
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import type { FragmentRenderContext, BlockLookup } from '../renderer.js';
 import { renderTableRow } from './renderTableRow.js';
+import { applySdtContainerStyling } from '../utils/sdt-helpers.js';
 
 type ApplyStylesFn = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>) => void;
 
@@ -55,6 +56,13 @@ export type TableRenderDependencies = {
  * - Block is wrong kind (not 'table')
  * - Measure is wrong kind (not 'table')
  * - Document object is not available
+ *
+ * **SDT Container Styling:**
+ * If the table block has SDT metadata (`block.attrs?.sdt`), applies appropriate
+ * container styling via `applySdtContainerStyling()`:
+ * - Document sections: Gray border with hover tooltip
+ * - Structured content blocks: Blue border with label
+ * Uses type-safe helper functions to avoid unsafe type assertions.
  *
  * **Metadata Embedding:**
  * Embeds column boundary metadata in the `data-table-boundaries` attribute
@@ -141,6 +149,9 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
   applyFragmentFrame(container, fragment);
   container.style.height = `${fragment.height}px`;
   applySdtDataset(container, block.attrs?.sdt);
+
+  // Apply SDT container styling (document sections, structured content blocks)
+  applySdtContainerStyling(doc, container, block.attrs?.sdt);
 
   // Add table-specific class for resize overlay targeting
   container.classList.add('superdoc-table-fragment');
