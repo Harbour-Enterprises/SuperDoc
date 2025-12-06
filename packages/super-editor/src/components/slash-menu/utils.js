@@ -1,6 +1,7 @@
 import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { readFromClipboard } from '../../core/utilities/clipboardUtils.js';
 import { tableActionsOptions } from './constants.js';
+import { isList } from '../../core/commands/list-helpers/is-list.js';
 import { markRaw } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { yUndoPluginKey } from 'y-prosemirror';
@@ -125,7 +126,7 @@ export async function getEditorContext(editor, event) {
   let pos = null;
   let node = null;
 
-  if (event) {
+  if (event && typeof event.clientX === 'number' && typeof event.clientY === 'number') {
     const coords = { left: event.clientX, top: event.clientY };
     pos = view.posAtCoords(coords)?.pos ?? null;
     node = pos !== null ? state.doc.nodeAt(pos) : null;
@@ -150,6 +151,8 @@ export async function getEditorContext(editor, event) {
   const isInSectionNode =
     structureFromResolvedPos?.isInSectionNode ??
     selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
+  const isInToc = structureFromResolvedPos?.isInToc ?? false;
+  const tocNode = structureFromResolvedPos?.tocNode ?? null;
   const currentNodeType = node?.type?.name || null;
 
   const activeMarks = [];
@@ -222,6 +225,8 @@ export async function getEditorContext(editor, event) {
     isInTable,
     isInList,
     isInSectionNode,
+    isInToc,
+    tocNode,
     currentNodeType,
     activeMarks,
 
@@ -318,24 +323,63 @@ function isCollaborationEnabled(editor) {
 function getStructureFromResolvedPos(state, pos) {
   try {
     const $pos = state.doc.resolve(pos);
-    const ancestors = new Set();
+
+    let isInList = false;
+    let isInTable = false;
+    let isInSectionNode = false;
+    let isInToc = false;
+    let tocNode = null;
 
     for (let depth = $pos.depth; depth > 0; depth--) {
-      ancestors.add($pos.node(depth).type.name);
+      const node = $pos.node(depth);
+      const name = node.type.name;
+
+      if (!isInList && isList(node)) {
+        isInList = true;
+      }
+
+      // ProseMirror table structure typically includes tableRow/tableCell, so check those too
+      if (!isInTable && (name === 'table' || name === 'tableRow' || name === 'tableCell' || name === 'tableHeader')) {
+        isInTable = true;
+      }
+
+      if (!isInSectionNode && name === 'documentSection') {
+        isInSectionNode = true;
+      }
+
+      // Check for TOC nodes
+      if (!isInToc && (name === 'tableOfContents' || name === 'documentPartObject')) {
+        // Check if it's a TOC (documentPartObject with docPartGallery='Table of Contents')
+        if (name === 'tableOfContents' || node.attrs?.docPartGallery === 'Table of Contents') {
+          isInToc = true;
+          tocNode = node;
+        }
+      }
+
+      // Also check for TOC paragraphs by their attributes or style
+      if (!isInToc && name === 'paragraph') {
+        const styleId = node.attrs?.paragraphProperties?.styleId;
+        const isTocEntry = node.attrs?.isTocEntry === true;
+        const hasSdtToc = node.attrs?.sdt?.gallery === 'Table of Contents' || node.attrs?.sdt?.type === 'docPartObject';
+
+        // Check if it's a TOC paragraph by style or attributes
+        if (isTocEntry || hasSdtToc || (styleId && /^TOC\d*|TOCHeading$/i.test(styleId))) {
+          isInToc = true;
+          tocNode = node;
+        }
+      }
+
+      if (isInList && isInTable && isInSectionNode && isInToc) {
+        break;
+      }
     }
-
-    const isInList = ancestors.has('bulletList') || ancestors.has('orderedList');
-
-    // ProseMirror table structure typically includes tableRow/tableCell, so check those too
-    const isInTable =
-      ancestors.has('table') || ancestors.has('tableRow') || ancestors.has('tableCell') || ancestors.has('tableHeader');
-
-    const isInSectionNode = ancestors.has('documentSection');
 
     return {
       isInTable,
       isInList,
       isInSectionNode,
+      isInToc,
+      tocNode,
     };
   } catch (error) {
     console.warn('[SlashMenu] Unable to resolve position for structural context:', error);
