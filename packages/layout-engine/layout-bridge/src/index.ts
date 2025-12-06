@@ -902,16 +902,18 @@ export function clickToPosition(
  * @param blocks - Array of flow blocks to search through
  * @param fragmentBlockId - The block ID from the fragment (may include continuation suffix like "-1")
  * @param targetPmRange - Optional PM range {from, to} to disambiguate when multiple blocks share the same ID
- * @returns The index of the matching paragraph block, or -1 if not found
+ * @returns The index of the matching block, or -1 if not found
  */
 function findBlockIndexByFragmentId(
   blocks: FlowBlock[],
   fragmentBlockId: string,
   targetPmRange?: { from: number; to: number },
 ): number {
-  // Try exact match first, but only for paragraph blocks (not pageBreaks, sectionBreaks, etc.)
-  // This prevents matching pageBreak blocks that may share the same ID as continuation paragraphs
-  const index = blocks.findIndex((block) => block.id === fragmentBlockId && block.kind === 'paragraph');
+  // Try exact match first, but skip pageBreak/sectionBreak blocks that may share IDs with continuation paragraphs.
+  // This allows drawings, images, tables, and paragraphs to match while avoiding structural break blocks.
+  const index = blocks.findIndex(
+    (block) => block.id === fragmentBlockId && block.kind !== 'pageBreak' && block.kind !== 'sectionBreak',
+  );
   if (index !== -1) {
     return index;
   }
@@ -922,7 +924,8 @@ function findBlockIndexByFragmentId(
     return -1; // No suffix to strip, nothing more to try
   }
 
-  // Find all paragraph blocks with matching base ID
+  // Find all paragraph blocks with matching base ID.
+  // Note: continuation suffixes (-1, -2) are only used for paragraphs split across pages.
   const matchingIndices: number[] = [];
   blocks.forEach((block, idx) => {
     if (block.id === baseBlockId && block.kind === 'paragraph') {
