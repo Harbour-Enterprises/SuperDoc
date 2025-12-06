@@ -154,6 +154,73 @@ describe('PDF Painter', () => {
     expect(pageMatches.length).toBe(2);
   });
 
+  it('adds word spacing for justified lines (including last line)', async () => {
+    const justifyBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'justify-block',
+      runs: [
+        { text: 'a b', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'c d', fontFamily: 'Arial', fontSize: 16 },
+      ],
+      attrs: { alignment: 'justify' },
+    };
+
+    const justifyMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 3,
+          width: 60,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 3,
+          width: 50,
+          maxWidth: 100,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    } as ParagraphMeasure;
+
+    const justifyLayout: Layout = {
+      pageSize: { w: 200, h: 200 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'justify-block',
+              fromLine: 0,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 100,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createPdfPainter({ blocks: [justifyBlock], measures: [justifyMeasure] });
+    const blob = await painter.render(justifyLayout);
+    const text = await blob.text();
+
+    expect(text).toMatch(/[1-9]\d*\.?\d*\sTw/);
+  });
+
   it('embeds image fragments when data URLs are provided', async () => {
     const imageBlock: FlowBlock = {
       kind: 'image',

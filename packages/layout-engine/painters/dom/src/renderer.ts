@@ -1436,8 +1436,33 @@ export class DomPainter {
       const suppressFirstLineIndent = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
       const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
 
+      // Paragraphs with list markers should not be justified
+      const isListParagraph = !!(fragment.markerWidth && wordLayout?.marker);
+
+      // Check if the paragraph ends with a lineBreak run.
+      // In Word, justified text stretches all lines EXCEPT the true last line of a paragraph.
+      // However, if the paragraph ends with a <w:br/> (lineBreak), the visible text before
+      // the break should still be justified because the "last line" is the empty line after the break.
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
       lines.forEach((line, index) => {
-        const lineEl = this.renderLine(block, line, context);
+        const availableWidthOverride = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+
+        // Determine if this is the true last line of the paragraph that should skip justification.
+        // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
+        const isLastLineOfFragment = index === lines.length - 1;
+        const isLastLineOfParagraph = isLastLineOfFragment && !fragment.continuesOnNext;
+        const shouldSkipJustifyForLastLine = isLastLineOfParagraph && !paragraphEndsWithLineBreak;
+
+        const lineEl = this.renderLine(
+          block,
+          line,
+          context,
+          availableWidthOverride,
+          fragment.fromLine + index,
+          isListParagraph || shouldSkipJustifyForLastLine,
+        );
 
         // List first lines handle indentation via marker positioning and tab stops,
         // not CSS padding/text-indent. This matches Word's rendering model.
@@ -1796,8 +1821,15 @@ export class DomPainter {
       // Track B: preserve indent for wordLayout-based lists to show hierarchy
       const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
       applyParagraphBlockStyles(contentEl, contentAttrs);
-      lines.forEach((line) => {
-        const lineEl = this.renderLine(item.paragraph, line, context);
+      // Force list content to left alignment AFTER applyParagraphBlockStyles (which may set justify)
+      contentEl.style.textAlign = 'left';
+      // Override alignment to left for list content rendering
+      const paraForList: ParagraphBlock = {
+        ...item.paragraph,
+        attrs: { ...(item.paragraph.attrs || {}), alignment: 'left' },
+      };
+      lines.forEach((line, idx) => {
+        const lineEl = this.renderLine(paraForList, line, context, fragment.width, fragment.fromLine + idx, true);
         contentEl.appendChild(lineEl);
       });
       fragmentEl.appendChild(contentEl);
@@ -2454,12 +2486,18 @@ export class DomPainter {
       this.applyFragmentFrame(el, frag, context.section);
     };
 
+    // Create a wrapper for renderLine that always skips justification for table cell content.
+    // Word does not justify text inside table cells, even if jc="both" is specified.
+    const renderLineForTableCell = (block: ParagraphBlock, line: Line, ctx: FragmentRenderContext): HTMLElement => {
+      return this.renderLine(block, line, ctx, undefined, undefined, true); // skipJustify = true
+    };
+
     return renderTableFragmentElement({
       doc: this.doc,
       fragment,
       context,
       blockLookup: this.blockLookup,
-      renderLine: this.renderLine.bind(this),
+      renderLine: renderLineForTableCell,
       applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
@@ -2920,7 +2958,25 @@ export class DomPainter {
     return img;
   }
 
-  private renderLine(block: ParagraphBlock, line: Line, context: FragmentRenderContext): HTMLElement {
+  /**
+   * Renders a single line of a paragraph block.
+   *
+   * @param block - The paragraph block containing the line
+   * @param line - The line measurement data
+   * @param context - Rendering context with fragment information
+   * @param availableWidthOverride - Optional override for available width used in justification calculations
+   * @param lineIndex - Optional zero-based index of the line within the fragment
+   * @param skipJustify - When true, prevents justification even if alignment is 'justify'
+   * @returns The rendered line element
+   */
+  private renderLine(
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    availableWidthOverride?: number,
+    lineIndex?: number,
+    skipJustify?: boolean,
+  ): HTMLElement {
     if (!this.doc) {
       throw new Error('DomPainter: document is not available');
     }
@@ -2933,8 +2989,13 @@ export class DomPainter {
       el.setAttribute('styleid', styleId);
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
-    if (alignment === 'center' || alignment === 'right' || alignment === 'justify') {
-      el.style.textAlign = alignment === 'justify' ? 'justify' : alignment;
+    // Note: skipJustify only affects word-spacing for justify alignment, not other alignments.
+    // Center and right alignment should always be respected.
+    if (alignment === 'center' || alignment === 'right') {
+      el.style.textAlign = alignment;
+    } else if (alignment === 'justify') {
+      // Use manual spacing distribution; avoid native justify to prevent double stretching
+      el.style.textAlign = 'left';
     } else {
       el.style.textAlign = 'left';
     }
@@ -2950,6 +3011,12 @@ export class DomPainter {
 
     const runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
+    const textSlices =
+      runsForLine.length > 0
+        ? runsForLine
+            .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
+            .map((r) => r.text)
+        : gatherTextSlicesForLine(block, line);
 
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
@@ -3007,6 +3074,20 @@ export class DomPainter {
 
     // Check if any segments have explicit X positioning (from tab stops)
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+    const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
+
+    const shouldJustify = !skipJustify && alignment === 'justify' && !hasExplicitPositioning;
+    if (shouldJustify) {
+      const spaceCount = textSlices.reduce(
+        (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
+        0,
+      );
+      const slack = Math.max(0, availableWidth - line.width);
+      if (spaceCount > 0 && slack > 0) {
+        const extraPerSpace = slack / spaceCount;
+        el.style.wordSpacing = `${extraPerSpace}px`;
+      }
+    }
 
     if (hasExplicitPositioning && line.segments) {
       // Use segment-based rendering with absolute positioning for tab-aligned text
@@ -4044,6 +4125,31 @@ const stripListIndent = (attrs?: ParagraphAttrs): ParagraphAttrs | undefined => 
 const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
   if (!shading?.fill) return;
   element.style.backgroundColor = shading.fill;
+};
+
+/**
+ * Extracts text content from all runs within a line for justification calculations.
+ *
+ * @param block - The paragraph block containing the runs
+ * @param line - The line definition with run and character boundaries
+ * @returns Array of text slices from the line, used to count spaces for justification
+ */
+const gatherTextSlicesForLine = (block: ParagraphBlock, line: Line): string[] => {
+  const slices: string[] = [];
+  const startRun = line.fromRun ?? 0;
+  const endRun = line.toRun ?? startRun;
+  for (let runIndex = startRun; runIndex <= endRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run || (run.kind !== 'text' && run.kind !== undefined) || !('text' in run) || !run.text) continue;
+    const isFirst = runIndex === startRun;
+    const isLast = runIndex === endRun;
+    const start = isFirst ? (line.fromChar ?? 0) : 0;
+    const end = isLast ? (line.toChar ?? run.text.length) : run.text.length;
+    if (start >= end) continue;
+    const slice = run.text.slice(start, end);
+    if (slice) slices.push(slice);
+  }
+  return slices;
 };
 
 /**
