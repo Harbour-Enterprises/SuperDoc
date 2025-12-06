@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { toFlowBlocks, toFlowBlocksMap } from './index.js';
 import type { PMNode, PMMark } from './index.js';
-import type { FlowBlock, ImageBlock } from '@superdoc/contracts';
+import type { FlowBlock, ImageBlock, TableBlock } from '@superdoc/contracts';
 import basicParagraphFixture from './fixtures/basic-paragraph.json';
 import edgeCasesFixture from './fixtures/edge-cases.json';
 import tabsDecimalFixture from './fixtures/tabs-decimal.json';
@@ -4263,6 +4263,321 @@ describe('toFlowBlocks', () => {
 
       // Third paragraph should NOT have section metadata
       expect(blocks[2].attrs?.sdt).toBeUndefined();
+    });
+  });
+
+  describe('structuredContentBlock SDT metadata propagation', () => {
+    it('applies structuredContent metadata to paragraphs inside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-123',
+              tag: 'content-control',
+              alias: 'My Content Control',
+            },
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Content inside SDT block' }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe('paragraph');
+      expect(blocks[0].attrs?.sdt).toBeDefined();
+      expect(blocks[0].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-123',
+        tag: 'content-control',
+        alias: 'My Content Control',
+      });
+    });
+
+    it('applies structuredContent metadata to multiple paragraphs inside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-multi',
+            },
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'First paragraph' }],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Second paragraph' }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(2);
+      blocks.forEach((block, index) => {
+        expect(block.kind).toBe('paragraph');
+        expect(block.attrs?.sdt).toMatchObject({
+          type: 'structuredContent',
+          scope: 'block',
+          id: 'scb-multi',
+        });
+      });
+    });
+
+    it('does not apply structuredContent metadata to blocks outside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'Before SDT' }],
+          },
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-middle',
+            },
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Inside SDT' }],
+              },
+            ],
+          },
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'After SDT' }],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(3);
+
+      // First paragraph should NOT have SDT metadata
+      expect(blocks[0].attrs?.sdt).toBeUndefined();
+
+      // Second paragraph (inside structuredContentBlock) should have SDT metadata
+      expect(blocks[1].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-middle',
+      });
+
+      // Third paragraph should NOT have SDT metadata
+      expect(blocks[2].attrs?.sdt).toBeUndefined();
+    });
+
+    it('applies structuredContent metadata to tables inside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-table',
+              tag: 'table-control',
+              alias: 'Table Content Control',
+            },
+            content: [
+              {
+                type: 'table',
+                content: [
+                  {
+                    type: 'tableRow',
+                    content: [
+                      {
+                        type: 'tableCell',
+                        content: [
+                          {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: 'Cell content' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(1);
+      expect(blocks[0].kind).toBe('table');
+
+      const tableBlock = blocks[0] as TableBlock;
+      expect(tableBlock.attrs?.sdt).toBeDefined();
+      expect(tableBlock.attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-table',
+        tag: 'table-control',
+        alias: 'Table Content Control',
+      });
+    });
+
+    it('applies structuredContent metadata to mixed paragraphs and tables inside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-mixed',
+              alias: 'Mixed Content',
+            },
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Paragraph before table' }],
+              },
+              {
+                type: 'table',
+                content: [
+                  {
+                    type: 'tableRow',
+                    content: [
+                      {
+                        type: 'tableCell',
+                        content: [
+                          {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: 'Table cell' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: 'Paragraph after table' }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(3);
+
+      // First paragraph should have SDT metadata
+      expect(blocks[0].kind).toBe('paragraph');
+      expect(blocks[0].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-mixed',
+        alias: 'Mixed Content',
+      });
+
+      // Table should have SDT metadata
+      expect(blocks[1].kind).toBe('table');
+      expect(blocks[1].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-mixed',
+        alias: 'Mixed Content',
+      });
+
+      // Third paragraph should have SDT metadata
+      expect(blocks[2].kind).toBe('paragraph');
+      expect(blocks[2].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-mixed',
+        alias: 'Mixed Content',
+      });
+    });
+
+    it('does not apply structuredContent metadata to tables outside structuredContentBlock', () => {
+      const pmDoc = {
+        type: 'doc',
+        content: [
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  {
+                    type: 'tableCell',
+                    content: [
+                      {
+                        type: 'paragraph',
+                        content: [{ type: 'text', text: 'Outside SDT' }],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            type: 'structuredContentBlock',
+            attrs: {
+              id: 'scb-inner',
+            },
+            content: [
+              {
+                type: 'table',
+                content: [
+                  {
+                    type: 'tableRow',
+                    content: [
+                      {
+                        type: 'tableCell',
+                        content: [
+                          {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: 'Inside SDT' }],
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      };
+
+      const { blocks } = toFlowBlocks(pmDoc);
+
+      expect(blocks).toHaveLength(2);
+
+      // First table should NOT have SDT metadata
+      expect(blocks[0].kind).toBe('table');
+      expect(blocks[0].attrs?.sdt).toBeUndefined();
+
+      // Second table (inside structuredContentBlock) should have SDT metadata
+      expect(blocks[1].kind).toBe('table');
+      expect(blocks[1].attrs?.sdt).toMatchObject({
+        type: 'structuredContent',
+        scope: 'block',
+        id: 'scb-inner',
+      });
     });
   });
 });

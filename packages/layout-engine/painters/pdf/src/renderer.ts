@@ -590,7 +590,7 @@ export class PdfPainter {
     const fragmentHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
 
     const paragraphContent = lines
-      .map((line, idx) => {
+      .map((line, _idx) => {
         const baseline = yCursor + line.lineHeight - line.descent;
         yCursor += line.lineHeight;
         // List paragraphs should not be justified - pass true for skipJustify

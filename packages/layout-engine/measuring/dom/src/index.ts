@@ -50,6 +50,7 @@ import type {
   TabRun,
   ImageRun,
   LineBreakRun,
+  FieldAnnotationRun,
   TabStop,
   DrawingBlock,
   DrawingMeasure,
@@ -144,6 +145,12 @@ const DEFAULT_TAB_INTERVAL_PX = twipsToPx(DEFAULT_TAB_INTERVAL_TWIPS);
 const TAB_EPSILON = 0.1;
 const DEFAULT_DECIMAL_SEPARATOR = '.';
 const ALLOWED_TAB_VALS = new Set<TabStop['val']>(['start', 'center', 'end', 'decimal', 'bar', 'clear']);
+
+// Field annotation pill styling constants
+const FIELD_ANNOTATION_PILL_PADDING = 8; // Border (2px each side) + padding (2px each side)
+const FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER = 1.2; // Line height multiplier for pill height
+const FIELD_ANNOTATION_VERTICAL_PADDING = 6; // Vertical padding/border for pill height
+const DEFAULT_FIELD_ANNOTATION_FONT_SIZE = 16; // Default font size for field annotations
 
 /**
  * Tab stop in pixel coordinates for measurement.
@@ -362,6 +369,13 @@ function isImageRun(run: Run): run is ImageRun {
  */
 function isLineBreakRun(run: Run): run is LineBreakRun {
   return run.kind === 'lineBreak';
+}
+
+/**
+ * Type guard to check if a run is a field annotation run
+ */
+function isFieldAnnotationRun(run: Run): run is FieldAnnotationRun {
+  return run.kind === 'fieldAnnotation';
 }
 
 /**
@@ -915,7 +929,124 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       continue;
     }
 
-    // At this point, we've filtered out break, lineBreak, tab, and image runs.
+    // Handle field annotation runs (pill-styled form fields)
+    if (isFieldAnnotationRun(run)) {
+      // Use displayLabel for text measurement, with fallback defaults
+      const displayText = run.displayLabel || '';
+
+      // Use annotation's typography or fallback to defaults (16px Arial is standard)
+      const annotationFontSize =
+        typeof run.fontSize === 'number'
+          ? run.fontSize
+          : typeof run.fontSize === 'string'
+            ? parseFloat(run.fontSize) || DEFAULT_FIELD_ANNOTATION_FONT_SIZE
+            : DEFAULT_FIELD_ANNOTATION_FONT_SIZE;
+      const annotationFontFamily = run.fontFamily || 'Arial, sans-serif';
+
+      // Build font string for measurement
+      const fontWeight = run.bold ? 'bold' : 'normal';
+      const fontStyle = run.italic ? 'italic' : 'normal';
+      const annotationFont = `${fontStyle} ${fontWeight} ${annotationFontSize}px ${annotationFontFamily}`;
+      ctx.font = annotationFont;
+
+      // Measure text width
+      const textWidth = displayText ? ctx.measureText(displayText).width : 0;
+
+      // Add pill styling overhead: border (2px each side) + padding (2px each side) = 8px total
+      const annotationWidth = textWidth + FIELD_ANNOTATION_PILL_PADDING;
+
+      // Calculate height including pill styling
+      const annotationHeight =
+        annotationFontSize * FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER + FIELD_ANNOTATION_VERTICAL_PADDING;
+
+      // If a tab alignment is pending, apply it
+      let annotationStartX: number | undefined;
+      if (pendingTabAlignment && currentLine) {
+        annotationStartX = alignPendingTabForWidth(annotationWidth);
+      }
+
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1, // Field annotations are atomic units
+          width: annotationWidth,
+          maxFontSize: annotationHeight,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: annotationWidth,
+              ...(annotationStartX !== undefined ? { x: annotationStartX } : {}),
+            },
+          ],
+        };
+        continue;
+      }
+
+      // Check if annotation fits on current line
+      if (currentLine.width + annotationWidth > currentLine.maxWidth && currentLine.width > 0) {
+        // Doesn't fit - finish current line and start new one
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        tabStopCursor = 0;
+        pendingTabAlignment = null;
+        lastAppliedTabAlign = null;
+
+        // Start new line with the annotation
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: annotationWidth,
+          maxFontSize: annotationHeight,
+          maxWidth: getEffectiveWidth(contentWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: annotationWidth,
+            },
+          ],
+        };
+      } else {
+        // Fits on current line - append it
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        currentLine.width = roundValue(currentLine.width + annotationWidth);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, annotationHeight);
+        if (!currentLine.segments) currentLine.segments = [];
+        currentLine.segments.push({
+          runIndex,
+          fromChar: 0,
+          toChar: 1,
+          width: annotationWidth,
+          ...(annotationStartX !== undefined ? { x: annotationStartX } : {}),
+        });
+      }
+
+      // Handle end tab alignment
+      const tabAlign = lastAppliedTabAlign as { target: number; val: TabStop['val'] } | null;
+      if (tabAlign && currentLine && tabAlign.val === 'end') {
+        currentLine.width = roundValue(tabAlign.target);
+      }
+      lastAppliedTabAlign = null;
+
+      continue;
+    }
+
+    // At this point, we've filtered out break, lineBreak, tab, image, and fieldAnnotation runs.
     // The remaining run must be TextRun (which has text, fontSize, etc.)
     if (!('text' in run) || !('fontSize' in run)) {
       // Safety check - skip if this isn't a TextRun

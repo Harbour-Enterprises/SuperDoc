@@ -25,7 +25,9 @@ function fontString(run: Run): string {
 }
 
 function runText(run: Run): string {
-  return 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+  return 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+    ? ''
+    : (run.text ?? '');
 }
 
 function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): number {

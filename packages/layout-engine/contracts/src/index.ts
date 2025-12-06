@@ -289,7 +289,84 @@ export type BreakRun = {
   sdt?: SdtMetadata;
 };
 
-export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun;
+/**
+ * Inline field annotation run for interactive form fields displayed as styled "pills".
+ * Renders as a bordered, rounded inline element with displayLabel or type-specific content.
+ *
+ * Corresponds to super-editor's FieldAnnotation node which renders via FieldAnnotationView.
+ *
+ * @example
+ * // A paragraph with text and field annotation:
+ * {
+ *   kind: 'paragraph',
+ *   runs: [
+ *     { kind: 'text', text: 'Enter name: ', ... },
+ *     { kind: 'fieldAnnotation', variant: 'text', displayLabel: 'Full Name', fieldColor: '#980043', ... },
+ *   ]
+ * }
+ */
+export type FieldAnnotationRun = {
+  kind: 'fieldAnnotation';
+  /** The variant/type of field annotation. */
+  variant: 'text' | 'image' | 'signature' | 'checkbox' | 'html' | 'link';
+  /** Display text shown inside the pill (fallback for all types). */
+  displayLabel: string;
+  /** Unique field identifier. */
+  fieldId?: string;
+  /** Field type identifier (e.g., 'TEXTINPUT', 'SIGNATURE'). */
+  fieldType?: string;
+  /** Background color as hex string (e.g., "#980043"). Applied with alpha. */
+  fieldColor?: string;
+  /** Border color as hex string (e.g., "#b015b3"). */
+  borderColor?: string;
+  /** Whether to show the pill styling (border, background). Defaults to true. */
+  highlighted?: boolean;
+  /** Whether the field is hidden (display: none). */
+  hidden?: boolean;
+  /** CSS visibility value. */
+  visibility?: 'visible' | 'hidden';
+
+  // Type-specific content
+  /** Image source URL for image/signature variants. */
+  imageSrc?: string | null;
+  /** Link URL for link variant. */
+  linkUrl?: string | null;
+  /** Raw HTML content for html variant. */
+  rawHtml?: string | null;
+
+  // Sizing
+  /** Explicit size for the annotation (used for images). */
+  size?: {
+    width?: number;
+    height?: number;
+  } | null;
+
+  // Typography (applied to the displayLabel text)
+  /** Font family for the label text. */
+  fontFamily?: string | null;
+  /** Font size in points or pixels (e.g., "12pt", 14). */
+  fontSize?: string | number | null;
+  /** Text color as hex string. */
+  textColor?: string | null;
+  /** Text highlight/background color (overrides fieldColor). */
+  textHighlight?: string | null;
+  /** Bold text styling. */
+  bold?: boolean;
+  /** Italic text styling. */
+  italic?: boolean;
+  /** Underline text styling. */
+  underline?: boolean;
+
+  /** Absolute ProseMirror position (inclusive) of this run. */
+  pmStart?: number;
+  /** Absolute ProseMirror position (exclusive) after this run. */
+  pmEnd?: number;
+
+  /** Full SDT metadata if available. */
+  sdt?: SdtMetadata;
+};
+
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun | FieldAnnotationRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
