@@ -17,6 +17,8 @@ import {
   getHeaderFooterTypeForSection,
   layoutHeaderFooterWithCache,
   computeDisplayPageNumber,
+  findWordBoundaries,
+  findParagraphBoundaries,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -415,6 +417,11 @@ export class PresentationEditor extends EventEmitter {
   #lastClickTime = 0;
   #lastClickPosition: { x: number; y: number } = { x: 0, y: 0 };
   #lastSelectedImageBlockId: string | null = null;
+
+  // Drag selection state
+  #dragAnchor: number | null = null;
+  #isDragging = false;
+  #dragExtensionMode: 'char' | 'word' | 'para' = 'char';
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -1509,6 +1516,7 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost?.removeEventListener('pointerdown', this.#handlePointerDown);
     this.#viewportHost?.removeEventListener('dblclick', this.#handleDoubleClick);
     this.#viewportHost?.removeEventListener('pointermove', this.#handlePointerMove);
+    this.#viewportHost?.removeEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost?.removeEventListener('pointerleave', this.#handlePointerLeave);
     this.#visibleHost?.removeEventListener('keydown', this.#handleKeyDown);
     this.#inputBridge?.notifyTargetChanged();
@@ -2122,6 +2130,7 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost.addEventListener('pointerdown', this.#handlePointerDown);
     this.#viewportHost.addEventListener('dblclick', this.#handleDoubleClick);
     this.#viewportHost.addEventListener('pointermove', this.#handlePointerMove);
+    this.#viewportHost.addEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost.addEventListener('pointerleave', this.#handlePointerLeave);
     this.#visibleHost.addEventListener('keydown', this.#handleKeyDown);
   }
@@ -2197,7 +2206,7 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
-  #handlePointerDown = (event: MouseEvent) => {
+  #handlePointerDown = (event: PointerEvent) => {
     if (event.button !== 0) {
       return;
     }
@@ -2383,13 +2392,76 @@ export class PresentationEditor extends EventEmitter {
       this.#lastSelectedImageBlockId = null;
     }
 
+    // Handle shift+click to extend selection
+    if (event.shiftKey && this.#editor.state.selection.$anchor) {
+      const anchor = this.#editor.state.selection.anchor;
+      const head = hit.pos;
+
+      // Use current extension mode (from previous double/triple click) or default to character mode
+      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, selAnchor, selHead));
+        this.#editor.view?.dispatch(tr);
+        this.#scheduleSelectionUpdate();
+      } catch (error) {
+        console.warn('[SELECTION] Failed to extend selection on shift+click:', {
+          error,
+          anchor,
+          head,
+          selAnchor,
+          selHead,
+          mode: this.#dragExtensionMode,
+        });
+      }
+
+      // Focus editor
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        editorDom.focus();
+        this.#editor.view?.focus();
+      }
+
+      return; // Don't start drag on shift+click
+    }
+
     const clickDepth = this.#registerPointerClick(event);
+
+    // Set up drag selection state
+    // Only update dragAnchor on single click; preserve it for double/triple clicks
+    // so word/paragraph selection uses the consistent first-click position
+    // (the second click can return a slightly different position due to mouse movement)
+    if (clickDepth === 1) {
+      this.#dragAnchor = hit.pos;
+    }
+    this.#isDragging = true;
+    if (clickDepth >= 3) {
+      this.#dragExtensionMode = 'para';
+    } else if (clickDepth === 2) {
+      this.#dragExtensionMode = 'word';
+    } else {
+      this.#dragExtensionMode = 'char';
+    }
+
+    // Capture pointer for reliable drag tracking even outside viewport
+    // Guard for test environments where setPointerCapture may not exist
+    if (typeof this.#viewportHost.setPointerCapture === 'function') {
+      this.#viewportHost.setPointerCapture(event.pointerId);
+    }
+
     let handledByDepth = false;
     if (this.#session.mode === 'body') {
+      // For double/triple clicks, use the stored dragAnchor from the first click
+      // to avoid position drift from slight mouse movement between clicks
+      const selectionPos = clickDepth >= 2 && this.#dragAnchor !== null ? this.#dragAnchor : hit.pos;
+
       if (clickDepth >= 3) {
-        handledByDepth = this.#selectParagraphAt(hit.pos);
+        handledByDepth = this.#selectParagraphAt(selectionPos);
       } else if (clickDepth === 2) {
-        handledByDepth = this.#selectWordAt(hit.pos);
+        handledByDepth = this.#selectWordAt(selectionPos);
       }
     }
 
@@ -2467,10 +2539,12 @@ export class PresentationEditor extends EventEmitter {
     const MAX_CLICK_COUNT = 3;
 
     const time = event.timeStamp ?? performance.now();
-    const withinTime = time - this.#lastClickTime <= MULTI_CLICK_TIME_THRESHOLD_MS;
+    const timeDelta = time - this.#lastClickTime;
+    const withinTime = timeDelta <= MULTI_CLICK_TIME_THRESHOLD_MS;
+    const distanceX = Math.abs(event.clientX - this.#lastClickPosition.x);
+    const distanceY = Math.abs(event.clientY - this.#lastClickPosition.y);
     const withinDistance =
-      Math.abs(event.clientX - this.#lastClickPosition.x) <= MULTI_CLICK_DISTANCE_THRESHOLD_PX &&
-      Math.abs(event.clientY - this.#lastClickPosition.y) <= MULTI_CLICK_DISTANCE_THRESHOLD_PX;
+      distanceX <= MULTI_CLICK_DISTANCE_THRESHOLD_PX && distanceY <= MULTI_CLICK_DISTANCE_THRESHOLD_PX;
 
     if (withinTime && withinDistance) {
       this.#clickCount = Math.min(this.#clickCount + 1, MAX_CLICK_COUNT);
@@ -2507,6 +2581,12 @@ export class PresentationEditor extends EventEmitter {
     if (!state?.doc) {
       return false;
     }
+
+    // Validate position bounds before resolving
+    if (pos < 0 || pos > state.doc.content.size) {
+      return false;
+    }
+
     const $pos = state.doc.resolve(pos);
 
     // Find the nearest textblock ancestor (may not be the immediate parent)
@@ -2533,6 +2613,7 @@ export class PresentationEditor extends EventEmitter {
 
     const parentStart = textblockPos.start();
     const parentEnd = textblockPos.end();
+
     let startPos = pos;
     while (startPos > parentStart) {
       const prevChar = state.doc.textBetween(startPos - 1, startPos, '\u0000', '\u0000');
@@ -2626,6 +2707,54 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Calculates extended selection boundaries based on the current extension mode.
+   *
+   * This helper method consolidates the logic for extending selections to word or paragraph
+   * boundaries, used by both shift+click and drag selection handlers. It preserves selection
+   * directionality by placing the head on the side where the user is clicking/dragging.
+   *
+   * @param anchor - The anchor position of the selection (fixed point)
+   * @param head - The head position of the selection (moving point)
+   * @param mode - The extension mode: 'char' (no extension), 'word', or 'para'
+   * @returns Object with selAnchor and selHead positions after applying extension
+   * @private
+   */
+  #calculateExtendedSelection(
+    anchor: number,
+    head: number,
+    mode: 'char' | 'word' | 'para',
+  ): { selAnchor: number; selHead: number } {
+    if (mode === 'word') {
+      const anchorBounds = findWordBoundaries(this.#layoutState.blocks, anchor);
+      const headBounds = findWordBoundaries(this.#layoutState.blocks, head);
+      if (anchorBounds && headBounds) {
+        if (head >= anchor) {
+          // Dragging/extending forward: anchor at start of anchor word, head at end of head word
+          return { selAnchor: anchorBounds.from, selHead: headBounds.to };
+        } else {
+          // Dragging/extending backward: anchor at end of anchor word, head at start of head word
+          return { selAnchor: anchorBounds.to, selHead: headBounds.from };
+        }
+      }
+    } else if (mode === 'para') {
+      const anchorBounds = findParagraphBoundaries(this.#layoutState.blocks, anchor);
+      const headBounds = findParagraphBoundaries(this.#layoutState.blocks, head);
+      if (anchorBounds && headBounds) {
+        if (head >= anchor) {
+          // Dragging/extending forward: anchor at start of anchor para, head at end of head para
+          return { selAnchor: anchorBounds.from, selHead: headBounds.to };
+        } else {
+          // Dragging/extending backward: anchor at end of anchor para, head at start of head para
+          return { selAnchor: anchorBounds.to, selHead: headBounds.from };
+        }
+      }
+    }
+
+    // Fallback to character mode (no extension) if boundaries not found or mode is 'char'
+    return { selAnchor: anchor, selHead: head };
+  }
+
+  /**
    * Determines if a character is considered part of a word for selection purposes.
    *
    * Uses Unicode property escapes to match:
@@ -2650,6 +2779,46 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#layoutState.layout) return;
     const normalized = this.#normalizeClientPoint(event.clientX, event.clientY);
     if (!normalized) return;
+
+    // Handle drag selection when button is held
+    if (this.#isDragging && this.#dragAnchor !== null && event.buttons & 1) {
+      const hit = clickToPosition(
+        this.#layoutState.layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        { x: normalized.x, y: normalized.y },
+        this.#viewportHost,
+        event.clientX,
+        event.clientY,
+      );
+
+      // If we can't find a position, keep the last selection
+      if (!hit) return;
+
+      const anchor = this.#dragAnchor;
+      const head = hit.pos;
+
+      // Apply extension mode to expand selection boundaries, preserving direction
+      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, selAnchor, selHead));
+        this.#editor.view?.dispatch(tr);
+        this.#scheduleSelectionUpdate();
+      } catch (error) {
+        console.warn('[SELECTION] Failed to extend selection during drag:', {
+          error,
+          anchor,
+          head,
+          selAnchor,
+          selHead,
+          mode: this.#dragExtensionMode,
+        });
+      }
+
+      return; // Skip header/footer hover logic during drag
+    }
+
     if (this.#session.mode !== 'body') {
       this.#clearHoverRegion();
       return;
@@ -2673,6 +2842,26 @@ export class PresentationEditor extends EventEmitter {
 
   #handlePointerLeave = () => {
     this.#clearHoverRegion();
+  };
+
+  #handlePointerUp = (event: PointerEvent) => {
+    if (!this.#isDragging) return;
+
+    // Release pointer capture if we have it
+    // Guard for test environments where pointer capture methods may not exist
+    if (
+      typeof this.#viewportHost.hasPointerCapture === 'function' &&
+      typeof this.#viewportHost.releasePointerCapture === 'function' &&
+      this.#viewportHost.hasPointerCapture(event.pointerId)
+    ) {
+      this.#viewportHost.releasePointerCapture(event.pointerId);
+    }
+
+    // Clear drag state - but preserve #dragAnchor and #dragExtensionMode
+    // because they're needed for double-click word selection (the anchor from
+    // the first click must persist to the second click) and for shift+click
+    // to extend selection in the same mode (word/para) after a multi-click
+    this.#isDragging = false;
   };
 
   #handleDoubleClick = (event: MouseEvent) => {
@@ -4217,10 +4406,18 @@ export class PresentationEditor extends EventEmitter {
     }
     const pageRect = pageEl.getBoundingClientRect();
     const overlayRect = this.#selectionOverlay.getBoundingClientRect();
-    const zoom = this.#layoutOptions.zoom ?? 1;
+    const layoutPageSize = this.#layoutState.layout?.pageSize;
+    const scaleX =
+      layoutPageSize && typeof layoutPageSize.w === 'number' && layoutPageSize.w > 0
+        ? pageRect.width / layoutPageSize.w
+        : 1;
+    const scaleY =
+      layoutPageSize && typeof layoutPageSize.h === 'number' && layoutPageSize.h > 0
+        ? pageRect.height / layoutPageSize.h
+        : 1;
     return {
-      x: pageRect.left - overlayRect.left + pageLocalX * zoom,
-      y: pageRect.top - overlayRect.top + pageLocalY * zoom,
+      x: pageRect.left - overlayRect.left + pageLocalX * scaleX,
+      y: pageRect.top - overlayRect.top + pageLocalY * scaleY,
     };
   }
 

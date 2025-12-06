@@ -296,6 +296,93 @@ function measureCharacterXSegmentBased(
 }
 
 /**
+ * Convert a character offset within a line back to a ProseMirror position.
+ *
+ * This function is the inverse of finding a character offset from a PM position.
+ * It accounts for PM position gaps that can occur between runs due to wrapper nodes
+ * (e.g., inline formatting marks, link nodes) that don't correspond to visible characters.
+ *
+ * Algorithm:
+ * 1. Iterate through runs in the line, tracking cumulative character offset
+ * 2. For each run, determine its character length (accounting for tabs as 1 character)
+ * 3. When the target charOffset falls within a run:
+ *    - Calculate the offset within that run
+ *    - Add to the run's pmStart to get the final PM position
+ * 4. If charOffset exceeds all runs, return the last known PM position
+ *
+ * Edge Cases:
+ * - **Character offset beyond line bounds**: Returns the last PM position in the line (clamped to end)
+ * - **Negative character offset**: Clamped to 0, returns fallbackPmStart
+ * - **Runs with missing PM data**: Falls back to fallbackPmStart + charOffset calculation
+ * - **Non-paragraph blocks**: Returns fallbackPmStart + charOffset (simple arithmetic fallback)
+ * - **Empty runs**: Skipped during iteration, don't contribute to character count
+ * - **Tab runs**: Counted as 1 character regardless of visual width
+ *
+ * @param block - The paragraph block containing the line
+ * @param line - The line to map within
+ * @param charOffset - Character offset from start of line (0-based)
+ * @param fallbackPmStart - PM position to use when run PM data is missing or invalid
+ * @returns ProseMirror position corresponding to the character offset
+ *
+ * @example
+ * ```typescript
+ * // Line with runs: "Hello" (PM 0-5) + "World" (PM 7-12), gap at 5-7
+ * const block = { kind: 'paragraph', runs: [...] };
+ * const line = { fromRun: 0, toRun: 1, ... };
+ *
+ * // Character 3 maps to PM position 3 (within "Hello")
+ * charOffsetToPm(block, line, 3, 0); // returns 3
+ *
+ * // Character 7 maps to PM position 9 (within "World", accounting for gap)
+ * charOffsetToPm(block, line, 7, 0); // returns 9
+ * ```
+ */
+export function charOffsetToPm(block: FlowBlock, line: Line, charOffset: number, fallbackPmStart: number): number {
+  // Validate inputs
+  if (!Number.isFinite(charOffset) || !Number.isFinite(fallbackPmStart)) {
+    console.warn('[charOffsetToPm] Invalid input:', { charOffset, fallbackPmStart });
+    return fallbackPmStart;
+  }
+
+  // Clamp charOffset to non-negative
+  const safeCharOffset = Math.max(0, charOffset);
+
+  if (block.kind !== 'paragraph') {
+    return fallbackPmStart + safeCharOffset;
+  }
+
+  const runs = sliceRunsForLine(block, line);
+  let cursor = 0;
+  let lastPm = fallbackPmStart;
+
+  for (const run of runs) {
+    const isTab = isTabRun(run);
+    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const runLength = isTab ? TAB_CHAR_LENGTH : text.length;
+
+    const runPmStart = typeof run.pmStart === 'number' ? run.pmStart : null;
+    const runPmEnd = typeof run.pmEnd === 'number' ? run.pmEnd : runPmStart != null ? runPmStart + runLength : null;
+
+    if (runPmStart != null) {
+      lastPm = runPmStart;
+    }
+
+    if (safeCharOffset <= cursor + runLength) {
+      const offsetInRun = Math.max(0, safeCharOffset - cursor);
+      return runPmStart != null ? runPmStart + Math.min(offsetInRun, runLength) : fallbackPmStart + safeCharOffset;
+    }
+
+    if (runPmEnd != null) {
+      lastPm = runPmEnd;
+    }
+
+    cursor += runLength;
+  }
+
+  return lastPm;
+}
+
+/**
  * Find the character offset and PM position at a given X coordinate within a line.
  * This is the inverse of measureCharacterX.
  *
@@ -326,9 +413,10 @@ export function findCharacterAtX(
     );
     const ratio = Math.max(0, Math.min(1, x / line.width));
     const charOffset = Math.round(ratio * charsInLine);
+    const pmPosition = charOffsetToPm(block, line, charOffset, pmStart);
     return {
       charOffset,
-      pmPosition: pmStart + charOffset,
+      pmPosition,
     };
   }
 
@@ -347,8 +435,7 @@ export function findCharacterAtX(
         const midpoint = startX + tabWidth / 2;
         const offsetInRun = safeX < midpoint ? 0 : TAB_CHAR_LENGTH;
         const charOffset = currentCharOffset + offsetInRun;
-        const pmBase = run.pmStart ?? pmStart + currentCharOffset;
-        const pmPosition = pmBase + offsetInRun;
+        const pmPosition = charOffsetToPm(block, line, charOffset, pmStart);
         return {
           charOffset,
           pmPosition,
@@ -377,9 +464,10 @@ export function findCharacterAtX(
       if (charX >= safeX) {
         if (i === 0) {
           // First character, return this position
+          const pmPosition = charOffsetToPm(block, line, currentCharOffset, pmStart);
           return {
             charOffset: currentCharOffset,
-            pmPosition: pmStart + currentCharOffset,
+            pmPosition,
           };
         }
 
@@ -393,9 +481,10 @@ export function findCharacterAtX(
 
         const charOffset = distToPrev < distToCurrent ? currentCharOffset + i - 1 : currentCharOffset + i;
 
+        const pmPosition = charOffsetToPm(block, line, charOffset, pmStart);
         return {
           charOffset,
-          pmPosition: pmStart + charOffset,
+          pmPosition,
         };
       }
     }
@@ -407,9 +496,10 @@ export function findCharacterAtX(
   }
 
   // If we're past all characters, return the end of the line
+  const pmPosition = charOffsetToPm(block, line, currentCharOffset, pmStart);
   return {
     charOffset: currentCharOffset,
-    pmPosition: pmStart + currentCharOffset,
+    pmPosition,
   };
 }
 

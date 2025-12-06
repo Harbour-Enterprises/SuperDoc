@@ -348,6 +348,8 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
     text: targetEl.textContent?.substring(0, 30),
     visibility: targetEl.style.visibility,
     rect: { left: targetRect.left, right: targetRect.right, width: targetRect.width },
+    pageX: viewX,
+    pageY: viewY,
   });
 
   if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {

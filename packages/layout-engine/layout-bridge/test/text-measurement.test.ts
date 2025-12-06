@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import type { FlowBlock, Line, Run } from '@superdoc/contracts';
-import { findCharacterAtX, measureCharacterX } from '../src/text-measurement.ts';
+import { findCharacterAtX, measureCharacterX, charOffsetToPm } from '../src/text-measurement.ts';
 
 const CHAR_WIDTH = 10;
 
@@ -88,6 +88,23 @@ describe('text measurement utility', () => {
     const result = findCharacterAtX(block, line, 73, 0);
     expect(result.charOffset).toBe(7);
     expect(result.pmPosition).toBe(7);
+  });
+
+  it('preserves PM gaps between runs when mapping X to positions', () => {
+    const block = createBlock([
+      { text: 'Hello', fontFamily: 'Arial', fontSize: 16, pmStart: 2, pmEnd: 7 },
+      { text: 'World', fontFamily: 'Arial', fontSize: 16, pmStart: 9, pmEnd: 14 },
+    ]);
+    const line = baseLine({
+      fromRun: 0,
+      toRun: 1,
+      toChar: 5,
+      width: 10 * CHAR_WIDTH,
+    });
+
+    const result = findCharacterAtX(block, line, 7 * CHAR_WIDTH, 2);
+    expect(result.charOffset).toBe(7);
+    expect(result.pmPosition).toBe(11);
   });
 
   it('respects letter spacing when mapping X to characters', () => {
@@ -185,5 +202,149 @@ describe('text measurement utility', () => {
     const secondTab = findCharacterAtX(block, line, CHAR_WIDTH + 48 + 24, 0);
     expect(secondTab.pmPosition).toBeGreaterThanOrEqual(2);
     expect(secondTab.pmPosition).toBeLessThanOrEqual(3);
+  });
+
+  describe('charOffsetToPm edge cases', () => {
+    it('clamps character offset beyond line bounds to end position', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+      });
+
+      // Character offset beyond line length should clamp to last valid PM position
+      const result = charOffsetToPm(block, line, 100, 0);
+      expect(result).toBe(5); // Should return pmEnd
+    });
+
+    it('clamps negative character offset to start position', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16, pmStart: 10, pmEnd: 15 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+      });
+
+      // Negative offset should clamp to 0, which maps to pmStart
+      const result = charOffsetToPm(block, line, -5, 10);
+      expect(result).toBe(10); // Should return fallback/pmStart
+    });
+
+    it('handles runs with missing pmEnd gracefully', () => {
+      const block = createBlock([
+        { text: 'Test', fontFamily: 'Arial', fontSize: 16, pmStart: 5 } as any, // Missing pmEnd
+      ]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 4,
+      });
+
+      // Should infer pmEnd from pmStart + text length
+      const result = charOffsetToPm(block, line, 2, 5);
+      expect(result).toBe(7); // pmStart (5) + offset (2)
+    });
+
+    it('handles runs with missing pmStart gracefully', () => {
+      const block = createBlock([
+        { text: 'Test', fontFamily: 'Arial', fontSize: 16, pmEnd: 10 } as any, // Missing pmStart
+      ]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 4,
+      });
+
+      // When pmStart is missing, the function infers it from pmEnd - textLength
+      // pmEnd = 10, textLength = 4, so inferred pmStart = 6
+      // charOffset 2 maps to position 6 + 2 = 8
+      const result = charOffsetToPm(block, line, 2, 100);
+      expect(result).toBe(8); // inferred pmStart (6) + offset (2)
+    });
+
+    it('returns fallback position for non-paragraph blocks', () => {
+      const block = {
+        kind: 'table',
+        id: 'test-block',
+        rows: [],
+      } as any;
+      const line = baseLine();
+
+      // Non-paragraph blocks should use fallback calculation
+      const result = charOffsetToPm(block, line, 5, 50);
+      expect(result).toBe(55); // fallback (50) + offset (5)
+    });
+
+    it('handles character offset at exact line boundary', () => {
+      const block = createBlock([{ text: 'Exact', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+      });
+
+      // Offset exactly at line end
+      const result = charOffsetToPm(block, line, 5, 0);
+      expect(result).toBe(5);
+    });
+
+    it('handles line with only tab runs', () => {
+      const block = createBlock([
+        { kind: 'tab', text: '\t', width: 48, pmStart: 0, pmEnd: 1 },
+        { kind: 'tab', text: '\t', width: 48, pmStart: 1, pmEnd: 2 },
+      ]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 1,
+        toChar: 1, // Each tab counts as 1 character
+        width: 96,
+      });
+
+      // First tab
+      const result1 = charOffsetToPm(block, line, 0, 0);
+      expect(result1).toBe(0);
+
+      // Second tab
+      const result2 = charOffsetToPm(block, line, 1, 0);
+      expect(result2).toBe(1);
+
+      // After both tabs
+      const result3 = charOffsetToPm(block, line, 2, 0);
+      expect(result3).toBe(2);
+    });
+
+    it('handles empty runs in the middle of a line', () => {
+      const block = createBlock([
+        { text: 'Before', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 6 },
+        { text: '', fontFamily: 'Arial', fontSize: 16, pmStart: 6, pmEnd: 6 }, // Empty run
+        { text: 'After', fontFamily: 'Arial', fontSize: 16, pmStart: 6, pmEnd: 11 },
+      ]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 2,
+        toChar: 5,
+      });
+
+      // Character in first run
+      const result1 = charOffsetToPm(block, line, 3, 0);
+      expect(result1).toBe(3);
+
+      // Character in last run (empty run shouldn't affect count)
+      const result2 = charOffsetToPm(block, line, 8, 0);
+      expect(result2).toBe(8);
+    });
+
+    it('handles runs with zero-length text correctly', () => {
+      const block = createBlock([{ text: '', fontFamily: 'Arial', fontSize: 16, pmStart: 5, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 0,
+      });
+
+      const result = charOffsetToPm(block, line, 0, 5);
+      expect(result).toBe(5);
+    });
   });
 });
