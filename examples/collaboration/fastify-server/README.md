@@ -13,7 +13,7 @@ This example demonstrates how to set up a Fastify server with WebSocket support 
 1. **Install dependencies** in the example directory:
 
    ```bash
-   cd examples/fastify
+   cd examples/collaboration/fastify-server
    npm install
    ```
 
@@ -49,7 +49,7 @@ npm run dev
 Or start the example alone (after building the library):
 
 ```bash
-cd examples/fastify
+cd examples/collaboration/fastify-server
 npm start
 ```
 

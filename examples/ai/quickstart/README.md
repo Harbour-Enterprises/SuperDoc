@@ -12,7 +12,7 @@ document.
 ## Run the demo
 
 ```bash
-cd examples/superdoc-ai-quickstart
+cd examples/ai/quickstart
 cp .env.example .env               # add your OpenAI key + preferred model
 npm install
 npm run dev
