@@ -1,3 +1,9 @@
+## [0.34.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.7...v0.34.8) (2025-12-06)
+
+### Bug Fixes
+
+- onlyoffice docs fail to import from null pointer crash ([2892612](https://github.com/Harbour-Enterprises/SuperDoc/commit/289261257d6c081304833cbe1fcad15c446f51ad))
+
 ## [0.34.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.6...v0.34.7) (2025-12-05)
 
 ### Bug Fixes
