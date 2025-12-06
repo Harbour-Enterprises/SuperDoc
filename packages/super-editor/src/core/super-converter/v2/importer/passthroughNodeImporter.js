@@ -9,6 +9,7 @@ const INLINE_PARENT_NAMES = new Set([
   'w:proofErr',
   'w:del',
   'w:ins',
+  'w:p', // Paragraph is an inline container; unknown children must be inline-safe
 ]);
 const INLINE_NODE_NAMES = new Set([
   'm:oMathPara',
@@ -21,7 +22,7 @@ const INLINE_NODE_NAMES = new Set([
   'm:sup',
   'm:sSup',
 ]);
-const BLOCK_BOUNDARY_NAMES = new Set(['w:p', 'w:body', 'w:tbl', 'w:tc', 'w:tr']);
+const BLOCK_BOUNDARY_NAMES = new Set(['w:body', 'w:tbl', 'w:tc', 'w:tr']);
 
 export const isInlineContext = (path = [], currentNodeName) => {
   if (currentNodeName && INLINE_NODE_NAMES.has(currentNodeName)) {
