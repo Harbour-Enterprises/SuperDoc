@@ -223,10 +223,10 @@ export function buildMultiSectionIdentifier(
       });
     }
 
-    // Track per-section titlePg (first section with 'first' variant enables titlePg for that section)
-    const hasFirstHeader = Boolean(section.headerRefs?.first);
-    const hasFirstFooter = Boolean(section.footerRefs?.first);
-    if (hasFirstHeader || hasFirstFooter) {
+    // Track per-section titlePg from section metadata (w:titlePg element in OOXML)
+    // Note: The presence of a 'first' header/footer reference does NOT mean titlePg is enabled.
+    // The w:titlePg element must be present in sectPr to use first page headers/footers.
+    if (section.titlePg === true) {
       identifier.sectionTitlePg.set(idx, true);
     }
   }

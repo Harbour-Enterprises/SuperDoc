@@ -8,7 +8,7 @@
  * - Tracked changes (insert, delete, format)
  */
 
-import type { TextRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
+import type { TextRun, TabRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
 import type { UnderlineStyle, PMMark, HyperlinkConfig, ThemeColorPalette } from '../types.js';
 import { normalizeColor, isFiniteNumber, ptToPx } from '../utilities.js';
 import { buildFlowRunLink, migrateLegacyLink } from './links.js';
@@ -697,11 +697,14 @@ const DEFAULT_HYPERLINK_CONFIG: HyperlinkConfig = {
  * @throws Does not throw; errors in mark processing are logged but do not interrupt processing
  */
 export const applyMarksToRun = (
-  run: TextRun,
+  run: TextRun | TabRun,
   marks: PMMark[],
   hyperlinkConfig: HyperlinkConfig = DEFAULT_HYPERLINK_CONFIG,
   themeColors?: ThemeColorPalette,
 ): void => {
+  // Type guard to distinguish TabRun from TextRun
+  const isTabRun = run.kind === 'tab';
+
   marks.forEach((mark) => {
     const forwardedDataAttrs = extractDataAttributes(mark.attrs as Record<string, unknown> | undefined);
     try {
@@ -734,11 +737,17 @@ export const applyMarksToRun = (
           break;
         }
         case 'textStyle':
-          applyTextStyleMark(run, mark.attrs ?? {}, themeColors);
+          // TextStyle mark only applies to TextRun (has fontFamily, fontSize, etc.)
+          if (!isTabRun) {
+            applyTextStyleMark(run, mark.attrs ?? {}, themeColors);
+          }
           break;
         case 'commentMark':
         case 'comment': {
-          pushCommentAnnotation(run, mark.attrs ?? {});
+          // Comment marks only apply to TextRun
+          if (!isTabRun) {
+            pushCommentAnnotation(run, mark.attrs ?? {});
+          }
           break;
         }
         case 'underline': {
@@ -765,34 +774,37 @@ export const applyMarksToRun = (
           run.highlight = resolveColorFromAttributes(mark.attrs ?? {}, themeColors);
           break;
         case 'link': {
-          const attrs = (mark.attrs ?? {}) as Record<string, unknown>;
-          if (hyperlinkConfig.enableRichHyperlinks) {
-            try {
-              const link = buildFlowRunLink(attrs);
-              if (link) {
-                run.link = link as unknown as TextRun['link'];
+          // Link mark only applies to TextRun
+          if (!isTabRun) {
+            const attrs = (mark.attrs ?? {}) as Record<string, unknown>;
+            if (hyperlinkConfig.enableRichHyperlinks) {
+              try {
+                const link = buildFlowRunLink(attrs);
+                if (link) {
+                  run.link = link as unknown as TextRun['link'];
+                }
+              } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('[PM-Adapter] Failed to build rich hyperlink:', error);
+                }
+                // Fall through to legacy link handling or skip
               }
-            } catch (error) {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('[PM-Adapter] Failed to build rich hyperlink:', error);
+            } else if (typeof attrs.href === 'string' && attrs.href.trim()) {
+              try {
+                const sanitized = sanitizeHref(attrs.href);
+                if (sanitized && sanitized.href) {
+                  const legacyLink = {
+                    href: sanitized.href,
+                    title: typeof attrs.title === 'string' ? attrs.title : undefined,
+                  };
+                  run.link = migrateLegacyLink(legacyLink) as unknown as TextRun['link'];
+                }
+              } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('[PM-Adapter] Failed to sanitize link href:', error);
+                }
+                // Skip this link if sanitization fails
               }
-              // Fall through to legacy link handling or skip
-            }
-          } else if (typeof attrs.href === 'string' && attrs.href.trim()) {
-            try {
-              const sanitized = sanitizeHref(attrs.href);
-              if (sanitized && sanitized.href) {
-                const legacyLink = {
-                  href: sanitized.href,
-                  title: typeof attrs.title === 'string' ? attrs.title : undefined,
-                };
-                run.link = migrateLegacyLink(legacyLink) as unknown as TextRun['link'];
-              }
-            } catch (error) {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('[PM-Adapter] Failed to sanitize link href:', error);
-              }
-              // Skip this link if sanitization fails
             }
           }
           break;
@@ -807,7 +819,8 @@ export const applyMarksToRun = (
       // Continue processing other marks
     }
 
-    if (forwardedDataAttrs) {
+    // dataAttrs only applies to TextRun
+    if (forwardedDataAttrs && !isTabRun) {
       run.dataAttrs = { ...(run.dataAttrs ?? {}), ...forwardedDataAttrs };
     }
   });

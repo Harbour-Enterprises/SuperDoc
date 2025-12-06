@@ -835,7 +835,7 @@ describe('paragraph converters', () => {
 
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenCalledWith(tabNode, positions, 0, para);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenCalledWith(tabNode, positions, 0, para, []);
         const paraBlock = blocks[0] as ParagraphBlock;
         expect(paraBlock.runs).toContain(mockTabRun);
       });
@@ -848,9 +848,9 @@ describe('paragraph converters', () => {
 
         paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(1, expect.any(Object), positions, 0, para);
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(2, expect.any(Object), positions, 1, para);
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(3, expect.any(Object), positions, 2, para);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(1, expect.any(Object), positions, 0, para, []);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(2, expect.any(Object), positions, 1, para, []);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(3, expect.any(Object), positions, 2, para, []);
       });
 
       it('should skip tab when tabNodeToRun returns null', () => {

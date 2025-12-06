@@ -612,6 +612,7 @@ describe('analysis', () => {
         headerRefs: { default: 'header1' },
         footerRefs: { default: 'footer1' },
         numbering: { format: 'decimal' },
+        titlePg: false,
       });
     });
 

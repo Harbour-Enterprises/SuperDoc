@@ -467,10 +467,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const indentRight = sanitizePositive(indent?.right);
   const firstLine = indent?.firstLine ?? 0;
   const hanging = indent?.hanging ?? 0;
+  const isWordLayoutList = Boolean(wordLayout?.marker);
   // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
   // suppressFirstLineIndent=true for these cases.
   const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
-  const firstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
+  const rawFirstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
+  // When wordLayout is present, the hanging region is occupied by the list marker/tab.
+  // Do not expand the first-line width; use the same content width as subsequent lines.
+  const firstLineOffset = isWordLayoutList ? 0 : rawFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   const tabStops = buildTabStopsPx(

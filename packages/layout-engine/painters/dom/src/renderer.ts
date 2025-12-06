@@ -3068,9 +3068,31 @@ export class DomPainter {
           tabEl.style.width = `${actualTabWidth}px`;
           tabEl.style.height = `${line.lineHeight}px`;
           tabEl.style.display = 'inline-block';
-          tabEl.style.visibility = 'hidden';
           tabEl.style.pointerEvents = 'none';
           tabEl.style.zIndex = '1';
+
+          // Apply underline styling to tab if present (common in signature lines)
+          // TabRun can have RunMarks properties like underline, bold, etc.
+          //
+          // Signature line use case: In documents with signature lines, tabs are often used
+          // to create underlined blank spaces where signatures should go. The underline mark
+          // is inherited from a parent node (e.g., a paragraph with underline formatting) and
+          // applied to the tab, creating a visible underline even though the tab itself has
+          // no visible text content.
+          if (baseRun.underline) {
+            const underlineStyle = baseRun.underline.style ?? 'single';
+            // We must use an explicit color instead of currentColor because tab content is
+            // invisible (no text). If we used currentColor, the underline would inherit the
+            // text color, which might be transparent or the same as the background, making
+            // the underline invisible. Using an explicit color (defaulting to black) ensures
+            // the underline is always visible for signature lines.
+            const underlineColor = baseRun.underline.color ?? '#000000';
+            const borderStyle = underlineStyle === 'double' ? 'double' : 'solid';
+            tabEl.style.borderBottom = `1px ${borderStyle} ${underlineColor}`;
+          } else {
+            tabEl.style.visibility = 'hidden';
+          }
+
           if (styleId) {
             tabEl.setAttribute('styleid', styleId);
           }
@@ -3173,6 +3195,48 @@ export class DomPainter {
     } else {
       // Use run-based rendering for normal text flow
       runsForLine.forEach((run) => {
+        // Special handling for TabRuns (e.g., signature lines with underlines)
+        if (run.kind === 'tab') {
+          const tabEl = this.doc!.createElement('span');
+          tabEl.classList.add('superdoc-tab');
+
+          // Calculate tab width - use measured width or estimate based on typical tab stop
+          const tabWidth = run.width ?? 48; // Default tab width if not measured
+
+          tabEl.style.display = 'inline-block';
+          tabEl.style.width = `${tabWidth}px`;
+          tabEl.style.height = `${line.lineHeight}px`;
+          tabEl.style.verticalAlign = 'bottom';
+
+          // Apply underline styling if present (common for signature lines)
+          //
+          // Signature line use case: In documents with signature lines, tabs are often used
+          // to create underlined blank spaces where signatures should go. The underline mark
+          // is inherited from a parent node (e.g., a paragraph with underline formatting) and
+          // applied to the tab, creating a visible underline even though the tab itself has
+          // no visible text content.
+          if (run.underline) {
+            const underlineStyle = run.underline.style ?? 'single';
+            // We must use an explicit color instead of currentColor because tab content is
+            // invisible (no text). If we used currentColor, the underline would inherit the
+            // text color, which might be transparent or the same as the background, making
+            // the underline invisible. Using an explicit color (defaulting to black) ensures
+            // the underline is always visible for signature lines.
+            const underlineColor = run.underline.color ?? '#000000';
+            const borderStyle = underlineStyle === 'double' ? 'double' : 'solid';
+            tabEl.style.borderBottom = `1px ${borderStyle} ${underlineColor}`;
+          }
+
+          if (styleId) {
+            tabEl.setAttribute('styleid', styleId);
+          }
+          if (run.pmStart != null) tabEl.dataset.pmStart = String(run.pmStart);
+          if (run.pmEnd != null) tabEl.dataset.pmEnd = String(run.pmEnd);
+
+          el.appendChild(tabEl);
+          return;
+        }
+
         const elem = this.renderRun(run, context, trackedConfig);
         if (elem) {
           if (styleId) {
