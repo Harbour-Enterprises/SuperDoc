@@ -588,19 +588,52 @@ export function layoutTableBlock({
   // move to the next column/page to avoid starting a table that immediately needs to split
   const availableHeight = state.contentBottom - state.cursorY;
 
-  // Determine minimum height needed to start the table
-  // Use the first row height if available, otherwise fall back to totalHeight for tables
-  // with empty measure.rows arrays
-  let minRequiredHeight = 0;
-  if (measure.rows.length > 0) {
-    minRequiredHeight = sumRowHeights(measure.rows, 0, 1);
-  } else if (measure.totalHeight > 0) {
-    // Fallback: use total height for tables with no row measurements
-    minRequiredHeight = measure.totalHeight;
-  }
+  // Table start preflight check: Decide whether to start the table on the current page
+  // or advance to a new page. This prevents starting a table that immediately splits,
+  // which would waste the remaining space on the current page.
+  const hasPriorFragments = state.page.fragments.length > 0;
+  const hasMeasuredRows = measure.rows.length > 0 && block.rows.length > 0;
 
-  if (minRequiredHeight > availableHeight && state.page.fragments.length > 0) {
-    state = advanceColumn(state);
+  if (hasMeasuredRows && hasPriorFragments) {
+    // Decision tree for tables with measured rows and existing page content:
+    const firstRowCantSplit = block.rows[0]?.attrs?.tableRowProperties?.cantSplit === true;
+    const firstRowHeight = measure.rows[0]?.height ?? measure.totalHeight ?? 0;
+
+    if (firstRowCantSplit) {
+      // Branch 1: cantSplit row
+      // Require the entire first row to fit on the current page.
+      // If it doesn't fit, advance to a new page to avoid an immediate split.
+      if (firstRowHeight > availableHeight) {
+        state = advanceColumn(state);
+      }
+    } else {
+      // Branch 2: Splittable row (cantSplit = false or undefined)
+      // Allow the table to start on the current page if ANY content can fit.
+      // Use computePartialRow to check if at least one line can be rendered.
+      const partial = computePartialRow(0, block.rows[0], measure, availableHeight);
+      const madeProgress = partial.toLineByCell.some(
+        (toLine: number, idx: number) => toLine > (partial.fromLineByCell[idx] || 0),
+      );
+      const hasRenderableHeight = partial.partialHeight > 0;
+
+      // Advance only if we can't fit any lines at all
+      if (!madeProgress || !hasRenderableHeight) {
+        state = advanceColumn(state);
+      }
+      // Otherwise, start on current page and let normal row processing handle the split
+    }
+  } else if (hasPriorFragments) {
+    // Fallback for cases without measured rows (e.g., empty measure.rows)
+    let minRequiredHeight = 0;
+    if (measure.rows.length > 0) {
+      minRequiredHeight = sumRowHeights(measure.rows, 0, 1);
+    } else if (measure.totalHeight > 0) {
+      minRequiredHeight = measure.totalHeight;
+    }
+
+    if (minRequiredHeight > availableHeight) {
+      state = advanceColumn(state);
+    }
   }
 
   let currentRow = 0;
@@ -689,7 +722,9 @@ export function layoutTableBlock({
 
       const fragmentHeight = continuationPartialRow.partialHeight + (repeatHeaderCount > 0 ? headerHeight : 0);
 
-      if (fragmentHeight > 0) {
+      // Only create a fragment if we made progress (rendered some lines)
+      // Don't create empty fragments with just padding
+      if (fragmentHeight > 0 && madeProgress) {
         const fragment: TableFragment = {
           kind: 'table',
           blockId: block.id,
