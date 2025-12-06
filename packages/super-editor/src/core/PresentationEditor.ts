@@ -48,6 +48,12 @@ import type {
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
+
+// Comment and tracked change mark names (inline to avoid missing declaration files)
+const CommentMarkName = 'commentMark';
+const TrackInsertMarkName = 'trackInsert';
+const TrackDeleteMarkName = 'trackDelete';
+const TrackFormatMarkName = 'trackFormat';
 // Collaboration cursor imports
 import { relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
@@ -1183,6 +1189,56 @@ export class PresentationEditor extends EventEmitter {
     });
 
     return hasUpdates ? remapped : positions;
+  }
+
+  /**
+   * Collect all comment and tracked change positions from the PM document.
+   *
+   * This is the authoritative source for PM positions - called after every
+   * layout update to ensure positions are always fresh from the current document.
+   *
+   * The returned positions contain PM offsets (start, end) which can be passed
+   * to getCommentBounds() to compute visual layout coordinates.
+   *
+   * @returns Map of threadId -> { threadId, start, end }
+   */
+  #collectCommentPositions(): Record<string, { threadId: string; start: number; end: number }> {
+    const editorState = this.#editor?.state;
+    if (!editorState) return {};
+
+    const doc = editorState.doc;
+    const trackChangeMarks = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
+
+    // Collect PM positions for all comments and tracked changes
+    const pmPositions: Record<string, { threadId: string; start: number; end: number }> = {};
+
+    doc.descendants((node, pos) => {
+      const marks = node.marks || [];
+
+      for (const mark of marks) {
+        let threadId: string | undefined;
+
+        if (mark.type.name === CommentMarkName) {
+          threadId = mark.attrs.commentId || mark.attrs.importedId;
+        } else if (trackChangeMarks.includes(mark.type.name)) {
+          threadId = mark.attrs.id;
+        }
+
+        if (!threadId) continue;
+
+        const nodeEnd = pos + node.nodeSize;
+
+        if (!pmPositions[threadId]) {
+          pmPositions[threadId] = { threadId, start: pos, end: nodeEnd };
+        } else {
+          // Extend range if this mark spans multiple nodes
+          pmPositions[threadId].start = Math.min(pmPositions[threadId].start, pos);
+          pmPositions[threadId].end = Math.max(pmPositions[threadId].end, nodeEnd);
+        }
+      }
+    });
+
+    return pmPositions;
   }
 
   /**
@@ -3471,6 +3527,14 @@ export class PresentationEditor extends EventEmitter {
     const payload = { layout, blocks, measures, metrics };
     this.emit('layoutUpdated', payload);
     this.emit('paginationUpdate', payload);
+
+    // Emit fresh comment positions after layout completes.
+    // This ensures positions are always in sync with the current document and layout.
+    const commentPositions = this.#collectCommentPositions();
+    const positionKeys = Object.keys(commentPositions);
+    if (positionKeys.length > 0) {
+      this.emit('commentPositions', { positions: commentPositions });
+    }
     if (this.#telemetryEmitter && metrics) {
       this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });
     }
