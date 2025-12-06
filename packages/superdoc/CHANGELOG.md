@@ -1,3 +1,9 @@
+## [0.34.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.8...v0.34.9) (2025-12-06)
+
+### Bug Fixes
+
+- tests ([a59aae8](https://github.com/Harbour-Enterprises/SuperDoc/commit/a59aae887989c5433274c2d0d916e939f65219ba))
+
 ## [0.34.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.7...v0.34.8) (2025-12-06)
 
 ### Bug Fixes
