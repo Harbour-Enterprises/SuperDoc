@@ -13,7 +13,7 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
 } from '@superdoc/contracts';
-import { findCharacterAtX, measureCharacterX } from './text-measurement.js';
+import { charOffsetToPm, findCharacterAtX, measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom } from './dom-mapping.js';
 
 export type { HeaderFooterType } from '@superdoc/contracts';
@@ -203,6 +203,82 @@ export function resetClickMappingTelemetry(): void {
 
 const logClickStage = (_level: 'log' | 'warn' | 'error', _stage: string, _payload: Record<string, unknown>) => {
   // No-op in production. Enable for debugging click-to-position mapping.
+};
+
+const SELECTION_DEBUG_ENABLED = false;
+const logSelectionDebug = (payload: Record<string, unknown>): void => {
+  if (!SELECTION_DEBUG_ENABLED) return;
+  try {
+    console.log('[SELECTION-DEBUG]', JSON.stringify(payload));
+  } catch {
+    console.log('[SELECTION-DEBUG]', payload);
+  }
+};
+
+/**
+ * Debug flag for DOM and geometry position mapping.
+ * Set to true to enable detailed logging of click-to-position operations.
+ * WARNING: Should be false in production to avoid performance degradation.
+ */
+const DEBUG_POSITION_MAPPING = false;
+
+/**
+ * Logs position mapping debug information when DEBUG_POSITION_MAPPING is enabled.
+ * @param payload - Debug data to log
+ */
+const logPositionDebug = (payload: Record<string, unknown>): void => {
+  if (!DEBUG_POSITION_MAPPING) return;
+  try {
+    console.log('[CLICK-POS]', JSON.stringify(payload));
+  } catch {
+    console.log('[CLICK-POS]', payload);
+  }
+};
+
+/**
+ * Logs selection mapping debug information when DEBUG_POSITION_MAPPING is enabled.
+ * @param payload - Debug data to log
+ */
+const logSelectionMapDebug = (payload: Record<string, unknown>): void => {
+  if (!DEBUG_POSITION_MAPPING) return;
+  try {
+    console.log('[SELECTION-MAP]', JSON.stringify(payload));
+  } catch {
+    console.log('[SELECTION-MAP]', payload);
+  }
+};
+
+/**
+ * Extracts text content from a specific line within a paragraph block.
+ *
+ * This function concatenates text from all runs that contribute to the specified line,
+ * handling partial runs at line boundaries and filtering out non-text runs (images, breaks).
+ *
+ * @param block - The flow block to extract text from (must be a paragraph block)
+ * @param line - The line specification including run range (fromRun to toRun) and character offsets
+ * @returns The complete text content of the line, or empty string if block is not a paragraph
+ *
+ * @example
+ * ```typescript
+ * // Line spanning runs [0, 1] with partial text from first and last run
+ * const text = buildLineText(paragraphBlock, line);
+ * // Returns: "Hello world" (combining partial run text)
+ * ```
+ */
+const buildLineText = (block: FlowBlock, line: Line): string => {
+  if (block.kind !== 'paragraph') return '';
+  let text = '';
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run || 'src' in run || run.kind === 'lineBreak' || run.kind === 'break') continue;
+    const runText = run.text ?? '';
+    const isFirstRun = runIndex === line.fromRun;
+    const isLastRun = runIndex === line.toRun;
+    const start = isFirstRun ? line.fromChar : 0;
+    const end = isLastRun ? line.toChar : runText.length;
+    text += runText.slice(start, end);
+  }
+  return text;
 };
 
 const blockPmRangeFromAttrs = (block: FlowBlock): { pmStart?: number; pmEnd?: number } => {
@@ -560,6 +636,12 @@ export function clickToPosition(
     const domPos = clickToPositionDom(domContainer, clientX, clientY);
 
     if (domPos != null) {
+      logPositionDebug({
+        origin: 'dom',
+        pos: domPos,
+        clientX,
+        clientY,
+      });
       clickMappingTelemetry.domSuccess++;
       // DOM mapping succeeded - we need to construct a PositionHit with metadata
       // Find the block containing this position to get blockId
@@ -674,6 +756,17 @@ export function clickToPosition(
 
     const column = determineColumn(layout, fragment.x);
     clickMappingTelemetry.geometrySuccess++;
+    logPositionDebug({
+      origin: 'geometry',
+      pos,
+      blockId: fragment.blockId,
+      pageIndex,
+      column,
+      lineIndex,
+      x: pageRelativePoint.x - fragment.x,
+      y: pageRelativePoint.y,
+      isRTL,
+    });
 
     logClickStage('log', 'success', {
       blockId: fragment.blockId,
@@ -812,6 +905,7 @@ export function selectionToRects(
   }
 
   const rects: Rect[] = [];
+  const debugEntries: Record<string, unknown>[] = [];
   layout.pages.forEach((page, pageIndex) => {
     page.fragments.forEach((fragment) => {
       if (fragment.kind === 'para') {
@@ -834,10 +928,16 @@ export function selectionToRects(
           const sliceTo = Math.min(range.pmEnd, to);
           if (sliceFrom >= sliceTo) return;
 
-          const x1 = mapPmToX(block, line, sliceFrom - range.pmStart, fragment.width);
-          const x2 = mapPmToX(block, line, sliceTo - range.pmStart, fragment.width);
-          const rectX = fragment.x + Math.min(x1, x2);
-          const rectWidth = Math.max(1, Math.abs(x2 - x1));
+          // Convert PM positions to character offsets properly
+          // (accounts for gaps in PM positions between runs)
+          const charOffsetFrom = pmPosToCharOffset(block, line, sliceFrom);
+          const charOffsetTo = pmPosToCharOffset(block, line, sliceTo);
+          const startX = mapPmToX(block, line, charOffsetFrom, fragment.width);
+          const endX = mapPmToX(block, line, charOffsetTo, fragment.width);
+          // Align highlights with DOM-rendered list markers by offsetting for the marker box
+          const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
+          const rectX = fragment.x + markerWidth + Math.min(startX, endX);
+          const rectWidth = Math.max(1, Math.abs(endX - startX));
           const lineOffset = lineHeightBeforeIndex(measure, index) - lineHeightBeforeIndex(measure, fragment.fromLine);
           const rectY = fragment.y + lineOffset;
           rects.push({
@@ -847,6 +947,58 @@ export function selectionToRects(
             height: line.lineHeight,
             pageIndex,
           });
+
+          if (SELECTION_DEBUG_ENABLED) {
+            const runs = block.runs.slice(line.fromRun, line.toRun + 1).map((run, idx) => {
+              const isAtomic = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break';
+              const text = isAtomic ? '' : (run.text ?? '');
+              return {
+                idx: line.fromRun + idx,
+                kind: run.kind ?? 'text',
+                pmStart: run.pmStart,
+                pmEnd: run.pmEnd,
+                textLength: text.length,
+                textPreview: text.slice(0, 30),
+                fontFamily: (run as { fontFamily?: string }).fontFamily,
+                fontSize: (run as { fontSize?: number }).fontSize,
+              };
+            });
+
+            debugEntries.push({
+              pageIndex,
+              blockId: block.id,
+              lineIndex: index,
+              lineFromRun: line.fromRun,
+              lineToRun: line.toRun,
+              lineFromChar: line.fromChar,
+              lineToChar: line.toChar,
+              lineWidth: line.width,
+              fragment: {
+                x: fragment.x,
+                y: fragment.y,
+                width: fragment.width,
+                fromLine: fragment.fromLine,
+                toLine: fragment.toLine,
+              },
+              pmRange: range,
+              sliceFrom,
+              sliceTo,
+              charOffsetFrom,
+              charOffsetTo,
+              startX,
+              endX,
+              rect: { x: rectX, y: rectY, width: rectWidth, height: line.lineHeight },
+              runs,
+              lineText: buildLineText(block, line),
+              selectedText: buildLineText(block, line).slice(
+                Math.min(charOffsetFrom, charOffsetTo),
+                Math.max(charOffsetFrom, charOffsetTo),
+              ),
+              indent: (block.attrs as { indent?: unknown } | undefined)?.indent,
+              marker: measure.marker,
+              lineSegments: line.segments,
+            });
+          }
         });
         return;
       }
@@ -867,6 +1019,14 @@ export function selectionToRects(
       }
     });
   });
+
+  if (SELECTION_DEBUG_ENABLED && debugEntries.length > 0) {
+    logSelectionDebug({
+      from,
+      to,
+      entries: debugEntries,
+    });
+  }
 
   return rects;
 }
@@ -1034,6 +1194,130 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
   return { pmStart, pmEnd };
 }
 
+/**
+ * Convert a ProseMirror position to a character offset within a line.
+ *
+ * This function performs ratio-based interpolation to handle cases where the PM position
+ * range doesn't match the text length (e.g., when a run has formatting marks or when
+ * there are position gaps between runs due to wrapper nodes).
+ *
+ * Algorithm:
+ * 1. Iterate through runs in the line
+ * 2. For each run, calculate its PM range and character count
+ * 3. If pmPos falls within the run's PM range:
+ *    - Use ratio interpolation: (pmPos - runStart) / runPmRange * runCharCount
+ *    - This handles cases where PM positions don't align 1:1 with characters
+ * 4. Return the accumulated character offset
+ *
+ * Edge Cases:
+ * - Position before line start: Returns 0
+ * - Position after line end: Returns total character count of the line
+ * - Empty runs (images, breaks): Skipped, don't contribute to character count
+ * - Runs with missing PM data: Skipped
+ * - Zero-length PM range: Returns current accumulated offset without adding
+ *
+ * Performance:
+ * - Time complexity: O(n) where n is the number of runs in the line
+ * - Space complexity: O(1)
+ *
+ * @param block - The paragraph block containing the line
+ * @param line - The line containing the position
+ * @param pmPos - The ProseMirror position to convert
+ * @returns Character offset from start of line (0-based), or 0 if position not found
+ *
+ * @example
+ * ```typescript
+ * // Run with PM range [10, 15] containing "Hello" (5 chars)
+ * // pmPos = 12 should map to character offset 2 within the run
+ * const offset = pmPosToCharOffset(block, line, 12);
+ * // offset = 2 (ratio: (12-10)/(15-10) * 5 = 2/5 * 5 = 2)
+ * ```
+ */
+export function pmPosToCharOffset(block: FlowBlock, line: Line, pmPos: number): number {
+  if (block.kind !== 'paragraph') return 0;
+
+  let charOffset = 0;
+
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run) continue;
+
+    const text = 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' ? '' : (run.text ?? '');
+    const runTextLength = text.length;
+    const runPmStart = run.pmStart ?? null;
+    const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runTextLength : null);
+
+    if (runPmStart == null || runPmEnd == null || runTextLength === 0) continue;
+
+    const isFirstRun = runIndex === line.fromRun;
+    const isLastRun = runIndex === line.toRun;
+    const lineStartChar = isFirstRun ? line.fromChar : 0;
+    const lineEndChar = isLastRun ? line.toChar : runTextLength;
+    const runSliceCharCount = lineEndChar - lineStartChar;
+
+    // Calculate PM positions for this slice using ratio-based mapping
+    // This handles cases where run's PM range doesn't equal its text length
+    const runPmRange = runPmEnd - runPmStart;
+    const runSlicePmStart = runPmStart + (lineStartChar / runTextLength) * runPmRange;
+    const runSlicePmEnd = runPmStart + (lineEndChar / runTextLength) * runPmRange;
+
+    // Check if pmPos falls within this run's PM range
+    if (pmPos >= runSlicePmStart && pmPos <= runSlicePmEnd) {
+      // Position is within this run - use ratio to calculate character offset
+      const runSlicePmRange = runSlicePmEnd - runSlicePmStart;
+      if (runSlicePmRange > 0) {
+        const pmOffsetInSlice = pmPos - runSlicePmStart;
+        const charOffsetInSlice = Math.round((pmOffsetInSlice / runSlicePmRange) * runSliceCharCount);
+        const result = charOffset + Math.min(charOffsetInSlice, runSliceCharCount);
+        const runText = text;
+        const offsetInRun = result - charOffset - (isFirstRun ? 0 : 0);
+        logSelectionMapDebug({
+          kind: 'pmPosToCharOffset-hit',
+          blockId: block.id,
+          pmPos,
+          runIndex,
+          lineFromRun: line.fromRun,
+          lineToRun: line.toRun,
+          runPmStart,
+          runPmEnd,
+          runSlicePmStart,
+          runSlicePmEnd,
+          runSliceCharCount,
+          pmOffsetInSlice,
+          charOffsetInSlice,
+          result,
+          runTextPreview: runText.slice(Math.max(0, offsetInRun - 10), Math.min(runText.length, offsetInRun + 10)),
+        });
+        return result;
+      }
+      logSelectionMapDebug({
+        kind: 'pmPosToCharOffset-zero-range',
+        blockId: block.id,
+        pmPos,
+        runIndex,
+      });
+      return charOffset;
+    }
+
+    // Position is after this run - add this run's character count and continue
+    if (pmPos > runSlicePmEnd) {
+      charOffset += runSliceCharCount;
+    }
+  }
+
+  // If we didn't find the position in any run, return the total character count
+  // (position is at or past the end of the line)
+  logSelectionMapDebug({
+    kind: 'pmPosToCharOffset-fallback',
+    blockId: block.id,
+    pmPos,
+    lineFromRun: line.fromRun,
+    lineToRun: line.toRun,
+    result: charOffset,
+  });
+  return charOffset;
+}
+
 const determineColumn = (layout: Layout, fragmentX: number): number => {
   const columns = layout.columns;
   if (!columns || columns.count <= 1) return 0;
@@ -1107,8 +1391,8 @@ const mapPointToPm = (block: FlowBlock, line: Line, x: number, isRTL: boolean): 
   if (isRTL) {
     const charOffset = result.charOffset;
     const charsInLine = Math.max(1, line.toChar - line.fromChar);
-    const reversedOffset = charsInLine - charOffset;
-    return range.pmStart + reversedOffset;
+    const reversedOffset = Math.max(0, Math.min(charsInLine, charsInLine - charOffset));
+    return charOffsetToPm(block, line, reversedOffset, range.pmStart);
   }
 
   return result.pmPosition;

@@ -712,9 +712,12 @@ export const applyMarksToRun = (
         case TRACK_INSERT_MARK:
         case TRACK_DELETE_MARK:
         case TRACK_FORMAT_MARK: {
-          const tracked = buildTrackedChangeMetaFromMark(mark);
-          if (tracked) {
-            run.trackedChange = selectTrackedChangeMeta(run.trackedChange, tracked);
+          // Tracked change marks only apply to TextRun
+          if (!isTabRun) {
+            const tracked = buildTrackedChangeMetaFromMark(mark);
+            if (tracked) {
+              run.trackedChange = selectTrackedChangeMeta(run.trackedChange, tracked);
+            }
           }
           break;
         }
