@@ -10,6 +10,8 @@
  * @module dom-mapping
  */
 
+import { DOM_CLASS_NAMES } from '@superdoc/painter-dom';
+
 // Debug logging for click-to-position pipeline (disabled - enable for debugging)
 const DEBUG_CLICK_MAPPING = false;
 const log = (...args: unknown[]) => {
@@ -23,9 +25,9 @@ const log = (...args: unknown[]) => {
  * These must match the painter's output structure.
  */
 const CLASS_NAMES = {
-  page: 'superdoc-page',
-  fragment: 'superdoc-fragment',
-  line: 'superdoc-line',
+  page: DOM_CLASS_NAMES.PAGE,
+  fragment: DOM_CLASS_NAMES.FRAGMENT,
+  line: DOM_CLASS_NAMES.LINE,
 } as const;
 
 /**
@@ -53,6 +55,12 @@ const CLASS_NAMES = {
  * above) that can occur after document edits. The geometry-based mapping in `clickToPosition`
  * may produce incorrect positions in these cases, which is why DOM mapping should be preferred
  * when available.
+ *
+ * **Inline SDT Filtering:** Inline structured content (SDT) wrapper elements are automatically
+ * excluded from click-to-position mapping. These wrappers (identified by the class
+ * `superdoc-structured-content-inline`) have PM position attributes for selection highlighting,
+ * but their child spans provide more accurate character-level positioning for clicks. This
+ * ensures the caret is placed at the exact clicked character rather than at wrapper boundaries.
  *
  * @param domContainer - The DOM container element (typically the viewport or page element)
  * @param clientX - X coordinate in viewport space (from MouseEvent.clientX)
@@ -316,8 +324,13 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
   // Find the span or anchor (run slice) at the X position
   // Include both <span> and <a> elements since links are rendered as <a> tags with PM position data
   // Filter to only elements with PM position data (excludes nested content spans like annotation-content)
+  // Exclude inline SDT wrapper elements - they have PM positions for selection highlighting but their
+  // child spans should be the click targets for accurate character-level positioning
   const spanEls = (Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[]).filter(
-    (el) => el.dataset.pmStart !== undefined && el.dataset.pmEnd !== undefined,
+    (el) =>
+      el.dataset.pmStart !== undefined &&
+      el.dataset.pmEnd !== undefined &&
+      !el.classList.contains(DOM_CLASS_NAMES.INLINE_SDT_WRAPPER),
   );
 
   log(
@@ -431,8 +444,13 @@ function processLineElement(lineEl: HTMLElement, viewX: number): number | null {
 
   // Find the span or anchor (run slice) at the X position
   // Filter to only elements with PM position data (excludes nested content spans)
+  // Exclude inline SDT wrapper elements - they have PM positions for selection highlighting but their
+  // child spans should be the click targets for accurate character-level positioning
   const spanEls = (Array.from(lineEl.querySelectorAll('span, a')) as HTMLElement[]).filter(
-    (el) => el.dataset.pmStart !== undefined && el.dataset.pmEnd !== undefined,
+    (el) =>
+      el.dataset.pmStart !== undefined &&
+      el.dataset.pmEnd !== undefined &&
+      !el.classList.contains(DOM_CLASS_NAMES.INLINE_SDT_WRAPPER),
   );
 
   log(

@@ -1,4 +1,4 @@
-import type { FlowBlock, ImageRun } from '@superdoc/contracts';
+import type { FlowBlock, ImageRun, TableBlock, ParagraphBlock } from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
 
 /**
@@ -29,6 +29,48 @@ const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ')
  * @returns A string hash representing the block's run content and formatting
  */
 const hashRuns = (block: FlowBlock): string => {
+  // FIX: For table blocks, include cell content in hash to invalidate cache when cell text changes.
+  // Previously tables were cached by ID only, causing stale measurements when editing cell content.
+  if (block.kind === 'table') {
+    const tableBlock = block as TableBlock;
+    const cellTexts: string[] = [];
+
+    // Safety: Check that rows array exists before iterating
+    if (!tableBlock.rows) {
+      return `${block.id}:table:`;
+    }
+
+    for (const row of tableBlock.rows) {
+      // Safety: Check that cells array exists before iterating
+      if (!row.cells) {
+        continue;
+      }
+
+      for (const cell of row.cells) {
+        // Support both new multi-block cells and legacy single paragraph cells
+        const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+
+        for (const cellBlock of cellBlocks) {
+          const paragraphBlock = cellBlock as ParagraphBlock;
+
+          // Safety: Check that runs array exists before iterating
+          if (!paragraphBlock.runs) {
+            continue;
+          }
+
+          for (const run of paragraphBlock.runs) {
+            // Type guard: Check if run has text property and it's a string
+            if ('text' in run && typeof run.text === 'string') {
+              cellTexts.push(normalizeText(run.text));
+            }
+          }
+        }
+      }
+    }
+    const contentHash = cellTexts.join('|');
+    return `${block.id}:table:${contentHash}`;
+  }
+
   if (block.kind !== 'paragraph') return block.id;
   const trackedMode =
     (block.attrs && 'trackedChangesMode' in block.attrs && block.attrs.trackedChangesMode) || 'review';

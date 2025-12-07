@@ -2,6 +2,10 @@ import type { FlowBlock, Fragment, Layout, Measure, Page, PainterDOM, PageMargin
 import { DomPainter } from './renderer.js';
 import type { PageStyles } from './styles.js';
 
+// Re-export constants
+export { DOM_CLASS_NAMES } from './constants.js';
+export type { DomClassName } from './constants.js';
+
 // Re-export utility functions for testing
 export { sanitizeUrl, linkMetrics, applyRunDataAttributes } from './renderer.js';
 

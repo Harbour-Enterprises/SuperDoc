@@ -58,6 +58,7 @@ import {
   ensureFieldAnnotationStyles,
   type PageStyles,
 } from './styles.js';
+import { DOM_CLASS_NAMES } from './constants.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
@@ -3641,14 +3642,14 @@ export class DomPainter {
             if (!currentInlineSdtWrapper) {
               // Create new wrapper for this SDT group
               currentInlineSdtWrapper = this.doc.createElement('span');
-              currentInlineSdtWrapper.className = 'superdoc-structured-content-inline';
+              currentInlineSdtWrapper.className = DOM_CLASS_NAMES.INLINE_SDT_WRAPPER;
               currentInlineSdtId = runSdtId;
               // Apply SDT metadata to wrapper
               this.applySdtDataset(currentInlineSdtWrapper, runSdt);
               // Add label element for hover display
               const alias = (runSdt as { alias?: string })?.alias || 'Inline content';
               const labelEl = this.doc.createElement('span');
-              labelEl.className = 'superdoc-structured-content-inline__label';
+              labelEl.className = `${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER}__label`;
               labelEl.textContent = alias;
               currentInlineSdtWrapper.appendChild(labelEl);
             }
@@ -4705,9 +4706,13 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
-    const fallbackPmEnd = runPmStart != null && run.pmEnd == null ? runPmStart + runLength : (run.pmEnd ?? null);
 
-    if (runPmStart == null || fallbackPmEnd == null) {
+    // FIX: Always calculate effectivePmEnd from text length, not from potentially stale pmEnd.
+    // The run's pmEnd can become stale after PM transactions modify text content (especially in tables),
+    // causing content truncation when Math.min caps the range.
+    const effectivePmEnd = runPmStart != null ? runPmStart + runLength : null;
+
+    if (runPmStart == null || effectivePmEnd == null) {
       continue;
     }
 
@@ -4717,7 +4722,8 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const endOffset = isLastRun ? line.toChar : runLength;
 
     const sliceStart = runPmStart + startOffset;
-    const sliceEnd = Math.min(runPmStart + endOffset, fallbackPmEnd);
+    // FIX: Removed Math.min cap that was causing truncation with stale pmEnd values.
+    const sliceEnd = runPmStart + endOffset;
 
     if (pmStart == null) {
       pmStart = sliceStart;
