@@ -2322,7 +2322,8 @@ describe('computeParagraphAttrs - alignment priority cascade', () => {
       const para1: PMNode = { attrs: {} };
       const styleContext = createStyleContext();
       const result1 = computeParagraphAttrs(para1, styleContext);
-      // Will have some default or undefined
+      // Level 6 provides default 'left' alignment from style-engine when no other sources are present
+      expect(result1?.alignment).toBe('left');
 
       // Level 5: styleAlignment
       const para2: PMNode = { attrs: {} };

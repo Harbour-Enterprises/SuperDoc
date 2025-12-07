@@ -105,6 +105,17 @@ export const resolveRunProperties = (
     }
   }
 
+  // If no fontSize resolved from any source, fall back to defaults/Normal or a 10pt baseline (20 half-points)
+  if (finalProps.fontSize == null) {
+    const defaultFontSize =
+      defaultProps?.fontSize != null
+        ? defaultProps.fontSize
+        : normalProps?.fontSize != null
+          ? normalProps.fontSize
+          : 20; // 20 half-points = 10pt
+    finalProps.fontSize = defaultFontSize;
+  }
+
   return finalProps;
 };
 

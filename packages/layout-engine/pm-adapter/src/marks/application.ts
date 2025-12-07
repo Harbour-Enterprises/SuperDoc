@@ -649,6 +649,14 @@ export const applyTextStyleMark = (
   attrs: Record<string, unknown>,
   themeColors?: ThemeColorPalette,
 ): void => {
+  const safeStringify = (value: unknown) => {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '[unserializable]';
+    }
+  };
+
   const resolvedColor = resolveColorFromAttributes(attrs, themeColors);
   if (resolvedColor) {
     run.color = resolvedColor;
@@ -657,11 +665,32 @@ export const applyTextStyleMark = (
     const sanitized = sanitizeFontFamily(attrs.fontFamily);
     if (sanitized) {
       run.fontFamily = sanitized;
+      console.log(
+        '[pm-adapter/applyTextStyleMark] fontFamily applied',
+        safeStringify({
+          fontFamily: sanitized,
+        }),
+      );
     }
   }
   const fontSizePx = normalizeFontSizePx(attrs.fontSize);
   if (fontSizePx !== undefined && fontSizePx >= 1 && fontSizePx <= 1000) {
     run.fontSize = fontSizePx;
+    console.log(
+      '[pm-adapter/applyTextStyleMark] fontSize applied',
+      safeStringify({
+        raw: attrs.fontSize,
+        normalizedPx: fontSizePx,
+      }),
+    );
+  } else if (attrs.fontSize !== undefined) {
+    console.log(
+      '[pm-adapter/applyTextStyleMark] fontSize ignored',
+      safeStringify({
+        raw: attrs.fontSize,
+        normalizedPx: fontSizePx,
+      }),
+    );
   }
   if (isFiniteNumber(attrs.letterSpacing)) {
     const spacing = Number(attrs.letterSpacing);

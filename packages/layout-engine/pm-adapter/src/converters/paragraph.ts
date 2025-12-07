@@ -698,6 +698,24 @@ export function paragraphToFlowBlocks(
   },
   converterContext?: ConverterContext,
 ): FlowBlock[] {
+  const safeStringify = (value: unknown) => {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '[unserializable]';
+    }
+  };
+
+  console.log(
+    '[pm-adapter/paragraphToFlowBlocks] PM paragraph',
+    safeStringify({
+      textPreview: para.text?.slice(0, 50),
+      attrs: para.attrs,
+      marks: para.marks,
+      paragraphProperties: (para.attrs as Record<string, unknown> | undefined)?.paragraphProperties,
+    }),
+  );
+
   const baseBlockId = nextBlockId('paragraph');
   const paragraphProps =
     typeof para.attrs?.paragraphProperties === 'object' && para.attrs.paragraphProperties !== null
@@ -710,6 +728,7 @@ export function paragraphToFlowBlocks(
         ? (paragraphProps.styleId as string)
         : null;
   const paragraphHydration = converterContext ? hydrateParagraphStyleAttrs(para, converterContext) : null;
+
   let baseRunDefaults: RunDefaults = {};
   try {
     const spacingSource =
