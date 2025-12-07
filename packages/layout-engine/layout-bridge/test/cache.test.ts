@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { MeasureCache } from '../src/cache';
-import type { FlowBlock, ImageRun } from '@superdoc/contracts';
+import type { FlowBlock, ImageRun, TableBlock, TableCell } from '@superdoc/contracts';
 
 const block = (id: string, text: string): FlowBlock => ({
   kind: 'paragraph',
@@ -19,6 +19,38 @@ const blockWithImage = (id: string, imgRun: ImageRun): FlowBlock => ({
   kind: 'paragraph',
   id,
   runs: [imgRun],
+});
+
+/**
+ * Creates a table block with specified cell content for testing.
+ * Supports both new multi-block cells and legacy single paragraph cells.
+ */
+const tableBlock = (id: string, cellContents: string[][], useMultiBlock = false): TableBlock => ({
+  kind: 'table',
+  id,
+  rows: cellContents.map((rowCells, rowIndex) => ({
+    id: `${id}-row-${rowIndex}`,
+    cells: rowCells.map((cellText, cellIndex) => {
+      const cellId = `${id}-cell-${rowIndex}-${cellIndex}`;
+      const paragraph = {
+        kind: 'paragraph' as const,
+        id: `${cellId}-para`,
+        runs: [{ text: cellText, fontFamily: 'Arial', fontSize: 12 }],
+      };
+
+      const cell: TableCell = {
+        id: cellId,
+      };
+
+      if (useMultiBlock) {
+        cell.blocks = [paragraph];
+      } else {
+        cell.paragraph = paragraph;
+      }
+
+      return cell;
+    }),
+  })),
 });
 
 describe('MeasureCache', () => {
@@ -245,6 +277,251 @@ describe('MeasureCache', () => {
 
       cache.invalidate(['img-block']);
       expect(cache.get(imgBlock, 400, 600)).toBeUndefined();
+    });
+  });
+
+  describe('table block caching', () => {
+    it('invalidates cache when cell text changes', () => {
+      const table1 = tableBlock('table-1', [
+        ['Row 1 Cell 1', 'Row 1 Cell 2'],
+        ['Row 2 Cell 1', 'Row 2 Cell 2'],
+      ]);
+      const table2 = tableBlock('table-1', [
+        ['Row 1 Cell 1', 'Row 1 Cell 2 MODIFIED'],
+        ['Row 2 Cell 1', 'Row 2 Cell 2'],
+      ]);
+
+      cache.set(table1, 800, 600, { totalHeight: 100 });
+      // Different cell content should result in cache miss
+      expect(cache.get(table2, 800, 600)).toBeUndefined();
+    });
+
+    it('creates cache hit when table content is identical', () => {
+      const table1 = tableBlock('table-1', [
+        ['Hello', 'World'],
+        ['Foo', 'Bar'],
+      ]);
+      const table2 = tableBlock('table-1', [
+        ['Hello', 'World'],
+        ['Foo', 'Bar'],
+      ]);
+
+      cache.set(table1, 800, 600, { totalHeight: 100 });
+      // Identical content should result in cache hit
+      expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 100 });
+    });
+
+    it('handles multi-block cells (new format with blocks array)', () => {
+      const table1 = tableBlock(
+        'table-1',
+        [
+          ['Multi', 'Block'],
+          ['Cell', 'Format'],
+        ],
+        true,
+      );
+      const table2 = tableBlock(
+        'table-1',
+        [
+          ['Multi', 'Block'],
+          ['Cell', 'Format'],
+        ],
+        true,
+      );
+
+      cache.set(table1, 800, 600, { totalHeight: 120 });
+      // Multi-block format with identical content should cache hit
+      expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 120 });
+    });
+
+    it('handles legacy single paragraph cells', () => {
+      const table1 = tableBlock(
+        'table-1',
+        [
+          ['Legacy', 'Format'],
+          ['Test', 'Data'],
+        ],
+        false,
+      );
+      const table2 = tableBlock(
+        'table-1',
+        [
+          ['Legacy', 'Format'],
+          ['Test', 'Data'],
+        ],
+        false,
+      );
+
+      cache.set(table1, 800, 600, { totalHeight: 90 });
+      // Legacy format with identical content should cache hit
+      expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 90 });
+    });
+
+    it('handles empty tables', () => {
+      const emptyTable1: TableBlock = {
+        kind: 'table',
+        id: 'empty-table',
+        rows: [],
+      };
+      const emptyTable2: TableBlock = {
+        kind: 'table',
+        id: 'empty-table',
+        rows: [],
+      };
+
+      cache.set(emptyTable1, 800, 600, { totalHeight: 0 });
+      // Empty tables should cache hit
+      expect(cache.get(emptyTable2, 800, 600)).toEqual({ totalHeight: 0 });
+    });
+
+    it('handles tables with no rows property', () => {
+      const tableNoRows: TableBlock = {
+        kind: 'table',
+        id: 'table-no-rows',
+        rows: undefined as unknown as TableBlock['rows'],
+      };
+
+      cache.set(tableNoRows, 800, 600, { totalHeight: 0 });
+      // Should not throw and should cache the value
+      expect(cache.get(tableNoRows, 800, 600)).toEqual({ totalHeight: 0 });
+    });
+
+    it('differentiates tables with different content', () => {
+      const table1 = tableBlock('table-1', [
+        ['A', 'B'],
+        ['C', 'D'],
+      ]);
+      const table2 = tableBlock('table-1', [
+        ['A', 'B'],
+        ['C', 'E'], // Different content in last cell
+      ]);
+
+      cache.set(table1, 800, 600, { totalHeight: 100 });
+      // Different content should result in cache miss
+      expect(cache.get(table2, 800, 600)).toBeUndefined();
+    });
+
+    it('handles whitespace normalization in table cells', () => {
+      const table1: TableBlock = {
+        kind: 'table',
+        id: 'table-whitespace',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'Hello   World', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const table2: TableBlock = {
+        kind: 'table',
+        id: 'table-whitespace',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text: 'Hello World', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      cache.set(table1, 800, 600, { totalHeight: 50 });
+      // Whitespace normalization should treat these as the same
+      expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+    });
+
+    it('handles mixed multi-block and legacy cells', () => {
+      const mixedTable: TableBlock = {
+        kind: 'table',
+        id: 'mixed-table',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              // Multi-block cell
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Multi', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              // Legacy cell
+              {
+                id: 'cell-0-1',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-1',
+                  runs: [{ text: 'Legacy', fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      cache.set(mixedTable, 800, 600, { totalHeight: 60 });
+      expect(cache.get(mixedTable, 800, 600)).toEqual({ totalHeight: 60 });
+    });
+
+    it('handles cells with non-text runs (images)', () => {
+      const tableWithImage: TableBlock = {
+        kind: 'table',
+        id: 'table-image',
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [
+                    { text: 'Text before ', fontFamily: 'Arial', fontSize: 12 },
+                    { kind: 'image', src: 'data:image/png;base64,abc', width: 100, height: 50 },
+                    { text: ' text after', fontFamily: 'Arial', fontSize: 12 },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      cache.set(tableWithImage, 800, 600, { totalHeight: 80 });
+      // Image runs should not break the hashing logic
+      expect(cache.get(tableWithImage, 800, 600)).toEqual({ totalHeight: 80 });
+    });
+
+    it('invalidates table cache by block id', () => {
+      const table = tableBlock('invalidate-table', [
+        ['A', 'B'],
+        ['C', 'D'],
+      ]);
+
+      cache.set(table, 800, 600, { totalHeight: 100 });
+      cache.invalidate(['invalidate-table']);
+      expect(cache.get(table, 800, 600)).toBeUndefined();
     });
   });
 });

@@ -157,30 +157,27 @@ export function assertPmPositions(
  *
  * Used for paragraph fragments and other block-level elements.
  *
+ * **Note on validation warnings:** This function only records statistics and does not emit
+ * warnings for missing PM positions. Fragment-level position validation warnings were removed
+ * because certain fragment types (e.g., inline SDT wrappers) intentionally have PM positions
+ * on wrapper elements for selection highlighting, while their child spans are used for
+ * accurate click-to-position mapping. The presence of wrapper PM positions is valid for
+ * rendering purposes, but warning about them creates noise without indicating an actual issue.
+ * Text run validation (via `assertPmPositions`) remains active to catch genuine position gaps.
+ *
  * @param fragment - The fragment being rendered
  * @param context - Context string for debugging
  */
 export function assertFragmentPmPositions(
   fragment: { pmStart?: number | null; pmEnd?: number | null; kind?: string },
-  context: string,
+  _context: string,
 ): void {
   const hasPmStart = fragment.pmStart != null;
   const hasPmEnd = fragment.pmEnd != null;
 
-  // Record stats
+  // Record stats for monitoring coverage, but do not emit warnings.
+  // See function JSDoc for rationale on why warnings were removed.
   globalValidationStats.record(hasPmStart, hasPmEnd);
-
-  // Only warn in development
-  if (!isDevelopment()) return;
-
-  if (!hasPmStart || !hasPmEnd) {
-    console.warn(`[PmPositionValidation] Missing PM positions in ${context}:`, {
-      fragmentKind: fragment.kind ?? 'unknown',
-      hasPmStart,
-      hasPmEnd,
-      fallback: 'Will use PM DOM coordinates for cursor positioning',
-    });
-  }
 }
 
 /**

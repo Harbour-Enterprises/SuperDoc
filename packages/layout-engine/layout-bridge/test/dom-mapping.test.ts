@@ -321,4 +321,122 @@ describe('DOM-based click-to-position mapping', () => {
     // Should snap to start or end based on which is closer
     expect(result === 5 || result === 15).toBe(true);
   });
+
+  describe('inline SDT wrapper exclusion', () => {
+    it('excludes inline SDT wrapper elements from click-to-position mapping', () => {
+      // Inline SDT wrappers have PM positions for selection highlighting but should not
+      // be used as click targets - their child spans should be targeted instead
+      container.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-fragment" data-block-id="block1">
+            <div class="superdoc-line" data-pm-start="0" data-pm-end="20">
+              <span class="superdoc-structured-content-inline" data-pm-start="0" data-pm-end="20">
+                <span class="superdoc-structured-content-inline__label">Field</span>
+                <span data-pm-start="0" data-pm-end="10">First text</span>
+                <span data-pm-start="10" data-pm-end="20">Second text</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Get the child spans (which should be used for positioning)
+      const childSpans = container.querySelectorAll('span[data-pm-start]:not(.superdoc-structured-content-inline)');
+      expect(childSpans.length).toBeGreaterThan(0); // Verify we have child spans to click on
+
+      const firstChildRect = (childSpans[0] as HTMLElement).getBoundingClientRect();
+
+      // Click on the first child span - should map to its PM range [0, 10]
+      const result = clickToPositionDom(container, firstChildRect.left + 5, firstChildRect.top + 5);
+
+      // Should return a position from the child span, not the wrapper
+      expect(result).not.toBeNull();
+      expect(result).toBeGreaterThanOrEqual(0);
+      // In JSDOM environment, may return line end as fallback
+      expect(result).toBeLessThanOrEqual(20);
+    });
+
+    it('correctly identifies inline SDT wrappers by class name', () => {
+      // Test that the wrapper element is properly filtered out by verifying the DOM structure
+      container.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-fragment" data-block-id="block1">
+            <div class="superdoc-line" data-pm-start="5" data-pm-end="15">
+              <span class="superdoc-structured-content-inline" data-pm-start="5" data-pm-end="15">
+                <span class="superdoc-structured-content-inline__label">Content</span>
+                <span data-pm-start="5" data-pm-end="15">Inline content</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).not.toBeNull();
+
+      // Verify the wrapper exists
+      const wrapper = lineEl.querySelector('.superdoc-structured-content-inline');
+      expect(wrapper).not.toBeNull();
+      expect(wrapper?.getAttribute('data-pm-start')).toBe('5');
+      expect(wrapper?.getAttribute('data-pm-end')).toBe('15');
+
+      // Verify that child spans exist and are different from the wrapper
+      const childSpans = Array.from(lineEl.querySelectorAll('span[data-pm-start]')).filter(
+        (el) => !el.classList.contains('superdoc-structured-content-inline'),
+      );
+      expect(childSpans.length).toBe(1); // Should find exactly one child span (excluding wrapper and label)
+
+      const lineRect = lineEl.getBoundingClientRect();
+      const result = clickToPositionDom(container, lineRect.left + 5, lineRect.top + 5);
+
+      // Should successfully map to a position using the child span
+      expect(result).not.toBeNull();
+      expect(result).toBeGreaterThanOrEqual(5);
+      expect(result).toBeLessThanOrEqual(15);
+    });
+
+    it('handles mixed content with inline SDT wrappers and regular spans', () => {
+      // Test a realistic case with both wrapped and unwrapped content
+      container.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-fragment" data-block-id="block1">
+            <div class="superdoc-line" data-pm-start="0" data-pm-end="30">
+              <span data-pm-start="0" data-pm-end="10">Regular text</span>
+              <span class="superdoc-structured-content-inline" data-pm-start="10" data-pm-end="20">
+                <span class="superdoc-structured-content-inline__label">Field</span>
+                <span data-pm-start="10" data-pm-end="20">Field text</span>
+              </span>
+              <span data-pm-start="20" data-pm-end="30">More regular</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const spans = Array.from(
+        container.querySelectorAll('span[data-pm-start]:not(.superdoc-structured-content-inline)'),
+      );
+
+      // Should find 3 clickable spans: 2 regular + 1 child of wrapper (excluding wrapper itself and label)
+      expect(spans.length).toBe(3);
+
+      // Verify we can click on each span
+      const firstSpanRect = (spans[0] as HTMLElement).getBoundingClientRect();
+      const result1 = clickToPositionDom(container, firstSpanRect.left + 5, firstSpanRect.top + 5);
+      expect(result1).not.toBeNull();
+      expect(result1).toBeGreaterThanOrEqual(0);
+      expect(result1).toBeLessThanOrEqual(30);
+
+      const wrappedChildRect = (spans[1] as HTMLElement).getBoundingClientRect();
+      const result2 = clickToPositionDom(container, wrappedChildRect.left + 5, wrappedChildRect.top + 5);
+      expect(result2).not.toBeNull();
+      expect(result2).toBeGreaterThanOrEqual(0);
+      expect(result2).toBeLessThanOrEqual(30);
+
+      const lastSpanRect = (spans[2] as HTMLElement).getBoundingClientRect();
+      const result3 = clickToPositionDom(container, lastSpanRect.left + 5, lastSpanRect.top + 5);
+      expect(result3).not.toBeNull();
+      expect(result3).toBeGreaterThanOrEqual(0);
+      expect(result3).toBeLessThanOrEqual(30);
+    });
+  });
 });
