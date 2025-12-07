@@ -1,9 +1,9 @@
 /**
- * Tool system types for AIBuilder
+ * Tool system types for AIPlanner
  * @module tools/types
  */
 
-import type { Editor, Result } from '../../shared/types';
+import type { Editor, Result } from '../../shared';
 
 /**
  * Safe record type for tool arguments
@@ -11,9 +11,9 @@ import type { Editor, Result } from '../../shared/types';
 export type SafeRecord = Record<string, unknown>;
 
 /**
- * Built-in tool names available in AIBuilder
+ * Built-in tool names available in AIPlanner
  */
-export type AIBuilderBuiltinTool =
+export type AIToolBuiltin =
     | 'findAll'
     | 'highlight'
     | 'replaceAll'
@@ -27,14 +27,14 @@ export type AIBuilderBuiltinTool =
 /**
  * Tool name type that allows built-in names plus custom tool names
  */
-export type AIBuilderToolName = AIBuilderBuiltinTool | (string & {});
+export type AIToolName = AIToolBuiltin | (string & {});
 
 /**
  * Represents a single step in an execution plan
  */
-export interface AIBuilderPlanStep {
+export interface AIPlanStep {
     id?: string;
-    tool: AIBuilderToolName;
+    tool: AIToolName;
     instruction: string;
     args?: SafeRecord;
 }
@@ -69,7 +69,7 @@ export interface SelectionRange {
 /**
  * Context provided to tool handlers
  */
-export interface AIBuilderToolHandlerContext {
+export interface AIToolHandlerContext {
     editor: Editor;
     actions: AIToolActions;
 }
@@ -77,16 +77,16 @@ export interface AIBuilderToolHandlerContext {
 /**
  * Payload passed to tool handlers
  */
-export interface AIBuilderToolHandlerPayload {
+export interface AIToolHandlerPayload {
     instruction: string;
-    step: AIBuilderPlanStep;
-    context: AIBuilderToolHandlerContext;
+    step: AIPlanStep;
+    context: AIToolHandlerContext;
 }
 
 /**
  * Result returned from tool handlers
  */
-export interface AIBuilderToolHandlerResult {
+export interface AIToolHandlerResult {
     success: boolean;
     message?: string;
     data?: Result | SafeRecord | null;
@@ -95,10 +95,10 @@ export interface AIBuilderToolHandlerResult {
 /**
  * Tool definition including metadata and handler
  */
-export interface AIBuilderToolDefinition {
-    name: AIBuilderToolName;
+export interface AIToolDefinition {
+    name: AIToolName;
     description: string;
-    handler: (payload: AIBuilderToolHandlerPayload) => Promise<AIBuilderToolHandlerResult> | AIBuilderToolHandlerResult;
+    handler: (payload: AIToolHandlerPayload) => Promise<AIToolHandlerResult> | AIToolHandlerResult;
 }
 
 /**
@@ -111,9 +111,9 @@ export interface SelectionSnapshot {
 }
 
 /**
- * Progress event types for AIBuilder execution
+ * Progress event types for AIPlanner execution
  */
-export type AIBuilderProgressEvent =
+export type AIPlannerProgressEvent =
     | { type: 'planning'; message: string }
     | { type: 'plan_ready'; plan: any }
     | { type: 'tool_start'; tool: string; instruction: string; stepIndex: number; totalSteps: number }
@@ -123,5 +123,5 @@ export type AIBuilderProgressEvent =
 /**
  * Callback function for progress updates
  */
-export type AIBuilderProgressCallback = (event: AIBuilderProgressEvent) => void;
+export type AIPlannerProgressCallback = (event: AIPlannerProgressEvent) => void;
 

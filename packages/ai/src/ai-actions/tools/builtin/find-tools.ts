@@ -4,7 +4,7 @@
  */
 
 import type { Result } from '../../../shared';
-import type { AIBuilderToolDefinition } from '../types';
+import type { AIToolDefinition } from '../types';
 import { ERROR_MESSAGES } from '../../../shared';
 
 /**
@@ -13,7 +13,7 @@ import { ERROR_MESSAGES } from '../../../shared';
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createFindAllTool(actions: any): AIBuilderToolDefinition {
+export function createFindAllTool(actions: any): AIToolDefinition {
     return {
         name: 'findAll',
         description: 'Locate all occurrences of content matching the instruction.',
@@ -39,7 +39,7 @@ export function createFindAllTool(actions: any): AIBuilderToolDefinition {
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createHighlightTool(actions: any): AIBuilderToolDefinition {
+export function createHighlightTool(actions: any): AIToolDefinition {
     return {
         name: 'highlight',
         description:

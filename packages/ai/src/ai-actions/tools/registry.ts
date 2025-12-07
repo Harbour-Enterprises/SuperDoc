@@ -3,7 +3,7 @@
  * @module tools/registry
  */
 
-import type { AIBuilderToolDefinition, AIBuilderToolName } from './types';
+import type { AIToolDefinition, AIToolName } from './types';
 import {
     createFindAllTool,
     createHighlightTool,
@@ -26,10 +26,10 @@ import {
  */
 export function createToolRegistry(
     actions: any,
-    customTools?: AIBuilderToolDefinition[]
-): Map<AIBuilderToolName, AIBuilderToolDefinition> {
+    customTools?: AIToolDefinition[]
+): Map<AIToolName, AIToolDefinition> {
     // Built-in tools in order of importance
-    const entries: AIBuilderToolDefinition[] = [
+    const entries: AIToolDefinition[] = [
         // === REDLINING & REVIEW TOOLS (Use these for suggestions, edits, feedback) ===
         createInsertTrackedChangesTool(actions),
         createInsertCommentsTool(actions),
@@ -73,7 +73,7 @@ export function createToolRegistry(
  * @param toolRegistry - Map of registered tools
  * @returns Formatted string of tool descriptions
  */
-export function getToolDescriptions(toolRegistry: Map<AIBuilderToolName, AIBuilderToolDefinition>): string {
+export function getToolDescriptions(toolRegistry: Map<AIToolName, AIToolDefinition>): string {
     return Array.from(toolRegistry.values())
         .map((tool) => `- ${tool.name}: ${tool.description}`)
         .join('\n');
@@ -85,7 +85,7 @@ export function getToolDescriptions(toolRegistry: Map<AIBuilderToolName, AIBuild
  * @param tool - Tool definition to validate
  * @returns True if valid, false otherwise
  */
-export function isValidTool(tool: any): tool is AIBuilderToolDefinition {
+export function isValidTool(tool: any): tool is AIToolDefinition {
     return (
         tool &&
         typeof tool === 'object' &&

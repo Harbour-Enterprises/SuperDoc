@@ -4,7 +4,7 @@
  */
 
 import type { Result } from '../../../shared';
-import type { AIBuilderToolDefinition } from '../types';
+import type { AIToolDefinition } from '../types';
 import { ERROR_MESSAGES } from '../../../shared';
 
 /**
@@ -13,7 +13,7 @@ import { ERROR_MESSAGES } from '../../../shared';
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createInsertContentTool(actions: any): AIBuilderToolDefinition {
+export function createInsertContentTool(actions: any): AIToolDefinition {
     return {
         name: 'insertContent',
         description:
@@ -44,7 +44,7 @@ export function createInsertContentTool(actions: any): AIBuilderToolDefinition {
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createSummarizeTool(actions: any): AIBuilderToolDefinition {
+export function createSummarizeTool(actions: any): AIToolDefinition {
     return {
         name: 'summarize',
         description:

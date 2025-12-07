@@ -10,11 +10,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./ai-builder": {
-      "types": "./dist/ai-builder/index.d.ts",
-      "import": "./dist/ai-builder/index.js",
-      "default": "./dist/ai-builder/index.js"
     }
   },
   "scripts": {
@@ -49,7 +44,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": ">=0.34.0 <1.0.0"
+    "superdoc": "*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

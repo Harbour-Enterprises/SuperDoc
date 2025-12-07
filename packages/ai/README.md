@@ -58,73 +58,6 @@ await ai.action.insertTrackedChange('improve the introduction');
 await ai.action.insertContent('write a conclusion paragraph');
 ```
 
-## Low-Level AI Builder Primitives
-
-When you need direct control over tool calls, the AI Builder primitives provide low-level document operations with multi-provider support.
-
-### With Anthropic Claude
-
-```typescript
-import { anthropicTools, executeTool, getDocumentContext } from '@superdoc-dev/ai/ai-builder';
-import Anthropic from '@anthropic-ai/sdk';
-
-const tools = anthropicTools();
-const context = getDocumentContext(editor, { maxTokens: 4000 });
-
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
-const response = await anthropic.messages.create({
-  model: 'claude-sonnet-4-5',
-  system: `Document:\n${JSON.stringify(context.content)}`,
-  tools,
-  messages: [{ role: 'user', content: 'Add a heading before the selected paragraph.' }],
-});
-
-for (const block of response.content) {
-  if (block.type === 'tool_use') {
-    await executeTool(block.name, block.input, editor);
-  }
-}
-```
-
-### With OpenAI GPT-4
-
-```typescript
-import { openaiTools, executeTool, getDocumentContext } from '@superdoc-dev/ai/ai-builder';
-import OpenAI from 'openai';
-
-const tools = openaiTools();
-const context = getDocumentContext(editor, { maxTokens: 4000 });
-
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
-const response = await openai.chat.completions.create({
-  model: 'gpt-4',
-  messages: [
-    { role: 'system', content: `Document:\n${JSON.stringify(context.content)}` },
-    { role: 'user', content: 'Add a heading before the selected paragraph.' },
-  ],
-  tools,
-});
-
-for (const toolCall of response.choices[0]?.message?.tool_calls || []) {
-  const args = JSON.parse(toolCall.function.arguments);
-  await executeTool(toolCall.function.name, args, editor);
-}
-```
-
-AI Builder exports:
-
-- **9 primitive tools** with complete CRUD operations
-  - Read: readSelection, readContent, readSection, getDocumentOutline
-  - Write: insertContent (enhanced with flexible positioning)
-  - Update: replaceContent
-  - Delete: deleteContent (NEW!)
-  - Search: searchContent
-  - Meta: getContentSchema (dynamic schema support)
-- **Multi-provider support** (anthropicTools, openaiTools, genericTools)
-- **executeTool()** function for executing tool calls
-- **getDocumentContext()** helper with optional dynamic schema
-- **CONTENT_SCHEMA** for document format specification (fallback)
-
 ## API Reference
 
 ### AIActions Class
@@ -269,28 +202,32 @@ await ai.action.insertComment('suggest improvements to introduction');
 
 ## AIPlanner: Prompt → Plan → Action
 
-When you need low-level control over AI-driven workflows, the `AIPlanner` class lets you turn a natural language prompt into a concrete plan and apply it with formatting-safe primitives.
+Access the planner through your `AIActions` instance to turn natural language prompts into concrete plans and apply them with formatting-safe primitives.
 
 ```ts
-import { AIPlanner } from '@superdoc-dev/ai';
+import { AIActions } from '@superdoc-dev/ai';
 
-const planner = new AIPlanner({
+const ai = new AIActions(superdoc, {
+  user: { displayName: 'AI Assistant', userId: 'ai-1' },
   provider: {
     type: 'openai',
     apiKey: process.env.OPENAI_API_KEY!,
     model: 'gpt-4o-mini',
   },
-  editor: superdoc.activeEditor,
-  documentContextProvider: () => {
-    // Include the current selection when available, otherwise share full text
-    const { state } = superdoc.activeEditor;
-    return state.doc.textBetween(state.selection.from, state.selection.to || state.doc.content.size, ' ').trim();
+  // Optional planner configuration
+  planner: {
+    maxContextLength: 8000,
+    documentContextProvider: () => {
+      // Include the current selection when available, otherwise share full text
+      const { state } = superdoc.activeEditor;
+      return state.doc.textBetween(state.selection.from, state.selection.to || state.doc.content.size, ' ').trim();
+    },
+    onProgress: (event) => console.log('Progress:', event),
   },
-  maxContextLength: 8000,
-  enableLogging: true,
 });
 
-const result = await planner.execute('Add tracked changes that tighten the executive summary.');
+// Access planner through ai.planner
+const result = await ai.planner.execute('Add tracked changes that tighten the executive summary.');
 
 console.log(result.executedTools); // e.g. ['insertTrackedChanges', 'respond']
 console.log(result.response); // Planner's textual reply (if any)
@@ -303,7 +240,7 @@ console.log(result.response); // Planner's textual reply (if any)
 - **Formatting Preservation** – Every editing tool is backed by the `EditorAdapter`, which maintains marks and inline styling via `replaceText`, tracked changes, and comment helpers.
 - **Execution Results** – `execute` returns whether the run succeeded, which tools ran, any textual response, the parsed plan, and warnings for skipped steps.
 
-Use `AIPlanner` when you want prompt → plan → action orchestration (redlining, drafting, reviews) while keeping full control over the resulting document edits.
+Use `ai.planner` when you want prompt → plan → action orchestration (redlining, drafting, reviews) while keeping full control over the resulting document edits.
 
 #### `insertComments(instruction)`
 
@@ -533,9 +470,8 @@ AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
 
 ### What's New in 0.1.x
 
-- ✅ Complete architecture refactor (ai-actions + ai-builder)
+- ✅ Complete architecture refactor (ai-actions)
 - ✅ Multi-provider support (OpenAI, Anthropic, HTTP, custom)
-- ✅ 9 low-level primitives with complete CRUD operations
 - ✅ Dynamic schema support via editor.getSchemaSummaryJSON()
 - ✅ Flexible positioning (7 modes)
 - ✅ Query-based operations

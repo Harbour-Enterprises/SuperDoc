@@ -107,17 +107,6 @@ export function safeTextBetween(
     }
 }
 
-/**
- * Validates that a number is within a specified range
- * @param value - Number to validate
- * @param min - Minimum allowed value (inclusive)
- * @param max - Maximum allowed value (inclusive)
- * @returns True if within range, false otherwise
- */
-export function isInRange(value: number, min: number, max: number): boolean {
-    return typeof value === 'number' && !isNaN(value) && value >= min && value <= max;
-}
-
 
 /**
  * Extracts error message from various error types

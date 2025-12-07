@@ -13,6 +13,6 @@
     "moduleResolution": "node",
     "resolveJsonModule": true
   },
-  "include": ["src/**/*", "ai-builder/**/*", "types.ts"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "ai-builder/__tests__/**/*"]
+  "include": ["src/**/*", "types.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

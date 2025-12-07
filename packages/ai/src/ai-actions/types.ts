@@ -8,11 +8,3 @@ export type {
     AIPlannerExecutionResult,
     AIPlan,
 } from './planner';
-
-// Backward compatibility
-export type {
-    AIPlannerConfig as AIBuilderConfig,
-    AIPlannerExecutionResult as AIBuilderExecutionResult,
-    AIPlan as AIBuilderPlan,
-} from './planner';
-

@@ -4,7 +4,7 @@
  */
 
 import type { Result } from '../../../shared';
-import type { AIBuilderToolDefinition } from '../types';
+import type { AIToolDefinition } from '../types';
 import { ERROR_MESSAGES } from '../../../shared';
 
 /**
@@ -13,7 +13,7 @@ import { ERROR_MESSAGES } from '../../../shared';
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createReplaceAllTool(actions: any): AIBuilderToolDefinition {
+export function createReplaceAllTool(actions: any): AIToolDefinition {
     return {
         name: 'replaceAll',
         description:
@@ -41,7 +41,7 @@ export function createReplaceAllTool(actions: any): AIBuilderToolDefinition {
  * @param actions - AI actions service instance
  * @returns Tool definition with handler
  */
-export function createLiteralReplaceTool(actions: any): AIBuilderToolDefinition {
+export function createLiteralReplaceTool(actions: any): AIToolDefinition {
     return {
         name: 'literalReplace',
         description:

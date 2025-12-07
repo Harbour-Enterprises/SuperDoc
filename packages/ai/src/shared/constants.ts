@@ -8,15 +8,6 @@
  */
 export const DEFAULT_CONTEXT_LENGTH = 8000;
 
-/**
- * Minimum allowed context length
- */
-export const MIN_CONTEXT_LENGTH = 100;
-
-/**
- * Maximum allowed context length
- */
-export const MAX_CONTEXT_LENGTH = 100000;
 
 /**
  * Ratio of context to use for the beginning of truncated text (0.0 - 1.0)
@@ -45,16 +36,15 @@ export const MAX_INSTRUCTION_LENGTH = 5000;
  */
 export const ERROR_MESSAGES = {
     // Configuration errors
-    NO_SUPERDOC_OR_EDITOR: 'AIBuilder requires either "superdoc" or "editor" configuration',
+    NO_SUPERDOC_OR_EDITOR: 'AIPlanner requires either "superdoc" or "editor" configuration',
     NO_USER_CONFIG: 'When using "superdoc", you must provide either "user" config or a pre-built "aiActions" instance',
-    NO_ACTIVE_EDITOR: 'AIBuilder requires an active SuperDoc editor instance',
+    NO_ACTIVE_EDITOR: 'AIPlanner requires an active SuperDoc editor instance',
     NO_PROVIDER: 'AI provider is required',
     NO_EDITOR_FOR_ACTION: 'No active SuperDoc editor available for AI actions',
     
     // Validation errors
-    EMPTY_PROMPT: 'AIBuilder requires a non-empty prompt',
+    EMPTY_PROMPT: 'AIPlanner requires a non-empty prompt',
     PROMPT_TOO_LONG: `Prompt exceeds maximum length of ${MAX_PROMPT_LENGTH} characters`,
-    INVALID_CONTEXT_LENGTH: `Context length must be between ${MIN_CONTEXT_LENGTH} and ${MAX_CONTEXT_LENGTH}`,
     TOO_MANY_STEPS: `Plan exceeds maximum of ${MAX_PLAN_STEPS} steps`,
     
     // Execution errors
@@ -89,7 +79,7 @@ export const ERROR_MESSAGES = {
  * Logging prefixes for different components
  */
 export const LOG_PREFIXES = {
-    BUILDER: '[AIBuilder]',
+    PLANNER: '[AIPlanner]',
     ACTIONS: '[AIActions]',
     SERVICE: '[AIActionsService]',
     PROVIDER: '[AIProvider]',

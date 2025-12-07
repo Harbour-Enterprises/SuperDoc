@@ -31,10 +31,10 @@ import {extractSelection, getDocumentText, isEditorReady} from './editor';
 import {createToolRegistry, getToolDescriptions} from './tools';
 import {buildAIPlannerSystemPrompt} from '../shared/prompts';
 import type {
-    AIBuilderToolDefinition,
-    AIBuilderToolName,
-    AIBuilderPlanStep,
-    AIBuilderProgressCallback,
+    AIToolDefinition,
+    AIToolName,
+    AIPlanStep,
+    AIPlannerProgressCallback,
     AIToolActions,
     SelectionSnapshot,
 } from './tools';
@@ -42,7 +42,7 @@ import type {
 
 export interface AIPlan {
     reasoning?: string;
-    steps: AIBuilderPlanStep[];
+    steps: AIPlanStep[];
 }
 
 export interface AIPlannerConfig {
@@ -61,10 +61,10 @@ export interface AIPlannerConfig {
     enableLogging?: boolean;
     maxContextLength?: number;
     documentContextProvider?: () => string;
-    tools?: AIBuilderToolDefinition[];
+    tools?: AIToolDefinition[];
     
     // Callbacks (only needed when superdoc + user is used, not when aiActions is provided)
-    onProgress?: AIBuilderProgressCallback;
+    onProgress?: AIPlannerProgressCallback;
     onReady?: AIActionsCallbacks['onReady'];
     onStreamingStart?: AIActionsCallbacks['onStreamingStart'];
     onStreamingPartialResult?: AIActionsCallbacks['onStreamingPartialResult'];
@@ -89,10 +89,10 @@ export class AIPlanner {
     private readonly enableLogging: boolean;
     private readonly maxContextLength: number;
     private readonly documentContextProvider: () => string;
-    private readonly tools: Map<AIBuilderToolName, AIBuilderToolDefinition>;
+    private readonly tools: Map<AIToolName, AIToolDefinition>;
     private readonly aiActionsInstance: AIActions | null;
     private readonly actions: AIToolActions;
-    private readonly onProgress?: AIBuilderProgressCallback;
+    private readonly onProgress?: AIPlannerProgressCallback;
     private selectionSnapshot: SelectionSnapshot | null = null;
 
     /**
@@ -146,9 +146,6 @@ export class AIPlanner {
             throw new Error(ERROR_MESSAGES.NO_PROVIDER);
         }
 
-        // When aiActions is provided, we only need editor (passed from AIActions.planner getter)
-        // When superdoc is provided, we need user config
-        // Otherwise, we need at least editor
         if (config.aiActions) {
             if (!config.editor) {
                 throw new Error(ERROR_MESSAGES.NO_SUPERDOC_OR_EDITOR);
@@ -173,27 +170,17 @@ export class AIPlanner {
         this.provider = isAIProvider(config.provider) ? config.provider : createAIProvider(config.provider);
         this.onProgress = config.onProgress;
 
-        // Initialize document context provider
-        // When aiActions is provided, prefer its getDocumentContext method
-        // Otherwise use custom provider or fallback to reading from editor
         if (config.documentContextProvider) {
             this.documentContextProvider = config.documentContextProvider;
         } else if (config.aiActions) {
-            // Use AIActions' document context method when available
             this.documentContextProvider = () => config.aiActions!.getDocumentContext();
         } else {
-            // Fallback to reading directly from editor
             this.documentContextProvider = () => this.readDocumentContextFromEditor();
         }
-
-        // Initialize actions based on configuration
-        // Priority: aiActions > superdoc+user > service fallback
         if (config.aiActions) {
-            // Use provided AIActions instance (most common when accessed via ai.planner)
             this.aiActionsInstance = config.aiActions;
             this.actions = config.aiActions.action as AIToolActions;
         } else if (config.superdoc && config.user) {
-            // Create new AIActions instance from superdoc + user
             this.aiActionsInstance = new AIActions(config.superdoc, {
                 provider: this.provider,
                 user: config.user,
@@ -206,7 +193,6 @@ export class AIPlanner {
             });
             this.actions = this.aiActionsInstance.action as AIToolActions;
         } else {
-            // Fallback: use service directly (no AIActions instance)
             this.aiActionsInstance = null;
             const service = new AIActionsService(
                 this.provider,
@@ -357,7 +343,7 @@ export class AIPlanner {
                 } catch (error) {
                     const detail = getErrorMessage(error);
                     if (this.enableLogging) {
-                        console.error(`${LOG_PREFIXES.BUILDER} Tool execution error:`, {
+                        console.error(`${LOG_PREFIXES.PLANNER} Tool execution error:`, {
                             tool: step.tool,
                             instruction: instruction.substring(0, 100),
                             error,
@@ -419,8 +405,8 @@ export class AIPlanner {
         const warnings: string[] = [];
         const sanitizedSteps = Array.isArray(parsed.steps)
             ? parsed.steps
-                  .map((step) => this.normalizeStep(step as AIBuilderPlanStep))
-                  .filter((step): step is AIBuilderPlanStep => Boolean(step))
+                  .map((step) => this.normalizeStep(step as AIPlanStep))
+                  .filter((step): step is AIPlanStep => Boolean(step))
             : [];
 
         if (!sanitizedSteps.length) {
@@ -487,7 +473,7 @@ export class AIPlanner {
      * @param step - Raw plan step from AI response
      * @returns Normalized step or null if invalid
      */
-    private normalizeStep(step: AIBuilderPlanStep | undefined | null): AIBuilderPlanStep | null {
+    private normalizeStep(step: AIPlanStep | undefined | null): AIPlanStep | null {
         if (!step || typeof step !== 'object') {
             return null;
         }
@@ -499,7 +485,7 @@ export class AIPlanner {
 
         return {
             id: step.id,
-            tool: step.tool as AIBuilderToolName,
+            tool: step.tool as AIToolName,
             instruction,
             args,
         };
@@ -598,7 +584,7 @@ export class AIPlanner {
             return this.documentContextProvider() || '';
         } catch (error) {
             if (this.enableLogging) {
-                console.warn(`${LOG_PREFIXES.BUILDER} ${ERROR_MESSAGES.CONTEXT_PROVIDER_FAILED}:`, error);
+                console.warn(`${LOG_PREFIXES.PLANNER} ${ERROR_MESSAGES.CONTEXT_PROVIDER_FAILED}:`, error);
             }
             return this.readDocumentContextFromEditor();
         }
