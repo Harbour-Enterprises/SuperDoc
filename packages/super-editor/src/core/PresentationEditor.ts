@@ -209,6 +209,8 @@ type LayoutState = {
   blocks: FlowBlock[];
   measures: Measure[];
   layout: Layout | null;
+  bookmarks: Map<string, number>;
+  anchorMap?: Map<string, number>;
 };
 
 type LayoutMetrics = {
@@ -427,7 +429,7 @@ export class PresentationEditor extends EventEmitter {
   #selectionOverlay: HTMLElement;
   #hiddenHost: HTMLElement;
   #layoutOptions: LayoutEngineOptions;
-  #layoutState: LayoutState = { blocks: [], measures: [], layout: null };
+  #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
   #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
@@ -2464,6 +2466,20 @@ export class PresentationEditor extends EventEmitter {
     // Check if clicking on a draggable field annotation - if so, don't preventDefault
     // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
     const target = event.target as HTMLElement;
+
+    // Handle clicks on internal anchor links (e.g., TOC navigation)
+    const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
+    if (linkEl) {
+      const href = linkEl.getAttribute('href') ?? '';
+      const isAnchorLink = href.startsWith('#') && href.length > 1;
+
+      if (isAnchorLink) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.goToAnchor(href);
+        return;
+      }
+    }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
 
     if (!this.#layoutState.layout) {
@@ -3388,6 +3404,7 @@ export class PresentationEditor extends EventEmitter {
 
     const sectionMetadata: SectionMetadata[] = [];
     let blocks: FlowBlock[] | undefined;
+    let bookmarks: Map<string, number> = new Map();
     try {
       const converter = (this.#editor as Editor & { converter?: Record<string, unknown> }).converter;
       const converterContext = converter
@@ -3408,6 +3425,7 @@ export class PresentationEditor extends EventEmitter {
         converterContext,
       });
       blocks = result.blocks;
+      bookmarks = result.bookmarks ?? new Map();
     } catch (error) {
       this.#handleLayoutError('render', this.#decorateError(error, 'toFlowBlocks'));
       return;
@@ -3464,7 +3482,8 @@ export class PresentationEditor extends EventEmitter {
     const converter = (this.#editor as Editor & { converter?: { pageStyles?: { alternateHeaders?: boolean } } })
       .converter;
     this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles);
-    this.#layoutState = { blocks, measures, layout };
+    const anchorMap = this.#computeAnchorMap(bookmarks, layout);
+    this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
@@ -4478,6 +4497,198 @@ export class PresentationEditor extends EventEmitter {
     // Scroll viewport to the calculated position
     if (this.#visibleHost) {
       this.#visibleHost.scrollTop = yPosition;
+    }
+  }
+
+  /**
+   * Build an anchor map (bookmark name -> page index) using fragment PM ranges.
+   * Mirrors layout-engine's buildAnchorMap to avoid an extra dependency here.
+   */
+  #computeAnchorMap(bookmarks: Map<string, number>, layout: Layout): Map<string, number> {
+    const anchorMap = new Map<string, number>();
+
+    // Precompute block PM ranges for fallbacks
+    const blockPmRanges = new Map<
+      string,
+      { pmStart: number | null; pmEnd: number | null; hasFragmentPositions: boolean }
+    >();
+
+    const computeBlockRange = (blockId: string): { pmStart: number | null; pmEnd: number | null } => {
+      if (blockPmRanges.has(blockId)) {
+        const cached = blockPmRanges.get(blockId)!;
+        return { pmStart: cached.pmStart, pmEnd: cached.pmEnd };
+      }
+      const block = this.#layoutState.blocks.find((b) => b.id === blockId);
+      if (!block || block.kind !== 'paragraph') {
+        blockPmRanges.set(blockId, { pmStart: null, pmEnd: null, hasFragmentPositions: false });
+        return { pmStart: null, pmEnd: null };
+      }
+      let pmStart: number | null = null;
+      let pmEnd: number | null = null;
+      for (const run of block.runs) {
+        if (run.pmStart != null) {
+          pmStart = pmStart == null ? run.pmStart : Math.min(pmStart, run.pmStart);
+        }
+        if (run.pmEnd != null) {
+          pmEnd = pmEnd == null ? run.pmEnd : Math.max(pmEnd, run.pmEnd);
+        }
+      }
+      blockPmRanges.set(blockId, { pmStart, pmEnd, hasFragmentPositions: false });
+      return { pmStart, pmEnd };
+    };
+
+    bookmarks.forEach((pmPosition, bookmarkName) => {
+      for (const page of layout.pages) {
+        for (const fragment of page.fragments) {
+          if (fragment.kind !== 'para') continue;
+          let fragStart = fragment.pmStart;
+          let fragEnd = fragment.pmEnd;
+          if (fragStart == null || fragEnd == null) {
+            const range = computeBlockRange(fragment.blockId);
+            if (range.pmStart != null && range.pmEnd != null) {
+              fragStart = range.pmStart;
+              fragEnd = range.pmEnd;
+            }
+          } else {
+            // Remember that this block had fragment positions
+            const cached = blockPmRanges.get(fragment.blockId);
+            blockPmRanges.set(fragment.blockId, {
+              pmStart: cached?.pmStart ?? fragStart,
+              pmEnd: cached?.pmEnd ?? fragEnd,
+              hasFragmentPositions: true,
+            });
+          }
+          if (fragStart == null || fragEnd == null) continue;
+          if (pmPosition >= fragStart && pmPosition < fragEnd) {
+            anchorMap.set(bookmarkName, page.number);
+            return;
+          }
+        }
+      }
+    });
+
+    return anchorMap;
+  }
+
+  /**
+   * Timeout duration for anchor navigation when waiting for page mount (in milliseconds).
+   * This allows sufficient time for virtualized pages to render before giving up.
+   */
+  private static readonly ANCHOR_NAV_TIMEOUT_MS = 2000;
+
+  /**
+   * Navigate to a bookmark/anchor in the current document (e.g., TOC links).
+   *
+   * This method performs asynchronous navigation to support virtualized page rendering:
+   * 1. Normalizes the anchor by removing leading '#' if present
+   * 2. Looks up the bookmark in the document's bookmark registry
+   * 3. Determines which page contains the target position
+   * 4. Scrolls the page into view (may be virtualized)
+   * 5. Waits up to 2000ms for the page to mount in the DOM
+   * 6. Moves the editor caret to the bookmark position
+   *
+   * @param anchor - Bookmark name or fragment identifier (with or without leading '#')
+   * @returns Promise resolving to true if navigation succeeded, false otherwise
+   *
+   * @remarks
+   * Navigation fails and returns false if:
+   * - The anchor parameter is empty or becomes empty after normalization
+   * - No layout has been computed yet
+   * - The bookmark does not exist in the document
+   * - The bookmark's page cannot be determined
+   * - The page fails to mount within the timeout period (2000ms)
+   *
+   * Note: This method does not throw errors. All failures are logged and result in
+   * a false return value. An 'error' event is emitted for unhandled exceptions.
+   *
+   * @throws Never throws directly - errors are caught, logged, and emitted as events
+   */
+  async goToAnchor(anchor: string): Promise<boolean> {
+    try {
+      if (!anchor) return false;
+      const layout = this.#layoutState.layout;
+      if (!layout) return false;
+
+      const normalized = anchor.startsWith('#') ? anchor.slice(1) : anchor;
+      if (!normalized) return false;
+
+      const pmPos = this.#layoutState.bookmarks.get(normalized);
+      if (pmPos == null) return false;
+
+      // Try to get exact position rect for precise scrolling
+      const rects =
+        selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, pmPos, pmPos + 1) ?? [];
+      const rect = rects[0];
+
+      // Find the page containing this position by scanning fragments
+      // Bookmarks often fall in gaps between fragments (e.g., at page/section breaks),
+      // so we also track the first fragment starting after the position as a fallback
+      let pageIndex: number | null = rect?.pageIndex ?? null;
+
+      if (pageIndex == null) {
+        let nextFragmentPage: number | null = null;
+        let nextFragmentStart: number | null = null;
+
+        for (const page of layout.pages) {
+          for (const fragment of page.fragments) {
+            if (fragment.kind !== 'para') continue;
+            const fragStart = fragment.pmStart;
+            const fragEnd = fragment.pmEnd;
+            if (fragStart == null || fragEnd == null) continue;
+
+            // Exact match: position is within this fragment
+            if (pmPos >= fragStart && pmPos < fragEnd) {
+              pageIndex = page.number - 1;
+              break;
+            }
+
+            // Track the first fragment that starts after our position
+            if (fragStart > pmPos && (nextFragmentStart === null || fragStart < nextFragmentStart)) {
+              nextFragmentPage = page.number - 1;
+              nextFragmentStart = fragStart;
+            }
+          }
+          if (pageIndex != null) break;
+        }
+
+        // Use the page of the next fragment if bookmark is in a gap
+        if (pageIndex == null && nextFragmentPage != null) {
+          pageIndex = nextFragmentPage;
+        }
+      }
+
+      if (pageIndex == null) return false;
+
+      // Scroll to the target page and wait for it to mount (virtualization)
+      this.#scrollPageIntoView(pageIndex);
+      await this.#waitForPageMount(pageIndex, { timeout: PresentationEditor.ANCHOR_NAV_TIMEOUT_MS });
+
+      // Scroll the page element into view
+      const pageEl = this.#painterHost?.querySelector(`[data-page-index="${pageIndex}"]`) as HTMLElement | null;
+      if (pageEl) {
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+      }
+
+      // Move caret to the bookmark position
+      const activeEditor = this.getActiveEditor();
+      if (activeEditor?.commands?.setTextSelection) {
+        activeEditor.commands.setTextSelection({ from: pmPos, to: pmPos });
+      } else {
+        // Navigation succeeded visually (page scrolled), but caret positioning is unavailable
+        // This is not an error - log a warning for debugging
+        console.warn(
+          '[PresentationEditor] goToAnchor: Navigation succeeded but could not move caret (editor commands unavailable)',
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[PresentationEditor] goToAnchor failed:', error);
+      this.emit('error', {
+        error,
+        context: 'goToAnchor',
+      });
+      return false;
     }
   }
 

@@ -47,8 +47,10 @@ const handleLinkClick = (event) => {
     return;
   }
 
+  const detail = event?.detail ?? {};
+
   // Move cursor to the click position first
-  moveCursorToMouseEvent(event.detail, props.editor);
+  moveCursorToMouseEvent(detail, props.editor);
 
   // Check if the cursor is now on a link mark after moving
   // Use a small timeout to ensure the selection has been updated
@@ -70,8 +72,8 @@ const handleLinkClick = (event) => {
           closePopover: props.closePopover,
         },
         {
-          left: `${event.detail.clientX - surfaceRect.left}px`,
-          top: `${event.detail.clientY - surfaceRect.top + 15}px`,
+          left: `${detail.clientX - surfaceRect.left}px`,
+          top: `${detail.clientY - surfaceRect.top + 15}px`,
         },
       );
     }
