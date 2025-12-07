@@ -5,9 +5,7 @@ import type { SuperDocTool, ToolResult } from '../types';
  * Params for readContent tool
  */
 export interface ReadContentParams {
-  /** Start position (character offset) */
   from: number;
-  /** End position (character offset) */
   to: number;
 }
 
@@ -34,7 +32,7 @@ export const readContent: SuperDocTool = {
     try {
       const { from, to } = params;
 
-      if (typeof from !== 'number' || typeof to !== 'number') {
+      if (!from || !to) {
         return {
           success: false,
           error: 'Both "from" and "to" parameters must be numbers',

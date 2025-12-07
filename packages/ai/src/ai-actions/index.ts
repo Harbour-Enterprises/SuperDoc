@@ -501,16 +501,11 @@ When searching for content, provide precise locations and relevant context.`;
             if (!isEditorReady(editor)) {
                 throw new Error(ERROR_MESSAGES.NO_ACTIVE_EDITOR);
             }
-
-            // Simplified config - only pass essentials since aiActions is provided
-            // Callbacks (onReady, onStreamingStart, etc.) are not needed when aiActions is provided
-            // since the planner uses the existing aiActions instance instead of creating a new one
             const plannerConfig: AIPlannerConfig = {
                 editor,
                 aiActions: this,
                 provider: this.config.provider,
                 enableLogging: this.config.enableLogging,
-                // Only planner-specific options
                 maxContextLength: this.plannerOptions?.maxContextLength,
                 documentContextProvider: this.plannerOptions?.documentContextProvider,
                 tools: this.plannerOptions?.tools,

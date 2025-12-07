@@ -6,15 +6,10 @@ import { enrichParagraphNodes } from '../helpers/enrichContent';
  * Params for replaceContent tool
  */
 export interface ReplaceContentParams {
-  /** Text to search for and replace (alternative to from/to positions) */
   query?: string;
-  /** Start position (character offset) - required if query not provided */
   from?: number;
-  /** End position (character offset) - required if query not provided */
   to?: number;
-  /** Array of content nodes to replace with (ProseMirror JSON format) */
   content: any[];
-  /** Whether to replace all occurrences when using query (default: false) */
   replaceAll?: boolean;
 }
 
@@ -49,10 +44,7 @@ export const replaceContent: SuperDocTool = {
         };
       }
 
-      // Automatically add default spacing attributes to paragraph nodes
       const enrichedContent = enrichParagraphNodes(content);
-
-      // If query is provided, search for it first
       if (query) {
         if (!editor.commands?.search) {
           return {
@@ -71,8 +63,6 @@ export const replaceContent: SuperDocTool = {
           };
         }
 
-        // For inline text replacement, extract text content from paragraphs
-        // This prevents splitting paragraphs when replacing text within them
         let inlineContent = enrichedContent;
         if (
           enrichedContent.length === 1 &&
@@ -104,7 +94,6 @@ export const replaceContent: SuperDocTool = {
         };
       }
 
-      // Otherwise, use explicit from/to positions
       if (typeof from !== 'number' || typeof to !== 'number') {
         return {
           success: false,
@@ -121,12 +110,10 @@ export const replaceContent: SuperDocTool = {
         };
       }
 
-      // Clamp positions to valid document range
       const docSize = state.doc.content.size;
       const validFrom = Math.max(0, Math.min(from, docSize));
       const validTo = Math.max(0, Math.min(to, docSize));
 
-      // For full document replacement, use setContent
       if (validFrom === 0 && validTo === docSize) {
         const success = editor.commands.setContent({ type: 'doc', content: enrichedContent });
 
@@ -138,7 +125,6 @@ export const replaceContent: SuperDocTool = {
         };
       }
 
-      // For partial replacement, use insertContentAt
       const success = editor.commands.insertContentAt(
         { from: validFrom, to: validTo },
         { type: 'doc', content: enrichedContent },

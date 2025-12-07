@@ -26,7 +26,6 @@ export const getContentSchema: SuperDocTool = {
 
   async execute(editor: Editor): Promise<ToolResult> {
     try {
-      // Try to get dynamic schema from editor if available
       if (editor && typeof editor.getSchemaSummaryJSON === 'function') {
         const dynamicSchema = await editor.getSchemaSummaryJSON();
         
@@ -45,11 +44,9 @@ export const getContentSchema: SuperDocTool = {
         };
       }
     } catch (error) {
-      // Fall through to hardcoded schema
       console.warn('Failed to get dynamic schema, using fallback:', error);
     }
 
-    // Fallback to hardcoded schema
     return {
       success: true,
       data: {

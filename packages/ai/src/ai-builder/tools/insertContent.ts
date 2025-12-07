@@ -15,7 +15,6 @@ export interface InsertContentParams {
    * - number: At specific character position
    */
   position: 'selection' | 'beforeSelection' | 'afterSelection' | 'replaceSelection' | 'documentStart' | 'documentEnd' | number;
-  /** Array of content nodes to insert (ProseMirror JSON format) */
   content: any[];
 }
 
@@ -44,7 +43,6 @@ export const insertContent: SuperDocTool = {
         };
       }
 
-      // Automatically add default spacing attributes to paragraph nodes
       const enrichedContent = enrichParagraphNodes(content);
 
       const { state } = editor;
@@ -60,9 +58,7 @@ export const insertContent: SuperDocTool = {
       let isReplacement = false;
       let replaceEnd: number | undefined;
 
-      // Handle different position types
       if (typeof position === 'number') {
-        // Numeric position: clamp to document bounds
         insertPos = Math.max(0, Math.min(position, state.doc.content.size));
       } else {
         switch (position) {
@@ -98,7 +94,6 @@ export const insertContent: SuperDocTool = {
         }
       }
 
-      // Execute insertion or replacement
       let success: boolean;
 
       if (isReplacement && replaceEnd !== undefined) {

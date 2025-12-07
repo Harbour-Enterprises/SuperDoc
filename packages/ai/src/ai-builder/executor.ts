@@ -40,7 +40,6 @@ export async function executeTool(
       };
     }
 
-    // Get the tool
     const tool = getTool(toolName);
     if (!tool) {
       return {
@@ -50,9 +49,7 @@ export async function executeTool(
       };
     }
 
-    // Validate params if requested
     if (options?.validate) {
-      // Basic validation - could be enhanced with JSON Schema validation
       if (params === undefined || params === null) {
         return {
           success: false,
@@ -62,10 +59,7 @@ export async function executeTool(
       }
     }
 
-    // Execute the tool
     const result = await tool.execute(editor, params);
-
-    // Report progress if callback provided
     if (options?.onProgress) {
       options.onProgress(100);
     }

@@ -6,11 +6,8 @@ import type { SuperDocTool, ToolResult } from '../types';
  * Params for readSection tool
  */
 export interface ReadSectionParams {
-  /** Heading text to find and read (case-insensitive partial match) */
   heading?: string;
-  /** Start position (alternative to heading) */
   from?: number;
-  /** End position (alternative to heading) */
   to?: number;
 }
 
@@ -46,7 +43,6 @@ export const readSection: SuperDocTool = {
 
       const doc = state.doc;
 
-      // If from/to provided, read that range directly
       if (typeof from === 'number' && typeof to === 'number') {
         const clampedFrom = Math.max(0, Math.min(from, doc.content.size));
         const clampedTo = Math.max(clampedFrom, Math.min(to, doc.content.size));
@@ -64,7 +60,6 @@ export const readSection: SuperDocTool = {
         };
       }
 
-      // Find section by heading name
       if (!heading) {
         return {
           success: false,
@@ -79,7 +74,6 @@ export const readSection: SuperDocTool = {
       let foundHeadingLevel: number | null = null;
       let foundHeadingText: string | null = null;
 
-      // Find the heading and the next heading at same or higher level
       doc.descendants((node: Node, pos: number) => {
         if (node.type.name === 'paragraph') {
           const styleId = node.attrs?.styleId;
@@ -92,7 +86,6 @@ export const readSection: SuperDocTool = {
                 if (child.isText) text += child.text;
               });
 
-              // If we haven't found our section yet, look for matching heading
               if (sectionStart === null) {
                 if (text.toLowerCase().includes(searchTerm)) {
                   sectionStart = pos;
@@ -100,10 +93,9 @@ export const readSection: SuperDocTool = {
                   foundHeadingText = text.trim();
                 }
               } else {
-                // We found our section, now look for end (same or higher level heading)
                 if (level <= foundHeadingLevel!) {
                   sectionEnd = pos;
-                  return false; // stop traversal
+                  return false;
                 }
               }
             }
@@ -120,7 +112,6 @@ export const readSection: SuperDocTool = {
         };
       }
 
-      // If no end found, section goes to end of document
       const finalEnd = sectionEnd ?? doc.content.size;
       const content = doc.cut(sectionStart, finalEnd);
 

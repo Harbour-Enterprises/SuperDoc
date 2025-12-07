@@ -4,15 +4,10 @@ import type { Editor } from '../types';
  * Result of executing a tool
  */
 export interface ToolResult {
-  /** Whether the tool executed successfully */
   success: boolean;
-  /** Data returned by the tool */
   data?: any;
-  /** Error message if execution failed */
   error?: string;
-  /** Whether the document was modified */
   docChanged: boolean;
-  /** Optional message to send back to the AI */
   message?: string;
 }
 
@@ -25,13 +20,9 @@ export type ToolCategory = 'read' | 'write' | 'navigate' | 'analyze';
  * Core tool interface that all SuperDoc AI tools must implement
  */
 export interface SuperDocTool {
-  /** Unique identifier for the tool */
   name: string;
-  /** Human-readable description of what the tool does */
   description: string;
-  /** Category of operation */
   category: ToolCategory;
-  /** Execute the tool with given parameters */
   execute: (editor: Editor, params: any) => Promise<ToolResult>;
 }
 
@@ -39,15 +30,10 @@ export interface SuperDocTool {
  * Options for filtering which tools and features to include
  */
 export interface ToolDefinitionsOptions {
-  /** List of tool names to enable (if undefined, all are enabled) */
   enabledTools?: string[];
-  /** Node types to exclude (all others from extensions are included) */
   excludedNodes?: string[];
-  /** Mark types to exclude (all others from extensions are included) */
   excludedMarks?: string[];
-  /** Attribute names to exclude */
   excludedAttrs?: string[];
-  /** Whether to use strict mode (for providers that support it) */
   strict?: boolean;
 }
 
@@ -55,11 +41,8 @@ export interface ToolDefinitionsOptions {
  * Options for tool execution
  */
 export interface ExecuteToolOptions {
-  /** Whether to validate params before execution */
   validate?: boolean;
-  /** Callback for progress updates during execution */
   onProgress?: (progress: number) => void;
-  /** Abort signal for cancellation */
   signal?: AbortSignal;
 }
 

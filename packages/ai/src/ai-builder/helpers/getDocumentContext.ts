@@ -4,13 +4,9 @@ import type { Editor } from '../../types';
  * Result from getDocumentContext
  */
 export interface DocumentContextResult {
-  /** Strategy used: 'full' for small docs, 'selection' for large docs */
   strategy: 'full' | 'selection';
-  /** The document content (full or selection only) */
   content: unknown;
-  /** Guidance message for large documents */
   message?: string;
-  /** Optional document schema (if includeSchema was true) */
   schema?: any;
 }
 
@@ -18,9 +14,7 @@ export interface DocumentContextResult {
  * Options for getDocumentContext
  */
 export interface DocumentContextOptions {
-  /** Maximum tokens before switching to selection-only mode (default: 5000) */
   maxTokens?: number;
-  /** Whether to include the document schema (default: false) */
   includeSchema?: boolean;
 }
 
@@ -81,7 +75,6 @@ export async function getDocumentContext(
   const docSize = state.doc.content.size;
   const estimatedTokens = Math.ceil(docSize / charsPerToken);
 
-  // Small document: return full content
   if (estimatedTokens <= maxTokens) {
     return {
       strategy: 'full',
@@ -90,7 +83,6 @@ export async function getDocumentContext(
     };
   }
 
-  // Large document: return selection only
   const { from, to } = state.selection;
   const selectedContent = state.doc.cut(from, to);
 

@@ -5,13 +5,9 @@ import type { SuperDocTool, ToolResult } from '../types';
  * Params for deleteContent tool
  */
 export interface DeleteContentParams {
-  /** Text to search for and delete (alternative to from/to positions) */
   query?: string;
-  /** Start position (character offset) - required if query not provided */
   from?: number;
-  /** End position (character offset) - required if query not provided */
   to?: number;
-  /** Whether to delete all occurrences when using query (default: false) */
   deleteAll?: boolean;
 }
 
@@ -48,7 +44,6 @@ export const deleteContent: SuperDocTool = {
         };
       }
 
-      // If query is provided, search and delete
       if (query) {
         if (!editor.commands?.search) {
           return {
@@ -67,12 +62,10 @@ export const deleteContent: SuperDocTool = {
           };
         }
 
-        // Delete matches (in reverse order to maintain positions)
         const matchesToDelete = deleteAll ? [...matches].reverse() : [matches[0]];
         let deletedCount = 0;
 
         for (const match of matchesToDelete) {
-          // Delete by replacing with empty content (insertContentAt with empty content)
           const success = editor.commands.insertContentAt({ from: match.from, to: match.to }, '');
           if (success) deletedCount++;
         }
@@ -89,7 +82,6 @@ export const deleteContent: SuperDocTool = {
         };
       }
 
-      // Delete by position
       if (typeof from !== 'number' || typeof to !== 'number') {
         return {
           success: false,

@@ -6,11 +6,8 @@ import type { SuperDocTool, ToolResult } from '../types';
  * Heading info returned in document outline
  */
 export interface HeadingInfo {
-  /** The heading text */
   text: string;
-  /** Heading level (1-6) */
   level: number;
-  /** Start position in document */
   position: number;
 }
 
@@ -42,16 +39,13 @@ export const getDocumentOutline: SuperDocTool = {
       const headings: HeadingInfo[] = [];
       const doc = state.doc;
 
-      // Walk through document to find headings
       doc.descendants((node: Node, pos: number) => {
         if (node.type.name === 'paragraph') {
           const styleId = node.attrs?.styleId;
           if (styleId && typeof styleId === 'string') {
-            // Check for Heading1, Heading2, etc.
             const match = styleId.match(/^Heading(\d)$/i);
             if (match) {
               const level = parseInt(match[1], 10);
-              // Extract text content from the paragraph
               let text = '';
               node.content.forEach((child: Node) => {
                 if (child.isText) {
@@ -67,7 +61,7 @@ export const getDocumentOutline: SuperDocTool = {
             }
           }
         }
-        return true; // continue traversal
+        return true;
       });
 
       return {

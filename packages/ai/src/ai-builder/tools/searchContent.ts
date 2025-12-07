@@ -71,7 +71,6 @@ export const searchContent: SuperDocTool = {
         };
       }
 
-      // Check if editor has search command
       if (!editor.commands?.search) {
         return {
           success: false,
@@ -80,7 +79,6 @@ export const searchContent: SuperDocTool = {
         };
       }
 
-      // Create search pattern
       let pattern: string | RegExp;
       if (regex) {
         try {
@@ -96,7 +94,6 @@ export const searchContent: SuperDocTool = {
         pattern = query;
       }
 
-      // Execute search
       const rawMatches = editor.commands.search(pattern);
 
       if (!rawMatches || !Array.isArray(rawMatches)) {
@@ -107,20 +104,17 @@ export const searchContent: SuperDocTool = {
         };
       }
 
-      // Format results
       const matches: SearchMatch[] = rawMatches.map((match) => ({
         text: match.text,
         from: match.from,
         to: match.to,
       }));
 
-      // Filter case sensitivity if needed (for non-regex searches)
       let filteredMatches = matches;
       if (!regex && caseSensitive) {
         filteredMatches = matches.filter((match) => match.text === query);
       }
 
-      // Return only first match if findAll is false
       const finalMatches = findAll ? filteredMatches : filteredMatches.slice(0, 1);
 
       return {

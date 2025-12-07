@@ -35,20 +35,13 @@ export function enrichParagraphNodes(nodes: any[]): any[] {
   }
 
   return nodes.map((node) => {
-    // Only process paragraph nodes
     if (node?.type !== 'paragraph') {
       return node;
     }
-
-    // Create a copy to avoid mutating the original
     const enrichedNode = { ...node };
-
-    // Initialize attrs if not present
     if (!enrichedNode.attrs) {
       enrichedNode.attrs = {};
     }
-
-    // Add default spacing if not already set
     if (!enrichedNode.attrs.spacing) {
       enrichedNode.attrs.spacing = { ...DEFAULT_SPACING };
     }
