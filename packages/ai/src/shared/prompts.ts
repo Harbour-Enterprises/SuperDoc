@@ -129,13 +129,13 @@ export const buildInsertContentPrompt = (query: string, documentContext?: string
 };
 
 /**
- * Builds the system prompt for AIBuilder planning
+ * Builds the system prompt for AIPlanner planning
  *
  * @param toolDescriptions - Formatted string of available tool descriptions
- * @returns Complete system prompt for the AI Builder planner
+ * @returns Complete system prompt for the AI Planner
  */
-export const buildAIBuilderSystemPrompt = (toolDescriptions: string): string => {
-  return `You are SuperDoc AI Builder, a concise planner for collaborative document edits. Tools available:
+export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => {
+  return `You are SuperDoc AI Planner, a concise planner for collaborative document edits. Tools available:
           ${toolDescriptions}
           
           Guidelines:

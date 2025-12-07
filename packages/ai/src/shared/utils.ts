@@ -115,7 +115,7 @@ export function safeTextBetween(
  * @returns True if within range, false otherwise
  */
 export function isInRange(value: number, min: number, max: number): boolean {
-    return !value && !isNaN(value) && value >= min && value <= max;
+    return typeof value === 'number' && !isNaN(value) && value >= min && value <= max;
 }
 
 

@@ -4,7 +4,7 @@
  */
 
 import type {Result} from './types';
-import { AIBuilderPlan } from '../core';
+import type { AIPlan as AIBuilderPlan } from '../ai-actions/types';
 
 /**
  * Record type with string keys and unknown values for maximum type safety

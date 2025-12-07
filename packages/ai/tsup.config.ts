@@ -1,11 +1,11 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  entry: ['src/index.ts'],
+  entry: ['src/index.ts', 'src/ai-builder/index.ts'],
   format: ['esm'],
   dts: true,
   clean: true,
-  minify: true,
+  minify: false,
   sourcemap: false,
   outDir: 'dist',
   target: 'es2020',

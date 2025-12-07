@@ -21,18 +21,20 @@ npm install @superdoc-dev/ai
 
 ## Quick Start
 
+> ⚠️ **SECURITY WARNING**: This example is for **development only**. Never expose API keys in production browser code. See [Production Deployment](#production-deployment) for secure patterns.
+
 ```typescript
 import { AIActions } from '@superdoc-dev/ai';
 
-// Initialize with OpenAI
+// ⚠️ DEVELOPMENT ONLY - See "Production Deployment" section
 const ai = new AIActions(superdoc, {
   user: {
     displayName: 'AI Assistant',
-    userId: 'ai-bot-001',
+    userId: 'ai-bot-001', // Required: unique identifier
   },
   provider: {
     type: 'openai',
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.OPENAI_API_KEY, // ⚠️ NEVER in browser!
     model: 'gpt-4',
   },
   onReady: ({ aiActions }) => {
@@ -56,6 +58,73 @@ await ai.action.insertTrackedChange('improve the introduction');
 await ai.action.insertContent('write a conclusion paragraph');
 ```
 
+## Low-Level AI Builder Primitives
+
+When you need direct control over tool calls, the AI Builder primitives provide low-level document operations with multi-provider support.
+
+### With Anthropic Claude
+
+```typescript
+import { anthropicTools, executeTool, getDocumentContext } from '@superdoc-dev/ai/ai-builder';
+import Anthropic from '@anthropic-ai/sdk';
+
+const tools = anthropicTools();
+const context = getDocumentContext(editor, { maxTokens: 4000 });
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });
+const response = await anthropic.messages.create({
+  model: 'claude-sonnet-4-5',
+  system: `Document:\n${JSON.stringify(context.content)}`,
+  tools,
+  messages: [{ role: 'user', content: 'Add a heading before the selected paragraph.' }],
+});
+
+for (const block of response.content) {
+  if (block.type === 'tool_use') {
+    await executeTool(block.name, block.input, editor);
+  }
+}
+```
+
+### With OpenAI GPT-4
+
+```typescript
+import { openaiTools, executeTool, getDocumentContext } from '@superdoc-dev/ai/ai-builder';
+import OpenAI from 'openai';
+
+const tools = openaiTools();
+const context = getDocumentContext(editor, { maxTokens: 4000 });
+
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+const response = await openai.chat.completions.create({
+  model: 'gpt-4',
+  messages: [
+    { role: 'system', content: `Document:\n${JSON.stringify(context.content)}` },
+    { role: 'user', content: 'Add a heading before the selected paragraph.' },
+  ],
+  tools,
+});
+
+for (const toolCall of response.choices[0]?.message?.tool_calls || []) {
+  const args = JSON.parse(toolCall.function.arguments);
+  await executeTool(toolCall.function.name, args, editor);
+}
+```
+
+AI Builder exports:
+
+- **9 primitive tools** with complete CRUD operations
+  - Read: readSelection, readContent, readSection, getDocumentOutline
+  - Write: insertContent (enhanced with flexible positioning)
+  - Update: replaceContent
+  - Delete: deleteContent (NEW!)
+  - Search: searchContent
+  - Meta: getContentSchema (dynamic schema support)
+- **Multi-provider support** (anthropicTools, openaiTools, genericTools)
+- **executeTool()** function for executing tool calls
+- **getDocumentContext()** helper with optional dynamic schema
+- **CONTENT_SCHEMA** for document format specification (fallback)
+
 ## API Reference
 
 ### AIActions Class
@@ -72,7 +141,7 @@ new AIActions(superdoc: SuperDocInstance, options: AIActionsOptions)
 
 - `user` (required): User/bot information
   - `displayName`: Display name for AI-generated changes
-  - `userId?`: Optional user identifier
+  - `userId`: Unique identifier for the AI user (required)
   - `profileUrl?`: Optional profile image URL
 - `provider` (required): AI provider configuration or instance
 - `systemPrompt?`: Custom system prompt for AI context
@@ -198,14 +267,14 @@ Insert a single comment.
 await ai.action.insertComment('suggest improvements to introduction');
 ```
 
-## AIBuilder: Prompt → Plan → Action
+## AIPlanner: Prompt → Plan → Action
 
-When you need low-level control over AI-driven workflows, the `AIBuilder` class lets you turn a natural language prompt into a concrete plan and apply it with formatting-safe primitives.
+When you need low-level control over AI-driven workflows, the `AIPlanner` class lets you turn a natural language prompt into a concrete plan and apply it with formatting-safe primitives.
 
 ```ts
-import { AIBuilder } from '@superdoc-dev/ai';
+import { AIPlanner } from '@superdoc-dev/ai';
 
-const builder = new AIBuilder({
+const planner = new AIPlanner({
   provider: {
     type: 'openai',
     apiKey: process.env.OPENAI_API_KEY!,
@@ -221,20 +290,20 @@ const builder = new AIBuilder({
   enableLogging: true,
 });
 
-const result = await builder.execute('Add tracked changes that tighten the executive summary.');
+const result = await planner.execute('Add tracked changes that tighten the executive summary.');
 
 console.log(result.executedTools); // e.g. ['insertTrackedChanges', 'respond']
-console.log(result.response); // Builder’s textual reply (if any)
+console.log(result.response); // Planner's textual reply (if any)
 ```
 
-### AIBuilder Highlights
+### AIPlanner Highlights
 
-- **Planning Prompt** – Builder sends the document text, JSON, and schema summary (when available) to the LLM and asks for a JSON plan (`tool`, `instruction`).
+- **Planning Prompt** – Planner sends the document text, JSON, and schema summary (when available) to the LLM and asks for a JSON plan (`tool`, `instruction`).
 - **Tool Registry** – Built-in tools cover find/highlight, replace (single/all), tracked changes, comments, summaries, content insertion, and a `respond` fallback. You can inject your own tool definitions if needed.
 - **Formatting Preservation** – Every editing tool is backed by the `EditorAdapter`, which maintains marks and inline styling via `replaceText`, tracked changes, and comment helpers.
 - **Execution Results** – `execute` returns whether the run succeeded, which tools ran, any textual response, the parsed plan, and warnings for skipped steps.
 
-Use `AIBuilder` when you want prompt → plan → action orchestration (redlining, drafting, reviews) while keeping full control over the resulting document edits.
+Use `AIPlanner` when you want prompt → plan → action orchestration (redlining, drafting, reviews) while keeping full control over the resulting document edits.
 
 #### `insertComments(instruction)`
 
@@ -269,7 +338,7 @@ When the provider configuration leaves `streamResults` enabled (default), genera
 
 ```typescript
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
+  user: { displayName: 'AI', userId: 'ai-1' },
   provider: {
     type: 'openai',
     apiKey: 'sk-...',
@@ -287,7 +356,7 @@ const ai = new AIActions(superdoc, {
 
 ```typescript
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
+  user: { displayName: 'AI', userId: 'ai-1' },
   provider: {
     type: 'anthropic',
     apiKey: 'sk-ant-...',
@@ -305,7 +374,7 @@ const ai = new AIActions(superdoc, {
 
 ```typescript
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
+  user: { displayName: 'AI', userId: 'ai-1' },
   provider: {
     type: 'http',
     url: 'https://your-ai-api.com/complete',
@@ -348,7 +417,7 @@ const customProvider: AIProvider = {
 };
 
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
+  user: { displayName: 'AI', userId: 'ai-1' },
   provider: customProvider,
 });
 ```
@@ -359,7 +428,7 @@ const ai = new AIActions(superdoc, {
 
 ```typescript
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'AI' },
+  user: { displayName: 'AI', userId: 'ai-1' },
   provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
   enableLogging: true,
   onReady: () => console.log('Ready!'),
@@ -380,7 +449,7 @@ const ai = new AIActions(superdoc, {
 
 ```typescript
 const ai = new AIActions(superdoc, {
-  user: { displayName: 'Legal AI' },
+  user: { displayName: 'Legal AI', userId: 'legal-ai-1' },
   provider: { type: 'openai', apiKey: '...', model: 'gpt-4' },
   systemPrompt: `You are a legal document assistant. 
     Focus on accuracy, clarity, and compliance.
@@ -450,6 +519,25 @@ AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
 - 🐛 [Issue Tracker](https://github.com/harbour-enterprises/superdoc/issues)
 - 📧 [Email Support](mailto:support@superdoc.dev)
 
-## Changelog
+## Version & Compatibility
 
-See [CHANGELOG.md](./CHANGELOG.md) for version history.
+**Current Version**: 0.1.6-next.18 (Pre-release)
+
+**Supported SuperDoc Versions**: >=0.34.0 <1.0.0
+
+> **Before deploying to production**, you MUST:
+>
+> - ✅ Implement server-side API proxy (security)
+> - ✅ Never expose API keys in browser
+> - ✅ Add token budgeting for large documents
+
+### What's New in 0.1.x
+
+- ✅ Complete architecture refactor (ai-actions + ai-builder)
+- ✅ Multi-provider support (OpenAI, Anthropic, HTTP, custom)
+- ✅ 9 low-level primitives with complete CRUD operations
+- ✅ Dynamic schema support via editor.getSchemaSummaryJSON()
+- ✅ Flexible positioning (7 modes)
+- ✅ Query-based operations
+- ✅ AIPlanner orchestration system
+- ✅ All critical bugs fixed

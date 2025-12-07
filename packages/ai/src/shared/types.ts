@@ -108,7 +108,19 @@ export type AIActionsCallbacks = {
 }
 
 /**
+ * Planner-specific configuration options
+ */
+export type PlannerOptions = {
+    maxContextLength?: number;
+    documentContextProvider?: () => string;
+    tools?: any[]; // AIBuilderToolDefinition[] - avoiding circular dependency
+    onProgress?: (event: any) => void; // AIBuilderProgressCallback - avoiding circular dependency
+}
+
+/**
  * Complete options for AIActions constructor
  */
-export type AIActionsOptions = AIActionsConfig & AIActionsCallbacks;
+export type AIActionsOptions = AIActionsConfig & AIActionsCallbacks & {
+    planner?: PlannerOptions;
+};
 export { SuperDoc };
