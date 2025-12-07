@@ -10,6 +10,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./ai-builder": {
+      "types": "./dist/ai-builder/index.d.ts",
+      "import": "./dist/ai-builder/index.js",
+      "default": "./dist/ai-builder/index.js"
     }
   },
   "scripts": {

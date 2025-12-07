@@ -1,0 +1,277 @@
+import type { AnthropicTool, ToolDefinitionsOptions } from '../types';
+import type { Editor } from '../../types';
+import { getContentSchema, generateLegacyContentSchema } from '../schema/schema-generator';
+
+/**
+ * Generate Anthropic-compatible tool definitions from SuperDoc editor.
+ *
+ * Returns an array of tool objects compatible with Anthropic's Messages API
+ * and structured outputs (strict mode).
+ *
+ * **Important**: This function is now async because it generates schema dynamically
+ * from the editor. Use `await anthropicTools(editor)`.
+ *
+ * @param editor - SuperDoc editor instance
+ * @param options - Tool definition options
+ * @returns Promise resolving to array of Anthropic tool definitions
+ *
+ * @example
+ * ```typescript
+ * import { anthropicTools } from '@superdoc-dev/ai/ai-builder/providers';
+ * import Anthropic from '@anthropic-ai/sdk';
+ *
+ * const tools = await anthropicTools(editor, {
+ *   excludedNodes: ['table'],
+ *   excludedMarks: ['strike', 'underline'],
+ *   enabledTools: ['insertContent', 'searchDocument']
+ * });
+ *
+ * const anthropic = new Anthropic({ apiKey: '...' });
+ * const response = await anthropic.beta.messages.create({
+ *   model: 'claude-sonnet-4-5',
+ *   betas: ['structured-outputs-2025-11-13'],
+ *   tools,
+ *   messages: [...]
+ * });
+ * ```
+ */
+export async function anthropicTools(
+    editor: Editor,
+    options?: ToolDefinitionsOptions
+): Promise<AnthropicTool[]> {
+    const {
+        enabledTools,
+        excludedNodes,
+        excludedMarks,
+    } = options || {};
+
+    // Generate content schema from editor
+    let contentSchema: any;
+    try {
+        contentSchema = await getContentSchema(editor, {
+            excludedNodes,
+            excludedMarks,
+            includeDescriptions: true,
+        });
+    } catch (error) {
+        // Fallback to legacy schema if getSchemaSummaryJSON is not available
+        console.warn('Failed to generate dynamic schema, using legacy schema:', error);
+        contentSchema = generateLegacyContentSchema();
+    }
+
+    // Define all available tools with dynamic schema
+    // Matching genericTools structure - all 9 tools
+    const allTools: AnthropicTool[] = [
+        {
+            name: 'readSelection',
+            description: 'Read the currently selected content in the document. Returns the selection range (from/to positions) and the JSON representation. Use withContext to include surrounding paragraphs.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    withContext: {
+                        type: 'integer',
+                        description: 'Number of paragraphs to include before and after the selection for context (optional)'
+                    }
+                },
+                required: [],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'readContent',
+            description: 'Read document content at a specific position range (from/to character offsets). Use after searchContent to read actual content at found positions.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    from: {
+                        type: 'integer',
+                        description: 'Start position (character offset)'
+                    },
+                    to: {
+                        type: 'integer',
+                        description: 'End position (character offset)'
+                    }
+                },
+                required: ['from', 'to'],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'searchContent',
+            description: 'Search for text or patterns in the document. Returns matches with their positions (from/to character offsets). Use with readContent to see context or replaceContent to modify.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'The text or pattern to search for'
+                    },
+                    caseSensitive: {
+                        type: 'boolean',
+                        description: 'Whether the search should be case-sensitive (default: false)'
+                    },
+                    regex: {
+                        type: 'boolean',
+                        description: 'Whether to treat query as a regular expression (default: false)'
+                    },
+                    findAll: {
+                        type: 'boolean',
+                        description: 'Whether to return all matches or just the first one (default: true)'
+                    }
+                },
+                required: ['query'],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'getContentSchema',
+            description: 'Get the JSON schema for document content format. Call this before insertContent or replaceContent to understand the expected structure for the content array.',
+            input_schema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'insertContent',
+            description: 'Insert new content into the document. Call getContentSchema first to understand the content format. Position can be "selection", "beforeSelection", "afterSelection", "replaceSelection", "documentStart", "documentEnd", or a specific number (character offset).',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    position: {
+                        oneOf: [
+                            {
+                                type: 'string',
+                                enum: ['selection', 'beforeSelection', 'afterSelection', 'replaceSelection', 'documentStart', 'documentEnd'],
+                                description: 'Named position: selection, beforeSelection, afterSelection, replaceSelection, documentStart, or documentEnd'
+                            },
+                            {
+                                type: 'integer',
+                                description: 'Specific character offset position in the document'
+                            }
+                        ],
+                        description: 'Where to insert the content'
+                    },
+                    content: {
+                        type: 'array',
+                        description: 'Array of paragraph nodes. Call getContentSchema for the full format specification.',
+                        items: {
+                            type: 'object',
+                            description: 'A paragraph node in ProseMirror JSON format'
+                        }
+                    }
+                },
+                required: ['position', 'content'],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'deleteContent',
+            description: 'Delete content from the document. Use query to search and delete text by name, or use from/to for exact positions. Set deleteAll to true to delete all occurrences.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'Text to search for and delete. Use this instead of from/to positions.'
+                    },
+                    from: {
+                        type: 'integer',
+                        description: 'Start position (character offset). Only needed if query is not provided.'
+                    },
+                    to: {
+                        type: 'integer',
+                        description: 'End position (character offset). Only needed if query is not provided.'
+                    },
+                    deleteAll: {
+                        type: 'boolean',
+                        description: 'Whether to delete all occurrences when using query (default: false)'
+                    }
+                },
+                required: [],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'replaceContent',
+            description: 'Replace content in the document. Use query to search and replace text by name, or use from/to for exact positions.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    query: {
+                        type: 'string',
+                        description: 'Text to search for and replace. Use this instead of from/to positions.'
+                    },
+                    from: {
+                        type: 'integer',
+                        description: 'Start position (character offset). Only needed if query is not provided.'
+                    },
+                    to: {
+                        type: 'integer',
+                        description: 'End position (character offset). Only needed if query is not provided.'
+                    },
+                    content: {
+                        type: 'array',
+                        description: 'Array of paragraph nodes to replace with.',
+                        items: {
+                            type: 'object',
+                            description: 'A paragraph node in ProseMirror JSON format'
+                        }
+                    },
+                    replaceAll: {
+                        type: 'boolean',
+                        description: 'Whether to replace all occurrences when using query (default: false)'
+                    }
+                },
+                required: ['content'],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'getDocumentOutline',
+            description: 'Get the document outline (headings and their positions). Use this to understand document structure before reading or editing specific sections.',
+            input_schema: {
+                type: 'object',
+                properties: {},
+                required: [],
+                additionalProperties: false
+            }
+        },
+        {
+            name: 'readSection',
+            description: 'Read a specific section of the document by heading name or position range. Use heading parameter to find by name, or from/to for exact positions.',
+            input_schema: {
+                type: 'object',
+                properties: {
+                    heading: {
+                        type: 'string',
+                        description: 'Heading text to find and read (case-insensitive partial match). The section includes content until the next heading of same or higher level.'
+                    },
+                    from: {
+                        type: 'integer',
+                        description: 'Start position (character offset). Alternative to heading parameter.'
+                    },
+                    to: {
+                        type: 'integer',
+                        description: 'End position (character offset). Alternative to heading parameter.'
+                    }
+                },
+                required: [],
+                additionalProperties: false
+            }
+        }
+    ];
+
+    // Filter tools if enabledTools is specified
+    if (enabledTools && enabledTools.length > 0) {
+        return allTools.filter(tool => enabledTools.includes(tool.name));
+    }
+
+    return allTools;
+}
+
+/**
+ * Alias for anthropicTools for consistency
+ */
+export const toolDefinitions = anthropicTools;
