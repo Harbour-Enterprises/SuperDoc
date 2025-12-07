@@ -217,6 +217,14 @@ vi.mock('@superdoc/layout-bridge', () => ({
 // Mock painter-dom
 vi.mock('@superdoc/painter-dom', () => ({
   createDomPainter: mockCreateDomPainter,
+  DOM_CLASS_NAMES: {
+    PAGE: 'superdoc-page',
+    FRAGMENT: 'superdoc-fragment',
+    LINE: 'superdoc-line',
+    INLINE_SDT_WRAPPER: 'superdoc-structured-content-inline',
+    BLOCK_SDT: 'superdoc-structured-content-block',
+    DOCUMENT_SECTION: 'superdoc-document-section',
+  },
 }));
 
 // Mock measuring-dom

@@ -170,7 +170,7 @@ export function assertPmPositions(
  */
 export function assertFragmentPmPositions(
   fragment: { pmStart?: number | null; pmEnd?: number | null; kind?: string },
-  context: string,
+  _context: string,
 ): void {
   const hasPmStart = fragment.pmStart != null;
   const hasPmEnd = fragment.pmEnd != null;
