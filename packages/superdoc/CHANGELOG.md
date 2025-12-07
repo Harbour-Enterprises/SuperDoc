@@ -1,3 +1,22 @@
+## [0.34.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.8...v0.34.9) (2025-12-06)
+
+### Bug Fixes
+
+- tests ([a59aae8](https://github.com/Harbour-Enterprises/SuperDoc/commit/a59aae887989c5433274c2d0d916e939f65219ba))
+
+## [0.34.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.7...v0.34.8) (2025-12-06)
+
+### Bug Fixes
+
+- onlyoffice docs fail to import from null pointer crash ([2892612](https://github.com/Harbour-Enterprises/SuperDoc/commit/289261257d6c081304833cbe1fcad15c446f51ad))
+
+## [0.34.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.6...v0.34.7) (2025-12-05)
+
+### Bug Fixes
+
+- temp workaround for docx ydoc updates ([4d5e23f](https://github.com/Harbour-Enterprises/SuperDoc/commit/4d5e23f996bcb08b883b53fd7110a00c1d7a0a24))
+- temp workaround for docx ydoc updates ([#1429](https://github.com/Harbour-Enterprises/SuperDoc/issues/1429)) ([addaab8](https://github.com/Harbour-Enterprises/SuperDoc/commit/addaab886d42cdea5cd519b4f80d1aa51741a7f9))
+
 ## [0.34.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.5...v0.34.6) (2025-12-03)
 
 ### Bug Fixes
