@@ -343,4 +343,44 @@ describe('LinkClickHandler', () => {
     expect(moveCursorToMouseEvent).not.toHaveBeenCalled();
     expect(mockOpenPopover).not.toHaveBeenCalled();
   });
+
+  it('should close popover when clicking a link with popoverVisible=true', async () => {
+    // Mock selectionHasNodeOrMark to return true (cursor is on a link)
+    selectionHasNodeOrMark.mockReturnValue(true);
+
+    mount(LinkClickHandler, {
+      props: {
+        editor: mockEditor,
+        openPopover: mockOpenPopover,
+        closePopover: mockClosePopover,
+        popoverVisible: true, // Popover is already visible
+      },
+    });
+
+    // Create and dispatch a custom link click event
+    const linkClickEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: document.createElement('a'),
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(linkClickEvent);
+
+    // Wait for the timeout in the handler
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Verify closePopover was called
+    expect(mockClosePopover).toHaveBeenCalled();
+
+    // Verify openPopover was NOT called (popover should be closed, not reopened)
+    expect(mockOpenPopover).not.toHaveBeenCalled();
+
+    // Verify moveCursorToMouseEvent was NOT called (early return)
+    expect(moveCursorToMouseEvent).not.toHaveBeenCalled();
+  });
 });

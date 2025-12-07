@@ -104,6 +104,7 @@ The feature works automatically once integrated. When a user clicks a link in la
 - Users can edit URL, change link text, or remove the link
 - Users can open the link in a new tab if desired
 - Consistent UX between legacy and layout-engine rendering
+- Internal anchor links (e.g., TOC entries) navigate to the target section instead of opening the popover
 
 ## Testing
 

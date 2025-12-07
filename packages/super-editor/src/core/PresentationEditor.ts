@@ -55,7 +55,7 @@ const TrackInsertMarkName = 'trackInsert';
 const TrackDeleteMarkName = 'trackDelete';
 const TrackFormatMarkName = 'trackFormat';
 // Collaboration cursor imports
-import { relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
+import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import {
   HeaderFooterEditorManager,
@@ -103,6 +103,35 @@ type AwarenessState = {
   };
   [key: string]: unknown;
 };
+
+/**
+ * Cursor position data stored in awareness state.
+ * Contains relative Yjs positions for anchor and head.
+ */
+type AwarenessCursorData = {
+  /** Relative Yjs position for selection anchor */
+  anchor: Y.RelativePosition;
+  /** Relative Yjs position for selection head (caret) */
+  head: Y.RelativePosition;
+};
+
+/**
+ * Extended awareness interface that includes the setLocalStateField method.
+ * The base Awareness type from y-protocols has this method but it's not always
+ * included in type definitions, so we extend it here for type safety.
+ */
+interface AwarenessWithSetField {
+  clientID: number;
+  getStates: () => Map<number, AwarenessState>;
+  on: (event: string, handler: () => void) => void;
+  off: (event: string, handler: () => void) => void;
+  /**
+   * Update a specific field in the local awareness state.
+   * @param field - The field name to update (e.g., 'cursor', 'user')
+   * @param value - The value to set for the field
+   */
+  setLocalStateField: (field: string, value: unknown) => void;
+}
 
 /**
  * User metadata for remote collaborators.
@@ -190,12 +219,7 @@ export type PresentationEditorOptions = ConstructorParameters<typeof Editor>[0] 
    * Required for remote cursor rendering.
    */
   collaborationProvider?: {
-    awareness?: {
-      clientID: number;
-      getStates: () => Map<number, AwarenessState>;
-      on: (event: string, handler: () => void) => void;
-      off: (event: string, handler: () => void) => void;
-    };
+    awareness?: AwarenessWithSetField;
     disconnect?: () => void;
   } | null;
   /**
@@ -209,6 +233,8 @@ type LayoutState = {
   blocks: FlowBlock[];
   measures: Measure[];
   layout: Layout | null;
+  bookmarks: Map<string, number>;
+  anchorMap?: Map<string, number>;
 };
 
 type LayoutMetrics = {
@@ -322,8 +348,13 @@ const MULTI_CLICK_TIME_THRESHOLD_MS = 400;
 const MULTI_CLICK_DISTANCE_THRESHOLD_PX = 5;
 /** Budget for header/footer initialization before warning (milliseconds) */
 const HEADER_FOOTER_INIT_BUDGET_MS = 200;
-/** Debounce delay for scroll events (milliseconds) */
-const SCROLL_DEBOUNCE_MS = 100;
+/**
+ * Debounce delay for scroll events (milliseconds).
+ * Set to 32ms (~31fps) for responsive cursor updates during scrolling while avoiding
+ * excessive re-renders. Reduced from 100ms to improve collaboration cursor responsiveness
+ * when users scroll to view remote collaborators' positions.
+ */
+const SCROLL_DEBOUNCE_MS = 32;
 /** Maximum zoom level before warning */
 const MAX_ZOOM_WARNING_THRESHOLD = 10;
 /** Maximum number of selection rectangles per user (performance guardrail) */
@@ -427,7 +458,7 @@ export class PresentationEditor extends EventEmitter {
   #selectionOverlay: HTMLElement;
   #hiddenHost: HTMLElement;
   #layoutOptions: LayoutEngineOptions;
-  #layoutState: LayoutState = { blocks: [], measures: [], layout: null };
+  #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
   #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
@@ -483,6 +514,8 @@ export class PresentationEditor extends EventEmitter {
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
   #remoteCursorState: Map<number, RemoteCursorState> = new Map();
+  /** Map of clientId -> DOM element for cursor (enables DOM reuse to prevent flicker) */
+  #remoteCursorElements: Map<number, HTMLElement> = new Map();
   /** Flag indicating remote cursor state needs re-rendering (RAF batching) */
   #remoteCursorDirty = false;
   /** DOM element for rendering remote cursor overlays */
@@ -493,10 +526,12 @@ export class PresentationEditor extends EventEmitter {
   #awarenessCleanup: (() => void) | null = null;
   /** Cleanup function for scroll listener (virtualization updates) */
   #scrollCleanup: (() => void) | null = null;
-  /** RAF handle for remote cursor updates, cleared on destroy to prevent post-destruction callbacks */
-  #remoteCursorRafHandle: number | null = null;
   /** Timeout handle for scroll debounce (instance-level tracking for proper cleanup) */
   #scrollTimeout: number | undefined = undefined;
+  /** Timestamp of last remote cursor render for throttle-based immediate rendering */
+  #lastRemoteCursorRenderTime = 0;
+  /** Timeout handle for trailing edge of cursor throttle */
+  #remoteCursorThrottleTimeout: number | null = null;
 
   constructor(options: PresentationEditorOptions) {
     super();
@@ -1609,13 +1644,12 @@ export class PresentationEditor extends EventEmitter {
       }, 'Layout RAF');
     }
 
-    // Cancel pending remote cursor RAF to prevent execution after destroy
-    if (this.#remoteCursorRafHandle !== null) {
+    // Cancel pending remote cursor throttle timeout to prevent execution after destroy
+    if (this.#remoteCursorThrottleTimeout !== null) {
       this.#safeCleanup(() => {
-        const win = this.#visibleHost?.ownerDocument?.defaultView ?? window;
-        win.cancelAnimationFrame(this.#remoteCursorRafHandle!);
-        this.#remoteCursorRafHandle = null;
-      }, 'Remote cursor RAF');
+        clearTimeout(this.#remoteCursorThrottleTimeout!);
+        this.#remoteCursorThrottleTimeout = null;
+      }, 'Remote cursor throttle');
     }
 
     this.#editorListeners.forEach(({ event, handler }) => this.#editor?.off(event, handler));
@@ -1645,6 +1679,7 @@ export class PresentationEditor extends EventEmitter {
     }
 
     this.#remoteCursorState.clear();
+    this.#remoteCursorElements.clear();
     this.#remoteCursorOverlay = null;
 
     // Unregister from static registry
@@ -1699,9 +1734,17 @@ export class PresentationEditor extends EventEmitter {
         this.#pendingDocChange = true;
         this.#scheduleRerender();
       }
+      // Update local cursor in awareness whenever document changes
+      // This ensures cursor position is broadcast with each keystroke
+      if (transaction?.docChanged) {
+        this.#updateLocalAwarenessCursor();
+      }
     };
     const handleSelection = () => {
       this.#scheduleSelectionUpdate();
+      // Update local cursor in awareness for collaboration
+      // This bypasses y-prosemirror's focus check which may fail for hidden PM views
+      this.#updateLocalAwarenessCursor();
     };
     this.#editor.on('update', handleUpdate);
     this.#editor.on('selectionUpdate', handleSelection);
@@ -1808,6 +1851,59 @@ export class PresentationEditor extends EventEmitter {
     // When joining a session with existing collaborators, awareness.getStates() has data
     // but no 'change' event fires, so we need to normalize immediately
     handleAwarenessChange();
+  }
+
+  /**
+   * Update local cursor position in awareness.
+   *
+   * CRITICAL FIX: The y-prosemirror cursor plugin only updates awareness when
+   * view.hasFocus() returns true. In PresentationEditor, the hidden PM EditorView
+   * may not have DOM focus (focus is on the visual representation / input bridge).
+   * This causes the cursor plugin to not send cursor updates, making remote users
+   * see a stale cursor position.
+   *
+   * This method bypasses the focus check and manually updates awareness with the
+   * current selection position whenever the PM selection changes.
+   *
+   * @private
+   * @returns {void}
+   * @throws {Error} Position conversion errors are silently caught and ignored.
+   *   These can occur during document restructuring when the PM document structure
+   *   doesn't match the Yjs structure, or when positions are temporarily invalid.
+   */
+  #updateLocalAwarenessCursor(): void {
+    const provider = this.#options.collaborationProvider;
+    if (!provider?.awareness) return;
+
+    // Runtime validation: ensure setLocalStateField method exists
+    if (typeof provider.awareness.setLocalStateField !== 'function') {
+      // Awareness implementation doesn't support setLocalStateField
+      return;
+    }
+
+    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    if (!ystate?.binding?.mapping) return;
+
+    const { selection } = this.#editor.state;
+    const { anchor, head } = selection;
+
+    try {
+      // Convert PM positions to Yjs relative positions
+      const relAnchor = absolutePositionToRelativePosition(anchor, ystate.type, ystate.binding.mapping);
+      const relHead = absolutePositionToRelativePosition(head, ystate.type, ystate.binding.mapping);
+
+      if (relAnchor && relHead) {
+        // Update awareness with cursor position
+        // Use 'cursor' as the field name to match y-prosemirror's convention
+        const cursorData: AwarenessCursorData = {
+          anchor: relAnchor,
+          head: relHead,
+        };
+        provider.awareness.setLocalStateField('cursor', cursorData);
+      }
+    } catch {
+      // Silently ignore conversion errors - can happen during document restructuring
+    }
   }
 
   /**
@@ -1918,24 +2014,73 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
-   * Schedule a remote cursor update using RAF batching.
-   * Stores RAF handle for proper cleanup on destroy to prevent post-destruction callbacks.
-   * Mirrors the existing #scheduleSelectionUpdate() pattern for consistency.
+   * Schedule a remote cursor update using microtask + throttle-based rendering.
+   *
+   * CRITICAL: Uses queueMicrotask to defer cursor normalization until after all
+   * synchronous code completes. This fixes a race condition where awareness events
+   * fire before the ProseMirror state is updated with Yjs document changes:
+   *
+   * 1. WebSocket message arrives with doc update + awareness update
+   * 2. Yjs doc is updated, sync plugin starts creating PM transaction
+   * 3. Awareness update fires events (PresentationEditor handler called)
+   * 4. If we read PM state NOW, it may not have the new text yet
+   * 5. Cursor position conversion uses stale mapping → wrong position
+   *
+   * By deferring to a microtask, we ensure:
+   * - All synchronous code completes (including PM transaction dispatch)
+   * - PM state reflects the latest Yjs document state
+   * - Cursor positions are calculated correctly
+   *
+   * Throttling is still applied (60fps max) to prevent excessive re-renders.
+   *
    * @private
    */
   #scheduleRemoteCursorUpdate() {
     // Skip scheduling entirely when presence is disabled
-    // This avoids unnecessary RAF scheduling when the feature is toggled off
+    // This avoids unnecessary scheduling when the feature is toggled off
     if (this.#layoutOptions.presence?.enabled === false) return;
 
+    // Already have a pending update scheduled
     if (this.#remoteCursorUpdateScheduled) return;
     this.#remoteCursorUpdateScheduled = true;
 
-    const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#remoteCursorRafHandle = win.requestAnimationFrame(() => {
-      this.#remoteCursorUpdateScheduled = false;
-      this.#remoteCursorRafHandle = null;
-      this.#updateRemoteCursors();
+    // Use microtask to defer until after PM state is synced with Yjs
+    queueMicrotask(() => {
+      if (!this.#remoteCursorUpdateScheduled) return; // Was cancelled
+
+      const now = performance.now();
+      const elapsed = now - this.#lastRemoteCursorRenderTime;
+      /**
+       * Throttle window for remote cursor updates (milliseconds).
+       * Set to 16ms to target ~60fps rendering (one animation frame at 60Hz).
+       * This prevents excessive re-renders during rapid awareness updates while
+       * maintaining smooth visual feedback for collaboration cursors.
+       * Using requestAnimationFrame would be ideal, but microtask deferral is
+       * critical for fixing the race condition with Yjs state synchronization.
+       */
+      const THROTTLE_MS = 16;
+
+      // If enough time has passed, render now
+      if (elapsed >= THROTTLE_MS) {
+        // Clear any pending trailing edge timeout
+        if (this.#remoteCursorThrottleTimeout !== null) {
+          clearTimeout(this.#remoteCursorThrottleTimeout);
+          this.#remoteCursorThrottleTimeout = null;
+        }
+        this.#remoteCursorUpdateScheduled = false;
+        this.#lastRemoteCursorRenderTime = now;
+        this.#updateRemoteCursors();
+        return;
+      }
+
+      // Within throttle window: schedule trailing edge render
+      const remaining = THROTTLE_MS - elapsed;
+      this.#remoteCursorThrottleTimeout = window.setTimeout(() => {
+        this.#remoteCursorUpdateScheduled = false;
+        this.#remoteCursorThrottleTimeout = null;
+        this.#lastRemoteCursorRenderTime = performance.now();
+        this.#updateRemoteCursors();
+      }, remaining) as unknown as number;
     });
   }
 
@@ -1943,6 +2088,9 @@ export class PresentationEditor extends EventEmitter {
    * Schedule a remote cursor re-render without re-normalizing awareness states.
    * Performance optimization: avoids expensive Yjs position conversions on layout changes.
    * Used when layout geometry changes but cursor positions haven't (e.g., zoom, scroll, reflow).
+   *
+   * Note: This method doesn't need microtask deferral because it uses already-computed
+   * PM positions from #remoteCursorState, not awareness relative positions.
    * @private
    */
   #scheduleRemoteCursorReRender() {
@@ -1950,10 +2098,12 @@ export class PresentationEditor extends EventEmitter {
     if (this.#remoteCursorUpdateScheduled) return;
     this.#remoteCursorUpdateScheduled = true;
 
+    // Use RAF for re-renders since they're triggered by layout/scroll events
+    // and should align with the browser's paint cycle
     const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#remoteCursorRafHandle = win.requestAnimationFrame(() => {
+    win.requestAnimationFrame(() => {
       this.#remoteCursorUpdateScheduled = false;
-      this.#remoteCursorRafHandle = null;
+      this.#lastRemoteCursorRenderTime = performance.now();
       this.#renderRemoteCursors();
     });
   }
@@ -1969,6 +2119,7 @@ export class PresentationEditor extends EventEmitter {
     // This ensures already-rendered cursors are wiped when toggling presence off
     if (this.#layoutOptions.presence?.enabled === false) {
       this.#remoteCursorState.clear();
+      this.#remoteCursorElements.clear();
       if (this.#remoteCursorOverlay) {
         this.#remoteCursorOverlay.innerHTML = '';
       }
@@ -2013,14 +2164,14 @@ export class PresentationEditor extends EventEmitter {
    * Extracted rendering logic to support both full updates and geometry-only re-renders.
    * Used by #updateRemoteCursors (after awareness normalization) and #scheduleRemoteCursorReRender
    * (when only layout geometry changes, not cursor positions).
+   *
+   * FLICKER PREVENTION: This method reuses existing DOM elements instead of clearing
+   * and recreating them. Elements are keyed by clientId and only created/removed when
+   * clients join/leave. Position updates use CSS transitions for smooth movement.
+   *
    * @private
    */
   #renderRemoteCursors() {
-    // Clear previous remote cursor rendering
-    if (this.#remoteCursorOverlay) {
-      this.#remoteCursorOverlay.innerHTML = '';
-    }
-
     // Get layout state for geometry calculations
     const layout = this.#layoutState?.layout;
     const blocks = this.#layoutState?.blocks;
@@ -2037,14 +2188,26 @@ export class PresentationEditor extends EventEmitter {
       .sort((a, b) => b.updatedAt - a.updatedAt) // Most recent first
       .slice(0, maxVisible);
 
-    // Render each remote cursor
+    // Track which clientIds are currently visible
+    const visibleClientIds = new Set<number>();
+
+    // Render/update each remote cursor
     sortedCursors.forEach((cursor) => {
+      visibleClientIds.add(cursor.clientId);
       if (cursor.anchor === cursor.head) {
         // Render caret only
         this.#renderRemoteCaret(cursor);
       } else {
         // Render selection + caret at head
         this.#renderRemoteSelection(cursor);
+      }
+    });
+
+    // Remove DOM elements for clients that are no longer visible
+    this.#remoteCursorElements.forEach((element, clientId) => {
+      if (!visibleClientIds.has(clientId)) {
+        element.remove();
+        this.#remoteCursorElements.delete(clientId);
       }
     });
   }
@@ -2057,8 +2220,11 @@ export class PresentationEditor extends EventEmitter {
    * and virtualization), and renders a colored vertical bar with an optional name label.
    *
    * **Virtualization handling:** If the cursor's position falls on a page that is not currently
-   * mounted in the DOM (due to virtualization), the method silently returns without rendering.
-   * The cursor state remains in memory and will be rendered when the page becomes visible.
+   * mounted in the DOM (due to virtualization), the element is hidden but retained in memory.
+   * It will be shown again when the page becomes visible.
+   *
+   * **Flicker prevention:** Reuses existing DOM elements when possible, updating positions via
+   * CSS transforms with smooth transitions. Elements are only created for new clients.
    *
    * **Performance:** Uses GPU-accelerated CSS transforms and respects the maxVisible limit
    * enforced by the parent #updateRemoteCursors method.
@@ -2069,41 +2235,63 @@ export class PresentationEditor extends EventEmitter {
   #renderRemoteCaret(cursor: RemoteCursorState) {
     // Use existing geometry helper to get caret layout rect
     const caretLayout = this.#computeCaretLayoutRect(cursor.head);
-    if (!caretLayout) return; // Position not in layout
-
-    // Convert to overlay coordinates (handles zoom, scroll, virtualization)
-    const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
-    if (!coords) return; // Page not mounted (virtualized)
 
     const zoom = this.#layoutOptions.zoom ?? 1;
     const doc = this.#visibleHost.ownerDocument ?? document;
-
-    // Use validated color helper for consistency
     const color = this.#getValidatedColor(cursor);
 
-    // Create caret element
-    const caretEl = doc.createElement('div');
-    caretEl.className = 'presentation-editor__remote-caret';
-    caretEl.style.position = 'absolute';
-    caretEl.style.left = `${coords.x}px`;
-    caretEl.style.top = `${coords.y}px`;
-    caretEl.style.width = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px`;
-    caretEl.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
-    caretEl.style.borderLeft = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px solid ${color}`;
-    caretEl.style.pointerEvents = 'none';
-    caretEl.setAttribute('data-client-id', cursor.clientId.toString());
+    // Check if we already have a DOM element for this client
+    let caretEl = this.#remoteCursorElements.get(cursor.clientId);
+    const isNewElement = !caretEl;
 
-    // Remote cursors are purely visual decorations - hide from accessibility tree
-    caretEl.setAttribute('aria-hidden', 'true');
+    if (isNewElement) {
+      // Create new caret element
+      caretEl = doc.createElement('div');
+      caretEl.className = 'presentation-editor__remote-caret';
+      caretEl.style.position = 'absolute';
+      caretEl.style.width = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px`;
+      caretEl.style.borderLeft = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px solid ${color}`;
+      caretEl.style.pointerEvents = 'none';
+      // GPU-accelerated transitions for smooth movement
+      caretEl.style.transition = 'transform 50ms ease-out, height 50ms ease-out, opacity 100ms ease-out';
+      caretEl.style.willChange = 'transform';
+      caretEl.setAttribute('data-client-id', cursor.clientId.toString());
+      caretEl.setAttribute('aria-hidden', 'true');
 
-    // Render caret at head position to indicate selection direction
-    // (head may be before or after anchor depending on selection direction)
-    // Add label if enabled
-    if (this.#layoutOptions.presence?.showLabels !== false) {
-      this.#renderRemoteCursorLabel(caretEl, cursor);
+      // Add label if enabled
+      if (this.#layoutOptions.presence?.showLabels !== false) {
+        this.#renderRemoteCursorLabel(caretEl, cursor);
+      }
+
+      this.#remoteCursorElements.set(cursor.clientId, caretEl);
+      this.#remoteCursorOverlay?.appendChild(caretEl);
     }
 
-    this.#remoteCursorOverlay?.appendChild(caretEl);
+    // Handle case where position can't be computed or page is virtualized
+    if (!caretLayout) {
+      caretEl!.style.opacity = '0';
+      return;
+    }
+
+    const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
+    if (!coords) {
+      caretEl!.style.opacity = '0';
+      return;
+    }
+
+    // Update position using transform for GPU acceleration
+    caretEl!.style.opacity = '1';
+    caretEl!.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
+    caretEl!.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
+
+    // Update color in case it changed
+    caretEl!.style.borderLeftColor = color;
+
+    // Update label background color if it exists
+    const labelEl = caretEl!.querySelector('.presentation-editor__remote-label') as HTMLElement | null;
+    if (labelEl) {
+      labelEl.style.backgroundColor = color;
+    }
   }
 
   /**
@@ -2464,6 +2652,20 @@ export class PresentationEditor extends EventEmitter {
     // Check if clicking on a draggable field annotation - if so, don't preventDefault
     // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
     const target = event.target as HTMLElement;
+
+    // Handle clicks on internal anchor links (e.g., TOC navigation)
+    const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
+    if (linkEl) {
+      const href = linkEl.getAttribute('href') ?? '';
+      const isAnchorLink = href.startsWith('#') && href.length > 1;
+
+      if (isAnchorLink) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.goToAnchor(href);
+        return;
+      }
+    }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
 
     if (!this.#layoutState.layout) {
@@ -3388,6 +3590,7 @@ export class PresentationEditor extends EventEmitter {
 
     const sectionMetadata: SectionMetadata[] = [];
     let blocks: FlowBlock[] | undefined;
+    let bookmarks: Map<string, number> = new Map();
     try {
       const converter = (this.#editor as Editor & { converter?: Record<string, unknown> }).converter;
       const converterContext = converter
@@ -3408,6 +3611,7 @@ export class PresentationEditor extends EventEmitter {
         converterContext,
       });
       blocks = result.blocks;
+      bookmarks = result.bookmarks ?? new Map();
     } catch (error) {
       this.#handleLayoutError('render', this.#decorateError(error, 'toFlowBlocks'));
       return;
@@ -3464,7 +3668,8 @@ export class PresentationEditor extends EventEmitter {
     const converter = (this.#editor as Editor & { converter?: { pageStyles?: { alternateHeaders?: boolean } } })
       .converter;
     this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles);
-    this.#layoutState = { blocks, measures, layout };
+    const anchorMap = this.#computeAnchorMap(bookmarks, layout);
+    this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
@@ -4320,15 +4525,14 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #updateAwarenessSession() {
-    const provider = (
-      this.#editor.options as {
-        collaborationProvider?: { awareness?: { setLocalStateField?: (field: string, value: unknown) => void } };
-      }
-    )?.collaborationProvider;
+    const provider = this.#options.collaborationProvider;
     const awareness = provider?.awareness;
-    if (!awareness?.setLocalStateField) {
+
+    // Runtime validation: ensure setLocalStateField method exists
+    if (!awareness || typeof awareness.setLocalStateField !== 'function') {
       return;
     }
+
     if (this.#session.mode === 'body') {
       awareness.setLocalStateField('layoutSession', null);
       return;
@@ -4478,6 +4682,198 @@ export class PresentationEditor extends EventEmitter {
     // Scroll viewport to the calculated position
     if (this.#visibleHost) {
       this.#visibleHost.scrollTop = yPosition;
+    }
+  }
+
+  /**
+   * Build an anchor map (bookmark name -> page index) using fragment PM ranges.
+   * Mirrors layout-engine's buildAnchorMap to avoid an extra dependency here.
+   */
+  #computeAnchorMap(bookmarks: Map<string, number>, layout: Layout): Map<string, number> {
+    const anchorMap = new Map<string, number>();
+
+    // Precompute block PM ranges for fallbacks
+    const blockPmRanges = new Map<
+      string,
+      { pmStart: number | null; pmEnd: number | null; hasFragmentPositions: boolean }
+    >();
+
+    const computeBlockRange = (blockId: string): { pmStart: number | null; pmEnd: number | null } => {
+      if (blockPmRanges.has(blockId)) {
+        const cached = blockPmRanges.get(blockId)!;
+        return { pmStart: cached.pmStart, pmEnd: cached.pmEnd };
+      }
+      const block = this.#layoutState.blocks.find((b) => b.id === blockId);
+      if (!block || block.kind !== 'paragraph') {
+        blockPmRanges.set(blockId, { pmStart: null, pmEnd: null, hasFragmentPositions: false });
+        return { pmStart: null, pmEnd: null };
+      }
+      let pmStart: number | null = null;
+      let pmEnd: number | null = null;
+      for (const run of block.runs) {
+        if (run.pmStart != null) {
+          pmStart = pmStart == null ? run.pmStart : Math.min(pmStart, run.pmStart);
+        }
+        if (run.pmEnd != null) {
+          pmEnd = pmEnd == null ? run.pmEnd : Math.max(pmEnd, run.pmEnd);
+        }
+      }
+      blockPmRanges.set(blockId, { pmStart, pmEnd, hasFragmentPositions: false });
+      return { pmStart, pmEnd };
+    };
+
+    bookmarks.forEach((pmPosition, bookmarkName) => {
+      for (const page of layout.pages) {
+        for (const fragment of page.fragments) {
+          if (fragment.kind !== 'para') continue;
+          let fragStart = fragment.pmStart;
+          let fragEnd = fragment.pmEnd;
+          if (fragStart == null || fragEnd == null) {
+            const range = computeBlockRange(fragment.blockId);
+            if (range.pmStart != null && range.pmEnd != null) {
+              fragStart = range.pmStart;
+              fragEnd = range.pmEnd;
+            }
+          } else {
+            // Remember that this block had fragment positions
+            const cached = blockPmRanges.get(fragment.blockId);
+            blockPmRanges.set(fragment.blockId, {
+              pmStart: cached?.pmStart ?? fragStart,
+              pmEnd: cached?.pmEnd ?? fragEnd,
+              hasFragmentPositions: true,
+            });
+          }
+          if (fragStart == null || fragEnd == null) continue;
+          if (pmPosition >= fragStart && pmPosition < fragEnd) {
+            anchorMap.set(bookmarkName, page.number);
+            return;
+          }
+        }
+      }
+    });
+
+    return anchorMap;
+  }
+
+  /**
+   * Timeout duration for anchor navigation when waiting for page mount (in milliseconds).
+   * This allows sufficient time for virtualized pages to render before giving up.
+   */
+  private static readonly ANCHOR_NAV_TIMEOUT_MS = 2000;
+
+  /**
+   * Navigate to a bookmark/anchor in the current document (e.g., TOC links).
+   *
+   * This method performs asynchronous navigation to support virtualized page rendering:
+   * 1. Normalizes the anchor by removing leading '#' if present
+   * 2. Looks up the bookmark in the document's bookmark registry
+   * 3. Determines which page contains the target position
+   * 4. Scrolls the page into view (may be virtualized)
+   * 5. Waits up to 2000ms for the page to mount in the DOM
+   * 6. Moves the editor caret to the bookmark position
+   *
+   * @param anchor - Bookmark name or fragment identifier (with or without leading '#')
+   * @returns Promise resolving to true if navigation succeeded, false otherwise
+   *
+   * @remarks
+   * Navigation fails and returns false if:
+   * - The anchor parameter is empty or becomes empty after normalization
+   * - No layout has been computed yet
+   * - The bookmark does not exist in the document
+   * - The bookmark's page cannot be determined
+   * - The page fails to mount within the timeout period (2000ms)
+   *
+   * Note: This method does not throw errors. All failures are logged and result in
+   * a false return value. An 'error' event is emitted for unhandled exceptions.
+   *
+   * @throws Never throws directly - errors are caught, logged, and emitted as events
+   */
+  async goToAnchor(anchor: string): Promise<boolean> {
+    try {
+      if (!anchor) return false;
+      const layout = this.#layoutState.layout;
+      if (!layout) return false;
+
+      const normalized = anchor.startsWith('#') ? anchor.slice(1) : anchor;
+      if (!normalized) return false;
+
+      const pmPos = this.#layoutState.bookmarks.get(normalized);
+      if (pmPos == null) return false;
+
+      // Try to get exact position rect for precise scrolling
+      const rects =
+        selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, pmPos, pmPos + 1) ?? [];
+      const rect = rects[0];
+
+      // Find the page containing this position by scanning fragments
+      // Bookmarks often fall in gaps between fragments (e.g., at page/section breaks),
+      // so we also track the first fragment starting after the position as a fallback
+      let pageIndex: number | null = rect?.pageIndex ?? null;
+
+      if (pageIndex == null) {
+        let nextFragmentPage: number | null = null;
+        let nextFragmentStart: number | null = null;
+
+        for (const page of layout.pages) {
+          for (const fragment of page.fragments) {
+            if (fragment.kind !== 'para') continue;
+            const fragStart = fragment.pmStart;
+            const fragEnd = fragment.pmEnd;
+            if (fragStart == null || fragEnd == null) continue;
+
+            // Exact match: position is within this fragment
+            if (pmPos >= fragStart && pmPos < fragEnd) {
+              pageIndex = page.number - 1;
+              break;
+            }
+
+            // Track the first fragment that starts after our position
+            if (fragStart > pmPos && (nextFragmentStart === null || fragStart < nextFragmentStart)) {
+              nextFragmentPage = page.number - 1;
+              nextFragmentStart = fragStart;
+            }
+          }
+          if (pageIndex != null) break;
+        }
+
+        // Use the page of the next fragment if bookmark is in a gap
+        if (pageIndex == null && nextFragmentPage != null) {
+          pageIndex = nextFragmentPage;
+        }
+      }
+
+      if (pageIndex == null) return false;
+
+      // Scroll to the target page and wait for it to mount (virtualization)
+      this.#scrollPageIntoView(pageIndex);
+      await this.#waitForPageMount(pageIndex, { timeout: PresentationEditor.ANCHOR_NAV_TIMEOUT_MS });
+
+      // Scroll the page element into view
+      const pageEl = this.#painterHost?.querySelector(`[data-page-index="${pageIndex}"]`) as HTMLElement | null;
+      if (pageEl) {
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+      }
+
+      // Move caret to the bookmark position
+      const activeEditor = this.getActiveEditor();
+      if (activeEditor?.commands?.setTextSelection) {
+        activeEditor.commands.setTextSelection({ from: pmPos, to: pmPos });
+      } else {
+        // Navigation succeeded visually (page scrolled), but caret positioning is unavailable
+        // This is not an error - log a warning for debugging
+        console.warn(
+          '[PresentationEditor] goToAnchor: Navigation succeeded but could not move caret (editor commands unavailable)',
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[PresentationEditor] goToAnchor failed:', error);
+      this.emit('error', {
+        error,
+        context: 'goToAnchor',
+      });
+      return false;
     }
   }
 
