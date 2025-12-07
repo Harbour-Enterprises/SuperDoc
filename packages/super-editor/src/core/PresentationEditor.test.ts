@@ -165,6 +165,7 @@ vi.mock('./Editor', () => {
           content: {
             size: 100,
           },
+          descendants: vi.fn(),
           nodesBetween: vi.fn((_from: number, _to: number, callback: (node: unknown, pos: number) => void) => {
             // Simulate a simple document with one text block at position 0.
             callback({ isTextblock: true }, 0);

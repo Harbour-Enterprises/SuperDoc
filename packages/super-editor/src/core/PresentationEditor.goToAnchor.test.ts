@@ -152,6 +152,13 @@ vi.mock('./Editor', () => {
           content: {
             size: 100,
           },
+          // Mock ProseMirror document methods
+          descendants: vi.fn(),
+          resolve: vi.fn(() => ({
+            node: vi.fn(),
+            parent: null,
+            depth: 0,
+          })),
         },
       },
       view: {
@@ -337,6 +344,9 @@ describe('PresentationEditor - goToAnchor', () => {
   });
 
   it('should return false when layout is missing', async () => {
+    // Suppress expected console.error from layout error handler
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
     // Mock layout as null
     mockIncrementalLayout.mockResolvedValueOnce({ layout: null, measures: [] });
 
@@ -350,6 +360,8 @@ describe('PresentationEditor - goToAnchor', () => {
 
     const result = await editor.goToAnchor('bookmark1');
     expect(result).toBe(false);
+
+    consoleSpy.mockRestore();
   });
 
   it('should return false for non-existent bookmark', async () => {
