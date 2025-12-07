@@ -28,7 +28,7 @@ import type {
   MultiSectionHeaderFooterIdentifier,
   DropEvent,
 } from '@superdoc/layout-bridge';
-import { createDomPainter } from '@superdoc/painter-dom';
+import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
 import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
 import { measureBlock } from '@superdoc/measuring-dom';
 import type {
@@ -587,6 +587,10 @@ export class PresentationEditor extends EventEmitter {
 
     this.#viewportHost = doc.createElement('div');
     this.#viewportHost.className = 'presentation-editor__viewport';
+    // Hide the viewport from screen readers - it's a visual rendering layer, not semantic content.
+    // The hidden ProseMirror editor (in #hiddenHost) provides the actual accessible document structure.
+    // This prevents screen readers from encountering duplicate or non-semantic visual elements.
+    this.#viewportHost.setAttribute('aria-hidden', 'true');
     this.#viewportHost.style.position = 'relative';
     this.#viewportHost.style.width = '100%';
     // Set min-height to at least one page so the viewport is clickable before layout renders
@@ -5348,10 +5352,14 @@ export class PresentationEditor extends EventEmitter {
     }
 
     // Query spans - prefer narrowed scope if we found the page, fallback to viewport-wide query
+    // Exclude inline SDT wrapper elements - they have PM positions for selection highlighting but their
+    // child spans should be the targets for accurate character-level caret positioning
     const spanEls = Array.from(
       targetPageEl
-        ? targetPageEl.querySelectorAll('span[data-pm-start][data-pm-end]')
-        : this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]'),
+        ? targetPageEl.querySelectorAll(`span[data-pm-start][data-pm-end]:not(.${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER})`)
+        : this.#viewportHost.querySelectorAll(
+            `span[data-pm-start][data-pm-end]:not(.${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER})`,
+          ),
     );
 
     for (const spanEl of spanEls) {
@@ -5664,7 +5672,6 @@ export class PresentationEditor extends EventEmitter {
   #createHiddenHost(doc: Document): HTMLElement {
     const host = doc.createElement('div');
     host.className = 'presentation-editor__hidden-host';
-    host.setAttribute('aria-hidden', 'true');
     host.style.position = 'absolute';
     host.style.left = '-9999px';
     host.style.top = '0';
@@ -5675,6 +5682,10 @@ export class PresentationEditor extends EventEmitter {
     host.style.opacity = '0';
     host.style.zIndex = '-1';
     host.style.userSelect = 'none';
+    // DO NOT set aria-hidden="true" on this element.
+    // This hidden host contains the actual ProseMirror editor which must remain accessible
+    // to screen readers and keyboard navigation. The viewport (#viewportHost) is aria-hidden
+    // because it's purely visual, but this editor provides the semantic document structure.
     return host;
   }
 }

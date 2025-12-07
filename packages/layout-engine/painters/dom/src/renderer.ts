@@ -58,6 +58,7 @@ import {
   ensureFieldAnnotationStyles,
   type PageStyles,
 } from './styles.js';
+import { DOM_CLASS_NAMES } from './constants.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
@@ -3641,14 +3642,14 @@ export class DomPainter {
             if (!currentInlineSdtWrapper) {
               // Create new wrapper for this SDT group
               currentInlineSdtWrapper = this.doc.createElement('span');
-              currentInlineSdtWrapper.className = 'superdoc-structured-content-inline';
+              currentInlineSdtWrapper.className = DOM_CLASS_NAMES.INLINE_SDT_WRAPPER;
               currentInlineSdtId = runSdtId;
               // Apply SDT metadata to wrapper
               this.applySdtDataset(currentInlineSdtWrapper, runSdt);
               // Add label element for hover display
               const alias = (runSdt as { alias?: string })?.alias || 'Inline content';
               const labelEl = this.doc.createElement('span');
-              labelEl.className = 'superdoc-structured-content-inline__label';
+              labelEl.className = `${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER}__label`;
               labelEl.textContent = alias;
               currentInlineSdtWrapper.appendChild(labelEl);
             }
