@@ -1073,22 +1073,36 @@ export const computeParagraphAttrs = (
     paragraphAttrs.rtl = true;
   }
 
+  /**
+   * Paragraph alignment priority cascade (6 levels, highest to lowest):
+   *
+   * 1. bidi + adjustRightInd: Forced right alignment for BiDi paragraphs with right indent adjustment
+   * 2. explicitAlignment: Direct alignment attribute on the paragraph node (attrs.alignment or attrs.textAlign)
+   * 3. paragraphAlignment: Paragraph justification from paragraphProperties (inline paragraph-level formatting)
+   * 4. bidi alone: Default right alignment for BiDi paragraphs without explicit alignment
+   * 5. styleAlignment: Alignment from hydrated paragraph style (style-based formatting)
+   * 6. computed.paragraph.alignment: Fallback alignment from style engine computation
+   *
+   * This cascade ensures that inline paragraph properties (level 3) correctly override style-based
+   * alignment (levels 5-6), matching Microsoft Word's behavior where direct paragraph formatting
+   * takes precedence over style-based formatting.
+   */
   const explicitAlignment = normalizeAlignment(attrs.alignment ?? attrs.textAlign);
+  const paragraphAlignment =
+    typeof paragraphProps.justification === 'string' ? normalizeAlignment(paragraphProps.justification) : undefined;
   const styleAlignment = hydrated?.alignment ? normalizeAlignment(hydrated.alignment) : undefined;
-  const paragraphAlignment = paragraphProps.justification
-    ? normalizeAlignment(paragraphProps.justification as string)
-    : undefined;
   if (bidi && adjustRightInd) {
     paragraphAttrs.alignment = 'right';
   } else if (explicitAlignment) {
     paragraphAttrs.alignment = explicitAlignment;
+  } else if (paragraphAlignment) {
+    // Inline paragraph justification should override style-derived alignment
+    paragraphAttrs.alignment = paragraphAlignment;
   } else if (bidi) {
     // RTL paragraphs without explicit alignment default to right
     paragraphAttrs.alignment = 'right';
   } else if (styleAlignment) {
     paragraphAttrs.alignment = styleAlignment;
-  } else if (paragraphAlignment) {
-    paragraphAttrs.alignment = paragraphAlignment;
   } else if (computed.paragraph.alignment) {
     paragraphAttrs.alignment = computed.paragraph.alignment;
   }
