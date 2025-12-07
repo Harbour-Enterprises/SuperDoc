@@ -4706,9 +4706,13 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
-    const fallbackPmEnd = runPmStart != null && run.pmEnd == null ? runPmStart + runLength : (run.pmEnd ?? null);
 
-    if (runPmStart == null || fallbackPmEnd == null) {
+    // FIX: Always calculate effectivePmEnd from text length, not from potentially stale pmEnd.
+    // The run's pmEnd can become stale after PM transactions modify text content (especially in tables),
+    // causing content truncation when Math.min caps the range.
+    const effectivePmEnd = runPmStart != null ? runPmStart + runLength : null;
+
+    if (runPmStart == null || effectivePmEnd == null) {
       continue;
     }
 
@@ -4718,7 +4722,8 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const endOffset = isLastRun ? line.toChar : runLength;
 
     const sliceStart = runPmStart + startOffset;
-    const sliceEnd = Math.min(runPmStart + endOffset, fallbackPmEnd);
+    // FIX: Removed Math.min cap that was causing truncation with stale pmEnd values.
+    const sliceEnd = runPmStart + endOffset;
 
     if (pmStart == null) {
       pmStart = sliceStart;
