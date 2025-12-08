@@ -43,7 +43,7 @@
     "eslint": "^9.39.1",
     "eslint-config-prettier": "^9.1.2",
     "nodemon": "^3.1.10",
-    "prettier": "^3.5.3",
+    "prettier": "^3.7.4",
     "tsup": "^8.5.0",
     "typescript": "^5.7.3",
     "vitest": "^2.0.5"
