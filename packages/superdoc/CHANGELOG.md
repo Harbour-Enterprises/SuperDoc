@@ -1,3 +1,15 @@
+# [0.35.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.9...v0.35.0) (2025-12-08)
+
+### Bug Fixes
+
+- collaboratio tests and more scenarios ([4153017](https://github.com/Harbour-Enterprises/SuperDoc/commit/4153017da205a32c853da3cbafad57fda881cc94))
+
+### Features
+
+- add y-sweet example + remove type file ([#1463](https://github.com/Harbour-Enterprises/SuperDoc/issues/1463)) ([ac26255](https://github.com/Harbour-Enterprises/SuperDoc/commit/ac2625599395230d78293fff9255562a58d5e9fa))
+- make collab provider agnostic ([0096abc](https://github.com/Harbour-Enterprises/SuperDoc/commit/0096abc581b297ec4594a96eae20e90c7b9a572c))
+- y-sweet example ([fa71867](https://github.com/Harbour-Enterprises/SuperDoc/commit/fa71867f22b5c6f0bac5435c3b11d47afbdbf66a))
+
 ## [0.34.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.8...v0.34.9) (2025-12-06)
 
 ### Bug Fixes
