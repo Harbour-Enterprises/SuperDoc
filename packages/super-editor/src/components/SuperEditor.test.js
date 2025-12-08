@@ -15,24 +15,20 @@ const getFileObjectMock = vi.hoisted(() =>
 const getStarterExtensionsMock = vi.hoisted(() => vi.fn(() => [{ name: 'core' }]));
 
 const EditorConstructor = vi.hoisted(() => {
-  const constructor = vi.fn((options) => {
-    const instance = {
-      options,
-      listeners: {},
-      on: vi.fn((event, handler) => {
-        instance.listeners[event] = handler;
-      }),
-      off: vi.fn(),
-      view: { focus: vi.fn() },
-      destroy: vi.fn(),
-    };
-
-    return instance;
+  const MockEditor = vi.fn(function (options) {
+    this.options = options;
+    this.listeners = {};
+    this.on = vi.fn((event, handler) => {
+      this.listeners[event] = handler;
+    });
+    this.off = vi.fn();
+    this.view = { focus: vi.fn() };
+    this.destroy = vi.fn();
   });
 
-  constructor.loadXmlData = vi.fn();
+  MockEditor.loadXmlData = vi.fn();
 
-  return constructor;
+  return MockEditor;
 });
 
 vi.mock('naive-ui', () => ({
@@ -147,8 +143,11 @@ describe('SuperEditor.vue', () => {
   });
 
   it('initializes when collaboration provider syncs remote docx data', async () => {
+    vi.useFakeTimers();
+
     const metaMap = {
-      get: vi.fn(() => '<remote />'),
+      has: vi.fn((key) => key === 'docx'),
+      get: vi.fn((key) => (key === 'docx' ? '<remote />' : undefined)),
     };
     const ydoc = {
       getMap: vi.fn(() => metaMap),
@@ -182,12 +181,149 @@ describe('SuperEditor.vue', () => {
     await flushPromises();
 
     expect(ydoc.getMap).toHaveBeenCalledWith('meta');
+    expect(metaMap.has).toHaveBeenCalledWith('docx');
+    expect(metaMap.get).toHaveBeenCalledWith('docx');
     expect(EditorConstructor).toHaveBeenCalledTimes(1);
     expect(EditorConstructor.loadXmlData).not.toHaveBeenCalled();
 
     const options = EditorConstructor.mock.calls[0][0];
     expect(options.content).toBe('<remote />');
     expect(provider.off).toHaveBeenCalledWith('synced', syncedHandler);
+
+    wrapper.unmount();
+  });
+
+  it('loads blank document when collaboration provider syncs with no existing content (first client)', async () => {
+    vi.useFakeTimers();
+
+    EditorConstructor.loadXmlData.mockResolvedValueOnce(['<blank />', {}, {}, {}]);
+
+    const metaMap = {
+      has: vi.fn(() => false), // No existing content
+      get: vi.fn(() => undefined),
+    };
+    const ydoc = {
+      getMap: vi.fn(() => metaMap),
+    };
+
+    const provider = {
+      listeners: {},
+      on: vi.fn((event, handler) => {
+        provider.listeners[event] = handler;
+      }),
+      off: vi.fn(),
+    };
+
+    const wrapper = mount(SuperEditor, {
+      props: {
+        documentId: 'doc-first-client',
+        options: {
+          ydoc,
+          collaborationProvider: provider,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const syncedHandler = provider.on.mock.calls.find(([event]) => event === 'synced')[1];
+    syncedHandler();
+
+    await flushPromises();
+    vi.runAllTimers();
+    await flushPromises();
+
+    expect(metaMap.has).toHaveBeenCalledWith('docx');
+    expect(EditorConstructor.loadXmlData).toHaveBeenCalled(); // Should load blank
+    expect(EditorConstructor).toHaveBeenCalledTimes(1);
+
+    wrapper.unmount();
+  });
+
+  it('skips waiting for sync when provider is already synced', async () => {
+    vi.useFakeTimers();
+
+    const metaMap = {
+      has: vi.fn((key) => key === 'docx'),
+      get: vi.fn((key) => (key === 'docx' ? '<already-synced />' : undefined)),
+    };
+    const ydoc = {
+      getMap: vi.fn(() => metaMap),
+    };
+
+    const provider = {
+      isSynced: true, // Already synced
+      on: vi.fn(),
+      off: vi.fn(),
+    };
+
+    const wrapper = mount(SuperEditor, {
+      props: {
+        documentId: 'doc-already-synced',
+        options: {
+          ydoc,
+          collaborationProvider: provider,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    // Should NOT register sync listeners since already synced
+    expect(provider.on).not.toHaveBeenCalledWith('synced', expect.any(Function));
+    expect(ydoc.getMap).toHaveBeenCalledWith('meta');
+    expect(EditorConstructor).toHaveBeenCalledTimes(1);
+
+    const options = EditorConstructor.mock.calls[0][0];
+    expect(options.content).toBe('<already-synced />');
+
+    wrapper.unmount();
+  });
+
+  it('ignores sync event with synced=false (Liveblocks behavior)', async () => {
+    vi.useFakeTimers();
+
+    const metaMap = {
+      has: vi.fn((key) => key === 'docx'),
+      get: vi.fn((key) => (key === 'docx' ? '<liveblocks />' : undefined)),
+    };
+    const ydoc = {
+      getMap: vi.fn(() => metaMap),
+    };
+
+    const provider = {
+      listeners: {},
+      on: vi.fn((event, handler) => {
+        provider.listeners[event] = handler;
+      }),
+      off: vi.fn(),
+    };
+
+    const wrapper = mount(SuperEditor, {
+      props: {
+        documentId: 'doc-liveblocks',
+        options: {
+          ydoc,
+          collaborationProvider: provider,
+        },
+      },
+    });
+
+    await flushPromises();
+
+    const syncHandler = provider.on.mock.calls.find(([event]) => event === 'sync')?.[1];
+
+    // Liveblocks fires sync(false) first - should be ignored
+    syncHandler(false);
+    await flushPromises();
+
+    expect(EditorConstructor).not.toHaveBeenCalled();
+
+    // Then fires sync(true) or synced()
+    syncHandler(true);
+    await flushPromises();
+
+    expect(EditorConstructor).toHaveBeenCalledTimes(1);
 
     wrapper.unmount();
   });
