@@ -19,6 +19,7 @@ Real-time collaboration examples using Yjs for multi-user document editing.
 | [from-scratch](./from-scratch)     | Build collaboration from scratch with client and server    |
 | [production](./production)         | Production-ready setup with persistence and authentication |
 | [fastify-server](./fastify-server) | Fastify-based collaboration server                         |
+| [y-sweet](./y-sweet)               | Y-Sweet collaboration server                               |
 
 ## Running an Example
 
