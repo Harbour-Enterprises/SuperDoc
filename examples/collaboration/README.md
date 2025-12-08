@@ -14,6 +14,7 @@ Real-time collaboration examples using Yjs for multi-user document editing.
 | Example                            | Description                                                |
 | ---------------------------------- | ---------------------------------------------------------- |
 | [Hocuspocus](./hocuspocus)         | Self-hosted Hocuspocus server                              |
+| [Y-Sweet](./y-sweet)               | Self-hosted Y-Sweet collaboration server                   |
 | [basic](./basic)                   | Simple collaboration setup with y-websocket                |
 | [superdoc](./superdoc)             | Full SuperDoc collaboration with awareness features        |
 | [from-scratch](./from-scratch)     | Build collaboration from scratch with client and server    |
