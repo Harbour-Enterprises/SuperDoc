@@ -2063,9 +2063,11 @@ function r(t) {
           if (typeof L == 'number') e.strokeWidth = L;
           else if (typeof L == 'string') {
             let o = Number(L);
-            Number.isFinite(o) && (e.strokeWidth = o);
+            if (Number.isFinite(o)) e.strokeWidth = o;
           }
-        } else typeof L == 'string' && (e[l] = L);
+        } else if (typeof L == 'string') {
+          e[l] = L;
+        }
     }),
     Object.keys(e).length ? e : null
   );

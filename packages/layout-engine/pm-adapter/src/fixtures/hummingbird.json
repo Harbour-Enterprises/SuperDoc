@@ -1,0 +1,1557 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "image",
+              "attrs": {
+                "src": "word/media/image1.png",
+                "alt": "Picture 2",
+                "extension": "png",
+                "id": "9",
+                "title": "A picture containing green, bird, colorful\n\nDescription automatically generated",
+                "inline": true,
+                "padding": {
+                  "top": 0,
+                  "bottom": 0,
+                  "left": 0,
+                  "right": 0
+                },
+                "marginOffset": {
+                  "horizontal": 63,
+                  "top": 26
+                },
+                "size": {
+                  "width": 248,
+                  "height": 235
+                },
+                "anchorData": {
+                  "hRelativeFrom": "column",
+                  "vRelativeFrom": "paragraph"
+                },
+                "isAnchor": true,
+                "transformData": {
+                  "sizeExtension": {
+                    "left": 0,
+                    "top": 0,
+                    "right": 0,
+                    "bottom": 0
+                  }
+                },
+                "simplePos": {
+                  "x": "0",
+                  "y": "0"
+                },
+                "wrap": {
+                  "type": "Tight",
+                  "attrs": {
+                    "wrapText": "bothSides",
+                    "polygon": [
+                      [110.625, 0],
+                      [105.188, 122.729],
+                      [25.385, 153.406],
+                      [25.385, 159.167],
+                      [36.271, 184.094],
+                      [0, 197.51],
+                      [0, 210.938],
+                      [59.844, 214.771],
+                      [67.104, 222.448],
+                      [68.917, 222.448],
+                      [83.427, 222.448],
+                      [88.865, 214.771],
+                      [101.563, 214.771],
+                      [134.198, 191.76],
+                      [132.385, 184.094],
+                      [223.063, 159.167],
+                      [223.063, 153.406],
+                      [145.083, 122.729],
+                      [125.135, 92.042],
+                      [117.875, 0]
+                    ],
+                    "polygonEdited": "0"
+                  }
+                },
+                "wrapTopAndBottom": false,
+                "originalPadding": {
+                  "distT": "0",
+                  "distB": "0",
+                  "distL": "0",
+                  "distR": "0"
+                },
+                "originalAttributes": {
+                  "distT": "0",
+                  "distB": "0",
+                  "distL": "0",
+                  "distR": "0",
+                  "simplePos": "0",
+                  "relativeHeight": "251659264",
+                  "behindDoc": "1",
+                  "locked": "0",
+                  "layoutInCell": "1",
+                  "allowOverlap": "1",
+                  "wp14:anchorId": "59C66B87",
+                  "wp14:editId": "1E065548"
+                },
+                "rId": "rId4"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "runProperties": [
+              {
+                "xmlName": "w:noProof",
+                "attributes": {}
+              }
+            ]
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Lets",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": []
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": " tightly wrap this one. ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": []
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "28DA4CF0",
+        "w14:textId": "77777777",
+        "w:rsidR": "00763510",
+        "w:rsidRDefault": "00763510",
+        "w:rsidP": "00763510",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.1583333333333334,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00763510",
+        "paraId": "28DA4CF0",
+        "textId": "77777777",
+        "rsidR": "00763510",
+        "rsidP": "00763510"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "2902D54E",
+        "w14:textId": "77777777",
+        "w:rsidR": "003C58BC",
+        "w:rsidRDefault": "003C58BC",
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.1583333333333334,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "003C58BC",
+        "paraId": "2902D54E",
+        "textId": "77777777",
+        "rsidR": "003C58BC"
+      },
+      "marks": []
+    }
+  ],
+  "attrs": {
+    "attributes": {
+      "xmlns:wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+      "xmlns:cx": "http://schemas.microsoft.com/office/drawing/2014/chartex",
+      "xmlns:cx1": "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex",
+      "xmlns:cx2": "http://schemas.microsoft.com/office/drawing/2015/10/21/chartex",
+      "xmlns:cx3": "http://schemas.microsoft.com/office/drawing/2016/5/9/chartex",
+      "xmlns:cx4": "http://schemas.microsoft.com/office/drawing/2016/5/10/chartex",
+      "xmlns:cx5": "http://schemas.microsoft.com/office/drawing/2016/5/11/chartex",
+      "xmlns:cx6": "http://schemas.microsoft.com/office/drawing/2016/5/12/chartex",
+      "xmlns:cx7": "http://schemas.microsoft.com/office/drawing/2016/5/13/chartex",
+      "xmlns:cx8": "http://schemas.microsoft.com/office/drawing/2016/5/14/chartex",
+      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+      "xmlns:aink": "http://schemas.microsoft.com/office/drawing/2016/ink",
+      "xmlns:am3d": "http://schemas.microsoft.com/office/drawing/2017/model3d",
+      "xmlns:o": "urn:schemas-microsoft-com:office:office",
+      "xmlns:oel": "http://schemas.microsoft.com/office/2019/extlst",
+      "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "xmlns:m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+      "xmlns:v": "urn:schemas-microsoft-com:vml",
+      "xmlns:wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+      "xmlns:wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
+      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+      "xmlns:w15": "http://schemas.microsoft.com/office/word/2012/wordml",
+      "xmlns:w16cex": "http://schemas.microsoft.com/office/word/2018/wordml/cex",
+      "xmlns:w16cid": "http://schemas.microsoft.com/office/word/2016/wordml/cid",
+      "xmlns:w16": "http://schemas.microsoft.com/office/word/2018/wordml",
+      "xmlns:w16du": "http://schemas.microsoft.com/office/word/2023/wordml/word16du",
+      "xmlns:w16sdtdh": "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash",
+      "xmlns:w16sdtfl": "http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock",
+      "xmlns:w16se": "http://schemas.microsoft.com/office/word/2015/wordml/symex",
+      "xmlns:wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+      "xmlns:wpi": "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
+      "xmlns:wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "mc:Ignorable": "w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"
+    }
+  }
+}

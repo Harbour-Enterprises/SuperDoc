@@ -28,9 +28,22 @@ vi.mock('../menuItems.js', () => ({
   getItems: vi.fn(),
 }));
 
-vi.mock('../../cursor-helpers.js', () => ({
-  moveCursorToMouseEvent: vi.fn(),
-}));
+vi.mock('../../cursor-helpers.js', async () => {
+  const actual = await vi.importActual('../../cursor-helpers.js');
+  return {
+    ...actual,
+    moveCursorToMouseEvent: vi.fn(),
+  };
+});
+
+let surfaceElementMock;
+vi.mock('../../core/helpers/editorSurface.js', async () => {
+  const actual = await vi.importActual('../../core/helpers/editorSurface.js');
+  return {
+    ...actual,
+    getEditorSurfaceElement: vi.fn(() => surfaceElementMock),
+  };
+});
 
 describe('SlashMenu.vue', () => {
   let mockEditor;
@@ -55,6 +68,7 @@ describe('SlashMenu.vue', () => {
         },
       },
     });
+    surfaceElementMock = mockEditor.view.dom;
 
     mockProps = {
       editor: mockEditor,
@@ -104,6 +118,23 @@ describe('SlashMenu.vue', () => {
       wrapper.unmount();
 
       assertEventListenersCleanup(mockEditor, commonMocks.spies);
+    });
+
+    it('attaches contextmenu listener to PresentationEditor host when available', () => {
+      const presentationHost = {
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0 })),
+      };
+      mockEditor.presentationEditor = { element: presentationHost };
+      surfaceElementMock = presentationHost;
+
+      const wrapper = mount(SlashMenu, { props: mockProps });
+      expect(presentationHost.addEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
+      expect(mockEditor.view.dom.addEventListener).not.toHaveBeenCalledWith('contextmenu', expect.any(Function));
+
+      wrapper.unmount();
+      expect(presentationHost.removeEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
     });
   });
 

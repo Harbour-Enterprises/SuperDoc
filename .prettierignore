@@ -27,3 +27,6 @@ src/tests/data
 src/tests/data/**
 tests/data
 tests/data/**
+
+# Markdown files
+*.md

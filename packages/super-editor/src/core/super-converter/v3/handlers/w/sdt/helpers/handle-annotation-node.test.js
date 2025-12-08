@@ -143,26 +143,16 @@ describe('handleAnnotationNode', () => {
     const result = handleAnnotationNode(params);
 
     expect(parseTagValueJSON).not.toHaveBeenCalled();
-    expect(result).toEqual({
-      type: 'text',
-      text: '{{Legacy Field}}',
-      attrs: {
-        type: 'text',
-        fieldId: 'field-123',
-        displayLabel: 'Legacy Field',
-        defaultDisplayLabel: 'Legacy Field',
-        multipleImage: false,
-        fieldType: undefined,
-        fieldColor: undefined,
-        fontFamily: undefined,
-        fontSize: undefined,
-        textColor: undefined,
-        textHighlight: undefined,
-        sdtId: undefined,
-        hash: 'test-hash-1234',
-      },
-      marks: undefined,
-    });
+    expect(result.type).toEqual('text');
+    expect(result.text).toEqual('{{Legacy Field}}');
+    expect(result.attrs.type).toEqual('text');
+    expect(result.attrs.fieldId).toEqual('field-123');
+    expect(result.attrs.displayLabel).toEqual('Legacy Field');
+    expect(result.attrs.defaultDisplayLabel).toEqual('Legacy Field');
+    expect(result.attrs.multipleImage).toEqual(false);
+    expect(result.attrs.hash).toEqual('test-hash-1234');
+    expect(result.attrs.sdtPr).toBeDefined(); // Passthrough for round-trip
+    expect(result.attrs.sdtPr).toHaveProperty('elements');
   });
 
   it('returns fieldAnnotation type when editor annotations option is enabled', () => {
@@ -495,5 +485,55 @@ describe('handleAnnotationNode', () => {
     expect(result.attrs.defaultDisplayLabel).toBe('');
     expect(result.attrs.hash).toBe('test-hash-1234');
     expect(generateDocxRandomId).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles null sdtPr gracefully without adding it to attrs', () => {
+    const tagValue = '{"fieldId":"field-test","fieldTypeShort":"text","displayLabel":"Test"}';
+
+    parseTagValueJSON.mockReturnValue({
+      fieldId: 'field-test',
+      fieldTypeShort: 'text',
+      displayLabel: 'Test',
+    });
+
+    // Create a node without sdtPr - tag is in sdtPr, so we need sdtPr but with minimal elements
+    const node = createNode([createTag(tagValue)], []);
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: {} } });
+
+    expect(result).not.toBeNull();
+    expect(result.attrs).toBeDefined();
+    expect(result.attrs.sdtPr).toBeDefined();
+    // sdtPr exists but has minimal elements (just the tag)
+    expect(result.attrs.sdtPr.elements).toEqual([createTag(tagValue)]);
+  });
+
+  it('handles empty sdtPr.elements array correctly', () => {
+    // When sdtPr.elements is empty, there's no tag to parse
+    // So we need to use the legacy path which expects certain elements
+    const node = {
+      name: 'w:sdt',
+      elements: [
+        {
+          name: 'w:sdtPr',
+          elements: [
+            createTag('field-test'),
+            { name: 'w:fieldTypeShort', attributes: { 'w:val': 'text' } },
+            createAlias('Test Field'),
+          ],
+        },
+        {
+          name: 'w:sdtContent',
+          elements: [],
+        },
+      ],
+    };
+
+    const result = handleAnnotationNode({ nodes: [node], editor: { options: {} } });
+
+    expect(result).not.toBeNull();
+    expect(result.attrs).toBeDefined();
+    expect(result.attrs.sdtPr).toBeDefined();
+    expect(Array.isArray(result.attrs.sdtPr.elements)).toBe(true);
   });
 });

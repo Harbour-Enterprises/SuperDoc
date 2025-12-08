@@ -1,7 +1,6 @@
 // @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { PaginationPluginKey } from '../../pagination/pagination-helpers.js';
 
 /** @typedef {import('prosemirror-transform').Step} PMStep */
 /** @typedef {import('prosemirror-transform').ReplaceStep} ReplaceStep */
@@ -38,7 +37,7 @@ const pageBreakPositionCache = new WeakMap();
  */
 export const ImagePositionPlugin = ({ editor }) => {
   const { view } = editor;
-  let shouldUpdate = false;
+  let shouldUpdate = true;
   return new Plugin({
     name: 'ImagePositionPlugin',
     key: ImagePositionPluginKey,
@@ -50,6 +49,12 @@ export const ImagePositionPlugin = ({ editor }) => {
 
       apply(tr, oldDecorationSet, oldState, newState) {
         if (!tr.docChanged && !shouldUpdate) return oldDecorationSet;
+
+        // In headless/Node environments, or when no view/DOM is available, skip DOM-dependent work
+        const hasDOM = typeof document !== 'undefined' && !!(document && document.createElement);
+        if (!hasDOM || !view || typeof view.domAtPos !== 'function') {
+          return oldDecorationSet.map(tr.mapping, tr.doc);
+        }
 
         /*
          * OPTIMIZATION: Check if transaction affects images before regenerating decorations.
@@ -82,14 +87,12 @@ export const ImagePositionPlugin = ({ editor }) => {
     view: () => {
       return {
         update: (view, lastState) => {
-          const pagination = PaginationPluginKey.getState(lastState);
+          const hasDOM = typeof document !== 'undefined' && !!(document && document.createElement);
+          if (!hasDOM || !view || typeof view.domAtPos !== 'function') return;
           if (shouldUpdate) {
             const decorations = getImagePositionDecorations(lastState, view);
             const updateTransaction = view.state.tr.setMeta(ImagePositionPluginKey, { decorations });
             view.dispatch(updateTransaction);
-          }
-          if (pagination?.isReadyToInit) {
-            shouldUpdate = true;
           }
         },
       };
@@ -115,6 +118,12 @@ export const ImagePositionPlugin = ({ editor }) => {
  */
 const getImagePositionDecorations = (state, view) => {
   let decorations = [];
+
+  // Guard for non-DOM environments or missing view APIs
+  const hasDOM = typeof document !== 'undefined' && !!(document && document.createElement);
+  if (!hasDOM || !view || typeof view.domAtPos !== 'function') {
+    return decorations;
+  }
 
   /*
    * OPTIMIZATION: Early return if no anchored images exist in the document.
@@ -202,6 +211,9 @@ const getImagePositionDecorations = (state, view) => {
  * @note Handles text nodes by starting from their parent
  */
 const findPreviousDomNodeWithClass = (view, pos, className) => {
+  // Guard for headless environments
+  const hasDOM = typeof document !== 'undefined' && !!(document && document.createElement);
+  if (!hasDOM || !view || typeof view.domAtPos !== 'function') return null;
   let { node } = view.domAtPos(pos);
 
   // If you get a text node, go to its parent

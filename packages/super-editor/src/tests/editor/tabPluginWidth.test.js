@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { initTestEditor } from '../helpers/helpers.js';
 import { getIndentWidth } from '@extensions/tab/helpers/tabDecorations.js';
+import { pixelsToTwips } from '@converter/helpers.js';
 
 const makeText = (text) => ({
   type: 'run',
@@ -29,11 +30,11 @@ describe('tab plugin width calculation', () => {
       type: 'paragraph',
       attrs: {
         tabStops: [
-          { val: 'start', pos: 96, originalPos: '1440' },
-          { val: 'start', pos: 160, originalPos: '2400' },
-          { val: 'start', pos: 240, originalPos: '3600' },
-          { val: 'start', pos: 336, originalPos: '5040' },
-          { val: 'start', pos: 480, originalPos: '7200' },
+          { tab: { tabType: 'start', pos: 96, originalPos: '1440' } },
+          { tab: { tabType: 'start', pos: 160, originalPos: '2400' } },
+          { tab: { tabType: 'start', pos: 240, originalPos: '3600' } },
+          { tab: { tabType: 'start', pos: 336, originalPos: '5040' } },
+          { tab: { tabType: 'start', pos: 480, originalPos: '7200' } },
         ],
       },
       content: [
@@ -88,7 +89,7 @@ describe('getIndentWidth', () => {
       coordsAtPos: () => ({ left: 10 }),
     };
 
-    const width = getIndentWidth(view, 0, { firstLine: 144 });
+    const width = getIndentWidth(view, 0, { firstLine: pixelsToTwips(144) });
 
     expect(width).toBe(144);
   });
@@ -98,7 +99,11 @@ describe('getIndentWidth', () => {
       coordsAtPos: () => ({ left: 0 }),
     };
 
-    const width = getIndentWidth(view, 0, { left: 24, firstLine: 48, hanging: 12 });
+    const width = getIndentWidth(view, 0, {
+      left: pixelsToTwips(24),
+      firstLine: pixelsToTwips(48),
+      hanging: pixelsToTwips(12),
+    });
 
     expect(width).toBe(60);
   });

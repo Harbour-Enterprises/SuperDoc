@@ -22,9 +22,13 @@ vi.mock('@converter/v3/handlers/w/sdt/helpers/translate-field-annotation.js', ()
   prepareTextAnnotation: vi.fn(() => ({ type: 'text', text: 'annotation' })),
 }));
 
-vi.mock('@core/helpers/index.js', () => ({
-  generateDocxRandomId: vi.fn(() => '123'),
-}));
+vi.mock(import('@core/helpers/index.js'), async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    generateDocxRandomId: vi.fn(() => '123'),
+  };
+});
 
 describe('translateImageNode', () => {
   let baseParams;

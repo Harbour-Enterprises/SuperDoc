@@ -44,6 +44,7 @@ export const resetAttributes =
           }
         });
       });
+      dispatch(tr);
     }
 
     return true;

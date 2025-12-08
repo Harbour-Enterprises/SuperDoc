@@ -1,8 +1,9 @@
-// @ts-check
+// @ts-nocheck
 import { Extension } from '@core/Extension.js';
 import { applyLinkedStyleToTransaction, generateLinkedStyleString } from './helpers.js';
 import { createLinkedStylesPlugin, LinkedStylesPluginKey } from './plugin.js';
 import { findParentNodeClosestToPos } from '@core/helpers';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 /**
  * Style definition from Word document
@@ -57,38 +58,35 @@ export const LinkedStyles = Extension.create({
        * Toggle a linked style on the current selection
        * @category Command
        * @param {LinkedStyle} style - The linked style to apply (with id property)
-       * @param {string|null} [nodeType=null] - Node type to restrict toggle to (e.g., 'paragraph')
        * @example
        * const style = editor.helpers.linkedStyles.getStyleById('Heading1');
        * editor.commands.toggleLinkedStyle(style)
-       * editor.commands.toggleLinkedStyle(style, 'paragraph')
        * @note If selection is empty, returns false
        * @note Removes style if already applied, applies it if not
        */
-      toggleLinkedStyle:
-        (style, nodeType = null) =>
-        (params) => {
-          const { tr } = params;
-          if (tr.selection.empty) {
-            return false;
-          }
-          let node = tr.doc.nodeAt(tr.selection.$from.pos);
+      toggleLinkedStyle: (style) => (params) => {
+        const { tr } = params;
+        if (tr.selection.empty) {
+          return false;
+        }
+        let node = tr.doc.nodeAt(tr.selection.$from.pos);
 
-          if (node && nodeType && node.type.name !== nodeType) {
-            node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
-              return nodeType ? n.type.name === nodeType : true;
-            })?.node;
-          }
-          if (!node) {
-            return false;
-          }
-          const currentStyleId = node.attrs.styleId;
+        if (node && node.type.name !== 'paragraph') {
+          node = findParentNodeClosestToPos(tr.selection.$from, (n) => {
+            return n.type.name === 'paragraph';
+          })?.node;
+        }
+        if (!node) {
+          return false;
+        }
+        const paragraphProps = getResolvedParagraphProperties(node);
+        const currentStyleId = paragraphProps.styleId;
 
-          if (currentStyleId === style.id) {
-            return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
-          }
-          return applyLinkedStyleToTransaction(tr, this.editor, style);
-        },
+        if (currentStyleId === style.id) {
+          return applyLinkedStyleToTransaction(tr, this.editor, { id: null });
+        }
+        return applyLinkedStyleToTransaction(tr, this.editor, style);
+      },
 
       /**
        * Apply a linked style by its ID

@@ -1,4 +1,5 @@
 // @ts-check
+
 import { Node } from '@core/index.js';
 
 /**
@@ -47,9 +48,19 @@ export const Document = Node.create({
         rendered: false,
         'aria-label': 'Document node',
       },
+      bodySectPr: {
+        rendered: false,
+        default: null,
+        /**
+         * Body-level section properties (raw w:sectPr JSON) extracted from DOCX.
+         * Used by the layout engine to compute the final section range (end-tagged semantics),
+         * ensuring that the last section’s page size/orientation/margins are applied correctly.
+         */
+      },
     };
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**

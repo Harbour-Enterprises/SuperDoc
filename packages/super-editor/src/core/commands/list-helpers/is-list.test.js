@@ -1,36 +1,68 @@
-import { describe, it, expect } from 'vitest';
-import { Schema } from 'prosemirror-model';
+import { describe, it, expect, vi } from 'vitest';
 import { isList } from './is-list.js';
 
-const schema = new Schema({
-  nodes: {
-    doc: { content: 'block+' },
-    paragraph: { group: 'block', content: 'text*', renderDOM: () => ['p', 0], parseDOM: () => [{ tag: 'p' }] },
-    text: { group: 'inline' },
-    orderedList: { content: 'listItem+', group: 'block', renderDOM: () => ['ol', 0], parseDOM: () => [{ tag: 'ol' }] },
-    bulletList: { content: 'listItem+', group: 'block', renderDOM: () => ['ul', 0], parseDOM: () => [{ tag: 'ul' }] },
-    listItem: { content: 'paragraph+', renderDOM: () => ['li', 0], parseDOM: () => [{ tag: 'li' }] },
-  },
-});
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => node?.attrs?.paragraphProperties || {}),
+}));
 
 describe('isList', () => {
-  it('returns true for orderedList nodes', () => {
-    const node = schema.nodes.orderedList.createAndFill();
-    expect(isList(node)).toBe(true);
+  it('returns true for paragraph nodes with numbering & list metadata', () => {
+    const node = {
+      type: { name: 'paragraph' },
+      attrs: {
+        paragraphProperties: { numberingProperties: { numId: 1, ilvl: 0 } },
+        listRendering: { numberingType: 'bullet' },
+      },
+    };
+
+    expect(isList(node)).toBeTruthy();
   });
 
-  it('returns true for bulletList nodes', () => {
-    const node = schema.nodes.bulletList.createAndFill();
-    expect(isList(node)).toBe(true);
+  it('returns false when numbering metadata is missing', () => {
+    const node = {
+      type: { name: 'paragraph' },
+      attrs: {
+        paragraphProperties: {},
+        listRendering: { numberingType: 'decimal' },
+      },
+    };
+
+    expect(isList(node)).toBeFalsy();
   });
 
-  it('returns false for non-list nodes', () => {
-    const para = schema.nodes.paragraph.create();
-    expect(isList(para)).toBe(false);
+  it('returns false when list rendering metadata is missing', () => {
+    const node = {
+      type: { name: 'paragraph' },
+      attrs: {
+        paragraphProperties: { numberingProperties: { numId: 2 } },
+      },
+    };
+
+    expect(isList(node)).toBeFalsy();
+  });
+
+  it('returns false for non-paragraph nodes even with list attributes', () => {
+    const node = {
+      type: { name: 'orderedList' },
+      attrs: {
+        paragraphProperties: { numberingProperties: { numId: 5 } },
+        listRendering: { numberingType: 'decimal' },
+      },
+    };
+
+    expect(isList(node)).toBeFalsy();
+  });
+
+  it('returns false when attrs are missing entirely', () => {
+    const node = {
+      type: { name: 'paragraph' },
+    };
+
+    expect(isList(node)).toBeFalsy();
   });
 
   it('returns false for null/undefined', () => {
-    expect(isList(null)).toBe(false);
-    expect(isList(undefined)).toBe(false);
+    expect(isList(null)).toBeFalsy();
+    expect(isList(undefined)).toBeFalsy();
   });
 });

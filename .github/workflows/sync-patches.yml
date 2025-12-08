@@ -1,10 +1,7 @@
-name: 🔄 Sync Patches [auto]
+name: 🔄 Sync Patches [disabled]
 
 on:
-  push:
-    branches: [stable, "*.x"]
-    paths:
-      - "packages/**"
+  # Disabled to stop automatic PRs syncing stable/*.x back to main.
   workflow_dispatch:
 
 permissions:
@@ -13,12 +10,9 @@ permissions:
 
 jobs:
   sync-to-main:
+    # Short-circuit to fully disable the workflow.
+    if: ${{ false }}
     runs-on: ubuntu-latest
-    # Skip release commits
-    if: |
-      !contains(github.event.head_commit.message, '[skip ci]') &&
-      !contains(github.event.head_commit.message, 'chore(release)') &&
-      !contains(github.event.head_commit.message, 'chore: promote')
 
     steps:
       - name: Generate token
@@ -59,16 +53,5 @@ jobs:
               
               ---
               _This PR was automatically created to sync a patch to main._" \
-              --label "patch-sync"
-          else
-            echo "⚠️ Cherry-pick failed - manual resolution needed"
-            gh issue create \
-              --title "🔄 Manual sync needed: ${{ github.event.head_commit.message }}" \
-              --body "Failed to auto-sync patch from ${{ github.ref_name }}
-              
-              **Commit**: ${{ github.sha }}
-              **Branch**: ${{ github.ref_name }}
-              
-              Please manually cherry-pick this commit to main." \
               --label "patch-sync"
           fi

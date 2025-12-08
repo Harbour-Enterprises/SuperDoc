@@ -66,3 +66,43 @@ describe('Invalid underline handling', () => {
     expect(underlineMark.attrs?.underlineType).toBe('single');
   });
 });
+
+describe.skip('section margin normalization', () => {
+  it('parses header/footer inches from sectPr within paragraph properties', () => {
+    const paragraphNode = {
+      name: 'w:p',
+      elements: [
+        createParagraphProperties([
+          {
+            name: 'w:sectPr',
+            elements: [
+              {
+                name: 'w:pgMar',
+                attributes: {
+                  'w:header': '720',
+                  'w:footer': '2160',
+                },
+              },
+            ],
+          },
+        ]),
+        {
+          name: 'w:r',
+          elements: [
+            {
+              name: 'w:t',
+              elements: [{ text: 'Example' }],
+            },
+          ],
+        },
+      ],
+    };
+
+    const { attributes } = parseProperties(paragraphNode);
+
+    expect(attributes.sectionMargins).toEqual({
+      header: 0.5,
+      footer: 1.5,
+    });
+  });
+});

@@ -4,22 +4,22 @@ type ReadonlyLooseRecord = Readonly<Record<string, unknown>>;
  */
 export type HexColor = `#${string}`;
 export interface User extends ReadonlyLooseRecord {
-    readonly email: string;
-    readonly name?: string;
+  readonly email: string;
+  readonly name?: string;
 }
 export interface AwarenessState extends ReadonlyLooseRecord {
-    user?: User;
+  user?: User;
 }
 export interface AwarenessContext {
-    userColorMap: Map<string, HexColor>;
-    colorIndex: number;
-    config: {
-        readonly colors: readonly HexColor[];
-    };
+  userColorMap: Map<string, HexColor>;
+  colorIndex: number;
+  config: {
+    readonly colors: readonly HexColor[];
+  };
 }
 export interface UserWithColor extends User {
-    readonly clientId: number;
-    readonly color: HexColor;
+  readonly clientId: number;
+  readonly color: HexColor;
 }
 /**
  * Convert provider awareness to an array of users
@@ -28,7 +28,10 @@ export interface UserWithColor extends User {
  * @param states - The provider's awareness states object
  * @returns Array of users with assigned colors
  */
-export declare const awarenessStatesToArray: (context: AwarenessContext, states: Map<number, AwarenessState>) => UserWithColor[];
+export declare const awarenessStatesToArray: (
+  context: AwarenessContext,
+  states: Map<number, AwarenessState>,
+) => UserWithColor[];
 /**
  * Shuffle an array of hex colors
  * @param array - List of hex colors
@@ -36,4 +39,3 @@ export declare const awarenessStatesToArray: (context: AwarenessContext, states:
  */
 export declare const shuffleArray: (array: HexColor[]) => HexColor[];
 export {};
-//# sourceMappingURL=awareness.d.ts.map

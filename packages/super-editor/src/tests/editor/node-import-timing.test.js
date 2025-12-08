@@ -3,6 +3,13 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import { existsSync } from 'node:fs';
+
+// Check if dist bundle exists (only available after build)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const distPath = resolve(__dirname, '../../../dist/super-editor.es.js');
+const DIST_EXISTS = existsSync(distPath);
 
 /**
  * This test verifies that the super-editor can be imported in a Node.js environment
@@ -99,34 +106,35 @@ describe('Node.js import timing - document access', () => {
     expect(extensionsModule.getStarterExtensions).toBeDefined();
   });
 
-  it('should allow importing the built dist bundle in Node.js without document global', async () => {
-    // Verify we're starting with no browser globals
-    expect(globalThis.document).toBeUndefined();
-    expect(globalThis.window).toBeUndefined();
+  it.skipIf(!DIST_EXISTS)(
+    'should allow importing the built dist bundle in Node.js without document global',
+    async () => {
+      // Verify we're starting with no browser globals
+      expect(globalThis.document).toBeUndefined();
+      expect(globalThis.window).toBeUndefined();
 
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-    const distUrl = pathToFileURL(resolve(__dirname, '../../../dist/super-editor.es.js')).href;
+      const distUrl = pathToFileURL(distPath).href;
 
-    let importError = null;
-    let bundle = null;
+      let importError = null;
+      let bundle = null;
 
-    try {
-      // This simulates what end users do: import from the built package
-      // WITHOUT setting up JSDOM first
-      bundle = await import(distUrl);
-    } catch (error) {
-      importError = error;
-    }
+      try {
+        // This simulates what end users do: import from the built package
+        // WITHOUT setting up JSDOM first
+        bundle = await import(distUrl);
+      } catch (error) {
+        importError = error;
+      }
 
-    // This should pass because markdown libraries are lazy-loaded
-    expect(importError).toBeNull();
-    expect(bundle).toBeDefined();
-    expect(bundle.Editor).toBeDefined();
-    expect(bundle.getStarterExtensions).toBeDefined();
-  });
+      // This should pass because markdown libraries are lazy-loaded
+      expect(importError).toBeNull();
+      expect(bundle).toBeDefined();
+      expect(bundle.Editor).toBeDefined();
+      expect(bundle.getStarterExtensions).toBeDefined();
+    },
+  );
 
-  it('should allow calling getMarkdown() in Node.js with JSDOM setup', async () => {
+  it.skipIf(!DIST_EXISTS)('should allow calling getMarkdown() in Node.js with JSDOM setup', async () => {
     const { JSDOM } = await import('jsdom');
     const { readFile } = await import('node:fs/promises');
 
@@ -134,12 +142,9 @@ describe('Node.js import timing - document access', () => {
     expect(globalThis.document).toBeUndefined();
     expect(globalThis.window).toBeUndefined();
 
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = dirname(__filename);
-
     // Import the dist bundle (can now be done without setting up globals first
     // because markdown libraries are lazy-loaded)
-    const distUrl = pathToFileURL(resolve(__dirname, '../../../dist/super-editor.es.js')).href;
+    const distUrl = pathToFileURL(distPath).href;
     const bundle = await import(distUrl);
 
     // Now set up JSDOM (as users would do)

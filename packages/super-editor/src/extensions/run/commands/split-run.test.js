@@ -2,10 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, vi } from 'vite
 import { TextSelection, EditorState } from 'prosemirror-state';
 import { initTestEditor } from '@tests/helpers/helpers.js';
 
-let splitRun;
+let splitRunToParagraph;
+let splitRunAtCursor;
 
 beforeAll(async () => {
-  ({ splitRun } = await import('@extensions/run/commands/split-run.js'));
+  ({ splitRunToParagraph, splitRunAtCursor } = await import('@extensions/run/commands/split-run.js'));
 });
 
 const RUN_DOC = {
@@ -43,7 +44,17 @@ const getParagraphTexts = (doc) => {
   return texts;
 };
 
-describe('splitRun command', () => {
+const getRunTexts = (doc) => {
+  const texts = [];
+  doc.descendants((node) => {
+    if (node.type.name === 'run') {
+      texts.push(node.textContent);
+    }
+  });
+  return texts;
+};
+
+describe('splitRunToParagraph command', () => {
   let editor;
   let originalMatchMedia;
 
@@ -99,7 +110,7 @@ describe('splitRun command', () => {
     expect(start).not.toBeNull();
     updateSelection((start ?? 0) + 1, (start ?? 0) + 3);
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(false);
   });
@@ -109,7 +120,7 @@ describe('splitRun command', () => {
 
     updateSelection(1);
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(false);
   });
@@ -123,11 +134,39 @@ describe('splitRun command', () => {
 
     expect(editor.view.state.selection.$from.parent.type.name).toBe('run');
 
-    const handled = editor.commands.splitRun();
+    const handled = editor.commands.splitRunToParagraph();
 
     expect(handled).toBe(true);
 
     const paragraphTexts = getParagraphTexts(editor.view.state.doc);
     expect(paragraphTexts).toEqual(['He', 'llo']);
+  });
+
+  it('splits a run at the cursor into two runs', () => {
+    loadDoc(RUN_DOC);
+
+    const start = findTextPos('Hello');
+    expect(start).not.toBeNull();
+    updateSelection((start ?? 0) + 3); // after "Hel"
+
+    expect(editor.view.state.selection.$from.parent.type.name).toBe('run');
+
+    const handled = editor.commands.splitRunAtCursor();
+
+    expect(handled).toBe(true);
+    const runTexts = getRunTexts(editor.view.state.doc);
+    expect(runTexts).toEqual(['Hel', 'lo']);
+  });
+
+  it('returns false when selection is not empty for splitRunAtCursor', () => {
+    loadDoc(RUN_DOC);
+
+    const start = findTextPos('Hello');
+    expect(start).not.toBeNull();
+    updateSelection((start ?? 0) + 1, (start ?? 0) + 2);
+
+    const handled = editor.commands.splitRunAtCursor();
+
+    expect(handled).toBe(false);
   });
 });

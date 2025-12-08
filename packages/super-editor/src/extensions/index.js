@@ -4,8 +4,6 @@ import { Color } from './color/index.js';
 import { FontFamily } from './font-family/index.js';
 import { FontSize } from './font-size/index.js';
 import { TextAlign } from './text-align/index.js';
-import { TextIndent } from './text-indent/index.js';
-import { LineHeight } from './line-height/index.js';
 import { FormatCommands } from './format-commands/index.js';
 import { DropCursor } from './dropcursor/index.js';
 import { Gapcursor } from './gapcursor/index.js';
@@ -19,9 +17,6 @@ import { StructuredContentCommands } from './structured-content/index.js';
 import { Document } from './document/index.js';
 import { Text } from './text/index.js';
 import { Run } from './run/index.js';
-import { BulletList } from './bullet-list/index.js';
-import { OrderedList } from './ordered-list/index.js';
-import { ListItem } from './list-item/index.js';
 import { Paragraph } from './paragraph/index.js';
 import { Heading } from './heading/index.js';
 import { CommentRangeStart, CommentRangeEnd, CommentReference } from './comment/index.js';
@@ -50,6 +45,7 @@ import { BlockNode } from './block-node/index.js';
 import { TableOfContents } from './table-of-contents/index.js';
 import { VectorShape } from './vector-shape/index.js';
 import { ShapeGroup } from './shape-group/index.js';
+import { PassthroughBlock, PassthroughInline } from '@extensions/passthrough/index.js';
 
 // Marks extensions
 import { TextStyle } from './text-style/text-style.js';
@@ -68,7 +64,6 @@ import { CommentsPlugin } from './comment/index.js';
 import { Placeholder } from './placeholder/index.js';
 import { PopoverPlugin } from './popover-plugin/index.js';
 import { TrackChanges } from './track-changes/index.js';
-import { Pagination } from './pagination/index.js';
 import { LinkedStyles } from './linked-styles/linked-styles.js';
 import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
@@ -80,7 +75,6 @@ import { trackChangesHelpers } from './track-changes/index.js';
 const getRichTextExtensions = () => {
   return [
     Bold,
-    BulletList,
     Color,
     Document,
     FontFamily,
@@ -88,15 +82,11 @@ const getRichTextExtensions = () => {
     History,
     Heading,
     Italic,
-    ListItem,
-    LineHeight,
     Link,
-    OrderedList,
     Paragraph,
     Strike,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     Placeholder,
@@ -117,6 +107,8 @@ const getRichTextExtensions = () => {
     Image,
     NodeResizer,
     CustomSelection,
+    PassthroughInline,
+    PassthroughBlock,
   ];
 };
 
@@ -124,7 +116,6 @@ const getStarterExtensions = () => {
   return [
     Bold,
     BlockNode,
-    BulletList,
     Color,
     CommentRangeStart,
     CommentRangeEnd,
@@ -135,10 +126,7 @@ const getStarterExtensions = () => {
     History,
     Heading,
     Italic,
-    ListItem,
-    LineHeight,
     Link,
-    OrderedList,
     Paragraph,
     LineBreak,
     HardBreak,
@@ -149,7 +137,6 @@ const getStarterExtensions = () => {
     TableOfContents,
     Text,
     TextAlign,
-    TextIndent,
     TextStyle,
     Underline,
     FormatCommands,
@@ -172,7 +159,6 @@ const getStarterExtensions = () => {
     TrackDelete,
     TrackFormat,
     CommentsMark,
-    Pagination,
     Highlight,
     LinkedStyles,
     AiPlugin,
@@ -196,6 +182,8 @@ const getStarterExtensions = () => {
     TextTransform,
     VectorShape,
     ShapeGroup,
+    PassthroughInline,
+    PassthroughBlock,
   ];
 };
 
@@ -205,9 +193,6 @@ export {
   Document,
   Text,
   Run,
-  BulletList,
-  OrderedList,
-  ListItem,
   Paragraph,
   CommentRangeStart,
   CommentRangeEnd,
@@ -224,9 +209,7 @@ export {
   FontFamily,
   FontSize,
   TextAlign,
-  TextIndent,
   TextStyle,
-  LineHeight,
   FormatCommands,
   CommentsPlugin,
   Gapcursor,
@@ -268,4 +251,6 @@ export {
   TextTransform,
   VectorShape,
   ShapeGroup,
+  PassthroughInline,
+  PassthroughBlock,
 };

@@ -12,5 +12,5 @@ export type {
   LoadFn,
   BeforeChangeFn,
   ChangeFn,
-  AutoSaveFn
+  AutoSaveFn,
 } from './types/service-types.js';

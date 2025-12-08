@@ -162,8 +162,10 @@ export class SuperValidator {
    * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
    */
   validateActiveDocument() {
-    const { tr } = this.#editor.state;
-    const { dispatch } = this.#editor.view;
+    const state = this.#editor.state;
+    if (!state) return { modified: false, results: [] };
+
+    const { tr } = state;
 
     const documentAnalysis = this.#analyzeDocument();
     this.logger.debug('Document analysis:', documentAnalysis);
@@ -179,8 +181,11 @@ export class SuperValidator {
       hasModifiedDocument = hasModifiedDocument || modified;
     });
 
-    if (!this.dryRun) dispatch(tr);
-    else this.logger.debug('DRY RUN: No changes applied to the document.');
+    if (!this.dryRun) {
+      this.#dispatchWithFallback(tr);
+    } else {
+      this.logger.debug('DRY RUN: No changes applied to the document.');
+    }
 
     this.logger.debug('Results:', validationResults);
     return { modified: hasModifiedDocument, results: validationResults };
@@ -191,8 +196,9 @@ export class SuperValidator {
    * @returns {{ modified: boolean, results: Array<{ key: string, results: string[] }> }}
    */
   validateDocumentExport() {
-    const { tr } = this.#editor.state;
-    const { dispatch } = this.#editor.view;
+    const state = this.#editor.state;
+    if (!state) return { modified: false, results: [] };
+    const { tr } = state;
 
     let hasModifiedDocument = false;
     const validationResults = [];
@@ -207,10 +213,25 @@ export class SuperValidator {
       hasModifiedDocument = hasModifiedDocument || modified;
     });
 
-    if (!this.dryRun && hasModifiedDocument) dispatch(tr);
-    else this.logger.debug('DRY RUN: No export changes applied to the document.');
+    if (!this.dryRun && hasModifiedDocument) {
+      this.#dispatchWithFallback(tr);
+    } else {
+      this.logger.debug('DRY RUN: No export changes applied to the document.');
+    }
 
     this.logger.debug('Export validation results:', validationResults);
     return { modified: hasModifiedDocument, results: validationResults };
+  }
+
+  /**
+   * Dispatch a transaction using the editor's public API if available, or fall back to the view.
+   * @param {import('prosemirror-state').Transaction} tr
+   */
+  #dispatchWithFallback(tr) {
+    if (typeof this.#editor?.dispatch === 'function') {
+      this.#editor.dispatch(tr);
+      return;
+    }
+    this.#editor?.view?.dispatch?.(tr);
   }
 }

@@ -10,12 +10,14 @@ export function translateAnchorNode(params) {
   const { attrs } = params.node;
   const anchorElements = [];
 
-  if (attrs.simplePos) {
+  const hasSimplePos = attrs.simplePos || attrs.originalAttributes?.simplePos;
+
+  if (hasSimplePos) {
     anchorElements.push({
       name: 'wp:simplePos',
       attributes: {
-        x: 0,
-        y: 0,
+        x: attrs.simplePos?.x ?? 0,
+        y: attrs.simplePos?.y ?? 0,
       },
     });
   }
@@ -74,8 +76,8 @@ export function translateAnchorNode(params) {
 
   if (attrs.originalAttributes?.simplePos !== undefined) {
     inlineAttrs.simplePos = attrs.originalAttributes.simplePos;
-  } else if (attrs.simplePos !== undefined) {
-    inlineAttrs.simplePos = attrs.simplePos;
+  } else if (hasSimplePos) {
+    inlineAttrs.simplePos = '1';
   }
 
   if (attrs.originalAttributes?.locked !== undefined) {

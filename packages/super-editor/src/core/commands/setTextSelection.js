@@ -32,7 +32,11 @@ export const setTextSelection =
       dispatch(transaction);
     }
 
-    if (editor?.view?.focus) {
+    // Prefer direct DOM focus with preventScroll to avoid page jumps
+    if (editor?.view?.dom && typeof editor.view.dom.focus === 'function') {
+      editor.view.dom.focus({ preventScroll: true });
+    } else if (editor?.view && typeof editor.view.focus === 'function') {
+      // Fallback for tests or environments without direct DOM access
       editor.view.focus();
     }
 

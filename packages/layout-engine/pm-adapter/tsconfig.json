@@ -1,0 +1,11 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "declaration": true,
+    "declarationMap": true,
+    "outDir": "dist"
+  },
+  "include": ["src/**/*.ts", "../style-engine/src/**/*.ts", "../../word-layout/src/**/*.ts"],
+  "references": [{ "path": "../contracts" }]
+}

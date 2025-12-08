@@ -163,6 +163,7 @@ describe('image collaboration round trip', () => {
     });
 
     const mediaPath = 'word/media/user-a-upload.png';
+
     insertCollaborationImage({ editor: editorA, ydoc: sharedYdoc, mediaPath, fileData: BLUE_PIXEL });
 
     await vi.waitFor(() => {

@@ -43,7 +43,7 @@ function hasUser(entry: [number, AwarenessState]): entry is [number, AwarenessSt
  */
 export const awarenessStatesToArray = (
   context: AwarenessContext,
-  states: Map<number, AwarenessState>
+  states: Map<number, AwarenessState>,
 ): UserWithColor[] => {
   const seenUsers = new Set<string>();
 

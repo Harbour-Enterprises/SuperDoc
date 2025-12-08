@@ -24,6 +24,12 @@ export function handleDocumentSectionNode(params) {
   const title = titleTag?.attributes?.['w:val'] || tagValue.title || null;
 
   const { description } = tagValue;
+
+  // Parse w:lock element for section locking
+  const lockTag = sdtPr?.elements.find((el) => el.name === 'w:lock');
+  const lockValue = lockTag?.attributes?.['w:val'];
+  const isLocked = lockValue === 'sdtContentLocked';
+
   const sdtContent = node.elements.find((el) => el.name === 'w:sdtContent');
   const translatedContent = nodeListHandler.handler({
     ...params,
@@ -38,6 +44,8 @@ export function handleDocumentSectionNode(params) {
       id,
       title,
       description,
+      isLocked,
+      ...(sdtPr && { sdtPr }), // Passthrough for round-trip preservation of unknown elements only if it exists
     },
   };
 

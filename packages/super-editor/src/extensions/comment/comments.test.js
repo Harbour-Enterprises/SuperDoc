@@ -129,29 +129,107 @@ describe('comment helpers', () => {
     expect(dispatch).toHaveBeenCalledWith(tr);
   });
 
-  it('prepares comments for export including child comments', () => {
-    const schema = createCommentSchema();
-    const state = createStateWithComment(schema, 'root');
-    const tr = state.tr;
+  describe('prepares comments for export including child comments', () => {
+    it('prepares comments for export including child comments', () => {
+      const schema = createCommentSchema();
+      const state = createStateWithComment(schema, 'root');
+      const tr = state.tr;
 
-    const childComments = [
-      { commentId: 'child-1', parentCommentId: 'root', createdTime: 2 },
-      { commentId: 'child-0', parentCommentId: 'root', createdTime: 1 },
-    ];
+      const childComments = [
+        { commentId: 'child-1', parentCommentId: 'root', createdTime: 2 },
+        { commentId: 'child-0', parentCommentId: 'root', createdTime: 1 },
+      ];
 
-    prepareCommentsForExport(state.doc, tr, schema, childComments);
+      prepareCommentsForExport(state.doc, tr, schema, childComments);
 
-    const applied = state.apply(tr);
-    const insertedStarts = [];
-    const insertedEnds = [];
+      const applied = state.apply(tr);
+      const insertedStarts = [];
+      const insertedEnds = [];
 
-    applied.doc.descendants((node) => {
-      if (node.type.name === 'commentRangeStart') insertedStarts.push(node.attrs['w:id']);
-      if (node.type.name === 'commentRangeEnd') insertedEnds.push(node.attrs['w:id']);
+      applied.doc.descendants((node) => {
+        if (node.type.name === 'commentRangeStart') insertedStarts.push(node.attrs['w:id']);
+        if (node.type.name === 'commentRangeEnd') insertedEnds.push(node.attrs['w:id']);
+      });
+
+      expect(insertedStarts).toEqual(['root', 'child-0', 'child-1']);
+      expect(insertedEnds).toEqual(['root', 'child-0', 'child-1']);
     });
 
-    expect(insertedStarts).toEqual(['root', 'child-0', 'child-1']);
-    expect(insertedEnds).toEqual(['root', 'child-0', 'child-1']);
+    it('verifies nested range ordering for Google Docs format', () => {
+      const schema = createCommentSchema();
+      const mark = schema.marks[CommentMarkName].create({ commentId: 'parent', internal: true });
+      const paragraph = schema.nodes.paragraph.create(null, schema.text('Text', [mark]));
+      const doc = schema.nodes.doc.create(null, [paragraph]);
+      const state = EditorState.create({
+        schema,
+        doc,
+        selection: TextSelection.create(doc, 1, 5),
+      });
+      const tr = state.tr;
+
+      const comments = [
+        { commentId: 'parent', createdTime: 1 },
+        { commentId: 'child', parentCommentId: 'parent', createdTime: 2 },
+      ];
+
+      prepareCommentsForExport(state.doc, tr, schema, comments);
+
+      const applied = state.apply(tr);
+      const nodes = [];
+      applied.doc.descendants((node, pos) => {
+        if (node.type.name === 'commentRangeStart' || node.type.name === 'commentRangeEnd') {
+          nodes.push({ type: node.type.name, id: node.attrs['w:id'], pos });
+        }
+      });
+
+      // Parent Start → Child Start → Content → Parent End → Child End
+      const startNodes = nodes.filter((n) => n.type === 'commentRangeStart');
+      const endNodes = nodes.filter((n) => n.type === 'commentRangeEnd');
+
+      expect(startNodes[0].id).toBe('parent');
+      expect(startNodes[1].id).toBe('child');
+      expect(endNodes[0].id).toBe('parent');
+      expect(endNodes[1].id).toBe('child');
+    });
+
+    it('verifies ordering when parent has multiple children', () => {
+      const schema = createCommentSchema();
+      const mark = schema.marks[CommentMarkName].create({ commentId: 'parent', internal: true });
+      const paragraph = schema.nodes.paragraph.create(null, schema.text('Text', [mark]));
+      const doc = schema.nodes.doc.create(null, [paragraph]);
+      const state = EditorState.create({
+        schema,
+        doc,
+        selection: TextSelection.create(doc, 1, 5),
+      });
+      const tr = state.tr;
+
+      const comments = [
+        { commentId: 'parent', createdTime: 1 },
+        { commentId: 'child-2', parentCommentId: 'parent', createdTime: 3 },
+        { commentId: 'child-1', parentCommentId: 'parent', createdTime: 2 },
+        { commentId: 'child-0', parentCommentId: 'parent', createdTime: 1 },
+      ];
+
+      prepareCommentsForExport(state.doc, tr, schema, comments);
+
+      const applied = state.apply(tr);
+      const startNodes = [];
+      const endNodes = [];
+
+      applied.doc.descendants((node) => {
+        if (node.type.name === 'commentRangeStart') {
+          startNodes.push(node.attrs['w:id']);
+        }
+        if (node.type.name === 'commentRangeEnd') {
+          endNodes.push(node.attrs['w:id']);
+        }
+      });
+
+      // children ordered by creation time
+      expect(startNodes).toEqual(['parent', 'child-0', 'child-1', 'child-2']);
+      expect(endNodes).toEqual(['parent', 'child-0', 'child-1', 'child-2']);
+    });
   });
 
   it('prepares comments for import by converting nodes into marks', () => {

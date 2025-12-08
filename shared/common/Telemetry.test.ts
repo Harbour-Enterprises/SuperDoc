@@ -7,7 +7,7 @@ const baseConfig = {
 
 describe('Telemetry randomBytes', () => {
   let originalCryptoDescriptor: PropertyDescriptor | undefined;
-  let originalMsCrypto: (typeof globalThis & { msCrypto?: Crypto }).msCrypto;
+  let originalMsCrypto: Crypto | undefined;
 
   beforeAll(() => {
     originalCryptoDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');

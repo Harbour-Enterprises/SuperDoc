@@ -5,5 +5,5 @@ import { TextSelection } from 'prosemirror-state';
  * @param value Any value.
  */
 export const isTextSelection = (value) => {
-  value instanceof TextSelection;
+  return value instanceof TextSelection;
 };

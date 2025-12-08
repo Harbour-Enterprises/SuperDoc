@@ -186,7 +186,16 @@ describe('extractFillColor', () => {
   });
 
   it('returns placeholder for unsupported fills', () => {
-    expect(extractFillColor({ elements: [{ name: 'a:gradFill' }] }, null)).toBe('#cccccc');
+    // Gradient fills now return a gradient object
+    const gradientResult = extractFillColor({ elements: [{ name: 'a:gradFill' }] }, null);
+    expect(gradientResult).toEqual({
+      type: 'gradient',
+      stops: [],
+      angle: 0,
+      gradientType: 'linear',
+    });
+
+    // Image fills still return placeholder color
     expect(extractFillColor({ elements: [{ name: 'a:blipFill' }] }, null)).toBe('#cccccc');
   });
 

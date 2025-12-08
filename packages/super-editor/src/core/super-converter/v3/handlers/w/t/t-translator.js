@@ -4,7 +4,7 @@ import { createAttributeHandler } from '@converter/v3/handlers/utils.js';
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del/index.js';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins/index.js';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/index.js';
-import { getTextNodeForExport } from '@converter/exporter.js';
+import { getTextNodeForExport } from '@converter/v3/handlers/w/t/helpers/translate-text-node.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:t';
@@ -39,7 +39,8 @@ const encode = (params, encodedAttrs = {}) => {
     text = elements[0].text;
     const xmlSpace = encodedAttrs.xmlSpace ?? elements[0]?.attributes?.['xml:space'];
     if (xmlSpace !== 'preserve' && typeof text === 'string') {
-      text = text.replace(/^\s+/, '').replace(/\s+$/, '');
+      // Only trim regular ASCII whitespace, not NBSP (U+00A0) which is used intentionally for alignment
+      text = text.replace(/^[ \t\n\r]+/, '').replace(/[ \t\n\r]+$/, '');
     }
     // Handle the removal of a temporary wrapper that we added to preserve empty spaces
     text = text.replace(/\[\[sdspace\]\]/g, '');

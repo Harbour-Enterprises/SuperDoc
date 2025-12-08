@@ -38,6 +38,12 @@ import { range } from '../helpers/range.js';
  */
 
 /**
+ * @typedef {Object} PageSize
+ * @property {number} width
+ * @property {number} height
+ */
+
+/**
  * @abstract
  */
 class PDFAdapter {
@@ -70,6 +76,7 @@ export class PDFJSAdapter extends PDFAdapter {
         this.pdfLib.GlobalWorkerOptions.workerSrc = getWorkerSrcFromCDN(this.pdfLib.version);
       }
     }
+    /** @type {any[]} */
     this.pdfPageViews = [];
   }
 
@@ -120,9 +127,9 @@ export class PDFJSAdapter extends PDFAdapter {
         this.pdfPageViews.push(pdfPageView);
 
         const containerBounds = container.getBoundingClientRect();
-        // @ts-ignore
+        // @ts-expect-error - Adding custom properties to DOMRect for internal use
         containerBounds.originalWidth = width;
-        // @ts-ignore
+        // @ts-expect-error - Adding custom properties to DOMRect for internal use
         containerBounds.originalHeight = height;
 
         pdfPageView.setPdfPage(page);
@@ -141,7 +148,7 @@ export class PDFJSAdapter extends PDFAdapter {
 
   /**
    * @param {PDFPageProxy} page
-   * @returns {object}
+   * @returns {PageSize}
    */
   getOriginalPageSize(page) {
     const viewport = page.getViewport({ scale: 1 });

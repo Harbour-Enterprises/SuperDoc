@@ -5,8 +5,9 @@ import { translator as wDrawingNodeTranslator } from '@converter/v3/handlers/w/d
 import { ListHelpers } from '@helpers/list-numbering-helpers';
 import { generateDocxRandomId, generateRandomSigned32BitIntStrId } from '@helpers/generateDocxRandomId';
 import { sanitizeHtml } from '@core/InputRule';
-import { getTextNodeForExport, processLinkContentNode, addNewLinkRelationship } from '@converter/exporter';
+import { getTextNodeForExport } from '@converter/v3/handlers/w/t/helpers/translate-text-node.js';
 import he from 'he';
+import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/index.js';
 
 /**
  * Translate a field annotation node
@@ -68,16 +69,28 @@ export function translateFieldAnnotation(params) {
   };
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
+  // Build sdtPr elements with passthrough support
+  const sdtPrElements = [
+    { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
+    { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
+    { name: 'w:id', attributes: { 'w:val': id } },
+  ];
+
+  // Passthrough: preserve any sdtPr elements not explicitly managed
+  if (attrs.sdtPr?.elements && Array.isArray(attrs.sdtPr.elements)) {
+    const elementsToExclude = ['w:alias', 'w:tag', 'w:id'];
+    const passthroughElements = attrs.sdtPr.elements.filter(
+      (el) => el && el.name && !elementsToExclude.includes(el.name),
+    );
+    sdtPrElements.push(...passthroughElements);
+  }
+
   const result = {
     name: 'w:sdt',
     elements: [
       {
         name: 'w:sdtPr',
-        elements: [
-          { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
-          { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
-          { name: 'w:id', attributes: { 'w:val': id } },
-        ],
+        elements: sdtPrElements,
       },
       {
         name: 'w:sdtContent',
@@ -229,20 +242,32 @@ export function prepareUrlAnnotation(params) {
 
   if (!attrs.linkUrl) return prepareTextAnnotation(params);
 
-  const newId = addNewLinkRelationship(params, attrs.linkUrl);
-
-  const linkTextNode = getTextNodeForExport(attrs.linkUrl, marks, params);
-  const contentNode = processLinkContentNode(linkTextNode);
-
-  return {
-    name: 'w:hyperlink',
-    type: 'element',
-    attributes: {
-      'r:id': newId,
-      'w:history': 1,
-    },
-    elements: [contentNode],
+  const linkTextNode = {
+    type: 'text',
+    text: attrs.linkUrl,
+    marks: [
+      ...marks,
+      {
+        type: 'link',
+        attrs: {
+          href: attrs.linkUrl,
+          history: true,
+          text: attrs.linkUrl,
+        },
+      },
+      {
+        type: 'textStyle',
+        attrs: {
+          color: '#467886',
+        },
+      },
+    ],
   };
+
+  return wHyperlinkTranslator.decode({
+    ...params,
+    node: linkTextNode,
+  });
 }
 
 export function translateFieldAttrsToMarks(attrs = {}) {

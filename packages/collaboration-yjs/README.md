@@ -25,7 +25,9 @@ It provides:
 
 ## Examples
 
-Please see a [quick start example here](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/packages/collaboration-yjs/examples/fastify)
+Please see a [quick start example here](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/examples/collaboration/fastify-server)
+
+For more collaboration examples, see the [collaboration examples folder](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/examples/collaboration)
 
 ## Installation
 
@@ -91,7 +93,7 @@ app.get('/collaboration/:documentId', { websocket: true }, (socket, request) => 
 app.listen({ port: 3000 });
 ```
 
-See `examples/fastify` for more details
+See [examples/collaboration/fastify-server](https://github.com/Harbour-Enterprises/SuperDoc/tree/develop/examples/collaboration/fastify-server) for more details
 
 ---
 

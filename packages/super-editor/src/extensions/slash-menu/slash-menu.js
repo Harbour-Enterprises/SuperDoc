@@ -1,85 +1,174 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
+import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
 
 /**
  * Configuration options for SlashMenu
  * @typedef {Object} SlashMenuOptions
+ * @property {boolean} [disabled] - Disable the slash menu entirely (inherited from editor.options.disableContextMenu)
+ * @property {number} [cooldownMs=5000] - Cooldown duration in milliseconds to prevent rapid re-opening
  * @category Options
  */
 
 /**
- * Calculates the cursor position relative to the editor container element
- * @param {import('prosemirror-view').EditorView} view - The ProseMirror editor view instance
- * @param {Object} eventLocation - Object containing clientX/clientY coordinates from an event
- * @param {number} [eventLocation.clientX] - The x coordinate relative to the viewport
- * @param {number} [eventLocation.clientY] - The y coordinate relative to the viewport
- * @returns {{left: number, top: number}} The cursor position relative to the container
+ * Plugin state structure for SlashMenu
+ * @typedef {Object} SlashMenuState
+ * @property {boolean} open - Whether the slash menu is currently visible
+ * @property {string|null} selected - ID of the currently selected menu item
+ * @property {number|null} anchorPos - Document position where the menu was anchored
+ * @property {Object|null} menuPosition - CSS positioning {left: string, top: string}
+ * @property {string} [menuPosition.left] - Left position in pixels (e.g., "100px")
+ * @property {string} [menuPosition.top] - Top position in pixels (e.g., "28px")
+ * @property {boolean} disabled - Whether the menu functionality is disabled
  */
-function getCursorPositionRelativeToContainer(view, eventLocation) {
-  const { state, dom } = view;
-  const { selection } = state;
-  const containerRect = dom.getBoundingClientRect();
-  let x, y;
-  if (typeof eventLocation.clientX === 'number' && typeof eventLocation.clientY === 'number') {
-    // Use the provided mouse coordinates
-    x = eventLocation.clientX - containerRect.left;
-    y = eventLocation.clientY - containerRect.top;
-  } else {
-    // Fallback to the cursor/selection start in the viewport
-    const cursorCoords = view.coordsAtPos(selection.from);
-    x = cursorCoords.left - containerRect.left;
-    y = cursorCoords.top - containerRect.top;
-  }
-  return { left: x, top: y };
-}
+
+/**
+ * Transaction metadata for SlashMenu actions
+ * @typedef {Object} SlashMenuMeta
+ * @property {'open'|'select'|'close'|'updatePosition'} type - Action type
+ * @property {number} [pos] - Document position (for 'open' action)
+ * @property {number} [clientX] - X coordinate for context menu positioning (for 'open' action)
+ * @property {number} [clientY] - Y coordinate for context menu positioning (for 'open' action)
+ * @property {string} [id] - Menu item ID (for 'select' action)
+ */
 
 export const SlashMenuPluginKey = new PluginKey('slashMenu');
+
+// Menu positioning constants (in pixels)
+const MENU_OFFSET_X = 100; // Horizontal offset for slash menu
+const MENU_OFFSET_Y = 28; // Vertical offset for slash menu
+const CONTEXT_MENU_OFFSET_X = 10; // Small offset for right-click
+const CONTEXT_MENU_OFFSET_Y = 10; // Small offset for right-click
+const SLASH_COOLDOWN_MS = 5000; // Cooldown period to prevent rapid re-opening
 
 /**
  * @module SlashMenu
  * @sidebarTitle Slash Menu
  * @snippetPath /snippets/extensions/slash-menu.mdx
+ *
+ * @fires slashMenu:open - Emitted when menu opens, payload: {menuPosition: {left, top}}
+ * @fires slashMenu:close - Emitted when menu closes, no payload
  */
 export const SlashMenu = Extension.create({
   name: 'slashMenu',
 
+  /**
+   * Initialize default options for the SlashMenu extension
+   * @returns {SlashMenuOptions} Empty options object (configuration is inherited from editor options)
+   */
   addOptions() {
     return {};
   },
 
   addPmPlugins() {
-    if (this.editor.options?.disableContextMenu) {
+    const editor = this.editor;
+    if (editor.options?.isHeadless) {
       return [];
     }
-    const editor = this.editor;
 
     // Cooldown flag and timeout for slash menu
     let slashCooldown = false;
     let slashCooldownTimeout = null;
 
+    /**
+     * Check if the context menu is disabled via editor options
+     * @returns {boolean} True if menu is disabled
+     */
+    const isMenuDisabled = () => Boolean(editor.options?.disableContextMenu);
+
+    /**
+     * Ensures plugin state has the correct shape with all required properties
+     * @param {Partial<SlashMenuState>} [value={}] - Partial state to merge with defaults
+     * @returns {SlashMenuState} Complete state object with all properties
+     */
+    const ensureStateShape = (value = {}) => ({
+      open: false,
+      selected: null,
+      anchorPos: null,
+      menuPosition: null,
+      disabled: isMenuDisabled(),
+      ...value,
+    });
+
     const slashMenuPlugin = new Plugin({
       key: SlashMenuPluginKey,
 
       state: {
-        init() {
-          return {
-            open: false,
-            selected: null,
-            anchorPos: null,
-            menuPosition: null,
-          };
-        },
+        init: () => ensureStateShape(),
 
+        /**
+         * Apply transaction to update plugin state
+         * Handles state transitions based on transaction metadata:
+         * - 'open': Opens menu at specified position or cursor location
+         * - 'select': Updates the selected menu item
+         * - 'close': Closes the menu and clears anchor position
+         * - 'updatePosition': Triggers menu position recalculation (no-op in apply)
+         *
+         * @param {import('prosemirror-state').Transaction} tr - The transaction
+         * @param {SlashMenuState} value - Previous plugin state
+         * @returns {SlashMenuState} New plugin state
+         */
         apply(tr, value) {
           const meta = tr.getMeta(SlashMenuPluginKey);
-          if (!meta) return value;
+          const disabled = isMenuDisabled();
+
+          if (disabled) {
+            if (value.open) {
+              editor.emit('slashMenu:close');
+            }
+            return ensureStateShape({ disabled: true });
+          }
+
+          if (!meta) {
+            if (value.disabled !== disabled) {
+              return ensureStateShape({ ...value, disabled });
+            }
+            return value;
+          }
 
           switch (meta.type) {
             case 'open': {
-              const pos = getCursorPositionRelativeToContainer(editor.view, meta);
+              // Validate position
+              if (typeof meta.pos !== 'number' || meta.pos < 0 || meta.pos > tr.doc.content.size) {
+                console.warn('SlashMenu: Invalid position', meta.pos);
+                return ensureStateShape(value);
+              }
+
+              // For position: fixed menu, use viewport coordinates directly
+              let left = 0;
+              let top = 0;
+              let isContextMenu = false;
+
+              if (typeof meta.clientX === 'number' && typeof meta.clientY === 'number') {
+                left = meta.clientX;
+                top = meta.clientY;
+                isContextMenu = true; // Right-click triggered
+              } else {
+                // Fallback to selection-based positioning (slash menu)
+                const relativePoint = getSurfaceRelativePoint(editor, meta);
+                if (relativePoint) {
+                  // Need to convert surface-relative to viewport coordinates
+                  const surface = editor.presentationEditor?.element ?? editor.view?.dom ?? editor.options?.element;
+                  if (surface) {
+                    try {
+                      const rect = surface.getBoundingClientRect();
+                      left = rect.left + relativePoint.left;
+                      top = rect.top + relativePoint.top;
+                    } catch (error) {
+                      console.warn('SlashMenu: Failed to get surface bounds', error);
+                      return ensureStateShape(value); // Return unchanged state on error
+                    }
+                  }
+                }
+              }
+
+              // Use smaller offsets for context menu, larger for slash menu
+              const offsetX = isContextMenu ? CONTEXT_MENU_OFFSET_X : MENU_OFFSET_X;
+              const offsetY = isContextMenu ? CONTEXT_MENU_OFFSET_Y : MENU_OFFSET_Y;
+
               const menuPosition = {
-                left: `${pos.left + 100}px`,
-                top: `${pos.top + 28}px`,
+                left: `${left + offsetX}px`,
+                top: `${top + offsetY}px`,
               };
 
               // Update state
@@ -93,26 +182,36 @@ export const SlashMenu = Extension.create({
               // Emit event after state update
               editor.emit('slashMenu:open', { menuPosition });
 
-              return newState;
+              return ensureStateShape(newState);
             }
 
             case 'select': {
-              return { ...value, selected: meta.id };
+              return ensureStateShape({ ...value, selected: meta.id });
             }
 
             case 'close': {
               editor.emit('slashMenu:close');
-              return { ...value, open: false, anchorPos: null };
+              return ensureStateShape({ ...value, open: false, anchorPos: null });
             }
 
             default:
-              return value;
+              return ensureStateShape({ ...value, disabled });
           }
         },
       },
 
+      /**
+       * Create view plugin to handle window event listeners
+       * @param {import('prosemirror-view').EditorView} editorView - The ProseMirror editor view
+       * @returns {Object} View plugin with destroy method
+       */
       view(editorView) {
+        /**
+         * Update menu position when window scrolls or resizes
+         * Dispatches an 'updatePosition' meta action if menu is open
+         */
         const updatePosition = () => {
+          if (isMenuDisabled()) return;
           const state = SlashMenuPluginKey.getState(editorView.state);
           if (state.open) {
             editorView.dispatch(
@@ -140,7 +239,19 @@ export const SlashMenu = Extension.create({
       },
 
       props: {
+        /**
+         * Handle keyboard events to open/close the slash menu
+         * - '/': Opens menu at cursor if conditions are met (in paragraph, after space/start)
+         * - 'Escape' or 'ArrowLeft': Closes menu and restores cursor position
+         *
+         * @param {import('prosemirror-view').EditorView} view - The ProseMirror editor view
+         * @param {KeyboardEvent} event - The keyboard event
+         * @returns {boolean} True if the event was handled, false otherwise
+         */
         handleKeyDown(view, event) {
+          if (isMenuDisabled()) {
+            return false;
+          }
           const pluginState = this.getState(view.state);
 
           // If cooldown is active and slash is pressed, allow default behavior
@@ -167,7 +278,7 @@ export const SlashMenu = Extension.create({
             slashCooldownTimeout = setTimeout(() => {
               slashCooldown = false;
               slashCooldownTimeout = null;
-            }, 5000);
+            }, SLASH_COOLDOWN_MS);
 
             // Only dispatch state update - event will be emitted in apply()
             view.dispatch(
@@ -206,7 +317,6 @@ export const SlashMenu = Extension.create({
       },
     });
 
-    // If we are in headless mode, do not add the plugin
-    return this.editor.options.isHeadless ? [] : [slashMenuPlugin];
+    return [slashMenuPlugin];
   },
 });

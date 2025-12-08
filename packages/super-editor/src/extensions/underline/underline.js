@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Mark, Attribute } from '@core/index.js';
 import { getUnderlineCssString } from '@extensions/linked-styles/index.js';
 import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';

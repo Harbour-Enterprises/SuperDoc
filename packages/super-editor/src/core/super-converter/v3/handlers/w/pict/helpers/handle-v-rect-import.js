@@ -1,12 +1,12 @@
 import { parseInlineStyles } from './parse-inline-styles';
-import { twipsToPixels, twipsToLines } from '@converter/helpers';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 
 /**
  * Handler for v:rect elements
  * @param {Object} options
  * @returns {Object}
  */
-export function handleVRectImport({ pNode, pict }) {
+export function handleVRectImport({ pNode, pict, params }) {
   const rect = pict.elements?.find((el) => el.name === 'v:rect');
 
   const schemaAttrs = {};
@@ -67,49 +67,18 @@ export function handleVRectImport({ pNode, pict }) {
     schemaAttrs.horizontalRule = true;
   }
 
-  const pPr = pNode.elements?.find((el) => el.name === 'w:pPr');
-  const spacingElement = pPr?.elements?.find((el) => el.name === 'w:spacing');
-  const spacingAttrs = spacingElement?.attributes || {};
-  const inLineIndentTag = pPr?.elements?.find((el) => el.name === 'w:ind');
-  const inLineIndent = inLineIndentTag?.attributes || {};
-
-  // Parse spacing using the same logic as paragraphNodeImporter
-  const spacing = {};
-  if (spacingAttrs['w:after']) spacing.lineSpaceAfter = twipsToPixels(spacingAttrs['w:after']);
-  if (spacingAttrs['w:before']) spacing.lineSpaceBefore = twipsToPixels(spacingAttrs['w:before']);
-  if (spacingAttrs['w:line']) spacing.line = twipsToLines(spacingAttrs['w:line']);
-  if (spacingAttrs['w:lineRule']) spacing.lineRule = spacingAttrs['w:lineRule'];
-
-  const indent = {
-    left: 0,
-    right: 0,
-    firstLine: 0,
-    hanging: 0,
-  };
-  const leftIndent = inLineIndent?.['w:left'];
-  const rightIndent = inLineIndent?.['w:right'];
-
-  if (leftIndent) {
-    indent.left = twipsToPixels(leftIndent);
-  }
-  if (rightIndent) {
-    indent.right = twipsToPixels(rightIndent);
-  }
-
-  return {
-    type: 'paragraph',
-    content: [
-      {
-        type: 'contentBlock',
-        attrs: schemaAttrs,
-      },
-    ],
-    attrs: {
-      spacing: Object.keys(spacing).length > 0 ? spacing : undefined,
-      rsidRDefault: pNode.attributes?.['w:rsidRDefault'],
-      indent,
+  const pElement = wPTranslator.encode({
+    ...params,
+    nodes: [{ ...pNode, elements: pNode.elements.filter((el) => el.name !== 'w:r') }],
+  });
+  pElement.content = [
+    {
+      type: 'contentBlock',
+      attrs: schemaAttrs,
     },
-  };
+  ];
+
+  return pElement;
 }
 
 export function parsePointsToPixels(value) {

@@ -1,0 +1,232 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "orderedList",
+      "attrs": {
+        "listId": "1",
+        "order": 1
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "%1.",
+            "listLevel": [1],
+            "level": 0,
+            "numId": "1",
+            "listNumberingType": "custom",
+            "indent": {
+              "left": 24,
+              "hanging": 18
+            },
+            "spacing": {
+              "after": 6
+            },
+            "lvlJc": "left"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Heading 1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": {
+        "listId": "1",
+        "order": 1
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "%1.%2.",
+            "listLevel": [1, 1],
+            "level": 1,
+            "numId": "1",
+            "listNumberingType": "custom",
+            "indent": {
+              "left": 48,
+              "hanging": 18
+            },
+            "spacing": {
+              "after": 4
+            },
+            "lvlJc": "left"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Child 1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": {
+        "listId": "1",
+        "order": 1
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "%1.%2.",
+            "listLevel": [1, 2],
+            "level": 1,
+            "numId": "1",
+            "listNumberingType": "decimal",
+            "indent": {
+              "left": 48,
+              "hanging": 18
+            },
+            "spacing": {
+              "after": 4
+            },
+            "lvlJc": "left"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Child 2"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "orderedList",
+      "attrs": {
+        "listId": "1",
+        "order": 2
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "%1.",
+            "listLevel": [2],
+            "level": 0,
+            "numId": "1",
+            "listNumberingType": "custom",
+            "customFormat": "001, 002, 003, ...",
+            "indent": {
+              "left": 24,
+              "hanging": 18
+            },
+            "spacing": {
+              "after": 8
+            },
+            "lvlJc": "right"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Heading 2"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "attrs": {
+        "listId": "2"
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "•",
+            "listLevel": [1],
+            "level": 0,
+            "numId": "2",
+            "listNumberingType": "bullet",
+            "indent": {
+              "left": 24,
+              "hanging": 24
+            },
+            "spacing": {
+              "after": 4
+            },
+            "lvlJc": "left"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Bullet 1"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "bulletList",
+      "attrs": {
+        "listId": "2"
+      },
+      "content": [
+        {
+          "type": "listItem",
+          "attrs": {
+            "lvlText": "o",
+            "listLevel": [1, 1],
+            "level": 1,
+            "numId": "2",
+            "listNumberingType": "bullet",
+            "indent": {
+              "left": 48,
+              "hanging": 24
+            },
+            "spacing": {
+              "after": 4
+            },
+            "lvlJc": "left"
+          },
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "Bullet Child"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

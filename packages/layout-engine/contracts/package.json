@@ -1,0 +1,19 @@
+{
+  "name": "@superdoc/contracts",
+  "version": "1.0.0",
+  "description": "Shared layout contracts & engine interfaces for the SuperDoc layout engine pipeline.",
+  "type": "module",
+  "private": true,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run"
+  }
+}

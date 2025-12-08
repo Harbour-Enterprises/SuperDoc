@@ -18,11 +18,28 @@ const visualizerConfig = {
 
 export const getAliases = (isDev) => {
   const aliases = {
-    // IMPORTANT: @superdoc/common MUST come before @superdoc to avoid partial matching
+    // IMPORTANT: Specific @superdoc/* package aliases must come BEFORE the generic '@superdoc'
+    // to avoid partial matches swallowing them.
     '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
+
+    // Workspace packages (source paths for dev)
+    '@superdoc/contracts': path.resolve(__dirname, '../layout-engine/contracts/src/index.ts'),
+    '@superdoc/geometry-utils': path.resolve(__dirname, '../layout-engine/geometry-utils/src/index.ts'),
+    '@superdoc/pm-adapter': path.resolve(__dirname, '../layout-engine/pm-adapter/src/index.ts'),
+    '@superdoc/layout-bridge': path.resolve(__dirname, '../layout-engine/layout-bridge/src/index.ts'),
+    '@superdoc/painter-dom': path.resolve(__dirname, '../layout-engine/painters/dom/src/index.ts'),
+    '@superdoc/painter-pdf': path.resolve(__dirname, '../layout-engine/painters/pdf/src/index.ts'),
+    '@superdoc/style-engine': path.resolve(__dirname, '../layout-engine/style-engine/src/index.ts'),
+    '@superdoc/measuring-dom': fileURLToPath(new URL('../layout-engine/measuring/dom/src', import.meta.url)),
+    '@superdoc/word-layout': path.resolve(__dirname, '../word-layout/src/index.ts'),
+    '@superdoc/url-validation': path.resolve(__dirname, '../../shared/url-validation/index.js'),
+    '@superdoc/preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
+
+    // Generic @superdoc app alias LAST to avoid masking specific package aliases above
     '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
     '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
     '@packages': fileURLToPath(new URL('../', import.meta.url)),
+    // (rest below)
 
     // Super Editor aliases
     '@': fileURLToPath(new URL('../super-editor/src', import.meta.url)),
@@ -34,7 +51,6 @@ export const getAliases = (isDev) => {
     '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
     '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
     '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
-    '@preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
   };
 
   if (isDev) {
@@ -143,6 +159,16 @@ export default defineConfig(({ mode, command}) => {
     },
     optimizeDeps: {
       include: ['yjs', '@hocuspocus/provider'],
+      exclude: [
+        // Layout engine packages (use source, not pre-bundled)
+        '@superdoc/pm-adapter',
+        '@superdoc/layout-bridge',
+        '@superdoc/painter-dom',
+        '@superdoc/contracts',
+        '@superdoc/style-engine',
+        '@superdoc/measuring-dom',
+        '@superdoc/word-layout',
+      ],
       esbuildOptions: {
         target: 'es2020',
       },
@@ -152,7 +178,7 @@ export default defineConfig(({ mode, command}) => {
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },
     css: {
-      postcss: './postcss.config.cjs',
+      postcss: './postcss.config.mjs',
     },
     server: {
       port: 9094,
@@ -160,6 +186,7 @@ export default defineConfig(({ mode, command}) => {
       fs: {
         allow: [
           path.resolve(__dirname, '../super-editor'),
+          path.resolve(__dirname, '../layout-engine'),
           '../',
           '../../',
         ],

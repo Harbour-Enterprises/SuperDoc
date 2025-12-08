@@ -25,13 +25,16 @@ function encode(params) {
     'wp:inline': wpInlineTranslator,
   };
 
-  return node.elements.reduce((acc, child) => {
+  const result = node.elements.reduce((acc, child) => {
     if (acc) return acc;
     const translator = translatorByChildName[child.name];
     if (!translator) return acc;
 
-    return translator.encode({ ...params, extraParams: { node: child } }) || acc;
+    const childResult = translator.encode({ ...params, extraParams: { node: child } });
+    return childResult || acc;
   }, null);
+
+  return result;
 }
 
 /**

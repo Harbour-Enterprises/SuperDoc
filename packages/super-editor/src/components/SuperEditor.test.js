@@ -7,13 +7,12 @@ const messageApi = vi.hoisted(() => ({
   success: vi.fn(),
 }));
 
-const adjustPaginationBreaksMock = vi.hoisted(() => vi.fn());
 const onMarginClickCursorChangeMock = vi.hoisted(() => vi.fn());
 const checkNodeSpecificClicksMock = vi.hoisted(() => vi.fn());
 const getFileObjectMock = vi.hoisted(() =>
   vi.fn(async () => new Blob([], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })),
 );
-const getStarterExtensionsMock = vi.hoisted(() => vi.fn(() => [{ name: 'core' }, { name: 'pagination' }]));
+const getStarterExtensionsMock = vi.hoisted(() => vi.fn(() => [{ name: 'core' }]));
 
 const EditorConstructor = vi.hoisted(() => {
   const constructor = vi.fn((options) => {
@@ -41,9 +40,7 @@ vi.mock('naive-ui', () => ({
   useMessage: () => messageApi,
 }));
 
-vi.mock('./pagination-helpers.js', () => ({
-  adjustPaginationBreaks: adjustPaginationBreaksMock,
-}));
+// pagination legacy removed; no pagination helpers
 
 vi.mock('./cursor-helpers.js', () => ({
   onMarginClickCursorChange: onMarginClickCursorChangeMock,
@@ -105,7 +102,7 @@ describe('SuperEditor.vue', () => {
     vi.clearAllMocks();
   });
 
-  it('initializes an editor from a provided file source and filters pagination extension', async () => {
+  it('initializes an editor from a provided file source', async () => {
     vi.useFakeTimers();
 
     EditorConstructor.loadXmlData.mockResolvedValueOnce([
@@ -121,7 +118,7 @@ describe('SuperEditor.vue', () => {
       props: {
         documentId: 'doc-1',
         fileSource,
-        options: { pagination: false, externalExtensions: [], onException },
+        options: { externalExtensions: [], onException },
       },
     });
 
@@ -138,11 +135,7 @@ describe('SuperEditor.vue', () => {
     expect(options.extensions.map((ext) => ext.name)).toEqual(['core']);
 
     const instance = getEditorInstance();
-    expect(instance.on).toHaveBeenCalledWith('paginationUpdate', expect.any(Function));
     expect(instance.on).toHaveBeenCalledWith('collaborationReady', expect.any(Function));
-
-    instance.listeners.paginationUpdate();
-    expect(adjustPaginationBreaksMock).toHaveBeenCalled();
 
     instance.listeners.collaborationReady();
     vi.runAllTimers();
@@ -175,7 +168,6 @@ describe('SuperEditor.vue', () => {
         options: {
           ydoc,
           collaborationProvider: provider,
-          pagination: true,
         },
       },
     });
@@ -211,7 +203,7 @@ describe('SuperEditor.vue', () => {
     const wrapper = mount(SuperEditor, {
       props: {
         fileSource,
-        options: { pagination: true, onException },
+        options: { onException },
       },
     });
 

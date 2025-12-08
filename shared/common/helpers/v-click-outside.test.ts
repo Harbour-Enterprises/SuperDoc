@@ -1,17 +1,30 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { Mock } from 'vitest';
+import type { DirectiveBinding } from 'vue';
 import vClickOutside from './v-click-outside';
+
+interface ClickOutsideElement extends HTMLElement {
+  __clickOutsideHandler?: (event: MouseEvent) => void;
+}
+
+type ClickOutsideHandler = (event: MouseEvent) => void;
+
+interface MockDocument {
+  addEventListener: Mock;
+  removeEventListener: Mock;
+}
 
 describe('v-click-outside directive', () => {
   let originalDocument: Document | undefined;
-  let addEventListenerMock: any;
-  let removeEventListenerMock: any;
+  let addEventListenerMock: Mock;
+  let removeEventListenerMock: Mock;
 
   beforeEach(() => {
     originalDocument = globalThis.document;
     addEventListenerMock = vi.fn();
     removeEventListenerMock = vi.fn();
 
-    (globalThis as any).document = {
+    (globalThis as unknown as { document: MockDocument }).document = {
       addEventListener: addEventListenerMock,
       removeEventListener: removeEventListenerMock,
     };
@@ -20,18 +33,28 @@ describe('v-click-outside directive', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     if (originalDocument === undefined) {
-      delete (globalThis as any).document;
+      delete (globalThis as unknown as { document?: MockDocument }).document;
     } else {
-      (globalThis as any).document = originalDocument;
+      (globalThis as unknown as { document: Document }).document = originalDocument;
     }
   });
 
   it('invokes binding when clicks originate outside the element and unregisters on unmount', () => {
     const containsMock = vi.fn().mockReturnValue(false);
-    const binding = { value: vi.fn() };
-    const el: any = { contains: containsMock };
+    const binding: DirectiveBinding<ClickOutsideHandler> = {
+      value: vi.fn(),
+      oldValue: undefined,
+      arg: undefined,
+      modifiers: {},
+      instance: null,
+      dir: vClickOutside,
+    };
+    const el = {
+      contains: containsMock,
+      __clickOutsideHandler: undefined,
+    } as unknown as ClickOutsideElement;
 
-    vClickOutside.mounted(el, binding as any);
+    vClickOutside.mounted(el, binding);
 
     expect(addEventListenerMock).toHaveBeenCalledWith('click', expect.any(Function));
     expect(typeof el.__clickOutsideHandler).toBe('function');

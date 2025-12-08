@@ -92,13 +92,16 @@ describe('Image Extension DOM rendering', () => {
       expect(styles.height).toBe('auto');
     });
 
-    it('renders EMF sizing with explicit height and border', () => {
-      const { style } = renderImageAttributes({ size: { width: 300, height: 200 }, extension: 'emf' });
+    it('renders EMF/WMF like normal images (converted to SVG at import time)', () => {
+      // EMF/WMF images are converted to SVG during import, so they render like normal images
+      // The special placeholder styling was removed since images are now properly converted
+      const { style } = renderImageAttributes({ size: { width: 300, height: 200 }, extension: 'svg' });
       const styles = parseStyle(style);
       expect(styles.width).toBe('300px');
-      expect(styles.height).toBe('200px');
-      expect(styles['border']).toBe('1px solid black');
-      expect(styles['position']).toBe('absolute');
+      expect(styles.height).toBe('auto');
+      // No special border or position for converted images
+      expect(styles['border']).toBeUndefined();
+      expect(styles['position']).toBeUndefined();
     });
   });
 

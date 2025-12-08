@@ -55,7 +55,10 @@ export class CommandService {
         const fn = command(...args)(props);
 
         if (!tr.getMeta('preventDispatch')) {
-          view.dispatch(tr);
+          // Only dispatch if view exists (it may not exist during initialization)
+          if (view && typeof view.dispatch === 'function') {
+            view.dispatch(tr);
+          }
         }
 
         return fn;

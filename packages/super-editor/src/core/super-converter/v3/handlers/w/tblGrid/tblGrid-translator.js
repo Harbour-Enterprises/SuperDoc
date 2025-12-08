@@ -15,7 +15,7 @@ const SD_ATTR_KEY = 'grid';
 const cellMinWidth = pixelsToTwips(10);
 
 /**
- * Encode the w:rPr element.
+ * Encode the w:tblGrid element.
  * @param {import('@translator').SCEncoderConfig} params
  * @returns {import('@translator').SCEncoderResult}
  */
@@ -24,7 +24,11 @@ const encode = (params) => {
   const node = nodes[0];
 
   // Process property translators
-  const attributes = encodeProperties(node, { [gridColTranslator.xmlName]: gridColTranslator }, true);
+  const attributes = encodeProperties(
+    { ...params, nodes: [node] },
+    { [gridColTranslator.xmlName]: gridColTranslator },
+    true,
+  );
 
   return {
     xmlName: XML_NODE_NAME,
@@ -34,7 +38,7 @@ const encode = (params) => {
 };
 
 /**
- * Decode the tableProperties in the table node back into OOXML <w:tblPr>.
+ * Decode the tableProperties in the table node back into OOXML <w:tblGrid>.
  * @param {import('@translator').SCDecoderConfig} params
  * @returns {import('@translator').SCDecoderResult}
  */
@@ -45,17 +49,18 @@ const decode = (params) => {
 
   const cellNodes = firstRow.content?.filter((n) => n.type === 'tableCell') ?? [];
 
-  const columnCountFromCells = cellNodes.reduce((count, cell) => {
+  const colWidthsFromCellNodes = cellNodes.flatMap((cell) => {
     const spanCount = Math.max(1, cell?.attrs?.colspan ?? 1);
-    return count + spanCount;
-  }, 0);
+    const colwidth = cell.attrs?.colwidth;
+    return Array.from({ length: spanCount }).map((_, span) => (Array.isArray(colwidth) ? colwidth[span] : undefined));
+  });
 
+  const columnCountFromCells = colWidthsFromCellNodes.length;
   const totalColumns = Math.max(columnCountFromCells, grid.length);
   const fallbackColumnWidthTwips = resolveFallbackColumnWidthTwips(params, totalColumns, cellMinWidth);
 
   // Build the <w:tblGrid> columns
   const elements = [];
-  let columnIndex = 0;
 
   const pushColumn = (widthTwips, { enforceMinimum = false } = {}) => {
     let numericWidth = typeof widthTwips === 'string' ? parseInt(widthTwips, 10) : widthTwips;
@@ -76,50 +81,36 @@ const decode = (params) => {
     if (decoded) elements.push(decoded);
   };
 
-  cellNodes.forEach((cell) => {
-    const { colspan = 1, colwidth } = cell?.attrs || {};
-    const spanCount = Math.max(1, colspan);
+  for (let columnIndex = 0; columnIndex < totalColumns; ++columnIndex) {
+    const rawWidth = colWidthsFromCellNodes[columnIndex];
+    const cellWidthPixels = typeof rawWidth === 'number' && Number.isFinite(rawWidth) ? rawWidth : Number(rawWidth);
+    const hasCellWidth = Number.isFinite(cellWidthPixels) && cellWidthPixels > 0;
 
-    for (let span = 0; span < spanCount; span++) {
-      const rawWidth = Array.isArray(colwidth) ? colwidth[span] : undefined;
-      const cellWidthPixels = typeof rawWidth === 'number' && Number.isFinite(rawWidth) ? rawWidth : Number(rawWidth);
-      const hasCellWidth = Number.isFinite(cellWidthPixels) && cellWidthPixels > 0;
+    const colGridAttrs = grid?.[columnIndex] || {};
+    const gridWidthTwips = normalizeTwipWidth(colGridAttrs.col);
+    const gridWidthPixels = gridWidthTwips != null ? twipsToPixels(gridWidthTwips) : null;
 
-      const colGridAttrs = grid?.[columnIndex] || {};
-      const gridWidthTwips = normalizeTwipWidth(colGridAttrs.col);
-      const gridWidthPixels = gridWidthTwips != null ? twipsToPixels(gridWidthTwips) : null;
-
-      let cellWidthTwips;
-      let enforceMinimum = false;
-      if (hasCellWidth) {
-        const tolerance = 0.5;
-        if (
-          gridWidthTwips != null &&
-          gridWidthPixels != null &&
-          Math.abs(gridWidthPixels - cellWidthPixels) <= tolerance
-        ) {
-          cellWidthTwips = gridWidthTwips;
-        } else {
-          cellWidthTwips = pixelsToTwips(cellWidthPixels);
-        }
-      } else if (gridWidthTwips != null) {
+    let cellWidthTwips;
+    let enforceMinimum = false;
+    if (gridWidthTwips != null) {
+      cellWidthTwips = gridWidthTwips;
+    } else if (hasCellWidth) {
+      const tolerance = 0.5;
+      if (
+        gridWidthTwips != null &&
+        gridWidthPixels != null &&
+        Math.abs(gridWidthPixels - cellWidthPixels) <= tolerance
+      ) {
         cellWidthTwips = gridWidthTwips;
       } else {
-        cellWidthTwips = fallbackColumnWidthTwips;
-        enforceMinimum = true;
+        cellWidthTwips = pixelsToTwips(cellWidthPixels);
       }
-
-      pushColumn(cellWidthTwips, { enforceMinimum });
-      columnIndex++;
+    } else {
+      cellWidthTwips = fallbackColumnWidthTwips;
+      enforceMinimum = true;
     }
-  });
 
-  // Some documents define more grid columns than there are cells in the first row (e.g. empty header rows
-  // or grid templates). We still need to emit those trailing columns so the exported grid matches the original.
-  while (columnIndex < grid.length) {
-    const gridWidthTwips = normalizeTwipWidth(grid[columnIndex]?.col);
-    pushColumn(gridWidthTwips);
-    columnIndex++;
+    pushColumn(cellWidthTwips, { enforceMinimum });
   }
 
   const newNode = {

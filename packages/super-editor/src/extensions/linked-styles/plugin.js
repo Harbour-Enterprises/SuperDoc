@@ -1,7 +1,11 @@
 // @ts-check
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { generateLinkedStyleString, getLinkedStyle } from './helpers.js';
+import { generateLinkedStyleString, getLinkedStyle, stepInsertsTextIntoStyledParagraph } from './helpers.js';
+import {
+  calculateResolvedParagraphProperties,
+  getResolvedParagraphProperties,
+} from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 /**
  * Plugin key for accessing linked styles state
@@ -55,11 +59,18 @@ export const createLinkedStylesPlugin = (editor) => {
           // Style-related mark types that affect linked styles
           const styleRelatedMarks = new Set(['textStyle', 'bold', 'italic', 'underline', 'strike']);
 
-          tr.steps.forEach((step) => {
+          tr.steps.forEach((step, index) => {
             if (step.slice) {
-              step.slice.content.descendants((node) => {
-                if (node.attrs?.styleId) {
-                  mightAffectStyles = true;
+              step.slice.content.descendants((node, pos) => {
+                if (node.type.name === 'paragraph') {
+                  const paragraphProps = calculateResolvedParagraphProperties(
+                    editor,
+                    node,
+                    newEditorState.doc.resolve(pos),
+                  );
+                  if (paragraphProps.styleId) {
+                    mightAffectStyles = true;
+                  }
                   return false;
                 }
                 // Check if any marks are style-related
@@ -78,6 +89,10 @@ export const createLinkedStylesPlugin = (editor) => {
               if (step.mark && styleRelatedMarks.has(step.mark.type.name)) {
                 mightAffectStyles = true;
               }
+            }
+
+            if (!mightAffectStyles && stepInsertsTextIntoStyledParagraph(tr, oldEditorState, step, index)) {
+              mightAffectStyles = true;
             }
           });
 
@@ -122,11 +137,17 @@ const generateDecorations = (state, styles) => {
   const decorations = [];
   const doc = state?.doc;
 
+  // Early return if no doc or state
+  if (!doc || !state) return DecorationSet.empty;
+
   const getParagraphStyleId = (pos) => {
     const $pos = state.doc.resolve(pos);
     for (let d = $pos.depth; d >= 0; d--) {
       const n = $pos.node(d);
-      if (n?.type?.name === 'paragraph') return n.attrs?.styleId || null;
+      if (n?.type?.name === 'paragraph') {
+        const paragraphProps = getResolvedParagraphProperties(n);
+        return paragraphProps.styleId || null;
+      }
     }
     return null;
   };

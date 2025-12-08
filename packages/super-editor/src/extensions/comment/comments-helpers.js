@@ -48,67 +48,126 @@ export const getCommentPositionsById = (commentId, doc) => {
 
 /**
  * Prepare comments for export by converting the marks back to commentRange nodes
+ * This function handles both Word format (via commentsExtended.xml) and Google Docs format
+ * (via nested comment ranges). For threaded comments from Google Docs, it maintains the
+ * nested structure: Parent Start → Child Start → Content → Parent End → Child End
  *
  * @param {import('prosemirror-model').Node} doc The prosemirror document
  * @param {import('prosemirror-state').Transaction} tr The preparation transaction
  * @param {import('prosemirror-model').Schema} schema The editor schema
- * @param {Array[Object]} comments The comments to prepare
+ * @param {Array[Object]} comments The comments to prepare (may contain parentCommentId relationships)
  * @returns {void}
  */
 export const prepareCommentsForExport = (doc, tr, schema, comments = []) => {
-  // Collect all pending insertions in an array
+  // Create a map of commentId -> comment for quick lookup
+  const commentMap = new Map();
+  comments.forEach((c) => {
+    commentMap.set(c.commentId, c);
+  });
+
+  // Note: Parent/child relationships are tracked via comment.parentCommentId property
   const startNodes = [];
   const endNodes = [];
   const seen = new Set();
 
   doc.descendants((node, pos) => {
-    const commentMarks = node.marks?.filter((mark) => mark.type.name === CommentMarkName);
+    const commentMarks = node.marks?.filter((mark) => mark.type.name === CommentMarkName) || [];
     commentMarks.forEach((commentMark) => {
-      if (commentMark) {
-        const { attrs = {} } = commentMark;
-        const { commentId } = attrs;
+      const { attrs = {} } = commentMark;
+      const { commentId } = attrs;
 
-        if (commentId === 'pending') return;
-        if (seen.has(commentId)) return;
-        seen.add(commentId);
+      if (commentId === 'pending') return;
+      if (seen.has(commentId)) return;
+      seen.add(commentId);
 
-        const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
-        const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
+      const comment = commentMap.get(commentId);
+      const parentCommentId = comment?.parentCommentId;
+
+      const commentStartNodeAttrs = getPreparedComment(commentMark.attrs);
+      const startNode = schema.nodes.commentRangeStart.create(commentStartNodeAttrs);
+      startNodes.push({
+        pos,
+        node: startNode,
+        commentId,
+        parentCommentId,
+      });
+
+      const endNode = schema.nodes.commentRangeEnd.create(commentStartNodeAttrs);
+      endNodes.push({
+        pos: pos + node.nodeSize,
+        node: endNode,
+        commentId,
+        parentCommentId,
+      });
+
+      // Find child comments that should be nested inside this comment
+      const childComments = comments
+        .filter((c) => c.parentCommentId === commentId)
+        .sort((a, b) => a.createdTime - b.createdTime);
+
+      childComments.forEach((c) => {
+        if (seen.has(c.commentId)) return;
+        seen.add(c.commentId);
+
+        const childMark = getPreparedComment({
+          commentId: c.commentId,
+          internal: c.isInternal,
+        });
+        const childStartNode = schema.nodes.commentRangeStart.create(childMark);
         startNodes.push({
           pos,
-          node: startNode,
+          node: childStartNode,
+          commentId: c.commentId,
+          parentCommentId: c.parentCommentId,
         });
 
-        const endNode = schema.nodes.commentRangeEnd.create(commentStartNodeAttrs);
+        const childEndNode = schema.nodes.commentRangeEnd.create(childMark);
         endNodes.push({
           pos: pos + node.nodeSize,
-          node: endNode,
+          node: childEndNode,
+          commentId: c.commentId,
+          parentCommentId: c.parentCommentId,
         });
-
-        const parentId = commentId;
-        if (parentId) {
-          const childComments = comments
-            .filter((c) => c.parentCommentId === parentId)
-            .sort((a, b) => a.createdTime - b.createdTime);
-
-          childComments.forEach((c) => {
-            const childMark = getPreparedComment(c);
-            const childStartNode = schema.nodes.commentRangeStart.create(childMark);
-            seen.add(c.commentId);
-            startNodes.push({
-              pos: pos,
-              node: childStartNode,
-            });
-
-            const childEndNode = schema.nodes.commentRangeEnd.create(childMark);
-            endNodes.push({
-              pos: pos + node.nodeSize,
-              node: childEndNode,
-            });
-          });
-        }
-      }
+      });
     });
+  });
+
+  // Sort start nodes to ensure proper nesting order for Google Docs format:
+  // Parent ranges must wrap child ranges: Parent Start, Child Start, Content, Parent End, Child End
+  startNodes.sort((a, b) => {
+    if (a.pos !== b.pos) return a.pos - b.pos;
+    // At the same position: parents before children
+    // This ensures: Parent Start comes before Child Start
+    const aIsParentOfB = a.commentId === b.parentCommentId;
+    const bIsParentOfA = b.commentId === a.parentCommentId;
+    if (aIsParentOfB) return -1; // a is parent, should come before b (child)
+    if (bIsParentOfA) return 1; // b is parent, should come before a (child)
+    // Both children of the same parent: maintain creation order
+    if (a.parentCommentId && a.parentCommentId === b.parentCommentId) {
+      const aComment = commentMap.get(a.commentId);
+      const bComment = commentMap.get(b.commentId);
+      return (aComment?.createdTime || 0) - (bComment?.createdTime || 0);
+    }
+    return 0;
+  });
+
+  // Sort end nodes to ensure proper nesting order for Google Docs format:
+  // Parent ends must come before child ends to maintain nesting: Parent End, Child End
+  endNodes.sort((a, b) => {
+    if (a.pos !== b.pos) return a.pos - b.pos;
+    // At the same position: parent ends before child ends
+    // This ensures: Parent End comes before Child End
+    const aIsParentOfB = a.commentId === b.parentCommentId;
+    const bIsParentOfA = b.commentId === a.parentCommentId;
+    if (aIsParentOfB) return -1; // a is parent, should end before b (child)
+    if (bIsParentOfA) return 1; // b is parent, should end before a (child)
+    // Both children of the same parent: maintain creation order
+    if (a.parentCommentId && a.parentCommentId === b.parentCommentId) {
+      const aComment = commentMap.get(a.commentId);
+      const bComment = commentMap.get(b.commentId);
+      return (aComment?.createdTime || 0) - (bComment?.createdTime || 0);
+    }
+    return 0;
   });
 
   startNodes.forEach((n) => {

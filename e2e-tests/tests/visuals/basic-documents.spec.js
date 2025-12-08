@@ -21,6 +21,11 @@ test.describe('basic documents', () => {
         timeout: 10_000,
       });
 
+      await page.waitForFunction(() => {
+        const toolbar = document.querySelector('#toolbar');
+        return toolbar && toolbar.children.length > 0;
+      });
+
       await expect(page).toHaveScreenshot({
         path: `${fileName}.png`,
         fullPage: true,

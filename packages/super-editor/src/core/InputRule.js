@@ -5,7 +5,7 @@ import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
-import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+import { handleDocxPaste, wrapTextsInRuns } from './inputRules/docx-paste/docx-paste.js';
 import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { handleGoogleDocsHtml } from './inputRules/google-docs-paste/google-docs-paste.js';
 
@@ -248,7 +248,8 @@ export function handleHtmlPaste(html, editor, source) {
   let cleanedHtml;
   if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
   else cleanedHtml = htmlHandler(html, editor);
-  const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+  let doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+  doc = wrapTextsInRuns(doc);
 
   const { dispatch, state } = editor.view;
   if (!dispatch) return false;
@@ -256,6 +257,7 @@ export function handleHtmlPaste(html, editor, source) {
   // Check if we're pasting into an existing paragraph
   const { $from } = state.selection;
   const isInParagraph = $from.parent.type.name === 'paragraph';
+  const isParagraphEmpty = $from.parent.content.size === 0;
 
   // Check if the pasted content is a single paragraph
   const isSingleParagraph = doc.childCount === 1 && doc.firstChild.type.name === 'paragraph';
@@ -265,7 +267,7 @@ export function handleHtmlPaste(html, editor, source) {
     const paragraphContent = doc.firstChild.content;
     const tr = state.tr.replaceSelectionWith(paragraphContent, false);
     dispatch(tr);
-  } else if (isInParagraph && state.doc.textContent) {
+  } else if (isInParagraph && state.doc.textContent && !isParagraphEmpty) {
     // We're in a paragraph but pasting multiple nodes, extract content from all paragraph nodes
     const allContent = [];
     doc.content.forEach((node, index) => {

@@ -12,7 +12,7 @@ describe('PageNumber commands', () => {
     expect(result).toBe(false);
   });
 
-  it('addAutoPageNumber inserts node and flags pagination update', () => {
+  it('addAutoPageNumber inserts node', () => {
     const commands = PageNumber.config.addCommands();
     const replaceSelectionWith = vi.fn();
     const setMeta = vi.fn();
@@ -22,9 +22,13 @@ describe('PageNumber commands', () => {
       nodeFromJSON: vi.fn().mockReturnValue(pageNode),
     };
 
+    const tr = { replaceSelectionWith, setMeta };
+    // setMeta returns tr for chaining
+    setMeta.mockReturnValue(tr);
+
     const result = commands.addAutoPageNumber()({
       editor: { options: { isHeaderOrFooter: true } },
-      tr: { replaceSelectionWith, setMeta },
+      tr,
       dispatch: vi.fn(),
       state: { schema },
     });

@@ -6,7 +6,7 @@ import OverflowMenu from './OverflowMenu.vue';
 import { NDropdown, NTooltip, NSelect } from 'naive-ui';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
-const emit = defineEmits(['command', 'item-clicked']);
+const emit = defineEmits(['command', 'item-clicked', 'dropdown-update-show']);
 
 const toolbarItemRefs = ref([]);
 const props = defineProps({
@@ -103,18 +103,6 @@ const getDropdownAttributes = (option, item) => {
   };
 };
 
-const handleClickOutside = (e) => {
-  const target = e.target;
-  const itemCtn = target.closest('.toolbar-item-ctn');
-  const targetItemId = itemCtn?.dataset.itemId;
-
-  if (targetItemId === currentItem.value.id) {
-    return;
-  }
-
-  closeDropdowns();
-};
-
 const moveToNextButton = (e) => {
   const currentButton = e.target;
   const nextButton = e.target.closest('.toolbar-item-ctn').nextElementSibling;
@@ -205,6 +193,13 @@ const handleFocus = (e) => {
     firstButton.focus();
   }
 };
+
+const handleDropdownUpdateShow = (open) => {
+  if (!open) {
+    closeDropdowns();
+  }
+  emit('dropdown-update-show', open);
+};
 </script>
 
 <template>
@@ -237,7 +232,7 @@ const handleFocus = (e) => {
         class="toolbar-button toolbar-dropdown sd-editor-toolbar-dropdown"
         :class="{ 'high-contrast': isHighContrastMode }"
         @select="(key, option) => handleSelect(item, option)"
-        @clickoutside="handleClickOutside"
+        @update-show="handleDropdownUpdateShow"
         :style="item.dropdownStyles.value"
         :menu-props="
           () => ({
@@ -283,6 +278,7 @@ const handleFocus = (e) => {
         :toolbar-item="item"
         @buttonClick="handleToolbarButtonClick(item)"
         :overflow-items="overflowItems"
+        @close="closeDropdowns"
       />
     </div>
   </div>

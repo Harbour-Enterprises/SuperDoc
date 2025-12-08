@@ -2,25 +2,26 @@
 import { DOMParser } from 'prosemirror-model';
 import { createDocFromHTML } from './importHtml.js';
 import { createDocFromMarkdown } from './importMarkdown.js';
+import { wrapTextsInRuns } from '../inputRules/docx-paste/docx-paste.js';
 
 /**
  * Unified content processor that handles all content types
  * @param {Object} params
  * @param {string} params.content - The content to process
  * @param {string} params.type - Content type: 'html', 'markdown', 'text', 'schema'
- * @param {Object} params.schema - ProseMirror schema
+ * @param {Object} params.editor - The editor instance
  * @returns {Object} Processed ProseMirror document
  */
-export function processContent({ content, type, schema }) {
+export function processContent({ content, type, editor }) {
   let doc;
 
   switch (type) {
     case 'html':
-      doc = createDocFromHTML(content, schema, { isImport: true });
+      doc = createDocFromHTML(content, editor, { isImport: true });
       break;
 
     case 'markdown':
-      doc = createDocFromMarkdown(content, schema, { isImport: true });
+      doc = createDocFromMarkdown(content, editor, { isImport: true });
       break;
 
     case 'text':
@@ -29,11 +30,13 @@ export function processContent({ content, type, schema }) {
       const para = document.createElement('p');
       para.textContent = content;
       wrapper.appendChild(para);
-      doc = DOMParser.fromSchema(schema).parse(wrapper);
+      doc = DOMParser.fromSchema(editor.schema).parse(wrapper);
+      doc = wrapTextsInRuns(doc);
       break;
 
     case 'schema':
-      doc = schema.nodeFromJSON(content);
+      doc = editor.schema.nodeFromJSON(content);
+      doc = wrapTextsInRuns(doc);
       break;
 
     default:

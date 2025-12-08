@@ -65,7 +65,6 @@ const superdoc = new SuperDoc({
   toolbar: '#superdoc-toolbar',
   document: '/sample.docx', // URL, File or document config
   documentMode: 'editing',
-  pagination: true,
   rulers: true,
   onReady: (event) => {
     console.log('SuperDoc is ready', event);
@@ -75,6 +74,8 @@ const superdoc = new SuperDoc({
   },
 });
 ```
+
+SuperDoc now uses the layout-engine powered `PresentationEditor` under the hood, so pages/zoom/error telemetry are always available—no pagination flag required.
 
 For a list of all available properties and events, see the documentation or refer to [SuperDoc.js](packages/superdoc/src/core/SuperDoc.js)
 

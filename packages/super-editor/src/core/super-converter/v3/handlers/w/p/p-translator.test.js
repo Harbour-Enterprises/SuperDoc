@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { translateParagraphNode } from './helpers/translate-paragraph-node.js';
 
 // Mock attribute handlers before importing the SUT so the config captures them.
 // Define everything inside the factory to avoid hoisting issues.
@@ -54,7 +55,7 @@ vi.mock('./helpers/legacy-handle-paragraph-node.js', () => ({
 }));
 
 // Mock exporter decode function used by decode
-vi.mock('../../../../exporter.js', () => ({
+vi.mock('./helpers/translate-paragraph-node.js', () => ({
   translateParagraphNode: vi.fn(() => ({
     name: 'w:p',
     elements: [],
@@ -66,7 +67,6 @@ vi.mock('../../../../exporter.js', () => ({
 import { translator, config } from './p-translator.js';
 import { NodeTranslator } from '@translator';
 import { handleParagraphNode } from './helpers/legacy-handle-paragraph-node.js';
-import { translateParagraphNode } from '../../../../exporter.js';
 
 describe('w/p p-translator', () => {
   afterEach(() => {

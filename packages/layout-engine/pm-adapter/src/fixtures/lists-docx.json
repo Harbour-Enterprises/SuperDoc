@@ -1,0 +1,786 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "185A3200",
+        "w14:textId": "77777777",
+        "w:rsidR": "00DB5CF7",
+        "w:rsidRDefault": "00DB5CF7",
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:rPr",
+              "elements": [
+                {
+                  "type": "element",
+                  "name": "w:rFonts",
+                  "attributes": {
+                    "w:ascii": "Times New Roman",
+                    "w:eastAsia": "Times New Roman",
+                    "w:hAnsi": "Times New Roman",
+                    "w:cs": "Times New Roman"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:sz",
+                  "attributes": {
+                    "w:val": "20"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:szCs",
+                  "attributes": {
+                    "w:val": "20"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "marksAttrs": [
+          {
+            "type": "textStyle",
+            "attrs": {
+              "fontFamily": "Times New Roman, sans-serif",
+              "fontSize": "10pt"
+            }
+          }
+        ],
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00DB5CF7",
+        "paraId": "185A3200",
+        "textId": "77777777",
+        "rsidR": "00DB5CF7"
+      },
+      "marks": []
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "ONE",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "bold"
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                },
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "lineBreak",
+                      "attrs": {},
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "attrs": {
+                    "rsidR": "00000000"
+                  },
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "573CD6BB",
+                "w14:textId": "27D800BF",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00967839",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00967839",
+                "paraId": "573CD6BB",
+                "textId": "27D800BF",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%1.",
+            "listLevel": [1],
+            "listNumberingType": "decimal",
+            "numId": "1",
+            "level": 0,
+            "numPrType": "inline",
+            "indent": {
+              "left": 48,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "decimal",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "underline",
+                          "attrs": {
+                            "underlineType": "single"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                },
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "lineBreak",
+                      "attrs": {},
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "5406AEA1",
+                "w14:textId": "404E6000",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00000000",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00000000",
+                "paraId": "5406AEA1",
+                "textId": "404E6000",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%2.",
+            "listLevel": [1, 1],
+            "listNumberingType": "lowerLetter",
+            "numId": "1",
+            "level": 1,
+            "numPrType": "inline",
+            "indent": {
+              "left": 96,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "lowerLetter",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "TWO",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "bold"
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                },
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "lineBreak",
+                      "attrs": {},
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "attrs": {
+                    "rsidR": "00000000"
+                  },
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "1F664981",
+                "w14:textId": "22CD0D8A",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00967839",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00967839",
+                "paraId": "1F664981",
+                "textId": "22CD0D8A",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%1.",
+            "listLevel": [2],
+            "listNumberingType": "decimal",
+            "numId": "1",
+            "level": 0,
+            "numPrType": "inline",
+            "indent": {
+              "left": 48,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "decimal",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "A",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "underline",
+                          "attrs": {
+                            "underlineType": "single"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                },
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "lineBreak",
+                      "attrs": {},
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "attrs": {
+                    "rsidR": "00000000"
+                  },
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "321EACBC",
+                "w14:textId": "0A66AE48",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00967839",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00967839",
+                "paraId": "321EACBC",
+                "textId": "0A66AE48",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%2.",
+            "listLevel": [2, 1],
+            "listNumberingType": "lowerLetter",
+            "numId": "1",
+            "level": 1,
+            "numPrType": "inline",
+            "indent": {
+              "left": 96,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "lowerLetter",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "B",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "underline",
+                          "attrs": {
+                            "underlineType": "single"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                },
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "lineBreak",
+                      "attrs": {},
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {}
+                        }
+                      ]
+                    }
+                  ],
+                  "attrs": {
+                    "rsidR": "00000000"
+                  },
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "5DD57E17",
+                "w14:textId": "4DF1D4A3",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00967839",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00967839",
+                "paraId": "5DD57E17",
+                "textId": "4DF1D4A3",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%2.",
+            "listLevel": [2, 2],
+            "listNumberingType": "lowerLetter",
+            "numId": "1",
+            "level": 1,
+            "numPrType": "inline",
+            "indent": {
+              "left": 96,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "lowerLetter",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                {
+                  "type": "run",
+                  "content": [
+                    {
+                      "type": "text",
+                      "text": "C",
+                      "attrs": {
+                        "type": "element",
+                        "attributes": {}
+                      },
+                      "marks": [
+                        {
+                          "type": "textStyle",
+                          "attrs": {
+                            "fontFamily": "Times New Roman, serif",
+                            "fontSize": "10pt",
+                            "fontSizeCs": "10pt"
+                          }
+                        },
+                        {
+                          "type": "underline",
+                          "attrs": {
+                            "underlineType": "single"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "marks": [
+                    {
+                      "type": "textStyle",
+                      "attrs": {}
+                    }
+                  ]
+                }
+              ],
+              "attrs": {
+                "w14:paraId": "6253115E",
+                "w14:textId": "1D646C39",
+                "w:rsidR": "00DB5CF7",
+                "w:rsidRDefault": "00967839",
+                "spacing": {
+                  "line": 1.15,
+                  "lineRule": "auto"
+                },
+                "rsidRDefault": "00967839",
+                "paraId": "6253115E",
+                "textId": "1D646C39",
+                "rsidR": "00DB5CF7"
+              },
+              "marks": []
+            }
+          ],
+          "attrs": {
+            "lvlText": "%2.",
+            "listLevel": [2, 3],
+            "listNumberingType": "lowerLetter",
+            "numId": "1",
+            "level": 1,
+            "numPrType": "inline",
+            "indent": {
+              "left": 96,
+              "hanging": 24
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "list-style-type": "lowerLetter",
+        "listId": "1"
+      }
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "653DC71D",
+        "w14:textId": "77777777",
+        "w:rsidR": "00967839",
+        "w:rsidRDefault": "00967839",
+        "w:rsidP": "00967839",
+        "paragraphProperties": {
+          "type": "element",
+          "name": "w:pPr",
+          "elements": [
+            {
+              "type": "element",
+              "name": "w:rPr",
+              "elements": [
+                {
+                  "type": "element",
+                  "name": "w:rFonts",
+                  "attributes": {
+                    "w:ascii": "Times New Roman",
+                    "w:eastAsia": "Times New Roman",
+                    "w:hAnsi": "Times New Roman",
+                    "w:cs": "Times New Roman"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:sz",
+                  "attributes": {
+                    "w:val": "20"
+                  }
+                },
+                {
+                  "type": "element",
+                  "name": "w:szCs",
+                  "attributes": {
+                    "w:val": "20"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        "marksAttrs": [
+          {
+            "type": "textStyle",
+            "attrs": {
+              "fontFamily": "Times New Roman, sans-serif",
+              "fontSize": "10pt"
+            }
+          }
+        ],
+        "indent": {
+          "left": 0,
+          "right": 0,
+          "firstLine": 0,
+          "hanging": 0
+        },
+        "textIndent": "0in",
+        "spacing": {
+          "line": 1.15,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00967839",
+        "paraId": "653DC71D",
+        "textId": "77777777",
+        "rsidR": "00967839",
+        "rsidP": "00967839"
+      },
+      "marks": []
+    }
+  ],
+  "attrs": {
+    "attributes": {
+      "xmlns:wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+      "xmlns:cx": "http://schemas.microsoft.com/office/drawing/2014/chartex",
+      "xmlns:cx1": "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex",
+      "xmlns:cx2": "http://schemas.microsoft.com/office/drawing/2015/10/21/chartex",
+      "xmlns:cx3": "http://schemas.microsoft.com/office/drawing/2016/5/9/chartex",
+      "xmlns:cx4": "http://schemas.microsoft.com/office/drawing/2016/5/10/chartex",
+      "xmlns:cx5": "http://schemas.microsoft.com/office/drawing/2016/5/11/chartex",
+      "xmlns:cx6": "http://schemas.microsoft.com/office/drawing/2016/5/12/chartex",
+      "xmlns:cx7": "http://schemas.microsoft.com/office/drawing/2016/5/13/chartex",
+      "xmlns:cx8": "http://schemas.microsoft.com/office/drawing/2016/5/14/chartex",
+      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+      "xmlns:aink": "http://schemas.microsoft.com/office/drawing/2016/ink",
+      "xmlns:am3d": "http://schemas.microsoft.com/office/drawing/2017/model3d",
+      "xmlns:o": "urn:schemas-microsoft-com:office:office",
+      "xmlns:oel": "http://schemas.microsoft.com/office/2019/extlst",
+      "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "xmlns:m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+      "xmlns:v": "urn:schemas-microsoft-com:vml",
+      "xmlns:wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+      "xmlns:wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
+      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+      "xmlns:w15": "http://schemas.microsoft.com/office/word/2012/wordml",
+      "xmlns:w16cex": "http://schemas.microsoft.com/office/word/2018/wordml/cex",
+      "xmlns:w16cid": "http://schemas.microsoft.com/office/word/2016/wordml/cid",
+      "xmlns:w16": "http://schemas.microsoft.com/office/word/2018/wordml",
+      "xmlns:w16du": "http://schemas.microsoft.com/office/word/2023/wordml/word16du",
+      "xmlns:w16sdtdh": "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash",
+      "xmlns:w16sdtfl": "http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock",
+      "xmlns:w16se": "http://schemas.microsoft.com/office/word/2015/wordml/symex",
+      "xmlns:wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+      "xmlns:wpi": "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
+      "xmlns:wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "mc:Ignorable": "w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"
+    }
+  }
+}

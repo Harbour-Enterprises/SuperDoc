@@ -22,7 +22,8 @@ export const translateImageNode = (params) => {
 
   let imageId = attrs.rId;
 
-  const src = attrs.src || attrs.imageSrc;
+  // Prefer originalSrc for round-trip fidelity (e.g., EMF/WMF files converted to SVG for display)
+  const src = attrs.originalSrc || attrs.src || attrs.imageSrc;
   const { originalWidth, originalHeight } = getPngDimensions(src);
 
   let imageName;

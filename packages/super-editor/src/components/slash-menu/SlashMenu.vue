@@ -4,6 +4,7 @@ import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
 import { shouldBypassContextMenu } from '../../utils/contextmenu-helpers.js';
 import { moveCursorToMouseEvent } from '../cursor-helpers.js';
+import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
 
@@ -166,11 +167,11 @@ const cleanupCustomItems = () => {
 
 const handleGlobalKeyDown = (event) => {
   // ESCAPE: always close popover or menu
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && isOpen.value) {
     event.preventDefault();
     event.stopPropagation();
     closeMenu();
-    props.editor?.view?.focus();
+    props.editor?.focus?.();
     return;
   }
 
@@ -214,25 +215,36 @@ const handleGlobalOutsideClick = (event) => {
 
 const handleRightClick = async (event) => {
   const readOnly = !props.editor?.isEditable;
-  if (readOnly || shouldBypassContextMenu(event)) {
+  const contextMenuDisabled = props.editor?.options?.disableContextMenu;
+  const bypass = shouldBypassContextMenu(event);
+
+  if (readOnly || contextMenuDisabled || bypass) {
     return;
   }
 
   event.preventDefault();
-  const context = await getEditorContext(props.editor, event);
-  currentContext.value = context; // Store context for later use
-  sections.value = getItems({ ...context, trigger: 'click' });
-  selectedId.value = flattenedItems.value[0]?.id || null;
-  searchQuery.value = '';
 
-  props.editor.view.dispatch(
-    props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-      type: 'open',
-      pos: context?.pos ?? props.editor.view.state.selection.from,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    }),
-  );
+  try {
+    const context = await getEditorContext(props.editor, event);
+    currentContext.value = context;
+    sections.value = getItems({ ...context, trigger: 'click' });
+    selectedId.value = flattenedItems.value[0]?.id || null;
+    searchQuery.value = '';
+
+    const state = props.editor.state;
+    if (!state) return;
+
+    props.editor.dispatch(
+      state.tr.setMeta(SlashMenuPluginKey, {
+        type: 'open',
+        pos: context?.pos ?? state.selection.from,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }),
+    );
+  } catch (error) {
+    console.error('[SlashMenu] Error opening context menu:', error);
+  }
 };
 
 const executeCommand = async (item) => {
@@ -257,40 +269,41 @@ const executeCommand = async (item) => {
 };
 
 const closeMenu = (options = { restoreCursor: true }) => {
-  if (props.editor?.view) {
-    // Get plugin state to access anchorPos
-    const pluginState = SlashMenuPluginKey.getState(props.editor.view.state);
-    const anchorPos = pluginState?.anchorPos;
+  if (!props.editor) return;
+  const state = props.editor.state;
+  if (!state) return;
+  // Get plugin state to access anchorPos
+  const pluginState = SlashMenuPluginKey.getState(state);
+  const anchorPos = pluginState?.anchorPos;
 
-    // Update prosemirror state to close menu
-    props.editor.view.dispatch(
-      props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-        type: 'close',
-      }),
+  // Update prosemirror state to close menu
+  props.editor.dispatch(state.tr.setMeta(SlashMenuPluginKey, { type: 'close' }));
+
+  // Restore cursor position and focus only if requested
+  if (options.restoreCursor && anchorPos !== null && anchorPos !== undefined) {
+    const tr = props.editor.state.tr.setSelection(
+      props.editor.state.selection.constructor.near(props.editor.state.doc.resolve(anchorPos)),
     );
-
-    // Restore cursor position and focus only if requested
-    if (options.restoreCursor && anchorPos !== null) {
-      const tr = props.editor.view.state.tr.setSelection(
-        props.editor.view.state.selection.constructor.near(props.editor.view.state.doc.resolve(anchorPos)),
-      );
-      props.editor.view.dispatch(tr);
-      props.editor.view.focus();
-    }
-
-    cleanupCustomItems();
-    currentContext.value = null;
-
-    // Update local state
-    isOpen.value = false;
-    searchQuery.value = '';
-    sections.value = [];
+    props.editor.dispatch(tr);
+    props.editor.focus?.();
   }
+
+  cleanupCustomItems();
+  currentContext.value = null;
+
+  // Update local state
+  isOpen.value = false;
+  searchQuery.value = '';
+  sections.value = [];
 };
 
 /**
  * Lifecycle hooks on mount and onBeforeUnmount
  */
+let contextMenuTarget = null;
+let slashMenuOpenHandler = null;
+let slashMenuCloseHandler = null;
+
 onMounted(() => {
   if (!props.editor) return;
 
@@ -302,7 +315,7 @@ onMounted(() => {
   props.editor.on('update', handleEditorUpdate);
 
   // Listen for the slash menu to open
-  props.editor.on('slashMenu:open', async (event) => {
+  slashMenuOpenHandler = async (event) => {
     // Prevent opening the menu in read-only mode
     const readOnly = !props.editor?.isEditable;
     if (readOnly) return;
@@ -320,16 +333,22 @@ onMounted(() => {
       sections.value = getItems({ ...currentContext.value, trigger });
       selectedId.value = flattenedItems.value[0]?.id || null;
     }
-  });
+  };
+  props.editor.on('slashMenu:open', slashMenuOpenHandler);
 
-  props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
+  // Attach context menu to the active surface (flow view.dom or presentation host)
+  contextMenuTarget = getEditorSurfaceElement(props.editor);
+  if (contextMenuTarget) {
+    contextMenuTarget.addEventListener('contextmenu', handleRightClick);
+  }
 
-  props.editor.on('slashMenu:close', () => {
+  slashMenuCloseHandler = () => {
     cleanupCustomItems();
     isOpen.value = false;
     searchQuery.value = '';
     currentContext.value = null;
-  });
+  };
+  props.editor.on('slashMenu:close', slashMenuCloseHandler);
 });
 
 // Cleanup function for event listeners
@@ -341,11 +360,18 @@ onBeforeUnmount(() => {
 
   if (props.editor) {
     try {
-      props.editor.off('slashMenu:open');
-      props.editor.off('slashMenu:close');
+      // Remove specific handlers to avoid removing other components' listeners
+      if (slashMenuOpenHandler) {
+        props.editor.off('slashMenu:open', slashMenuOpenHandler);
+      }
+      if (slashMenuCloseHandler) {
+        props.editor.off('slashMenu:close', slashMenuCloseHandler);
+      }
       props.editor.off('update', handleEditorUpdate);
-      props.editor.view.dom.removeEventListener('contextmenu', handleRightClick);
-    } catch (error) {}
+      contextMenuTarget?.removeEventListener('contextmenu', handleRightClick);
+    } catch (error) {
+      console.warn('[SlashMenu] Error during cleanup:', error);
+    }
   }
 });
 </script>
@@ -387,7 +413,7 @@ onBeforeUnmount(() => {
 
 <style>
 .slash-menu {
-  position: absolute;
+  position: fixed;
   z-index: 50;
   width: 180px;
   color: #47484a;

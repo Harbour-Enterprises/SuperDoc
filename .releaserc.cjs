@@ -10,8 +10,8 @@ const config = {
     },
     {
       name: 'main',
-      prerelease: 'next',
-      channel: 'next',
+      prerelease: 'beta',
+      channel: 'beta',
     },
     // Maintenance branches - channel defaults to branch name
     {

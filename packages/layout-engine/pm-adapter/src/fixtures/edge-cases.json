@@ -1,0 +1,49 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "attrs": {
+        "alignment": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "text": "Simple plain text paragraph."
+        }
+      ]
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "alignment": null
+      }
+    },
+    {
+      "type": "paragraph",
+      "attrs": {
+        "alignment": null
+      },
+      "content": [
+        {
+          "type": "text",
+          "marks": [
+            {
+              "type": "bold"
+            },
+            {
+              "type": "italic"
+            },
+            {
+              "type": "textStyle",
+              "attrs": {
+                "color": "#0000ff"
+              }
+            }
+          ],
+          "text": "All marks combined"
+        }
+      ]
+    }
+  ]
+}

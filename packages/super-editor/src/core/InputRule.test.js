@@ -6,9 +6,13 @@ const handleDocxPasteMock = vi.hoisted(() => vi.fn(() => true));
 const handleGoogleDocsHtmlMock = vi.hoisted(() => vi.fn(() => true));
 const flattenListsInHtmlMock = vi.hoisted(() => vi.fn((html) => html));
 
-vi.mock('./inputRules/docx-paste/docx-paste.js', () => ({
-  handleDocxPaste: handleDocxPasteMock,
-}));
+vi.mock('./inputRules/docx-paste/docx-paste.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    handleDocxPaste: handleDocxPasteMock,
+  };
+});
 
 vi.mock('./inputRules/google-docs-paste/google-docs-paste.js', () => ({
   handleGoogleDocsHtml: handleGoogleDocsHtmlMock,

@@ -1,0 +1,50 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "This is a simple paragraph with " },
+        { "type": "text", "text": "bold text", "marks": [{ "type": "bold" }] },
+        { "type": "text", "text": ", " },
+        { "type": "text", "text": "italic text", "marks": [{ "type": "italic" }] },
+        { "type": "text", "text": ", and " },
+        {
+          "type": "text",
+          "text": "bold italic text",
+          "marks": [{ "type": "bold" }, { "type": "italic" }]
+        },
+        { "type": "text", "text": " to ensure formatting." }
+      ],
+      "attrs": {
+        "spacing": {},
+        "indent": {}
+      }
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        { "type": "text", "text": "This paragraph contains " },
+        {
+          "type": "text",
+          "text": "red colored text",
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": { "color": "#ff0000" }
+            }
+          ]
+        },
+        { "type": "text", "text": " and some trailing text." }
+      ],
+      "attrs": {
+        "spacing": {},
+        "indent": {}
+      }
+    }
+  ],
+  "attrs": {
+    "attributes": {},
+    "bodySectPr": {}
+  }
+}
