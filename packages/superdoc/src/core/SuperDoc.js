@@ -12,6 +12,7 @@ import { shuffleArray } from '@superdoc/common/collaboration/awareness';
 import { Telemetry } from '@superdoc/common/Telemetry';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
+import { setupAwarenessHandler } from './collaboration/collaboration.js';
 import { normalizeDocumentEntry } from './helpers/file.js';
 import { isAllowed } from './collaboration/permissions.js';
 
@@ -352,6 +353,40 @@ export class SuperDoc extends EventEmitter {
     // Flag this superdoc as collaborative
     this.isCollaborative = true;
 
+    // Check for external ydoc/provider (provider-agnostic mode)
+    const { ydoc: externalYdoc, provider: externalProvider } = collaborationModuleConfig;
+
+    if (externalYdoc && externalProvider) {
+      // Use external provider - wire up awareness for SuperDoc events
+      this.ydoc = externalYdoc;
+      this.provider = externalProvider;
+      setupAwarenessHandler(externalProvider, this, this.config.user);
+
+      // If no documents provided, create a default blank document
+      if (!this.config.documents || this.config.documents.length === 0) {
+        this.config.documents = [
+          {
+            id: uuidv4(),
+            type: DOCX,
+            name: 'document.docx',
+          },
+        ];
+      }
+
+      // Assign to all documents
+      this.config.documents.forEach((doc) => {
+        doc.ydoc = externalYdoc;
+        doc.provider = externalProvider;
+        doc.role = this.config.role;
+      });
+
+      // Initialize comments sync, if enabled
+      initCollaborationComments(this);
+
+      return this.config.documents;
+    }
+
+    // Fallback: internal provider creation (legacy mode)
     // Start a socket for all documents and general metaMap for this SuperDoc
     if (collaborationModuleConfig.providerType === 'hocuspocus') {
       this.config.socket = new HocuspocusProviderWebsocket({
