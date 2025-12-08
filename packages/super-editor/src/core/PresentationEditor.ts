@@ -2198,6 +2198,16 @@ export class PresentationEditor extends EventEmitter {
     // Render/update each remote cursor
     sortedCursors.forEach((cursor) => {
       visibleClientIds.add(cursor.clientId);
+
+      // Clear old selection rectangles for this user before rendering new state.
+      // Selection rects are not tracked in #remoteCursorElements (only carets are),
+      // so we must query and remove them to prevent "stuck" selections when a user's
+      // selection changes position or collapses to a caret.
+      const oldSelections = this.#remoteCursorOverlay?.querySelectorAll(
+        `.presentation-editor__remote-selection[data-client-id="${cursor.clientId}"]`,
+      );
+      oldSelections?.forEach((el) => el.remove());
+
       if (cursor.anchor === cursor.head) {
         // Render caret only
         this.#renderRemoteCaret(cursor);
