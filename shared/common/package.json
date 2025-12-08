@@ -37,7 +37,7 @@
     "@types/node": "^22.13.1",
     "@vitejs/plugin-vue": "^5.0.4",
     "typescript": "^5.7.3",
-    "vitest": "^3.0.8",
+    "vitest": "^4.0.15",
     "vue": "^3.5.20"
   }
 }

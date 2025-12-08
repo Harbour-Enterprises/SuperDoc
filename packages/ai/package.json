@@ -38,7 +38,7 @@
     "superdoc": "^0.28.0",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "vitest": "^4.0.15"
   },
   "files": [
     "dist",
