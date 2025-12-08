@@ -71,8 +71,8 @@ export interface Awareness {
  */
 export interface CollaborationProvider {
   awareness?: Awareness | null;
-  on?(event: string, handler: (...args: unknown[]) => void): void;
-  off?(event: string, handler: (...args: unknown[]) => void): void;
+  on?(event: any, handler: (...args: any[]) => void): void;
+  off?(event: any, handler: (...args: any[]) => void): void;
   disconnect?(): void;
   destroy?(): void;
   /** Whether provider is synced - some use `synced`, others `isSynced` */
