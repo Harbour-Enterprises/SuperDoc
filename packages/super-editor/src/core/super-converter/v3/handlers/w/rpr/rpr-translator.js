@@ -35,6 +35,7 @@ import { translator as kernTranslator } from '../kern/kern-translator.js';
 import { translator as positionTranslator } from '../position/position-translator.js';
 import { translator as fitTextTranslator } from '../fitText/fitText-translator.js';
 import { translator as eastAsianLayoutTranslator } from '../eastAsianLayout/eastAsianLayout-translator.js';
+import { translator as rtlTranslator } from '../rtl/rtl-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -64,6 +65,7 @@ export const propertyTranslators = [
   oMathTranslator,
   outlineTranslator,
   positionTranslator,
+  rtlTranslator,
   runStyleTranslator,
   shadowTranslator,
   shdTranslator,

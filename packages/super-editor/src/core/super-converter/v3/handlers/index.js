@@ -79,6 +79,7 @@ import { translator as w_r_translator } from './w/r/r-translator.js';
 import { translator as w_rFonts_translator } from './w/rFonts/rFonts-translator.js';
 import { translator as w_rPr_translator } from './w/rpr/rpr-translator.js';
 import { translator as w_rStyle_translator } from './w/rStyle/rstyle-translator.js';
+import { translator as w_rtl_translator } from './w/rtl/rtl-translator.js';
 import { translator as w_right_translator } from './w/right/right-translator.js';
 import { translator as w_sdt_translator } from './w/sdt/sdt-translator.js';
 import { translator as w_shadow_translator } from './w/shadow/shadow-translator.js';
@@ -226,6 +227,7 @@ const translatorList = Array.from(
     w_rFonts_translator,
     w_rPr_translator,
     w_rStyle_translator,
+    w_rtl_translator,
     w_right_translator,
     w_sdt_translator,
     w_shadow_translator,
