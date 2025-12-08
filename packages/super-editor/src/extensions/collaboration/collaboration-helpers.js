@@ -30,6 +30,7 @@ export const updateYdocDocxData = async (editor, ydoc) => {
     if (!newXml || typeof newXml !== 'object') return;
 
     let hasChanges = false;
+    const changedXmlFiles = [];
 
     Object.keys(newXml).forEach((key) => {
       const fileIndex = docx.findIndex((item) => item.name === key);
@@ -41,6 +42,7 @@ export const updateYdocDocxData = async (editor, ydoc) => {
       }
 
       hasChanges = true;
+      changedXmlFiles.push(key);
       if (fileIndex > -1) {
         docx.splice(fileIndex, 1);
       }
@@ -49,6 +51,10 @@ export const updateYdocDocxData = async (editor, ydoc) => {
         content: newXml[key],
       });
     });
+
+    if (changedXmlFiles.length > 0) {
+      console.log('[xml-updates]', `${changedXmlFiles.length} file(s) updated:`, changedXmlFiles);
+    }
 
     // Only transact if there were actual changes OR this is initial setup
     if (hasChanges || !docxValue) {
