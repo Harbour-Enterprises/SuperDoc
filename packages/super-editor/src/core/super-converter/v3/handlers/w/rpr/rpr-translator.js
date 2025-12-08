@@ -27,6 +27,7 @@ import { translator as oMathTranslator } from '../oMath/oMath-translator.js';
 import { translator as outlineTranslator } from '../outline/outline-translator.js';
 import { translator as shadowTranslator } from '../shadow/shadow-translator.js';
 import { translator as vanishTranslator } from '../vanish/vanish-translator.js';
+import { translator as specVanishTranslator } from '../specVanish/specVanish-translator.js';
 import { translator as effectTranslator } from '../effect/effect-translator.js';
 import { translator as emTranslator } from '../em/em-translator.js';
 import { translator as wTranslator } from '../w/w-translator.js';
@@ -68,6 +69,7 @@ export const propertyTranslators = [
   shdTranslator,
   smallCapsTranslator,
   snapToGridTranslator,
+  specVanishTranslator,
   strikeTranslator,
   underlineTranslator,
   vanishTranslator,

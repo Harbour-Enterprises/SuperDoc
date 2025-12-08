@@ -126,6 +126,7 @@ import { translator as w_wBefore_translator } from './w/wBefore/wBefore-translat
 import { translator as w_vMerge_translator } from './w/vMerge/vMerge-translator.js';
 import { translator as w_vAlign_translator } from './w/vAlign/vAlign-translator.js';
 import { translator as w_vertAlign_translator } from './w/vertAlign/vertAlign-translator.js';
+import { translator as w_specVanish_translator } from './w/specVanish/specVanish-translator.js';
 import { translator as w_tcFitText_translator } from './w/tcFitText/tcFitText-translator.js';
 import { translator as w_tcW_translator } from './w/tcW/tcW-translator.js';
 import { translator as w_textDirection_translator } from './w/textDirection/textDirection-translator.js';
@@ -235,6 +236,7 @@ const translatorList = Array.from(
     w_suppressAutoHyphens_translator,
     w_suppressLineNumbers_translator,
     w_suppressOverlap_translator,
+    w_specVanish_translator,
     w_start_translator,
     w_strike_translator,
     w_sz_translator,
