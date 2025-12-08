@@ -145,7 +145,7 @@ describe('deleteSelection', () => {
   // This is a workaround to prevent this from happening, by checking if the current DOM selection is a single character.
   it('returns false when current dom selection is a single character', () => {
     const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
-    const sel = TextSelection.create(doc, 2, 2);
+    const sel = TextSelection.create(doc, 2, 5);
     const state = EditorState.create({ schema, doc, selection: sel });
 
     vi.spyOn(document, 'getSelection').mockReturnValue({
