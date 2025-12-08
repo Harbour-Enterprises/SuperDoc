@@ -11,6 +11,7 @@ import {
     createLiteralReplaceTool,
     createInsertTrackedChangesTool,
     createInsertCommentsTool,
+    createLiteralInsertCommentTool,
     createInsertContentTool,
     createSummarizeTool,
     createRespondTool,
@@ -41,6 +42,7 @@ export function createToolRegistry(
         // === DIRECT EDITING TOOLS (Use only when user explicitly wants immediate changes) ===
         createReplaceAllTool(actions),
         createLiteralReplaceTool(actions),
+        createLiteralInsertCommentTool(actions),
 
         // === SEARCH & HIGHLIGHT TOOLS ===
         createFindAllTool(actions),

@@ -6,6 +6,7 @@ import {
     buildReplacePrompt,
     buildSummaryPrompt,
     buildInsertContentPrompt,
+    buildInsertCommentPrompt,
     SYSTEM_PROMPTS
 } from '../../shared/prompts';
 
@@ -163,17 +164,20 @@ export class AIActionsService {
      *
      * @param query - Natural language query describing what to replace
      * @param multiple - Whether to find all occurrences or just the first
+     * @param isComment - Whether this is for comments (uses different prompt)
      * @returns Array of FoundMatch results from AI, or empty array if no context or results
      * @private
      */
-    private async fetchAIReplacements(query: string, multiple: boolean): Promise<FoundMatch[]> {
+    private async fetchAIReplacements(query: string, multiple: boolean, isComment: boolean = false): Promise<FoundMatch[]> {
         const documentContext = this.getDocumentContext();
 
         if (!documentContext) {
             return [];
         }
 
-        const prompt = buildReplacePrompt(query, documentContext, multiple);
+        const prompt = isComment 
+            ? buildInsertCommentPrompt(query, documentContext, multiple)
+            : buildReplacePrompt(query, documentContext, multiple);
         const response = await this.runCompletion([
             {role: 'system', content: SYSTEM_PROMPTS.EDIT},
             {role: 'user', content: prompt},
@@ -219,6 +223,40 @@ export class AIActionsService {
             }
             throw error;
         }
+    }
+
+    /**
+     * Executes an operation that may need to find locations first (like comments).
+     * 
+     * @param query - Natural language query describing where to add comments
+     * @param multiple - Whether to find all occurrences or just the first
+     * @param operationFn - Function to execute the specific operation
+     * @param isComment - Whether this is for comments (uses different prompt)
+     * @returns Array of processed results
+     * @private
+     */
+    private async executeOperationWithLocationFinding(
+        query: string,
+        multiple: boolean,
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>,
+        isComment: boolean = false
+    ): Promise<FoundMatch[]> {
+        const replacements = await this.fetchAIReplacements(query, multiple, isComment);
+        if (!replacements.length) {
+            return [];
+        }
+        const searchResults = this.adapter.findResults(replacements);
+        if (!multiple) {
+            return await this.executeSingleOperation(searchResults, operationFn);
+        }
+        
+        const allOperations = this.collectOperationsFromResults(searchResults);
+        
+        if (!allOperations.length) {
+            return [];
+        }
+
+        return await this.executeMultipleOperations(allOperations, operationFn);
     }
 
     /**
@@ -598,7 +636,7 @@ export class AIActionsService {
             throw new Error('Query cannot be empty');
         }
 
-        const matches = await this.executeOperation(
+        const matches = await this.executeOperationWithLocationFinding(
             query,
             false,
             (adapter, position, replacement) =>
@@ -606,7 +644,8 @@ export class AIActionsService {
                     position.from,
                     position.to,
                     replacement.suggestedText || ''
-                )
+                ),
+            true // isComment = true
         );
 
         return {
@@ -623,7 +662,7 @@ export class AIActionsService {
             throw new Error('Query cannot be empty');
         }
 
-        const matches = await this.executeOperation(
+        const matches = await this.executeOperationWithLocationFinding(
             query,
             true,
             (adapter, position, replacement) =>
@@ -631,12 +670,75 @@ export class AIActionsService {
                     position.from,
                     position.to,
                     replacement.suggestedText || ''
-                )
+                ),
+            true // isComment = true
         );
 
         return {
             success: matches.length > 0,
             results: matches,
+        };
+    }
+
+    /**
+     * Performs a deterministic literal find-and-add-comment operation (no AI).
+     * Finds all occurrences of the find text and adds the specified comment at each location.
+     *
+     * @param findText - Literal text to locate
+     * @param commentText - Comment text to add at each match location
+     * @param options - Additional options such as case sensitivity
+     */
+    async literalInsertComment(
+        findText: string,
+        commentText: string,
+        options?: {
+            caseSensitive?: boolean;
+        }
+    ): Promise<Result> {
+        if (!validateInput(findText)) {
+            throw new Error('Find text cannot be empty');
+        }
+        if (commentText === undefined || commentText === null) {
+            throw new Error('Comment text must be a string');
+        }
+
+        const applied: FoundMatch[] = [];
+
+        // Find all literal matches
+        const matches = this.adapter.findLiteralMatches(findText, Boolean(options?.caseSensitive));
+        
+        if (!matches.length) {
+            return { success: false, results: [] };
+        }
+
+        // Sort descending to process from end to start (prevents position shifting issues)
+        const descending = [...matches].sort((a, b) => b.from - a.from);
+
+        for (const match of descending) {
+            try {
+                const commentId = await this.adapter.createComment(
+                    match.from,
+                    match.to,
+                    commentText
+                );
+                
+                applied.push({
+                    originalText: match.text,
+                    suggestedText: commentText,
+                    positions: [{ from: match.from, to: match.to }],
+                    changeId: commentId,
+                } as FoundMatch);
+            } catch (error) {
+                if (this.enableLogging) {
+                    console.error(`[AIActionsService] Failed to add comment at position ${match.from}-${match.to}:`, error);
+                }
+                // Continue with other matches even if one fails
+            }
+        }
+
+        return {
+            success: applied.length > 0,
+            results: applied,
         };
     }
 

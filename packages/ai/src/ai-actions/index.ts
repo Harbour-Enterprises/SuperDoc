@@ -92,6 +92,15 @@ export class AIActions {
         insertComments: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.insertComments(instruction));
         },
+        literalInsertComment: async (
+            findText: string,
+            commentText: string,
+            options?: {caseSensitive?: boolean}
+        ) => {
+            return this.executeActionWithCallbacks(() =>
+                this.commands.literalInsertComment(findText, commentText, options)
+            );
+        },
         summarize: async (instruction: string) => {
             return this.executeActionWithCallbacks(() => this.commands.summarize(instruction));
         },

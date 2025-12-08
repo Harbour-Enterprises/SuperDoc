@@ -17,7 +17,7 @@ export function createReplaceAllTool(actions: any): AIToolDefinition {
     return {
         name: 'replaceAll',
         description:
-            'DIRECT batch editing (no tracking). Use ONLY when: user explicitly wants all instances changed immediately. Otherwise prefer insertTrackedChanges for reviewable changes.',
+            'DIRECT batch editing (no tracking). Use ONLY when: user explicitly wants all instances changed immediately AND the user does NOT provide exact find/replace text pairs. If user provides exact text to find and exact replacement (e.g., "change X to Y", "replace A with B"), use literalReplace instead. Otherwise prefer insertTrackedChanges for reviewable changes.',
         handler: async ({instruction}) => {
             const action = actions.replaceAll;
             if (typeof action !== 'function') {
@@ -45,7 +45,7 @@ export function createLiteralReplaceTool(actions: any): AIToolDefinition {
     return {
         name: 'literalReplace',
         description:
-            'Deterministic literal find-and-replace. Use when the user explicitly provides both the text to find and the exact replacement. Requires args.find and args.replace.',
+            'PREFERRED for explicit find-and-replace operations. Use when the user provides both the exact text to find AND the exact replacement text (e.g., "change X to Y", "replace A with B", "change all references to CompanyA to CompanyB"). Automatically handles "all" instances. Requires args.find (the exact text to find) and args.replace (the exact replacement text). Use trackChanges:true for reviewable edits, false for direct changes.',
         handler: async ({step}) => {
             const args = step.args ?? {};
             const findText = typeof args.find === 'string' ? args.find : '';

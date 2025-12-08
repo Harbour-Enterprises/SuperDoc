@@ -20,6 +20,7 @@ export type AIToolBuiltin =
     | 'literalReplace'
     | 'insertTrackedChanges'
     | 'insertComments'
+    | 'literalInsertComment'
     | 'summarize'
     | 'insertContent'
     | 'respond';
@@ -53,6 +54,11 @@ export interface AIToolActions {
     ) => Promise<Result>;
     insertTrackedChanges: (instruction: string) => Promise<Result>;
     insertComments: (instruction: string) => Promise<Result>;
+    literalInsertComment: (
+        findText: string,
+        commentText: string,
+        options?: {caseSensitive?: boolean}
+    ) => Promise<Result>;
     summarize: (instruction: string) => Promise<Result>;
     insertContent: (instruction: string, options?: {position?: 'before' | 'after' | 'replace'}) => Promise<Result>;
 }

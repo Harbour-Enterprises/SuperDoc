@@ -104,6 +104,48 @@ export const buildSummaryPrompt = (query: string, documentContext: string): stri
             }`;
 };
 
+export const buildInsertCommentPrompt = (query: string, documentContext: string, multiple: boolean): string => {
+  const scope = multiple ? 'ALL locations' : 'the FIRST location';
+  
+  return `You are a document review assistant. Your task is to find ${scope} where comments should be added based on the user's request, then provide the comment text to add at each location.
+
+            Task:
+            - Parse the user request to understand: (1) WHERE to add comments (location criteria), and (2) WHAT comment text to add
+            - Find ${scope} in the document that match the location criteria
+            - For each location found, return the text at that location as "originalText" and the comment text as "suggestedText"
+            
+            CRITICAL RULES:
+            - originalText: The exact text from the document at the location where the comment should be added
+            - suggestedText: The comment text/question to add (e.g., "Is this correct?", "Review needed", etc.)
+            - If the user specifies a location (e.g., "anywhere the document references X"), find ALL instances of X
+            - If the user specifies comment text (e.g., "add a comment that says 'Y'"), use that exact text in suggestedText
+            - Preserve the exact wording of the comment text from the user's request
+            
+            RESPONSE FORMAT (always):
+            {
+              "success": boolean,
+              "results": [
+                {
+                  "originalText": "string (text at location where comment should be added)",
+                  "suggestedText": "string (the comment text to add)"
+                }
+              ]
+            }
+            
+            Rules:
+            - For multiple locations, add multiple entries (one per location)
+            - originalText should be the exact text from the document at each location
+            - suggestedText should be the comment text to add at that location
+            - No explanations. No extra text outside JSON.
+            ---------------------
+            
+            Document:
+            ${documentContext}
+            
+            User Request:
+            ${query}`;
+};
+
 export const buildInsertContentPrompt = (query: string, documentContext?: string): string => {
   return `You are a document content generation assistant.
           Task:
@@ -143,6 +185,14 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           - Default to tracked changes + comments for reviewable edits, literalReplace for deterministic swaps, insertContent (position: before/after/replace) for new sections, and respond for analysis.
           - Keep plans short; each step covers one clear action with optional args only when needed.
           
+          CRITICAL - When to use literalReplace vs replaceAll:
+          - literalReplace: ALWAYS use when user provides explicit find/replace text pairs (e.g., "change X to Y", "replace A with B", "change all references to OldName to NewName"). Extract the exact find text and exact replace text into args.find and args.replace. Works for both single and "all" instances.
+          - replaceAll: ONLY use when user wants batch editing but does NOT provide explicit find/replace text pairs (e.g., "improve all instances of this phrase" without specifying exact replacement).
+          
+          CRITICAL - When to use literalInsertComment vs insertComments:
+          - literalInsertComment: ALWAYS use when user provides explicit find text and comment text (e.g., "add comment X anywhere Y appears", "add a comment that says Z anywhere the document references W"). Extract the exact find text into args.find and exact comment text into args.comment. Works for both single and "all" instances. Deterministic and predictable.
+          - insertComments: ONLY use when location criteria are complex or require AI interpretation (e.g., "add comments asking about unclear sections" without specifying exact text to find).
+          
           CRITICAL - Tool Usage:
           - insertTrackedChanges: For text edits/replacements ONLY. Suggested text must be clean, final text (no HTML comments, no inline notes).
           - insertComments: For questions, feedback, or notes. Use this if you have questions about the text.
@@ -169,7 +219,9 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           Examples:
           Editing → {"reasoning":"Use tracked changes for clarity fixes","steps":[{"id":"revise","tool":"insertTrackedChanges","instruction":"Improve grammar and tone in the selected paragraph"}]}
           Editing with questions → {"reasoning":"Fix grammar and ask about entity","steps":[{"id":"fix","tool":"insertTrackedChanges","instruction":"Fix grammar errors"},{"id":"question","tool":"insertComments","instruction":"Ask if 'Iqidis' is the correct entity name"}]}
-          Literal replace → {"reasoning":"User provided exact before/after text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Replace the legacy company name","args":{"find":"A","replace":"B","trackChanges":true}}]}
+          Literal replace (single) → {"reasoning":"User provided exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Replace the legacy company name","args":{"find":"OldName","replace":"NewName","trackChanges":true}}]}
+          Literal replace (all instances) → {"reasoning":"User wants all instances changed with exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Change all references to OldName to NewName","args":{"find":"OldName","replace":"NewName","trackChanges":false}}]}
+          Literal insert comment (all instances) → {"reasoning":"User wants comments added at all locations with exact find/comment text","steps":[{"id":"comment","tool":"literalInsertComment","instruction":"Add comment anywhere OldName appears","args":{"find":"OldName","comment":"Is this the correct entity?"}}]}
           Insert after selection → {"reasoning":"Insert conclusion after current section","steps":[{"id":"conclude","tool":"insertContent","instruction":"Write a short conclusion paragraph summarizing next steps","args":{"position":"after"}}]}
           Insert after specific clause → {"reasoning":"Find clause first, then add new content after it","steps":[{"id":"find","tool":"highlight","instruction":"Find and highlight Clause 7.1"},{"id":"add","tool":"insertContent","instruction":"Add a new Clause 7.2 about confidentiality","args":{"position":"after"}},{"id":"comment","tool":"insertComments","instruction":"Add comment saying 'review needed'"}]}`;
 };
