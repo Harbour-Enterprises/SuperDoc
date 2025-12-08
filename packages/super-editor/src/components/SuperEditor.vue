@@ -372,18 +372,41 @@ const initializeData = async () => {
     return initEditor(fileData);
   }
 
-  // If we are in collaboration mode, wait for the docx data to be available
+  // If we are in collaboration mode, wait for sync then initialize
   else if (props.options.ydoc && props.options.collaborationProvider) {
     delete props.options.content;
     const ydoc = props.options.ydoc;
     const provider = props.options.collaborationProvider;
-    const handleSynced = () => {
-      pollForMetaMapData(ydoc);
-      // Remove the synced event listener.
-      // Avoids re-initializing the editor in case the connection is lost and reconnected
-      provider.off('synced', handleSynced);
+
+    // Wait for provider sync (handles different provider APIs)
+    const waitForSync = () => {
+      if (provider.isSynced || provider.synced) return Promise.resolve();
+
+      return new Promise((resolve) => {
+        const onSync = (synced) => {
+          if (synced === false) return; // Liveblocks fires sync(false) first
+          provider.off('synced', onSync);
+          provider.off('sync', onSync);
+          resolve();
+        };
+        provider.on('synced', onSync);
+        provider.on('sync', onSync);
+      });
     };
-    provider.on('synced', handleSynced);
+
+    waitForSync().then(async () => {
+      const metaMap = ydoc.getMap('meta');
+
+      if (metaMap.has('docx')) {
+        // Existing content - poll for it
+        pollForMetaMapData(ydoc);
+      } else {
+        // First client - load blank document
+        props.options.isNewFile = true;
+        const fileData = await loadNewFileData();
+        if (fileData) initEditor(fileData);
+      }
+    });
   }
 };
 
