@@ -12,10 +12,12 @@ export const deleteSelection =
     // Docs that are loaded into SuperDoc, when user selects text from right to left and replace it with a single char:
     // Prosemirror will interpret this as a backspace operation, which will delete the character.
     // This is a workaround to prevent this from happening, by checking if the current DOM selection is a single character.
-    const currentDomSelection = document.getSelection();
-    // If the current DOM selection is a single character, we don't want to delete it.
-    if (currentDomSelection?.baseNode?.data?.length == 1) {
-      return false;
+    if (document && document.getSelection) {
+      const currentDomSelection = document.getSelection();
+      // If the current DOM selection is a single character, we don't want to delete it.
+      if (currentDomSelection?.baseNode?.data?.length == 1) {
+        return false;
+      }
     }
 
     if (empty) {
