@@ -191,7 +191,7 @@ export const updateCommentsIdsAndExtensible = (comments = [], commentsIds, exten
       name: 'w16cex:commentExtensible',
       attributes: {
         'w16cex:durableId': newDurableId,
-        'w16cex:dateUtc': toIsoNoFractional(comment.createdTime),
+        'w16cex:dateUtc': toIsoNoFractional(),
       },
     };
     extensibleUpdated.elements[0].elements.push(newExtensible);

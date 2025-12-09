@@ -9,8 +9,6 @@
  * @property {Boolean} [defining=false] Whether the node is defining.
  * @property {Boolean} [topNode=false] Whether the node is a top-level node.
  * @property {String} [tableRole] The role of the node in a table.
- * @property {String} [summary] A short human-readable description for schema summaries.
- * @property {Boolean} [excludeFromSummaryJSON=false] Whether to omit this node from schema summaries.
  * @property {Function | String} [content] ProseMirror string for what content this node accepts.
  * @property {String} [marks] The marks applied to this node.
  * @property {Boolean} [inline=false] Whether the node is an inline node.
