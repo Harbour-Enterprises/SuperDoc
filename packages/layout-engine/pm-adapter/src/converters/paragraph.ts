@@ -710,6 +710,7 @@ export function paragraphToFlowBlocks(
         ? (paragraphProps.styleId as string)
         : null;
   const paragraphHydration = converterContext ? hydrateParagraphStyleAttrs(para, converterContext) : null;
+
   let baseRunDefaults: RunDefaults = {};
   try {
     const spacingSource =

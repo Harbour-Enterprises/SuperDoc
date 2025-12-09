@@ -55,7 +55,11 @@ function lineHeightForRuns(runs: Run[], fromRun: number, toRun: number): number 
   return maxSize * 1.2;
 }
 
-export function remeasureParagraph(block: ParagraphBlock, maxWidth: number): ParagraphMeasure {
+export function remeasureParagraph(
+  block: ParagraphBlock,
+  maxWidth: number,
+  firstLineIndent: number = 0,
+): ParagraphMeasure {
   const runs = block.runs ?? [];
   const lines: Line[] = [];
 
@@ -63,6 +67,9 @@ export function remeasureParagraph(block: ParagraphBlock, maxWidth: number): Par
   let currentChar = 0;
 
   while (currentRun < runs.length) {
+    const isFirstLine = lines.length === 0;
+    // For first line, reduce available width by firstLineIndent (e.g., for in-flow list markers)
+    const effectiveMaxWidth = isFirstLine ? maxWidth - firstLineIndent : maxWidth;
     const startRun = currentRun;
     const startChar = currentChar;
     let width = 0;
@@ -77,7 +84,7 @@ export function remeasureParagraph(block: ParagraphBlock, maxWidth: number): Par
       const start = r === currentRun ? currentChar : 0;
       for (let c = start; c < text.length; c += 1) {
         const w = measureRunSliceWidth(run, c, c + 1);
-        if (width + w > maxWidth && width > 0) {
+        if (width + w > effectiveMaxWidth && width > 0) {
           // Break line
           if (lastBreakRun >= 0) {
             endRun = lastBreakRun;
