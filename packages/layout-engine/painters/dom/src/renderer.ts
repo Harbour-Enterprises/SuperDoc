@@ -1565,9 +1565,6 @@ export class DomPainter {
       const suppressFirstLineIndent = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
       const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
 
-      // Paragraphs with list markers should not be justified
-      const isListParagraph = !!(fragment.markerWidth && wordLayout?.marker);
-
       // Check if the paragraph ends with a lineBreak run.
       // In Word, justified text stretches all lines EXCEPT the true last line of a paragraph.
       // However, if the paragraph ends with a <w:br/> (lineBreak), the visible text before
@@ -1592,6 +1589,11 @@ export class DomPainter {
 
         // Determine if this is the true last line of the paragraph that should skip justification.
         // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
+        //
+        // IMPORTANT: List paragraphs (paragraphs with fragment.markerWidth and wordLayout.marker)
+        // SHOULD be justified per MS Word specification when alignment is 'justify'. Do NOT add
+        // an isListParagraph check here - the last line rule applies equally to list and non-list
+        // paragraphs (both skip justification on the final line unless it ends with lineBreak).
         const isLastLineOfFragment = index === lines.length - 1;
         const isLastLineOfParagraph = isLastLineOfFragment && !fragment.continuesOnNext;
         const shouldSkipJustifyForLastLine = isLastLineOfParagraph && !paragraphEndsWithLineBreak;
@@ -1602,7 +1604,7 @@ export class DomPainter {
           context,
           availableWidthOverride,
           fragment.fromLine + index,
-          isListParagraph || shouldSkipJustifyForLastLine,
+          shouldSkipJustifyForLastLine,
         );
 
         // List first lines handle indentation via marker positioning and tab stops,
