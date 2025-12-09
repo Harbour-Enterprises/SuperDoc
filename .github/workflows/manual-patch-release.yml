@@ -1,0 +1,49 @@
+name: 🚀 Manual Patch Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      dist-tag:
+        description: npm dist-tag to publish under
+        required: false
+        default: beta
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  manual-patch-release:
+    runs-on: ubuntu-latest
+    env:
+      DIST_TAG: ${{ github.event.inputs.dist-tag || 'beta' }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - name: Update npm
+        run: npm install -g npm@latest
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Bump patch version (no git tag)
+        run: npm --workspace=superdoc version patch --no-git-tag-version
+
+      - name: Build packages
+        run: npm run build
+
+      - name: Publish patch release
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: node scripts/publish-superdoc.cjs --dist-tag "${DIST_TAG}" --skip-build
+
+      - name: Show published version
+        run: node -e "console.log('published version:', require('./packages/superdoc/package.json').version)"
