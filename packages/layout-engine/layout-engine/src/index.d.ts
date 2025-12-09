@@ -23,7 +23,7 @@ export type LayoutOptions = {
   pageSize?: PageSize;
   margins?: Margins;
   columns?: ColumnLayout;
-  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number) => ParagraphMeasure;
+  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number, firstLineIndent?: number) => ParagraphMeasure;
 };
 export type HeaderFooterConstraints = {
   width: number;

@@ -1418,7 +1418,9 @@ export class DomPainter {
         fragmentEl.dataset.continuesOnNext = 'true';
       }
 
-      const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
+      // Use fragment.lines if available (set when paragraph was remeasured for narrower column).
+      // Otherwise, fall back to slicing from the original measure.
+      const lines = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
 
       applyParagraphBlockStyles(fragmentEl, block.attrs);
       if (block.attrs?.styleId) {
