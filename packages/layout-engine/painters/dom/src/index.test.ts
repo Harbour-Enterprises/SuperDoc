@@ -690,6 +690,172 @@ describe('DomPainter', () => {
     expect(line.style.textAlign).toBe('center');
   });
 
+  it('justifies multi-line list paragraphs (except last line)', () => {
+    // List paragraphs with alignment='justify' should be justified just like normal paragraphs.
+    // Multi-line list items have their non-final lines justified, and the last line is not justified.
+    const listParaBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'list-para-block',
+      runs: [
+        { text: 'First line of list item text', fontFamily: 'Arial', fontSize: 16 },
+        { text: ' Second line of list item text', fontFamily: 'Arial', fontSize: 16 },
+      ],
+      attrs: { alignment: 'justify' },
+      wordLayout: {
+        marker: {
+          markerText: '1.',
+          markerFontSize: 16,
+          markerBoxWidthPx: 24,
+          markerX: 4,
+          markerY: 0,
+          markerJustification: 'left',
+        },
+        spacing: { before: 0, after: 0, line: 12, lineRule: 'auto' },
+        indent: { left: 48, right: 0, firstLine: 0, hanging: 24 },
+      },
+    };
+
+    const listParaMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 28,
+          width: 180,
+          maxWidth: 400,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 31,
+          width: 190,
+          maxWidth: 400,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+      marker: {
+        markerWidth: 24,
+        markerTextWidth: 12,
+        indentLeft: 48,
+      },
+    };
+
+    const listParaLayout: Layout = {
+      pageSize: { w: 500, h: 500 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'list-para-block',
+              fromLine: 0,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 400,
+              markerWidth: 24,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [listParaBlock], measures: [listParaMeasure] });
+    painter.paint(listParaLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(2);
+    // First line SHOULD be justified (not the last line)
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    // Second line should NOT be justified (last line of paragraph)
+    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('does not justify single-line list paragraphs (last line rule)', () => {
+    // Single-line list paragraphs with alignment='justify' should NOT be justified
+    // because that single line is also the last line, which should not be justified per Word spec.
+    const singleLineListBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'single-list-block',
+      runs: [{ text: 'Single line list item', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'justify' },
+      wordLayout: {
+        marker: {
+          markerText: '1.',
+          markerFontSize: 16,
+          markerBoxWidthPx: 24,
+          markerX: 4,
+          markerY: 0,
+          markerJustification: 'left',
+        },
+        spacing: { before: 0, after: 0, line: 12, lineRule: 'auto' },
+        indent: { left: 48, right: 0, firstLine: 0, hanging: 24 },
+      },
+    };
+
+    const singleLineListMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 21,
+          width: 150,
+          maxWidth: 400,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 24,
+        markerTextWidth: 12,
+        indentLeft: 48,
+      },
+    };
+
+    const singleLineListLayout: Layout = {
+      pageSize: { w: 500, h: 500 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'single-list-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 400,
+              markerWidth: 24,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [singleLineListBlock], measures: [singleLineListMeasure] });
+    painter.paint(singleLineListLayout, mount);
+
+    const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
+    expect(lines).toHaveLength(1);
+    // Single line = last line, should NOT be justified
+    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
+  });
+
   it('does not justify text inside table cells (Word quirk)', () => {
     // Word does not justify text inside table cells, even if jc="both" is specified.
     // This test verifies that table cell paragraphs have no word-spacing applied.
