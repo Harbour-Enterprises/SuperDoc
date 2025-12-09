@@ -75,6 +75,10 @@ type WordLayoutMarker = {
   gutterWidthPx?: number;
   markerBoxWidthPx?: number;
   suffix?: 'tab' | 'space' | 'nothing';
+  /** Pre-calculated X position where the marker should be placed (used in firstLineIndentMode). */
+  markerX?: number;
+  /** Pre-calculated X position where paragraph text should begin after the marker (used in firstLineIndentMode). */
+  textStartX?: number;
   run: {
     fontFamily: string;
     fontSize: number;
@@ -101,12 +105,18 @@ type WordLayoutMarker = {
  * @property firstLineIndentMode - When true, indicates the paragraph uses firstLine indent
  *   pattern (marker at left+firstLine) instead of standard hanging indent (marker at left-hanging).
  *   This flag changes how markers are positioned and how tab spacing is calculated.
+ * @property textStartPx - X position where paragraph text should begin (used for tab width calculation)
+ * @property tabsPx - Array of explicit tab stop positions in pixels
  */
 type MinimalWordLayout = {
   marker?: WordLayoutMarker;
   indentLeftPx?: number;
   /** True for firstLine indent pattern (marker at left+firstLine vs left-hanging). */
   firstLineIndentMode?: boolean;
+  /** X position where paragraph text should begin. */
+  textStartPx?: number;
+  /** Array of explicit tab stop positions in pixels. */
+  tabsPx?: number[];
 };
 
 /**
@@ -141,6 +151,17 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
     if (typeof obj.marker !== 'object' || obj.marker === null) {
       return false;
     }
+    const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerX if present
+    if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
+      return false;
+    }
+
+    // Validate marker.textStartX if present
+    if (marker.textStartX !== undefined && typeof marker.textStartX !== 'number') {
+      return false;
+    }
   }
 
   // Check indentLeftPx property if present
@@ -154,6 +175,26 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
   if (obj.firstLineIndentMode !== undefined) {
     if (typeof obj.firstLineIndentMode !== 'boolean') {
       return false;
+    }
+  }
+
+  // Check textStartPx property if present
+  if (obj.textStartPx !== undefined) {
+    if (typeof obj.textStartPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check tabsPx property if present and validate all array elements are numbers
+  if (obj.tabsPx !== undefined) {
+    if (!Array.isArray(obj.tabsPx)) {
+      return false;
+    }
+    // Validate that all elements are numbers
+    for (const tab of obj.tabsPx) {
+      if (typeof tab !== 'number') {
+        return false;
+      }
     }
   }
 
@@ -1620,12 +1661,26 @@ export class DomPainter {
 
         if (isListFirstLine && wordLayout?.marker && fragment.markerWidth) {
           // Position marker based on indent pattern:
-          // - Standard hanging: marker at (left - hanging)
-          // - FirstLine mode: marker at (left + firstLine)
+          // - FirstLine mode: use pre-calculated markerX from word-layout (essential because
+          //   paraIndent may have style overrides that zero out firstLine)
+          // - Standard hanging: calculate from paraIndent (works because hanging isn't overridden)
           const isFirstLineIndentMode = wordLayout.firstLineIndentMode === true;
-          const markerStartPos = isFirstLineIndentMode
-            ? paraIndentLeft + (paraIndent?.firstLine ?? 0)
-            : paraIndentLeft - (paraIndent?.hanging ?? 0);
+
+          let markerStartPos: number;
+          if (
+            isFirstLineIndentMode &&
+            wordLayout.marker.markerX !== undefined &&
+            Number.isFinite(wordLayout.marker.markerX)
+          ) {
+            // FirstLine mode: use pre-calculated marker position from word-layout
+            markerStartPos = wordLayout.marker.markerX;
+          } else if (isFirstLineIndentMode) {
+            // FirstLine mode fallback: calculate from paraIndent
+            markerStartPos = paraIndentLeft + (paraIndent?.firstLine ?? 0);
+          } else {
+            // Standard hanging: marker hangs back from left indent
+            markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
+          }
 
           // Validate markerStartPos to handle NaN/Infinity values gracefully
           const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
@@ -1710,8 +1765,52 @@ export class DomPainter {
               const currentPos = validMarkerStartPos + markerTextWidth;
 
               if (isFirstLineIndentMode) {
-                // FirstLine pattern: no implicit tab stop, just add gap after marker
-                tabWidth = LIST_MARKER_GAP;
+                // FirstLine pattern: find the appropriate tab stop for text alignment.
+                // Priority:
+                // 1. First explicit tab stop past currentPos
+                // 2. marker.textStartX (pre-calculated, consistent with marker.markerX)
+                // 3. textStartPx from word-layout
+                // 4. Minimum gap (LIST_MARKER_GAP) to ensure some separation
+
+                // Check for explicit tab stops past current position
+                const explicitTabs = wordLayout.tabsPx;
+                let targetTabStop: number | undefined;
+
+                if (Array.isArray(explicitTabs) && explicitTabs.length > 0) {
+                  // Find the first tab stop that's past the current position
+                  for (const tab of explicitTabs) {
+                    if (typeof tab === 'number' && tab > currentPos) {
+                      targetTabStop = tab;
+                      break;
+                    }
+                  }
+                }
+
+                // Get text start position - prefer marker.textStartX as it's consistent with markerX
+                const textStartTarget =
+                  wordLayout.marker.textStartX !== undefined && Number.isFinite(wordLayout.marker.textStartX)
+                    ? wordLayout.marker.textStartX
+                    : wordLayout.textStartPx;
+
+                if (targetTabStop !== undefined) {
+                  // Use explicit tab stop
+                  tabWidth = targetTabStop - currentPos;
+                } else if (
+                  textStartTarget !== undefined &&
+                  Number.isFinite(textStartTarget) &&
+                  textStartTarget > currentPos
+                ) {
+                  // Use pre-calculated text start position
+                  tabWidth = textStartTarget - currentPos;
+                } else {
+                  // Fallback: use minimum gap
+                  tabWidth = LIST_MARKER_GAP;
+                }
+
+                // Ensure minimum gap for readability
+                if (tabWidth < LIST_MARKER_GAP) {
+                  tabWidth = LIST_MARKER_GAP;
+                }
               } else {
                 // Standard hanging: implicit tab stop at paraIndentLeft
                 const implicitTabStop = paraIndentLeft;

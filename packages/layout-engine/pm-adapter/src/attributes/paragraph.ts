@@ -834,14 +834,19 @@ export const computeWordLayoutForParagraph = (
   }
 
   try {
-    // Merge paragraph indent with level-specific indent from numbering definition
+    // Merge paragraph indent with level-specific indent from numbering definition.
+    // Numbering level provides base indent, but paragraph/style can override specific properties.
+    // For example, a style may set firstLine=0 to remove numbering's firstLine indent.
     let effectiveIndent = paragraphAttrs.indent;
+
     if (numberingProps?.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(numberingProps.resolvedLevelIndent as ParagraphIndent);
-      // Level indent from numbering definition takes precedence
+      const numberingIndent = resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent);
+
+      // Numbering indent is the base, paragraph/style indent overrides
       effectiveIndent = {
+        ...numberingIndent,
         ...paragraphAttrs.indent,
-        ...(resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent)),
       };
     }
 

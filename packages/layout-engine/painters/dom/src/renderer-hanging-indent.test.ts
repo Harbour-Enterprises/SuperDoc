@@ -979,4 +979,520 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl.style.textIndent).toBe('');
     });
   });
+
+  describe('FirstLineIndentMode with firstLine=0 style override', () => {
+    it('should use markerX for positioning when firstLine=0 cancels numbering level indent', () => {
+      const blockId = 'firstline-zero-override';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'List item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 9 }],
+        attrs: {
+          indent: {
+            left: 360,
+            firstLine: 0, // Style override cancels numbering level indent
+          },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              markerX: 720, // Pre-calculated position from word-layout
+              textStartX: 760, // Pre-calculated text start
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 360,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 9,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 9,
+                markerWidth: 20,
+                markerTextWidth: 16,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft should use markerX (720) from word-layout, not left + firstLine (360 + 0 = 360)
+      expect(lineEl.style.paddingLeft).toBe('720px');
+
+      const marker = lineEl.querySelector('.superdoc-paragraph-marker');
+      expect(marker).toBeTruthy();
+      expect(marker?.textContent).toBe('1.');
+    });
+
+    it('should fall back to left + firstLine when markerX is not provided', () => {
+      const blockId = 'firstline-zero-no-markerX';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'List item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 9 }],
+        attrs: {
+          indent: {
+            left: 360,
+            firstLine: 0,
+          },
+          wordLayout: {
+            marker: {
+              markerText: '2.',
+              justification: 'left',
+              suffix: 'tab',
+              // No markerX provided
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 360,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 9,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 9,
+                markerWidth: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // Should fall back to left (360) + firstLine (0) = 360px
+      expect(lineEl.style.paddingLeft).toBe('360px');
+    });
+  });
+
+  describe('Tab width calculation with explicit tab stops', () => {
+    it('should use explicit tab stop when available and past current position', () => {
+      const blockId = 'explicit-tab-stop';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 500,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'A.',
+              justification: 'left',
+              suffix: 'tab',
+              markerX: 600,
+              textStartX: 800,
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 100,
+            firstLineIndentMode: true,
+            tabsPx: [400, 800, 1200], // Explicit tab stops
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+                markerWidth: 30,
+                markerTextWidth: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // currentPos = markerStartPos (600) + markerTextWidth (20) = 620
+      // First tab stop past 620 is 800
+      // tabWidth should be 800 - 620 = 180
+      const tabEl = lineEl.querySelector('.superdoc-tab') as HTMLElement;
+      expect(tabEl).toBeTruthy();
+      expect(tabEl.style.width).toBe('180px');
+    });
+
+    it('should use textStartX when no explicit tab stops are past current position', () => {
+      const blockId = 'use-textstartx';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 500,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'B.',
+              justification: 'left',
+              suffix: 'tab',
+              markerX: 600,
+              textStartX: 720, // Should be used when no tab stops available
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 100,
+            firstLineIndentMode: true,
+            tabsPx: [400, 500], // All tab stops are before current position
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+                markerWidth: 30,
+                markerTextWidth: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // currentPos = markerStartPos (600) + markerTextWidth (20) = 620
+      // No tab stops past 620, so use textStartX (720)
+      // tabWidth should be 720 - 620 = 100
+      const tabEl = lineEl.querySelector('.superdoc-tab') as HTMLElement;
+      expect(tabEl).toBeTruthy();
+      expect(tabEl.style.width).toBe('100px');
+    });
+  });
+
+  describe('TextStartX fallback to LIST_MARKER_GAP', () => {
+    it('should use LIST_MARKER_GAP when textStartX is behind current position', () => {
+      const blockId = 'textstartx-behind';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 500,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'Very Long Marker Text.',
+              justification: 'left',
+              suffix: 'tab',
+              markerX: 600,
+              textStartX: 620, // Behind currentPos after adding marker text width
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 100,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+                markerWidth: 150,
+                markerTextWidth: 140, // Very wide marker
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // currentPos = markerStartPos (600) + markerTextWidth (140) = 740
+      // textStartX (620) is behind currentPos (740), so should fall back to LIST_MARKER_GAP (8)
+      const tabEl = lineEl.querySelector('.superdoc-tab') as HTMLElement;
+      expect(tabEl).toBeTruthy();
+      expect(tabEl.style.width).toBe('8px');
+    });
+
+    it('should use LIST_MARKER_GAP when textStartX is undefined', () => {
+      const blockId = 'no-textstartx';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 500,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'C.',
+              justification: 'left',
+              suffix: 'tab',
+              markerX: 600,
+              // No textStartX provided
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 100,
+            firstLineIndentMode: true,
+            // No textStartPx in wordLayout either
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+                markerWidth: 30,
+                markerTextWidth: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // No textStartX or textStartPx, so should use LIST_MARKER_GAP (8)
+      const tabEl = lineEl.querySelector('.superdoc-tab') as HTMLElement;
+      expect(tabEl).toBeTruthy();
+      expect(tabEl.style.width).toBe('8px');
+    });
+  });
 });
