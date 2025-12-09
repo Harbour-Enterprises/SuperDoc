@@ -14,6 +14,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write  # Required for npm OIDC provenance
 
 concurrency:
   group: release-${{ github.ref }}
@@ -22,6 +23,10 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+      id-token: write  # Required for npm OIDC trusted publishing
     steps:
       - name: Generate token
         id: generate_token
@@ -40,6 +45,9 @@ jobs:
           node-version-file: .nvmrc
           cache: npm
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Update npm for OIDC support
+        run: npm install -g npm@latest
 
       - name: Install canvas system dependencies
         run: |
@@ -63,8 +71,7 @@ jobs:
         id: semantic
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # NPM authentication handled via OIDC provenance (no token needed)
         run: |
           npx semantic-release
           echo "released=$?" >> $GITHUB_OUTPUT

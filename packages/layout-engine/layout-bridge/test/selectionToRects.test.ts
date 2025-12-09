@@ -11,6 +11,9 @@ import {
   drawingLayout,
   drawingBlock,
   drawingMeasure,
+  tableLayout,
+  tableBlock,
+  tableMeasure,
 } from './mock-data';
 
 describe('selectionToRects', () => {
@@ -34,6 +37,12 @@ describe('selectionToRects', () => {
     const rects = selectionToRects(drawingLayout, [drawingBlock], [drawingMeasure], 20, 21);
     expect(rects).toHaveLength(1);
     expect(rects[0].width).toBeCloseTo(60);
+  });
+
+  it('returns rects for selections inside table cells', () => {
+    const rects = selectionToRects(tableLayout, [tableBlock], [tableMeasure], 2, 8);
+    expect(rects.length).toBeGreaterThan(0);
+    expect(rects[0].x).toBeGreaterThan(tableLayout.pages[0].fragments[0].x);
   });
 });
 

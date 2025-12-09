@@ -490,7 +490,22 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Do not expand the first-line width; use the same content width as subsequent lines.
   const firstLineOffset = isWordLayoutList ? 0 : rawFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
+
+  // For left-justified list markers, the marker is rendered in-flow (position: relative),
+  // so it occupies horizontal space on the first line. Reduce the first line's available
+  // width by the marker space to prevent overflow.
+  let leftJustifiedMarkerSpace = 0;
+  if (wordLayout?.marker) {
+    const markerJustification = wordLayout.marker.justification ?? 'left';
+    if (markerJustification === 'left') {
+      // Marker space = marker box width + gutter between marker and text
+      const markerBoxWidth = wordLayout.marker.markerBoxWidthPx ?? 0;
+      const gutterWidth = wordLayout.marker.gutterWidthPx ?? LIST_MARKER_GAP;
+      leftJustifiedMarkerSpace = markerBoxWidth + gutterWidth;
+    }
+  }
+
+  const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset - leftJustifiedMarkerSpace);
   const tabStops = buildTabStopsPx(
     indent,
     block.attrs?.tabs as TabStop[],
@@ -803,6 +818,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
+
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
@@ -1228,6 +1244,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         tabStopCursor = nextIndex;
         const tabAdvance = Math.max(0, target - currentLine.width);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
+
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
         currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
         currentLine.toRun = runIndex;

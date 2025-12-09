@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
@@ -107,8 +107,29 @@ const imageResizeState = reactive({
 });
 
 /**
+ * Image selection state (for layout-engine rendered images)
+ * @type {{element: HTMLElement | null, blockId: string | null, pmStart: number | null}}
+ */
+const selectedImageState = reactive({
+  element: null,
+  blockId: null,
+  pmStart: null,
+});
+
+/**
  * Threshold in pixels for showing table resize handles.
  * Handles only appear when mouse is within this distance of a column boundary.
+ *
+ * COORDINATE SPACE: This threshold is in SCREEN SPACE (zoomed pixels).
+ * - When comparing mouse position to column boundaries, both are converted to screen space
+ * - Column boundaries (from layout engine) are multiplied by zoom to get screen coordinates
+ * - Mouse coordinates (from getBoundingClientRect) are already in screen space
+ * - This ensures the hover threshold feels consistent regardless of zoom level
+ *
+ * Example at different zoom levels:
+ * - At zoom 1.0: 8 screen pixels = 8 layout pixels (threshold feels normal)
+ * - At zoom 2.0: 8 screen pixels = 4 layout pixels (threshold stays same visual size)
+ * - At zoom 0.5: 8 screen pixels = 16 layout pixels (threshold stays same visual size)
  */
 const TABLE_RESIZE_HOVER_THRESHOLD = 8;
 
@@ -117,6 +138,50 @@ const TABLE_RESIZE_HOVER_THRESHOLD = 8;
  * Limits how frequently the overlay visibility is recalculated during mousemove.
  */
 const TABLE_RESIZE_THROTTLE_MS = 16; // ~60fps
+
+/**
+ * Get the editor's zoom level.
+ *
+ * Retrieves the current zoom multiplier from the editor instance. Zoom is centrally
+ * controlled by PresentationEditor via transform: scale() on the viewport host.
+ * This function handles both direct PresentationEditor instances and wrapped Editor
+ * instances that contain a presentationEditor property.
+ *
+ * The zoom level is a multiplier where:
+ * - 1 = 100% (default, no scaling)
+ * - 0.5 = 50% (zoomed out)
+ * - 2 = 200% (zoomed in)
+ *
+ * This zoom value is used to convert between layout coordinates (which are in
+ * unscaled logical pixels) and screen coordinates (which are affected by the
+ * CSS transform: scale()).
+ *
+ * @returns {number} The zoom level multiplier. Returns 1 (100%) as a safe fallback
+ *                   if zoom cannot be retrieved from the editor instance.
+ *
+ * @example
+ * ```javascript
+ * const zoom = getEditorZoom();
+ * // Convert layout coordinates to screen coordinates
+ * const screenX = layoutX * zoom;
+ * const screenY = layoutY * zoom;
+ * ```
+ */
+const getEditorZoom = () => {
+  const active = activeEditor.value;
+  if (active && typeof active.zoom === 'number') {
+    return active.zoom;
+  }
+  if (active?.presentationEditor && typeof active.presentationEditor.zoom === 'number') {
+    return active.presentationEditor.zoom;
+  }
+  // Fallback to default zoom when editor instance doesn't have zoom configured
+  console.warn(
+    '[SuperEditor] getEditorZoom: Unable to retrieve zoom from editor instance, using fallback value of 1. ' +
+      'This may indicate the editor is not fully initialized or is not a PresentationEditor instance.',
+  );
+  return 1;
+};
 
 /**
  * Timestamp of last updateTableResizeOverlay execution for throttling.
@@ -151,18 +216,38 @@ const isNearColumnBoundary = (event, tableElement) => {
     const metadata = JSON.parse(boundariesAttr);
     if (!metadata.columns || !Array.isArray(metadata.columns)) return false;
 
+    // Get zoom factor to properly compare screen coordinates with layout coordinates
+    const zoom = getEditorZoom();
+
     const tableRect = tableElement.getBoundingClientRect();
-    const mouseX = event.clientX - tableRect.left;
-    const mouseY = event.clientY - tableRect.top;
+    // Mouse coordinates relative to table are in screen space (zoomed)
+    const mouseXScreen = event.clientX - tableRect.left;
+    const mouseYScreen = event.clientY - tableRect.top;
 
     // Check each column boundary
     for (let i = 0; i < metadata.columns.length; i++) {
       const col = metadata.columns[i];
-      // The boundary x position is at (col.x + col.w) - the right edge of the column
-      const boundaryX = col.x + col.w;
 
-      // Check if mouse is horizontally near this boundary
-      if (Math.abs(mouseX - boundaryX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+      // Validate column data structure before using col.x and col.w
+      if (!col || typeof col !== 'object') {
+        console.warn(`[isNearColumnBoundary] Invalid column at index ${i}: not an object`, col);
+        continue;
+      }
+      if (typeof col.x !== 'number' || !Number.isFinite(col.x)) {
+        console.warn(`[isNearColumnBoundary] Invalid column.x at index ${i}:`, col.x);
+        continue;
+      }
+      if (typeof col.w !== 'number' || !Number.isFinite(col.w) || col.w <= 0) {
+        console.warn(`[isNearColumnBoundary] Invalid column.w at index ${i}:`, col.w);
+        continue;
+      }
+
+      // The boundary x position is at (col.x + col.w) - the right edge of the column
+      // This is in layout coordinates, so multiply by zoom to convert to screen space
+      const boundaryXScreen = (col.x + col.w) * zoom;
+
+      // Check if mouse is horizontally near this boundary (both in screen space now)
+      if (Math.abs(mouseXScreen - boundaryXScreen) <= TABLE_RESIZE_HOVER_THRESHOLD) {
         // Check if there's a segment at this Y position (boundary exists here, not merged)
         const segmentColIndex = i + 1; // segments are indexed by boundary, not column
         const segments = metadata.segments?.[segmentColIndex];
@@ -176,10 +261,11 @@ const isNearColumnBoundary = (event, tableElement) => {
         }
 
         // Check if mouse Y is within any segment
+        // Segment coordinates are in layout space, convert to screen space
         for (const seg of segments) {
-          const segTop = seg.y || 0;
-          const segBottom = seg.h != null ? segTop + seg.h : tableRect.height;
-          if (mouseY >= segTop && mouseY <= segBottom) {
+          const segTopScreen = (seg.y || 0) * zoom;
+          const segBottomScreen = seg.h != null ? segTopScreen + seg.h * zoom : tableRect.height;
+          if (mouseYScreen >= segTopScreen && mouseYScreen <= segBottomScreen) {
             return true;
           }
         }
@@ -187,7 +273,7 @@ const isNearColumnBoundary = (event, tableElement) => {
     }
 
     // Also check left edge of table (x = 0)
-    if (Math.abs(mouseX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+    if (Math.abs(mouseXScreen) <= TABLE_RESIZE_HOVER_THRESHOLD) {
       return true;
     }
 
@@ -297,6 +383,44 @@ const hideImageResizeOverlay = () => {
 };
 
 /**
+ * Clear visual selection on the currently selected image fragment.
+ * Removes the 'superdoc-image-selected' CSS class and resets selection state.
+ * Safe to call when no image is selected (no-op).
+ * @returns {void}
+ */
+const clearSelectedImage = () => {
+  if (selectedImageState.element?.classList?.contains('superdoc-image-selected')) {
+    selectedImageState.element.classList.remove('superdoc-image-selected');
+  }
+  selectedImageState.element = null;
+  selectedImageState.blockId = null;
+  selectedImageState.pmStart = null;
+};
+
+/**
+ * Apply visual selection to the provided image fragment element
+ * @param {HTMLElement | null} element - DOM element for the image fragment
+ * @param {string | null} blockId - Layout-engine block id for the image
+ * @param {number | null} pmStart - ProseMirror document position of the image node
+ * @returns {void}
+ */
+const setSelectedImage = (element, blockId, pmStart) => {
+  // Remove selection from the previously selected element
+  if (selectedImageState.element && selectedImageState.element !== element) {
+    selectedImageState.element.classList.remove('superdoc-image-selected');
+  }
+
+  if (element && element.classList) {
+    element.classList.add('superdoc-image-selected');
+    selectedImageState.element = element;
+    selectedImageState.blockId = blockId ?? null;
+    selectedImageState.pmStart = typeof pmStart === 'number' ? pmStart : null;
+  } else {
+    clearSelectedImage();
+  }
+};
+
+/**
  * Combined handler to update both table and image resize overlays
  */
 const handleOverlayUpdates = (event) => {
@@ -372,18 +496,41 @@ const initializeData = async () => {
     return initEditor(fileData);
   }
 
-  // If we are in collaboration mode, wait for the docx data to be available
+  // If we are in collaboration mode, wait for sync then initialize
   else if (props.options.ydoc && props.options.collaborationProvider) {
     delete props.options.content;
     const ydoc = props.options.ydoc;
     const provider = props.options.collaborationProvider;
-    const handleSynced = () => {
-      pollForMetaMapData(ydoc);
-      // Remove the synced event listener.
-      // Avoids re-initializing the editor in case the connection is lost and reconnected
-      provider.off('synced', handleSynced);
+
+    // Wait for provider sync (handles different provider APIs)
+    const waitForSync = () => {
+      if (provider.isSynced || provider.synced) return Promise.resolve();
+
+      return new Promise((resolve) => {
+        const onSync = (synced) => {
+          if (synced === false) return; // Liveblocks fires sync(false) first
+          provider.off('synced', onSync);
+          provider.off('sync', onSync);
+          resolve();
+        };
+        provider.on('synced', onSync);
+        provider.on('sync', onSync);
+      });
     };
-    provider.on('synced', handleSynced);
+
+    waitForSync().then(async () => {
+      const metaMap = ydoc.getMap('meta');
+
+      if (metaMap.has('docx')) {
+        // Existing content - poll for it
+        pollForMetaMapData(ydoc);
+      } else {
+        // First client - load blank document
+        props.options.isNewFile = true;
+        const fileData = await loadNewFileData();
+        if (fileData) initEditor(fileData);
+      }
+    });
   }
 };
 
@@ -392,6 +539,7 @@ const getExtensions = () => getStarterExtensions();
 const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } = {}) => {
   const { editorCtor, ...editorOptions } = props.options || {};
   const EditorCtor = editorCtor ?? Editor;
+  clearSelectedImage();
   editor.value = new EditorCtor({
     mode: 'docx',
     element: editorElem.value,
@@ -410,20 +558,22 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     presentationEditor: editor.value instanceof PresentationEditor ? editor.value : null,
   });
 
-  editor.value.on('paginationUpdate', () => {
-    const base = activeEditor.value;
-    if (isHeadless(base)) return;
-    const paginationTarget = editor.value?.editor ? { value: base } : editor;
-    adjustPaginationBreaks(editorElem, paginationTarget);
-  });
-
-  // Handle image resize overlay re-acquisition after layout updates
+  // Attach layout-engine specific image selection listeners
   if (editor.value instanceof PresentationEditor) {
-    editor.value.on('layoutUpdated', () => {
+    const presentationEditor = editor.value;
+    presentationEditor.on('imageSelected', ({ element, blockId, pmStart }) => {
+      setSelectedImage(element, blockId ?? null, pmStart);
+    });
+    presentationEditor.on('imageDeselected', () => {
+      clearSelectedImage();
+    });
+
+    presentationEditor.on('layoutUpdated', () => {
       if (imageResizeState.visible && imageResizeState.blockId) {
         // Re-acquire element reference (may have been recreated after re-render)
+        const escapedBlockId = CSS.escape(imageResizeState.blockId);
         const newElement = editorElem.value?.querySelector(
-          `.superdoc-image-fragment[data-sd-block-id="${imageResizeState.blockId}"]`,
+          `.superdoc-image-fragment[data-sd-block-id="${escapedBlockId}"]`,
         );
         if (newElement) {
           imageResizeState.imageElement = newElement;
@@ -434,8 +584,37 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
           imageResizeState.blockId = null;
         }
       }
+
+      if (selectedImageState.blockId) {
+        const escapedBlockId = CSS.escape(selectedImageState.blockId);
+        const refreshed = editorElem.value?.querySelector(
+          `.superdoc-image-fragment[data-sd-block-id="${escapedBlockId}"]`,
+        );
+        if (refreshed) {
+          setSelectedImage(refreshed, selectedImageState.blockId, selectedImageState.pmStart);
+        } else {
+          // Try pmStart-based re-acquisition (inline images)
+          if (selectedImageState.pmStart != null) {
+            const pmSelector = `.superdoc-image-fragment[data-pm-start="${selectedImageState.pmStart}"], .superdoc-inline-image[data-pm-start="${selectedImageState.pmStart}"]`;
+            const pmElement = editorElem.value?.querySelector(pmSelector);
+            if (pmElement) {
+              setSelectedImage(pmElement, selectedImageState.blockId, selectedImageState.pmStart);
+              return;
+            }
+          }
+
+          clearSelectedImage();
+        }
+      }
     });
   }
+
+  editor.value.on('paginationUpdate', () => {
+    const base = activeEditor.value;
+    if (isHeadless(base)) return;
+    const paginationTarget = editor.value?.editor ? { value: base } : editor;
+    adjustPaginationBreaks(editorElem, paginationTarget);
+  });
 
   editor.value.on('collaborationReady', () => {
     setTimeout(() => {
@@ -541,6 +720,7 @@ const handleMarginChange = ({ side, value }) => {
 
 onBeforeUnmount(() => {
   stopPolling();
+  clearSelectedImage();
   editor.value?.destroy();
   editor.value = null;
 });

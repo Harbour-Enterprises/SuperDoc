@@ -26,7 +26,30 @@ import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.j
 const INLINE_OVERRIDE_PROPERTIES = ['fontSize', 'bold', 'italic', 'strike', 'underline', 'letterSpacing'];
 
 /**
+ * Default font size in half-points (20 half-points = 10pt).
+ * This baseline ensures all text has a valid, positive font size when no other source provides one.
+ * Used as the final fallback in fontSize resolution cascade:
+ * 1. Inline formatting (highest priority)
+ * 2. Character style
+ * 3. Paragraph style
+ * 4. Document defaults
+ * 5. Normal style
+ * 6. DEFAULT_FONT_SIZE_HALF_POINTS (this constant)
+ */
+const DEFAULT_FONT_SIZE_HALF_POINTS = 20;
+
+/**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
+ *
+ * FontSize Fallback Behavior:
+ * - Validates that the resolved fontSize is a valid positive number
+ * - If fontSize is null, 0, negative, or NaN, applies fallback cascade:
+ *   1. Document defaults (defaultProps.fontSize)
+ *   2. Normal style (normalProps.fontSize)
+ *   3. Baseline constant (DEFAULT_FONT_SIZE_HALF_POINTS = 20 half-points = 10pt)
+ * - Each fallback source is validated before use (must be positive finite number)
+ * - Ensures all text has a valid font size, preventing rendering issues
+ *
  * @param {import('@translator').SCEncoderConfig} params - Converter context containing docx data.
  * @param {Object} inlineRpr - The inline run properties.
  * @param {Object} resolvedPpr - The resolved paragraph properties.
@@ -69,11 +92,17 @@ export const resolveRunProperties = (
   if (isListNumber) {
     // Numbering properties
     let numberingProps = {};
-    if (resolvedPpr?.numberingProperties?.numId != null) {
+    const numId = resolvedPpr?.numberingProperties?.numId;
+    /**
+     * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables
+     * numbering inherited from paragraph styles. We only fetch numbering properties when
+     * numId is not null/undefined and not the special zero value.
+     */
+    if (numId != null && numId !== 0 && numId !== '0') {
       numberingProps = getNumberingProperties(
         params,
         resolvedPpr.numberingProperties.ilvl ?? 0,
-        resolvedPpr.numberingProperties.numId,
+        numId,
         w_rPrTranslator,
       );
     }
@@ -105,6 +134,36 @@ export const resolveRunProperties = (
     }
   }
 
+  // If no fontSize resolved from any source, fall back to defaults/Normal or a 10pt baseline (20 half-points)
+  // Validate that the resolved fontSize is a valid positive number
+  if (
+    finalProps.fontSize == null ||
+    typeof finalProps.fontSize !== 'number' ||
+    !Number.isFinite(finalProps.fontSize) ||
+    finalProps.fontSize <= 0
+  ) {
+    // Cascade through fallback sources, validating each
+    let defaultFontSize = DEFAULT_FONT_SIZE_HALF_POINTS;
+
+    if (
+      defaultProps?.fontSize != null &&
+      typeof defaultProps.fontSize === 'number' &&
+      Number.isFinite(defaultProps.fontSize) &&
+      defaultProps.fontSize > 0
+    ) {
+      defaultFontSize = defaultProps.fontSize;
+    } else if (
+      normalProps?.fontSize != null &&
+      typeof normalProps.fontSize === 'number' &&
+      Number.isFinite(normalProps.fontSize) &&
+      normalProps.fontSize > 0
+    ) {
+      defaultFontSize = normalProps.fontSize;
+    }
+
+    finalProps.fontSize = defaultFontSize;
+  }
+
   return finalProps;
 };
 
@@ -133,9 +192,23 @@ export function resolveParagraphProperties(
   // Numbering style
   let numberingProps = {};
   let ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
-  const numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
+  let numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
   let numberingDefinedInline = inlineProps?.numberingProperties?.numId != null;
-  const isList = numId != null;
+  /**
+   * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables/removes
+   * numbering inherited from paragraph styles. When encountered inline, we set numId to null to
+   * prevent referencing a numbering definition.
+   */
+  const inlineNumIdDisablesNumbering =
+    inlineProps?.numberingProperties?.numId === 0 || inlineProps?.numberingProperties?.numId === '0';
+  if (inlineNumIdDisablesNumbering) {
+    numId = null;
+  }
+  /**
+   * Validates that the paragraph has valid numbering properties.
+   * Per OOXML spec §17.9.16, numId="0" (or '0') disables numbering.
+   */
+  const isList = numId != null && numId !== 0 && numId !== '0';
   if (isList) {
     ilvl = ilvl != null ? ilvl : 0;
     numberingProps = getNumberingProperties(params, ilvl, numId, w_pPrTranslator);

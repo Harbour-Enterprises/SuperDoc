@@ -30,7 +30,7 @@ export type ParagraphLayoutContext = {
   advanceColumn: (state: PageState) => PageState;
   columnX: (columnIndex: number) => number;
   floatManager: FloatingObjectManager;
-  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number) => ParagraphMeasure;
+  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number, firstLineIndent?: number) => ParagraphMeasure;
 };
 
 export type AnchoredDrawingEntry = {
@@ -199,6 +199,36 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   }
 
   let lines = normalizeLines(measure);
+
+  // Check if paragraph was measured at a wider width than the current column.
+  // This happens when a document has sections with different column counts -
+  // text measured for a single-column section may need remeasurement when
+  // placed in a multi-column section with narrower columns.
+  const measurementWidth = lines[0]?.maxWidth;
+  let didRemeasureForColumnWidth = false;
+  if (
+    typeof remeasureParagraph === 'function' &&
+    typeof measurementWidth === 'number' &&
+    measurementWidth > columnWidth
+  ) {
+    // Calculate firstLineIndent for list markers (same logic as float remeasurement)
+    let firstLineIndent = 0;
+    const wordLayout = block.attrs?.wordLayout as
+      | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+      | undefined;
+    if (wordLayout?.marker && measure.marker) {
+      const markerJustification = wordLayout.marker.justification ?? 'left';
+      if (markerJustification === 'left') {
+        const markerWidth = measure.marker.markerWidth ?? 0;
+        const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+        firstLineIndent = markerWidth + gutterWidth;
+      }
+    }
+    const newMeasure = remeasureParagraph(block, columnWidth, firstLineIndent);
+    lines = normalizeLines(newMeasure);
+    didRemeasureForColumnWidth = true;
+  }
+
   let fromLine = 0;
   const spacing = (block.attrs?.spacing ?? {}) as Record<string, unknown>;
   const styleId = (block.attrs as Record<string, unknown>)?.styleId as string | undefined;
@@ -301,7 +331,21 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     // If we found a narrower width, remeasure the entire paragraph once with that width
     if (narrowestWidth < columnWidth) {
-      const newMeasure = remeasureParagraph(block, narrowestWidth);
+      // Calculate firstLineIndent for left-justified list markers (position: relative, in-flow)
+      let firstLineIndent = 0;
+      const wordLayout = block.attrs?.wordLayout as
+        | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+        | undefined;
+      if (wordLayout?.marker && measure.marker) {
+        const markerJustification = wordLayout.marker.justification ?? 'left';
+        if (markerJustification === 'left') {
+          const markerWidth = measure.marker.markerWidth ?? 0;
+          const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+          firstLineIndent = markerWidth + gutterWidth;
+        }
+      }
+
+      const newMeasure = remeasureParagraph(block, narrowestWidth, firstLineIndent);
       lines = normalizeLines(newMeasure);
       didRemeasureForFloats = true;
     }
@@ -417,6 +461,12 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       width: effectiveColumnWidth,
       ...computeFragmentPmRange(block, lines, fromLine, slice.toLine),
     };
+
+    // Store remeasured lines in fragment so renderer can use them.
+    // This is needed because the original measure has different line breaks.
+    if (didRemeasureForColumnWidth) {
+      fragment.lines = lines.slice(fromLine, slice.toLine);
+    }
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;

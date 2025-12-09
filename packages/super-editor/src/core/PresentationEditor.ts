@@ -388,6 +388,26 @@ export type LayoutUpdatePayload = {
 };
 
 /**
+ * Event payload emitted when an image is selected in the editor.
+ */
+export type ImageSelectedEvent = {
+  /** The DOM element representing the selected image */
+  element: HTMLElement;
+  /** The layout-engine block ID for the image (null for inline images) */
+  blockId: string | null;
+  /** The ProseMirror document position where the image node starts */
+  pmStart: number;
+};
+
+/**
+ * Event payload emitted when an image is deselected in the editor.
+ */
+export type ImageDeselectedEvent = {
+  /** The block ID of the previously selected image (may be a synthetic ID like "inline-{position}") */
+  blockId: string;
+};
+
+/**
  * Discriminated union for all telemetry events.
  * Use TypeScript's type narrowing to handle each event type safely.
  */
@@ -892,6 +912,48 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the current zoom level.
+   *
+   * The zoom level is a multiplier that controls the visual scale of the document.
+   * This value is applied via CSS transform: scale() on the #viewportHost element,
+   * which ensures consistent scaling between rendered content and overlay elements
+   * (selections, cursors, interactive handles).
+   *
+   * Relationship to Centralized Zoom Architecture:
+   * - PresentationEditor is the SINGLE SOURCE OF TRUTH for zoom state
+   * - Zoom is applied internally via transform: scale() on #viewportHost
+   * - External components (toolbar, UI controls) should use setZoom() to modify zoom
+   * - The zoom value is used throughout the system for coordinate transformations
+   *
+   * Coordinate Space Implications:
+   * - Layout coordinates: Unscaled logical pixels used by the layout engine
+   * - Screen coordinates: Physical pixels affected by CSS transform: scale()
+   * - Conversion: screenCoord = layoutCoord * zoom
+   *
+   * Zoom Scale:
+   * - 1 = 100% (default, no scaling)
+   * - 0.5 = 50% (zoomed out, content appears smaller)
+   * - 2 = 200% (zoomed in, content appears larger)
+   *
+   * @returns The current zoom level multiplier (default: 1 if not configured)
+   *
+   * @example
+   * ```typescript
+   * const zoom = presentation.zoom;
+   * // Convert layout coordinates to screen coordinates
+   * const screenX = layoutX * zoom;
+   * const screenY = layoutY * zoom;
+   *
+   * // Convert screen coordinates back to layout coordinates
+   * const layoutX = screenX / zoom;
+   * const layoutY = screenY / zoom;
+   * ```
+   */
+  get zoom(): number {
+    return this.#layoutOptions.zoom ?? 1;
+  }
+
+  /**
    * Set the document mode and update editor editability.
    *
    * This method updates both the PresentationEditor's internal mode state and the
@@ -1075,6 +1137,9 @@ export class PresentationEditor extends EventEmitter {
 
     const start = Math.min(from, to);
     const end = Math.max(from, to);
+    // Use effective zoom from actual rendered dimensions, not internal state.
+    // Zoom may be applied externally (e.g., by SuperDoc toolbar) without
+    // updating PresentationEditor's internal zoom value.
     const zoom = this.#layoutOptions.zoom ?? 1;
     const overlayRect = this.#selectionOverlay.getBoundingClientRect();
     const relativeRect = relativeTo?.getBoundingClientRect() ?? null;
@@ -1102,8 +1167,10 @@ export class PresentationEditor extends EventEmitter {
         const pageLocalY = rect.y - rect.pageIndex * pageHeight;
         const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
         if (!coords) return null;
-        const absLeft = coords.x + overlayRect.left;
-        const absTop = coords.y + overlayRect.top;
+        // coords are in layout space, convert to screen space by multiplying by zoom
+        // This is for external consumers (like comments) that expect screen coordinates
+        const absLeft = coords.x * zoom + overlayRect.left;
+        const absTop = coords.y * zoom + overlayRect.top;
         const left = relativeRect ? absLeft - relativeRect.left : absLeft;
         const top = relativeRect ? absTop - relativeRect.top : absTop;
         const width = Math.max(1, rect.width * zoom);
@@ -2198,6 +2265,16 @@ export class PresentationEditor extends EventEmitter {
     // Render/update each remote cursor
     sortedCursors.forEach((cursor) => {
       visibleClientIds.add(cursor.clientId);
+
+      // Clear old selection rectangles for this user before rendering new state.
+      // Selection rects are not tracked in #remoteCursorElements (only carets are),
+      // so we must query and remove them to prevent "stuck" selections when a user's
+      // selection changes position or collapses to a caret.
+      const oldSelections = this.#remoteCursorOverlay?.querySelectorAll(
+        `.presentation-editor__remote-selection[data-client-id="${cursor.clientId}"]`,
+      );
+      oldSelections?.forEach((el) => el.remove());
+
       if (cursor.anchor === cursor.head) {
         // Render caret only
         this.#renderRemoteCaret(cursor);
@@ -2240,6 +2317,7 @@ export class PresentationEditor extends EventEmitter {
     // Use existing geometry helper to get caret layout rect
     const caretLayout = this.#computeCaretLayoutRect(cursor.head);
 
+    // Use effective zoom from actual rendered dimensions for consistent scaling
     const zoom = this.#layoutOptions.zoom ?? 1;
     const doc = this.#visibleHost.ownerDocument ?? document;
     const color = this.#getValidatedColor(cursor);
@@ -2286,7 +2364,8 @@ export class PresentationEditor extends EventEmitter {
     // Update position using transform for GPU acceleration
     caretEl!.style.opacity = '1';
     caretEl!.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
-    caretEl!.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    caretEl!.style.height = `${Math.max(1, caretLayout.height)}px`;
 
     // Update color in case it changed
     caretEl!.style.borderLeftColor = color;
@@ -2389,8 +2468,6 @@ export class PresentationEditor extends EventEmitter {
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
-
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const opacity = this.#layoutOptions.presence?.highlightOpacity ?? 0.35;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     const doc = this.#visibleHost.ownerDocument ?? document;
@@ -2412,8 +2489,9 @@ export class PresentationEditor extends EventEmitter {
       selectionEl.style.position = 'absolute';
       selectionEl.style.left = `${coords.x}px`;
       selectionEl.style.top = `${coords.y}px`;
-      selectionEl.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      selectionEl.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      selectionEl.style.width = `${Math.max(1, rect.width)}px`;
+      selectionEl.style.height = `${Math.max(1, rect.height)}px`;
       selectionEl.style.backgroundColor = color;
       selectionEl.style.opacity = opacity.toString();
       selectionEl.style.borderRadius = PresentationEditor.CURSOR_STYLES.SELECTION_BORDER_RADIUS;
@@ -2577,6 +2655,25 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Focus the editor after image selection and schedule selection update.
+   * This method encapsulates the common focus and blur logic used when
+   * selecting both inline and block images.
+   * @private
+   * @returns {void}
+   */
+  #focusEditorAfterImageSelection(): void {
+    this.#scheduleSelectionUpdate();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+    if (editorDom) {
+      editorDom.focus();
+      this.#editor.view?.focus();
+    }
+  }
+
   #setupInputBridge() {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
@@ -2657,18 +2754,42 @@ export class PresentationEditor extends EventEmitter {
     // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
     const target = event.target as HTMLElement;
 
-    // Handle clicks on internal anchor links (e.g., TOC navigation)
+    // Handle clicks on links in the layout engine
     const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
     if (linkEl) {
       const href = linkEl.getAttribute('href') ?? '';
       const isAnchorLink = href.startsWith('#') && href.length > 1;
+      const isTocLink = linkEl.closest('.superdoc-toc-entry') !== null;
 
-      if (isAnchorLink) {
+      if (isAnchorLink && isTocLink) {
+        // TOC entry anchor links: navigate to the anchor
         event.preventDefault();
         event.stopPropagation();
         this.goToAnchor(href);
         return;
       }
+
+      // Non-TOC links: dispatch custom event to show the link popover
+      // We dispatch from pointerdown because the DOM may be re-rendered before click fires,
+      // which would cause the click event to land on the wrong element
+      event.preventDefault();
+      event.stopPropagation();
+
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: href,
+          target: linkEl.getAttribute('target'),
+          rel: linkEl.getAttribute('rel'),
+          tooltip: linkEl.getAttribute('title'),
+          element: linkEl,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+      linkEl.dispatchEvent(linkClickEvent);
+      return;
     }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
 
@@ -2715,6 +2836,7 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -2812,6 +2934,53 @@ export class PresentationEditor extends EventEmitter {
       hit.pos,
     );
 
+    // Inline image hit detection via DOM target (for inline images rendered inside paragraphs)
+    const targetImg = (event.target as HTMLElement | null)?.closest?.('img');
+    const imgPmStart = targetImg?.dataset?.pmStart ? Number(targetImg.dataset.pmStart) : null;
+    if (!Number.isNaN(imgPmStart) && imgPmStart != null) {
+      const doc = this.#editor.state.doc;
+
+      // Validate position is within document bounds
+      if (imgPmStart < 0 || imgPmStart >= doc.content.size) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PresentationEditor] Invalid position ${imgPmStart} for inline image (document size: ${doc.content.size})`,
+          );
+        }
+        return;
+      }
+
+      // Emit imageDeselected if previous selection was a different image
+      const newSelectionId = `inline-${imgPmStart}`;
+      if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== newSelectionId) {
+        this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
+      }
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, imgPmStart));
+        this.#editor.view?.dispatch(tr);
+
+        const selector = `.superdoc-inline-image[data-pm-start="${imgPmStart}"]`;
+        const targetElement = this.#viewportHost.querySelector(selector);
+        this.emit('imageSelected', {
+          element: targetElement ?? targetImg,
+          blockId: null,
+          pmStart: imgPmStart,
+        } as ImageSelectedEvent);
+        this.#lastSelectedImageBlockId = newSelectionId;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PresentationEditor] Failed to create NodeSelection for inline image at position ${imgPmStart}:`,
+            error,
+          );
+        }
+      }
+
+      this.#focusEditorAfterImageSelection();
+      return;
+    }
+
     // If clicked on an atomic fragment (image or drawing), create NodeSelection
     if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
       const doc = this.#editor.state.doc;
@@ -2822,7 +2991,7 @@ export class PresentationEditor extends EventEmitter {
 
         // Emit imageDeselected if previous selection was a different image
         if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
-          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
         }
 
         // Emit imageSelected event for overlay to detect
@@ -2835,7 +3004,7 @@ export class PresentationEditor extends EventEmitter {
               element: targetElement,
               blockId: fragmentHit.fragment.blockId,
               pmStart: fragmentHit.fragment.pmStart,
-            });
+            } as ImageSelectedEvent);
             this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
           }
         }
@@ -2845,22 +3014,13 @@ export class PresentationEditor extends EventEmitter {
         }
       }
 
-      // Focus editor and schedule selection update
-      this.#scheduleSelectionUpdate();
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
-      if (editorDom) {
-        editorDom.focus();
-        this.#editor.view?.focus();
-      }
+      this.#focusEditorAfterImageSelection();
       return;
     }
 
     // If clicking away from an image, emit imageDeselected
     if (this.#lastSelectedImageBlockId) {
-      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
       this.#lastSelectedImageBlockId = null;
     }
 
@@ -3493,6 +3653,7 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#layoutState.layout) return;
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -3772,8 +3933,40 @@ export class PresentationEditor extends EventEmitter {
     return this.#domPainter;
   }
 
+  /**
+   * Schedules a cursor/selection update in the next animation frame.
+   *
+   * Implements guards to prevent race conditions during layout recalculation:
+   * - Skips scheduling if already scheduled (prevents duplicate updates)
+   * - Skips if layout is being recalculated (#isRerendering || #pendingDocChange)
+   *   to avoid rendering cursor before layout is ready
+   *
+   * The cursor will be updated at the end of #rerender() after layout completes.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Race condition guard: #isRerendering and #pendingDocChange flags prevent
+   *   scheduling cursor updates while layout is recalculating, avoiding stale position data.
+   * - Deduplication: #selectionUpdateScheduled flag prevents multiple redundant RAF callbacks
+   *   from being queued when selection changes rapidly.
+   *
+   * Side effects:
+   * - Sets #selectionUpdateScheduled flag to true
+   * - Schedules a requestAnimationFrame callback that calls #updateSelection()
+   * - The RAF callback automatically resets #selectionUpdateScheduled to false
+   *
+   * @private
+   */
   #scheduleSelectionUpdate() {
     if (this.#selectionUpdateScheduled) {
+      return;
+    }
+    // If layout is being recalculated, skip scheduling cursor update now.
+    // The cursor will be updated at the end of #rerender() after layout completes.
+    // This prevents race conditions where cursor rendering happens before layout is ready.
+    if (this.#isRerendering || this.#pendingDocChange) {
       return;
     }
     this.#selectionUpdateScheduled = true;
@@ -3784,6 +3977,47 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Updates the visual cursor/selection overlay to match the current editor selection.
+   *
+   * Handles several edge cases:
+   * - Defers cursor clearing until new position is successfully computed
+   * - Falls back to adjacent positions (from-1, from+1) when exact position lookup fails
+   * - Preserves existing cursor visibility when position cannot be computed
+   * - Skips rendering in header/footer mode and viewing mode
+   *
+   * This method is called after layout completes to ensure cursor positioning
+   * is based on stable layout data.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Position lookup failure: When #computeCaretLayoutRect(from) returns null (e.g., cursor
+   *   on node boundary between paragraph and run), falls back to adjacent positions.
+   * - Fallback positions (from-1, from+1): Adjacent positions typically resolve to nearest
+   *   text content with valid layout fragments. The fallback logic tries from-1 first
+   *   (safer for most text editing), then from+1 if within document bounds.
+   * - Bounds validation: Explicitly checks from > 0 before trying from-1, and validates
+   *   from+1 <= docSize before trying from+1, preventing invalid position access.
+   * - Cursor preservation: If all position lookups fail, keeps existing cursor visible
+   *   rather than clearing it, preventing jarring visual disappearance during edge cases.
+   * - Invalid document state: If editor state or doc is missing, safely returns early
+   *   after clearing cursor (defensive programming for race conditions during init/destroy).
+   *
+   * Side effects:
+   * - Mutates #localSelectionLayer.innerHTML (clears or sets cursor/selection HTML)
+   * - Calls #renderCaretOverlay() or #renderSelectionRects() which mutate DOM
+   * - DOM manipulation is wrapped in try/catch to prevent errors from breaking editor state
+   *
+   * Why fallback positions work:
+   * ProseMirror positions can land on structural node boundaries (e.g., between <p> and <run>)
+   * that don't correspond to renderable layout fragments. Adjacent positions ±1 typically
+   * land inside text content with valid layout data. The from-1 fallback is tried first
+   * because it's safer for most text editing scenarios (e.g., after backspace at start of line).
+   *
+   * @private
+   */
   #updateSelection() {
     // In header/footer mode, the ProseMirror editor handles its own caret
     if (this.#session.mode !== 'body') {
@@ -3797,37 +4031,93 @@ export class PresentationEditor extends EventEmitter {
 
     // In viewing mode, don't render caret or selection highlights
     if (this.#documentMode === 'viewing') {
-      this.#localSelectionLayer.innerHTML = '';
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        // Log but don't throw to prevent breaking editor
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer in viewing mode:', error);
+        }
+      }
       return;
     }
     const layout = this.#layoutState.layout;
-    const selection = this.getActiveEditor().state?.selection;
-
-    // Clear old carets/selections - this is critical to prevent accumulation
-    this.#localSelectionLayer.innerHTML = '';
+    const editorState = this.getActiveEditor().state;
+    const selection = editorState?.selection;
 
     if (!selection) {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer (no selection):', error);
+        }
+      }
       return;
     }
 
     if (!layout) {
+      // No layout yet - keep existing cursor visible until layout is ready
       return;
     }
 
     const { from, to } = selection;
     if (from === to) {
-      const caretLayout = this.#computeCaretLayoutRect(from);
-      if (!caretLayout) {
+      let caretLayout = this.#computeCaretLayoutRect(from);
+
+      // If exact position fails, try adjacent positions as fallback.
+      // This works around edge cases where ProseMirror positions can land on node boundaries
+      // (e.g., between paragraph and run nodes) that don't have corresponding layout fragments.
+      // Adjacent positions typically resolve to the nearest text content with valid layout data.
+
+      // Validate document state before attempting fallback positions
+      const doc = editorState?.doc;
+      if (!doc) {
+        // Document state is invalid - cannot safely compute positions
         return;
       }
-      this.#renderCaretOverlay(caretLayout);
+
+      const docSize = doc.content?.size ?? 0;
+
+      // Explicit bounds checking for fallback positions
+      if (!caretLayout && from > 0) {
+        caretLayout = this.#computeCaretLayoutRect(from - 1);
+      }
+      // Only try from + 1 if within document bounds
+      if (!caretLayout && from + 1 <= docSize) {
+        caretLayout = this.#computeCaretLayoutRect(from + 1);
+      }
+
+      if (!caretLayout) {
+        // Keep existing cursor visible rather than clearing it
+        return;
+      }
+      // Only clear old cursor after successfully computing new position
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCaretOverlay(caretLayout);
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to render caret overlay:', error);
+        }
+      }
       return;
     }
 
     const rects: LayoutRect[] =
       selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
 
-    this.#renderSelectionRects(rects);
+    try {
+      this.#localSelectionLayer.innerHTML = '';
+      this.#renderSelectionRects(rects);
+    } catch (error) {
+      // DOM manipulation can fail if element is detached or in invalid state
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to render selection rects:', error);
+      }
+    }
   }
 
   #resolveLayoutOptions(blocks: FlowBlock[] | undefined, sectionMetadata: SectionMetadata[]) {
@@ -4943,7 +5233,6 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
-    const zoom = this.#layoutOptions.zoom ?? 1;
     rects.forEach((rect, _index) => {
       const pageLocalY = rect.y - rect.pageIndex * pageHeight;
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
@@ -4958,8 +5247,9 @@ export class PresentationEditor extends EventEmitter {
       highlight.style.position = 'absolute';
       highlight.style.left = `${coords.x}px`;
       highlight.style.top = `${coords.y}px`;
-      highlight.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      highlight.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      highlight.style.width = `${Math.max(1, rect.width)}px`;
+      highlight.style.height = `${Math.max(1, rect.height)}px`;
       highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
@@ -4969,7 +5259,6 @@ export class PresentationEditor extends EventEmitter {
 
   #renderHoverRegion(region: HeaderFooterRegion) {
     if (!this.#hoverOverlay || !this.#hoverTooltip) return;
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(region.pageIndex, region.localX, region.localY);
     if (!coords) {
       this.#clearHoverRegion();
@@ -4978,8 +5267,9 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.display = 'block';
     this.#hoverOverlay.style.left = `${coords.x}px`;
     this.#hoverOverlay.style.top = `${coords.y}px`;
-    this.#hoverOverlay.style.width = `${region.width * zoom}px`;
-    this.#hoverOverlay.style.height = `${region.height * zoom}px`;
+    // Width and height are in layout space - the transform on #viewportHost handles scaling
+    this.#hoverOverlay.style.width = `${region.width}px`;
+    this.#hoverOverlay.style.height = `${region.height}px`;
 
     const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'header' : 'footer'}`;
     this.#hoverTooltip.textContent = tooltipText;
@@ -4990,7 +5280,8 @@ export class PresentationEditor extends EventEmitter {
     // This prevents clipping for headers at the top of the page
     const tooltipHeight = 24; // Approximate tooltip height
     const spaceAbove = coords.y;
-    const regionHeight = region.height * zoom;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const regionHeight = region.height;
     const tooltipY =
       spaceAbove < tooltipHeight + 4
         ? coords.y + regionHeight + 4 // Position below if near top (with 4px spacing)
@@ -5012,11 +5303,14 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#localSelectionLayer) {
       return;
     }
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
     if (!coords) {
       return;
     }
+
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const finalHeight = Math.max(1, caretLayout.height);
+
     const caretEl = this.#localSelectionLayer.ownerDocument?.createElement('div');
     if (!caretEl) {
       return;
@@ -5026,7 +5320,7 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.left = `${coords.x}px`;
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
-    caretEl.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
+    caretEl.style.height = `${finalHeight}px`;
     caretEl.style.backgroundColor = '#3366FF';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
@@ -5202,8 +5496,16 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #applyZoom() {
+    // Apply zoom via transform: scale() on #viewportHost.
+    // This is the SINGLE source of zoom - the toolbar no longer applies CSS zoom on .layers.
+    //
+    // By applying transform on #viewportHost (which contains BOTH #painterHost AND #selectionOverlay),
+    // both the rendered content and selection overlays scale together automatically.
+    // This eliminates coordinate system mismatches that occurred when zoom was applied
+    // externally on a parent element that didn't contain the selection overlay.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    this.#painterHost.style.transform = `scale(${zoom})`;
+    this.#viewportHost.style.transformOrigin = 'top left';
+    this.#viewportHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
   }
 
   #createLayoutMetrics(
@@ -5223,27 +5525,76 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
-  #convertPageLocalToOverlayCoords(pageIndex: number, pageLocalX: number, pageLocalY: number) {
-    const pageEl = this.#painterHost.querySelector(
-      `.superdoc-page[data-page-index="${pageIndex}"]`,
-    ) as HTMLElement | null;
-    if (!pageEl) {
+  /**
+   * Convert page-local coordinates to overlay-space coordinates.
+   *
+   * Transforms coordinates from page-local space (x, y relative to a specific page)
+   * to overlay-space coordinates (absolute position within the stacked page layout).
+   * The returned coordinates are in layout space (unscaled logical pixels), not screen
+   * space - the CSS transform: scale() on #viewportHost handles zoom scaling.
+   *
+   * Pages are rendered vertically stacked at y = pageIndex * pageHeight, so the
+   * conversion involves:
+   * 1. X coordinate passes through unchanged (pages are horizontally aligned)
+   * 2. Y coordinate is offset by (pageIndex * pageHeight) to account for stacking
+   *
+   * @param pageIndex - Zero-based page index (must be finite and non-negative)
+   * @param pageLocalX - X coordinate relative to page origin (must be finite)
+   * @param pageLocalY - Y coordinate relative to page origin (must be finite)
+   * @returns Overlay coordinates {x, y} in layout space, or null if inputs are invalid
+   *
+   * @example
+   * ```typescript
+   * // Position at (50, 100) on page 2
+   * const coords = this.#convertPageLocalToOverlayCoords(2, 50, 100);
+   * // Returns: { x: 50, y: 2 * 792 + 100 } = { x: 50, y: 1684 }
+   * ```
+   *
+   * @private
+   */
+  #convertPageLocalToOverlayCoords(
+    pageIndex: number,
+    pageLocalX: number,
+    pageLocalY: number,
+  ): { x: number; y: number } | null {
+    // Validate pageIndex: must be finite and non-negative
+    if (!Number.isFinite(pageIndex) || pageIndex < 0) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageIndex ${pageIndex}. ` +
+          'Expected a finite non-negative number.',
+      );
       return null;
     }
-    const pageRect = pageEl.getBoundingClientRect();
-    const overlayRect = this.#selectionOverlay.getBoundingClientRect();
-    const layoutPageSize = this.#layoutState.layout?.pageSize;
-    const scaleX =
-      layoutPageSize && typeof layoutPageSize.w === 'number' && layoutPageSize.w > 0
-        ? pageRect.width / layoutPageSize.w
-        : 1;
-    const scaleY =
-      layoutPageSize && typeof layoutPageSize.h === 'number' && layoutPageSize.h > 0
-        ? pageRect.height / layoutPageSize.h
-        : 1;
+
+    // Validate pageLocalX: must be finite
+    if (!Number.isFinite(pageLocalX)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalX ${pageLocalX}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Validate pageLocalY: must be finite
+    if (!Number.isFinite(pageLocalY)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalY ${pageLocalY}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Since zoom is now applied via transform: scale() on #viewportHost (which contains
+    // BOTH #painterHost and #selectionOverlay), both are in the same coordinate system.
+    // We position overlay elements in layout-space coordinates, and the transform handles scaling.
+    //
+    // Pages are rendered vertically stacked at y = pageIndex * pageHeight.
+    // The page-local coordinates are already in layout space.
+    const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+
     return {
-      x: pageRect.left - overlayRect.left + pageLocalX * scaleX,
-      y: pageRect.top - overlayRect.top + pageLocalY * scaleY,
+      x: pageLocalX,
+      y: pageIndex * pageHeight + pageLocalY,
     };
   }
 
@@ -5252,9 +5603,11 @@ export class PresentationEditor extends EventEmitter {
       return null;
     }
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Zoom is now controlled centrally via this.#layoutOptions.zoom
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
+    // Convert from screen coordinates to layout coordinates by dividing by zoom
     return {
       x: (clientX - rect.left + scrollLeft) / zoom,
       y: (clientY - rect.top + scrollTop) / zoom,
@@ -5329,6 +5682,7 @@ export class PresentationEditor extends EventEmitter {
    * Returns page-local coordinates (x, y relative to the page element).
    */
   #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
 
     // Optimization: Try to find the specific page containing this position
@@ -5438,7 +5792,7 @@ export class PresentationEditor extends EventEmitter {
       const verticalOffset = (lineRect.height - caretHeight) / 2;
       const caretY = lineRect.top + verticalOffset;
 
-      // Return page-local coordinates (unzoomed)
+      // Return page-local coordinates (in layout space, unzoomed)
       return {
         pageIndex,
         x: (rangeRect.left - pageRect.left) / zoom,

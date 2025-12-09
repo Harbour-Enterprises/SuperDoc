@@ -39,7 +39,7 @@
     "build:super-editor": "npm run build --workspace=packages/super-editor",
     "build": "npm run build:super-editor && npm run build:superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
-    "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
+    "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && rm -rf ./e2e-tests/node_modules && rm -rf ./e2e-tests/package-lock.json && rm -rf ./e2e-tests/templates/vue/node_modules && rm -rf ./e2e-tests/templates/vue/package-lock.json && npm install",
     "publish": "node scripts/publish-superdoc.cjs",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
     "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
@@ -89,7 +89,9 @@
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.47.0",
     "verdaccio": "^6.1.6",
-    "vitest": "^3.0.8",
+    "vitest": "^3.0.8"
+  },
+  "optionalDependencies": {
     "canvas": "^2.11.2"
   }
 }

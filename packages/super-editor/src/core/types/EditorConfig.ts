@@ -1,5 +1,5 @@
 import type { EditorState, Transaction } from 'prosemirror-state';
-import type { Doc as YDoc, XmlFragment as YXmlFragment } from 'yjs';
+import type { XmlFragment as YXmlFragment } from 'yjs';
 import type { Editor } from '../Editor.js';
 import type { Extension } from '../Extension.js';
 import type { Node as EditorNode } from '../Node.js';
@@ -54,15 +54,30 @@ export interface DocxFileEntry {
 }
 
 /**
- * Collaboration provider interface
+ * Awareness interface - matches y-protocols Awareness.
+ * All properties optional to support various provider implementations.
+ */
+export interface Awareness {
+  clientID?: number;
+  getStates?(): Map<number, Record<string, unknown>>;
+  setLocalStateField?(field: string, value: unknown): void;
+  on?(event: string, handler: (...args: unknown[]) => void): void;
+  off?(event: string, handler: (...args: unknown[]) => void): void;
+}
+
+/**
+ * Collaboration provider interface.
+ * Accepts any Yjs-compatible provider (HocuspocusProvider, LiveblocksYjsProvider, TiptapCollabProvider, etc.)
  */
 export interface CollaborationProvider {
-  on(event: string, handler: (...args: unknown[]) => void): void;
-  off(event: string, handler: (...args: unknown[]) => void): void;
-  connect?: () => void;
-  disconnect?: () => void;
-  destroy?: () => void;
+  awareness?: Awareness | null;
+  on?(event: any, handler: (...args: any[]) => void): void;
+  off?(event: any, handler: (...args: any[]) => void): void;
+  disconnect?(): void;
+  destroy?(): void;
+  /** Whether provider is synced - some use `synced`, others `isSynced` */
   synced?: boolean;
+  isSynced?: boolean;
 }
 
 /**
@@ -232,8 +247,8 @@ export interface EditorOptions {
   /** Parent editor (for header/footer editors) */
   parentEditor?: Editor | null;
 
-  /** Collaborative document reference */
-  ydoc?: YDoc | null;
+  /** Collaborative Y.Doc reference - accepts any yjs Doc instance */
+  ydoc?: unknown;
 
   /** Y.js XML fragment for collaborative editing */
   fragment?: YXmlFragment | null;
