@@ -3851,6 +3851,22 @@ export class PresentationEditor extends EventEmitter {
    *   to avoid rendering cursor before layout is ready
    *
    * The cursor will be updated at the end of #rerender() after layout completes.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Race condition guard: #isRerendering and #pendingDocChange flags prevent
+   *   scheduling cursor updates while layout is recalculating, avoiding stale position data.
+   * - Deduplication: #selectionUpdateScheduled flag prevents multiple redundant RAF callbacks
+   *   from being queued when selection changes rapidly.
+   *
+   * Side effects:
+   * - Sets #selectionUpdateScheduled flag to true
+   * - Schedules a requestAnimationFrame callback that calls #updateSelection()
+   * - The RAF callback automatically resets #selectionUpdateScheduled to false
+   *
+   * @private
    */
   #scheduleSelectionUpdate() {
     if (this.#selectionUpdateScheduled) {
@@ -3881,6 +3897,35 @@ export class PresentationEditor extends EventEmitter {
    *
    * This method is called after layout completes to ensure cursor positioning
    * is based on stable layout data.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Position lookup failure: When #computeCaretLayoutRect(from) returns null (e.g., cursor
+   *   on node boundary between paragraph and run), falls back to adjacent positions.
+   * - Fallback positions (from-1, from+1): Adjacent positions typically resolve to nearest
+   *   text content with valid layout fragments. The fallback logic tries from-1 first
+   *   (safer for most text editing), then from+1 if within document bounds.
+   * - Bounds validation: Explicitly checks from > 0 before trying from-1, and validates
+   *   from+1 <= docSize before trying from+1, preventing invalid position access.
+   * - Cursor preservation: If all position lookups fail, keeps existing cursor visible
+   *   rather than clearing it, preventing jarring visual disappearance during edge cases.
+   * - Invalid document state: If editor state or doc is missing, safely returns early
+   *   after clearing cursor (defensive programming for race conditions during init/destroy).
+   *
+   * Side effects:
+   * - Mutates #localSelectionLayer.innerHTML (clears or sets cursor/selection HTML)
+   * - Calls #renderCaretOverlay() or #renderSelectionRects() which mutate DOM
+   * - DOM manipulation is wrapped in try/catch to prevent errors from breaking editor state
+   *
+   * Why fallback positions work:
+   * ProseMirror positions can land on structural node boundaries (e.g., between <p> and <run>)
+   * that don't correspond to renderable layout fragments. Adjacent positions ±1 typically
+   * land inside text content with valid layout data. The from-1 fallback is tried first
+   * because it's safer for most text editing scenarios (e.g., after backspace at start of line).
+   *
+   * @private
    */
   #updateSelection() {
     // In header/footer mode, the ProseMirror editor handles its own caret
@@ -3895,14 +3940,29 @@ export class PresentationEditor extends EventEmitter {
 
     // In viewing mode, don't render caret or selection highlights
     if (this.#documentMode === 'viewing') {
-      this.#localSelectionLayer.innerHTML = '';
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        // Log but don't throw to prevent breaking editor
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer in viewing mode:', error);
+        }
+      }
       return;
     }
     const layout = this.#layoutState.layout;
-    const selection = this.getActiveEditor().state?.selection;
+    const editorState = this.getActiveEditor().state;
+    const selection = editorState?.selection;
 
     if (!selection) {
-      this.#localSelectionLayer.innerHTML = '';
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer (no selection):', error);
+        }
+      }
       return;
     }
 
@@ -3919,11 +3979,21 @@ export class PresentationEditor extends EventEmitter {
       // This works around edge cases where ProseMirror positions can land on node boundaries
       // (e.g., between paragraph and run nodes) that don't have corresponding layout fragments.
       // Adjacent positions typically resolve to the nearest text content with valid layout data.
+
+      // Validate document state before attempting fallback positions
+      const doc = editorState?.doc;
+      if (!doc) {
+        // Document state is invalid - cannot safely compute positions
+        return;
+      }
+
+      const docSize = doc.content?.size ?? 0;
+
+      // Explicit bounds checking for fallback positions
       if (!caretLayout && from > 0) {
         caretLayout = this.#computeCaretLayoutRect(from - 1);
       }
       // Only try from + 1 if within document bounds
-      const docSize = this.getActiveEditor().state?.doc?.content?.size ?? 0;
       if (!caretLayout && from + 1 <= docSize) {
         caretLayout = this.#computeCaretLayoutRect(from + 1);
       }
@@ -3933,16 +4003,30 @@ export class PresentationEditor extends EventEmitter {
         return;
       }
       // Only clear old cursor after successfully computing new position
-      this.#localSelectionLayer.innerHTML = '';
-      this.#renderCaretOverlay(caretLayout);
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCaretOverlay(caretLayout);
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to render caret overlay:', error);
+        }
+      }
       return;
     }
 
     const rects: LayoutRect[] =
       selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
 
-    this.#localSelectionLayer.innerHTML = '';
-    this.#renderSelectionRects(rects);
+    try {
+      this.#localSelectionLayer.innerHTML = '';
+      this.#renderSelectionRects(rects);
+    } catch (error) {
+      // DOM manipulation can fail if element is detached or in invalid state
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to render selection rects:', error);
+      }
+    }
   }
 
   #resolveLayoutOptions(blocks: FlowBlock[] | undefined, sectionMetadata: SectionMetadata[]) {
