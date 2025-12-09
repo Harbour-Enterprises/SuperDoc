@@ -67,6 +67,11 @@ jobs:
       - name: Build packages
         run: npm run build
 
+      - name: Ensure branch is up-to-date
+        run: |
+          git fetch origin ${{ github.ref_name }}
+          git reset --hard origin/${{ github.ref_name }}
+
       - name: Release
         id: semantic
         env:
