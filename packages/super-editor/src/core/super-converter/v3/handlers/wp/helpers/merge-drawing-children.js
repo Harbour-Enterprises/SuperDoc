@@ -21,7 +21,9 @@ export function mergeDrawingChildren({ order, generated, original }) {
 
 function groupByIndex(entries = []) {
   const map = new Map();
-  entries.forEach(({ index, xml }) => {
+  entries.forEach((entry) => {
+    if (!entry) return;
+    const { index, xml } = entry;
     if (typeof index === 'number' && xml && xml.name !== 'wp:extent') {
       map.set(index, carbonCopy(xml));
     }
@@ -29,7 +31,7 @@ function groupByIndex(entries = []) {
   return map;
 }
 
-function mergeWithOrder(order, genQueues, originalsByIndex) {
+function mergeWithOrder(order = [], genQueues, originalsByIndex) {
   const out = [];
   const namesInOrder = new Set(order);
 

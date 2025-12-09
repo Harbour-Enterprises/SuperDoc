@@ -53,12 +53,13 @@ class DocxZipper {
         (name.startsWith('word/embeddings') && name !== 'word/embeddings/')
       ) {
         // Media and embedded binaries (charts, OLE)
-        const buffer = await zipEntry.async('nodebuffer');
-        const fileBase64 = buffer.toString('base64');
         if (isNode) {
+          const buffer = await zipEntry.async('nodebuffer');
+          const fileBase64 = buffer.toString('base64');
           this.mediaFiles[name] = fileBase64;
         } else {
-          const extension = this.getFileExtension(name);
+          const fileBase64 = await zipEntry.async('base64');
+          const extension = this.getFileExtension(name)?.toLowerCase();
           // Only build data URIs for images; keep raw base64 for other binaries (e.g., xlsx)
           const imageTypes = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'emf', 'wmf', 'svg', 'webp']);
           if (imageTypes.has(extension)) {
