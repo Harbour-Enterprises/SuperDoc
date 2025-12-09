@@ -3806,8 +3806,24 @@ export class PresentationEditor extends EventEmitter {
     return this.#domPainter;
   }
 
+  /**
+   * Schedules a cursor/selection update in the next animation frame.
+   *
+   * Implements guards to prevent race conditions during layout recalculation:
+   * - Skips scheduling if already scheduled (prevents duplicate updates)
+   * - Skips if layout is being recalculated (#isRerendering || #pendingDocChange)
+   *   to avoid rendering cursor before layout is ready
+   *
+   * The cursor will be updated at the end of #rerender() after layout completes.
+   */
   #scheduleSelectionUpdate() {
     if (this.#selectionUpdateScheduled) {
+      return;
+    }
+    // If layout is being recalculated, skip scheduling cursor update now.
+    // The cursor will be updated at the end of #rerender() after layout completes.
+    // This prevents race conditions where cursor rendering happens before layout is ready.
+    if (this.#isRerendering || this.#pendingDocChange) {
       return;
     }
     this.#selectionUpdateScheduled = true;
@@ -3818,6 +3834,18 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Updates the visual cursor/selection overlay to match the current editor selection.
+   *
+   * Handles several edge cases:
+   * - Defers cursor clearing until new position is successfully computed
+   * - Falls back to adjacent positions (from-1, from+1) when exact position lookup fails
+   * - Preserves existing cursor visibility when position cannot be computed
+   * - Skips rendering in header/footer mode and viewing mode
+   *
+   * This method is called after layout completes to ensure cursor positioning
+   * is based on stable layout data.
+   */
   #updateSelection() {
     // In header/footer mode, the ProseMirror editor handles its own caret
     if (this.#session.mode !== 'body') {
@@ -3837,23 +3865,39 @@ export class PresentationEditor extends EventEmitter {
     const layout = this.#layoutState.layout;
     const selection = this.getActiveEditor().state?.selection;
 
-    // Clear old carets/selections - this is critical to prevent accumulation
-    this.#localSelectionLayer.innerHTML = '';
-
     if (!selection) {
+      this.#localSelectionLayer.innerHTML = '';
       return;
     }
 
     if (!layout) {
+      // No layout yet - keep existing cursor visible until layout is ready
       return;
     }
 
     const { from, to } = selection;
     if (from === to) {
-      const caretLayout = this.#computeCaretLayoutRect(from);
+      let caretLayout = this.#computeCaretLayoutRect(from);
+
+      // If exact position fails, try adjacent positions as fallback.
+      // This works around edge cases where ProseMirror positions can land on node boundaries
+      // (e.g., between paragraph and run nodes) that don't have corresponding layout fragments.
+      // Adjacent positions typically resolve to the nearest text content with valid layout data.
+      if (!caretLayout && from > 0) {
+        caretLayout = this.#computeCaretLayoutRect(from - 1);
+      }
+      // Only try from + 1 if within document bounds
+      const docSize = this.getActiveEditor().state?.doc?.content?.size ?? 0;
+      if (!caretLayout && from + 1 <= docSize) {
+        caretLayout = this.#computeCaretLayoutRect(from + 1);
+      }
+
       if (!caretLayout) {
+        // Keep existing cursor visible rather than clearing it
         return;
       }
+      // Only clear old cursor after successfully computing new position
+      this.#localSelectionLayer.innerHTML = '';
       this.#renderCaretOverlay(caretLayout);
       return;
     }
@@ -3861,6 +3905,7 @@ export class PresentationEditor extends EventEmitter {
     const rects: LayoutRect[] =
       selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
 
+    this.#localSelectionLayer.innerHTML = '';
     this.#renderSelectionRects(rects);
   }
 
