@@ -142,6 +142,7 @@ import { translator as w_textAlignment_translator } from './w/textAlignment/text
 import { translator as w_textBoxTightWrap_translator } from './w/textboxTightWrap/textboxTightWrap-translator.js';
 import { translator as w_topLinePunct_translator } from './w/topLinePunct/topLinePunct-translator.js';
 import { translator as w_vanish_translator } from './w/vanish/vanish-translator.js';
+import { translator as w_webHidden_translator } from './w/webHidden/webHidden-translator.js';
 import { translator as w_widowControl_translator } from './w/widowControl/widowControl-translator.js';
 import { translator as w_wordWrap_translator } from './w/wordWrap/wordWrap-translator.js';
 import { translator as wp_anchor_translator } from './wp/anchor/anchor-translator.js';
@@ -292,6 +293,7 @@ const translatorList = Array.from(
     w_w_translator,
     w_wAfter_translator,
     w_wBefore_translator,
+    w_webHidden_translator,
     w_widowControl_translator,
     w_wordWrap_translator,
     wp_anchor_translator,

@@ -38,6 +38,7 @@ import { translator as eastAsianLayoutTranslator } from '../eastAsianLayout/east
 import { translator as rtlTranslator } from '../rtl/rtl-translator.js';
 import { translator as csTranslator } from '../cs/cs-translator.js';
 import { translator as iCsTranslator } from '../iCs/iCs-translator.js';
+import { translator as webHiddenTranslator } from '../webHidden/webHidden-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -80,6 +81,7 @@ export const propertyTranslators = [
   underlineTranslator,
   vanishTranslator,
   vertAlignTranslator,
+  webHiddenTranslator,
   wTranslator,
 ];
 
