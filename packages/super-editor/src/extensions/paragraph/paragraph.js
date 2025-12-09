@@ -85,6 +85,8 @@ export const Paragraph = OxmlNode.create({
 
   inline: false,
 
+  summary: 'The paragraph node mirrors MS Word w:p paragraphs, and also represents lists in the schema.',
+
   addOptions() {
     return {
       headingLevels: [1, 2, 3, 4, 5, 6],

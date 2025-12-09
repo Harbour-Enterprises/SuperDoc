@@ -126,4 +126,74 @@ describe('w:r r-translator (node)', () => {
     expect(result.content[1]).toMatchObject({ type: 'tab', attrs: { val: 'start' } });
     expect(result.content[2].type).toBe('text');
   });
+
+  it('does not wrap a comment range start and end in a run node', () => {
+    const params = {
+      node: {
+        type: 'run',
+        attrs: {
+          runProperties: [
+            {
+              xmlName: 'w:rtl',
+              attributes: {
+                'w:val': '0',
+              },
+            },
+          ],
+          rsidR: '00000000',
+          rsidRPr: '00000000',
+          rsidDel: '00000000',
+        },
+        content: [
+          {
+            type: 'commentRangeStart',
+            attrs: {
+              'w:id': 'id1',
+              internal: false,
+            },
+          },
+          {
+            type: 'commentRangeEnd',
+            attrs: {
+              'w:id': 'id1',
+            },
+          },
+        ],
+      },
+      comments: [{ commentId: 'id1' }],
+      exportedCommentDefs: [{}],
+      commentsExportType: 'external',
+    };
+
+    const result = translator.decode(params);
+
+    const commentRangeStart = result.find((el) => el.name === 'w:commentRangeStart');
+    const commentRangeEnd = result.find((el) => el.name === 'w:commentRangeEnd');
+
+    expect(commentRangeStart).toBeDefined();
+    expect(commentRangeEnd).toBeDefined();
+
+    expect(commentRangeStart).toEqual(
+      expect.objectContaining({
+        name: 'w:commentRangeStart',
+        attributes: {
+          'w:id': '0',
+          'w:rsidDel': '00000000',
+          'w:rsidR': '00000000',
+          'w:rsidRPr': '00000000',
+        },
+      }),
+    );
+    expect(commentRangeEnd).toEqual(
+      expect.objectContaining({
+        name: 'w:commentRangeEnd',
+        attributes: {
+          'w:id': '0',
+          'w:rsidDel': '00000000',
+          'w:rsidR': '00000000',
+          'w:rsidRPr': '00000000',
+        },
+      }),
+    );
+  });
 });

@@ -90,7 +90,15 @@ describe('AIActionsService', () => {
                 }
             },
             view: {
-                dispatch: vi.fn()
+                dispatch: vi.fn(),
+                domAtPos: vi.fn((pos: number) => {
+                    return {
+                        node: {
+                            scrollIntoView: vi.fn(),
+                        },
+                        offset: 0,
+                    };
+                }),
             },
             exportDocx: vi.fn(),
             options: {
@@ -139,6 +147,8 @@ describe('AIActionsService', () => {
             expect(result.success).toBe(true);
             expect(result.results).toHaveLength(1);
             expect(result.results[0].originalText).toBe('Sample');
+            expect(mockEditor.commands.search).toHaveBeenCalledWith('Sample', { highlight: true });
+            expect(mockEditor.commands.search).toHaveBeenCalledWith('document', { highlight: true });
         });
 
         it('should return empty result when no matches', async () => {
@@ -191,6 +201,7 @@ describe('AIActionsService', () => {
 
             expect(result.success).toBe(true);
             expect(result.results).toHaveLength(3);
+            expect(mockEditor.commands.search).toHaveBeenCalledWith('test', { highlight: true });
         });
     });
 

@@ -83,7 +83,7 @@ export class AIActionsService {
         if (!result.success || !result.results) {
             return result;
         }
-        result.results = this.adapter.findResults(result.results);
+        result.results = this.adapter.findResults(result.results, { highlight: true });
 
         return result;
     }
@@ -159,6 +159,157 @@ export class AIActionsService {
     }
 
     /**
+     * Fetches AI-generated replacements based on the query.
+     *
+     * @param query - Natural language query describing what to replace
+     * @param multiple - Whether to find all occurrences or just the first
+     * @returns Array of FoundMatch results from AI, or empty array if no context or results
+     * @private
+     */
+    private async fetchAIReplacements(query: string, multiple: boolean): Promise<FoundMatch[]> {
+        const documentContext = this.getDocumentContext();
+
+        if (!documentContext) {
+            return [];
+        }
+
+        const prompt = buildReplacePrompt(query, documentContext, multiple);
+        const response = await this.runCompletion([
+            {role: 'system', content: SYSTEM_PROMPTS.EDIT},
+            {role: 'user', content: prompt},
+        ]);
+
+        const parsed = parseJSON<Result>(
+            response,
+            {success: false, results: []},
+            this.enableLogging
+        );
+
+        return parsed.results || [];
+    }
+
+    /**
+     * Executes a single operation on the first valid match found.
+     * 
+     * @param searchResults - Array of search results with positions
+     * @param operationFn - Function to execute the specific operation
+     * @returns Array with the processed result, or empty array if no valid result
+     * @throws Error if operation execution fails
+     * @private
+     */
+    private async executeSingleOperation(
+        searchResults: FoundMatch[],
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
+    ): Promise<FoundMatch[]> {
+        const firstValidResult = searchResults.find(
+            result => result.positions && result.positions.length > 0
+        );
+
+        if (!firstValidResult) {
+            return [];
+        }
+
+        try {
+            const position = firstValidResult.positions![0];
+            await operationFn(this.adapter, position, firstValidResult);
+            return [firstValidResult];
+        } catch (error) {
+            if (this.enableLogging) {
+                console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+            }
+            throw error;
+        }
+    }
+
+    /**
+     * Collects all operations from search results into a flat array.
+     * Creates immutable copies of positions to prevent mutation.
+     * 
+     * @param searchResults - Array of search results with positions
+     * @returns Array of operations with positions and associated results
+     * @private
+     */
+    private collectOperationsFromResults(
+        searchResults: FoundMatch[]
+    ): Array<{ position: DocumentPosition; result: FoundMatch }> {
+        const allOperations: Array<{ position: DocumentPosition; result: FoundMatch }> = [];
+        
+        for (const result of searchResults) {
+            if (!result.positions || !result.positions.length) {
+                continue;
+            }
+            for (const position of result.positions) {
+                allOperations.push({
+                    position: { from: position.from, to: position.to }, 
+                    result 
+                });
+            }
+        }
+        return allOperations;
+    }
+
+    /**
+     * Checks if a position overlaps with any of the processed ranges.
+     * 
+     * @param position - Position to check for overlap
+     * @param processedRanges - Array of already processed ranges
+     * @returns True if position overlaps with any processed range
+     * @private
+     */
+    private hasOverlap(
+        position: DocumentPosition,
+        processedRanges: Array<{ from: number; to: number }>
+    ): boolean {
+        return processedRanges.some(
+            range => position.from < range.to && position.to > range.from
+        );
+    }
+
+    /**
+     * Executes multiple operations, handling overlaps and processing in reverse order.
+     * Processes positions from end to beginning to prevent position drift.
+     * 
+     * @param allOperations - Array of all operations to process
+     * @param operationFn - Function to execute the specific operation
+     * @returns Array of successfully processed results
+     * @throws Error if any operation execution fails
+     * @private
+     */
+    private async executeMultipleOperations(
+        allOperations: Array<{ position: DocumentPosition; result: FoundMatch }>,
+        operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
+    ): Promise<FoundMatch[]> {
+        // Sort positions by 'from' in descending order (end to beginning)
+        // This prevents position drift - earlier positions remain valid when processing from the end
+        allOperations.sort((a, b) => b.position.from - a.position.from);
+
+        const processedRanges: Array<{ from: number; to: number }> = [];
+        const processedResults: FoundMatch[] = [];
+        
+        for (const { position, result } of allOperations) {
+            try {
+                // Check if this position overlaps with any already processed range
+                if (this.hasOverlap(position, processedRanges)) {
+                    continue;
+                }
+                
+                await operationFn(this.adapter, { from: position.from, to: position.to }, result);
+                processedRanges.push({ from: position.from, to: position.to });
+                if (!processedResults.includes(result)) {
+                    processedResults.push(result);
+                }
+            } catch (error) {
+                if (this.enableLogging) {
+                    console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                }
+                throw error;
+            }
+        }
+        
+        return processedResults;
+    }
+
+    /**
      * Core logic for all document operations (replace, tracked changes, comments).
      * Finds matching content and applies the operation function to each match.
      *
@@ -174,48 +325,24 @@ export class AIActionsService {
         multiple: boolean,
         operationFn: (adapter: EditorAdapter, position: DocumentPosition, replacement: FoundMatch) => Promise<string | void>
     ): Promise<FoundMatch[]> {
-        const documentContext = this.getDocumentContext();
-
-        if (!documentContext) {
-            return [];
-        }
-
-        // Get AI query
-        const prompt = buildReplacePrompt(query, documentContext, multiple);
-        const response = await this.runCompletion([
-            {role: 'system', content: SYSTEM_PROMPTS.EDIT},
-            {role: 'user', content: prompt},
-        ]);
-
-        const parsed = parseJSON<Result>(
-            response,
-            {success: false, results: []},
-            this.enableLogging
-        );
-
-        const replacements = parsed.results || [];
+        const replacements = await this.fetchAIReplacements(query, multiple);
 
         if (!replacements.length) {
             return [];
         }
-
         const searchResults = this.adapter.findResults(replacements);
-        const match = searchResults?.[0];
-        for (const result of searchResults) {
-            try {
-                if (!result.positions || !result.positions.length) {
-                    return [];
-                }
-                await operationFn(this.adapter, result.positions[0], result);
-                if (!multiple) return [match];
-            } catch (error) {
-                if (this.enableLogging) {
-                    console.error(`Failed to execute operation: ${error instanceof Error ? error.message : 'Unknown'}`);
-                }
-                throw error;
-            }
+        
+        if (!multiple) {
+            return await this.executeSingleOperation(searchResults, operationFn);
         }
-        return searchResults;
+        
+        const allOperations = this.collectOperationsFromResults(searchResults);
+        
+        if (!allOperations.length) {
+            return [];
+        }
+        
+        return await this.executeMultipleOperations(allOperations, operationFn);
     }
 
 
@@ -496,8 +623,19 @@ export class AIActionsService {
         stream: boolean = false,
         onStreamProgress?: (aggregated: string, chunk: string) => Promise<boolean | void> | boolean | void,
     ): Promise<string> {
+        if (this.enableLogging) {
+            console.log('[AIActions] AI request', {
+                stream,
+                messages,
+            });
+        }
+
         if (!stream) {
-            return this.provider.getCompletion(messages);
+            const response = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response });
+            }
+            return response;
         }
 
         let aggregated = '';
@@ -522,20 +660,35 @@ export class AIActionsService {
         } catch (error) {
             if (!aggregated) {
                 // No progress, fallback to non-streaming completion so callers still get a response.
-                return this.provider.getCompletion(messages);
+                const fallbackResponse = await this.provider.getCompletion(messages);
+                if (this.enableLogging) {
+                    console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+                }
+                return fallbackResponse;
             }
             throw error;
         }
 
         if (!streamed || !aggregated) {
-            return this.provider.getCompletion(messages);
+            const fallbackResponse = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+            }
+            return fallbackResponse;
         }
 
         const trimmed = aggregated.trim();
         if (!trimmed || (!trimmed.startsWith('{') && !trimmed.startsWith('['))) {
-            return this.provider.getCompletion(messages);
+            const fallbackResponse = await this.provider.getCompletion(messages);
+            if (this.enableLogging) {
+                console.log('[AIActions] AI response', { stream: false, response: fallbackResponse });
+            }
+            return fallbackResponse;
         }
 
+        if (this.enableLogging) {
+            console.log('[AIActions] AI response', { stream: true, response: aggregated });
+        }
         return aggregated;
     }
 }

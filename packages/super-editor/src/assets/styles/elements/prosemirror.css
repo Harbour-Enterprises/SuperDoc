@@ -4,6 +4,8 @@
  */
 .ProseMirror {
   position: relative;
+  /* We use "all: revert" to isolate the editor content from external stylesheets. This makes the "contenteditable" not editable on Safari devices. So we need to keep this. */
+  -webkit-user-modify: read-write-plaintext-only;
 }
 
 .ProseMirror {

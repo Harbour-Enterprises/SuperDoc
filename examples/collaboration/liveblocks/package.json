@@ -1,0 +1,24 @@
+{
+  "name": "superdoc-liveblocks-example",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "@liveblocks/client": "^3.11.0",
+    "@liveblocks/yjs": "^3.11.0",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1",
+    "superdoc": "latest",
+    "yjs": "13.6.27"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.1.2",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.7"
+  }
+}
