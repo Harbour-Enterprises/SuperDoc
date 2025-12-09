@@ -44,7 +44,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "*"
+    "superdoc": "../superdoc/"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
