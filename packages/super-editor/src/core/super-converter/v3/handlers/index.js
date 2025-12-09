@@ -25,6 +25,7 @@ import {
   commentRangeEndTranslator as w_commentRangeEnd_translator,
 } from './w/commentRange/comment-range-translator.js';
 import { translator as w_contextualSpacing } from './w/contextualSpacing/contextualSpacing-translator.js';
+import { translator as w_cs } from './w/cs/cs-translator.js';
 import { translator as w_del_translator } from './w/del/del-translator.js';
 import { translator as w_divId_translator } from './w/divId/divId-translator.js';
 import { translator as w_drawing_translator } from './w/drawing/drawing-translator.js';
@@ -173,6 +174,7 @@ const translatorList = Array.from(
     w_cnfStyle_translator,
     w_color_translator,
     w_contextualSpacing,
+    w_cs,
     w_del_translator,
     w_divId_translator,
     w_drawing_translator,
