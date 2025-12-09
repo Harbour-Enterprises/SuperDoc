@@ -1576,7 +1576,19 @@ export class DomPainter {
       const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
 
       lines.forEach((line, index) => {
-        const availableWidthOverride = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        /**
+         * Calculate available width for text justification.
+         *
+         * Uses line.maxWidth (from measurement phase) as the canonical source because it
+         * correctly accounts for line-specific width constraints like firstLine indent
+         * offsets, drop cap width reduction, and exclusion zones from wrapped images.
+         *
+         * Bug fix: Previously calculated from fragment.width minus indents, which caused
+         * lines with firstLine indent to be justified to the wrong width. For example,
+         * a line measured at 624.8px was justified to 672.8px, causing right margin overflow.
+         */
+        const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        const availableWidthOverride = line.maxWidth ?? fallbackAvailableWidth;
 
         // Determine if this is the true last line of the paragraph that should skip justification.
         // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
