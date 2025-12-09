@@ -834,14 +834,19 @@ export const computeWordLayoutForParagraph = (
   }
 
   try {
-    // Merge paragraph indent with level-specific indent from numbering definition
+    // Merge paragraph indent with level-specific indent from numbering definition.
+    // Numbering level provides base indent, but paragraph/style can override specific properties.
+    // For example, a style may set firstLine=0 to remove numbering's firstLine indent.
     let effectiveIndent = paragraphAttrs.indent;
+
     if (numberingProps?.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(numberingProps.resolvedLevelIndent as ParagraphIndent);
-      // Level indent from numbering definition takes precedence
+      const numberingIndent = resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent);
+
+      // Numbering indent is the base, paragraph/style indent overrides
       effectiveIndent = {
+        ...numberingIndent,
         ...paragraphAttrs.indent,
-        ...(resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent)),
       };
     }
 
@@ -1129,16 +1134,6 @@ export const computeParagraphAttrs = (
     paragraphAttrs.alignment = styleAlignment;
   } else if (computed.paragraph.alignment) {
     paragraphAttrs.alignment = computed.paragraph.alignment;
-  }
-
-  // Word quirk: fully justified paragraphs ignore first-line indent.
-  // This behavior occurs even when the paragraph starts with plain text.
-  // See: https://answers.microsoft.com/en-us/msoffice/forum/all/first-line-indent-ignored-in-justified-paragraphs
-  const isJustified = paragraphAttrs.alignment === 'justify';
-  const hasFirstLineIndent = normalizedIndent?.firstLine && normalizedIndent.firstLine > 0;
-
-  if (isJustified && hasFirstLineIndent) {
-    paragraphAttrs.suppressFirstLineIndent = true;
   }
 
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);
