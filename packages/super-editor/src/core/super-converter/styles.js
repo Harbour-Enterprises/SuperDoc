@@ -92,11 +92,17 @@ export const resolveRunProperties = (
   if (isListNumber) {
     // Numbering properties
     let numberingProps = {};
-    if (resolvedPpr?.numberingProperties?.numId != null) {
+    const numId = resolvedPpr?.numberingProperties?.numId;
+    /**
+     * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables
+     * numbering inherited from paragraph styles. We only fetch numbering properties when
+     * numId is not null/undefined and not the special zero value.
+     */
+    if (numId != null && numId !== 0 && numId !== '0') {
       numberingProps = getNumberingProperties(
         params,
         resolvedPpr.numberingProperties.ilvl ?? 0,
-        resolvedPpr.numberingProperties.numId,
+        numId,
         w_rPrTranslator,
       );
     }
@@ -186,9 +192,23 @@ export function resolveParagraphProperties(
   // Numbering style
   let numberingProps = {};
   let ilvl = inlineProps?.numberingProperties?.ilvl ?? styleProps?.numberingProperties?.ilvl;
-  const numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
+  let numId = inlineProps?.numberingProperties?.numId ?? styleProps?.numberingProperties?.numId;
   let numberingDefinedInline = inlineProps?.numberingProperties?.numId != null;
-  const isList = numId != null;
+  /**
+   * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables/removes
+   * numbering inherited from paragraph styles. When encountered inline, we set numId to null to
+   * prevent referencing a numbering definition.
+   */
+  const inlineNumIdDisablesNumbering =
+    inlineProps?.numberingProperties?.numId === 0 || inlineProps?.numberingProperties?.numId === '0';
+  if (inlineNumIdDisablesNumbering) {
+    numId = null;
+  }
+  /**
+   * Validates that the paragraph has valid numbering properties.
+   * Per OOXML spec §17.9.16, numId="0" (or '0') disables numbering.
+   */
+  const isList = numId != null && numId !== 0 && numId !== '0';
   if (isList) {
     ilvl = ilvl != null ? ilvl : 0;
     numberingProps = getNumberingProperties(params, ilvl, numId, w_pPrTranslator);

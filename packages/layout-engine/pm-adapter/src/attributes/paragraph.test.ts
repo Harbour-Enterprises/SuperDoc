@@ -30,6 +30,7 @@ import {
   mergeParagraphAttrs,
   convertListParagraphAttrs,
   mergeSpacingSources,
+  isValidNumberingId,
 } from './paragraph.js';
 import type { ListCounterContext } from '../types.js';
 import { twipsToPx } from '../utilities.js';
@@ -38,6 +39,75 @@ import { twipsToPx } from '../utilities.js';
 type PMNode = {
   attrs?: Record<string, unknown>;
 };
+
+describe('isValidNumberingId', () => {
+  describe('valid numbering IDs', () => {
+    it('should return true for positive integer numId', () => {
+      expect(isValidNumberingId(1)).toBe(true);
+      expect(isValidNumberingId(5)).toBe(true);
+      expect(isValidNumberingId(100)).toBe(true);
+    });
+
+    it('should return true for positive string numId', () => {
+      expect(isValidNumberingId('1')).toBe(true);
+      expect(isValidNumberingId('5')).toBe(true);
+      expect(isValidNumberingId('100')).toBe(true);
+    });
+
+    it('should return true for negative numId values', () => {
+      // While unusual, negative values are technically valid (not the special zero value)
+      expect(isValidNumberingId(-1)).toBe(true);
+      expect(isValidNumberingId('-1')).toBe(true);
+    });
+  });
+
+  describe('invalid numbering IDs (OOXML spec §17.9.16)', () => {
+    it('should return false for numeric zero (disables numbering)', () => {
+      expect(isValidNumberingId(0)).toBe(false);
+    });
+
+    it('should return false for string zero (disables numbering)', () => {
+      expect(isValidNumberingId('0')).toBe(false);
+    });
+
+    it('should return false for null', () => {
+      expect(isValidNumberingId(null)).toBe(false);
+    });
+
+    it('should return false for undefined', () => {
+      expect(isValidNumberingId(undefined)).toBe(false);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should return true for empty string (not the zero sentinel)', () => {
+      // Empty string is not the same as '0' per OOXML spec
+      expect(isValidNumberingId('')).toBe(true);
+    });
+
+    it('should return true for string with leading zeros', () => {
+      // '00' is not the same as '0'
+      expect(isValidNumberingId('00')).toBe(true);
+      expect(isValidNumberingId('001')).toBe(true);
+    });
+
+    it('should return true for floating point numbers', () => {
+      // While unusual, non-zero floats are not the special zero value
+      expect(isValidNumberingId(1.5)).toBe(true);
+      expect(isValidNumberingId(0.1)).toBe(true);
+    });
+
+    it('should return false for string "0.0" (string comparison)', () => {
+      // String comparison: '0.0' !== '0', so this is technically valid
+      expect(isValidNumberingId('0.0')).toBe(true);
+    });
+
+    it('should return false for -0 (numeric zero)', () => {
+      // In JavaScript, -0 === 0
+      expect(isValidNumberingId(-0)).toBe(false);
+    });
+  });
+});
 
 describe('resolveParagraphBooleanAttr', () => {
   describe('direct attribute resolution', () => {
@@ -1082,6 +1152,170 @@ describe('computeParagraphAttrs', () => {
     const result = computeParagraphAttrs(para, styleContext, listCounterContext);
     expect(result?.numberingProperties).toBeDefined();
     expect(listCounterContext.incrementListCounter).toHaveBeenCalledWith(1, 0);
+  });
+
+  describe('numId=0 disables numbering (OOXML spec §17.9.16)', () => {
+    const createStyleContext = () =>
+      ({
+        styles: {},
+        defaults: {},
+      }) as never;
+
+    it('should not create numberingProperties when numId is numeric 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId=0 disables numbering, so numberingProperties should not be set
+      expect(result?.numberingProperties).toBeUndefined();
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should not create numberingProperties when numId is string "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId='0' disables numbering, so numberingProperties should not be set
+      expect(result?.numberingProperties).toBeUndefined();
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should not increment list counter when numId is 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const listCounterContext: ListCounterContext = {
+        getListCounter: vi.fn(() => 0),
+        incrementListCounter: vi.fn(() => 1),
+        resetListCounter: vi.fn(),
+      };
+
+      computeParagraphAttrs(para, styleContext, listCounterContext);
+
+      // numId=0 should skip list counter logic entirely
+      expect(listCounterContext.incrementListCounter).not.toHaveBeenCalled();
+      expect(listCounterContext.resetListCounter).not.toHaveBeenCalled();
+    });
+
+    it('should not increment list counter when numId is "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 2,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const listCounterContext: ListCounterContext = {
+        getListCounter: vi.fn(() => 0),
+        incrementListCounter: vi.fn(() => 1),
+        resetListCounter: vi.fn(),
+      };
+
+      computeParagraphAttrs(para, styleContext, listCounterContext);
+
+      // numId='0' should skip list counter logic entirely
+      expect(listCounterContext.incrementListCounter).not.toHaveBeenCalled();
+      expect(listCounterContext.resetListCounter).not.toHaveBeenCalled();
+    });
+
+    it('should create numberingProperties for valid numId=1', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 1,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Valid numId should create numberingProperties
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe(1);
+    });
+
+    it('should create numberingProperties for valid numId="5"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '5',
+            ilvl: 1,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Valid string numId should create numberingProperties
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe('5');
+    });
+
+    it('should skip word layout processing when numId is 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+            format: 'decimal',
+            lvlText: '%1.',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId=0 should skip word layout entirely
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should skip word layout processing when numId is "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 1,
+            format: 'lowerLetter',
+            lvlText: '%1)',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId='0' should skip word layout entirely
+      expect(result?.wordLayout).toBeUndefined();
+    });
   });
 
   it('should reset deeper list levels', () => {
