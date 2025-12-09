@@ -388,6 +388,26 @@ export type LayoutUpdatePayload = {
 };
 
 /**
+ * Event payload emitted when an image is selected in the editor.
+ */
+export type ImageSelectedEvent = {
+  /** The DOM element representing the selected image */
+  element: HTMLElement;
+  /** The layout-engine block ID for the image (null for inline images) */
+  blockId: string | null;
+  /** The ProseMirror document position where the image node starts */
+  pmStart: number;
+};
+
+/**
+ * Event payload emitted when an image is deselected in the editor.
+ */
+export type ImageDeselectedEvent = {
+  /** The block ID of the previously selected image (may be a synthetic ID like "inline-{position}") */
+  blockId: string;
+};
+
+/**
  * Discriminated union for all telemetry events.
  * Use TypeScript's type narrowing to handle each event type safely.
  */
@@ -2587,6 +2607,25 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Focus the editor after image selection and schedule selection update.
+   * This method encapsulates the common focus and blur logic used when
+   * selecting both inline and block images.
+   * @private
+   * @returns {void}
+   */
+  #focusEditorAfterImageSelection(): void {
+    this.#scheduleSelectionUpdate();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+    if (editorDom) {
+      editorDom.focus();
+      this.#editor.view?.focus();
+    }
+  }
+
   #setupInputBridge() {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
@@ -2851,6 +2890,23 @@ export class PresentationEditor extends EventEmitter {
     const imgPmStart = targetImg?.dataset?.pmStart ? Number(targetImg.dataset.pmStart) : null;
     if (!Number.isNaN(imgPmStart) && imgPmStart != null) {
       const doc = this.#editor.state.doc;
+
+      // Validate position is within document bounds
+      if (imgPmStart < 0 || imgPmStart >= doc.content.size) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PresentationEditor] Invalid position ${imgPmStart} for inline image (document size: ${doc.content.size})`,
+          );
+        }
+        return;
+      }
+
+      // Emit imageDeselected if previous selection was a different image
+      const newSelectionId = `inline-${imgPmStart}`;
+      if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== newSelectionId) {
+        this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
+      }
+
       try {
         const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, imgPmStart));
         this.#editor.view?.dispatch(tr);
@@ -2861,24 +2917,18 @@ export class PresentationEditor extends EventEmitter {
           element: targetElement ?? targetImg,
           blockId: null,
           pmStart: imgPmStart,
-        });
-        this.#lastSelectedImageBlockId = `inline-${imgPmStart}`;
+        } as ImageSelectedEvent);
+        this.#lastSelectedImageBlockId = newSelectionId;
       } catch (error) {
         if (process.env.NODE_ENV === 'development') {
-          console.warn('[PresentationEditor] Failed to create NodeSelection for inline image run:', error);
+          console.warn(
+            `[PresentationEditor] Failed to create NodeSelection for inline image at position ${imgPmStart}:`,
+            error,
+          );
         }
       }
 
-      // Focus editor and schedule selection update
-      this.#scheduleSelectionUpdate();
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
-      if (editorDom) {
-        editorDom.focus();
-        this.#editor.view?.focus();
-      }
+      this.#focusEditorAfterImageSelection();
       return;
     }
 
@@ -2892,7 +2942,7 @@ export class PresentationEditor extends EventEmitter {
 
         // Emit imageDeselected if previous selection was a different image
         if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
-          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
         }
 
         // Emit imageSelected event for overlay to detect
@@ -2905,7 +2955,7 @@ export class PresentationEditor extends EventEmitter {
               element: targetElement,
               blockId: fragmentHit.fragment.blockId,
               pmStart: fragmentHit.fragment.pmStart,
-            });
+            } as ImageSelectedEvent);
             this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
           }
         }
@@ -2915,22 +2965,13 @@ export class PresentationEditor extends EventEmitter {
         }
       }
 
-      // Focus editor and schedule selection update
-      this.#scheduleSelectionUpdate();
-      if (document.activeElement instanceof HTMLElement) {
-        document.activeElement.blur();
-      }
-      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
-      if (editorDom) {
-        editorDom.focus();
-        this.#editor.view?.focus();
-      }
+      this.#focusEditorAfterImageSelection();
       return;
     }
 
     // If clicking away from an image, emit imageDeselected
     if (this.#lastSelectedImageBlockId) {
-      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
       this.#lastSelectedImageBlockId = null;
     }
 

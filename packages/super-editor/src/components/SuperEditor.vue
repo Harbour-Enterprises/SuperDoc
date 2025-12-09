@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
@@ -108,6 +108,7 @@ const imageResizeState = reactive({
 
 /**
  * Image selection state (for layout-engine rendered images)
+ * @type {{element: HTMLElement | null, blockId: string | null, pmStart: number | null}}
  */
 const selectedImageState = reactive({
   element: null,
@@ -494,8 +495,9 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     presentationEditor.on('layoutUpdated', () => {
       if (imageResizeState.visible && imageResizeState.blockId) {
         // Re-acquire element reference (may have been recreated after re-render)
+        const escapedBlockId = CSS.escape(imageResizeState.blockId);
         const newElement = editorElem.value?.querySelector(
-          `.superdoc-image-fragment[data-sd-block-id="${imageResizeState.blockId}"]`,
+          `.superdoc-image-fragment[data-sd-block-id="${escapedBlockId}"]`,
         );
         if (newElement) {
           imageResizeState.imageElement = newElement;
@@ -508,8 +510,9 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
       }
 
       if (selectedImageState.blockId) {
+        const escapedBlockId = CSS.escape(selectedImageState.blockId);
         const refreshed = editorElem.value?.querySelector(
-          `.superdoc-image-fragment[data-sd-block-id="${selectedImageState.blockId}"]`,
+          `.superdoc-image-fragment[data-sd-block-id="${escapedBlockId}"]`,
         );
         if (refreshed) {
           setSelectedImage(refreshed, selectedImageState.blockId, selectedImageState.pmStart);
