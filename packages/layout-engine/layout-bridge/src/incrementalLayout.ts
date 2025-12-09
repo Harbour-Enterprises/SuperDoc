@@ -167,7 +167,8 @@ export async function incrementalLayout(
   let layout = layoutDocument(nextBlocks, measures, {
     ...options,
     headerContentHeights, // Pass header heights to prevent overlap
-    remeasureParagraph: (block: FlowBlock, maxWidth: number) => remeasureParagraph(block as ParagraphBlock, maxWidth),
+    remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+      remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
   });
   const layoutEnd = performance.now();
   perfLog(`[Perf] 4.2 Layout document (pagination): ${(layoutEnd - layoutStart).toFixed(2)}ms`);
@@ -242,8 +243,8 @@ export async function incrementalLayout(
       layout = layoutDocument(currentBlocks, currentMeasures, {
         ...options,
         headerContentHeights, // Pass header heights to prevent overlap
-        remeasureParagraph: (block: FlowBlock, maxWidth: number) =>
-          remeasureParagraph(block as ParagraphBlock, maxWidth),
+        remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+          remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
       });
       const relayoutEnd = performance.now();
       const relayoutTime = relayoutEnd - relayoutStart;
@@ -378,6 +379,7 @@ export function resolveMeasurementConstraints(options: LayoutOptions): {
   const contentHeight = pageSize.h - (margins.top + margins.bottom);
 
   const columns = options.columns;
+
   if (columns && columns.count > 1) {
     const gap = Math.max(0, columns.gap ?? 0);
     const totalGap = gap * (columns.count - 1);
