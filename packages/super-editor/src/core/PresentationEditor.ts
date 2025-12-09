@@ -892,6 +892,48 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the current zoom level.
+   *
+   * The zoom level is a multiplier that controls the visual scale of the document.
+   * This value is applied via CSS transform: scale() on the #viewportHost element,
+   * which ensures consistent scaling between rendered content and overlay elements
+   * (selections, cursors, interactive handles).
+   *
+   * Relationship to Centralized Zoom Architecture:
+   * - PresentationEditor is the SINGLE SOURCE OF TRUTH for zoom state
+   * - Zoom is applied internally via transform: scale() on #viewportHost
+   * - External components (toolbar, UI controls) should use setZoom() to modify zoom
+   * - The zoom value is used throughout the system for coordinate transformations
+   *
+   * Coordinate Space Implications:
+   * - Layout coordinates: Unscaled logical pixels used by the layout engine
+   * - Screen coordinates: Physical pixels affected by CSS transform: scale()
+   * - Conversion: screenCoord = layoutCoord * zoom
+   *
+   * Zoom Scale:
+   * - 1 = 100% (default, no scaling)
+   * - 0.5 = 50% (zoomed out, content appears smaller)
+   * - 2 = 200% (zoomed in, content appears larger)
+   *
+   * @returns The current zoom level multiplier (default: 1 if not configured)
+   *
+   * @example
+   * ```typescript
+   * const zoom = presentation.zoom;
+   * // Convert layout coordinates to screen coordinates
+   * const screenX = layoutX * zoom;
+   * const screenY = layoutY * zoom;
+   *
+   * // Convert screen coordinates back to layout coordinates
+   * const layoutX = screenX / zoom;
+   * const layoutY = screenY / zoom;
+   * ```
+   */
+  get zoom(): number {
+    return this.#layoutOptions.zoom ?? 1;
+  }
+
+  /**
    * Set the document mode and update editor editability.
    *
    * This method updates both the PresentationEditor's internal mode state and the
@@ -1075,6 +1117,9 @@ export class PresentationEditor extends EventEmitter {
 
     const start = Math.min(from, to);
     const end = Math.max(from, to);
+    // Use effective zoom from actual rendered dimensions, not internal state.
+    // Zoom may be applied externally (e.g., by SuperDoc toolbar) without
+    // updating PresentationEditor's internal zoom value.
     const zoom = this.#layoutOptions.zoom ?? 1;
     const overlayRect = this.#selectionOverlay.getBoundingClientRect();
     const relativeRect = relativeTo?.getBoundingClientRect() ?? null;
@@ -1102,8 +1147,10 @@ export class PresentationEditor extends EventEmitter {
         const pageLocalY = rect.y - rect.pageIndex * pageHeight;
         const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
         if (!coords) return null;
-        const absLeft = coords.x + overlayRect.left;
-        const absTop = coords.y + overlayRect.top;
+        // coords are in layout space, convert to screen space by multiplying by zoom
+        // This is for external consumers (like comments) that expect screen coordinates
+        const absLeft = coords.x * zoom + overlayRect.left;
+        const absTop = coords.y * zoom + overlayRect.top;
         const left = relativeRect ? absLeft - relativeRect.left : absLeft;
         const top = relativeRect ? absTop - relativeRect.top : absTop;
         const width = Math.max(1, rect.width * zoom);
@@ -2250,6 +2297,7 @@ export class PresentationEditor extends EventEmitter {
     // Use existing geometry helper to get caret layout rect
     const caretLayout = this.#computeCaretLayoutRect(cursor.head);
 
+    // Use effective zoom from actual rendered dimensions for consistent scaling
     const zoom = this.#layoutOptions.zoom ?? 1;
     const doc = this.#visibleHost.ownerDocument ?? document;
     const color = this.#getValidatedColor(cursor);
@@ -2296,7 +2344,8 @@ export class PresentationEditor extends EventEmitter {
     // Update position using transform for GPU acceleration
     caretEl!.style.opacity = '1';
     caretEl!.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
-    caretEl!.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    caretEl!.style.height = `${Math.max(1, caretLayout.height)}px`;
 
     // Update color in case it changed
     caretEl!.style.borderLeftColor = color;
@@ -2399,8 +2448,6 @@ export class PresentationEditor extends EventEmitter {
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
-
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const opacity = this.#layoutOptions.presence?.highlightOpacity ?? 0.35;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     const doc = this.#visibleHost.ownerDocument ?? document;
@@ -2422,8 +2469,9 @@ export class PresentationEditor extends EventEmitter {
       selectionEl.style.position = 'absolute';
       selectionEl.style.left = `${coords.x}px`;
       selectionEl.style.top = `${coords.y}px`;
-      selectionEl.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      selectionEl.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      selectionEl.style.width = `${Math.max(1, rect.width)}px`;
+      selectionEl.style.height = `${Math.max(1, rect.height)}px`;
       selectionEl.style.backgroundColor = color;
       selectionEl.style.opacity = opacity.toString();
       selectionEl.style.borderRadius = PresentationEditor.CURSOR_STYLES.SELECTION_BORDER_RADIUS;
@@ -2725,6 +2773,7 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -3503,6 +3552,7 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#layoutState.layout) return;
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -4953,7 +5003,6 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
-    const zoom = this.#layoutOptions.zoom ?? 1;
     rects.forEach((rect, _index) => {
       const pageLocalY = rect.y - rect.pageIndex * pageHeight;
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
@@ -4968,8 +5017,9 @@ export class PresentationEditor extends EventEmitter {
       highlight.style.position = 'absolute';
       highlight.style.left = `${coords.x}px`;
       highlight.style.top = `${coords.y}px`;
-      highlight.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      highlight.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      highlight.style.width = `${Math.max(1, rect.width)}px`;
+      highlight.style.height = `${Math.max(1, rect.height)}px`;
       highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
@@ -4979,7 +5029,6 @@ export class PresentationEditor extends EventEmitter {
 
   #renderHoverRegion(region: HeaderFooterRegion) {
     if (!this.#hoverOverlay || !this.#hoverTooltip) return;
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(region.pageIndex, region.localX, region.localY);
     if (!coords) {
       this.#clearHoverRegion();
@@ -4988,8 +5037,9 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.display = 'block';
     this.#hoverOverlay.style.left = `${coords.x}px`;
     this.#hoverOverlay.style.top = `${coords.y}px`;
-    this.#hoverOverlay.style.width = `${region.width * zoom}px`;
-    this.#hoverOverlay.style.height = `${region.height * zoom}px`;
+    // Width and height are in layout space - the transform on #viewportHost handles scaling
+    this.#hoverOverlay.style.width = `${region.width}px`;
+    this.#hoverOverlay.style.height = `${region.height}px`;
 
     const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'header' : 'footer'}`;
     this.#hoverTooltip.textContent = tooltipText;
@@ -5000,7 +5050,8 @@ export class PresentationEditor extends EventEmitter {
     // This prevents clipping for headers at the top of the page
     const tooltipHeight = 24; // Approximate tooltip height
     const spaceAbove = coords.y;
-    const regionHeight = region.height * zoom;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const regionHeight = region.height;
     const tooltipY =
       spaceAbove < tooltipHeight + 4
         ? coords.y + regionHeight + 4 // Position below if near top (with 4px spacing)
@@ -5022,11 +5073,14 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#localSelectionLayer) {
       return;
     }
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
     if (!coords) {
       return;
     }
+
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const finalHeight = Math.max(1, caretLayout.height);
+
     const caretEl = this.#localSelectionLayer.ownerDocument?.createElement('div');
     if (!caretEl) {
       return;
@@ -5036,7 +5090,7 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.left = `${coords.x}px`;
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
-    caretEl.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
+    caretEl.style.height = `${finalHeight}px`;
     caretEl.style.backgroundColor = '#3366FF';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
@@ -5212,8 +5266,16 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #applyZoom() {
+    // Apply zoom via transform: scale() on #viewportHost.
+    // This is the SINGLE source of zoom - the toolbar no longer applies CSS zoom on .layers.
+    //
+    // By applying transform on #viewportHost (which contains BOTH #painterHost AND #selectionOverlay),
+    // both the rendered content and selection overlays scale together automatically.
+    // This eliminates coordinate system mismatches that occurred when zoom was applied
+    // externally on a parent element that didn't contain the selection overlay.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    this.#painterHost.style.transform = `scale(${zoom})`;
+    this.#viewportHost.style.transformOrigin = 'top left';
+    this.#viewportHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
   }
 
   #createLayoutMetrics(
@@ -5233,27 +5295,76 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
-  #convertPageLocalToOverlayCoords(pageIndex: number, pageLocalX: number, pageLocalY: number) {
-    const pageEl = this.#painterHost.querySelector(
-      `.superdoc-page[data-page-index="${pageIndex}"]`,
-    ) as HTMLElement | null;
-    if (!pageEl) {
+  /**
+   * Convert page-local coordinates to overlay-space coordinates.
+   *
+   * Transforms coordinates from page-local space (x, y relative to a specific page)
+   * to overlay-space coordinates (absolute position within the stacked page layout).
+   * The returned coordinates are in layout space (unscaled logical pixels), not screen
+   * space - the CSS transform: scale() on #viewportHost handles zoom scaling.
+   *
+   * Pages are rendered vertically stacked at y = pageIndex * pageHeight, so the
+   * conversion involves:
+   * 1. X coordinate passes through unchanged (pages are horizontally aligned)
+   * 2. Y coordinate is offset by (pageIndex * pageHeight) to account for stacking
+   *
+   * @param pageIndex - Zero-based page index (must be finite and non-negative)
+   * @param pageLocalX - X coordinate relative to page origin (must be finite)
+   * @param pageLocalY - Y coordinate relative to page origin (must be finite)
+   * @returns Overlay coordinates {x, y} in layout space, or null if inputs are invalid
+   *
+   * @example
+   * ```typescript
+   * // Position at (50, 100) on page 2
+   * const coords = this.#convertPageLocalToOverlayCoords(2, 50, 100);
+   * // Returns: { x: 50, y: 2 * 792 + 100 } = { x: 50, y: 1684 }
+   * ```
+   *
+   * @private
+   */
+  #convertPageLocalToOverlayCoords(
+    pageIndex: number,
+    pageLocalX: number,
+    pageLocalY: number,
+  ): { x: number; y: number } | null {
+    // Validate pageIndex: must be finite and non-negative
+    if (!Number.isFinite(pageIndex) || pageIndex < 0) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageIndex ${pageIndex}. ` +
+          'Expected a finite non-negative number.',
+      );
       return null;
     }
-    const pageRect = pageEl.getBoundingClientRect();
-    const overlayRect = this.#selectionOverlay.getBoundingClientRect();
-    const layoutPageSize = this.#layoutState.layout?.pageSize;
-    const scaleX =
-      layoutPageSize && typeof layoutPageSize.w === 'number' && layoutPageSize.w > 0
-        ? pageRect.width / layoutPageSize.w
-        : 1;
-    const scaleY =
-      layoutPageSize && typeof layoutPageSize.h === 'number' && layoutPageSize.h > 0
-        ? pageRect.height / layoutPageSize.h
-        : 1;
+
+    // Validate pageLocalX: must be finite
+    if (!Number.isFinite(pageLocalX)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalX ${pageLocalX}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Validate pageLocalY: must be finite
+    if (!Number.isFinite(pageLocalY)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalY ${pageLocalY}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Since zoom is now applied via transform: scale() on #viewportHost (which contains
+    // BOTH #painterHost and #selectionOverlay), both are in the same coordinate system.
+    // We position overlay elements in layout-space coordinates, and the transform handles scaling.
+    //
+    // Pages are rendered vertically stacked at y = pageIndex * pageHeight.
+    // The page-local coordinates are already in layout space.
+    const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+
     return {
-      x: pageRect.left - overlayRect.left + pageLocalX * scaleX,
-      y: pageRect.top - overlayRect.top + pageLocalY * scaleY,
+      x: pageLocalX,
+      y: pageIndex * pageHeight + pageLocalY,
     };
   }
 
@@ -5262,9 +5373,11 @@ export class PresentationEditor extends EventEmitter {
       return null;
     }
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Zoom is now controlled centrally via this.#layoutOptions.zoom
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
+    // Convert from screen coordinates to layout coordinates by dividing by zoom
     return {
       x: (clientX - rect.left + scrollLeft) / zoom,
       y: (clientY - rect.top + scrollTop) / zoom,
@@ -5339,6 +5452,7 @@ export class PresentationEditor extends EventEmitter {
    * Returns page-local coordinates (x, y relative to the page element).
    */
   #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
 
     // Optimization: Try to find the specific page containing this position
@@ -5448,7 +5562,7 @@ export class PresentationEditor extends EventEmitter {
       const verticalOffset = (lineRect.height - caretHeight) / 2;
       const caretY = lineRect.top + verticalOffset;
 
-      // Return page-local coordinates (unzoomed)
+      // Return page-local coordinates (in layout space, unzoomed)
       return {
         pageIndex,
         x: (rangeRect.left - pageRect.left) / zoom,
