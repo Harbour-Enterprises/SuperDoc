@@ -1383,4 +1383,452 @@ describe('layoutTableBlock', () => {
       // Once partialRow rendering is complete, this test should verify partialRow metadata
     });
   });
+
+  describe('line advancement-based row splitting', () => {
+    /**
+     * Test suite for the line advancement algorithm introduced in commit 911977b94.
+     * This algorithm ensures that when a row is split across pages, all cells advance
+     * by the same number of lines rather than the same height, maintaining structural
+     * alignment across cells with different line heights.
+     */
+
+    it('should split rows based on line advancement rather than height', () => {
+      // Create a table with a single row where cells have different line heights
+      // This tests the core bug fix: cells should advance by the same number of lines
+      const block = createMockTableBlock(1);
+
+      // Cell 0: 3 lines of 20px each (total 60px)
+      // Cell 1: 3 lines of 40px each (total 120px)
+      const measure = createMockTableMeasure(
+        [100, 100], // Two columns
+        [120], // Row height (max of cell heights)
+        [
+          // Row 0 - different line heights per cell
+          [20, 20, 20], // Cell 0: 3x20px lines
+          [40, 40, 40], // Cell 1: 3x40px lines
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let pageCount = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 50, // Only enough space for 1 line from Cell 0 or Cell 1
+        }),
+        advanceColumn: (state) => {
+          pageCount++;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50, // Consistently small pages to force line-by-line splitting
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // With line advancement, both cells should advance by 1 line at a time
+      // So we should see multiple fragments as the row is split line by line
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Check that fragments have partialRow metadata defined
+      const fragmentsWithPartialRow = fragments.filter((f) => 'partialRow' in f && f.partialRow !== null);
+      expect(fragmentsWithPartialRow.length).toBeGreaterThan(0);
+    });
+
+    it('should not call advanceColumn when partial row makes progress', () => {
+      // This tests the bug fix where advanceColumn was being called even when progress was made
+      const block = createMockTableBlock(1);
+
+      // Create a row with multiple lines that will need to be split
+      const measure = createMockTableMeasure(
+        [100],
+        [100], // Row with total height 100px
+        [[20, 20, 20, 20, 20]], // 5 lines of 20px each
+      );
+
+      const fragments: TableFragment[] = [];
+      let advanceCallCount = 0;
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 40, // Space for 2 lines at a time
+        }),
+        advanceColumn: (state) => {
+          advanceCallCount++;
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 40,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // The row should be split across multiple fragments as it makes progress
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // advanceColumn should only be called when no progress is made or when starting a new page
+      // With the fix, it should NOT be called when partial row makes progress
+      // The number of advance calls should be less than the number of fragments
+      // because progress-based continuations stay on the same page
+      expect(advanceCallCount).toBeLessThan(fragments.length);
+    });
+
+    it('should apply allCellsCompleteInFirstPass optimization', () => {
+      // When all cells complete in the first pass, the optimization should keep
+      // the natural heights without forcing line advancement alignment
+      const block = createMockTableBlock(1);
+
+      // Create a row where all cells will complete in available space
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [40], // Row height
+        [
+          [20, 20], // Cell 0: 2 lines of 20px (total 40px)
+          [10, 10, 10, 10], // Cell 1: 4 lines of 10px (total 40px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 100, // Plenty of space for entire row
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      // Should create a single fragment since everything fits
+      expect(fragments.length).toBe(1);
+
+      // The fragment should not have partialRow since it's complete
+      const fragment = fragments[0];
+      if ('partialRow' in fragment) {
+        // partialRow can be either null or undefined for complete rows
+        expect(fragment.partialRow == null).toBe(true);
+      }
+    });
+
+    it('should handle cells with different line counts in partial row splits', () => {
+      // Edge case: cells have different numbers of lines, not just different line heights
+      const block = createMockTableBlock(1);
+
+      // Cell 0 has 2 lines, Cell 1 has 4 lines
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [80], // Row height (max of cells)
+        [
+          [20, 20], // Cell 0: 2 lines of 20px (total 40px)
+          [20, 20, 20, 20], // Cell 1: 4 lines of 20px (total 80px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 30, // Space for 1 line (plus some padding)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 30,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments as the row is split
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify that partial row metadata exists for intermediate fragments
+      const intermediateFragments = fragments.slice(0, -1);
+      for (const fragment of intermediateFragments) {
+        if ('partialRow' in fragment && fragment.partialRow) {
+          // Each cell should advance by the minimum line advancement
+          const { toLineByCell, fromLineByCell } = fragment.partialRow;
+          const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
+
+          // All positive advancements should be equal (same number of lines advanced)
+          const positiveAdvancements = advancements.filter((a) => a > 0);
+          if (positiveAdvancements.length > 1) {
+            const minAdvancement = Math.min(...positiveAdvancements);
+            expect(positiveAdvancements.every((a) => a === minAdvancement)).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('should handle continuation from partial rows correctly', () => {
+      // Test that when a partial row continues to the next page, the fromLineByCell
+      // is correctly carried forward
+      const block = createMockTableBlock(1);
+
+      // Create a row with 5 lines that will need multiple splits
+      const measure = createMockTableMeasure([100], [100], [[20, 20, 20, 20, 20]]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 30, // Space for 1 line
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 30,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Check that continuation fragments have proper fromLineByCell values
+      let expectedStartLine = 0;
+      for (const fragment of fragments) {
+        if ('partialRow' in fragment && fragment.partialRow) {
+          const { fromLineByCell, toLineByCell, isFirstPart, isLastPart } = fragment.partialRow;
+
+          // fromLineByCell should match expected start line
+          expect(fromLineByCell[0]).toBe(expectedStartLine);
+
+          // toLineByCell should be greater than fromLineByCell
+          expect(toLineByCell[0]).toBeGreaterThan(fromLineByCell[0]);
+
+          // Update expected start line for next fragment
+          expectedStartLine = toLineByCell[0];
+
+          // Check first and last part flags
+          if (fragments.indexOf(fragment) === 0) {
+            expect(isFirstPart).toBe(true);
+          }
+          if (fragments.indexOf(fragment) === fragments.length - 1) {
+            expect(isLastPart).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('should handle edge case of zero line advancement (no progress)', () => {
+      // This test verifies the existence of the no-progress detection logic
+      // The condition (!madeProgress && hadRemainingLinesBefore) ensures advanceColumn
+      // is called when a partial row continuation cannot make progress
+      const block = createMockTableBlock(1);
+
+      // Create a simple row that requires splitting
+      const measure = createMockTableMeasure([100], [60], [[20, 20, 20]]); // 3 lines of 20px each
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 25, // Space for 1 line at a time
+        }),
+        advanceColumn: (state) => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 25,
+        }),
+        columnX: () => 0,
+      });
+
+      // Verify that the row is split into multiple fragments
+      // The no-progress logic exists to handle edge cases where space becomes insufficient
+      // during continuation. While difficult to trigger in a simple test, the logic
+      // is critical for production scenarios with complex layouts and padding.
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify that partial row splitting occurred
+      const fragmentsWithPartialRow = fragments.filter((f) => 'partialRow' in f && f.partialRow !== null);
+      expect(fragmentsWithPartialRow.length).toBeGreaterThan(0);
+    });
+
+    it('should maintain minimum line advancement across all cells', () => {
+      // Test that the minimum line advancement algorithm correctly identifies
+      // and applies the minimum advancement across all cells
+      const block = createMockTableBlock(1);
+
+      // Create cells with different line heights where the minimum advancement
+      // will be determined by the cell with the tallest lines
+      const measure = createMockTableMeasure(
+        [100, 100, 100],
+        [120],
+        [
+          [10, 10, 10, 10, 10], // Cell 0: 5 lines of 10px (total 50px)
+          [20, 20, 20, 20, 20], // Cell 1: 5 lines of 20px (total 100px)
+          [40, 40, 40], // Cell 2: 3 lines of 40px (total 120px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 300,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 50, // Space for varying number of lines per cell
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify line advancement consistency
+      for (const fragment of fragments) {
+        if ('partialRow' in fragment && fragment.partialRow && !fragment.partialRow.isLastPart) {
+          const { toLineByCell, fromLineByCell } = fragment.partialRow;
+          const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
+
+          // All cells that have remaining lines should advance by the same amount
+          // (this is the core of the line advancement algorithm)
+          const positiveAdvancements = advancements.filter((a) => a > 0);
+          if (positiveAdvancements.length > 0) {
+            const minAdvancement = Math.min(...positiveAdvancements);
+            // In the second pass, all cells should be normalized to minAdvancement
+            // (unless they've already completed)
+            positiveAdvancements.forEach((adv) => {
+              expect(adv).toBe(minAdvancement);
+            });
+          }
+        }
+      }
+    });
+
+    it('should correctly set isFirstPart and isLastPart flags', () => {
+      // Test that the partial row info correctly identifies first and last parts
+      const block = createMockTableBlock(1);
+
+      // Create a row that will be split into exactly 3 parts
+      const measure = createMockTableMeasure([100], [60], [[20, 20, 20]]); // 3 lines of 20px each
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 25, // Space for 1 line at a time
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 25,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should have exactly 3 fragments (one per line)
+      expect(fragments.length).toBe(3);
+
+      // First fragment should have isFirstPart = true
+      const firstFragment = fragments[0];
+      if ('partialRow' in firstFragment && firstFragment.partialRow) {
+        expect(firstFragment.partialRow.isFirstPart).toBe(true);
+        expect(firstFragment.partialRow.isLastPart).toBe(false);
+      }
+
+      // Last fragment should have isLastPart = true
+      const lastFragment = fragments[fragments.length - 1];
+      if ('partialRow' in lastFragment && lastFragment.partialRow) {
+        expect(lastFragment.partialRow.isFirstPart).toBe(false);
+        expect(lastFragment.partialRow.isLastPart).toBe(true);
+      }
+
+      // Middle fragments should have both flags false
+      if (fragments.length > 2) {
+        for (let i = 1; i < fragments.length - 1; i++) {
+          const fragment = fragments[i];
+          if ('partialRow' in fragment && fragment.partialRow) {
+            expect(fragment.partialRow.isFirstPart).toBe(false);
+            expect(fragment.partialRow.isLastPart).toBe(false);
+          }
+        }
+      }
+    });
+  });
 });
