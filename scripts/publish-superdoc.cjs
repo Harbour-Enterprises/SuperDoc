@@ -58,7 +58,7 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
     }
 
     logger.log(`Publishing @harbour-enterprises/superdoc with dist-tag "${distTag}"...`);
-    run('npm', ['publish', '--access', 'public', '--tag', distTag], tempDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -80,7 +80,7 @@ const publishPackages = ({
 
   if (publishUnscoped) {
     logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
-    run('npm', ['publish', '--access', 'public', '--tag', distTag], superdocDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], superdocDir);
   }
 
   publishScopedMirror(packageJson, distTag, logger);
