@@ -191,3 +191,84 @@ export const drawingLayout: Layout = {
     },
   ],
 };
+
+const tableParagraph = {
+  kind: 'paragraph',
+  id: 'table-cell-para',
+  runs: [{ text: 'Table text', fontFamily: 'Arial', fontSize: 14, pmStart: 1, pmEnd: 11 }],
+} as const;
+
+export const tableBlock: FlowBlock = {
+  kind: 'table',
+  id: 'table-0',
+  rows: [
+    {
+      id: 'row-0',
+      cells: [
+        {
+          id: 'cell-0',
+          blocks: [tableParagraph],
+          attrs: { padding: { top: 2, bottom: 2, left: 4, right: 4 } },
+        },
+      ],
+    },
+  ],
+};
+
+export const tableMeasure: Measure = {
+  kind: 'table',
+  rows: [
+    {
+      height: 24,
+      cells: [
+        {
+          width: 120,
+          height: 24,
+          gridColumnStart: 0,
+          blocks: [
+            {
+              kind: 'paragraph',
+              lines: [
+                {
+                  fromRun: 0,
+                  fromChar: 0,
+                  toRun: 0,
+                  toChar: 10,
+                  width: 80,
+                  ascent: 10,
+                  descent: 4,
+                  lineHeight: 18,
+                },
+              ],
+              totalHeight: 18,
+            },
+          ],
+        },
+      ],
+    },
+  ],
+  columnWidths: [120],
+  totalWidth: 120,
+  totalHeight: 24,
+};
+
+export const tableLayout: Layout = {
+  pageSize: { w: 400, h: 500 },
+  pages: [
+    {
+      number: 1,
+      fragments: [
+        {
+          kind: 'table',
+          blockId: 'table-0',
+          fromRow: 0,
+          toRow: 1,
+          x: 30,
+          y: 60,
+          width: 120,
+          height: 24,
+        },
+      ],
+    },
+  ],
+};

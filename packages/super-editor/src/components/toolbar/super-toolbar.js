@@ -320,20 +320,11 @@ export class SuperToolbar extends EventEmitter {
 
       this.emit('superdoc-command', { item, argument });
 
-      const layers = this.superdoc.element?.querySelector('.layers');
-      if (!layers) return;
-
-      const isMobileDevice = typeof screen.orientation !== 'undefined';
-      // 768px breakpoint doesn't consider iPad in portrait orientation
-      const isSmallScreen = window.matchMedia('(max-width: 834px)').matches;
-
-      // Zoom property doesn't work correctly when testing on mobile devices
-      if (isMobileDevice && isSmallScreen) {
-        layers.style.transformOrigin = '0 0';
-        layers.style.transform = `scale(${parseInt(argument, 10) / 100})`;
-      } else {
-        layers.style.zoom = parseInt(argument, 10) / 100;
-      }
+      // NOTE: Zoom is now handled by PresentationEditor via transform: scale() on #viewportHost.
+      // We do NOT apply CSS zoom on .layers anymore because:
+      // 1. It causes coordinate system mismatches between zoomed content and overlays
+      // 2. PresentationEditor.setGlobalZoom() is called when activeZoom changes (via SuperDoc.vue watcher)
+      // 3. Centralizing zoom in PresentationEditor ensures both content and selection overlays scale together
 
       this.superdoc.superdocStore.activeZoom = parseInt(argument, 10);
     },
