@@ -9,6 +9,8 @@ import { Extension } from '../Extension.js';
  * - Mouse interactions via mousedown
  * - Focus via automatic blur
  * - Click, double-click, and triple-click events
+ * - Keyboard shortcuts via handleKeyDown
+ * - Paste and drop events
  */
 export const Editable = Extension.create({
   name: 'editable',
@@ -46,6 +48,9 @@ export const Editable = Extension.create({
         handleClick: () => !editor.options.editable,
         handleDoubleClick: () => !editor.options.editable,
         handleTripleClick: () => !editor.options.editable,
+        handleKeyDown: () => !editor.options.editable,
+        handlePaste: () => !editor.options.editable,
+        handleDrop: () => !editor.options.editable,
       },
     });
 
