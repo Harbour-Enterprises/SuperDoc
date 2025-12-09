@@ -119,6 +119,17 @@ const selectedImageState = reactive({
 /**
  * Threshold in pixels for showing table resize handles.
  * Handles only appear when mouse is within this distance of a column boundary.
+ *
+ * COORDINATE SPACE: This threshold is in SCREEN SPACE (zoomed pixels).
+ * - When comparing mouse position to column boundaries, both are converted to screen space
+ * - Column boundaries (from layout engine) are multiplied by zoom to get screen coordinates
+ * - Mouse coordinates (from getBoundingClientRect) are already in screen space
+ * - This ensures the hover threshold feels consistent regardless of zoom level
+ *
+ * Example at different zoom levels:
+ * - At zoom 1.0: 8 screen pixels = 8 layout pixels (threshold feels normal)
+ * - At zoom 2.0: 8 screen pixels = 4 layout pixels (threshold stays same visual size)
+ * - At zoom 0.5: 8 screen pixels = 16 layout pixels (threshold stays same visual size)
  */
 const TABLE_RESIZE_HOVER_THRESHOLD = 8;
 
@@ -127,6 +138,50 @@ const TABLE_RESIZE_HOVER_THRESHOLD = 8;
  * Limits how frequently the overlay visibility is recalculated during mousemove.
  */
 const TABLE_RESIZE_THROTTLE_MS = 16; // ~60fps
+
+/**
+ * Get the editor's zoom level.
+ *
+ * Retrieves the current zoom multiplier from the editor instance. Zoom is centrally
+ * controlled by PresentationEditor via transform: scale() on the viewport host.
+ * This function handles both direct PresentationEditor instances and wrapped Editor
+ * instances that contain a presentationEditor property.
+ *
+ * The zoom level is a multiplier where:
+ * - 1 = 100% (default, no scaling)
+ * - 0.5 = 50% (zoomed out)
+ * - 2 = 200% (zoomed in)
+ *
+ * This zoom value is used to convert between layout coordinates (which are in
+ * unscaled logical pixels) and screen coordinates (which are affected by the
+ * CSS transform: scale()).
+ *
+ * @returns {number} The zoom level multiplier. Returns 1 (100%) as a safe fallback
+ *                   if zoom cannot be retrieved from the editor instance.
+ *
+ * @example
+ * ```javascript
+ * const zoom = getEditorZoom();
+ * // Convert layout coordinates to screen coordinates
+ * const screenX = layoutX * zoom;
+ * const screenY = layoutY * zoom;
+ * ```
+ */
+const getEditorZoom = () => {
+  const active = activeEditor.value;
+  if (active && typeof active.zoom === 'number') {
+    return active.zoom;
+  }
+  if (active?.presentationEditor && typeof active.presentationEditor.zoom === 'number') {
+    return active.presentationEditor.zoom;
+  }
+  // Fallback to default zoom when editor instance doesn't have zoom configured
+  console.warn(
+    '[SuperEditor] getEditorZoom: Unable to retrieve zoom from editor instance, using fallback value of 1. ' +
+      'This may indicate the editor is not fully initialized or is not a PresentationEditor instance.',
+  );
+  return 1;
+};
 
 /**
  * Timestamp of last updateTableResizeOverlay execution for throttling.
@@ -161,18 +216,38 @@ const isNearColumnBoundary = (event, tableElement) => {
     const metadata = JSON.parse(boundariesAttr);
     if (!metadata.columns || !Array.isArray(metadata.columns)) return false;
 
+    // Get zoom factor to properly compare screen coordinates with layout coordinates
+    const zoom = getEditorZoom();
+
     const tableRect = tableElement.getBoundingClientRect();
-    const mouseX = event.clientX - tableRect.left;
-    const mouseY = event.clientY - tableRect.top;
+    // Mouse coordinates relative to table are in screen space (zoomed)
+    const mouseXScreen = event.clientX - tableRect.left;
+    const mouseYScreen = event.clientY - tableRect.top;
 
     // Check each column boundary
     for (let i = 0; i < metadata.columns.length; i++) {
       const col = metadata.columns[i];
-      // The boundary x position is at (col.x + col.w) - the right edge of the column
-      const boundaryX = col.x + col.w;
 
-      // Check if mouse is horizontally near this boundary
-      if (Math.abs(mouseX - boundaryX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+      // Validate column data structure before using col.x and col.w
+      if (!col || typeof col !== 'object') {
+        console.warn(`[isNearColumnBoundary] Invalid column at index ${i}: not an object`, col);
+        continue;
+      }
+      if (typeof col.x !== 'number' || !Number.isFinite(col.x)) {
+        console.warn(`[isNearColumnBoundary] Invalid column.x at index ${i}:`, col.x);
+        continue;
+      }
+      if (typeof col.w !== 'number' || !Number.isFinite(col.w) || col.w <= 0) {
+        console.warn(`[isNearColumnBoundary] Invalid column.w at index ${i}:`, col.w);
+        continue;
+      }
+
+      // The boundary x position is at (col.x + col.w) - the right edge of the column
+      // This is in layout coordinates, so multiply by zoom to convert to screen space
+      const boundaryXScreen = (col.x + col.w) * zoom;
+
+      // Check if mouse is horizontally near this boundary (both in screen space now)
+      if (Math.abs(mouseXScreen - boundaryXScreen) <= TABLE_RESIZE_HOVER_THRESHOLD) {
         // Check if there's a segment at this Y position (boundary exists here, not merged)
         const segmentColIndex = i + 1; // segments are indexed by boundary, not column
         const segments = metadata.segments?.[segmentColIndex];
@@ -186,10 +261,11 @@ const isNearColumnBoundary = (event, tableElement) => {
         }
 
         // Check if mouse Y is within any segment
+        // Segment coordinates are in layout space, convert to screen space
         for (const seg of segments) {
-          const segTop = seg.y || 0;
-          const segBottom = seg.h != null ? segTop + seg.h : tableRect.height;
-          if (mouseY >= segTop && mouseY <= segBottom) {
+          const segTopScreen = (seg.y || 0) * zoom;
+          const segBottomScreen = seg.h != null ? segTopScreen + seg.h * zoom : tableRect.height;
+          if (mouseYScreen >= segTopScreen && mouseYScreen <= segBottomScreen) {
             return true;
           }
         }
@@ -197,7 +273,7 @@ const isNearColumnBoundary = (event, tableElement) => {
     }
 
     // Also check left edge of table (x = 0)
-    if (Math.abs(mouseX) <= TABLE_RESIZE_HOVER_THRESHOLD) {
+    if (Math.abs(mouseXScreen) <= TABLE_RESIZE_HOVER_THRESHOLD) {
       return true;
     }
 
