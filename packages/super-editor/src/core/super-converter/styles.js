@@ -26,7 +26,30 @@ import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.j
 const INLINE_OVERRIDE_PROPERTIES = ['fontSize', 'bold', 'italic', 'strike', 'underline', 'letterSpacing'];
 
 /**
+ * Default font size in half-points (20 half-points = 10pt).
+ * This baseline ensures all text has a valid, positive font size when no other source provides one.
+ * Used as the final fallback in fontSize resolution cascade:
+ * 1. Inline formatting (highest priority)
+ * 2. Character style
+ * 3. Paragraph style
+ * 4. Document defaults
+ * 5. Normal style
+ * 6. DEFAULT_FONT_SIZE_HALF_POINTS (this constant)
+ */
+const DEFAULT_FONT_SIZE_HALF_POINTS = 20;
+
+/**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
+ *
+ * FontSize Fallback Behavior:
+ * - Validates that the resolved fontSize is a valid positive number
+ * - If fontSize is null, 0, negative, or NaN, applies fallback cascade:
+ *   1. Document defaults (defaultProps.fontSize)
+ *   2. Normal style (normalProps.fontSize)
+ *   3. Baseline constant (DEFAULT_FONT_SIZE_HALF_POINTS = 20 half-points = 10pt)
+ * - Each fallback source is validated before use (must be positive finite number)
+ * - Ensures all text has a valid font size, preventing rendering issues
+ *
  * @param {import('@translator').SCEncoderConfig} params - Converter context containing docx data.
  * @param {Object} inlineRpr - The inline run properties.
  * @param {Object} resolvedPpr - The resolved paragraph properties.
@@ -106,13 +129,32 @@ export const resolveRunProperties = (
   }
 
   // If no fontSize resolved from any source, fall back to defaults/Normal or a 10pt baseline (20 half-points)
-  if (finalProps.fontSize == null) {
-    const defaultFontSize =
-      defaultProps?.fontSize != null
-        ? defaultProps.fontSize
-        : normalProps?.fontSize != null
-          ? normalProps.fontSize
-          : 20; // 20 half-points = 10pt
+  // Validate that the resolved fontSize is a valid positive number
+  if (
+    finalProps.fontSize == null ||
+    typeof finalProps.fontSize !== 'number' ||
+    !Number.isFinite(finalProps.fontSize) ||
+    finalProps.fontSize <= 0
+  ) {
+    // Cascade through fallback sources, validating each
+    let defaultFontSize = DEFAULT_FONT_SIZE_HALF_POINTS;
+
+    if (
+      defaultProps?.fontSize != null &&
+      typeof defaultProps.fontSize === 'number' &&
+      Number.isFinite(defaultProps.fontSize) &&
+      defaultProps.fontSize > 0
+    ) {
+      defaultFontSize = defaultProps.fontSize;
+    } else if (
+      normalProps?.fontSize != null &&
+      typeof normalProps.fontSize === 'number' &&
+      Number.isFinite(normalProps.fontSize) &&
+      normalProps.fontSize > 0
+    ) {
+      defaultFontSize = normalProps.fontSize;
+    }
+
     finalProps.fontSize = defaultFontSize;
   }
 
