@@ -84,7 +84,7 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
     }
 
     logger.log(`Publishing @harbour-enterprises/superdoc with dist-tag "${distTag}"...`);
-    run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], tempDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag], tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -110,7 +110,7 @@ const publishPackages = ({
       run('npm', ['dist-tag', 'add', `${packageJson.name}@${packageJson.version}`, distTag], rootDir);
     } else {
       logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
-      run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], superdocDir);
+      run('npm', ['publish', '--access', 'public', '--tag', distTag], superdocDir);
     }
   }
 
