@@ -1,3 +1,9 @@
+## [0.35.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.0...v0.35.1) (2025-12-09)
+
+### Bug Fixes
+
+- block keyboard, paste, and drop events in view mode during collab ([#1471](https://github.com/Harbour-Enterprises/SuperDoc/issues/1471)) ([48b2555](https://github.com/Harbour-Enterprises/SuperDoc/commit/48b2555552ca124d23444d1569b47c43746050da))
+
 # [0.35.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.9...v0.35.0) (2025-12-08)
 
 ### Bug Fixes
