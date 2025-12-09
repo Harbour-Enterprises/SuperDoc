@@ -2846,6 +2846,42 @@ export class PresentationEditor extends EventEmitter {
       hit.pos,
     );
 
+    // Inline image hit detection via DOM target (for inline images rendered inside paragraphs)
+    const targetImg = (event.target as HTMLElement | null)?.closest?.('img');
+    const imgPmStart = targetImg?.dataset?.pmStart ? Number(targetImg.dataset.pmStart) : null;
+    if (!Number.isNaN(imgPmStart) && imgPmStart != null) {
+      const doc = this.#editor.state.doc;
+      try {
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, imgPmStart));
+        this.#editor.view?.dispatch(tr);
+
+        const selector = `.superdoc-inline-image[data-pm-start="${imgPmStart}"]`;
+        const targetElement = this.#viewportHost.querySelector(selector);
+        this.emit('imageSelected', {
+          element: targetElement ?? targetImg,
+          blockId: null,
+          pmStart: imgPmStart,
+        });
+        this.#lastSelectedImageBlockId = `inline-${imgPmStart}`;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to create NodeSelection for inline image run:', error);
+        }
+      }
+
+      // Focus editor and schedule selection update
+      this.#scheduleSelectionUpdate();
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+      const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+      if (editorDom) {
+        editorDom.focus();
+        this.#editor.view?.focus();
+      }
+      return;
+    }
+
     // If clicked on an atomic fragment (image or drawing), create NodeSelection
     if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
       const doc = this.#editor.state.doc;

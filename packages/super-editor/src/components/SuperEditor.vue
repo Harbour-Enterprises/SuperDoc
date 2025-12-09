@@ -107,6 +107,15 @@ const imageResizeState = reactive({
 });
 
 /**
+ * Image selection state (for layout-engine rendered images)
+ */
+const selectedImageState = reactive({
+  element: null,
+  blockId: null,
+  pmStart: null,
+});
+
+/**
  * Threshold in pixels for showing table resize handles.
  * Handles only appear when mouse is within this distance of a column boundary.
  */
@@ -297,6 +306,44 @@ const hideImageResizeOverlay = () => {
 };
 
 /**
+ * Clear visual selection on the currently selected image fragment.
+ * Removes the 'superdoc-image-selected' CSS class and resets selection state.
+ * Safe to call when no image is selected (no-op).
+ * @returns {void}
+ */
+const clearSelectedImage = () => {
+  if (selectedImageState.element?.classList?.contains('superdoc-image-selected')) {
+    selectedImageState.element.classList.remove('superdoc-image-selected');
+  }
+  selectedImageState.element = null;
+  selectedImageState.blockId = null;
+  selectedImageState.pmStart = null;
+};
+
+/**
+ * Apply visual selection to the provided image fragment element
+ * @param {HTMLElement | null} element - DOM element for the image fragment
+ * @param {string | null} blockId - Layout-engine block id for the image
+ * @param {number | null} pmStart - ProseMirror document position of the image node
+ * @returns {void}
+ */
+const setSelectedImage = (element, blockId, pmStart) => {
+  // Remove selection from the previously selected element
+  if (selectedImageState.element && selectedImageState.element !== element) {
+    selectedImageState.element.classList.remove('superdoc-image-selected');
+  }
+
+  if (element && element.classList) {
+    element.classList.add('superdoc-image-selected');
+    selectedImageState.element = element;
+    selectedImageState.blockId = blockId ?? null;
+    selectedImageState.pmStart = typeof pmStart === 'number' ? pmStart : null;
+  } else {
+    clearSelectedImage();
+  }
+};
+
+/**
  * Combined handler to update both table and image resize overlays
  */
 const handleOverlayUpdates = (event) => {
@@ -415,6 +462,7 @@ const getExtensions = () => getStarterExtensions();
 const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } = {}) => {
   const { editorCtor, ...editorOptions } = props.options || {};
   const EditorCtor = editorCtor ?? Editor;
+  clearSelectedImage();
   editor.value = new EditorCtor({
     mode: 'docx',
     element: editorElem.value,
@@ -433,16 +481,17 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
     presentationEditor: editor.value instanceof PresentationEditor ? editor.value : null,
   });
 
-  editor.value.on('paginationUpdate', () => {
-    const base = activeEditor.value;
-    if (isHeadless(base)) return;
-    const paginationTarget = editor.value?.editor ? { value: base } : editor;
-    adjustPaginationBreaks(editorElem, paginationTarget);
-  });
-
-  // Handle image resize overlay re-acquisition after layout updates
+  // Attach layout-engine specific image selection listeners
   if (editor.value instanceof PresentationEditor) {
-    editor.value.on('layoutUpdated', () => {
+    const presentationEditor = editor.value;
+    presentationEditor.on('imageSelected', ({ element, blockId, pmStart }) => {
+      setSelectedImage(element, blockId ?? null, pmStart);
+    });
+    presentationEditor.on('imageDeselected', () => {
+      clearSelectedImage();
+    });
+
+    presentationEditor.on('layoutUpdated', () => {
       if (imageResizeState.visible && imageResizeState.blockId) {
         // Re-acquire element reference (may have been recreated after re-render)
         const newElement = editorElem.value?.querySelector(
@@ -457,8 +506,36 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
           imageResizeState.blockId = null;
         }
       }
+
+      if (selectedImageState.blockId) {
+        const refreshed = editorElem.value?.querySelector(
+          `.superdoc-image-fragment[data-sd-block-id="${selectedImageState.blockId}"]`,
+        );
+        if (refreshed) {
+          setSelectedImage(refreshed, selectedImageState.blockId, selectedImageState.pmStart);
+        } else {
+          // Try pmStart-based re-acquisition (inline images)
+          if (selectedImageState.pmStart != null) {
+            const pmSelector = `.superdoc-image-fragment[data-pm-start="${selectedImageState.pmStart}"], .superdoc-inline-image[data-pm-start="${selectedImageState.pmStart}"]`;
+            const pmElement = editorElem.value?.querySelector(pmSelector);
+            if (pmElement) {
+              setSelectedImage(pmElement, selectedImageState.blockId, selectedImageState.pmStart);
+              return;
+            }
+          }
+
+          clearSelectedImage();
+        }
+      }
     });
   }
+
+  editor.value.on('paginationUpdate', () => {
+    const base = activeEditor.value;
+    if (isHeadless(base)) return;
+    const paginationTarget = editor.value?.editor ? { value: base } : editor;
+    adjustPaginationBreaks(editorElem, paginationTarget);
+  });
 
   editor.value.on('collaborationReady', () => {
     setTimeout(() => {
@@ -564,6 +641,7 @@ const handleMarginChange = ({ side, value }) => {
 
 onBeforeUnmount(() => {
   stopPolling();
+  clearSelectedImage();
   editor.value?.destroy();
   editor.value = null;
 });

@@ -488,11 +488,27 @@ const FIELD_ANNOTATION_STYLES = `
 }
 `;
 
+const IMAGE_SELECTION_STYLES = `
+/* Highlight for selected images (block or inline) */
+.superdoc-image-selected {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(74, 144, 226, 0.35);
+}
+
+/* Ensure inline images can be targeted */
+.superdoc-inline-image.superdoc-image-selected {
+  outline-offset: 2px;
+}
+`;
+
 let printStylesInjected = false;
 let linkStylesInjected = false;
 let trackChangeStylesInjected = false;
 let sdtContainerStylesInjected = false;
 let fieldAnnotationStylesInjected = false;
+let imageSelectionStylesInjected = false;
 
 export const ensurePrintStyles = (doc: Document | null | undefined) => {
   if (printStylesInjected || !doc) return;
@@ -537,4 +553,19 @@ export const ensureFieldAnnotationStyles = (doc: Document | null | undefined) =>
   styleEl.textContent = FIELD_ANNOTATION_STYLES;
   doc.head?.appendChild(styleEl);
   fieldAnnotationStylesInjected = true;
+};
+
+/**
+ * Injects image selection highlight styles into the document head.
+ * Ensures styles are only injected once per document lifecycle.
+ * @param {Document | null | undefined} doc - The document to inject styles into
+ * @returns {void}
+ */
+export const ensureImageSelectionStyles = (doc: Document | null | undefined) => {
+  if (imageSelectionStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-image-selection-styles', 'true');
+  styleEl.textContent = IMAGE_SELECTION_STYLES;
+  doc.head?.appendChild(styleEl);
+  imageSelectionStylesInjected = true;
 };
