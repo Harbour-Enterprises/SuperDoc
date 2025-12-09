@@ -2667,18 +2667,42 @@ export class PresentationEditor extends EventEmitter {
     // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
     const target = event.target as HTMLElement;
 
-    // Handle clicks on internal anchor links (e.g., TOC navigation)
+    // Handle clicks on links in the layout engine
     const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
     if (linkEl) {
       const href = linkEl.getAttribute('href') ?? '';
       const isAnchorLink = href.startsWith('#') && href.length > 1;
+      const isTocLink = linkEl.closest('.superdoc-toc-entry') !== null;
 
-      if (isAnchorLink) {
+      if (isAnchorLink && isTocLink) {
+        // TOC entry anchor links: navigate to the anchor
         event.preventDefault();
         event.stopPropagation();
         this.goToAnchor(href);
         return;
       }
+
+      // Non-TOC links: dispatch custom event to show the link popover
+      // We dispatch from pointerdown because the DOM may be re-rendered before click fires,
+      // which would cause the click event to land on the wrong element
+      event.preventDefault();
+      event.stopPropagation();
+
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: href,
+          target: linkEl.getAttribute('target'),
+          rel: linkEl.getAttribute('rel'),
+          tooltip: linkEl.getAttribute('title'),
+          element: linkEl,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+      linkEl.dispatchEvent(linkClickEvent);
+      return;
     }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
 

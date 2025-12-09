@@ -3,6 +3,7 @@ import { mount } from '@vue/test-utils';
 import LinkClickHandler from './LinkClickHandler.vue';
 import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { moveCursorToMouseEvent, selectionHasNodeOrMark } from '../cursor-helpers.js';
+import { TextSelection } from 'prosemirror-state';
 
 // Mock dependencies
 vi.mock('../../core/helpers/editorSurface.js', () => ({
@@ -12,6 +13,12 @@ vi.mock('../../core/helpers/editorSurface.js', () => ({
 vi.mock('../cursor-helpers.js', () => ({
   moveCursorToMouseEvent: vi.fn(),
   selectionHasNodeOrMark: vi.fn(),
+}));
+
+vi.mock('prosemirror-state', () => ({
+  TextSelection: {
+    create: vi.fn(),
+  },
 }));
 
 describe('LinkClickHandler', () => {
@@ -30,16 +37,31 @@ describe('LinkClickHandler', () => {
         selection: {
           from: 0,
           to: 0,
+          $from: {
+            nodeAfter: null,
+            nodeBefore: null,
+          },
         },
         schema: {
           marks: {
             link: {},
           },
         },
+        doc: {
+          content: {
+            size: 100,
+          },
+        },
+        tr: {
+          setSelection: vi.fn(function (selection) {
+            return this; // Return transaction for chaining
+          }),
+        },
       },
       view: {
         dom: document.createElement('div'),
       },
+      dispatch: vi.fn(),
     };
 
     // Create mock functions
@@ -112,6 +134,10 @@ describe('LinkClickHandler', () => {
     // Mock selectionHasNodeOrMark to return true (cursor is on a link)
     selectionHasNodeOrMark.mockReturnValue(true);
 
+    // Mock TextSelection.create to return a mock selection
+    const mockSelection = { from: 10, to: 10 };
+    TextSelection.create.mockReturnValue(mockSelection);
+
     mount(LinkClickHandler, {
       props: {
         editor: mockEditor,
@@ -119,6 +145,10 @@ describe('LinkClickHandler', () => {
         closePopover: mockClosePopover,
       },
     });
+
+    // Create link element with data-pm-start attribute
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = '10';
 
     // Create and dispatch a custom link click event
     const linkClickEvent = new CustomEvent('superdoc-link-click', {
@@ -129,7 +159,7 @@ describe('LinkClickHandler', () => {
         target: '_blank',
         rel: 'noopener',
         tooltip: 'Example link',
-        element: document.createElement('a'),
+        element: linkElement,
         clientX: 250,
         clientY: 250,
       },
@@ -140,8 +170,14 @@ describe('LinkClickHandler', () => {
     // Wait for the timeout in the handler
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    // Verify moveCursorToMouseEvent was called with the event detail
-    expect(moveCursorToMouseEvent).toHaveBeenCalledWith(linkClickEvent.detail, mockEditor);
+    // Verify TextSelection.create was called with correct position
+    expect(TextSelection.create).toHaveBeenCalledWith(mockEditor.state.doc, 10);
+
+    // Verify editor.dispatch was called with transaction
+    expect(mockEditor.dispatch).toHaveBeenCalledWith(mockEditor.state.tr);
+
+    // Verify moveCursorToMouseEvent was NOT called (we used data-pm-start)
+    expect(moveCursorToMouseEvent).not.toHaveBeenCalled();
 
     // Verify selectionHasNodeOrMark was called to check if cursor is on a link
     expect(selectionHasNodeOrMark).toHaveBeenCalledWith(mockEditor.state, 'link', { requireEnds: true });
@@ -165,6 +201,10 @@ describe('LinkClickHandler', () => {
     // Mock selectionHasNodeOrMark to return false (cursor is not on a link)
     selectionHasNodeOrMark.mockReturnValue(false);
 
+    // Mock TextSelection.create to return a mock selection
+    const mockSelection = { from: 10, to: 10 };
+    TextSelection.create.mockReturnValue(mockSelection);
+
     mount(LinkClickHandler, {
       props: {
         editor: mockEditor,
@@ -173,13 +213,17 @@ describe('LinkClickHandler', () => {
       },
     });
 
+    // Create link element with data-pm-start attribute
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = '10';
+
     // Create and dispatch a custom link click event
     const linkClickEvent = new CustomEvent('superdoc-link-click', {
       bubbles: true,
       composed: true,
       detail: {
         href: 'https://example.com',
-        element: document.createElement('a'),
+        element: linkElement,
         clientX: 250,
         clientY: 250,
       },
@@ -190,8 +234,8 @@ describe('LinkClickHandler', () => {
     // Wait for the timeout in the handler
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    // Verify moveCursorToMouseEvent was called
-    expect(moveCursorToMouseEvent).toHaveBeenCalled();
+    // Verify editor.dispatch was called
+    expect(mockEditor.dispatch).toHaveBeenCalled();
 
     // Verify selectionHasNodeOrMark was called
     expect(selectionHasNodeOrMark).toHaveBeenCalled();
@@ -235,6 +279,10 @@ describe('LinkClickHandler', () => {
   it('should calculate correct popover position at different click locations', async () => {
     selectionHasNodeOrMark.mockReturnValue(true);
 
+    // Mock TextSelection.create to return a mock selection
+    const mockSelection = { from: 10, to: 10 };
+    TextSelection.create.mockReturnValue(mockSelection);
+
     mount(LinkClickHandler, {
       props: {
         editor: mockEditor,
@@ -253,12 +301,16 @@ describe('LinkClickHandler', () => {
     for (const testCase of testCases) {
       mockOpenPopover.mockClear();
 
+      // Create link element with data-pm-start attribute
+      const linkElement = document.createElement('a');
+      linkElement.dataset.pmStart = '10';
+
       const linkClickEvent = new CustomEvent('superdoc-link-click', {
         bubbles: true,
         composed: true,
         detail: {
           href: 'https://example.com',
-          element: document.createElement('a'),
+          element: linkElement,
           clientX: testCase.clientX,
           clientY: testCase.clientY,
         },
@@ -266,17 +318,20 @@ describe('LinkClickHandler', () => {
 
       mockSurfaceElement.dispatchEvent(linkClickEvent);
 
-      // Wait for the timeout
+      // Wait for the timeout and debounce
       await new Promise((resolve) => setTimeout(resolve, 20));
 
       expect(mockOpenPopover).toHaveBeenCalledWith(expect.anything(), expect.anything(), {
         left: testCase.expectedLeft,
         top: testCase.expectedTop,
       });
+
+      // Wait for debounce to clear before next iteration (300ms + buffer)
+      await new Promise((resolve) => setTimeout(resolve, 350));
     }
   });
 
-  it('should handle link click with minimal event detail', async () => {
+  it('should handle link click with minimal event detail (no data-pm-start)', async () => {
     selectionHasNodeOrMark.mockReturnValue(true);
 
     mount(LinkClickHandler, {
@@ -287,7 +342,7 @@ describe('LinkClickHandler', () => {
       },
     });
 
-    // Create event with minimal detail (only required fields)
+    // Create event with minimal detail (only required fields, no element or data-pm-start)
     const linkClickEvent = new CustomEvent('superdoc-link-click', {
       bubbles: true,
       composed: true,
@@ -302,7 +357,7 @@ describe('LinkClickHandler', () => {
     // Wait for the timeout
     await new Promise((resolve) => setTimeout(resolve, 20));
 
-    // Should still attempt to move cursor and check selection
+    // Should fallback to moveCursorToMouseEvent when no data-pm-start is available
     expect(moveCursorToMouseEvent).toHaveBeenCalled();
     expect(selectionHasNodeOrMark).toHaveBeenCalled();
     expect(mockOpenPopover).toHaveBeenCalled();
@@ -357,13 +412,17 @@ describe('LinkClickHandler', () => {
       },
     });
 
+    // Create link element with data-pm-start attribute
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = '10';
+
     // Create and dispatch a custom link click event
     const linkClickEvent = new CustomEvent('superdoc-link-click', {
       bubbles: true,
       composed: true,
       detail: {
         href: 'https://example.com',
-        element: document.createElement('a'),
+        element: linkElement,
         clientX: 250,
         clientY: 250,
       },
@@ -380,7 +439,167 @@ describe('LinkClickHandler', () => {
     // Verify openPopover was NOT called (popover should be closed, not reopened)
     expect(mockOpenPopover).not.toHaveBeenCalled();
 
-    // Verify moveCursorToMouseEvent was NOT called (early return)
-    expect(moveCursorToMouseEvent).not.toHaveBeenCalled();
+    // Verify editor.dispatch was NOT called (early return before cursor movement)
+    expect(mockEditor.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should use moveCursorToMouseEvent fallback when data-pm-start is missing', async () => {
+    selectionHasNodeOrMark.mockReturnValue(true);
+
+    mount(LinkClickHandler, {
+      props: {
+        editor: mockEditor,
+        openPopover: mockOpenPopover,
+        closePopover: mockClosePopover,
+      },
+    });
+
+    // Create link element WITHOUT data-pm-start attribute
+    const linkElement = document.createElement('a');
+
+    const linkClickEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: linkElement,
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(linkClickEvent);
+
+    // Wait for the timeout
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Should fallback to moveCursorToMouseEvent
+    expect(moveCursorToMouseEvent).toHaveBeenCalledWith(linkClickEvent.detail, mockEditor);
+    expect(mockEditor.dispatch).not.toHaveBeenCalled(); // Not called when using fallback
+  });
+
+  it('should handle invalid data-pm-start (NaN) by falling back to moveCursorToMouseEvent', async () => {
+    selectionHasNodeOrMark.mockReturnValue(true);
+
+    mount(LinkClickHandler, {
+      props: {
+        editor: mockEditor,
+        openPopover: mockOpenPopover,
+        closePopover: mockClosePopover,
+      },
+    });
+
+    // Create link element with invalid data-pm-start
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = 'invalid';
+
+    const linkClickEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: linkElement,
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(linkClickEvent);
+
+    // Wait for the timeout
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Should fallback to moveCursorToMouseEvent when parseInt returns NaN
+    expect(moveCursorToMouseEvent).toHaveBeenCalledWith(linkClickEvent.detail, mockEditor);
+    expect(mockEditor.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should handle out-of-bounds data-pm-start by falling back to moveCursorToMouseEvent', async () => {
+    selectionHasNodeOrMark.mockReturnValue(true);
+
+    mount(LinkClickHandler, {
+      props: {
+        editor: mockEditor,
+        openPopover: mockOpenPopover,
+        closePopover: mockClosePopover,
+      },
+    });
+
+    // Create link element with out-of-bounds data-pm-start
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = '999'; // Greater than doc.content.size (100)
+
+    const linkClickEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: linkElement,
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(linkClickEvent);
+
+    // Wait for the timeout
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Should fallback to moveCursorToMouseEvent when position is out of bounds
+    expect(moveCursorToMouseEvent).toHaveBeenCalledWith(linkClickEvent.detail, mockEditor);
+    expect(mockEditor.dispatch).not.toHaveBeenCalled();
+  });
+
+  it('should handle debounce correctly to prevent double-handling', async () => {
+    selectionHasNodeOrMark.mockReturnValue(true);
+
+    // Mock TextSelection.create
+    const mockSelection = { from: 10, to: 10 };
+    TextSelection.create.mockReturnValue(mockSelection);
+
+    mount(LinkClickHandler, {
+      props: {
+        editor: mockEditor,
+        openPopover: mockOpenPopover,
+        closePopover: mockClosePopover,
+      },
+    });
+
+    const linkElement = document.createElement('a');
+    linkElement.dataset.pmStart = '10';
+
+    // First event
+    const firstEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: linkElement,
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(firstEvent);
+
+    // Second event immediately after (should be debounced)
+    const secondEvent = new CustomEvent('superdoc-link-click', {
+      bubbles: true,
+      composed: true,
+      detail: {
+        href: 'https://example.com',
+        element: linkElement,
+        clientX: 250,
+        clientY: 250,
+      },
+    });
+
+    mockSurfaceElement.dispatchEvent(secondEvent);
+
+    // Wait for the timeout
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    // Should only dispatch once (second event was debounced)
+    expect(mockEditor.dispatch).toHaveBeenCalledTimes(1);
   });
 });
