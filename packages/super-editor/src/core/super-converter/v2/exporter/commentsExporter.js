@@ -96,11 +96,15 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
 
   // Re-build the comment definitions
   commentDefs.forEach((commentDef) => {
-    const elements = commentDef.elements[0].elements;
+    // Ensure we always have a paragraph node and attributes container
+    const paraNode = commentDef.elements[0];
+    if (!paraNode.attributes) paraNode.attributes = {};
+
+    const elements = paraNode.elements;
     elements.unshift(COMMENT_REF);
 
     const paraId = commentDef.attributes['w15:paraId'];
-    commentDef.elements[0].attributes['w14:paraId'] = paraId;
+    paraNode.attributes['w14:paraId'] = paraId;
 
     commentDef.attributes = {
       'w:id': commentDef.attributes['w:id'],
@@ -187,7 +191,7 @@ export const updateCommentsIdsAndExtensible = (comments = [], commentsIds, exten
       name: 'w16cex:commentExtensible',
       attributes: {
         'w16cex:durableId': newDurableId,
-        'w16cex:dateUtc': toIsoNoFractional(comment.createdTime),
+        'w16cex:dateUtc': toIsoNoFractional(),
       },
     };
     extensibleUpdated.elements[0].elements.push(newExtensible);

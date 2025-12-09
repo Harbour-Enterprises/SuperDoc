@@ -39,6 +39,9 @@ packages/super-editor/src/tests/data/*/
 # Playwright
 test-results
 *.tgz
+e2e-tests/tests/**/*darwin*
+e2e-tests/test-results/**/*darwin*
+e2e-tests/tests/visuals/layout-compare.spec.js-snapshots/*
 
 !examples/chrome-extension/dist
 
@@ -48,11 +51,8 @@ coverage/
 **/coverage
 **/coverage/
 
-# TypeScript generated declaration files in source (build artifacts)
-**/src/**/*.d.ts
 **/src/**/*.d.ts.map
-# But allow hand-written .d.ts files within packages
-!packages/super-editor/src/core/commands/core-command-map.d.ts
+**/src/**/*.js.map
 
 # TypeScript build info files
 *.tsbuildinfo
@@ -62,3 +62,5 @@ coverage/
 
 AGENTS.md
 codex.config.json
+perf-baseline-results.json
+.claude

@@ -1,7 +1,7 @@
 import { findParentNode } from '@helpers/index.js';
 import { isList } from '@core/commands/list-helpers';
-import { resolveParagraphProperties } from '@converter/styles';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 
 /**
  * Increase or decrease the numbering level of the currently selected list item.
@@ -29,6 +29,7 @@ export const changeListLevel = (delta, editor, tr) => {
   const addEdgeNode = ($pos) => {
     if (!$pos) return;
     const parentNode = $pos.parent;
+    if (parentNode.type.name !== 'paragraph') return;
     const pos = typeof $pos.before === 'function' ? $pos.before() : null;
     if (!parentNode || pos == null) return;
     collectListItem(parentNode, pos);
@@ -61,8 +62,7 @@ export const changeListLevel = (delta, editor, tr) => {
   let encounteredNegativeLevel = false;
 
   for (const item of listItemsInSelection) {
-    const numberingProperties =
-      item.node.attrs.numberingProperties ?? item.node.attrs.paragraphProperties?.numberingProperties;
+    const numberingProperties = getResolvedParagraphProperties(item.node)?.numberingProperties;
 
     if (!numberingProperties) continue;
 
@@ -117,7 +117,7 @@ export function updateNumberingProperties(newNumberingProperties, paragraphNode,
     numberingProperties: newNumberingProperties ? { ...newNumberingProperties } : null,
   };
 
-  if (paragraphNode.attrs.styleId === 'ListParagraph') {
+  if (paragraphNode.attrs.paragraphProperties?.styleId === 'ListParagraph') {
     // Word's default list paragraph style
     newProperties.styleId = null;
   }
@@ -131,21 +131,14 @@ export function updateNumberingProperties(newNumberingProperties, paragraphNode,
     ...paragraphNode.attrs,
     paragraphProperties: newProperties,
     numberingProperties: newProperties.numberingProperties,
-    listRendering: null,
   };
 
-  // START: remove after CSS styles
-  // Get new indent based on ilvl
-  const resolvedParagraphProperties = resolveParagraphProperties(
-    { docx: editor.converter.convertedXml, numbering: editor.converter.numbering },
-    newProperties,
-    false,
-    true,
-  );
-  newAttrs.indent = resolvedParagraphProperties.indent ? { ...resolvedParagraphProperties.indent } : null;
-  newAttrs.spacing = resolvedParagraphProperties.spacing ? { ...resolvedParagraphProperties.spacing } : null;
-  newAttrs.styleId = resolvedParagraphProperties.styleId || null;
-  // END: remove after CSS styles
+  // Only explicitly set listRendering to null when removing list properties.
+  // When adding/updating list properties, let numberingPlugin compute it via appendTransaction.
+  // This prevents cache issues where the first transaction caches with null marker data.
+  if (!newNumberingProperties) {
+    newAttrs.listRendering = null;
+  }
 
   tr.setNodeMarkup(pos, null, newAttrs);
 }

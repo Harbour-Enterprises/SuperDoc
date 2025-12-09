@@ -165,6 +165,12 @@ class SuperConverter {
     // Suppress logging when true
     this.debug = params?.debug || false;
 
+    // Optional DOM environment for server-side usage (e.g., JSDOM)
+    this.domEnvironment = {
+      mockWindow: params?.mockWindow || null,
+      mockDocument: params?.mockDocument || null,
+    };
+
     // Important docx pieces
     this.declaration = null;
     this.documentAttributes = null;
@@ -193,6 +199,7 @@ class SuperConverter {
     // Processed additional content
     this.numbering = null;
     this.pageStyles = null;
+    this.themeColors = null;
 
     // The JSON converted XML before any processing. This is simply the result of xml2json
     this.initialJSON = null;
@@ -716,6 +723,7 @@ class SuperConverter {
       this.comments = result.comments;
       this.linkedStyles = result.linkedStyles;
       this.inlineDocumentFonts = result.inlineDocumentFonts;
+      this.themeColors = result.themeColors ?? null;
 
       return result.pmDoc;
     } else {
@@ -1033,6 +1041,150 @@ class SuperConverter {
     this.addedMedia = {
       ...processedData,
     };
+  }
+
+  /**
+   * Creates a default empty header for the specified variant.
+   *
+   * This method programmatically creates a new header section with an empty ProseMirror
+   * document. The header is added to the converter's data structures and will be included
+   * in subsequent DOCX exports.
+   *
+   * @param {('default' | 'first' | 'even' | 'odd')} variant - The header variant to create
+   * @returns {string} The relationship ID of the created header
+   *
+   * @throws {Error} If variant is invalid or header already exists for this variant
+   *
+   * @example
+   * ```javascript
+   * const headerId = converter.createDefaultHeader('default');
+   * // headerId: 'rId-header-default'
+   * // converter.headers['rId-header-default'] contains empty PM doc
+   * // converter.headerIds.default === 'rId-header-default'
+   * ```
+   */
+  createDefaultHeader(variant = 'default') {
+    // Validate variant type
+    if (typeof variant !== 'string') {
+      throw new TypeError(`variant must be a string, received ${typeof variant}`);
+    }
+
+    // Validate variant value
+    const validVariants = ['default', 'first', 'even', 'odd'];
+    if (!validVariants.includes(variant)) {
+      throw new Error(`Invalid header variant: ${variant}. Must be one of: ${validVariants.join(', ')}`);
+    }
+
+    // Check if header already exists for this variant
+    if (this.headerIds[variant]) {
+      console.warn(`[SuperConverter] Header already exists for variant '${variant}': ${this.headerIds[variant]}`);
+      return this.headerIds[variant];
+    }
+
+    // Generate relationship ID
+    const rId = `rId-header-${variant}`;
+
+    // Create empty ProseMirror document
+    const emptyDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [],
+        },
+      ],
+    };
+
+    // Add to headers map
+    this.headers[rId] = emptyDoc;
+
+    // Update headerIds for the variant
+    this.headerIds[variant] = rId;
+
+    // Add to ids array if it exists
+    if (!this.headerIds.ids) {
+      this.headerIds.ids = [];
+    }
+    if (!this.headerIds.ids.includes(rId)) {
+      this.headerIds.ids.push(rId);
+    }
+
+    // Mark document as modified
+    this.documentModified = true;
+
+    return rId;
+  }
+
+  /**
+   * Creates a default empty footer for the specified variant.
+   *
+   * This method programmatically creates a new footer section with an empty ProseMirror
+   * document. The footer is added to the converter's data structures and will be included
+   * in subsequent DOCX exports.
+   *
+   * @param {('default' | 'first' | 'even' | 'odd')} variant - The footer variant to create
+   * @returns {string} The relationship ID of the created footer
+   *
+   * @throws {Error} If variant is invalid or footer already exists for this variant
+   *
+   * @example
+   * ```javascript
+   * const footerId = converter.createDefaultFooter('default');
+   * // footerId: 'rId-footer-default'
+   * // converter.footers['rId-footer-default'] contains empty PM doc
+   * // converter.footerIds.default === 'rId-footer-default'
+   * ```
+   */
+  createDefaultFooter(variant = 'default') {
+    // Validate variant type
+    if (typeof variant !== 'string') {
+      throw new TypeError(`variant must be a string, received ${typeof variant}`);
+    }
+
+    // Validate variant value
+    const validVariants = ['default', 'first', 'even', 'odd'];
+    if (!validVariants.includes(variant)) {
+      throw new Error(`Invalid footer variant: ${variant}. Must be one of: ${validVariants.join(', ')}`);
+    }
+
+    // Check if footer already exists for this variant
+    if (this.footerIds[variant]) {
+      console.warn(`[SuperConverter] Footer already exists for variant '${variant}': ${this.footerIds[variant]}`);
+      return this.footerIds[variant];
+    }
+
+    // Generate relationship ID
+    const rId = `rId-footer-${variant}`;
+
+    // Create empty ProseMirror document
+    const emptyDoc = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [],
+        },
+      ],
+    };
+
+    // Add to footers map
+    this.footers[rId] = emptyDoc;
+
+    // Update footerIds for the variant
+    this.footerIds[variant] = rId;
+
+    // Add to ids array if it exists
+    if (!this.footerIds.ids) {
+      this.footerIds.ids = [];
+    }
+    if (!this.footerIds.ids.includes(rId)) {
+      this.footerIds.ids.push(rId);
+    }
+
+    // Mark document as modified
+    this.documentModified = true;
+
+    return rId;
   }
 
   // Deprecated methods for backward compatibility

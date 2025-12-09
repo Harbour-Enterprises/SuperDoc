@@ -9,6 +9,9 @@ const domParserMock = vi.hoisted(() => ({
 
 vi.mock('prosemirror-model', () => ({
   DOMParser: domParserMock,
+  Fragment: {
+    fromArray: (content) => ({ content }),
+  },
 }));
 
 const convertEmToPtMock = vi.hoisted(() => vi.fn((html) => html));
@@ -23,7 +26,7 @@ vi.mock('../../InputRule.js', () => ({
 
 const normalizeLvlTextCharMock = vi.hoisted(() => vi.fn((value) => value || '%1.'));
 
-vi.mock('../../super-converter/v2/importer/listImporter.js', () => ({
+vi.mock('@superdoc/common/list-numbering', () => ({
   normalizeLvlTextChar: normalizeLvlTextCharMock,
 }));
 
@@ -37,8 +40,14 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
   },
 }));
 
+const decodeRPrFromMarksMock = vi.hoisted(() => vi.fn(() => ({ rPr: 'from-marks' })));
+
+vi.mock('@converter/styles.js', () => ({
+  decodeRPrFromMarks: decodeRPrFromMarksMock,
+}));
+
 import { DOMParser } from 'prosemirror-model';
-import { handleDocxPaste } from './docx-paste.js';
+import { handleDocxPaste, wrapTextsInRuns } from './docx-paste.js';
 
 describe('handleDocxPaste', () => {
   beforeEach(() => {
@@ -135,5 +144,58 @@ describe('handleDocxPaste', () => {
     expect(DOMParser.fromSchema).toHaveBeenCalledWith(editor.schema);
     expect(replaceSelectionWith).toHaveBeenCalledWith(parseResult, true);
     expect(dispatch).toHaveBeenCalledWith('next-tr');
+  });
+});
+
+describe('wrapTextsInRuns', () => {
+  const makeNode = ({ name, children = [], type }) => {
+    const nodeType = type || { name };
+    return {
+      isText: false,
+      type: nodeType,
+      childCount: children.length,
+      children,
+      forEach: (fn) => children.forEach(fn),
+      copy: (fragment) => makeNode({ name, children: fragment.content || fragment, type: nodeType }),
+    };
+  };
+
+  const makeText = (text, marks = []) => ({
+    isText: true,
+    text,
+    marks,
+  });
+
+  it('returns the original doc when run type is missing', () => {
+    const doc = makeNode({ name: 'doc' });
+
+    const result = wrapTextsInRuns(doc);
+
+    expect(result).toBe(doc);
+    expect(decodeRPrFromMarksMock).not.toHaveBeenCalled();
+  });
+
+  it('wraps non-run text nodes into run nodes and leaves existing runs untouched', () => {
+    const runType = {
+      name: 'run',
+      create: vi.fn((attrs, content) => makeNode({ name: 'run', children: content, type: { name: 'run' }, attrs })),
+    };
+    const docType = { name: 'doc', schema: { nodes: { run: runType } } };
+    const textOutsideRun = makeText('Hello', [{ type: 'bold' }]);
+    const textInsideRun = makeText('Inside', []);
+    const existingRun = makeNode({ name: 'run', children: [textInsideRun], type: { name: 'run' } });
+    const paragraph = makeNode({ name: 'paragraph', children: [textOutsideRun, existingRun] });
+    const doc = makeNode({ name: 'doc', children: [paragraph], type: docType });
+
+    const wrappedDoc = wrapTextsInRuns(doc);
+
+    expect(wrappedDoc).not.toBe(doc);
+    expect(runType.create).toHaveBeenCalledTimes(1);
+    expect(runType.create).toHaveBeenCalledWith({ runProperties: { rPr: 'from-marks' } }, [textOutsideRun]);
+    expect(decodeRPrFromMarksMock).toHaveBeenCalledWith(textOutsideRun.marks);
+
+    const wrappedParagraph = wrappedDoc.children[0];
+    expect(wrappedParagraph.children[0].type.name).toBe('run');
+    expect(wrappedParagraph.children[1]).toBe(existingRun);
   });
 });

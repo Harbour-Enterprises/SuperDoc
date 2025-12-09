@@ -1,7 +1,7 @@
 /**
  * Type representing a value that can be either a direct value or a function that returns that value.
  */
-export type MaybeGetter<T, Args extends any[] = []> = T | ((...args: Args) => T);
+export type MaybeGetter<T, Args extends unknown[] = []> = T | ((...args: Args) => T);
 
 /**
  * If "value" is a function, then call it and return result.
@@ -10,9 +10,9 @@ export type MaybeGetter<T, Args extends any[] = []> = T | ((...args: Args) => T)
  * @param context Context to bind to function (Optional).
  * @param props Props for function (Optional).
  */
-export function callOrGet<T, Args extends any[] = []>(
+export function callOrGet<T, Args extends unknown[] = []>(
   value: MaybeGetter<T, Args>,
-  context: any = null,
+  context: unknown = null,
   ...props: Args
 ): T {
   if (typeof value === 'function') {

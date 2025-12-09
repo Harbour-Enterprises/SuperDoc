@@ -1,7 +1,7 @@
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
-import type { DOMSerializer, Node as PmNode, Schema } from 'prosemirror-model';
-import type { EditorOptions, User, FieldValue, DocxNode, PermissionParams, DocxFileEntry } from './types/EditorConfig.js';
+import type { Node as PmNode, Schema } from 'prosemirror-model';
+import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
 import type {
   EditorHelpers,
   ExtensionStorage,
@@ -12,6 +12,7 @@ import type {
 } from './types/EditorTypes.js';
 import type { ChainableCommandObject, CanObject, EditorCommands } from './types/ChainedCommands.js';
 import type { EditorEventMap, FontsResolvedPayload, Comment } from './types/EditorEvents.js';
+import type { SchemaSummaryJSON } from './types/EditorSchema.js';
 
 import { EditorState as PmEditorState } from 'prosemirror-state';
 import { EditorView } from 'prosemirror-view';
@@ -28,11 +29,6 @@ import { createDocument } from './helpers/createDocument.js';
 import { isActive } from './helpers/isActive.js';
 import { trackedTransaction } from '@extensions/track-changes/trackChangesHelpers/trackedTransaction.js';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
-import {
-  initPaginationData,
-  PaginationPluginKey,
-  toggleHeaderFooterEditMode,
-} from '@extensions/pagination/pagination-helpers';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
 import { getRichTextExtensions } from '../extensions/index.js';
@@ -40,10 +36,8 @@ import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
 import { generateCollaborationData } from '@extensions/collaboration/collaboration.js';
-import { hasSomeParentWithClass } from './super-converter/helpers.js';
 import { useHighContrastMode } from '../composables/use-high-contrast-mode.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
-import { setWordSelection } from './helpers/setWordSelection.js';
 import { setImageNodeSelection } from './helpers/setImageNodeSelection.js';
 import { canRenderFont } from './helpers/canRenderFont.js';
 import {
@@ -58,14 +52,16 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
 import { buildSchemaSummary } from './schema-summary.js';
-/**
- * @typedef {Object} FieldValue
- * @property {string} input_id The id of the input field
- * @property {string} input_value The value to insert into the field
- */
 
 declare const __APP_VERSION__: string;
 declare const version: string | undefined;
+
+/**
+ * Image storage structure used by the image extension
+ */
+interface ImageStorage {
+  media: Record<string, unknown>;
+}
 
 /**
  * Main editor class that manages document state, extensions, and user interactions
@@ -95,6 +91,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * ProseMirror view instance
    */
   view!: EditorView;
+
+  /**
+   * Active PresentationEditor instance when layout mode is enabled.
+   * Set by PresentationEditor constructor to enable renderer-neutral helpers.
+   */
+  presentationEditor: import('./PresentationEditor.js').PresentationEditor | null = null;
 
   /**
    * Whether the editor currently has focus
@@ -161,12 +163,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
     isChildEditor: false,
     numbering: {},
     isHeaderOrFooter: false,
-    pagination: null,
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
     loadFromSchema: false,
     fragment: null,
+    skipViewCreation: false,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -186,7 +188,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
     onDocumentLocked: () => null,
     onFirstRender: () => null,
     onCollaborationReady: () => null,
-    onPaginationUpdate: () => null,
     onException: () => null,
     onListDefinitionsChange: () => null,
     onFontsResolved: null,
@@ -312,7 +313,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.on('commentsUpdate', this.options.onCommentsUpdate!);
     this.on('locked', this.options.onDocumentLocked!);
     this.on('collaborationReady', this.#onCollaborationReady.bind(this));
-    this.on('paginationUpdate', this.options.onPaginationUpdate!);
     this.on('comment-positions', this.options.onCommentLocationsUpdate!);
     this.on('list-definitions-change', this.options.onListDefinitionsChange!);
     this.on('fonts-resolved', this.options.onFontsResolved!);
@@ -339,14 +339,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     this.setDocumentMode(this.options.documentMode!, 'init');
 
-    // Init pagination only if we are not in collaborative mode. Otherwise
-    // it will be in itialized via this.#onCollaborationReady
     if (!this.options.ydoc) {
       if (!this.options.isChildEditor) {
-        this.#initPagination();
         this.#initComments();
-
-        this.#validateDocumentInit();
       }
     }
 
@@ -398,7 +393,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (this.view) {
       this.view.destroy();
     }
-
     this.view = undefined!;
   }
 
@@ -406,8 +400,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Handle focus event
    */
   #onFocus({ editor, event }: { editor: Editor; event: FocusEvent }): void {
-    this.toolbar?.setActiveEditor(editor);
-    this.options.onFocus!({ editor, event });
+    this.toolbar?.setActiveEditor?.(editor);
+    this.options.onFocus?.({ editor, event });
   }
 
   /**
@@ -430,6 +424,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         platform: 'node',
         userAgent: 'Node.js',
       };
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (global as any).navigator = minimalNavigator;
     }
 
@@ -519,9 +514,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Set the document mode
    * @param documentMode - The document mode ('editing', 'viewing', 'suggesting')
-   * @param caller - Calling context
+   * @param _caller - Calling context (unused)
    */
-  setDocumentMode(documentMode: string, caller?: string): void {
+  setDocumentMode(documentMode: string, _caller?: string): void {
     if (this.options.isHeaderOrFooter || this.options.isChildEditor) return;
 
     let cleanedMode = documentMode?.toLowerCase() || 'editing';
@@ -531,18 +526,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
+
     // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
       this.commands.toggleTrackChangesShowOriginal();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
-      if (caller !== 'init')
-        toggleHeaderFooterEditMode({
-          editor: this,
-          focusedSectionEditor: null,
-          isEditMode: false,
-          documentMode: cleanedMode,
-        });
       if (pm) pm.classList.add('view-mode');
     }
 
@@ -561,19 +550,96 @@ export class Editor extends EventEmitter<EditorEventMap> {
       this.commands.disableTrackChanges();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
-      if (caller !== 'init')
-        toggleHeaderFooterEditMode({
-          editor: this,
-          focusedSectionEditor: null,
-          isEditMode: false,
-          documentMode: cleanedMode,
-        });
       if (pm) pm.classList.remove('view-mode');
     }
   }
 
+  /**
+   * Blur the editor.
+   */
+  blur(): void {
+    this.view?.dom?.blur();
+  }
+
+  /**
+   * Check if editor has focus
+   */
+  hasFocus(): boolean {
+    if (this.view) {
+      return this.view.hasFocus();
+    }
+    return false;
+  }
+
+  /**
+   * Get viewport coordinates for a document position. Falls back to the PresentationEditor
+   * when running without a ProseMirror view (layout mode).
+   */
+  coordsAtPos(pos: number): ReturnType<PmEditorView['coordsAtPos']> | null {
+    if (this.view) {
+      return this.view.coordsAtPos(pos);
+    }
+
+    const layoutRects = this.presentationEditor?.getRangeRects?.(pos, pos);
+    if (Array.isArray(layoutRects) && layoutRects.length > 0) {
+      const rect = layoutRects[0];
+      return {
+        top: rect.top,
+        bottom: rect.bottom,
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+        height: rect.height,
+      } as ReturnType<PmEditorView['coordsAtPos']>;
+    }
+
+    return null;
+  }
+
+  /**
+   * Get position from client-space coordinates. Falls back to PresentationEditor hit testing in layout mode.
+   */
+  posAtCoords(coords: Parameters<PmEditorView['posAtCoords']>[0]): ReturnType<PmEditorView['posAtCoords']> {
+    if (this.view) {
+      return this.view.posAtCoords(coords);
+    }
+    if (typeof this.presentationEditor?.hitTest !== 'function') {
+      return null;
+    }
+
+    // Extract coordinates from various possible coordinate formats
+    const coordsObj = coords as {
+      clientX?: number;
+      clientY?: number;
+      left?: number;
+      top?: number;
+      x?: number;
+      y?: number;
+    };
+    const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
+    const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
+    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
+      return null;
+    }
+
+    const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
+    if (!hit) {
+      return null;
+    }
+
+    return {
+      pos: hit.pos,
+      inside: hit.pos,
+    };
+  }
+
   #registerCopyHandler(): void {
-    this.view.dom.addEventListener('copy', (event: ClipboardEvent) => {
+    const dom = this.view?.dom;
+    if (!dom) {
+      return;
+    }
+
+    dom.addEventListener('copy', (event: ClipboardEvent) => {
       const clipboardData = event.clipboardData;
       if (!clipboardData) return;
 
@@ -627,7 +693,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   replaceContent(content: ProseMirrorJSON): void {
     this.setOptions({
-      content: content as any,
+      content: content as unknown as Record<string, unknown>,
     });
 
     this.#createConverter();
@@ -639,7 +705,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const doc = this.#generatePmData();
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc);
     tr.setMeta('replaceContent', true);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
   }
 
   /**
@@ -652,10 +718,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const doc = this.#generatePmData();
     // hiding this transaction from history so it doesn't appear in undo stack
     const tr = this.state.tr.replaceWith(0, this.state.doc.content.size, doc).setMeta('addToHistory', false);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
 
     setTimeout(() => {
-      this.#initPagination();
       this.#initComments();
     }, 50);
   }
@@ -685,10 +750,29 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Set whether the editor is editable
+   * Set whether the editor is editable.
+   *
+   * When setting to non-editable, this method:
+   * - Forces ProseMirror to re-evaluate the editable prop from the Editable plugin
+   * - Blurs the editor to remove the cursor
+   *
+   * @param editable - Whether the editor should accept user input (default: true)
+   * @param emitUpdate - Whether to emit an update event after changing editability (default: true)
    */
   setEditable(editable: boolean = true, emitUpdate: boolean = true): void {
     this.setOptions({ editable });
+
+    // Force ProseMirror to re-evaluate the editable prop from the Editable plugin.
+    // ProseMirror only updates the editable state when setProps is called,
+    // even if the underlying editor.options.editable value has changed.
+    if (this.view) {
+      this.view.setProps({});
+
+      // When setting to non-editable, blur the editor to remove cursor
+      if (!editable && this.view.dom) {
+        this.view.dom.blur();
+      }
+    }
 
     if (emitUpdate) {
       this.emit('update', { editor: this, transaction: this.state.tr });
@@ -728,7 +812,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const name =
       typeof nameOrPluginKey === 'string'
         ? `${nameOrPluginKey}$`
-        : (nameOrPluginKey?.key as string | undefined) ?? '';
+        : ((nameOrPluginKey?.key as string | undefined) ?? '');
 
     const state = this.state.reconfigure({
       plugins: this.state.plugins.filter((plugin) => !this.#getPluginKeyName(plugin).startsWith(name)),
@@ -778,6 +862,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
         telemetry: this.options.telemetry,
         fileSource: this.options.fileSource,
         documentId: this.options.documentId,
+        mockWindow: this.options.mockWindow ?? null,
+        mockDocument: this.options.mockDocument ?? null,
       });
     }
   }
@@ -788,7 +874,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   #initMedia(): void {
     if (this.options.isChildEditor) return;
     if (!this.options.ydoc) {
-      (this.storage.image as any).media = this.options.mediaFiles;
+      (this.storage.image as ImageStorage).media = this.options.mediaFiles!;
       return;
     }
 
@@ -801,12 +887,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
       });
 
       // Set the storage to the imported media files
-      (this.storage.image as any).media = this.options.mediaFiles;
+      (this.storage.image as ImageStorage).media = this.options.mediaFiles!;
     }
 
     // If we are opening an existing file, we need to get the media from the ydoc
     else {
-      (this.storage.image as any).media = Object.fromEntries(mediaMap.entries());
+      (this.storage.image as ImageStorage).media = Object.fromEntries(mediaMap.entries());
     }
   }
 
@@ -908,7 +994,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Set the document version
    */
   static setDocumentVersion(doc: DocxFileEntry[], version: string): string {
-    return SuperConverter.setStoredSuperdocVersion(doc, version);
+    return SuperConverter.setStoredSuperdocVersion(doc, version) ?? version;
   }
 
   /**
@@ -928,9 +1014,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
   /**
    * Generates a schema summary for the current runtime schema.
-   * @returns {Promise<Object>} Schema summary JSON
    */
-  async getSchemaSummaryJSON() {
+  async getSchemaSummaryJSON(): Promise<SchemaSummaryJSON> {
     if (!this.schema) {
       throw new Error('Schema is not initialized.');
     }
@@ -939,12 +1024,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const suppressedNames = new Set(
       (this.extensionService?.extensions || [])
-        .filter((ext) => {
-          const config = ext?.config;
+        .filter((ext: { config?: { excludeFromSummaryJSON?: boolean } }) => {
+          const config = (ext as { config?: { excludeFromSummaryJSON?: boolean } })?.config;
           const suppressFlag = config?.excludeFromSummaryJSON;
           return Boolean(suppressFlag);
         })
-        .map((ext) => ext.name),
+        .map((ext: { name: string }) => ext.name),
     );
 
     const summary = buildSchemaSummary(this.schema, schemaVersion);
@@ -962,22 +1047,20 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
   /**
    * Validates a ProseMirror JSON document against the current schema.
-   * @param {Object|Object[]} doc - ProseMirror JSON representation of the document
-   * @returns {Object} ProseMirror node
    */
-  validateJSON(doc) {
+  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode | PmNode[] {
     if (!this.schema) {
       throw new Error('Schema is not initialized.');
     }
 
     try {
-      if (Array.isArray(doc)) return doc.map((d) => this.schema.nodeFromJSON(d));
-      return this.schema.nodeFromJSON(doc);
+      if (Array.isArray(doc)) return doc.map((d) => this.schema!.nodeFromJSON(d));
+      return this.schema.nodeFromJSON(doc as ProseMirrorJSON);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       const validationError = new Error(`Invalid document for current schema: ${detail}`);
       if (error instanceof Error) {
-        validationError.cause = error;
+        (validationError as Error & { cause?: Error }).cause = error;
       }
       throw validationError;
     }
@@ -1054,52 +1137,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
       dispatchTransaction: this.#dispatchTransaction.bind(this),
       state: this.options.initialState,
       handleClick: this.#handleNodeSelection.bind(this),
-      handleDoubleClick: (view: PmEditorView, pos: number, event: MouseEvent) => {
-        // Prevent edits if editor is not editable
-        if (this.options.documentMode !== 'editing') return;
-
-        // Deactivates header/footer editing mode when double-click on main editor
-        // Skip pagination-related double-click handling in headless mode
-        if (!isHeadless(this)) {
-          const isHeader = hasSomeParentWithClass(event.target as HTMLElement, 'pagination-section-header');
-          const isFooter = hasSomeParentWithClass(event.target as HTMLElement, 'pagination-section-footer');
-          if (isHeader || isFooter) {
-            const EventConstructor = event.constructor as new (type: string) => Event;
-            const eventClone = new EventConstructor(event.type);
-            (event.target as HTMLElement).dispatchEvent(eventClone);
-
-            // Imitate default double click behavior - word selection
-            if (this.options.isHeaderOrFooter && this.options.editable) setWordSelection(view, pos);
-            return;
-          }
-        }
-        event.stopPropagation();
-
-        if (!this.options.editable && !isHeadless(this)) {
-          // ToDo don't need now but consider to update pagination when recalculate header/footer height
-          // this.storage.pagination.sectionData = await initPaginationData(this);
-          //
-          // const newTr = this.view.state.tr;
-          // newTr.setMeta('forceUpdatePagination', true);
-          // this.view.dispatch(newTr);
-
-          this.setEditable(true, false);
-          toggleHeaderFooterEditMode({
-            editor: this,
-            focusedSectionEditor: null,
-            isEditMode: false,
-            documentMode: this.options.documentMode!,
-          });
-          const pm = this.view?.dom || this.options.element?.querySelector?.('.ProseMirror');
-          if (pm) {
-            pm.classList.remove('header-footer-edit');
-            pm.setAttribute('aria-readonly', 'false');
-          }
-        }
-
-        // Imitate default double click behavior - word selection
-        setWordSelection(view, pos);
-      },
     });
 
     const newState = this.state.reconfigure({
@@ -1117,6 +1154,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Creates all node views.
    */
   createNodeViews(): void {
+    if (this.options.skipViewCreation || typeof this.view?.setProps !== 'function') {
+      return;
+    }
     this.view.setProps({
       nodeViews: this.extensionService.nodeViews,
     });
@@ -1145,7 +1185,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Attach styles and attributes to the editor element
    */
-  updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement, hasPaginationEnabled: boolean = true): void {
+  updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement): void {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
 
     if (!proseMirror || !element) {
@@ -1199,13 +1239,20 @@ export class Editor extends EventEmitter<EditorEventMap> {
     proseMirror.style.lineHeight = String(defaultLineHeight);
 
     // If we are not using pagination, we still need to add some padding for header/footer
-    if (!hasPaginationEnabled) {
+    // Always pad the body to the page top margin so the body baseline
+    // starts at pageTop + topMargin (Word parity). Pagination decorations
+    // will only reserve header overflow beyond this margin.
+    if (this.presentationEditor && pageMargins?.top != null) {
+      proseMirror.style.paddingTop = `${pageMargins.top}in`;
+    } else if (this.presentationEditor) {
+      // Fallback for missing margins
       proseMirror.style.paddingTop = '1in';
-      proseMirror.style.paddingBottom = '1in';
     } else {
       proseMirror.style.paddingTop = '0';
-      proseMirror.style.paddingBottom = '0';
     }
+
+    // Keep footer padding managed by pagination; set to 0 here.
+    proseMirror.style.paddingBottom = '0';
   }
 
   /**
@@ -1215,12 +1262,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
    *
    * @param element - The DOM element to apply styles to
    */
-  initDefaultStyles(element: HTMLElement | null = this.element, isPaginationEnabled: boolean = true): void {
+  initDefaultStyles(element: HTMLElement | null = this.element): void {
     if (this.options.isHeadless || this.options.suppressDefaultDocxStyles) return;
 
     const proseMirror = element?.querySelector('.ProseMirror') as HTMLElement;
 
-    this.updateEditorStyles(element!, proseMirror, isPaginationEnabled);
+    this.updateEditorStyles(element!, proseMirror);
 
     this.initMobileStyles(element);
   }
@@ -1276,7 +1323,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
       screen.orientation.addEventListener('change', handleResize);
     } else {
       // jsdom (and some older browsers) don't implement matchMedia; skip listener in that case
-      const mediaQueryList = typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
+      const mediaQueryList =
+        typeof window.matchMedia === 'function' ? window.matchMedia('(orientation: portrait)') : null;
       if (mediaQueryList?.addEventListener) {
         mediaQueryList.addEventListener('change', handleResize);
       }
@@ -1287,7 +1335,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
   /**
    * Handler called when collaboration is ready.
-   * Initializes pagination and comments if not a new file.
+   * Initializes comments if not a new file.
    */
   #onCollaborationReady({ editor, ydoc }: { editor: Editor; ydoc: unknown }): void {
     if (this.options.collaborationIsReady) return;
@@ -1305,10 +1353,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const { tr } = this.state;
     tr.setMeta('collaborationReady', true);
-    this.view.dispatch(tr);
+    this.#dispatchTransaction(tr);
 
     if (!this.options.isNewFile) {
-      this.#initPagination();
       this.#initComments();
       updateYdocDocxData(this, this.options.ydoc);
     }
@@ -1330,30 +1377,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     setTimeout(() => {
       this.options.replacedFile = false;
-      const { state, dispatch } = this.view;
-      const tr = state.tr.setMeta(CommentsPluginKey, { type: 'force' });
-      dispatch(tr);
+      const st = this.state;
+      if (!st) return;
+      const tr = st.tr.setMeta(CommentsPluginKey, { type: 'force' });
+      this.#dispatchTransaction(tr);
     }, 50);
-  }
-
-  /**
-   * Initialize pagination, if the pagination extension is enabled.
-   */
-  async #initPagination(): Promise<void> {
-    if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
-      return;
-    }
-
-    const pagination = this.options.extensions!.find((e) => e.name === 'pagination');
-    if (pagination && this.options.pagination) {
-      const sectionData = await initPaginationData(this);
-      (this.storage.pagination as any).sectionData = sectionData;
-
-      // Trigger transaction to initialize pagination
-      const { state, dispatch } = this.view;
-      const tr = state.tr.setMeta(PaginationPluginKey, { isReadyToInit: true });
-      dispatch(tr);
-    }
   }
 
   /**
@@ -1439,6 +1467,15 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
+   * Public dispatch method for transaction dispatching.
+   * Allows external callers (e.g., SuperDoc stores) to dispatch plugin meta
+   * transactions without accessing editor.view directly.
+   */
+  dispatch(tr: Transaction): void {
+    this.#dispatchTransaction(tr);
+  }
+
+  /**
    * Get document identifier for telemetry (async - may generate hash)
    */
   async getDocumentIdentifier(): Promise<string | null> {
@@ -1502,7 +1539,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * editor.isActive('textStyle', { color: 'purple' })
    * editor.isActive({ textAlign: 'center' })
    */
-  isActive(nameOrAttributes: string | Record<string, unknown>, attributesOrUndefined?: Record<string, unknown>): boolean {
+  isActive(
+    nameOrAttributes: string | Record<string, unknown>,
+    attributesOrUndefined?: Record<string, unknown>,
+  ): boolean {
     const name = typeof nameOrAttributes === 'string' ? nameOrAttributes : null;
     const attributes = typeof nameOrAttributes === 'string' ? attributesOrUndefined : nameOrAttributes;
     return isActive(this.state, name, attributes);
@@ -1512,7 +1552,21 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Get the editor content as JSON
    */
   getJSON(): ProseMirrorJSON {
-    return this.state.doc.toJSON();
+    const json = this.state.doc.toJSON();
+    try {
+      // Check if the document has bodySectPr in attrs, and add from converter if missing
+      const jsonObj = json as ProseMirrorJSON;
+      const attrs = jsonObj.attrs as Record<string, unknown> | undefined;
+      const hasBody = attrs && 'bodySectPr' in attrs;
+      const converter = this.converter as unknown as { bodySectPr?: unknown };
+      if (!hasBody && converter && converter.bodySectPr) {
+        jsonObj.attrs = attrs || {};
+        (jsonObj.attrs as Record<string, unknown>).bodySectPr = converter.bodySectPr;
+      }
+    } catch {
+      // Non-fatal: leave json as-is if anything unexpected occurs
+    }
+    return json as ProseMirrorJSON;
   }
 
   /**
@@ -1616,10 +1670,18 @@ export class Editor extends EventEmitter<EditorEventMap> {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate && !isHeadless(this)) {
+    if (hasMadeUpdate && this.view && !isHeadless()) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
-      this.view.dispatch(newTr);
+      this.#dispatchTransaction(newTr);
+
+      // Emit dedicated event for page style updates
+      // This provides a clearer semantic signal for consumers that need to react
+      // to page style changes (margins, size, orientation) without content modifications
+      this.emit('pageStyleUpdate', {
+        pageMargins,
+        pageStyles: this.converter.pageStyles,
+      });
     }
   }
 
@@ -1657,7 +1719,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     return updatedState.doc;
   }
 
-  migrateListsToV2(): any[] {
+  migrateListsToV2(): Array<{ from: number; to: number; slice: unknown }> {
     if (this.options.isHeaderOrFooter) return [];
     const replacements = migrateListsToV2IfNecessary(this);
     return replacements;
@@ -1715,7 +1777,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const documentXml = await this.converter.exportToDocx(
         json,
         this.schema,
-        (this.storage.image as any).media,
+        (this.storage.image as ImageStorage).media,
         isFinalDoc,
         commentsType,
         comments,
@@ -1742,7 +1804,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         if (name.includes('header') || name.includes('footer')) {
           const jsonObj = json as { elements?: unknown[] };
           const resultXml = this.converter.schemaToXml(jsonObj.elements?.[0]);
-          updatedHeadersFooters[name] = String(resultXml);
+          updatedHeadersFooters[name] = String(resultXml.replace(/\[\[sdspace\]\]/g, ''));
         }
       });
 
@@ -1938,7 +2000,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
     }
 
     if (!this.options.ydoc) {
-      this.#initPagination();
       this.#initComments();
     }
   }
@@ -1980,7 +2041,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   getNodesOfType(type: string): Array<{ node: PmNode; pos: number }> {
     const { findChildren } = helpers;
-    return findChildren(this.state.doc, (node) => node.type.name === type);
+    return findChildren(this.state.doc, (node: PmNode) => node.type.name === type);
   }
 
   /**

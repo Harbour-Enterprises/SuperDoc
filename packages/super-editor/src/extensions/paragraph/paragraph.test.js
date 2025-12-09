@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { initTestEditor, loadTestDataForEditorTests } from '../../tests/helpers/helpers.js';
-import { exportSchemaToJson } from '../../core/super-converter/exporter.js';
 
 describe('Paragraph Node', () => {
   let docx, media, mediaFiles, fonts, editor, tr;
@@ -16,8 +15,9 @@ describe('Paragraph Node', () => {
 
   it('inserting html with <h1> tag adds paragraph styled as heading', async () => {
     editor.commands.insertContent('<h1>Test Heading</h1>');
-    expect(editor.state.doc.content.content[0].type.name).toBe('paragraph');
-    expect(editor.state.doc.content.content[0].attrs.styleId).toBe('Heading1');
+    const node = editor.state.doc.content.content[0];
+    expect(node.type.name).toBe('paragraph');
+    expect(node.attrs.paragraphProperties?.styleId).toBe('Heading1');
 
     const result = await editor.exportDocx({
       exportJsonOnly: true,
@@ -41,12 +41,6 @@ describe('Paragraph Node', () => {
               'w:val': 'Heading1',
             },
           },
-          {
-            name: 'w:spacing',
-            attributes: {
-              'w:lineRule': 'auto',
-            },
-          },
         ],
       },
       {
@@ -60,17 +54,20 @@ describe('Paragraph Node', () => {
                 type: 'text',
               },
             ],
-            attributes: null,
           },
         ],
       },
     ]);
+    const run = paragraph.elements.find((el) => el.name === 'w:r');
+    expect(run).toBeDefined();
+    const textNode = run.elements.find((el) => el.name === 'w:t');
+    expect(textNode?.elements?.[0]?.text).toBe('Test Heading');
   });
 
   it('inserting plain text creates a simple paragraph', async () => {
     editor.commands.insertContent('This is a test paragraph.');
     expect(editor.state.doc.content.content[0].type.name).toBe('paragraph');
-    expect(editor.state.doc.content.content[0].attrs.styleId).toBe(null);
+    expect(editor.state.doc.content.content[0].attrs.paragraphProperties?.styleId).toBeUndefined();
     const result = await editor.exportDocx({
       exportJsonOnly: true,
     });
@@ -81,13 +78,6 @@ describe('Paragraph Node', () => {
     expect(body.elements.map((el) => el.name)).toEqual(['w:p', 'w:sectPr']);
     const paragraph = body.elements[0];
     expect(paragraph.name).toBe('w:p');
-
-    const paragraphProps = paragraph.elements.find((el) => el.name === 'w:pPr');
-    expect(paragraphProps).toBeDefined();
-
-    const spacing = paragraphProps.elements.find((el) => el.name === 'w:spacing');
-    expect(spacing).toBeDefined();
-    expect(spacing.attributes['w:lineRule']).toBe('auto');
 
     const run = paragraph.elements.find((el) => el.name === 'w:r');
     expect(run).toBeDefined();

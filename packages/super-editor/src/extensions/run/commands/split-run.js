@@ -4,10 +4,10 @@ import { canSplit } from 'prosemirror-transform';
 import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
 
 /**
- * Splits a run node at the current selection.
- * @returns {import('@core/commands/types').Command} A command handler.
+ * Splits a run node at the current selection into two paragraphs.
+ * @returns {import('@core/commands/types').Command}
  */
-export const splitRun = () => (props) => {
+export const splitRunToParagraph = () => (props) => {
   const { state, view, tr } = props;
   const { $from, empty } = state.selection;
   if (!empty) return false;
@@ -24,6 +24,11 @@ export const splitRun = () => (props) => {
   return handled;
 };
 
+/**
+ * Minimal copy of ProseMirror splitBlock logic that tolerates splitting runs.
+ * @param {import('prosemirror-state').EditorState} state
+ * @param {(tr: import('prosemirror-state').Transaction) => void} dispatch
+ */
 export function splitBlockPatch(state, dispatch) {
   let { $from } = state.selection;
   if (state.selection instanceof NodeSelection && state.selection.node.isBlock) {
@@ -72,3 +77,31 @@ export function splitBlockPatch(state, dispatch) {
   if (dispatch) dispatch(tr.scrollIntoView());
   return true;
 }
+
+export const splitRunAtCursor = () => (props) => {
+  let { state, dispatch, tr } = props;
+  const sel = state.selection;
+  if (!sel.empty) return false;
+
+  const $pos = sel.$from;
+  const runType = state.schema.nodes.run;
+  if ($pos.parent.type !== runType) return false;
+
+  const run = $pos.parent;
+  const offset = $pos.parentOffset; // offset inside this run
+  const runStart = $pos.before(); // position before the run
+  const runEnd = runStart + run.nodeSize; // position after the run
+
+  const leftFrag = run.content.cut(0, offset);
+  const rightFrag = run.content.cut(offset);
+
+  const leftRun = runType.create(run.attrs, leftFrag, run.marks);
+  const rightRun = runType.create(run.attrs, rightFrag, run.marks);
+  const gapPos = runStart + leftRun.nodeSize; // cursor between the two runs
+  tr.replaceWith(runStart, runEnd, [leftRun, rightRun]).setSelection(TextSelection.create(tr.doc, gapPos));
+
+  if (dispatch) {
+    dispatch(tr);
+  }
+  return true;
+};

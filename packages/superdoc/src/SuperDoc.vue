@@ -28,7 +28,7 @@ import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
 import { DOCX, PDF, HTML } from '@superdoc/common';
-import { SuperEditor, AIWriter } from '@harbour-enterprises/super-editor';
+import { SuperEditor, AIWriter, PresentationEditor } from '@harbour-enterprises/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
 import AiLayer from './components/AiLayer/AiLayer.vue';
@@ -187,6 +187,43 @@ const onEditorCreate = ({ editor }) => {
   initAiLayer(true);
 };
 
+/**
+ * Handle editor-ready event from SuperEditor
+ * Subscribes to PresentationEditor telemetry to capture layout metrics/errors
+ * @param {Object} payload
+ * @param {Editor} payload.editor - The Editor instance
+ * @param {PresentationEditor} payload.presentationEditor - The PresentationEditor wrapper
+ */
+const onEditorReady = ({ editor, presentationEditor }) => {
+  if (!presentationEditor) return;
+
+  // Store presentationEditor reference for mode changes
+  const { documentId } = editor.options;
+  const doc = getDocument(documentId);
+  if (doc) {
+    doc.setPresentationEditor(presentationEditor);
+  }
+  presentationEditor.setContextMenuDisabled?.(proxy.$superdoc.config.disableContextMenu);
+
+  // Subscribe to layout pipeline telemetry
+  presentationEditor.onTelemetry((telemetryPayload) => {
+    proxy.$superdoc.captureLayoutPipelineEvent(telemetryPayload);
+  });
+
+  // Listen for fresh comment positions from the layout engine.
+  // PresentationEditor emits this after every layout with PM positions collected
+  // from the current document, ensuring positions are never stale.
+  presentationEditor.on('commentPositions', ({ positions }) => {
+    const commentsConfig = proxy.$superdoc.config.modules?.comments;
+    if (!commentsConfig || commentsConfig === false) return;
+    if (!positions || Object.keys(positions).length === 0) return;
+
+    // Map PM positions to visual layout coordinates
+    const mappedPositions = presentationEditor.getCommentBounds(positions, layers.value);
+    handleEditorLocationsUpdate(mappedPositions);
+  });
+};
+
 const onEditorDestroy = () => {
   proxy.$superdoc.broadcastEditorDestroy();
 };
@@ -216,10 +253,58 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   if ($from.pos === $to.pos) updateSelection({ x: null, y: null, x2: null, y2: null, source: 'super-editor' });
 
   if (!layers.value) return;
+
+  const presentation = PresentationEditor.getInstance(documentId);
+  if (!presentation) {
+    // Fallback to legacy coordinate calculation if PresentationEditor not yet initialized
+    const { view } = editor;
+    const fromCoords = view.coordsAtPos($from.pos);
+    const toCoords = view.coordsAtPos($to.pos);
+
+    const layerBounds = layers.value.getBoundingClientRect();
+    const HEADER_HEIGHT = 96;
+    const top = Math.max(HEADER_HEIGHT, fromCoords.top - layerBounds.top);
+    const bottom = toCoords.bottom - layerBounds.top;
+    const selectionBounds = {
+      top,
+      left: fromCoords.left,
+      right: toCoords.left,
+      bottom,
+    };
+
+    const selection = useSelection({
+      selectionBounds,
+      page: 1,
+      documentId,
+      source: 'super-editor',
+    });
+    handleSelectionChange(selection);
+    return;
+  }
+
+  const layoutRange = presentation.getSelectionBounds($from.pos, $to.pos, layers.value);
+  if (layoutRange) {
+    const { bounds, pageIndex } = layoutRange;
+    updateSelection({
+      startX: bounds.left,
+      startY: bounds.top,
+      x: bounds.right,
+      y: bounds.bottom,
+      source: 'super-editor',
+    });
+    const selection = useSelection({
+      selectionBounds: { ...bounds },
+      page: pageIndex + 1,
+      documentId,
+      source: 'super-editor',
+    });
+    handleSelectionChange(selection);
+    return;
+  }
+
   const { view } = editor;
   const fromCoords = view.coordsAtPos($from.pos);
   const toCoords = view.coordsAtPos($to.pos);
-  const { pageMargins } = editor.getPageStyles();
 
   const layerBounds = layers.value.getBoundingClientRect();
   const HEADER_HEIGHT = 96;
@@ -284,10 +369,10 @@ const editorOptions = (doc) => {
   // So, if the callback is not defined, we won't run the font check
   const onFontsResolvedFn =
     proxy.$superdoc.listeners?.('fonts-resolved')?.length > 0 ? proxy.$superdoc.listeners('fonts-resolved')[0] : null;
+  const useLayoutEngine = proxy.$superdoc.config.useLayoutEngine !== false;
 
   const options = {
     isDebug: proxy.$superdoc.config.isDebug || false,
-    pagination: proxy.$superdoc.config.pagination,
     documentId: doc.id,
     user: proxy.$superdoc.user,
     users: proxy.$superdoc.users,
@@ -302,6 +387,7 @@ const editorOptions = (doc) => {
     isCommentsEnabled: Boolean(commentsModuleConfig.value),
     isAiEnabled: proxy.$superdoc.config.modules?.ai,
     slashMenuConfig: proxy.$superdoc.config.modules?.slashMenu,
+    editorCtor: useLayoutEngine ? PresentationEditor : undefined,
     onBeforeCreate: onEditorBeforeCreate,
     onCreate: onEditorCreate,
     onDestroy: onEditorDestroy,
@@ -314,7 +400,7 @@ const editorOptions = (doc) => {
     onException: onEditorException,
     onCommentsLoaded,
     onCommentsUpdate: onEditorCommentsUpdate,
-    onCommentLocationsUpdate: onEditorCommentLocationsUpdate,
+    onCommentLocationsUpdate: (payload) => onEditorCommentLocationsUpdate(doc, payload),
     onListDefinitionsChange: onEditorListdefinitionsChange,
     onFontsResolved: onFontsResolvedFn,
     onTransaction: onEditorTransaction,
@@ -327,6 +413,13 @@ const editorOptions = (doc) => {
     suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
     disableContextMenu: proxy.$superdoc.config.disableContextMenu,
     jsonOverride: proxy.$superdoc.config.jsonOverride,
+    layoutEngineOptions: useLayoutEngine
+      ? {
+          ...(proxy.$superdoc.config.layoutEngineOptions || {}),
+          debugLabel: proxy.$superdoc.config.layoutEngineOptions?.debugLabel ?? doc.name ?? doc.id,
+          zoom: (activeZoom.value ?? 100) / 100,
+        }
+      : undefined,
     permissionResolver: (payload = {}) =>
       proxy.$superdoc.canPerformPermission({
         role: proxy.$superdoc.config.role,
@@ -340,14 +433,30 @@ const editorOptions = (doc) => {
 
 /**
  * Trigger a comment-positions location update
- * This is called when the editor has updated the comment locations
+ * This is called when the PM plugin emits comment locations.
+ *
+ * Note: When using the layout engine, PresentationEditor emits authoritative
+ * positions via the 'commentPositions' event after each layout. This handler
+ * primarily serves as a fallback for non-layout-engine mode.
  *
  * @returns {void}
  */
-const onEditorCommentLocationsUpdate = ({ allCommentIds: activeThreadId, allCommentPositions }) => {
+const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
-  handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
+
+  const presentation = PresentationEditor.getInstance(doc.id);
+  if (!presentation) {
+    // Non-layout-engine mode: pass through raw positions
+    handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
+    return;
+  }
+
+  // Layout engine mode: map PM positions to visual layout coordinates.
+  // Note: PresentationEditor's 'commentPositions' event provides fresh positions
+  // after every layout, so this is mainly for the initial load before layout completes.
+  const mappedPositions = presentation.getCommentBounds(allCommentPositions, layers.value);
+  handleEditorLocationsUpdate(mappedPositions, activeThreadId);
 };
 
 const onEditorCommentsUpdate = (params = {}) => {
@@ -521,8 +630,8 @@ const resetSelection = () => {
 };
 
 const updateSelection = ({ startX, startY, x, y, source }) => {
-  const hasStartCoords = startX || startY;
-  const hasEndCoords = x || y;
+  const hasStartCoords = typeof startX === 'number' || typeof startY === 'number';
+  const hasEndCoords = typeof x === 'number' || typeof y === 'number';
 
   if (!hasStartCoords && !hasEndCoords) {
     return (selectionPosition.value = null);
@@ -530,7 +639,7 @@ const updateSelection = ({ startX, startY, x, y, source }) => {
 
   // Initialize the selection position
   if (!selectionPosition.value) {
-    if (startY <= 0 || startX <= 0) return;
+    if (startY == null || startX == null) return;
     selectionPosition.value = {
       top: startY,
       left: startX,
@@ -542,22 +651,26 @@ const updateSelection = ({ startX, startY, x, y, source }) => {
     };
   }
 
-  if (startX) selectionPosition.value.startX = startX;
-  if (startY) selectionPosition.value.startY = startY;
+  if (typeof startX === 'number') selectionPosition.value.startX = startX;
+  if (typeof startY === 'number') selectionPosition.value.startY = startY;
 
   // Reverse the selection if the user drags up or left
-  const selectionTop = selectionPosition.value.startY;
-  if (y < selectionTop) {
-    selectionPosition.value.top = y;
-  } else {
-    selectionPosition.value.bottom = y;
+  if (typeof y === 'number') {
+    const selectionTop = selectionPosition.value.startY;
+    if (y < selectionTop) {
+      selectionPosition.value.top = y;
+    } else {
+      selectionPosition.value.bottom = y;
+    }
   }
 
-  const selectionLeft = selectionPosition.value.startX;
-  if (x < selectionLeft) {
-    selectionPosition.value.left = x;
-  } else {
-    selectionPosition.value.right = x;
+  if (typeof x === 'number') {
+    const selectionLeft = selectionPosition.value.startX;
+    if (x < selectionLeft) {
+      selectionPosition.value.left = x;
+    } else {
+      selectionPosition.value.right = x;
+    }
   }
 };
 
@@ -616,6 +729,15 @@ const handlePdfClick = (e) => {
   isDragging.value = true;
   handleSelectionStart(e);
 };
+
+watch(
+  () => activeZoom.value,
+  (zoom) => {
+    if (proxy.$superdoc.config.useLayoutEngine !== false) {
+      PresentationEditor.setGlobalZoom((zoom ?? 100) / 100);
+    }
+  },
+);
 
 watch(getFloatingComments, () => {
   hasInitializedLocations.value = false;
@@ -708,6 +830,7 @@ watch(getFloatingComments, () => {
               :state="doc.state"
               :document-id="doc.id"
               :options="editorOptions(doc)"
+              @editor-ready="onEditorReady"
               @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
             />
           </n-message-provider>
@@ -755,28 +878,6 @@ watch(getFloatingComments, () => {
     </div>
   </div>
 </template>
-
-<style>
-.superdoc {
-  &.high-contrast {
-    border-color: #000;
-
-    .super-editor {
-      border-color: #000;
-
-      &:focus-within {
-        border-color: blue;
-      }
-    }
-  }
-
-  .super-editor {
-    border-radius: 8px;
-    border: 1px solid #d3d3d3;
-    box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.05);
-  }
-}
-</style>
 
 <style scoped>
 .superdoc {

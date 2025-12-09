@@ -11,37 +11,38 @@ describe('Tab Stops Export Tests', () => {
       marks: {},
     },
   });
+  const createParagraphNode = (paragraphProperties = {}) => ({
+    type: 'paragraph',
+    attrs: { paragraphProperties },
+    content: [],
+  });
 
   it('correctly exports paragraph with tab stops', () => {
     const mockEditor = createMockEditor();
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {
-        tabStops: [
-          {
-            tab: {
-              tabType: 'start',
-              pos: 2160,
-            },
+    const mockParagraphNode = createParagraphNode({
+      tabStops: [
+        {
+          tab: {
+            tabType: 'start',
+            pos: 2160,
           },
-          {
-            tab: {
-              tabType: 'center',
-              pos: 5040,
-              leader: 'dot',
-            },
+        },
+        {
+          tab: {
+            tabType: 'center',
+            pos: 5040,
+            leader: 'dot',
           },
-          {
-            tab: {
-              tabType: 'decimal',
-              pos: 7200,
-              leader: 'underscore',
-            },
+        },
+        {
+          tab: {
+            tabType: 'decimal',
+            pos: 7200,
+            leader: 'underscore',
           },
-        ],
-      },
-      content: [],
-    };
+        },
+      ],
+    });
 
     const result = wPTranslator.decode({
       editor: mockEditor,
@@ -85,11 +86,7 @@ describe('Tab Stops Export Tests', () => {
 
   it('correctly exports paragraph without tab stops', () => {
     const mockEditor = createMockEditor();
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {},
-      content: [],
-    };
+    const mockParagraphNode = createParagraphNode();
 
     const result = wPTranslator.decode({
       editor: mockEditor,
@@ -111,13 +108,7 @@ describe('Tab Stops Export Tests', () => {
 
   it('correctly exports paragraph with empty tab stops array', () => {
     const mockEditor = createMockEditor();
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {
-        tabStops: [],
-      },
-      content: [],
-    };
+    const mockParagraphNode = createParagraphNode({ tabStops: [] });
 
     const result = wPTranslator.decode({
       editor: mockEditor,
@@ -139,20 +130,16 @@ describe('Tab Stops Export Tests', () => {
 
   it('correctly exports tab stop with default val attribute', () => {
     const mockEditor = createMockEditor();
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {
-        tabStops: [
-          {
-            tab: {
-              pos: 1440,
-              // No val specified, should default to 'start'
-            },
+    const mockParagraphNode = createParagraphNode({
+      tabStops: [
+        {
+          tab: {
+            pos: 1440,
+            // No val specified, should default to 'start'
           },
-        ],
-      },
-      content: [],
-    };
+        },
+      ],
+    });
 
     const result = wPTranslator.decode({
       editor: mockEditor,
@@ -186,13 +173,7 @@ describe('Tab Stops Export Tests', () => {
       },
     }));
 
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {
-        tabStops,
-      },
-      content: [],
-    };
+    const mockParagraphNode = createParagraphNode({ tabStops });
 
     const result = wPTranslator.decode({
       editor: mockEditor,
@@ -223,13 +204,7 @@ describe('Tab Stops Export Tests', () => {
       },
     }));
 
-    const mockParagraphNode = {
-      type: 'paragraph',
-      attrs: {
-        tabStops,
-      },
-      content: [],
-    };
+    const mockParagraphNode = createParagraphNode({ tabStops });
 
     const result = wPTranslator.decode({
       editor: mockEditor,

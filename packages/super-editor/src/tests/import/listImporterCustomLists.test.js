@@ -100,12 +100,12 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       path: [1],
       numberingType: 'decimal',
     });
-    expect(item.attrs.numberingProperties).toEqual({
+    expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,
       numId: 5,
     });
-    expect(item.attrs.indent.left).toBe(360);
-    expect(item.attrs.indent.hanging).toBe(360);
+    expect(item.attrs.paragraphProperties?.indent.left).toBe(360);
+    expect(item.attrs.paragraphProperties?.indent.hanging).toBeUndefined();
 
     expect(extractParagraphText(item)).toBe('ONE');
   });
@@ -120,19 +120,19 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       path: [1, 1],
       numberingType: 'lowerLetter',
     });
-    expect(item.attrs.numberingProperties).toEqual({
+    expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 1,
       numId: 5,
     });
-    expect(item.attrs.indent.left).toBe(360);
-    expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.indent.firstLine).toBe(0);
+    expect(item.attrs.paragraphProperties?.indent.left).toBe(360);
+    expect(item.attrs.paragraphProperties?.indent.hanging).toBeUndefined();
+    expect(item.attrs.paragraphProperties?.indent.firstLine).toBe(0);
 
     expect(extractParagraphText(item)).toBe('a');
 
     // Check spacing
     // The spacing in this document is crucial to showing the indented list in the right place
-    const { spacing } = item.attrs;
+    const { spacing } = item.attrs.paragraphProperties || {};
     expect(spacing).toBeDefined();
 
     expect(spacing.before).toBeUndefined();
@@ -190,13 +190,13 @@ describe('[broken-complex-list.docx] Tests with repeated list numbering item and
       path: [1, 3],
       numberingType: 'lowerLetter',
     });
-    expect(item.attrs.numberingProperties).toEqual({
+    expect(item.attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 1,
       numId: 5,
     });
-    expect(item.attrs.indent.left).toBe(360);
-    expect(item.attrs.indent.hanging).toBeUndefined();
-    expect(item.attrs.indent.firstLine).toBe(0);
+    expect(item.attrs.paragraphProperties?.indent.left).toBe(360);
+    expect(item.attrs.paragraphProperties?.indent.hanging).toBeUndefined();
+    expect(item.attrs.paragraphProperties?.indent.firstLine).toBe(0);
 
     expect(extractParagraphText(item)).toBe('c');
   });
@@ -226,13 +226,13 @@ describe('[broken-list.docx] Test list breaking indentation formatting', () => {
       path: [1],
       numberingType: 'decimal',
     });
-    expect(attrs.numberingProperties).toEqual({
+    expect(attrs.paragraphProperties?.numberingProperties).toEqual({
       ilvl: 0,
       numId: 1,
     });
-    expect(attrs.indent.left).toBe(480);
-    expect(attrs.indent.leftChars).toBe(0);
-    expect(attrs.indent.hanging).toBe(480);
+    expect(attrs.paragraphProperties?.indent.left).toBeUndefined();
+    expect(attrs.paragraphProperties?.indent.leftChars).toBe(0);
+    expect(attrs.paragraphProperties?.indent.hanging).toBeUndefined();
   });
 });
 

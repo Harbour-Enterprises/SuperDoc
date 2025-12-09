@@ -1,0 +1,2180 @@
+/**
+ * DOM-based text measurer for layout engine
+ *
+ * Uses HTML5 Canvas API to measure text runs and calculate line breaks.
+ *
+ * Responsibilities:
+ * - Measure text width using actual font rendering
+ * - Perform greedy line breaking based on maxWidth constraint
+ * - Calculate typography metrics (ascent, descent, lineHeight)
+ * - Return Measure with positioned line boundaries
+ *
+ * Typography Approximations (v0.1.0):
+ * - ascent ≈ fontSize * 0.8 (baseline to top)
+ * - descent ≈ fontSize * 0.2 (baseline to bottom)
+ * - lineHeight = fontSize * 1.2 (standard leading)
+ *
+ * These are documented heuristics; we can swap in precise font metrics later
+ * if needed via libraries like opentype.js.
+ *
+ * Line Breaking Strategy:
+ * - Greedy algorithm: accumulate words until exceeding maxWidth
+ * - Breaks on word boundaries (spaces)
+ * - Single words wider than maxWidth are kept on their own line
+ *
+ * Future improvements:
+ * - Hyphenation support
+ * - Justification and word spacing
+ * - Precise font metrics from font files
+ * - Kerning and ligature support
+ */
+
+import type {
+  FlowBlock,
+  ParagraphBlock,
+  ParagraphSpacing,
+  ParagraphIndent,
+  ImageBlock,
+  ListBlock,
+  Measure,
+  Line,
+  ParagraphMeasure,
+  ImageMeasure,
+  TableBlock,
+  TableMeasure,
+  TableRowMeasure,
+  TableCellMeasure,
+  ListMeasure,
+  Run,
+  TextRun,
+  TabRun,
+  ImageRun,
+  LineBreakRun,
+  FieldAnnotationRun,
+  TabStop,
+  DrawingBlock,
+  DrawingMeasure,
+  DrawingGeometry,
+  DropCapDescriptor,
+} from '@superdoc/contracts';
+import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
+import { Engines } from '@superdoc/contracts';
+import {
+  LIST_MARKER_GAP,
+  MIN_MARKER_GUTTER,
+  DEFAULT_LIST_INDENT_BASE_PX as DEFAULT_LIST_INDENT_BASE,
+  DEFAULT_LIST_INDENT_STEP_PX as DEFAULT_LIST_INDENT_STEP,
+  DEFAULT_LIST_HANGING_PX as DEFAULT_LIST_HANGING,
+} from '@superdoc/common/layout-constants';
+import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
+export { installNodeCanvasPolyfill } from './setup.js';
+import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
+import { getFontMetrics, clearFontMetricsCache, type FontInfo } from './fontMetricsCache.js';
+
+export { clearFontMetricsCache };
+
+const { computeTabStops } = Engines;
+
+type MeasurementMode = 'browser' | 'deterministic';
+
+type MeasurementConfig = {
+  mode: MeasurementMode;
+  fonts: {
+    deterministicFamily: string;
+    fallbackStack: string[];
+  };
+  cacheSize: number;
+};
+
+const measurementConfig: MeasurementConfig = {
+  mode: 'browser',
+  fonts: {
+    deterministicFamily: 'Noto Sans',
+    fallbackStack: ['Noto Sans', 'Arial', 'sans-serif'],
+  },
+  cacheSize: 5000,
+};
+
+export function configureMeasurement(options: Partial<MeasurementConfig>): void {
+  if (options.mode) {
+    measurementConfig.mode = options.mode;
+  }
+  if (options.fonts) {
+    measurementConfig.fonts = {
+      ...measurementConfig.fonts,
+      ...options.fonts,
+    };
+  }
+  if (typeof options.cacheSize === 'number' && Number.isFinite(options.cacheSize) && options.cacheSize > 0) {
+    measurementConfig.cacheSize = options.cacheSize;
+    setCacheSize(options.cacheSize);
+  }
+}
+
+export { clearMeasurementCache };
+
+/**
+ * Future: Font-specific calibration factors could be added here if Canvas measurements
+ * consistently diverge from MS Word after all precision fixes (bounding box, fractional pt→px, etc.)
+ * are applied. Currently not needed.
+ */
+
+/**
+ * Global canvas context cache for text measurement
+ * Reused across calls to avoid repeated canvas creation
+ */
+let canvasContext: CanvasRenderingContext2D | null = null;
+
+type MeasureConstraints = {
+  maxWidth: number;
+  maxHeight?: number;
+};
+
+// List constants centralized in @superdoc/common/layout-constants
+
+// Tab constants (OOXML alignment: twips → pixels)
+const DEFAULT_TAB_INTERVAL_TWIPS = 720; // 0.5 inch in twips
+const TWIPS_PER_INCH = 1440;
+const PX_PER_INCH = 96; // Standard CSS/DOM DPI
+const TWIPS_PER_PX = TWIPS_PER_INCH / PX_PER_INCH; // 15 twips per pixel
+const _PX_PER_PT = 96 / 72; // Reserved for future pt↔px conversions
+const twipsToPx = (twips: number): number => twips / TWIPS_PER_PX;
+const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
+
+const DEFAULT_TAB_INTERVAL_PX = twipsToPx(DEFAULT_TAB_INTERVAL_TWIPS);
+const TAB_EPSILON = 0.1;
+const DEFAULT_DECIMAL_SEPARATOR = '.';
+const ALLOWED_TAB_VALS = new Set<TabStop['val']>(['start', 'center', 'end', 'decimal', 'bar', 'clear']);
+
+// Field annotation pill styling constants
+const FIELD_ANNOTATION_PILL_PADDING = 8; // Border (2px each side) + padding (2px each side)
+const FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER = 1.2; // Line height multiplier for pill height
+const FIELD_ANNOTATION_VERTICAL_PADDING = 6; // Vertical padding/border for pill height
+const DEFAULT_FIELD_ANNOTATION_FONT_SIZE = 16; // Default font size for field annotations
+
+/**
+ * Tab stop in pixel coordinates for measurement.
+ * Converted from OOXML twips at measurement boundary.
+ */
+type TabStopPx = {
+  pos: number; // px
+  val: TabStop['val'];
+  leader?: TabStop['leader'];
+};
+
+// Unused type - may be needed for future decimal tab implementation
+// type _PendingDecimalStop = {
+//   target: number;
+//   consumed: number;
+// };
+
+const roundValue = (value: number): number =>
+  measurementConfig.mode === 'deterministic' ? Math.round(value * 10) / 10 : value;
+
+// Utility functions for future unit conversion needs
+// function _ptToPx(pt: number): number {
+//   return pt * PX_PER_PT;
+// }
+
+// function _pxToPt(px: number): number {
+//   return px / PX_PER_PT;
+// }
+
+/**
+ * Get or create a canvas 2D context for text measurement.
+ *
+ * Lazily creates and caches a canvas 2D context for efficient text measurement.
+ * The context is reused across multiple measurements to avoid the overhead of
+ * repeated canvas creation.
+ *
+ * @returns A cached CanvasRenderingContext2D instance
+ * @throws {Error} If canvas is not available (non-DOM environment without polyfill)
+ * @throws {Error} If 2D context creation fails
+ */
+function getCanvasContext(): CanvasRenderingContext2D {
+  if (!canvasContext) {
+    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+
+    if (!canvas) {
+      throw new Error('Canvas not available. Ensure this runs in a DOM environment (browser or jsdom).');
+    }
+
+    canvasContext = canvas.getContext('2d');
+    if (!canvasContext) {
+      throw new Error('Failed to get 2D context from canvas');
+    }
+  }
+
+  return canvasContext;
+}
+
+/**
+ * Build a CSS font string from Run styling properties
+ *
+ * @example
+ * ```
+ * buildFontString({ fontFamily: "Arial", fontSize: 16, bold: true, italic: true })
+ * // Returns: { font: "italic bold 16px Arial", fontFamily: "Arial" }
+ * ```
+ */
+function buildFontString(run: { fontFamily: string; fontSize: number; bold?: boolean; italic?: boolean }): {
+  font: string;
+  fontFamily: string;
+} {
+  const parts: string[] = [];
+
+  if (run.italic) parts.push('italic');
+  if (run.bold) parts.push('bold');
+  parts.push(`${run.fontSize}px`);
+
+  if (measurementConfig.mode === 'deterministic') {
+    parts.push(
+      measurementConfig.fonts.fallbackStack.length > 0
+        ? measurementConfig.fonts.fallbackStack.join(', ')
+        : measurementConfig.fonts.deterministicFamily,
+    );
+  } else {
+    parts.push(run.fontFamily);
+  }
+
+  return {
+    font: parts.join(' '),
+    fontFamily: run.fontFamily,
+  };
+}
+
+/**
+ * Measure the width of a text string with specific styling, including letter spacing
+ *
+ * @param text - The text to measure
+ * @param font - CSS font string (e.g., "16px Arial")
+ * @param ctx - Canvas 2D context
+ * @param fontFamily - Font family name for calibration
+ * @param letterSpacing - Optional letter spacing in pixels
+ * @returns Total width including letter spacing, calibration, and glyph overhang
+ */
+function measureText(
+  text: string,
+  font: string,
+  ctx: CanvasRenderingContext2D,
+  _fontFamily?: string,
+  _letterSpacing?: number,
+): number {
+  // Deprecated direct measurement; kept for backward compatibility in case of direct calls.
+  ctx.font = font;
+  const metrics = ctx.measureText(text);
+  const advanceWidth = metrics.width;
+  const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
+  return Math.max(advanceWidth, paintedWidth);
+}
+
+/**
+ * Calculate typography metrics for a given font size
+ *
+ * When fontInfo is provided, uses actual Canvas TextMetrics API to get precise
+ * ascent/descent values from actualBoundingBoxAscent/Descent. This prevents
+ * text clipping that occurs when using hardcoded approximations (0.8/0.2 ratios)
+ * which don't account for font-specific glyph heights.
+ *
+ * Falls back to approximations (0.8/0.2) only when:
+ * - fontInfo is not provided (empty paragraphs)
+ * - Browser doesn't support actualBoundingBox* metrics (legacy browsers)
+ */
+const MIN_SINGLE_LINE_PX = (12 * 96) / 72; // 240 twips = 12pt
+
+/**
+ * Safety margin added to line height to prevent text clipping at the edges.
+ * This accounts for sub-pixel rendering differences between measurement and display.
+ */
+const LINE_HEIGHT_SAFETY_MARGIN_PX = 1;
+
+function calculateTypographyMetrics(
+  fontSize: number,
+  spacing?: ParagraphSpacing,
+  fontInfo?: FontInfo,
+): {
+  ascent: number;
+  descent: number;
+  lineHeight: number;
+} {
+  let ascent: number;
+  let descent: number;
+
+  if (fontInfo) {
+    // Use actual font metrics from Canvas API for accurate measurements
+    const ctx = getCanvasContext();
+    const metrics = getFontMetrics(ctx, fontInfo, measurementConfig.mode, measurementConfig.fonts);
+    ascent = roundValue(metrics.ascent);
+    descent = roundValue(metrics.descent);
+  } else {
+    // Fallback approximations for empty paragraphs or missing font info
+    ascent = roundValue(fontSize * 0.8);
+    descent = roundValue(fontSize * 0.2);
+  }
+
+  // Add safety margin to prevent edge clipping from sub-pixel rendering differences
+  const baseLineHeight = Math.max(ascent + descent + LINE_HEIGHT_SAFETY_MARGIN_PX, MIN_SINGLE_LINE_PX);
+  const lineHeight = roundValue(resolveLineHeight(spacing, baseLineHeight));
+
+  return {
+    ascent,
+    descent,
+    lineHeight,
+  };
+}
+
+/**
+ * Extract FontInfo from a TextRun for typography metrics calculation.
+ */
+function getFontInfoFromRun(run: TextRun): FontInfo {
+  return {
+    fontFamily: run.fontFamily,
+    fontSize: run.fontSize,
+    bold: run.bold,
+    italic: run.italic,
+  };
+}
+
+/**
+ * Update maxFontInfo when a new run has a larger font size.
+ * Returns the updated FontInfo if this run has the max font size, otherwise returns the existing info.
+ */
+function updateMaxFontInfo(
+  currentMaxSize: number,
+  currentMaxInfo: FontInfo | undefined,
+  newRun: TextRun,
+): FontInfo | undefined {
+  if (newRun.fontSize >= currentMaxSize) {
+    return getFontInfoFromRun(newRun);
+  }
+  return currentMaxInfo;
+}
+
+/**
+ * Type guard to check if a run is a tab run
+ */
+function isTabRun(run: Run): run is TabRun {
+  return run.kind === 'tab';
+}
+
+/**
+ * Type guard to check if a run is an image run
+ */
+function isImageRun(run: Run): run is ImageRun {
+  return run.kind === 'image';
+}
+
+/**
+ * Type guard to check if a run is an explicit line break run
+ */
+function isLineBreakRun(run: Run): run is LineBreakRun {
+  return run.kind === 'lineBreak';
+}
+
+/**
+ * Type guard to check if a run is a field annotation run
+ */
+function isFieldAnnotationRun(run: Run): run is FieldAnnotationRun {
+  return run.kind === 'fieldAnnotation';
+}
+
+/**
+ * Calculate tab width and update the tab run with resolved width
+ *
+ * @param tabRun - The tab run to resolve
+ * @param currentX - Current horizontal position before the tab
+ * @param block - The paragraph block (for context like indent)
+ * @returns The calculated tab width
+ */
+/**
+ * Measure a single FlowBlock and calculate line breaks.
+ *
+ * Performs greedy line breaking: accumulates text width until exceeding maxWidth,
+ * then starts a new line. Breaks on word boundaries when possible.
+ *
+ * @param block - The FlowBlock to measure (contains runs with text and styling)
+ * @param maxWidth - Maximum width for each line in pixels
+ * @returns Measure with lines array and total height
+ *
+ * @example
+ * ```typescript
+ * const block: FlowBlock = {
+ *   id: "0-paragraph",
+ *   runs: [
+ *     { text: "Hello world", fontFamily: "Arial", fontSize: 16 }
+ *   ],
+ *   attrs: {}
+ * };
+ *
+ * const measure = await measureBlock(block, 200);
+ * // Result: { lines: [...], totalHeight: 19.2 }
+ * ```
+ */
+export async function measureBlock(block: FlowBlock, constraints: number | MeasureConstraints): Promise<Measure> {
+  const normalized = normalizeConstraints(constraints);
+
+  if (block.kind === 'drawing') {
+    return measureDrawingBlock(block as DrawingBlock, normalized);
+  }
+
+  if (block.kind === 'image') {
+    return measureImageBlock(block, normalized);
+  }
+
+  if (block.kind === 'list') {
+    return measureListBlock(block, normalized);
+  }
+
+  if (block.kind === 'table') {
+    return measureTableBlock(block, normalized);
+  }
+
+  // Break blocks (sectionBreak, pageBreak, columnBreak) are pass-through measures
+  // with no dimensions - they only signal layout control flow
+  if (block.kind === 'sectionBreak') {
+    return { kind: 'sectionBreak' };
+  }
+  if (block.kind === 'pageBreak') {
+    return { kind: 'pageBreak' };
+  }
+  if (block.kind === 'columnBreak') {
+    return { kind: 'columnBreak' };
+  }
+
+  // Paragraph/default
+  return measureParagraphBlock(block as ParagraphBlock, normalized.maxWidth);
+}
+
+async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): Promise<ParagraphMeasure> {
+  const ctx = getCanvasContext();
+  const wordLayout: WordParagraphLayoutOutput | undefined = block.attrs?.wordLayout as
+    | WordParagraphLayoutOutput
+    | undefined;
+
+  /**
+   * Floating-point tolerance for line breaking decisions (0.5px).
+   *
+   * Why this constant exists:
+   * - Canvas text measurement can have minor floating-point precision differences
+   *   between measurement and rendering contexts
+   * - Different browsers may round sub-pixel measurements slightly differently
+   * - Without a tolerance, lines might break prematurely when text is *almost*
+   *   but not quite at maxWidth
+   *
+   * Why 0.5px was chosen:
+   * - Large enough to absorb typical floating-point rounding errors (0.1-0.3px)
+   * - Small enough to be visually imperceptible at standard screen resolutions
+   * - Conservative value that prevents premature breaking without allowing
+   *   significant overflow
+   *
+   * How it's used in line breaking:
+   * - When checking if a word fits: `width + wordWidth <= maxWidth - WIDTH_FUDGE_PX`
+   * - This gives the layout a 0.5px safety margin before triggering a line break
+   * - Prevents edge cases where measured text at 199.7px breaks on a 200px line
+   *   due to rounding, when it would actually render fine
+   */
+  const WIDTH_FUDGE_PX = 0.5;
+  const lines: Line[] = [];
+  const indent = block.attrs?.indent;
+  const spacing = block.attrs?.spacing;
+  const indentLeft = sanitizePositive(indent?.left);
+  const indentRight = sanitizePositive(indent?.right);
+  const firstLine = indent?.firstLine ?? 0;
+  const hanging = indent?.hanging ?? 0;
+  const isWordLayoutList = Boolean(wordLayout?.marker);
+  // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
+  // suppressFirstLineIndent=true for these cases.
+  const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
+  const rawFirstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
+  // When wordLayout is present, the hanging region is occupied by the list marker/tab.
+  // Do not expand the first-line width; use the same content width as subsequent lines.
+  const firstLineOffset = isWordLayoutList ? 0 : rawFirstLineOffset;
+  const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
+
+  // For left-justified list markers, the marker is rendered in-flow (position: relative),
+  // so it occupies horizontal space on the first line. Reduce the first line's available
+  // width by the marker space to prevent overflow.
+  let leftJustifiedMarkerSpace = 0;
+  if (wordLayout?.marker) {
+    const markerJustification = wordLayout.marker.justification ?? 'left';
+    if (markerJustification === 'left') {
+      // Marker space = marker box width + gutter between marker and text
+      const markerBoxWidth = wordLayout.marker.markerBoxWidthPx ?? 0;
+      const gutterWidth = wordLayout.marker.gutterWidthPx ?? LIST_MARKER_GAP;
+      leftJustifiedMarkerSpace = markerBoxWidth + gutterWidth;
+    }
+  }
+
+  const initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset - leftJustifiedMarkerSpace);
+  const tabStops = buildTabStopsPx(
+    indent,
+    block.attrs?.tabs as TabStop[],
+    block.attrs?.tabIntervalTwips as number | undefined,
+  );
+  const decimalSeparator = sanitizeDecimalSeparator(block.attrs?.decimalSeparator);
+
+  // Extract bar tab stops for paragraph-level rendering (OOXML: bars on all lines)
+  const barTabStops = tabStops.filter((stop) => stop.val === 'bar');
+
+  // Helper to add bar tabs to a line (paragraph-level decoration)
+  const addBarTabsToLine = (line: Line): void => {
+    if (barTabStops.length > 0) {
+      line.bars = barTabStops.map((stop) => ({ x: stop.pos }));
+    }
+  };
+
+  // Drop cap handling: measure drop cap and calculate reserved space
+  const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+  let dropCapMeasure: {
+    width: number;
+    height: number;
+    lines: number;
+    mode: 'drop' | 'margin';
+  } | null = null;
+
+  if (dropCapDescriptor) {
+    // Validate required fields before measuring
+    if (!dropCapDescriptor.run || !dropCapDescriptor.run.text || !dropCapDescriptor.lines) {
+      console.warn('Invalid drop cap descriptor - missing required fields:', dropCapDescriptor);
+    } else {
+      const dropCapMeasured = measureDropCap(ctx, dropCapDescriptor, spacing);
+      dropCapMeasure = dropCapMeasured;
+
+      // Update the descriptor with measured dimensions
+      (dropCapDescriptor as DropCapDescriptor).measuredWidth = dropCapMeasured.width;
+      (dropCapDescriptor as DropCapDescriptor).measuredHeight = dropCapMeasured.height;
+    }
+  }
+
+  if (block.runs.length === 0) {
+    const metrics = calculateTypographyMetrics(12, spacing);
+    const emptyLine: Line = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 0,
+      width: 0,
+      ...metrics,
+    };
+    addBarTabsToLine(emptyLine);
+    lines.push(emptyLine);
+
+    return {
+      kind: 'paragraph',
+      lines,
+      totalHeight: metrics.lineHeight,
+    };
+  }
+
+  let currentLine: {
+    fromRun: number;
+    fromChar: number;
+    toRun: number;
+    toChar: number;
+    width: number;
+    maxFontSize: number;
+    /** Font info for the run with maxFontSize, used for accurate typography metrics */
+    maxFontInfo?: FontInfo;
+    maxWidth: number;
+    segments: Line['segments'];
+    leaders?: Line['leaders'];
+  } | null = null;
+
+  // Helper to calculate effective available width based on current line count.
+  // When drop cap is present in 'drop' mode, reduce width for the first N lines.
+  const getEffectiveWidth = (baseWidth: number): number => {
+    if (dropCapMeasure && lines.length < dropCapMeasure.lines && dropCapMeasure.mode === 'drop') {
+      return Math.max(1, baseWidth - dropCapMeasure.width);
+    }
+    return baseWidth;
+  };
+
+  let lastFontSize = 12;
+  let tabStopCursor = 0;
+  let pendingTabAlignment: { target: number; val: TabStop['val'] } | null = null;
+  // Remember the last applied tab alignment so we can clamp end-aligned
+  // segments to the exact target after measuring to avoid 1px drift.
+  let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
+  const warnedTabVals = new Set<string>();
+
+  /**
+   * Validate and track tab stop val to ensure it's normalized.
+   * Returns true if validation passed, false if val is invalid (treated as 'start').
+   */
+  const validateTabStopVal = (stop: TabStopPx): boolean => {
+    if (!ALLOWED_TAB_VALS.has(stop.val) && !warnedTabVals.has(stop.val)) {
+      warnedTabVals.add(stop.val);
+      return false;
+    }
+    return true;
+  };
+
+  /**
+   * Apply a pending tab alignment to the next segment/run given its width.
+   * Returns the aligned starting X position when applied.
+   */
+  const alignPendingTabForWidth = (segmentWidth: number, beforeDecimalWidth?: number): number | undefined => {
+    if (!pendingTabAlignment || !currentLine) return undefined;
+
+    // Guard against negative segment width
+    if (segmentWidth < 0) {
+      segmentWidth = 0;
+    }
+
+    const { target, val } = pendingTabAlignment;
+    let startX = currentLine.width;
+
+    if (val === 'decimal') {
+      const beforeWidth = beforeDecimalWidth ?? 0;
+      startX = Math.max(0, target - beforeWidth);
+    } else if (val === 'end') {
+      startX = Math.max(0, target - segmentWidth);
+    } else if (val === 'center') {
+      startX = Math.max(0, target - segmentWidth / 2);
+    } else {
+      startX = Math.max(0, target);
+    }
+
+    currentLine.width = roundValue(startX);
+    // Track alignment used for post-segment clamping
+    lastAppliedTabAlign = { target, val };
+    pendingTabAlignment = null;
+    return startX;
+  };
+
+  /**
+   * Aligns a text segment at a pending tab stop by measuring its width and applying the appropriate alignment.
+   *
+   * This function handles different tab alignment types:
+   * - 'decimal': Aligns text based on the decimal separator position
+   * - 'end': Right-aligns text at the tab stop
+   * - 'center': Centers text at the tab stop
+   * - 'start': Left-aligns text at the tab stop (default)
+   *
+   * @param segmentText - The text content of the segment to align
+   * @param font - CSS font string for measuring text width (e.g., "16px Arial")
+   * @param runContext - The Run object containing styling properties (letterSpacing, etc.)
+   * @returns The aligned starting X position for the segment, or undefined if no tab alignment is pending
+   */
+  const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): number | undefined => {
+    if (!pendingTabAlignment || !currentLine) return undefined;
+    const { val } = pendingTabAlignment;
+
+    let segmentWidth = 0;
+    let beforeDecimalWidth: number | undefined;
+
+    if (val === 'decimal') {
+      const idx = segmentText.indexOf(decimalSeparator);
+      if (idx >= 0) {
+        const beforeText = segmentText.slice(0, idx);
+        beforeDecimalWidth = beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, runContext) : 0;
+      }
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+    } else if (val === 'end' || val === 'center') {
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+    }
+
+    return alignPendingTabForWidth(segmentWidth, beforeDecimalWidth);
+  };
+
+  // Expand runs to handle inline newlines as explicit break runs
+  const runsToProcess: Run[] = [];
+  for (const run of block.runs as Run[]) {
+    if ((run as TextRun).text && typeof (run as TextRun).text === 'string' && (run as TextRun).text.includes('\n')) {
+      const textRun = run as TextRun;
+      const segments = textRun.text.split('\n');
+      let cursor = textRun.pmStart ?? 0;
+      segments.forEach((seg, idx) => {
+        runsToProcess.push({
+          ...textRun,
+          text: seg,
+          pmStart: cursor,
+          pmEnd: cursor + seg.length,
+        });
+        cursor += seg.length;
+        if (idx !== segments.length - 1) {
+          runsToProcess.push({
+            kind: 'break',
+            breakType: 'line',
+            pmStart: cursor,
+            pmEnd: cursor + 1,
+            sdt: (run as TextRun).sdt,
+          });
+          cursor += 1;
+        }
+      });
+    } else {
+      runsToProcess.push(run as Run);
+    }
+  }
+
+  // Process each run
+  for (let runIndex = 0; runIndex < runsToProcess.length; runIndex++) {
+    const run = runsToProcess[runIndex];
+
+    if ((run as Run).kind === 'break') {
+      if (currentLine) {
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+        const completedLine: Line = { ...currentLine, ...metrics };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        currentLine = null;
+      } else {
+        const textRunWithSize = block.runs.find(
+          (r): r is TextRun =>
+            r.kind !== 'tab' && r.kind !== 'lineBreak' && r.kind !== 'break' && !('src' in r) && 'fontSize' in r,
+        );
+        const fallbackSize = textRunWithSize?.fontSize ?? 12;
+        const metrics = calculateTypographyMetrics(fallbackSize, spacing);
+        const emptyLine: Line = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 0,
+          width: 0,
+          segments: [],
+          ...metrics,
+        };
+        addBarTabsToLine(emptyLine);
+        lines.push(emptyLine);
+      }
+      tabStopCursor = 0;
+      pendingTabAlignment = null;
+      lastAppliedTabAlign = null;
+      continue;
+    }
+
+    // Handle explicit line breaks (e.g., DOCX <w:br/>)
+    if (isLineBreakRun(run)) {
+      if (currentLine) {
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+      } else {
+        // Line break at the start of paragraph (no currentLine yet):
+        // Create an empty line to represent the leading line break
+        const metrics = calculateTypographyMetrics(lastFontSize, spacing);
+        const emptyLine: Line = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 0,
+          width: 0,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [],
+          ...metrics,
+        };
+        addBarTabsToLine(emptyLine);
+        lines.push(emptyLine);
+      }
+
+      // Start a fresh (currently empty) line after the break. If no further content
+      // is added, this placeholder will become a blank line with the appropriate height.
+      const hadPreviousLine = lines.length > 0;
+      const nextLineMaxWidth: number = hadPreviousLine
+        ? getEffectiveWidth(contentWidth)
+        : getEffectiveWidth(initialAvailableWidth);
+      currentLine = {
+        fromRun: runIndex,
+        fromChar: 0,
+        toRun: runIndex,
+        toChar: 0,
+        width: 0,
+        maxFontSize: lastFontSize,
+        maxWidth: nextLineMaxWidth,
+        segments: [],
+      };
+      tabStopCursor = 0;
+      pendingTabAlignment = null;
+      lastAppliedTabAlign = null;
+      continue;
+    }
+
+    // Handle tab runs specially
+    if (isTabRun(run)) {
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: 0,
+          maxFontSize: 12, // Default font size for tabs
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [],
+        };
+      }
+
+      // Advance to next tab stop using the same logic as inline "\t" handling
+      const originX = currentLine.width;
+      const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+      tabStopCursor = nextIndex;
+      const tabAdvance = Math.max(0, target - currentLine.width);
+      currentLine.width = roundValue(currentLine.width + tabAdvance);
+      // Persist measured tab width on the TabRun for downstream consumers/tests
+      (run as TabRun & { width?: number }).width = tabAdvance;
+      currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
+      currentLine.toRun = runIndex;
+      currentLine.toChar = 1; // tab is a single character
+      if (stop) {
+        validateTabStopVal(stop);
+        pendingTabAlignment = { target, val: stop.val };
+      } else {
+        pendingTabAlignment = null;
+      }
+
+      // Emit leader decoration if requested
+      if (stop && stop.leader && stop.leader !== 'none') {
+        const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
+        const from = Math.min(originX, target);
+        const to = Math.max(originX, target);
+        if (!currentLine.leaders) currentLine.leaders = [];
+        currentLine.leaders.push({ from, to, style: leaderStyle });
+      }
+
+      continue;
+    }
+
+    // Handle image runs
+    if (isImageRun(run)) {
+      // Calculate image width including spacing
+      const leftSpace = run.distLeft ?? 0;
+      const rightSpace = run.distRight ?? 0;
+      const imageWidth = run.width + leftSpace + rightSpace;
+
+      // Calculate image height including spacing (for line height)
+      const topSpace = run.distTop ?? 0;
+      const bottomSpace = run.distBottom ?? 0;
+      const imageHeight = run.height + topSpace + bottomSpace;
+
+      // If a tab alignment is pending, apply it to this image run
+      let imageStartX: number | undefined;
+      if (pendingTabAlignment && currentLine) {
+        imageStartX = alignPendingTabForWidth(imageWidth);
+      }
+
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1, // Images are treated as single atomic units
+          width: imageWidth,
+          maxFontSize: imageHeight, // Use image height for line height calculation
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+              ...(imageStartX !== undefined ? { x: imageStartX } : {}),
+            },
+          ],
+        };
+        continue;
+      }
+
+      // Preserve the tab alignment before the if-else block to avoid TypeScript narrowing issues
+      const appliedTabAlign: { target: number; val: TabStop['val'] } | null = lastAppliedTabAlign;
+
+      // Check if image fits on current line
+      if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
+        // Image doesn't fit - finish current line and start new line with image
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        tabStopCursor = 0;
+        pendingTabAlignment = null;
+        lastAppliedTabAlign = null;
+
+        // Start new line with the image
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: imageWidth,
+          maxFontSize: imageHeight,
+          maxWidth: getEffectiveWidth(contentWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: imageWidth,
+            },
+          ],
+        };
+      } else {
+        // Image fits on current line - append it
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        currentLine.width = roundValue(currentLine.width + imageWidth);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, imageHeight);
+        if (!currentLine.segments) currentLine.segments = [];
+        currentLine.segments.push({
+          runIndex,
+          fromChar: 0,
+          toChar: 1,
+          width: imageWidth,
+          ...(imageStartX !== undefined ? { x: imageStartX } : {}),
+        });
+      }
+
+      // Clamp width if aligned to an end tab to avoid rounding drift
+      // Note: Using type assertion to work around TypeScript control flow narrowing issue
+      // where TS incorrectly infers `never` type after the if-else block above.
+      const tabAlign = appliedTabAlign as { target: number; val: TabStop['val'] } | null;
+      if (tabAlign && currentLine && tabAlign.val === 'end') {
+        currentLine.width = roundValue(tabAlign.target);
+      }
+      lastAppliedTabAlign = null;
+
+      continue;
+    }
+
+    // Handle field annotation runs (pill-styled form fields)
+    if (isFieldAnnotationRun(run)) {
+      // Use displayLabel for text measurement, with fallback defaults
+      const displayText = run.displayLabel || '';
+
+      // Use annotation's typography or fallback to defaults (16px Arial is standard)
+      const annotationFontSize =
+        typeof run.fontSize === 'number'
+          ? run.fontSize
+          : typeof run.fontSize === 'string'
+            ? parseFloat(run.fontSize) || DEFAULT_FIELD_ANNOTATION_FONT_SIZE
+            : DEFAULT_FIELD_ANNOTATION_FONT_SIZE;
+      const annotationFontFamily = run.fontFamily || 'Arial, sans-serif';
+
+      // Build font string for measurement
+      const fontWeight = run.bold ? 'bold' : 'normal';
+      const fontStyle = run.italic ? 'italic' : 'normal';
+      const annotationFont = `${fontStyle} ${fontWeight} ${annotationFontSize}px ${annotationFontFamily}`;
+      ctx.font = annotationFont;
+
+      // Measure text width
+      const textWidth = displayText ? ctx.measureText(displayText).width : 0;
+
+      // Add pill styling overhead: border (2px each side) + padding (2px each side) = 8px total
+      const annotationWidth = textWidth + FIELD_ANNOTATION_PILL_PADDING;
+
+      // Calculate height including pill styling
+      const annotationHeight =
+        annotationFontSize * FIELD_ANNOTATION_LINE_HEIGHT_MULTIPLIER + FIELD_ANNOTATION_VERTICAL_PADDING;
+
+      // If a tab alignment is pending, apply it
+      let annotationStartX: number | undefined;
+      if (pendingTabAlignment && currentLine) {
+        annotationStartX = alignPendingTabForWidth(annotationWidth);
+      }
+
+      // Initialize line if needed
+      if (!currentLine) {
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1, // Field annotations are atomic units
+          width: annotationWidth,
+          maxFontSize: annotationHeight,
+          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: annotationWidth,
+              ...(annotationStartX !== undefined ? { x: annotationStartX } : {}),
+            },
+          ],
+        };
+        continue;
+      }
+
+      // Check if annotation fits on current line
+      if (currentLine.width + annotationWidth > currentLine.maxWidth && currentLine.width > 0) {
+        // Doesn't fit - finish current line and start new one
+        const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+        const completedLine: Line = {
+          ...currentLine,
+          ...metrics,
+        };
+        addBarTabsToLine(completedLine);
+        lines.push(completedLine);
+        tabStopCursor = 0;
+        pendingTabAlignment = null;
+        lastAppliedTabAlign = null;
+
+        // Start new line with the annotation
+        currentLine = {
+          fromRun: runIndex,
+          fromChar: 0,
+          toRun: runIndex,
+          toChar: 1,
+          width: annotationWidth,
+          maxFontSize: annotationHeight,
+          maxWidth: getEffectiveWidth(contentWidth),
+          segments: [
+            {
+              runIndex,
+              fromChar: 0,
+              toChar: 1,
+              width: annotationWidth,
+            },
+          ],
+        };
+      } else {
+        // Fits on current line - append it
+        currentLine.toRun = runIndex;
+        currentLine.toChar = 1;
+        currentLine.width = roundValue(currentLine.width + annotationWidth);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, annotationHeight);
+        if (!currentLine.segments) currentLine.segments = [];
+        currentLine.segments.push({
+          runIndex,
+          fromChar: 0,
+          toChar: 1,
+          width: annotationWidth,
+          ...(annotationStartX !== undefined ? { x: annotationStartX } : {}),
+        });
+      }
+
+      // Handle end tab alignment
+      const tabAlign = lastAppliedTabAlign as { target: number; val: TabStop['val'] } | null;
+      if (tabAlign && currentLine && tabAlign.val === 'end') {
+        currentLine.width = roundValue(tabAlign.target);
+      }
+      lastAppliedTabAlign = null;
+
+      continue;
+    }
+
+    // At this point, we've filtered out break, lineBreak, tab, image, and fieldAnnotation runs.
+    // The remaining run must be TextRun (which has text, fontSize, etc.)
+    if (!('text' in run) || !('fontSize' in run)) {
+      // Safety check - skip if this isn't a TextRun
+      continue;
+    }
+
+    // Handle text runs
+    lastFontSize = run.fontSize;
+    const { font } = buildFontString(run);
+    const tabSegments = run.text.split('\t');
+
+    let charPosInRun = 0;
+
+    for (let segmentIndex = 0; segmentIndex < tabSegments.length; segmentIndex++) {
+      const segment = tabSegments[segmentIndex];
+      const isLastSegment = segmentIndex === tabSegments.length - 1;
+      const words = segment.split(' ');
+
+      // Align this segment if a tab alignment is pending
+      let segmentStartX: number | undefined;
+      if (currentLine && pendingTabAlignment) {
+        segmentStartX = alignSegmentAtTab(segment, font, run);
+        // After alignment, currentLine.width is the X position where this segment starts
+        if (segmentStartX == null) {
+          segmentStartX = currentLine.width;
+        }
+      }
+
+      for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
+        const word = words[wordIndex];
+        if (word === '') {
+          charPosInRun += 1;
+          continue;
+        }
+        const isLastWordInSegment = wordIndex === words.length - 1;
+        const isLastWord = isLastWordInSegment && isLastSegment;
+        const wordOnlyWidth = measureRunWidth(word, font, ctx, run);
+        const spaceWidth = isLastWord ? 0 : measureRunWidth(' ', font, ctx, run);
+        const wordCommitWidth = isLastWord ? wordOnlyWidth : wordOnlyWidth + spaceWidth;
+        const wordStartChar = charPosInRun;
+        const wordEndNoSpace = charPosInRun + word.length;
+        const wordEndWithSpace = charPosInRun + (isLastWord ? word.length : word.length + 1);
+
+        if (!currentLine) {
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: wordStartChar,
+            toRun: runIndex,
+            toChar: wordEndNoSpace,
+            width: wordOnlyWidth,
+            maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
+          };
+          // If a trailing space exists and fits safely, include it on this line
+          const ls = (run as TextRun).letterSpacing ?? 0;
+          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+            currentLine.toChar = wordEndWithSpace;
+            currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
+            charPosInRun = wordEndWithSpace;
+          } else {
+            // Do not count trailing space at line end
+            // but still advance char index to skip over the space for subsequent words
+            charPosInRun = wordEndWithSpace;
+          }
+          continue;
+        }
+
+        // For TOC entries, never break lines - allow them to extend beyond maxWidth
+        const isTocEntry = block.attrs?.isTocEntry;
+        // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
+        const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+        if (
+          currentLine.width + boundarySpacing + wordOnlyWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
+          currentLine.width > 0 &&
+          !isTocEntry
+        ) {
+          const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+          const completedLine: Line = {
+            ...currentLine,
+            ...metrics,
+          };
+          addBarTabsToLine(completedLine);
+          lines.push(completedLine);
+          tabStopCursor = 0;
+          pendingTabAlignment = null;
+
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: wordStartChar,
+            toRun: runIndex,
+            toChar: wordEndNoSpace,
+            width: wordOnlyWidth,
+            maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
+            maxWidth: getEffectiveWidth(contentWidth),
+            segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
+          };
+          // If trailing space would fit on the new line, consume it here; otherwise skip it
+          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+            currentLine.toChar = wordEndWithSpace;
+            currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
+            charPosInRun = wordEndWithSpace;
+          } else {
+            // Skip the space in character indexing even if we don't render it
+            charPosInRun = wordEndWithSpace;
+          }
+        } else {
+          currentLine.toRun = runIndex;
+          // If adding the trailing space would exceed, commit only the word and finalize line
+          if (
+            !isLastWord &&
+            currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX
+          ) {
+            currentLine.toChar = wordEndNoSpace;
+            currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
+            currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+            currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+            appendSegment(currentLine.segments, runIndex, wordStartChar, wordEndNoSpace, wordOnlyWidth, segmentStartX);
+            // finish current line and start a new one on next iteration
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+            const completedLine: Line = { ...currentLine, ...metrics };
+            addBarTabsToLine(completedLine);
+            lines.push(completedLine);
+            tabStopCursor = 0;
+            pendingTabAlignment = null;
+            currentLine = null;
+            // advance past space
+            charPosInRun = wordEndNoSpace + 1;
+            continue;
+          }
+          const newToChar = isLastWord ? wordEndNoSpace : wordEndWithSpace;
+          currentLine.toChar = newToChar;
+          // For the first word in a tab-aligned segment, pass the explicit X position
+          const useExplicitX = wordIndex === 0 && segmentStartX !== undefined;
+          const explicitX = useExplicitX ? segmentStartX : undefined;
+          currentLine.width = roundValue(
+            currentLine.width +
+              boundarySpacing +
+              wordCommitWidth +
+              (isLastWord ? 0 : ((run as TextRun).letterSpacing ?? 0)),
+          );
+          currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+          currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+          appendSegment(currentLine.segments, runIndex, wordStartChar, newToChar, wordCommitWidth, explicitX);
+        }
+
+        charPosInRun = isLastWord ? wordEndNoSpace : wordEndWithSpace;
+      }
+
+      // If this segment was positioned by a right-aligned tab, clamp the
+      // final width to the tab target to avoid rounding drift.
+      if (lastAppliedTabAlign && currentLine) {
+        const appliedTab = lastAppliedTabAlign as { target: number; val: TabStop['val'] };
+        if (appliedTab.val === 'end') {
+          currentLine.width = roundValue(appliedTab.target);
+        }
+      }
+      lastAppliedTabAlign = null;
+
+      if (!isLastSegment) {
+        pendingTabAlignment = null;
+        if (!currentLine) {
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: charPosInRun,
+            toRun: runIndex,
+            toChar: charPosInRun,
+            width: 0,
+            maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            segments: [],
+          };
+        }
+        const originX = currentLine.width;
+        const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+        tabStopCursor = nextIndex;
+        const tabAdvance = Math.max(0, target - currentLine.width);
+        currentLine.width = roundValue(currentLine.width + tabAdvance);
+        currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+        currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+        currentLine.toRun = runIndex;
+        currentLine.toChar = charPosInRun;
+        charPosInRun += 1;
+        if (stop) {
+          validateTabStopVal(stop);
+          pendingTabAlignment = { target, val: stop.val };
+        } else {
+          pendingTabAlignment = null;
+        }
+
+        // Emit leader decoration if requested
+        if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
+          const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
+          const from = Math.min(originX, target);
+          const to = Math.max(originX, target);
+          if (!currentLine.leaders) currentLine.leaders = [];
+          currentLine.leaders.push({ from, to, style: leaderStyle });
+        }
+
+        // Note: Bar tabs are now added at paragraph-level via addBarTabsToLine()
+        // (OOXML spec: bars appear on all lines, not just where tab chars occur)
+
+        /* Build hyphen-aware segments: keep '-' with the left part to allow a wrap like "two-" | "column"
+      const parts = word.split('-');
+      const segments: string[] = [];
+      for (let i = 0; i < parts.length; i += 1) {
+        const last = i === parts.length - 1;
+        segments.push(last ? parts[i] : parts[i] + '-');
+      }
+
+      for (let segIndex = 0; segIndex < segments.length; segIndex++) {
+        const segText = segments[segIndex];
+        const isLastSegmentOfWord = segIndex === segments.length - 1;
+
+        // Width for fit check (no trailing space)
+        const segOnlyWidth = measureText(segText, font, ctx, fontFamily, letterSpacing);
+        // Width for commit: include trailing space only for last segment of a word that is not the last word
+        const fullSegmentText = isLastSegmentOfWord && !isLastWord ? segText + ' ' : segText;
+        const fullSegmentWidth = measureText(fullSegmentText, font, ctx, fontFamily, letterSpacing);
+
+        const segStartChar = charPosInRun;
+        const segEndChar = charPosInRun + fullSegmentText.length;
+
+        // Initialize line if needed
+        if (!currentLine) {
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: segStartChar,
+            toRun: runIndex,
+            toChar: segEndChar,
+            width: fullSegmentWidth,
+            maxFontSize: run.fontSize,
+          };
+          charPosInRun = segEndChar;
+          continue;
+        }
+
+        const boundarySpacing = currentLine.width > 0 ? letterSpacing : 0;
+        // Small safety margin for floating-point precision and minor measurement variations
+        const SAFETY_MARGIN_PX = 0.25;
+        const wouldFit =
+          currentLine.width + boundarySpacing + segOnlyWidth + SAFETY_MARGIN_PX <= maxWidth ||
+          currentLine.width === 0;
+
+        if (!wouldFit) {
+          // Finish current line before adding this segment
+          trimTrailingSpace(currentLine);
+          const metrics = calculateTypographyMetrics(currentLine.maxFontSize);
+          lines.push({
+            ...currentLine,
+            ...metrics,
+          });
+
+          // Start new line with this segment
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: segStartChar,
+            toRun: runIndex,
+            toChar: segEndChar,
+            width: fullSegmentWidth,
+            maxFontSize: run.fontSize,
+          };
+        } else {
+          // Append segment to current line
+          const prevToRun = currentLine.toRun;
+          const prevToChar = currentLine.toChar;
+          const prevWidth = currentLine.width;
+
+          currentLine.toRun = runIndex;
+          currentLine.toChar = segEndChar;
+          currentLine.width += boundarySpacing + fullSegmentWidth;
+          currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+
+          // Safety: if we exceeded maxWidth after appending (e.g., trailing space pushed us over),
+          // revert and wrap this segment to next line instead
+          if (currentLine.width > maxWidth) {
+            // Undo the append
+            currentLine.toRun = prevToRun;
+            currentLine.toChar = prevToChar;
+            currentLine.width = prevWidth;
+
+            // Finish current line
+            trimTrailingSpace(currentLine);
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize);
+            lines.push({
+              ...currentLine,
+              ...metrics,
+            });
+
+            // Start new line with this segment
+            currentLine = {
+              fromRun: runIndex,
+              fromChar: segStartChar,
+              toRun: runIndex,
+              toChar: segEndChar,
+              width: fullSegmentWidth,
+              maxFontSize: run.fontSize,
+            };
+          }
+        }
+
+        // Advance position within the run
+        charPosInRun = segEndChar;
+*/
+      }
+    }
+  }
+
+  if (!currentLine && lines.length === 0) {
+    const fallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
+    const metrics = calculateTypographyMetrics(fallbackFontSize, spacing);
+    const fallbackLine: Line = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 0,
+      width: 0,
+      segments: [],
+      ...metrics,
+    };
+    addBarTabsToLine(fallbackLine);
+    lines.push(fallbackLine);
+  }
+
+  if (currentLine) {
+    const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+    const finalLine: Line = {
+      ...currentLine,
+      ...metrics,
+    };
+    addBarTabsToLine(finalLine);
+    lines.push(finalLine);
+  }
+
+  const totalHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
+
+  let markerInfo: ParagraphMeasure['marker'];
+
+  if (wordLayout?.marker) {
+    const markerRun = {
+      fontFamily: wordLayout.marker.run.fontFamily,
+      fontSize: wordLayout.marker.run.fontSize,
+      bold: wordLayout.marker.run.bold,
+      italic: wordLayout.marker.run.italic,
+    };
+    const { font: markerFont } = buildFontString(markerRun);
+    const markerText = wordLayout.marker.markerText ?? '';
+    const glyphWidth = markerText ? measureText(markerText, markerFont, ctx) : 0;
+    const gutter =
+      typeof wordLayout.marker.gutterWidthPx === 'number' &&
+      isFinite(wordLayout.marker.gutterWidthPx) &&
+      wordLayout.marker.gutterWidthPx >= 0
+        ? wordLayout.marker.gutterWidthPx
+        : LIST_MARKER_GAP;
+
+    // Marker box should match Word's box width when provided; otherwise fall back to glyph + gap.
+    const markerBoxWidth = Math.max(wordLayout.marker.markerBoxWidthPx ?? 0, glyphWidth + LIST_MARKER_GAP);
+
+    markerInfo = {
+      markerWidth: markerBoxWidth,
+      markerTextWidth: glyphWidth,
+      indentLeft: wordLayout.indentLeftPx ?? 0,
+      // For tab sizing in the renderer: expose gutter for word-layout lists
+      gutterWidth: gutter,
+    } as ParagraphMeasure['marker'];
+  }
+
+  return {
+    kind: 'paragraph',
+    lines,
+    totalHeight,
+    ...(markerInfo ? { marker: markerInfo } : {}),
+    ...(dropCapMeasure ? { dropCap: dropCapMeasure } : {}),
+  };
+}
+
+async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
+  const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
+
+  let columnWidths: number[];
+
+  /**
+   * Scales column widths proportionally to fit within a target width.
+   *
+   * This function is used when table column widths exceed the available page width.
+   * It proportionally reduces all columns to fit the constraint while maintaining
+   * their relative proportions.
+   *
+   * Rounding Adjustment Logic:
+   * - Initial scaling uses Math.round() for each column, which can cause the sum
+   *   to deviate from the target due to accumulated rounding errors
+   * - After scaling, the function adjusts columns one-by-one to reach the exact target
+   * - For excess width (sum > target): decrements columns starting from index 0
+   * - For deficit width (sum < target): increments columns starting from index 0
+   * - Ensures no column goes below 1px minimum width
+   * - Distributes adjustments cyclically to avoid bias toward any single column
+   *
+   * @param widths - Array of column widths in pixels
+   * @param targetWidth - Maximum total width in pixels
+   * @returns Scaled column widths that sum exactly to targetWidth (or original widths if already fit)
+   *
+   * @example
+   * ```typescript
+   * scaleColumnWidths([100, 200, 100], 300)
+   * // Returns: [75, 150, 75] (scaled from 400px down to 300px, maintaining 1:2:1 ratio)
+   *
+   * scaleColumnWidths([50, 50], 200)
+   * // Returns: [50, 50] (already within target, no scaling needed)
+   *
+   * scaleColumnWidths([33, 33, 33], 100)
+   * // Returns: [34, 33, 33] (sum adjusted from 99 to exactly 100)
+   * ```
+   */
+  const scaleColumnWidths = (widths: number[], targetWidth: number): number[] => {
+    const totalWidth = widths.reduce((a, b) => a + b, 0);
+    if (totalWidth <= targetWidth || widths.length === 0) return widths;
+
+    const scale = targetWidth / totalWidth;
+    const scaled = widths.map((w) => Math.max(1, Math.round(w * scale)));
+    const sum = scaled.reduce((a, b) => a + b, 0);
+
+    // Normalize to the exact target to avoid overflows from rounding.
+    if (sum !== targetWidth) {
+      const adjust = (delta: number): void => {
+        let idx = 0;
+        const direction = delta > 0 ? 1 : -1;
+        delta = Math.abs(delta);
+        while (delta > 0 && scaled.length > 0) {
+          const i = idx % scaled.length;
+          if (direction > 0) {
+            scaled[i] += 1;
+            delta -= 1;
+          } else if (scaled[i] > 1) {
+            scaled[i] -= 1;
+            delta -= 1;
+          }
+          idx += 1;
+          if (idx > scaled.length * 2 && delta > 0) break;
+        }
+      };
+      adjust(targetWidth - sum);
+    }
+
+    return scaled;
+  };
+
+  // Determine actual column count from table structure
+  const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
+
+  // Use provided column widths from OOXML w:tblGrid if available
+  if (block.columnWidths && block.columnWidths.length > 0) {
+    columnWidths = [...block.columnWidths];
+
+    // Check if table has fixed layout (preserves exact widths)
+    const hasExplicitWidth = block.attrs?.tableWidth != null;
+    const hasFixedLayout = block.attrs?.tableLayout === 'fixed';
+
+    // For fixed-layout tables, preserve the exact widths without adjustment
+    if (hasExplicitWidth || hasFixedLayout) {
+      // Scale proportionally only if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      }
+    } else {
+      // For auto-layout tables, adjust column widths to match actual column count
+      if (columnWidths.length < maxCellCount) {
+        // Pad missing columns with equal distribution of remaining space
+        const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
+        const remainingWidth = Math.max(0, maxWidth - usedWidth);
+        const missingColumns = maxCellCount - columnWidths.length;
+        const paddingWidth = Math.max(1, Math.floor(remainingWidth / missingColumns));
+        columnWidths.push(...Array.from({ length: missingColumns }, () => paddingWidth));
+      } else if (columnWidths.length > maxCellCount) {
+        // Truncate extra column widths
+        columnWidths = columnWidths.slice(0, maxCellCount);
+      }
+
+      // Scale proportionally if total width exceeds available width
+      const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+      if (totalWidth > maxWidth) {
+        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      }
+    }
+  } else {
+    // Fallback: Equal distribution based on max cells in any row
+    const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
+    columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
+  }
+
+  // Derive grid column count from computed columnWidths (handles both explicit tblGrid and fallback cases)
+  const gridColumnCount = columnWidths.length;
+
+  /**
+   * Calculate the width for a cell by summing the grid column widths it spans.
+   * @param startCol - The starting grid column index
+   * @param colspan - Number of grid columns this cell spans
+   */
+  const calculateCellWidth = (startCol: number, colspan: number): number => {
+    let width = 0;
+    for (let i = 0; i < colspan && startCol + i < columnWidths.length; i++) {
+      width += columnWidths[startCol + i];
+    }
+    // Ensure minimum width of 1px
+    return Math.max(1, width);
+  };
+
+  // Track which grid columns are "occupied" by rowspans from previous rows
+  // Each element contains the number of remaining rows the cell spans into
+  const rowspanTracker: number[] = new Array(gridColumnCount).fill(0);
+
+  // Measure each cell paragraph with appropriate column width based on colspan
+  const rows: TableRowMeasure[] = [];
+  const rowBaseHeights: number[] = new Array(block.rows.length).fill(0);
+  const spanConstraints: Array<{ startRow: number; rowSpan: number; requiredHeight: number }> = [];
+  for (let rowIndex = 0; rowIndex < block.rows.length; rowIndex++) {
+    const row = block.rows[rowIndex];
+    const cellMeasures: TableCellMeasure[] = [];
+    let gridColIndex = 0; // Track position in the grid
+
+    for (const cell of row.cells) {
+      const colspan = cell.colSpan ?? 1;
+      const rowspan = cell.rowSpan ?? 1;
+
+      // Skip grid columns that are occupied by rowspans from previous rows
+      // before processing this cell
+      while (gridColIndex < gridColumnCount && rowspanTracker[gridColIndex] > 0) {
+        rowspanTracker[gridColIndex]--;
+        gridColIndex++;
+      }
+
+      // If we've exhausted the grid, stop processing cells
+      if (gridColIndex >= gridColumnCount) {
+        break;
+      }
+
+      const cellWidth = calculateCellWidth(gridColIndex, colspan);
+
+      // Mark grid columns as occupied for future rows if rowspan > 1
+      if (rowspan > 1) {
+        for (let c = 0; c < colspan && gridColIndex + c < gridColumnCount; c++) {
+          rowspanTracker[gridColIndex + c] = rowspan - 1;
+        }
+      }
+
+      // Get cell padding for height calculation
+      const cellPadding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
+      const paddingTop = cellPadding.top ?? 2;
+      const paddingBottom = cellPadding.bottom ?? 2;
+      const paddingLeft = cellPadding.left ?? 4;
+      const paddingRight = cellPadding.right ?? 4;
+
+      // Content width accounts for horizontal padding
+      const contentWidth = Math.max(1, cellWidth - paddingLeft - paddingRight);
+
+      /**
+       * Measure all blocks in the cell and accumulate total content height.
+       *
+       * Multi-Block Cell Support:
+       * - Cells can contain multiple blocks (paragraphs, lists, images, etc.)
+       * - Each block is measured independently with the cell's content width
+       * - Block heights are accumulated to calculate total content height
+       * - Vertical padding is applied to the total accumulated height
+       *
+       * Backward Compatibility:
+       * - If cell.blocks is not present, falls back to cell.paragraph (legacy format)
+       * - Empty blocks arrays are handled gracefully (no content)
+       *
+       * Height Calculation:
+       * - contentHeight = sum of all block.totalHeight values
+       * - totalCellHeight = contentHeight + paddingTop + paddingBottom
+       *
+       * Example:
+       * ```
+       * cell.blocks = [paragraph1, paragraph2, paragraph3]
+       * contentHeight = para1.height + para2.height + para3.height
+       * totalCellHeight = contentHeight + 2 (top) + 2 (bottom)
+       * ```
+       */
+      const blockMeasures: Measure[] = [];
+      let contentHeight = 0;
+
+      const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+
+      for (let blockIndex = 0; blockIndex < cellBlocks.length; blockIndex++) {
+        const block = cellBlocks[blockIndex];
+        const measure = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity });
+        blockMeasures.push(measure);
+        // Get height from different measure types
+        const blockHeight = 'totalHeight' in measure ? measure.totalHeight : 'height' in measure ? measure.height : 0;
+        contentHeight += blockHeight;
+
+        // Add paragraph spacing.after to content height for all paragraphs.
+        // Word applies spacing.after even to the last paragraph in a cell, creating space at the bottom.
+        if (block.kind === 'paragraph') {
+          const spacingAfter = (block as ParagraphBlock).attrs?.spacing?.after;
+          if (typeof spacingAfter === 'number' && spacingAfter > 0) {
+            contentHeight += spacingAfter;
+          }
+        }
+      }
+
+      // Total cell height includes vertical padding
+      const totalCellHeight = contentHeight + paddingTop + paddingBottom;
+
+      cellMeasures.push({
+        blocks: blockMeasures,
+        // Backward compatibility
+        paragraph: blockMeasures[0]?.kind === 'paragraph' ? (blockMeasures[0] as ParagraphMeasure) : undefined,
+        width: cellWidth,
+        height: totalCellHeight,
+        gridColumnStart: gridColIndex,
+        colSpan: colspan,
+        rowSpan: rowspan,
+      });
+
+      if (rowspan === 1) {
+        rowBaseHeights[rowIndex] = Math.max(rowBaseHeights[rowIndex], totalCellHeight);
+      } else {
+        spanConstraints.push({ startRow: rowIndex, rowSpan: rowspan, requiredHeight: totalCellHeight });
+      }
+
+      // Advance grid column position by colspan
+      gridColIndex += colspan;
+    }
+
+    // Decrement any remaining rowspan trackers that weren't handled
+    for (let col = gridColIndex; col < gridColumnCount; col++) {
+      if (rowspanTracker[col] > 0) {
+        rowspanTracker[col]--;
+      }
+    }
+
+    rows.push({ cells: cellMeasures, height: 0 });
+  }
+
+  const rowHeights = [...rowBaseHeights];
+  for (const constraint of spanConstraints) {
+    const { startRow, rowSpan, requiredHeight } = constraint;
+    if (rowSpan <= 0) continue;
+
+    let currentHeight = 0;
+    for (let i = 0; i < rowSpan && startRow + i < rowHeights.length; i++) {
+      currentHeight += rowHeights[startRow + i];
+    }
+
+    if (currentHeight < requiredHeight) {
+      const spanLength = Math.min(rowSpan, rowHeights.length - startRow);
+      const increment = spanLength > 0 ? (requiredHeight - currentHeight) / spanLength : 0;
+      for (let i = 0; i < spanLength; i++) {
+        rowHeights[startRow + i] += increment;
+      }
+    }
+  }
+
+  // Apply explicit row heights (exact / atLeast) from row attributes
+  block.rows.forEach((row, index) => {
+    const spec = row.attrs?.rowHeight as { value?: number; rule?: string } | undefined;
+    if (spec?.value != null && Number.isFinite(spec.value)) {
+      const rule = spec.rule ?? 'atLeast';
+      if (rule === 'exact') {
+        rowHeights[index] = spec.value;
+      } else {
+        rowHeights[index] = Math.max(rowHeights[index], spec.value);
+      }
+    }
+  });
+
+  for (let i = 0; i < rows.length; i++) {
+    rows[i].height = Math.max(0, rowHeights[i]);
+  }
+
+  const totalHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+  const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
+  return {
+    kind: 'table',
+    rows,
+    columnWidths,
+    totalWidth,
+    totalHeight,
+  };
+}
+
+async function measureImageBlock(block: ImageBlock, constraints: MeasureConstraints): Promise<ImageMeasure> {
+  const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
+
+  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
+
+  // For anchored images with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This matches MS Word behavior where images in headers/footers
+  // with negative offsets are rendered at their full size regardless of region constraints.
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
+
+  const widthScale = maxWidth / intrinsic.width;
+  const heightScale = maxHeight / intrinsic.height;
+  const scale = Math.min(1, widthScale, heightScale);
+
+  const width = Number.isFinite(scale) ? intrinsic.width * scale : intrinsic.width;
+  const height = Number.isFinite(scale) ? intrinsic.height * scale : intrinsic.height;
+
+  return {
+    kind: 'image',
+    width,
+    height,
+  };
+}
+
+/**
+ * Measures a drawing block (vector shapes, shape groups, embedded images) and calculates
+ * its rendered dimensions within the given constraints.
+ *
+ * This function handles:
+ * - Rotation transformations and their effect on bounding box dimensions
+ * - Proportional scaling to fit within maxWidth/maxHeight constraints
+ * - Special case: negative vertical positioning bypass for anchored drawings
+ *
+ * Negative Positioning Bypass:
+ * For anchored drawings with negative vertical positioning (offsetV < 0 or margin.top < 0),
+ * the maxHeight constraint is bypassed. This is intentional for footer/header graphics
+ * that are designed to overflow their nominal container region (e.g., decorative elements
+ * positioned above a footer's top edge). The bypass only applies when the drawing is
+ * anchored AND has at least one negative vertical offset value.
+ *
+ * @param block - The drawing block to measure, containing geometry, anchor, and margin data
+ * @param constraints - Measurement constraints with maxWidth and optional maxHeight
+ * @returns A DrawingMeasure containing final dimensions, scale factor, and geometry
+ *
+ * @example
+ * ```typescript
+ * const block: DrawingBlock = {
+ *   kind: 'drawing',
+ *   drawingKind: 'vectorShape',
+ *   geometry: { width: 200, height: 100, rotation: 0 },
+ *   anchor: { isAnchored: true, offsetV: -20 },
+ * };
+ *
+ * const measure = await measureDrawingBlock(block, { maxWidth: 500, maxHeight: 80 });
+ * // Result: { width: 200, height: 100, scale: 1 }
+ * // (maxHeight bypassed due to negative offsetV)
+ * ```
+ */
+async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureConstraints): Promise<DrawingMeasure> {
+  if (block.drawingKind === 'image') {
+    const intrinsic = getIntrinsicSizeFromDims(block.width, block.height, constraints.maxWidth);
+
+    const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
+    const maxHeight = constraints.maxHeight && constraints.maxHeight > 0 ? constraints.maxHeight : Infinity;
+
+    const widthScale = maxWidth / intrinsic.width;
+    const heightScale = maxHeight / intrinsic.height;
+    const scale = Math.min(1, widthScale, heightScale);
+
+    const width = Number.isFinite(scale) ? intrinsic.width * scale : intrinsic.width;
+    const height = Number.isFinite(scale) ? intrinsic.height * scale : intrinsic.height;
+
+    return {
+      kind: 'drawing',
+      drawingKind: 'image',
+      width,
+      height,
+      scale: Number.isFinite(scale) ? scale : 1,
+      naturalWidth: intrinsic.width,
+      naturalHeight: intrinsic.height,
+      geometry: {
+        width: intrinsic.width,
+        height: intrinsic.height,
+        rotation: 0,
+        flipH: false,
+        flipV: false,
+      },
+    };
+  }
+
+  const geometry = ensureDrawingGeometry(block.geometry);
+  const rotatedBounds = calculateRotatedBounds(geometry);
+  const naturalWidth = Math.max(1, rotatedBounds.width);
+  const naturalHeight = Math.max(1, rotatedBounds.height);
+
+  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth;
+
+  // For anchored drawings with negative vertical positioning (designed to overflow their container),
+  // bypass the height constraint. This is common for footer/header graphics that extend beyond
+  // their nominal region (e.g., decorative elements with marginOffset.top < 0).
+  const hasNegativeVerticalPosition =
+    block.anchor?.isAnchored &&
+    ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
+      (typeof block.margin?.top === 'number' && block.margin.top < 0));
+
+  const maxHeight =
+    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+      ? Infinity
+      : constraints.maxHeight;
+
+  const widthScale = maxWidth / naturalWidth;
+  const heightScale = maxHeight / naturalHeight;
+  const normalizedScale = Math.min(1, widthScale, heightScale);
+  const scale = Number.isFinite(normalizedScale) ? normalizedScale : 1;
+
+  const width = naturalWidth * scale;
+  const height = naturalHeight * scale;
+
+  return {
+    kind: 'drawing',
+    drawingKind: block.drawingKind,
+    width,
+    height,
+    scale,
+    naturalWidth,
+    naturalHeight,
+    geometry: { ...geometry },
+    ...(block.drawingKind === 'shapeGroup' && block.groupTransform
+      ? { groupTransform: { ...block.groupTransform } }
+      : {}),
+  };
+}
+
+function getIntrinsicImageSize(block: ImageBlock, fallback: number): { width: number; height: number } {
+  const safeFallback = fallback > 0 ? fallback : 1;
+  const suggestedWidth = typeof block.width === 'number' && block.width > 0 ? block.width : safeFallback;
+  const suggestedHeight = typeof block.height === 'number' && block.height > 0 ? block.height : safeFallback * 0.75;
+
+  return {
+    width: suggestedWidth,
+    height: suggestedHeight,
+  };
+}
+
+function getIntrinsicSizeFromDims(width?: number, height?: number, fallback = 1): { width: number; height: number } {
+  const safeFallback = fallback > 0 ? fallback : 1;
+  const intrinsicWidth = typeof width === 'number' && width > 0 ? width : safeFallback;
+  const intrinsicHeight = typeof height === 'number' && height > 0 ? height : safeFallback * 0.75;
+  return {
+    width: intrinsicWidth,
+    height: intrinsicHeight,
+  };
+}
+
+function ensureDrawingGeometry(geometry?: DrawingGeometry): DrawingGeometry {
+  if (geometry) {
+    return {
+      width: Math.max(1, geometry.width),
+      height: Math.max(1, geometry.height),
+      rotation: normalizeRotation(geometry.rotation ?? 0),
+      flipH: Boolean(geometry.flipH),
+      flipV: Boolean(geometry.flipV),
+    };
+  }
+  return {
+    width: 1,
+    height: 1,
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  };
+}
+
+function normalizeConstraints(constraints: number | MeasureConstraints): MeasureConstraints {
+  if (typeof constraints === 'number') {
+    return { maxWidth: constraints };
+  }
+  return constraints;
+}
+
+async function measureListBlock(block: ListBlock, constraints: MeasureConstraints): Promise<ListMeasure> {
+  const ctx = getCanvasContext();
+  const items = [];
+  let totalHeight = 0;
+
+  for (const item of block.items) {
+    const wordLayout = item.paragraph.attrs?.wordLayout as
+      | { marker?: WordParagraphLayoutOutput['marker']; indentLeftPx?: number }
+      | undefined;
+    let markerTextWidth: number;
+    let markerWidth: number;
+    let indentLeft: number;
+
+    if ((wordLayout as WordParagraphLayoutOutput | undefined)?.marker) {
+      // Track B: Use wordLayout from @superdoc/word-layout when available
+      const marker = (wordLayout as WordParagraphLayoutOutput).marker!;
+      const markerFontRun: TextRun = {
+        text: marker.markerText,
+        fontFamily: marker.run.fontFamily,
+        fontSize: marker.run.fontSize,
+        bold: marker.run.bold,
+        italic: marker.run.italic,
+        letterSpacing: marker.run.letterSpacing,
+      };
+      const { font: markerFont } = buildFontString(markerFontRun);
+      markerTextWidth = marker.markerText ? measureText(marker.markerText, markerFont, ctx) : 0;
+      markerWidth = marker.markerBoxWidthPx;
+      indentLeft = (wordLayout as WordParagraphLayoutOutput).indentLeftPx ?? 0;
+    } else {
+      // Fallback: legacy behavior for backwards compatibility
+      const markerFontRun = getPrimaryRun(item.paragraph);
+      const { font: markerFont } = buildFontString(markerFontRun);
+      const markerText = item.marker.text ?? '';
+      markerTextWidth = markerText ? measureText(markerText, markerFont, ctx) : 0;
+      indentLeft = resolveIndentLeft(item);
+      const indentHanging = resolveIndentHanging(item);
+      markerWidth = Math.max(MIN_MARKER_GUTTER, markerTextWidth + LIST_MARKER_GAP, indentHanging);
+    }
+
+    // Account for both indentLeft and marker width so paragraph text wraps correctly
+    const paragraphWidth = Math.max(1, constraints.maxWidth - indentLeft - markerWidth);
+
+    const paragraphMeasure = await measureParagraphBlock(item.paragraph, paragraphWidth);
+    totalHeight += paragraphMeasure.totalHeight;
+
+    items.push({
+      itemId: item.id,
+      markerWidth,
+      markerTextWidth,
+      indentLeft,
+      paragraph: paragraphMeasure,
+    });
+  }
+
+  return {
+    kind: 'list',
+    items,
+    totalHeight,
+  };
+}
+
+const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
+  return (
+    paragraph.runs.find((run): run is TextRun => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize)) || {
+      text: '',
+      fontFamily: 'Arial',
+      fontSize: 16,
+    }
+  );
+};
+
+const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
+  // TextRun.kind is optional and defaults to 'text', so check for undefined or 'text'
+  const letterSpacing = run.kind === 'text' || run.kind === undefined ? (run as TextRun).letterSpacing || 0 : 0;
+  const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
+  return roundValue(width);
+};
+
+const appendSegment = (
+  segments: Line['segments'] | undefined,
+  runIndex: number,
+  fromChar: number,
+  toChar: number,
+  width: number,
+  x?: number,
+): void => {
+  if (!segments) return;
+  const last = segments[segments.length - 1];
+  // Only merge segments if they are contiguous AND have no explicit X positioning
+  // (explicit X means tab-aligned, shouldn't merge)
+  if (last && last.runIndex === runIndex && last.toChar === fromChar && x === undefined) {
+    last.toChar = toChar;
+    last.width += width;
+    return;
+  }
+  segments.push({ runIndex, fromChar, toChar, width, x });
+};
+
+const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight: number): number => {
+  if (!spacing || spacing.line == null || spacing.line <= 0) {
+    return baseLineHeight;
+  }
+
+  const raw = spacing.line;
+  const treatAsMultiplier = (spacing.lineRule === 'auto' || spacing.lineRule == null) && raw > 0 && raw <= 10;
+
+  if (treatAsMultiplier) {
+    return raw * baseLineHeight;
+  }
+
+  if (spacing.lineRule === 'exact') {
+    return raw;
+  }
+
+  if (spacing.lineRule === 'atLeast') {
+    return Math.max(baseLineHeight, raw);
+  }
+
+  return Math.max(baseLineHeight, raw);
+};
+
+const sanitizePositive = (value: number | undefined): number =>
+  typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+
+const sanitizeDecimalSeparator = (value: unknown): string => {
+  if (value === ',') return ',';
+  return DEFAULT_DECIMAL_SEPARATOR;
+};
+
+/**
+ * Default padding around drop cap in pixels.
+ * Applied to the right side of the drop cap box.
+ */
+const DROP_CAP_PADDING_PX = 4;
+
+/**
+ * Measure the drop cap and calculate its dimensions.
+ *
+ * Uses the drop cap run's font properties to measure the text width,
+ * and calculates the height based on the number of lines it should span.
+ *
+ * @param ctx - Canvas context for text measurement
+ * @param descriptor - Drop cap descriptor with run and metadata
+ * @param spacing - Paragraph spacing for line height calculation
+ * @returns Measured drop cap dimensions
+ */
+const measureDropCap = (
+  ctx: CanvasRenderingContext2D,
+  descriptor: DropCapDescriptor,
+  spacing?: ParagraphSpacing,
+): { width: number; height: number; lines: number; mode: 'drop' | 'margin' } => {
+  const { run, lines, mode } = descriptor;
+
+  // Build font string for the drop cap run
+  const { font } = buildFontString({
+    fontFamily: run.fontFamily,
+    fontSize: run.fontSize,
+    bold: run.bold,
+    italic: run.italic,
+  });
+
+  // Measure the text width
+  ctx.font = font;
+  const metrics = ctx.measureText(run.text);
+  const advanceWidth = metrics.width;
+  const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
+  const textWidth = Math.max(advanceWidth, paintedWidth);
+
+  // Add padding for spacing between drop cap and text
+  const width = roundValue(textWidth + DROP_CAP_PADDING_PX);
+
+  // Calculate height based on the number of lines the drop cap should span
+  // This uses the base line height calculation from the paragraph's spacing
+  const baseLineHeight = resolveLineHeight(spacing, run.fontSize * 1.2);
+  const height = roundValue(baseLineHeight * lines);
+
+  return {
+    width,
+    height,
+    lines,
+    mode,
+  };
+};
+
+const resolveIndentLeft = (item: ListBlock['items'][number]): number => {
+  const indentLeft = sanitizePositive(item.paragraph.attrs?.indent?.left);
+  if (indentLeft > 0) {
+    return indentLeft;
+  }
+  return DEFAULT_LIST_INDENT_BASE + item.marker.level * DEFAULT_LIST_INDENT_STEP;
+};
+
+const resolveIndentHanging = (item: ListBlock['items'][number]): number => {
+  const indentHanging = sanitizePositive(item.paragraph.attrs?.indent?.hanging);
+  if (indentHanging > 0) {
+    return indentHanging;
+  }
+  return DEFAULT_LIST_HANGING;
+};
+
+/**
+ * Build tab stops in pixel coordinates for measurement.
+ * Converts indent from px→twips, calls engine with twips, converts result twips→px.
+ */
+const buildTabStopsPx = (indent?: ParagraphIndent, tabs?: TabStop[], tabIntervalTwips?: number): TabStopPx[] => {
+  // Convert indent from pixels to twips for the engine
+  const paragraphIndentTwips = {
+    left: pxToTwips(sanitizePositive(indent?.left)),
+    right: pxToTwips(sanitizePositive(indent?.right)),
+    firstLine: pxToTwips(sanitizePositive(indent?.firstLine)),
+    hanging: pxToTwips(sanitizePositive(indent?.hanging)),
+  };
+
+  // Engine works in twips (tabs already in twips from PM adapter)
+  const stops = computeTabStops({
+    explicitStops: tabs ?? [],
+    defaultTabInterval: tabIntervalTwips ?? DEFAULT_TAB_INTERVAL_TWIPS,
+    paragraphIndent: paragraphIndentTwips,
+  });
+
+  // Convert resulting tab stops from twips to pixels for measurement
+  return stops.map((stop) => ({
+    pos: twipsToPx(stop.pos),
+    val: stop.val,
+    leader: stop.leader,
+  }));
+};
+
+const getNextTabStopPx = (
+  currentX: number,
+  tabStops: TabStopPx[],
+  startIndex: number,
+): { target: number; nextIndex: number; stop?: TabStopPx } => {
+  let index = startIndex;
+  while (index < tabStops.length && tabStops[index].pos <= currentX + TAB_EPSILON) {
+    index++;
+  }
+  if (index < tabStops.length) {
+    return { target: tabStops[index].pos, nextIndex: index + 1, stop: tabStops[index] };
+  }
+  return { target: currentX + DEFAULT_TAB_INTERVAL_PX, nextIndex: index };
+};

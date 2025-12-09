@@ -12,6 +12,14 @@ vi.mock('@helpers/list-numbering-helpers.js', () => ({
   },
 }));
 
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: vi.fn((node) => node.attrs.paragraphProperties || {}),
+}));
+
+vi.mock('./removeNumberingProperties.js', () => ({
+  isVisuallyEmptyParagraph: vi.fn(() => false),
+}));
+
 import { toggleList } from './toggleList.js';
 import { updateNumberingProperties } from './changeListLevel.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
@@ -53,7 +61,17 @@ describe('toggleList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     editor = { converter: {} };
-    tr = { docChanged: false };
+    tr = {
+      docChanged: false,
+      mapping: {
+        map: vi.fn((pos) => pos),
+      },
+      doc: {
+        content: { size: 1000 },
+        resolve: vi.fn(() => ({})),
+      },
+      setSelection: vi.fn(),
+    };
     dispatch = vi.fn();
   });
 
@@ -74,7 +92,6 @@ describe('toggleList', () => {
     const paragraphs = [
       createParagraph(
         {
-          numberingProperties: sharedNumbering,
           paragraphProperties: { numberingProperties: sharedNumbering },
           listRendering: { numberingType: 'bullet' },
         },
@@ -82,7 +99,6 @@ describe('toggleList', () => {
       ),
       createParagraph(
         {
-          numberingProperties: { numId: 5, ilvl: 3 },
           paragraphProperties: { numberingProperties: { numId: 5, ilvl: 3 } },
           listRendering: { numberingType: 'bullet' },
         },
@@ -109,7 +125,6 @@ describe('toggleList', () => {
     const paragraphs = [
       createParagraph(
         {
-          numberingProperties: existingNumbering,
           paragraphProperties: { numberingProperties: existingNumbering },
           listRendering: { numberingType: 'decimal' },
         },
@@ -169,7 +184,6 @@ describe('toggleList', () => {
     const beforeNode = {
       type: { name: 'paragraph' },
       attrs: {
-        numberingProperties: beforeNumbering,
         paragraphProperties: { numberingProperties: beforeNumbering },
         listRendering: { numberingType: 'decimal' },
       },

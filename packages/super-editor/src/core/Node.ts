@@ -1,10 +1,10 @@
 import { getExtensionConfigField } from './helpers/getExtensionConfigField.js';
 import { callOrGet } from './utilities/callOrGet.js';
 import type { MaybeGetter } from './utilities/callOrGet.js';
-import type { NodeType, ParseRule, DOMOutputSpec } from 'prosemirror-model';
+import type { NodeType, ParseRule, DOMOutputSpec, Node as PmNode } from 'prosemirror-model';
 import type { Plugin } from 'prosemirror-state';
-import type { InputRule } from 'prosemirror-inputrules';
-import type { NodeView } from 'prosemirror-view';
+import type { NodeView, EditorView, Decoration, DecorationSource } from 'prosemirror-view';
+import type { InputRule } from './InputRule.js';
 import type { Editor } from './Editor.js';
 import type { Command } from './types/ChainedCommands.js';
 import type { AttributeSpec } from './Attribute.js';
@@ -14,7 +14,7 @@ import type { AttributeSpec } from './Attribute.js';
  */
 export interface NodeConfig<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   /** The node name */
   name: string;
@@ -65,7 +65,7 @@ export interface NodeConfig<
   parseDOM?: MaybeGetter<ParseRule[]>;
 
   /** The DOM rendering function - returns a DOMOutputSpec (allows mutable arrays for JS compatibility) */
-  renderDOM?: MaybeGetter<DOMOutputSpec | any[]>;
+  renderDOM?: MaybeGetter<DOMOutputSpec>;
 
   /** Function or object to add options to the node */
   addOptions?: MaybeGetter<Options>;
@@ -89,13 +89,21 @@ export interface NodeConfig<
   addInputRules?: MaybeGetter<InputRule[]>;
 
   /** Function to add a custom node view to the node */
-  addNodeView?: MaybeGetter<(props: any) => NodeView | null>;
+  addNodeView?: MaybeGetter<
+    (props: {
+      node: PmNode;
+      view: EditorView;
+      getPos: () => number | undefined;
+      decorations: readonly Decoration[];
+      innerDecorations: DecorationSource;
+    }) => NodeView | null
+  >;
 
   /** Function to add ProseMirror plugins to the node */
   addPmPlugins?: MaybeGetter<Plugin[]>;
 
   /** Function to extend the ProseMirror node schema */
-  extendNodeSchema?: MaybeGetter<Record<string, any>>;
+  extendNodeSchema?: MaybeGetter<Record<string, unknown>>;
 
   /** Additional config fields - use with caution */
   [key: string]: unknown;
@@ -108,7 +116,7 @@ export interface NodeConfig<
  */
 export class Node<
   Options extends Record<string, unknown> = Record<string, never>,
-  Storage extends Record<string, unknown> = Record<string, never>
+  Storage extends Record<string, unknown> = Record<string, never>,
 > {
   type: NodeType | string = 'node';
 
@@ -128,8 +136,8 @@ export class Node<
 
   constructor(config: NodeConfig<Options, Storage>) {
     this.config = {
-      name: this.name,
       ...config,
+      name: config.name || this.name,
     };
 
     this.name = this.config.name;
@@ -139,19 +147,18 @@ export class Node<
       this.options = (callOrGet(
         getExtensionConfigField(this, 'addOptions', {
           name: this.name,
-        })
+        }),
       ) || {}) as Options;
     } else {
       this.options = {} as Options;
     }
 
-    this.storage =
-      (callOrGet(
-        getExtensionConfigField(this, 'addStorage', {
-          name: this.name,
-          options: this.options,
-        })
-      ) || {}) as Storage;
+    this.storage = (callOrGet(
+      getExtensionConfigField(this, 'addStorage', {
+        name: this.name,
+        options: this.options,
+      }),
+    ) || {}) as Storage;
   }
 
   /**
@@ -161,7 +168,7 @@ export class Node<
    */
   static create<
     O extends Record<string, unknown> = Record<string, never>,
-    S extends Record<string, unknown> = Record<string, never>
+    S extends Record<string, unknown> = Record<string, never>,
   >(config: NodeConfig<O, S>): Node<O, S> {
     return new Node<O, S>(config);
   }

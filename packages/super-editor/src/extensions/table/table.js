@@ -117,7 +117,7 @@
  * @property {TableMeasurement} [tableWidth] - Table width
  * @property {FloatingTableProperties} [floatingTableProperties] - Floating table properties
  * @property {TableBorders} [borders] - Table border configuration
- * @proerty {TableCellMargins} [cellMargins] - Cell margin configuration
+ * @property {TableCellMargins} [cellMargins] - Cell margin configuration
  * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
  */
 
@@ -271,6 +271,17 @@ import {
  */
 
 /**
+ * @typedef {Object} TableNodeAttributes
+ * @property {TableProperties} tableProperties
+ * @property {TableGrid} grid
+ */
+
+/**
+ * @typedef {Node} TableNode
+ * @property {TableNodeAttributes} attrs
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx
@@ -305,16 +316,6 @@ export const Table = Node.create({
 
   addAttributes() {
     return {
-      /* tableWidth: {
-        renderDOM: ({ tableWidth }) => {
-          if (!tableWidth) return {};
-          const { width, type = 'auto' } = tableWidth;
-          return { 
-            style: `width: ${width}px` 
-          };
-        },
-      }, */
-
       /**
        * @private
        * @category Attribute
@@ -354,6 +355,7 @@ export const Table = Node.create({
         default: {},
         renderDOM({ borders }) {
           if (!borders) return {};
+
           const style = Object.entries(borders).reduce((acc, [key, { size, color }]) => {
             return `${acc}border-${key}: ${Math.ceil(size)}px solid ${color || 'black'};`;
           }, '');
@@ -430,7 +432,12 @@ export const Table = Node.create({
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
        */
       tableProperties: {
-        default: null,
+        default: {
+          tableWidth: {
+            value: null,
+            type: 'auto',
+          },
+        },
         rendered: false,
       },
 
@@ -441,6 +448,16 @@ export const Table = Node.create({
        */
       grid: {
         default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {boolean} [userEdited] - Flag indicating user has manually resized columns
+       * Used by pm-adapter to prioritize user edits over original OOXML grid
+       */
+      userEdited: {
+        default: false,
         rendered: false,
       },
     };
@@ -530,7 +547,11 @@ export const Table = Node.create({
           const node = createTable(editor.schema, rows, cols, withHeaderRow);
 
           if (dispatch) {
-            const offset = tr.selection.from + 1;
+            let offset = tr.selection.$from.end() + 1;
+            if (tr.selection.$from.parent?.type?.name === 'run') {
+              // If in a run, we need to insert after the parent paragraph
+              offset = tr.selection.$from.after(tr.selection.$from.depth - 1);
+            }
             tr.replaceSelectionWith(node)
               .scrollIntoView()
               .setSelection(TextSelection.near(tr.doc.resolve(offset)));
@@ -1131,8 +1152,11 @@ export const Table = Node.create({
       ...(resizable
         ? [
             columnResizing({
+              // Disable PM's visual handles (custom overlay handles resizing)
+              // Set to 0 to prevent PM from rendering its own resize handles
+              // while keeping transaction helpers and constraint logic
               // @ts-expect-error - Options types will be fixed in TS migration
-              handleWidth: this.options.handleWidth,
+              handleWidth: 0,
               // @ts-expect-error - Options types will be fixed in TS migration
               cellMinWidth: this.options.cellMinWidth,
               // @ts-expect-error - Options types will be fixed in TS migration
@@ -1188,8 +1212,7 @@ function getCellType({ node, state }) {
  */
 function copyCellAttrs(node) {
   // Exclude colspan, rowspan and colwidth attrs.
-  // eslint-disable-next-line no-unused-vars
-  const { colspan, rowspan, colwidth, ...attrs } = node.attrs;
+  const { colspan: _colspan, rowspan: _rowspan, colwidth: _colwidth, ...attrs } = node.attrs;
   return attrs;
 }
 

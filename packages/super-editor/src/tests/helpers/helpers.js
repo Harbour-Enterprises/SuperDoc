@@ -89,25 +89,54 @@ export const loadTestDataForEditorTests = async (filename) => {
 };
 
 /**
- * Instantiate a new test editor instance
+ * Instantiate a new test editor instance and wait for it to be ready.
+ *
+ * This function creates an Editor and waits for async initialization to complete
+ * before returning. This ensures the editor's state and renderer are fully initialized
+ * before tests attempt to use methods like exportDocx() that depend on the state.
  *
  * @param {Object} options Editor options
- * @returns {Editor} A new test editor instance
+ * @returns {Promise<{editor: Editor, dispatch: Function}>} A promise that resolves with the initialized editor
  */
 export const initTestEditor = (options = {}) => {
+  const { onCreate: userOnCreate, element: providedElement, useImmediateSetTimeout = true, ...restOptions } = options;
+
+  const hasWindow = typeof window !== 'undefined' && window?.setTimeout;
+  const originalSetTimeout = hasWindow ? window.setTimeout : null;
+  const immediateSetTimeout = (cb, ...cbArgs) => {
+    cb(...cbArgs);
+    return 0;
+  };
+  if (hasWindow && useImmediateSetTimeout) {
+    window.setTimeout = immediateSetTimeout;
+  }
+
+  const defaultElement = providedElement ?? (typeof document !== 'undefined' ? document.createElement('div') : null);
+
   const editor = new Editor({
     mode: 'docx',
     documentId: 'test',
     role: 'editor',
     documentMode: 'editing',
     isHeadless: true,
+    element: defaultElement,
     extensions: getStarterExtensions(),
     users: [],
-    ...options,
+    onCreate: (...args) => {
+      userOnCreate?.(...args);
+    },
+    ...restOptions,
   });
+
+  if (hasWindow && originalSetTimeout && useImmediateSetTimeout) {
+    window.setTimeout = originalSetTimeout;
+  }
+
   return {
     editor,
-    dispatch: editor.view.dispatch,
+    get dispatch() {
+      return editor.view?.dispatch;
+    },
   };
 };
 

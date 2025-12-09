@@ -74,7 +74,7 @@ export interface ExtensionLike {
   name: string;
   options: Record<string, unknown>;
   storage: Record<string, unknown>;
-  config: Record<string, any>;
+  config: Record<string, unknown>;
 }
 
 /**
@@ -117,10 +117,7 @@ export class Attribute {
    * @param defaultAttribute Default attribute.
    * @returns Global extension attributes.
    */
-  static #getGlobalAttributes(
-    extensions: ExtensionLike[],
-    defaultAttribute: AttributeSpec
-  ): ExtensionAttribute[] {
+  static #getGlobalAttributes(extensions: ExtensionLike[], defaultAttribute: AttributeSpec): ExtensionAttribute[] {
     const extensionAttributes: ExtensionAttribute[] = [];
 
     const collectAttribute = (globalAttr: GlobalAttribute) => {
@@ -149,7 +146,7 @@ export class Attribute {
       const addGlobalAttributes = getExtensionConfigField<() => GlobalAttribute[]>(
         extension,
         'addGlobalAttributes',
-        context
+        context,
       );
 
       if (!addGlobalAttributes) continue;
@@ -172,7 +169,7 @@ export class Attribute {
    */
   static #getNodeAndMarksAttributes(
     extensions: ExtensionLike[],
-    defaultAttribute: AttributeSpec
+    defaultAttribute: AttributeSpec,
   ): ExtensionAttribute[] {
     const extensionAttributes: ExtensionAttribute[] = [];
 
@@ -190,7 +187,7 @@ export class Attribute {
       const addAttributes = getExtensionConfigField<() => Record<string, Partial<AttributeSpec>>>(
         extension,
         'addAttributes',
-        context
+        context,
       );
 
       if (!addAttributes) continue;
@@ -223,10 +220,7 @@ export class Attribute {
    * @param parseRule PM ParseRule.
    * @param extensionAttrs List of attributes to insert.
    */
-  static insertExtensionAttrsToParseRule(
-    parseRule: ParseRule,
-    extensionAttrs: ExtensionAttribute[]
-  ): ParseRule {
+  static insertExtensionAttrsToParseRule(parseRule: ParseRule, extensionAttrs: ExtensionAttribute[]): ParseRule {
     if ('style' in parseRule) {
       return parseRule;
     }
@@ -235,9 +229,7 @@ export class Attribute {
       ...parseRule,
 
       getAttrs: (node: HTMLElement) => {
-        const oldAttrs = parseRule.getAttrs
-          ? parseRule.getAttrs(node)
-          : parseRule.attrs;
+        const oldAttrs = parseRule.getAttrs ? parseRule.getAttrs(node) : parseRule.attrs;
         if (oldAttrs === false) return false;
 
         const parseFromString = (value: string | AttributeValue): AttributeValue => {
@@ -267,10 +259,6 @@ export class Attribute {
     };
   }
 
-  static #isElementNode(node: unknown): node is Element {
-    return Boolean(node) && typeof (node as Element).getAttribute === 'function';
-  }
-
   /**
    * Get attributes to render.
    * @param nodeOrMark Node or Mark.
@@ -278,7 +266,7 @@ export class Attribute {
    */
   static getAttributesToRender(
     nodeOrMark: PmNode | PmMark,
-    extensionAttrs: ExtensionAttribute[]
+    extensionAttrs: ExtensionAttribute[],
   ): Record<string, AttributeValue> {
     const attributes = extensionAttrs
       .filter((item) => item.attribute.rendered)
@@ -351,7 +339,7 @@ export class Attribute {
   static getSplittedAttributes(
     extensionAttrs: ExtensionAttribute[],
     typeName: string,
-    attributes: Record<string, AttributeValue>
+    attributes: Record<string, AttributeValue>,
   ): Record<string, AttributeValue> {
     const entries = Object.entries(attributes).filter(([name]) => {
       const extensionAttr = extensionAttrs.find((item) => {
@@ -372,14 +360,11 @@ export class Attribute {
    * @param typeOrName The mark type or name.
    * @returns The mark attrs.
    */
-  static getMarkAttributes(
-    state: EditorState,
-    typeOrName: string | MarkType
-  ): Record<string, AttributeValue> {
+  static getMarkAttributes(state: EditorState, typeOrName: string | MarkType): Record<string, AttributeValue> {
     const type = getMarkType(typeOrName, state.schema);
     const marks = getMarksFromSelection(state);
 
-    const mark = marks.find((markItem) => markItem.type.name === type.name);
+    const mark = marks.find((markItem: PmMark) => markItem.type.name === type.name);
 
     if (!mark) return {};
 
@@ -392,10 +377,7 @@ export class Attribute {
    * @param typeOrName The node type or name.
    * @returns The node attrs.
    */
-  static getNodeAttributes(
-    state: EditorState,
-    typeOrName: string | NodeType
-  ): Record<string, AttributeValue> {
+  static getNodeAttributes(state: EditorState, typeOrName: string | NodeType): Record<string, AttributeValue> {
     const type = getNodeType(typeOrName, state.schema);
     const { from, to } = state.selection;
     const nodes: PmNode[] = [];
@@ -417,13 +399,10 @@ export class Attribute {
    * @param typeOrName The node/mark type or name.
    * @returns The attrs of the node/mark or an empty object.
    */
-  static getAttributes(
-    state: EditorState,
-    typeOrName: string | NodeType | MarkType
-  ): Record<string, AttributeValue> {
+  static getAttributes(state: EditorState, typeOrName: string | NodeType | MarkType): Record<string, AttributeValue> {
     const schemaType = getSchemaTypeNameByName(
       typeof typeOrName === 'string' ? typeOrName : typeOrName.name,
-      state.schema
+      state.schema,
     );
 
     if (schemaType === 'node') {

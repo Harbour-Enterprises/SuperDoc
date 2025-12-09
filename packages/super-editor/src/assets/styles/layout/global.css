@@ -19,3 +19,18 @@ a {
   color: initial;
   text-decoration: auto;
 }
+
+.presentation-editor__selection-caret {
+  animation: superdoc-caret-blink 1.2s steps(2, start) infinite;
+}
+
+@keyframes superdoc-caret-blink {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}

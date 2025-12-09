@@ -9,7 +9,6 @@ import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@superdoc/common/collaboration/awareness';
-import { Telemetry } from '@superdoc/common/Telemetry';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
 import { setupAwarenessHandler } from './collaboration/collaboration.js';
@@ -73,7 +72,6 @@ export class SuperDoc extends EventEmitter {
 
     title: 'SuperDoc',
     conversations: [],
-    pagination: false, // Optional: Whether to show pagination in SuperEditors
     isInternal: false,
 
     // toolbar config
@@ -111,6 +109,9 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+
+    // Internal: toggle layout-engine-powered PresentationEditor in dev shells
+    useLayoutEngine: true,
   };
 
   /**
@@ -140,6 +141,20 @@ export class SuperDoc extends EventEmitter {
       }
     }
 
+    // Initialize tracked changes defaults based on document mode
+    if (!this.config.layoutEngineOptions) {
+      this.config.layoutEngineOptions = {};
+    }
+    // Only set defaults if user didn't explicitly configure tracked changes
+    if (!this.config.layoutEngineOptions.trackedChanges) {
+      // Default: ON for editing/suggesting modes, OFF for viewing mode
+      const isViewingMode = this.config.documentMode === 'viewing';
+      this.config.layoutEngineOptions.trackedChanges = {
+        mode: isViewingMode ? 'final' : 'review',
+        enabled: !isViewingMode,
+      };
+    }
+
     this.config.modules = this.config.modules || {};
     if (!Object.prototype.hasOwnProperty.call(this.config.modules, 'comments')) {
       this.config.modules.comments = {};
@@ -149,7 +164,7 @@ export class SuperDoc extends EventEmitter {
     this.userColorMap = new Map();
     this.colorIndex = 0;
 
-    // @ts-ignore
+    // @ts-expect-error - __APP_VERSION__ is injected at build time
     this.version = __APP_VERSION__;
     this.#log('🦋 [superdoc] Using SuperDoc version:', this.version);
 
@@ -165,7 +180,6 @@ export class SuperDoc extends EventEmitter {
     // Apply csp nonce if provided
     if (this.config.cspNonce) this.#patchNaiveUIStyles();
 
-    // this.#initTelemetry();
     this.#initVueApp();
     this.#initListeners();
 
@@ -433,20 +447,6 @@ export class SuperDoc extends EventEmitter {
   }
 
   /**
-   * Initialize telemetry service.
-   */
-  // eslint-disable-next-line no-unused-private-class-members
-  #initTelemetry() {
-    this.telemetry = new Telemetry({
-      enabled: this.config.telemetry?.enabled ?? true,
-      licenseKey: this.config.telemetry?.licenseKey,
-      endpoint: this.config.telemetry?.endpoint,
-      superdocId: this.superdocId,
-      superdocVersion: this.version,
-    });
-  }
-
-  /**
    * Triggered when there is an error in the content
    * @param {Object} param0
    * @param {Error} param0.error The error that occurred
@@ -542,20 +542,6 @@ export class SuperDoc extends EventEmitter {
   }
 
   /**
-   * Toggle pagination for SuperEditors
-   * @returns {void}
-   */
-  togglePagination() {
-    this.config.pagination = !this.config.pagination;
-    this.superdocStore.documents.forEach((doc) => {
-      const editor = doc.getEditor();
-      if (editor) {
-        editor.commands.togglePagination();
-      }
-    });
-  }
-
-  /**
    * Determine whether the current configuration allows a given permission.
    * Used by downstream consumers (toolbar, context menu, commands) to keep
    * tracked-change affordances consistent with customer overrides.
@@ -605,7 +591,6 @@ export class SuperDoc extends EventEmitter {
       isDev: this.isDev || false,
       toolbarGroups: this.config.modules?.toolbar?.groups || this.config.toolbarGroups,
       role: this.config.role,
-      pagination: this.config.pagination,
       icons: this.config.modules?.toolbar?.icons || this.config.toolbarIcons,
       texts: this.config.modules?.toolbar?.texts || this.config.toolbarTexts,
       fonts: this.config.modules?.toolbar?.fonts || null,
@@ -633,7 +618,6 @@ export class SuperDoc extends EventEmitter {
    */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
-    this.#log('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });
@@ -649,6 +633,28 @@ export class SuperDoc extends EventEmitter {
       this.commentsList = null;
       if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: false });
     }
+  }
+
+  /**
+   * Toggle the custom context menu globally.
+   * Updates both flow editors and PresentationEditor instances so downstream listeners can short-circuit early.
+   * @param {boolean} disabled
+   */
+  setDisableContextMenu(disabled = true) {
+    const nextValue = Boolean(disabled);
+    if (this.config.disableContextMenu === nextValue) return;
+    this.config.disableContextMenu = nextValue;
+
+    this.superdocStore?.documents?.forEach((doc) => {
+      const presentationEditor = doc.getPresentationEditor?.();
+      if (presentationEditor?.setContextMenuDisabled) {
+        presentationEditor.setContextMenuDisabled(nextValue);
+      }
+      const editor = doc.getEditor?.();
+      if (editor?.setOptions) {
+        editor.setOptions({ disableContextMenu: nextValue });
+      }
+    });
   }
 
   /**
@@ -682,7 +688,47 @@ export class SuperDoc extends EventEmitter {
       suggesting: () => this.#setModeSuggesting(),
     };
 
-    if (types[type]) types[type]();
+    if (types[type]) {
+      types[type]();
+    }
+  }
+
+  /**
+   * Set the document mode on a document's editor (PresentationEditor or Editor).
+   * Tries PresentationEditor first, falls back to Editor for backward compatibility.
+   * @param {Object} doc - The document object
+   * @param {string} mode - The document mode ('editing', 'viewing', 'suggesting')
+   */
+  #applyDocumentMode(doc, mode) {
+    const presentationEditor = typeof doc.getPresentationEditor === 'function' ? doc.getPresentationEditor() : null;
+    if (presentationEditor) {
+      presentationEditor.setDocumentMode(mode);
+      return;
+    }
+    const editor = typeof doc.getEditor === 'function' ? doc.getEditor() : null;
+    if (editor) {
+      editor.setDocumentMode(mode);
+    }
+  }
+
+  /**
+   * Force PresentationEditor instances to render a specific tracked-changes mode
+   * or disable tracked-change metadata entirely.
+   *
+   * @param {{ mode?: 'review' | 'original' | 'final' | 'off', enabled?: boolean }} [preferences]
+   */
+  setTrackedChangesPreferences(preferences) {
+    const normalized = preferences && Object.keys(preferences).length ? { ...preferences } : undefined;
+    if (!this.config.layoutEngineOptions) {
+      this.config.layoutEngineOptions = {};
+    }
+    this.config.layoutEngineOptions.trackedChanges = normalized;
+    this.superdocStore?.documents?.forEach((doc) => {
+      const presentationEditor = typeof doc.getPresentationEditor === 'function' ? doc.getPresentationEditor() : null;
+      if (presentationEditor?.setTrackedChangesOverrides) {
+        presentationEditor.setTrackedChangesOverrides(normalized);
+      }
+    });
   }
 
   #setModeEditing() {
@@ -692,10 +738,12 @@ export class SuperDoc extends EventEmitter {
       if (firstEditor) this.setActiveEditor(firstEditor);
     }
 
+    // Enable tracked changes for editing mode
+    this.setTrackedChangesPreferences({ mode: 'review', enabled: true });
+
     this.superdocStore.documents.forEach((doc) => {
       doc.restoreComments();
-      const editor = doc.getEditor();
-      if (editor) editor.setDocumentMode('editing');
+      this.#applyDocumentMode(doc, 'editing');
     });
 
     if (this.toolbar) {
@@ -711,10 +759,12 @@ export class SuperDoc extends EventEmitter {
       if (firstEditor) this.setActiveEditor(firstEditor);
     }
 
+    // Enable tracked changes for suggesting mode
+    this.setTrackedChangesPreferences({ mode: 'review', enabled: true });
+
     this.superdocStore.documents.forEach((doc) => {
       doc.restoreComments();
-      const editor = doc.getEditor();
-      if (editor) editor.setDocumentMode('suggesting');
+      this.#applyDocumentMode(doc, 'suggesting');
     });
 
     if (this.toolbar) {
@@ -725,10 +775,13 @@ export class SuperDoc extends EventEmitter {
 
   #setModeViewing() {
     this.toolbar.activeEditor = null;
+
+    // Disable tracked changes for viewing mode (show original document without change markers)
+    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
+
     this.superdocStore.documents.forEach((doc) => {
       doc.removeComments();
-      const editor = doc.getEditor();
-      if (editor) editor.setDocumentMode('viewing');
+      this.#applyDocumentMode(doc, 'viewing');
     });
 
     if (this.toolbar) {
@@ -993,5 +1046,23 @@ export class SuperDoc extends EventEmitter {
     if (!this.activeEditor) return;
     this.activeEditor.setHighContrastMode(isHighContrast);
     this.highContrastModeStore.setHighContrastMode(isHighContrast);
+  }
+
+  /**
+   * Capture layout pipeline events from PresentationEditor
+   * Forwards metrics and errors to host callbacks
+   * @param {Object} payload - Event payload from PresentationEditor.onTelemetry
+   * @param {string} payload.type - Event type: 'layout' or 'error'
+   * @param {Object} payload.data - Event data (metrics for layout, error details for error)
+   * @returns {void}
+   */
+  captureLayoutPipelineEvent(payload) {
+    // Emit as an event so hosts can listen
+    this.emit('layout-pipeline', payload);
+
+    // Call the host callback if provided in config
+    if (typeof this.config.onLayoutPipelineEvent === 'function') {
+      this.config.onLayoutPipelineEvent(payload);
+    }
   }
 }

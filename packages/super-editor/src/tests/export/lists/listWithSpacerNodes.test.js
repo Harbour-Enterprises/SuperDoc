@@ -18,7 +18,6 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
 
   it('export spacer props correctly', () => {
     const spacer = body.elements[1];
-
     expect(spacer.elements.length).toEqual(1);
     expect(spacer.elements[0].name).toEqual('w:pPr');
     expect(spacer.elements[0].elements[0].name).toEqual('w:spacing');
@@ -116,7 +115,7 @@ describe('[list-spacer1.docx] correctly imports invalid list (no abstract) as pa
   it('correctly imports the list styles', () => {
     const importedParagraph = content.content[2];
     expect(importedParagraph.type).toEqual('paragraph');
-    expect(importedParagraph.attrs.styleId).toEqual('StandardL1');
+    expect(importedParagraph.attrs.paragraphProperties?.styleId).toEqual('StandardL1');
 
     const paragraph = body.elements[2];
     const pPr = paragraph.elements.find((el) => el.name === 'w:pPr');
