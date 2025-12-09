@@ -79,7 +79,7 @@ vi.mock('@extensions/index.js', () => ({
   getStarterExtensions: getStarterExtensionsMock,
 }));
 
-vi.mock('@/index.js', () => ({
+vi.mock('@editor/index.js', () => ({
   Editor: EditorConstructor,
 }));
 

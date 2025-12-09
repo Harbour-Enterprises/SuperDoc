@@ -1,6 +1,6 @@
 <script setup>
 import { getCurrentInstance, ref, onMounted } from 'vue';
-import { Toolbar } from '@harbour-enterprises/super-editor';
+import { Toolbar } from '@editor';
 
 const { proxy } = getCurrentInstance();
 const toolbar = ref(null);

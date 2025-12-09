@@ -1,4 +1,4 @@
-import path from 'path';
+import { dirname, resolve } from 'path';
 import copy from 'rollup-plugin-copy'
 import { defineConfig } from 'vite'
 import { fileURLToPath, URL } from 'node:url';
@@ -16,46 +16,45 @@ const visualizerConfig = {
   open: true
 }
 
-export const getAliases = (isDev) => {
+const dir = dirname(fileURLToPath(import.meta.url))
+
+export const getAliases = () => {
   const aliases = {
     // IMPORTANT: Specific @superdoc/* package aliases must come BEFORE the generic '@superdoc'
     // to avoid partial matches swallowing them.
-    '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
+    '@superdoc/common': resolve(dir, '../../shared/common'),
 
     // Workspace packages (source paths for dev)
-    '@superdoc/contracts': path.resolve(__dirname, '../layout-engine/contracts/src/index.ts'),
-    '@superdoc/geometry-utils': path.resolve(__dirname, '../layout-engine/geometry-utils/src/index.ts'),
-    '@superdoc/pm-adapter': path.resolve(__dirname, '../layout-engine/pm-adapter/src/index.ts'),
-    '@superdoc/layout-bridge': path.resolve(__dirname, '../layout-engine/layout-bridge/src/index.ts'),
-    '@superdoc/painter-dom': path.resolve(__dirname, '../layout-engine/painters/dom/src/index.ts'),
-    '@superdoc/painter-pdf': path.resolve(__dirname, '../layout-engine/painters/pdf/src/index.ts'),
-    '@superdoc/style-engine': path.resolve(__dirname, '../layout-engine/style-engine/src/index.ts'),
-    '@superdoc/measuring-dom': fileURLToPath(new URL('../layout-engine/measuring/dom/src', import.meta.url)),
-    '@superdoc/word-layout': path.resolve(__dirname, '../word-layout/src/index.ts'),
-    '@superdoc/url-validation': path.resolve(__dirname, '../../shared/url-validation/index.js'),
-    '@superdoc/preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
+    '@superdoc/contracts': resolve(dir, '../layout-engine/contracts/src'),
+    '@superdoc/geometry-utils': resolve(dir, '../layout-engine/geometry-utils/src'),
+    '@superdoc/pm-adapter': resolve(dir, '../layout-engine/pm-adapter/src'),
+    '@superdoc/layout-bridge': resolve(dir, '../layout-engine/layout-bridge/src'),
+    '@superdoc/painter-dom': resolve(dir, '../layout-engine/painters/dom/src'),
+    '@superdoc/painter-pdf': resolve(dir, '../layout-engine/painters/pdf/src'),
+    '@superdoc/style-engine': resolve(dir, '../layout-engine/style-engine/src'),
+    '@superdoc/measuring-dom': resolve(dir, '../layout-engine/measuring/dom/src'),
+    '@superdoc/word-layout': resolve(dir, '../word-layout/src'),
+    '@superdoc/url-validation': resolve(dir, '../../shared/url-validation'),
+    '@superdoc/preset-geometry': resolve(dir, '../preset-geometry'),
 
     // Generic @superdoc app alias LAST to avoid masking specific package aliases above
-    '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
-    '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
-    '@packages': fileURLToPath(new URL('../', import.meta.url)),
+    '@superdoc': resolve(dir, './src'),
+    '@stores': resolve(dir, './src/stores'),
+    '@packages': resolve(dir, '../'),
     // (rest below)
 
     // Super Editor aliases
-    '@': fileURLToPath(new URL('../super-editor/src', import.meta.url)),
-    '@core': fileURLToPath(new URL('../super-editor/src/core', import.meta.url)),
-    '@extensions': fileURLToPath(new URL('../super-editor/src/extensions', import.meta.url)),
-    '@features': fileURLToPath(new URL('../super-editor/src/features', import.meta.url)),
-    '@components': fileURLToPath(new URL('../super-editor/src/components', import.meta.url)),
-    '@helpers': fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)),
-    '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
-    '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
-    '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
+    '@components': resolve(dir, '../super-editor/src/components'),
+    '@converter': resolve(dir, '../super-editor/src/core/super-converter'),
+    '@core': resolve(dir, '../super-editor/src/core'),
+    '@editor': resolve(dir, '../super-editor/src'),
+    '@extensions': resolve(dir, '../super-editor/src/extensions'),
+    '@features': resolve(dir, '../super-editor/src/features'),
+    '@helpers': resolve(dir, '../super-editor/src/core/helpers'),
+    '@tests': resolve(dir, '../super-editor/src/tests'),
+    '@translator': resolve(dir, '../super-editor/src/core/super-converter/v3/node-translator'),
+    '@utils': resolve(dir, '../super-editor/src/utils'),
   };
-
-  if (isDev) {
-    aliases['@harbour-enterprises/super-editor'] = path.resolve(__dirname, '../super-editor/src');
-  }
 
   return aliases;
 };
@@ -67,12 +66,8 @@ export default defineConfig(({ mode, command}) => {
     vue(),
     copy({
       targets: [
-        {
-          src: path.resolve(__dirname, '../super-editor/dist/*'),
-          dest: 'dist/super-editor',
-        },
         { 
-          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
+          src: resolve(dir, '../../node_modules/pdfjs-dist/web/images/*'), 
           dest: 'dist/images',
         },
       ],
@@ -81,7 +76,6 @@ export default defineConfig(({ mode, command}) => {
     // visualizer(visualizerConfig)
   ];
   if (mode !== 'test') plugins.push(nodePolyfills());
-  const isDev = command === 'serve';
 
   // Use emoji marker instead of ANSI colors to avoid reporter layout issues
   const projectLabel = '🦋 @superdoc';
@@ -101,6 +95,12 @@ export default defineConfig(({ mode, command}) => {
       hookTimeout: 10000,
       exclude: [
         '**/*.spec.js',
+      ],
+      include: [
+        '**/*.{test,spec}.?(c|m)[jt]s?(x)',
+        '../super-editor/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+        '../layout-engine/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+        '../../shared/**/*.{test,spec}.?(c|m)[jt]s?(x)',
       ],
     },
     build: {
@@ -139,6 +139,13 @@ export default defineConfig(({ mode, command}) => {
               'eventemitter3': ['eventemitter3'],
               'uuid': ['uuid'],
               'xml-js': ['xml-js'],
+              'converter': ['@core/super-converter/SuperConverter'],
+              'editor': ['@core/Editor'],
+              'docx-zipper': ['@core/DocxZipper'],
+              'toolbar': ['@components/toolbar/Toolbar.vue'],
+              'super-input': ['@components/SuperInput.vue'],
+              'file-zipper': ['@core/super-converter/zipper.js'],
+              'ai-writer': ['@components/toolbar/AIWriter.vue'],
             }
           },
           {
@@ -174,7 +181,7 @@ export default defineConfig(({ mode, command}) => {
       },
     },
     resolve: {
-      alias: getAliases(isDev),
+      alias: getAliases(),
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
     },
     css: {
@@ -185,8 +192,8 @@ export default defineConfig(({ mode, command}) => {
       host: '0.0.0.0',
       fs: {
         allow: [
-          path.resolve(__dirname, '../super-editor'),
-          path.resolve(__dirname, '../layout-engine'),
+          resolve(dir, '../super-editor'),
+          resolve(dir, '../layout-engine'),
           '../',
           '../../',
         ],

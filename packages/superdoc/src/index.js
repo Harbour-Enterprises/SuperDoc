@@ -1,18 +1,11 @@
-import {
-  SuperConverter,
-  Editor,
-  getRichTextExtensions,
-  createZip,
-  Extensions,
-  registeredHandlers,
-} from '@harbour-enterprises/super-editor';
+import { SuperConverter, Editor, getRichTextExtensions, createZip, Extensions, registeredHandlers } from '@editor';
 import {
   helpers as superEditorHelpers,
   fieldAnnotationHelpers,
   trackChangesHelpers,
   AnnotatorHelpers,
   SectionHelpers,
-} from '@harbour-enterprises/super-editor';
+} from '@editor';
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 

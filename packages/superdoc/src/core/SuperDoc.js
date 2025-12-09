@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@superdoc/common';
-import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
+import { SuperToolbar, createZip } from '@editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@superdoc/common/collaboration/awareness';

@@ -1,11 +1,11 @@
 import './style.css';
 import './app-header.css';
 import '@superdoc/common/styles/common-styles.css';
-import '@harbour-enterprises/super-editor/style.css';
+import '@editor/style.css';
 
 import { SuperDoc } from 'superdoc';
-import { PresentationEditor } from '@harbour-enterprises/super-editor';
-import type { LayoutEngineOptions } from '@harbour-enterprises/super-editor';
+import { PresentationEditor } from '@editor';
+import type { LayoutEngineOptions } from '@editor';
 import imageDocUrl from './assets/image-inline-and-block.docx?url';
 import paragraphDocUrl from './assets/basic-paragraph.docx?url';
 import twoColumnDocUrl from './assets/two_column_two_page.docx?url';

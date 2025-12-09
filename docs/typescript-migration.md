@@ -190,7 +190,7 @@ export function updateNodeAttrs(node: PMNode, attrs: Record<string, any>): PMNod
 ### Extension Pattern
 
 ```typescript
-import { Extension } from '@/core/Extension';
+import { Extension } from '@core/Extension';
 
 export interface MyExtensionOptions {
   enabled?: boolean;

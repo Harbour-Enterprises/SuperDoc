@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
-import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { applyStyleIsolationClass } from '@utils/styleIsolation.js';
 
 /**
  * Configuration options for NodeResizer

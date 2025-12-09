@@ -48,7 +48,7 @@
  * @property {boolean} [slashMenu.includeDefaultItems] Whether to include default menu items
  */
 
-/** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */
+/** @typedef {import('@editor').Editor} Editor */
 /** @typedef {import('../SuperDoc.js').SuperDoc} SuperDoc */
 
 /**
