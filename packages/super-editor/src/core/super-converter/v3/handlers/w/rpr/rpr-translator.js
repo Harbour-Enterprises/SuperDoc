@@ -37,6 +37,7 @@ import { translator as fitTextTranslator } from '../fitText/fitText-translator.j
 import { translator as eastAsianLayoutTranslator } from '../eastAsianLayout/eastAsianLayout-translator.js';
 import { translator as rtlTranslator } from '../rtl/rtl-translator.js';
 import { translator as csTranslator } from '../cs/cs-translator.js';
+import { translator as iCsTranslator } from '../iCs/iCs-translator.js';
 
 // Property translators for w:rPr child elements
 // Each translator handles a specific property of the run properties
@@ -60,6 +61,7 @@ export const propertyTranslators = [
   highlightTranslator,
   imprintTranslator,
   italicTranslator,
+  iCsTranslator,
   kernTranslator,
   langTranslator,
   letterSpacingTranslator,

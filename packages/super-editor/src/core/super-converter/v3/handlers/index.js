@@ -48,6 +48,7 @@ import { translator as w_hideMark_translator } from './w/hideMark/hideMark-trans
 import { translator as w_highlight_translator } from './w/highlight/highlight-translator.js';
 import { translator as w_hyperlink_translator } from './w/hyperlink/hyperlink-translator.js';
 import { translator as w_i_translator } from './w/i/i-translator.js';
+import { translator as w_iCs_translator } from './w/iCs/iCs-translator.js';
 import { translator as w_ilvl_translator } from './w/ilvl/ilvl-translator.js';
 import { translator as w_imprint_translator } from './w/imprint/imprint-translator.js';
 import { translator as w_ind_translator } from './w/ind/ind-translator.js';
@@ -197,6 +198,7 @@ const translatorList = Array.from(
     w_highlight_translator,
     w_hyperlink_translator,
     w_i_translator,
+    w_iCs_translator,
     w_ilvl_translator,
     w_ind_translator,
     w_imprint_translator,
