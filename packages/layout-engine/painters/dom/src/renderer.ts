@@ -87,12 +87,78 @@ type WordLayoutMarker = {
 
 /**
  * Minimal type for wordLayout property used in this renderer.
- * Full type is WordParagraphLayoutOutput from @superdoc/word-layout.
+ *
+ * This is a subset of the full WordParagraphLayoutOutput type from @superdoc/word-layout.
+ * We extract only the fields needed for rendering to avoid a direct dependency on the
+ * word-layout package from the renderer. This allows the renderer to work with any object
+ * that provides these properties, maintaining loose coupling between packages.
+ *
+ * The wordLayout property is attached to ParagraphBlock.attrs during block processing
+ * and contains layout metadata needed for proper list marker and indent rendering.
+ *
+ * @property marker - Optional list marker layout containing text, styling, and positioning info
+ * @property indentLeftPx - Left indent in pixels (used for marker positioning calculations)
+ * @property firstLineIndentMode - When true, indicates the paragraph uses firstLine indent
+ *   pattern (marker at left+firstLine) instead of standard hanging indent (marker at left-hanging).
+ *   This flag changes how markers are positioned and how tab spacing is calculated.
  */
 type MinimalWordLayout = {
   marker?: WordLayoutMarker;
   indentLeftPx?: number;
+  /** True for firstLine indent pattern (marker at left+firstLine vs left-hanging). */
+  firstLineIndentMode?: boolean;
 };
+
+/**
+ * Type guard to check if a value is a valid MinimalWordLayout object.
+ *
+ * This guard validates that the object has the expected structure for MinimalWordLayout
+ * without unsafe type assertions. It checks for the presence of valid properties and
+ * ensures type safety when accessing wordLayout from block attributes.
+ *
+ * @param value - The value to check (typically from block.attrs?.wordLayout)
+ * @returns True if the value is a valid MinimalWordLayout object, false otherwise
+ *
+ * @example
+ * ```typescript
+ * const wordLayout = block.attrs?.wordLayout;
+ * if (isMinimalWordLayout(wordLayout)) {
+ *   // TypeScript now knows wordLayout is MinimalWordLayout
+ *   const marker = wordLayout.marker;
+ *   const isFirstLineMode = wordLayout.firstLineIndentMode === true;
+ * }
+ * ```
+ */
+function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const obj = value as Record<string, unknown>;
+
+  // Check marker property if present
+  if (obj.marker !== undefined) {
+    if (typeof obj.marker !== 'object' || obj.marker === null) {
+      return false;
+    }
+  }
+
+  // Check indentLeftPx property if present
+  if (obj.indentLeftPx !== undefined) {
+    if (typeof obj.indentLeftPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check firstLineIndentMode property if present
+  if (obj.firstLineIndentMode !== undefined) {
+    if (typeof obj.firstLineIndentMode !== 'boolean') {
+      return false;
+    }
+  }
+
+  return true;
+}
 
 /**
  * Layout mode for document rendering.
@@ -1386,7 +1452,7 @@ export class DomPainter {
 
       const block = lookup.block as ParagraphBlock;
       const measure = lookup.measure as ParagraphMeasure;
-      const wordLayout = block.attrs?.wordLayout as MinimalWordLayout | undefined;
+      const wordLayout = isMinimalWordLayout(block.attrs?.wordLayout) ? block.attrs.wordLayout : undefined;
 
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment);
@@ -1553,10 +1619,17 @@ export class DomPainter {
         }
 
         if (isListFirstLine && wordLayout?.marker && fragment.markerWidth) {
-          // Position marker at (indentLeft - hanging) from fragment edge.
-          // This matches Word's model where the marker "hangs" into the left margin.
-          const markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
-          lineEl.style.paddingLeft = `${markerStartPos}px`;
+          // Position marker based on indent pattern:
+          // - Standard hanging: marker at (left - hanging)
+          // - FirstLine mode: marker at (left + firstLine)
+          const isFirstLineIndentMode = wordLayout.firstLineIndentMode === true;
+          const markerStartPos = isFirstLineIndentMode
+            ? paraIndentLeft + (paraIndent?.firstLine ?? 0)
+            : paraIndentLeft - (paraIndent?.hanging ?? 0);
+
+          // Validate markerStartPos to handle NaN/Infinity values gracefully
+          const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
+          lineEl.style.paddingLeft = `${validMarkerStartPos}px`;
 
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
@@ -1581,7 +1654,7 @@ export class DomPainter {
           if (markerJustification === 'left') {
             markerContainer.style.position = 'relative';
           } else {
-            const markerLeftX = markerStartPos - fragment.markerWidth;
+            const markerLeftX = validMarkerStartPos - fragment.markerWidth;
             markerContainer.style.position = 'absolute';
             markerContainer.style.left = `${markerLeftX}px`;
             markerContainer.style.top = '0';
@@ -1634,14 +1707,21 @@ export class DomPainter {
                 : markerBoxWidth;
 
             if ((wordLayout.marker.justification ?? 'left') === 'left') {
-              const currentPos = markerStartPos + markerTextWidth;
-              const implicitTabStop = paraIndentLeft;
-              tabWidth = implicitTabStop - currentPos;
+              const currentPos = validMarkerStartPos + markerTextWidth;
 
-              // If past the implicit stop, use next default tab interval
-              if (tabWidth < 1) {
-                tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
-                if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+              if (isFirstLineIndentMode) {
+                // FirstLine pattern: no implicit tab stop, just add gap after marker
+                tabWidth = LIST_MARKER_GAP;
+              } else {
+                // Standard hanging: implicit tab stop at paraIndentLeft
+                const implicitTabStop = paraIndentLeft;
+                tabWidth = implicitTabStop - currentPos;
+
+                // If past the implicit stop, use next default tab interval
+                if (tabWidth < 1) {
+                  tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+                  if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+                }
               }
             } else {
               // For non-left justified markers, use gutter width from layout

@@ -261,3 +261,154 @@ describe('computeWordParagraphLayout edge cases', () => {
     expect(layout.marker?.markerBoxWidthPx).toBeGreaterThan(0);
   });
 });
+
+describe('firstLineIndentMode detection and behavior', () => {
+  it('should detect firstLine indent pattern when firstLine > 0 and no hanging', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 0, firstLine: 720 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBe(true);
+    expect(layout.firstLinePx).toBe(720);
+    expect(layout.hangingPx).toBe(0);
+  });
+
+  it('should NOT detect firstLine mode when firstLine is 0', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: 0 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+    expect(layout.firstLinePx).toBe(0);
+  });
+
+  it('should NOT detect firstLine mode when firstLine is undefined', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+    expect(layout.firstLinePx).toBeUndefined();
+  });
+
+  it('should NOT detect firstLine mode when hanging is also defined', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: 720, hanging: 360 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+    expect(layout.firstLinePx).toBe(720);
+    expect(layout.hangingPx).toBe(360);
+  });
+
+  it('should calculate textStartPx correctly in firstLine mode', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 0, firstLine: 720 },
+          tabs: [],
+        },
+        measurement: {
+          measureText: (text: string) => text.length * 6,
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBe(true);
+    expect(layout.indentLeftPx).toBe(0);
+    expect(layout.firstLinePx).toBe(720);
+
+    // textStartPx should be: left (0) + firstLine (720) + markerBoxWidth
+    // markerBoxWidth = glyphWidthPx (12) + LIST_MARKER_GAP (8) = 20
+    expect(layout.textStartPx).toBe(740); // 0 + 720 + 20
+    expect(layout.marker?.markerX).toBe(720); // left (0) + firstLine (720)
+  });
+
+  it('should handle negative firstLine as hanging (not firstLine mode)', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: -360 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+    expect(layout.firstLinePx).toBe(-360);
+    expect(layout.hangingPx).toBe(360); // converted from negative firstLine
+  });
+
+  it('should handle very small positive firstLine correctly', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: 1 },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBe(true);
+    expect(layout.firstLinePx).toBe(1);
+  });
+
+  it('should handle NaN firstLine gracefully (not detected as firstLine mode)', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: NaN },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+  });
+
+  it('should handle Infinity firstLine gracefully (not detected as firstLine mode)', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: Infinity },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+  });
+
+  it('should handle -Infinity firstLine gracefully (not detected as firstLine mode)', () => {
+    const layout = computeWordParagraphLayout(
+      buildInput({
+        paragraph: {
+          indent: { left: 360, firstLine: -Infinity },
+          tabs: [],
+        },
+      }),
+    );
+
+    expect(layout.firstLineIndentMode).toBeUndefined();
+  });
+});

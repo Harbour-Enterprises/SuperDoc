@@ -528,6 +528,343 @@ describe('DomPainter hanging indent with tabs', () => {
     });
   });
 
+  describe('firstLineIndentMode marker positioning', () => {
+    it('should position marker at left + firstLine when firstLineIndentMode is true', () => {
+      const blockId = 'firstline-indent-mode';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 14 }],
+        attrs: {
+          indent: {
+            left: 0,
+            firstLine: 720,
+          },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 0,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 14,
+            width: 200,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 14,
+                markerWidth: 24,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft should be: left (0) + firstLine (720) = 720px
+      expect(lineEl.style.paddingLeft).toBe('720px');
+
+      const marker = lineEl.querySelector('.superdoc-paragraph-marker');
+      expect(marker).toBeTruthy();
+      expect(marker?.textContent).toBe('1.');
+    });
+
+    it('should use LIST_MARKER_GAP for tab width in firstLine mode', () => {
+      const blockId = 'firstline-mode-tab-gap';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'List text', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 9 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 500,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'A.',
+              justification: 'left',
+              suffix: 'tab',
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 100,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 9,
+            width: 150,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 9,
+                markerWidth: 20,
+                markerTextWidth: 14,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft should be: left (100) + firstLine (500) = 600px
+      expect(lineEl.style.paddingLeft).toBe('600px');
+
+      // Tab element should exist and have width equal to LIST_MARKER_GAP (8px)
+      const tabEl = lineEl.querySelector('.superdoc-tab') as HTMLElement;
+      expect(tabEl).toBeTruthy();
+      expect(tabEl.style.width).toBe('8px');
+    });
+
+    it('should position right-justified marker correctly in firstLine mode', () => {
+      const blockId = 'firstline-right-justified';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Item text', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 9 }],
+        attrs: {
+          indent: {
+            left: 200,
+            firstLine: 400,
+          },
+          wordLayout: {
+            marker: {
+              markerText: 'IV.',
+              justification: 'right',
+              suffix: 'tab',
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 200,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 9,
+            width: 150,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 9,
+                markerWidth: 30,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft should be: left (200) + firstLine (400) = 600px
+      expect(lineEl.style.paddingLeft).toBe('600px');
+
+      const markerContainer = lineEl.querySelector('.superdoc-paragraph-marker')?.parentElement as HTMLElement;
+      expect(markerContainer).toBeTruthy();
+
+      // For right-justified markers, container should be absolutely positioned
+      expect(markerContainer.style.position).toBe('absolute');
+
+      // Marker left position should be: markerStartPos (600) - markerWidth (30) = 570px
+      expect(markerContainer.style.left).toBe('570px');
+    });
+
+    it('should handle firstLineIndentMode with zero left indent', () => {
+      const blockId = 'firstline-zero-left';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 4 }],
+        attrs: {
+          indent: {
+            left: 0,
+            firstLine: 360,
+          },
+          wordLayout: {
+            marker: {
+              markerText: '1.',
+              justification: 'left',
+              suffix: 'tab',
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 12,
+                bold: false,
+                italic: false,
+              },
+            },
+            indentLeftPx: 0,
+            firstLineIndentMode: true,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 4,
+            width: 50,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 4,
+                markerWidth: 20,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft should be: left (0) + firstLine (360) = 360px
+      expect(lineEl.style.paddingLeft).toBe('360px');
+    });
+  });
+
   describe('List first lines (should take precedence)', () => {
     it('should not apply hanging indent adjustment for list first lines', () => {
       const blockId = 'list-with-hanging';
