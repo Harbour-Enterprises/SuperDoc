@@ -123,15 +123,21 @@ export const spacingPtToPx = (
  * Converts paragraph indent from points to pixels.
  *
  * Transforms indent values from point measurements to pixel measurements.
- * Filters out zero values to keep the result object minimal.
+ * Preserves explicit zero values for firstLine and hanging since these are meaningful
+ * overrides (e.g., style setting firstLine=0 to override numbering level's firstLine).
+ * Filters out zero values for left/right to keep the result object minimal.
  *
  * @param indent - Computed indent from style engine with values in points
- * @returns Indent object with values in pixels, or undefined if no non-zero values
+ * @returns Indent object with values in pixels, or undefined if no values to preserve
  *
  * @example
  * ```typescript
  * indentPtToPx({ left: 36, firstLine: 18 });
  * // { left: 48, firstLine: 24 }
+ *
+ * // Zero firstLine is preserved (explicit override)
+ * indentPtToPx({ left: 0, firstLine: 0 });
+ * // { firstLine: 0 }
  * ```
  */
 export const indentPtToPx = (indent: EngineParagraphIndent): ParagraphIndent | undefined => {
@@ -140,10 +146,13 @@ export const indentPtToPx = (indent: EngineParagraphIndent): ParagraphIndent | u
   const right = ptToPx(indent.right);
   const firstLine = ptToPx(indent.firstLine);
   const hanging = ptToPx(indent.hanging);
+  // Filter out zero for left/right (purely cosmetic)
   if (left != null && left !== 0) result.left = left;
   if (right != null && right !== 0) result.right = right;
-  if (firstLine != null && firstLine !== 0) result.firstLine = firstLine;
-  if (hanging != null && hanging !== 0) result.hanging = hanging;
+  // Preserve zero for firstLine/hanging - these are meaningful overrides
+  // (e.g., style setting firstLine=0 to cancel numbering level's firstLine indent)
+  if (firstLine != null) result.firstLine = firstLine;
+  if (hanging != null) result.hanging = hanging;
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
@@ -322,11 +331,15 @@ export const normalizePxIndent = (value: unknown): ParagraphIndent | undefined =
   /**
    * Heuristic for detecting twips values:
    * 1. Values >= 50 are likely twips (50px = ~667 twips, invalid as px in OOXML context)
-   * 2. Twips values often divisible by 15 (e.g., half-point increments)
+   * 2. Non-zero twips values often divisible by 15 (e.g., half-point increments)
+   *
+   * Note: Zero is explicitly excluded from the divisibility check because it's a valid
+   * pixel value that happens to be divisible by 15. Zero indent is meaningful (explicit
+   * reset) and should not trigger twips conversion.
    *
    * Epsilon of 1e-6 accounts for floating point arithmetic errors.
    */
-  const looksLikeTwips = values.some((val) => val >= 50 || Math.abs(val % 15) < 1e-6);
+  const looksLikeTwips = values.some((val) => val >= 50 || (val !== 0 && Math.abs(val % 15) < 1e-6));
   if (looksLikeTwips) {
     return undefined;
   }

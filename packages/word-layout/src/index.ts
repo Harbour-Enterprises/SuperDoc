@@ -51,38 +51,46 @@ export type { NumberingFormat } from './marker-utils.js';
  *   optional numbering information, and an optional measurement adapter for calculating text widths.
  *
  * @returns A complete layout specification including:
- *   - Indentation values (left, hanging, firstLine)
- *   - Tab stop positions
- *   - Text start position
- *   - Optional list marker layout (position, text, styling)
- *   - Resolved indent and tab settings
+ *   - `indentLeftPx`: Left indent in pixels
+ *   - `hangingPx`: Hanging indent in pixels (clamped to >= 0)
+ *   - `firstLinePx`: First line indent in pixels (if specified)
+ *   - `tabsPx`: Array of tab stop positions in pixels
+ *   - `textStartPx`: Horizontal position where paragraph text begins
+ *   - `marker`: Optional list marker layout (position, text, styling)
+ *   - `resolvedIndent`: Merged indent configuration
+ *   - `resolvedTabs`: Resolved tab stops
+ *   - `defaultTabIntervalPx`: Default tab interval in pixels
+ *   - `firstLineIndentMode`: Boolean flag indicating firstLine indent pattern detection.
+ *     When true, this indicates the paragraph uses OOXML's alternative list indent pattern
+ *     where the marker is positioned at `left + firstLine` instead of the standard
+ *     `left - hanging` pattern. This flag is set when `firstLine > 0` and `hanging` is
+ *     not defined. It affects marker positioning and tab spacing calculations in the renderer.
  *
  * @example
  * ```typescript
- * const layout = computeWordParagraphLayout({
+ * // Standard hanging indent pattern
+ * const layout1 = computeWordParagraphLayout({
  *   paragraph: {
- *     indent: { left: 36, hanging: 18 },
- *     tabs: [{ position: 72, alignment: 'start' }],
- *     tabIntervalTwips: 720,
- *     numberingProperties: {
- *       numId: '1',
- *       ilvl: 0,
- *       format: 'decimal',
- *       lvlText: '%1.',
- *       path: [3]
- *     }
+ *     indent: { left: 720, hanging: 720 },
+ *     tabs: [],
+ *     numberingProperties: { numId: '1', ilvl: 0, format: 'decimal', lvlText: '%1.', path: [1] }
  *   },
- *   docDefaults: {
- *     defaultTabIntervalTwips: 720,
- *     run: { fontFamily: 'Calibri', fontSize: 12 }
- *   },
- *   measurement: {
- *     measureText: (text, fontCss) => text.length * 6
- *   }
+ *   docDefaults: { run: { fontFamily: 'Calibri', fontSize: 12 } }
  * });
+ * // layout1.firstLineIndentMode is undefined (standard pattern)
+ * // Marker positioned at: left (720) - hanging (720) = 0
  *
- * console.log(layout.marker?.markerText); // "3."
- * console.log(layout.indentLeftPx); // 36
+ * // FirstLine indent pattern (alternative OOXML style)
+ * const layout2 = computeWordParagraphLayout({
+ *   paragraph: {
+ *     indent: { left: 0, firstLine: 720 },
+ *     tabs: [],
+ *     numberingProperties: { numId: '1', ilvl: 0, format: 'decimal', lvlText: '%1.', path: [1] }
+ *   },
+ *   docDefaults: { run: { fontFamily: 'Calibri', fontSize: 12 } }
+ * });
+ * // layout2.firstLineIndentMode is true
+ * // Marker positioned at: left (0) + firstLine (720) = 720
  * ```
  */
 export function computeWordParagraphLayout(input: WordParagraphLayoutInput): WordParagraphLayoutOutput {
@@ -96,6 +104,14 @@ export function computeWordParagraphLayout(input: WordParagraphLayoutInput): Wor
   const firstLinePx = indent.firstLine;
   const defaultTabIntervalPx = resolveDefaultTabIntervalPx(paragraph.tabIntervalTwips, docDefaults);
   const tabsPx = tabs.map((tab) => tab.position);
+
+  // Detect "firstLine indent" pattern: OOXML allows lists to use firstLine instead of hanging.
+  // Standard: left=720, hanging=720 (marker hangs back to position 0)
+  // Alternative: left=0, firstLine=720 (marker at position 720, text follows)
+  // Per OOXML spec, firstLine and hanging are mutually exclusive.
+  // Validate that firstLine is a finite number to handle NaN, Infinity, and -Infinity gracefully.
+  const hasFirstLineIndent =
+    indent.firstLine != null && Number.isFinite(indent.firstLine) && indent.firstLine > 0 && !indent.hanging;
 
   const layout: WordParagraphLayoutOutput = {
     indentLeftPx,
@@ -129,10 +145,24 @@ export function computeWordParagraphLayout(input: WordParagraphLayoutInput): Wor
       ? measurement.measureText(markerText, buildFontCss(markerRun), { letterSpacing: markerRun.letterSpacing })
       : undefined;
 
-  const markerBoxWidthPx = resolveMarkerBoxWidth(hangingPxRaw, glyphWidthPx);
-  const markerX = indentLeftPx - markerBoxWidthPx;
+  let markerBoxWidthPx: number;
+  let markerX: number;
 
-  layout.hangingPx = markerBoxWidthPx;
+  if (hasFirstLineIndent) {
+    // FirstLine pattern: marker at (left + firstLine), text follows inline
+    markerBoxWidthPx =
+      glyphWidthPx != null && glyphWidthPx > 0 ? glyphWidthPx + LIST_MARKER_GAP : DEFAULT_LIST_HANGING_PX;
+    markerX = indentLeftPx + (firstLinePx ?? 0);
+    layout.textStartPx = markerX + markerBoxWidthPx;
+    layout.hangingPx = 0;
+    layout.firstLineIndentMode = true;
+  } else {
+    // Standard hanging pattern: marker hangs back from left indent
+    markerBoxWidthPx = resolveMarkerBoxWidth(hangingPxRaw, glyphWidthPx);
+    markerX = indentLeftPx - markerBoxWidthPx;
+    layout.hangingPx = markerBoxWidthPx;
+  }
+
   layout.marker = buildMarkerLayout({
     numbering,
     markerText,

@@ -818,6 +818,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
+
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
@@ -1243,6 +1244,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         tabStopCursor = nextIndex;
         const tabAdvance = Math.max(0, target - currentLine.width);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
+
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
         currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
         currentLine.toRun = runIndex;
