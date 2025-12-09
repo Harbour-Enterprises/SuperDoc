@@ -94,15 +94,24 @@ vi.mock('./collaboration/helpers.js', () => ({
   makeDocumentsCollaborative: makeDocumentsCollaborativeMock,
 }));
 
-const hocuspocusConstructor = vi.fn(() => ({
-  on: vi.fn(),
-  off: vi.fn(),
-  disconnect: vi.fn(),
-  destroy: vi.fn(),
-  cancelWebsocketRetry: vi.fn(),
-}));
+class MockHocuspocusProviderWebsocket {
+  constructor(config) {
+    this.config = config;
+    this.on = vi.fn();
+    this.off = vi.fn();
+    this.disconnect = vi.fn();
+    this.destroy = vi.fn();
+    this.cancelWebsocketRetry = vi.fn();
+    MockHocuspocusProviderWebsocket.instances.push(this);
+  }
+
+  static instances = [];
+  static mockClear() {
+    MockHocuspocusProviderWebsocket.instances = [];
+  }
+}
 vi.mock('@hocuspocus/provider', () => ({
-  HocuspocusProviderWebsocket: hocuspocusConstructor,
+  HocuspocusProviderWebsocket: MockHocuspocusProviderWebsocket,
 }));
 
 const createVueAppMock = vi.fn();
@@ -170,7 +179,7 @@ describe('SuperDoc core', () => {
     makeDocumentsCollaborativeMock.mockClear();
     initSuperdocYdocMock.mockClear();
     initCollaborationCommentsMock.mockClear();
-    hocuspocusConstructor.mockClear();
+    MockHocuspocusProviderWebsocket.mockClear();
     superCommentsConstructor.mockClear();
 
     document.body.innerHTML = '<div id="host"></div>';
@@ -298,7 +307,8 @@ describe('SuperDoc core', () => {
     const instance = new SuperDoc(config);
     await flushMicrotasks();
 
-    expect(hocuspocusConstructor).toHaveBeenCalledWith({ url: 'wss://example.com' });
+    expect(MockHocuspocusProviderWebsocket.instances).toHaveLength(1);
+    expect(MockHocuspocusProviderWebsocket.instances[0].config).toEqual({ url: 'wss://example.com' });
     expect(makeDocumentsCollaborativeMock).toHaveBeenCalledWith(instance);
     expect(initCollaborationCommentsMock).toHaveBeenCalledWith(instance);
     expect(instance.isCollaborative).toBe(true);

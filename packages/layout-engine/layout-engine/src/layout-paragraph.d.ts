@@ -17,7 +17,7 @@ export type ParagraphLayoutContext = {
   advanceColumn: (state: PageState) => PageState;
   columnX: (columnIndex: number) => number;
   floatManager: FloatingObjectManager;
-  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number) => ParagraphMeasure;
+  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number, firstLineIndent?: number) => ParagraphMeasure;
 };
 export type AnchoredDrawingEntry = {
   block: ImageBlock | DrawingBlock;

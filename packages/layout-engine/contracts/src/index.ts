@@ -1297,6 +1297,13 @@ export type ParaFragment = {
    * Only present for word-layout lists with marker.gutterWidth defined.
    */
   markerGutter?: number;
+  /**
+   * Remeasured lines for this fragment when the paragraph was re-wrapped at a different width.
+   * When present, the renderer should use these lines instead of looking up lines from
+   * the original measure using fromLine/toLine indices. This occurs when a paragraph
+   * measured at one column width is placed in a narrower column (e.g., multi-column layouts).
+   */
+  lines?: Line[];
   pmStart?: number;
   pmEnd?: number;
 };

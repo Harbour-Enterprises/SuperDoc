@@ -62,6 +62,55 @@ const overlayRect = ref(null);
 const tableMetadata = ref(null);
 
 /**
+ * Get the editor's zoom level for coordinate transformations.
+ *
+ * Retrieves the current zoom multiplier from the editor instance. Zoom is centrally
+ * controlled by PresentationEditor via transform: scale() applied to the #viewportHost
+ * element. This ensures consistent scaling between rendered content and overlay elements.
+ *
+ * The zoom factor is critical for accurate coordinate transformations:
+ * - Layout coordinates: Unscaled logical pixels used by the layout engine
+ * - Screen coordinates: Physical pixels affected by CSS transform: scale()
+ * - Conversion: screenCoord = layoutCoord * zoom
+ *
+ * This function handles both direct PresentationEditor instances and wrapped Editor
+ * instances that contain a presentationEditor property.
+ *
+ * The zoom level is a multiplier where:
+ * - 1 = 100% (default, no scaling)
+ * - 0.5 = 50% (zoomed out, screen coords are half of layout coords)
+ * - 2 = 200% (zoomed in, screen coords are double layout coords)
+ *
+ * @returns {number} The zoom level multiplier. Returns 1 (100%) as a safe fallback
+ *                   if zoom cannot be retrieved from the editor instance.
+ *
+ * @example
+ * ```javascript
+ * const zoom = getZoom();
+ * // Position resize handle at column boundary
+ * const boundaryScreenX = columnLayoutX * zoom;
+ * // Check if mouse is within threshold of boundary
+ * const mouseLayoutX = event.clientX / zoom;
+ * ```
+ */
+const getZoom = () => {
+  const editor = props.editor;
+  if (editor && typeof editor.zoom === 'number') {
+    return editor.zoom;
+  }
+  if (editor?.presentationEditor && typeof editor.presentationEditor.zoom === 'number') {
+    return editor.presentationEditor.zoom;
+  }
+  // Fallback to default zoom when editor instance doesn't have zoom configured
+  console.warn(
+    '[TableResizeOverlay] getZoom: Unable to retrieve zoom from editor instance, using fallback value of 1. ' +
+      'This may indicate the editor is not fully initialized or is not a PresentationEditor instance. ' +
+      'Table resize handles may be misaligned.',
+  );
+  return 1;
+};
+
+/**
  * Drag state tracking
  * @type {import('vue').Ref<{
  *   columnIndex: number,
@@ -85,10 +134,34 @@ const forcedCleanup = ref(false);
 // Constants
 // ============================================================================
 
-/** Width of the resize handle hit area in pixels */
+/**
+ * Width of the resize handle hit area in pixels.
+ *
+ * COORDINATE SPACE: This width is in SCREEN SPACE (zoomed pixels).
+ * - The handle is positioned using layout coordinates (column boundary x * zoom)
+ * - The width itself is a fixed screen-space value (9px) to ensure consistent hit area
+ * - This means the handle maintains a constant visual size regardless of zoom level
+ * - Users can always grab handles with the same precision, even when zoomed in/out
+ *
+ * Example: At zoom 2.0, a boundary at layout x=100 renders at screen x=200,
+ * but the handle width stays 9 screen pixels for easy interaction.
+ */
 const RESIZE_HANDLE_WIDTH_PX = 9;
 
-/** Horizontal offset to center the resize handle on the boundary line */
+/**
+ * Horizontal offset to center the resize handle on the boundary line.
+ *
+ * COORDINATE SPACE: This offset is in SCREEN SPACE (zoomed pixels).
+ * - Applied via CSS transform: translateX() to center the 9px-wide handle
+ * - Offset of 4px centers a 9px element on the boundary line (9/2 ≈ 4.5, rounded to 4)
+ * - Like RESIZE_HANDLE_WIDTH_PX, this is zoom-independent for consistent UX
+ *
+ * Visual layout:
+ *   Boundary line position: x
+ *   Handle left edge: x - 4px
+ *   Handle right edge: x + 5px (9px total width)
+ *   Result: Boundary line is approximately centered in the handle
+ */
 const RESIZE_HANDLE_OFFSET_PX = 4;
 
 /** Extension added to overlay width during drag for smooth mouse tracking */
@@ -357,12 +430,20 @@ function getBoundarySegments(boundary) {
  * ```
  */
 function getSegmentHandleStyle(boundary, segment) {
+  // Get zoom factor to convert layout coordinates to screen coordinates
+  const zoom = getZoom();
+
+  // Multiply layout coordinates by zoom to position correctly in zoomed space
+  const scaledX = boundary.x * zoom;
+  const scaledY = segment.y != null ? segment.y * zoom : null;
+  const scaledH = segment.h != null ? segment.h * zoom : null;
+
   return {
     position: 'absolute',
-    left: `${boundary.x}px`,
-    top: segment.y != null ? `${segment.y}px` : '0',
+    left: `${scaledX}px`,
+    top: scaledY != null ? `${scaledY}px` : '0',
     width: `${RESIZE_HANDLE_WIDTH_PX}px`,
-    height: segment.h != null ? `${segment.h}px` : '100%',
+    height: scaledH != null ? `${scaledH}px` : '100%',
     transform: `translateX(-${RESIZE_HANDLE_OFFSET_PX}px)`,
     cursor: 'col-resize',
     pointerEvents: 'auto',
@@ -378,7 +459,12 @@ const guidelineStyle = computed(() => {
   const initialBoundary = resizableBoundaries.value[dragState.value.resizableBoundaryIndex];
   if (!initialBoundary) return { display: 'none' };
 
-  const newX = initialBoundary.x + dragState.value.constrainedDelta;
+  // Get zoom factor to convert layout coordinates to screen coordinates
+  const zoom = getZoom();
+
+  // constrainedDelta is in layout coordinates, so the entire calculation stays in layout space
+  // Then multiply by zoom to convert to screen coordinates
+  const newX = (initialBoundary.x + dragState.value.constrainedDelta) * zoom;
 
   return {
     position: 'absolute',
@@ -588,10 +674,15 @@ function throttle(func, limit) {
 const mouseMoveThrottle = throttle((event) => {
   if (isUnmounted || !dragState.value) return;
 
-  // Calculate raw delta
-  const delta = event.clientX - dragState.value.initialX;
+  // Get zoom factor to convert screen coordinates to layout coordinates
+  const zoom = getZoom();
 
-  // Calculate constraints based on layout-computed minWidth
+  // Calculate raw delta in screen pixels, then convert to layout space
+  // This ensures constraints (which are in layout space) can be compared correctly
+  const screenDelta = event.clientX - dragState.value.initialX;
+  const delta = screenDelta / zoom;
+
+  // Calculate constraints based on layout-computed minWidth (already in layout space)
   const minDelta = -(dragState.value.leftColumn.width - dragState.value.leftColumn.minWidth);
 
   // For right edge, constrain by page content area to prevent overflow beyond margins
@@ -607,13 +698,16 @@ const mouseMoveThrottle = throttle((event) => {
       const tableLeftInPage = tableRect.left - pageRect.left;
       const rightMargin = tableLeftInPage; // Assumes symmetric margins
       const maxRightPosition = pageRect.right - rightMargin;
-      const availableSpace = maxRightPosition - tableRect.right;
+      // availableSpace is in screen pixels (from getBoundingClientRect),
+      // convert to layout space by dividing by zoom
+      const availableSpace = (maxRightPosition - tableRect.right) / zoom;
       maxDelta = Math.max(0, availableSpace);
     } else {
       // No page element found - allow unlimited expansion (fallback)
       maxDelta = Infinity;
     }
   } else {
+    // rightColumn dimensions are already in layout space
     maxDelta = dragState.value.rightColumn.width - dragState.value.rightColumn.minWidth;
   }
 

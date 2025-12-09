@@ -662,6 +662,8 @@ export const applyTextStyleMark = (
   const fontSizePx = normalizeFontSizePx(attrs.fontSize);
   if (fontSizePx !== undefined && fontSizePx >= 1 && fontSizePx <= 1000) {
     run.fontSize = fontSizePx;
+  } else if (attrs.fontSize !== undefined) {
+    // invalid or out-of-range size ignored
   }
   if (isFiniteNumber(attrs.letterSpacing)) {
     const spacing = Number(attrs.letterSpacing);

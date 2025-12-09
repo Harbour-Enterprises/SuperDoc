@@ -979,6 +979,40 @@ function findBlockIndexByFragmentId(
   return matchingIndices[0];
 }
 
+type TableRowBlock = TableBlock['rows'][number];
+type TableCellBlock = TableRowBlock['cells'][number];
+type TableCellMeasure = TableMeasure['rows'][number]['cells'][number];
+
+const DEFAULT_CELL_PADDING = { top: 2, bottom: 2, left: 4, right: 4 };
+
+const getCellPaddingFromRow = (cellIdx: number, row?: TableRowBlock) => {
+  const padding = row?.cells?.[cellIdx]?.attrs?.padding ?? {};
+  return {
+    top: padding.top ?? DEFAULT_CELL_PADDING.top,
+    bottom: padding.bottom ?? DEFAULT_CELL_PADDING.bottom,
+    left: padding.left ?? DEFAULT_CELL_PADDING.left,
+    right: padding.right ?? DEFAULT_CELL_PADDING.right,
+  };
+};
+
+const getCellBlocks = (cell: TableCellBlock | undefined) => {
+  if (!cell) return [];
+  return cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+};
+
+const getCellMeasures = (cell: TableCellMeasure | undefined) => {
+  if (!cell) return [];
+  return cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+};
+
+const sumLineHeights = (measure: ParagraphMeasure, fromLine: number, toLine: number) => {
+  let height = 0;
+  for (let i = fromLine; i < toLine && i < measure.lines.length; i += 1) {
+    height += measure.lines[i]?.lineHeight ?? 0;
+  }
+  return height;
+};
+
 /**
  * Given a PM range [from, to), return selection rectangles for highlighting.
  */
@@ -1093,6 +1127,176 @@ export function selectionToRects(
             });
           }
         });
+        return;
+      }
+
+      if (fragment.kind === 'table') {
+        const blockIndex = findBlockIndexByFragmentId(blocks, fragment.blockId, { from, to });
+        if (blockIndex === -1) return;
+
+        const block = blocks[blockIndex];
+        const measure = measures[blockIndex];
+        if (!block || block.kind !== 'table' || measure?.kind !== 'table') {
+          return;
+        }
+
+        const tableBlock = block as TableBlock;
+        const tableMeasure = measure as TableMeasure;
+        const tableFragment = fragment as TableFragment;
+
+        const rowHeights = tableMeasure.rows.map((rowMeasure, idx) => {
+          if (tableFragment.partialRow && tableFragment.partialRow.rowIndex === idx) {
+            return tableFragment.partialRow.partialHeight;
+          }
+          return rowMeasure?.height ?? 0;
+        });
+
+        const calculateCellX = (cellIdx: number, cellMeasure: TableCellMeasure) => {
+          const gridStart = cellMeasure.gridColumnStart ?? cellIdx;
+          let x = 0;
+          for (let i = 0; i < gridStart && i < tableMeasure.columnWidths.length; i += 1) {
+            x += tableMeasure.columnWidths[i];
+          }
+          return x;
+        };
+
+        const processRow = (rowIndex: number, rowOffset: number): number => {
+          const rowMeasure = tableMeasure.rows[rowIndex];
+          const row = tableBlock.rows[rowIndex];
+          if (!rowMeasure || !row) return rowOffset;
+
+          const rowHeight = rowHeights[rowIndex] ?? rowMeasure.height;
+          const isPartialRow = tableFragment.partialRow?.rowIndex === rowIndex;
+          const partialRowData = isPartialRow ? tableFragment.partialRow : null;
+
+          const totalColumns = Math.min(rowMeasure.cells.length, row.cells.length);
+
+          for (let cellIdx = 0; cellIdx < totalColumns; cellIdx += 1) {
+            const cellMeasure = rowMeasure.cells[cellIdx];
+            const cell = row.cells[cellIdx];
+            if (!cellMeasure || !cell) continue;
+
+            const padding = getCellPaddingFromRow(cellIdx, row);
+            const cellX = calculateCellX(cellIdx, cellMeasure);
+
+            const cellBlocks = getCellBlocks(cell);
+            const cellBlockMeasures = getCellMeasures(cellMeasure);
+
+            // Map each block to its global line range within the cell
+            const renderedBlocks: Array<{
+              block: ParagraphBlock;
+              measure: ParagraphMeasure;
+              startLine: number;
+              endLine: number;
+              height: number;
+            }> = [];
+
+            let cumulativeLine = 0;
+            for (let i = 0; i < Math.min(cellBlocks.length, cellBlockMeasures.length); i += 1) {
+              const paraBlock = cellBlocks[i];
+              const paraMeasure = cellBlockMeasures[i];
+              if (!paraBlock || !paraMeasure || paraBlock.kind !== 'paragraph' || paraMeasure.kind !== 'paragraph') {
+                continue;
+              }
+              const lineCount = paraMeasure.lines.length;
+              const blockStart = cumulativeLine;
+              const blockEnd = cumulativeLine + lineCount;
+              cumulativeLine = blockEnd;
+
+              const allowedStart = partialRowData?.fromLineByCell?.[cellIdx] ?? 0;
+              const rawAllowedEnd = partialRowData?.toLineByCell?.[cellIdx];
+              const allowedEnd = rawAllowedEnd == null || rawAllowedEnd === -1 ? cumulativeLine : rawAllowedEnd;
+
+              const renderStartGlobal = Math.max(blockStart, allowedStart);
+              const renderEndGlobal = Math.min(blockEnd, allowedEnd);
+              if (renderStartGlobal >= renderEndGlobal) continue;
+
+              const startLine = renderStartGlobal - blockStart;
+              const endLine = renderEndGlobal - blockStart;
+
+              let height = sumLineHeights(paraMeasure, startLine, endLine);
+              const rendersWholeBlock = startLine === 0 && endLine >= lineCount;
+              if (rendersWholeBlock) {
+                const totalHeight = (paraMeasure as { totalHeight?: number }).totalHeight;
+                if (typeof totalHeight === 'number' && totalHeight > height) {
+                  height = totalHeight;
+                }
+                const spacingAfter = (paraBlock.attrs as { spacing?: { after?: number } } | undefined)?.spacing?.after;
+                if (typeof spacingAfter === 'number' && spacingAfter > 0) {
+                  height += spacingAfter;
+                }
+              }
+
+              renderedBlocks.push({ block: paraBlock, measure: paraMeasure, startLine, endLine, height });
+            }
+
+            const contentHeight = renderedBlocks.reduce((acc, info) => acc + info.height, 0);
+            const contentAreaHeight = Math.max(0, rowHeight - (padding.top + padding.bottom));
+            const freeSpace = Math.max(0, contentAreaHeight - contentHeight);
+
+            let verticalOffset = 0;
+            const vAlign = cell.attrs?.verticalAlign;
+            if (vAlign === 'center' || vAlign === 'middle') {
+              verticalOffset = freeSpace / 2;
+            } else if (vAlign === 'bottom') {
+              verticalOffset = freeSpace;
+            }
+
+            let blockTopCursor = padding.top + verticalOffset;
+
+            renderedBlocks.forEach((info) => {
+              const paragraphMarkerWidth = info.measure.marker?.markerWidth ?? 0;
+              const intersectingLines = findLinesIntersectingRange(info.block, info.measure, from, to);
+
+              intersectingLines.forEach(({ line, index }) => {
+                if (index < info.startLine || index >= info.endLine) {
+                  return;
+                }
+                const range = computeLinePmRange(info.block, line);
+                if (range.pmStart == null || range.pmEnd == null) return;
+                const sliceFrom = Math.max(range.pmStart, from);
+                const sliceTo = Math.min(range.pmEnd, to);
+                if (sliceFrom >= sliceTo) return;
+
+                const charOffsetFrom = pmPosToCharOffset(info.block, line, sliceFrom);
+                const charOffsetTo = pmPosToCharOffset(info.block, line, sliceTo);
+                const availableWidth = Math.max(1, cellMeasure.width - padding.left - padding.right);
+                const startX = mapPmToX(info.block, line, charOffsetFrom, availableWidth);
+                const endX = mapPmToX(info.block, line, charOffsetTo, availableWidth);
+
+                const rectX = fragment.x + cellX + padding.left + paragraphMarkerWidth + Math.min(startX, endX);
+                const rectWidth = Math.max(1, Math.abs(endX - startX));
+                const lineOffset =
+                  lineHeightBeforeIndex(info.measure, index) - lineHeightBeforeIndex(info.measure, info.startLine);
+                const rectY = fragment.y + rowOffset + blockTopCursor + lineOffset;
+
+                rects.push({
+                  x: rectX,
+                  y: rectY + pageIndex * layout.pageSize.h,
+                  width: rectWidth,
+                  height: line.lineHeight,
+                  pageIndex,
+                });
+              });
+
+              blockTopCursor += info.height;
+            });
+          }
+
+          return rowOffset + rowHeight;
+        };
+
+        let rowCursor = 0;
+
+        const repeatHeaderCount = tableFragment.repeatHeaderCount ?? 0;
+        for (let r = 0; r < repeatHeaderCount && r < tableMeasure.rows.length; r += 1) {
+          rowCursor = processRow(r, rowCursor);
+        }
+
+        for (let r = tableFragment.fromRow; r < tableFragment.toRow && r < tableMeasure.rows.length; r += 1) {
+          rowCursor = processRow(r, rowCursor);
+        }
+
         return;
       }
 

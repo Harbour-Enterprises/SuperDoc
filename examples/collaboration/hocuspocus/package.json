@@ -1,0 +1,8 @@
+{
+  "name": "superdoc-hocuspocus-example",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "build": "pnpm --filter ./client build"
+  }
+}

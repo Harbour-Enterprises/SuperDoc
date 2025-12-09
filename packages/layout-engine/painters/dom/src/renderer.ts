@@ -56,6 +56,7 @@ import {
   ensureTrackChangeStyles,
   ensureSdtContainerStyles,
   ensureFieldAnnotationStyles,
+  ensureImageSelectionStyles,
   type PageStyles,
 } from './styles.js';
 import { DOM_CLASS_NAMES } from './constants.js';
@@ -744,6 +745,7 @@ export class DomPainter {
     ensureTrackChangeStyles(doc);
     ensureFieldAnnotationStyles(doc);
     ensureSdtContainerStyles(doc);
+    ensureImageSelectionStyles(doc);
     mount.classList.add(CLASS_NAMES.container);
 
     if (this.mount && this.mount !== mount) {
@@ -1418,7 +1420,9 @@ export class DomPainter {
         fragmentEl.dataset.continuesOnNext = 'true';
       }
 
-      const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
+      // Use fragment.lines if available (set when paragraph was remeasured for narrower column).
+      // Otherwise, fall back to slicing from the original measure.
+      const lines = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
 
       applyParagraphBlockStyles(fragmentEl, block.attrs);
       if (block.attrs?.styleId) {
@@ -2907,6 +2911,7 @@ export class DomPainter {
 
     // Create img element
     const img = this.doc.createElement('img');
+    img.classList.add('superdoc-inline-image');
 
     // Set source - validate data URLs with strict format and size checks
     // Note: data: URLs are blocked by sanitizeUrl for hyperlinks (XSS risk),

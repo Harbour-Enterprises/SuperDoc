@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { encodeMarksFromRPr, decodeRPrFromMarks, encodeCSSFromRPr, encodeCSSFromPPr } from './styles.js';
+import {
+  encodeMarksFromRPr,
+  decodeRPrFromMarks,
+  encodeCSSFromRPr,
+  encodeCSSFromPPr,
+  resolveRunProperties,
+} from './styles.js';
 
 beforeAll(() => {
   vi.stubGlobal('SuperConverter', {
@@ -291,5 +297,191 @@ describe('marks encoding/decoding round-trip', () => {
     const marksFromCaps = encodeMarksFromRPr(rPrCaps, {});
     // encodeMarksFromRPr doesn't handle 'caps', so it produces no textTransform mark.
     expect(marksFromCaps.some((m) => m.type === 'textStyle' && m.attrs.textTransform)).toBe(false);
+  });
+});
+
+describe('resolveRunProperties - fontSize fallback', () => {
+  // Mock minimal params structure
+  const createMockParams = (defaultFontSize = null, normalFontSize = null) => ({
+    docx: {
+      'word/styles.xml': {
+        elements: [
+          {
+            elements: [
+              // docDefaults
+              {
+                name: 'w:docDefaults',
+                elements: [
+                  {
+                    name: 'w:rPrDefault',
+                    elements:
+                      defaultFontSize !== null
+                        ? [
+                            {
+                              name: 'w:rPr',
+                              elements: [{ name: 'w:sz', attributes: { 'w:val': String(defaultFontSize) } }],
+                            },
+                          ]
+                        : [{ name: 'w:rPr', elements: [] }],
+                  },
+                ],
+              },
+              // Normal style
+              {
+                name: 'w:style',
+                attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                elements:
+                  normalFontSize !== null
+                    ? [{ name: 'w:rPr', elements: [{ name: 'w:sz', attributes: { 'w:val': String(normalFontSize) } }] }]
+                    : [{ name: 'w:rPr', elements: [] }],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    numbering: { definitions: {}, abstracts: {} },
+  });
+
+  it('should use inline fontSize when provided', () => {
+    const params = createMockParams();
+    const inlineRpr = { fontSize: 28 }; // 14pt
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    expect(result.fontSize).toBe(28);
+  });
+
+  it('should use defaultProps fontSize when finalProps fontSize is null', () => {
+    const params = createMockParams(24, null); // defaultProps has 24 (12pt)
+    const inlineRpr = {};
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    expect(result.fontSize).toBe(24);
+  });
+
+  it('should use normalProps fontSize when defaultProps has no fontSize', () => {
+    const params = createMockParams(null, 22); // normalProps has 22 (11pt)
+    const inlineRpr = {};
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    expect(result.fontSize).toBe(22);
+  });
+
+  it('should use 20 half-points baseline when neither defaultProps nor normalProps has fontSize', () => {
+    const params = createMockParams(null, null);
+    const inlineRpr = {};
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    expect(result.fontSize).toBe(20); // 20 half-points = 10pt baseline
+  });
+
+  it('should ignore invalid fontSize value of 0', () => {
+    const params = createMockParams(24, null);
+    const inlineRpr = { fontSize: 0 }; // Invalid: zero
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should fall back to defaultProps
+    expect(result.fontSize).toBe(24);
+  });
+
+  it('should ignore negative fontSize values', () => {
+    const params = createMockParams(null, 22);
+    const inlineRpr = { fontSize: -10 }; // Invalid: negative
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should fall back to normalProps
+    expect(result.fontSize).toBe(22);
+  });
+
+  it('should ignore NaN fontSize values', () => {
+    const params = createMockParams(null, null);
+    const inlineRpr = { fontSize: NaN }; // Invalid: NaN
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should fall back to baseline
+    expect(result.fontSize).toBe(20);
+  });
+
+  it('should ignore Infinity fontSize values', () => {
+    const params = createMockParams(24, null);
+    const inlineRpr = { fontSize: Infinity }; // Invalid: Infinity
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should fall back to defaultProps
+    expect(result.fontSize).toBe(24);
+  });
+
+  it('should preserve valid fontSize from inline formatting', () => {
+    const params = createMockParams(20, null);
+    const inlineRpr = { fontSize: 32 }; // Valid: 16pt
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    expect(result.fontSize).toBe(32);
+  });
+
+  it('should skip invalid defaultProps fontSize and use normalProps', () => {
+    const params = createMockParams(null, 26); // defaultProps invalid, normalProps has 26
+    // Manually set invalid defaultProps fontSize
+    const docDefaults = params.docx['word/styles.xml'].elements[0].elements[0];
+    docDefaults.elements[0].elements = [{ name: 'w:rPr', elements: [{ name: 'w:sz', attributes: { 'w:val': '-5' } }] }];
+
+    const inlineRpr = {};
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should skip invalid defaultProps and use normalProps
+    expect(result.fontSize).toBe(26);
+  });
+
+  it('should use baseline when all sources have invalid fontSize values', () => {
+    const params = createMockParams(null, null);
+    // Set both to invalid values
+    const elements = params.docx['word/styles.xml'].elements[0].elements;
+    elements[0].elements[0].elements = [{ name: 'w:rPr', elements: [{ name: 'w:sz', attributes: { 'w:val': '0' } }] }];
+    elements[1].elements = [{ name: 'w:rPr', elements: [{ name: 'w:sz', attributes: { 'w:val': '-10' } }] }];
+
+    const inlineRpr = { fontSize: NaN };
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should fall back to baseline
+    expect(result.fontSize).toBe(20);
+  });
+
+  it('should validate that defaultProps fontSize is a number', () => {
+    const params = createMockParams(null, 22);
+    // Manually corrupt defaultProps fontSize to be a string
+    const docDefaults = params.docx['word/styles.xml'].elements[0].elements[0];
+    docDefaults.elements[0].elements = [
+      { name: 'w:rPr', elements: [{ name: 'w:sz', attributes: { 'w:val': 'invalid' } }] },
+    ];
+
+    const inlineRpr = {};
+    const resolvedPpr = {};
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr);
+
+    // Should skip non-number defaultProps and use normalProps
+    expect(result.fontSize).toBe(22);
   });
 });
