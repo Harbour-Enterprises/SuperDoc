@@ -71,7 +71,8 @@ jobs:
         id: semantic
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
-          # NPM authentication handled via OIDC provenance (no token needed)
+          # Clear NODE_AUTH_TOKEN so npm uses OIDC instead of token auth
+          NODE_AUTH_TOKEN: ""
         run: |
           npx semantic-release
           echo "released=$?" >> $GITHUB_OUTPUT
