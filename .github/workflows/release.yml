@@ -47,11 +47,10 @@ jobs:
           git fetch origin ${{ github.ref_name }}
           git reset --hard origin/${{ github.ref_name }}
 
-      # IMPORTANT: Do NOT set registry-url here - it creates .npmrc with
-      # _authToken which interferes with OIDC authentication
       - uses: actions/setup-node@v5
         with:
           node-version: 22
+          registry-url: https://registry.npmjs.org
           cache: npm
 
       # npm 11.5.1+ required for OIDC trusted publishing
@@ -67,6 +66,7 @@ jobs:
       - name: Release
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }} # Use granular npm token for publish
         run: npx semantic-release
 
   # Sync stable branch back to main after stable releases
