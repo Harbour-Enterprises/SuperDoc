@@ -1084,6 +1084,7 @@ export class DomPainter {
       section: 'body',
       pageNumberText: page.numberText,
     };
+
     page.fragments.forEach((fragment) => {
       el.appendChild(this.renderFragment(fragment, contextBase));
     });

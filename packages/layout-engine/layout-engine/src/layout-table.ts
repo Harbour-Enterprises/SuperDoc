@@ -262,21 +262,39 @@ function getCellTotalLines(cell: TableRowMeasure['cells'][number]): number {
  *
  * When a row exceeds the available height and cantSplit is not set,
  * this function calculates where to split within the row by finding
- * a common Y position across all cells, then determining per-cell line cutoffs.
+ * a common line advancement across all cells, ensuring structural alignment.
  *
- * Algorithm:
+ * Algorithm (Two-Pass):
+ *
+ * Pass 1 - Initial Line Fitting:
  * 1. For each cell, calculate available height for lines (subtract padding)
- * 2. Find cumulative line heights and determine cutoff point per cell
+ * 2. Find cumulative line heights and determine initial cutoff point per cell
  * 3. Calculate the actual height of lines that fit for each cell
- * 4. Use the minimum height across cells as the split point
- * 5. Recalculate per-cell line cutoffs at that common height
+ * 4. Check if all cells completed their content in this pass
+ *
+ * Pass 2 - Line Advancement Alignment:
+ * 1. Calculate line advancement for each cell (cutLine - startLine)
+ * 2. Find minimum line advancement across all cells
+ * 3. If all cells completed in pass 1, keep the pass 1 results (optimization)
+ * 4. Otherwise, recalculate cutoffs so all cells advance by the same number of lines
+ *
+ * Why Line Advancement Instead of Minimum Height:
+ * Using minimum line advancement (instead of minimum height) ensures that all cells
+ * advance by the same number of lines, which maintains structural alignment across
+ * cells. This prevents scenarios where cells with different line heights would
+ * desynchronize, causing layout inconsistencies in multi-part row splits.
+ *
+ * Optimization - allCellsCompleteInFirstPass:
+ * When all cells complete their remaining content in the first pass, we skip the
+ * line advancement normalization. This allows the last fragment of a split row to
+ * use the natural heights without artificial constraints, improving space utilization.
  *
  * @param rowIndex - Index of the row to split
  * @param blockRow - Table row data for accessing cell attributes (padding, etc.)
  * @param measure - Table measurements with cell line data
  * @param availableHeight - Available vertical space for the partial row
  * @param fromLineByCell - Starting line indices per cell (for continuations)
- * @returns PartialRowInfo with line cutoffs per cell
+ * @returns PartialRowInfo with line cutoffs per cell, partial height, and split flags
  */
 function computePartialRow(
   rowIndex: number,
@@ -297,7 +315,7 @@ function computePartialRow(
   const heightByCell: number[] = [];
 
   // Capture cell paddings to keep height math aligned with rendering
-  const cellPaddings = row.cells.map((_: unknown, idx: number) => getCellPadding(idx, blockRow));
+  const cellPaddings = row.cells.map((_, idx: number) => getCellPadding(idx, blockRow));
 
   // First pass: find cutoff for each cell based on available height
   for (let cellIdx = 0; cellIdx < cellCount; cellIdx++) {
@@ -326,11 +344,22 @@ function computePartialRow(
     heightByCell.push(cumulativeHeight);
   }
 
-  // Find minimum height across all cells (ensures consistent visual split)
-  const positiveHeights = heightByCell.filter((h) => h > 0);
-  const minHeight = positiveHeights.length > 0 ? Math.min(...positiveHeights) : 0;
+  // Check if ALL cells completed their remaining content in the first pass
+  const allCellsCompleteInFirstPass: boolean = toLineByCell.every((cutLine, idx: number) => {
+    const totalLines = getCellTotalLines(row.cells[idx]);
+    return cutLine >= totalLines;
+  });
 
-  // Second pass: adjust cutoffs to match the minimum height
+  // Calculate line advancement for each cell (how many lines advanced from startLine)
+  const lineAdvancements: number[] = toLineByCell.map((cutLine, idx: number) => cutLine - (startLines[idx] || 0));
+
+  // Find minimum LINE ADVANCEMENT across cells (not minimum height!)
+  // This ensures all cells advance by the same number of lines, keeping structural alignment
+  const positiveAdvancements = lineAdvancements.filter((adv) => adv > 0);
+  const minLineAdvancement = positiveAdvancements.length > 0 ? Math.min(...positiveAdvancements) : 0;
+
+  // Second pass: adjust cutoffs to match the minimum line advancement
+  // BUT: Skip this adjustment if all cells already completed - no need to artificially limit
   let actualPartialHeight = 0;
   let maxPaddingTotal = 0;
   for (let cellIdx = 0; cellIdx < cellCount; cellIdx++) {
@@ -341,29 +370,32 @@ function computePartialRow(
     const paddingTotal = cellPadding.top + cellPadding.bottom;
     maxPaddingTotal = Math.max(maxPaddingTotal, paddingTotal);
 
-    let cumulativeHeight = 0;
-    let cutLine = startLine;
+    // If all cells completed in first pass, keep the first pass results
+    if (allCellsCompleteInFirstPass) {
+      // Keep toLineByCell[cellIdx] as-is from first pass
+      actualPartialHeight = Math.max(actualPartialHeight, heightByCell[cellIdx] + paddingTotal);
+    } else {
+      // Recalculate at minimum LINE ADVANCEMENT for consistent structural alignment
+      // Each cell advances by the same number of lines
+      const targetLine = Math.min(startLine + minLineAdvancement, lines.length);
+      let cumulativeHeight = 0;
 
-    for (let i = startLine; i < lines.length; i++) {
-      const lineHeight = lines[i].lineHeight || 0;
-      if (cumulativeHeight + lineHeight > minHeight) {
-        break;
+      for (let i = startLine; i < targetLine; i++) {
+        cumulativeHeight += lines[i].lineHeight || 0;
       }
-      cumulativeHeight += lineHeight;
-      cutLine = i + 1;
-    }
 
-    toLineByCell[cellIdx] = cutLine;
-    actualPartialHeight = Math.max(actualPartialHeight, cumulativeHeight + paddingTotal);
+      toLineByCell[cellIdx] = targetLine;
+      actualPartialHeight = Math.max(actualPartialHeight, cumulativeHeight + paddingTotal);
+    }
   }
 
   // CRITICAL: Check if we made any progress (advanced any lines)
-  const madeProgress = toLineByCell.some((cutLine: number, idx: number) => cutLine > (startLines[idx] || 0));
+  const madeProgress = toLineByCell.some((cutLine, idx: number) => cutLine > (startLines[idx] || 0));
 
   const isFirstPart = startLines.every((l) => l === 0);
 
   // Determine if this is the last part (all cells exhausted OR no progress made)
-  const allCellsExhausted = toLineByCell.every((cutLine: number, idx: number) => {
+  const allCellsExhausted = toLineByCell.every((cutLine, idx: number) => {
     const totalLines = getCellTotalLines(row.cells[idx]);
     return cutLine >= totalLines;
   });
@@ -751,10 +783,14 @@ export function layoutTableBlock({
         currentRow = rowIndex + 1;
         pendingPartialRow = null;
       } else if (!madeProgress && hadRemainingLinesBefore) {
+        // No progress made - need to advance to next page/column and retry
         state = advanceColumn(state);
         // Keep the same pendingPartialRow to retry on next page (no assignment needed)
       } else {
-        state = advanceColumn(state);
+        // Made progress but row not complete - continue on SAME page
+        // DO NOT call advanceColumn here! The cursor has already been advanced
+        // by the fragment height above. Just update pendingPartialRow to track
+        // remaining lines for the next iteration.
         pendingPartialRow = continuationPartialRow;
       }
 
