@@ -1652,9 +1652,16 @@ export class DomPainter {
            *   Normal: paddingLeft=360px, textIndent=720px → first line content at 1080px
            *   With tabs: paddingLeft=1080px, no textIndent → segments positioned correctly
            */
-          if (isFirstLine && hasExplicitSegmentPositioning && firstLineOffset !== 0) {
-            const adjustedPadding = paraIndentLeft + firstLineOffset;
-            lineEl.style.paddingLeft = `${adjustedPadding}px`;
+          if (hasExplicitSegmentPositioning) {
+            // When segments have explicit X positions (from tabs), they are absolutely positioned.
+            // Absolutely positioned elements ignore padding, so we must NOT set paddingLeft.
+            // The segment X positions already include the paragraph indent from layout calculation.
+            // For first lines with firstLineOffset, adjust the starting position.
+            if (isFirstLine && firstLineOffset !== 0) {
+              const adjustedPadding = paraIndentLeft + firstLineOffset;
+              lineEl.style.paddingLeft = `${adjustedPadding}px`;
+            }
+            // Otherwise, don't set paddingLeft - segment positions handle indentation
           } else if (paraIndentLeft) {
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
           }
@@ -3563,8 +3570,18 @@ export class DomPainter {
     if (hasExplicitPositioning && line.segments) {
       // Use segment-based rendering with absolute positioning for tab-aligned text
       // When rendering segments, we need to track cumulative X position
-      // for segments that don't have explicit X coordinates
-      let cumulativeX = 0;
+      // for segments that don't have explicit X coordinates.
+      //
+      // The segment x positions from layout are relative to the content area (left margin = 0).
+      // We need to add the paragraph indent to ALL positions (both explicit and calculated).
+      const paraIndent = (block.attrs as ParagraphAttrs | undefined)?.indent;
+      const indentLeft = paraIndent?.left ?? 0;
+      const firstLine = paraIndent?.firstLine ?? 0;
+      const hanging = paraIndent?.hanging ?? 0;
+      const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
+      const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
+      const indentOffset = indentLeft + firstLineOffsetForCumX;
+      let cumulativeX = 0; // Start at 0, we'll add indentOffset when positioning
       const segmentsByRun = new Map<number, LineSegment[]>();
       line.segments.forEach((segment) => {
         const list = segmentsByRun.get(segment.runIndex);
@@ -3580,6 +3597,19 @@ export class DomPainter {
        * Only returns the X if the very next run has a segment with explicit positioning.
        * This handles tab-aligned text where right/center alignment causes the text to start
        * before the tab stop target.
+       *
+       * WHY ONLY THE IMMEDIATE NEXT RUN:
+       * When rendering a tab, we need to know where the content IMMEDIATELY after this tab begins
+       * to correctly size the tab element. We don't look beyond the immediate next run because:
+       * 1. Each tab is independent and should only consider its directly adjacent content
+       * 2. Looking further ahead would incorrectly span multiple tabs or unrelated runs
+       * 3. If there's another tab between this tab and some content, that intermediate tab is
+       *    responsible for its own layout - we shouldn't reach across it
+       *
+       * For example, given: "Text[TAB1]Content[TAB2]MoreContent"
+       * - When sizing TAB1, we only check "Content" (immediate next run)
+       * - We don't check "MoreContent" because TAB2 is in between
+       * - TAB2 will independently check "MoreContent" when it's rendered
        *
        * @param fromRunIndex - The run index to search after
        * @returns The X position of the immediate next segment, or undefined if not found or not immediate
@@ -3615,7 +3645,7 @@ export class DomPainter {
 
           const tabEl = this.doc!.createElement('span');
           tabEl.style.position = 'absolute';
-          tabEl.style.left = `${tabStartX}px`;
+          tabEl.style.left = `${tabStartX + indentOffset}px`;
           tabEl.style.top = '0px';
           tabEl.style.width = `${actualTabWidth}px`;
           tabEl.style.height = `${line.lineHeight}px`;
@@ -3666,14 +3696,16 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Position image using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
             const runSegments = segmentsByRun.get(runIndex);
-            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
             const segWidth =
               (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : elem.offsetWidth) ?? 0;
             elem.style.position = 'absolute';
             elem.style.left = `${segX}px`;
             el.appendChild(elem);
-            cumulativeX = segX + segWidth;
+            cumulativeX = baseSegX + segWidth;
           }
           continue;
         }
@@ -3696,13 +3728,15 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Position using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
             const runSegments = segmentsByRun.get(runIndex);
-            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
             const segWidth = (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : 0) ?? 0;
             elem.style.position = 'absolute';
             elem.style.left = `${segX}px`;
             el.appendChild(elem);
-            cumulativeX = segX + segWidth;
+            cumulativeX = baseSegX + segWidth;
           }
           continue;
         }
@@ -3741,7 +3775,10 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Determine X position for this segment
-            const xPos = segment.x !== undefined ? segment.x : cumulativeX;
+            // Layout positions are relative to content area start (0).
+            // Add indentOffset to position content at the correct paragraph indent.
+            const baseX = segment.x !== undefined ? segment.x : cumulativeX;
+            const xPos = baseX + indentOffset;
 
             elem.style.position = 'absolute';
             elem.style.left = `${xPos}px`;
@@ -3749,6 +3786,8 @@ export class DomPainter {
 
             // Update cumulative X for next segment by measuring this element's width
             // This applies to ALL segments (both with and without explicit X)
+            // Use baseX (without indent) to keep cumulativeX relative to content area,
+            // matching how segment.x values are calculated in layout.
             let width = segment.width ?? 0;
             if (width <= 0 && this.doc) {
               const measureEl = elem.cloneNode(true) as HTMLElement;
@@ -3759,7 +3798,7 @@ export class DomPainter {
               width = measureEl.offsetWidth;
               this.doc.body.removeChild(measureEl);
             }
-            cumulativeX = xPos + width;
+            cumulativeX = baseX + width;
           }
         });
       }

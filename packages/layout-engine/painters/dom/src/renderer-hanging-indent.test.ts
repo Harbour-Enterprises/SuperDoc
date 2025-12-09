@@ -1495,4 +1495,837 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(tabEl.style.width).toBe('8px');
     });
   });
+
+  describe('indentOffset calculation for segment positioning', () => {
+    /**
+     * These tests verify the indentOffset calculation logic used for positioning
+     * segments with explicit X coordinates. The offset combines left indent with
+     * first-line adjustments (firstLine - hanging on first line, 0 on subsequent lines).
+     */
+
+    it('calculates indentOffset correctly for first line with firstLine indent', () => {
+      const blockId = 'firstline-indent-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 13,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      // Verify segments are rendered with correct positioning
+      // indentOffset should be: left (100) + firstLine (200) = 300
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // Get all absolutely positioned spans (segments) within the line
+      const spans = Array.from(lineEl.querySelectorAll('span')).filter(
+        (s) => (s as HTMLElement).style.position === 'absolute',
+      ) as HTMLElement[];
+      expect(spans.length).toBeGreaterThan(0);
+
+      // First segment at x=0, positioned at 0 + indentOffset = 300
+      const firstSpan = spans[0];
+      expect(firstSpan.style.left).toBe('300px');
+
+      // Second segment at x=150, positioned at 150 + indentOffset = 450
+      const secondSpan = spans[1];
+      expect(secondSpan.style.left).toBe('450px');
+    });
+
+    it('calculates indentOffset correctly for first line with hanging indent', () => {
+      const blockId = 'hanging-indent-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 360,
+            hanging: 144,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 13,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      // Verify segments are rendered with correct positioning
+      // indentOffset should be: left (360) + (firstLine (0) - hanging (144)) = 216
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      const spans = Array.from(lineEl.querySelectorAll('span')).filter(
+        (s) => (s as HTMLElement).style.position === 'absolute',
+      ) as HTMLElement[];
+      expect(spans.length).toBeGreaterThan(0);
+
+      // First segment at x=0, positioned at 0 + indentOffset = 216
+      const firstSpan = spans[0];
+      expect(firstSpan.style.left).toBe('216px');
+
+      // Second segment at x=150, positioned at 150 + indentOffset = 366
+      const secondSpan = spans[1];
+      expect(secondSpan.style.left).toBe('366px');
+    });
+
+    it('calculates indentOffset correctly for non-first lines', () => {
+      const blockId = 'non-first-line-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [
+          {
+            text: 'First line text continues on second line\twith tab',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            pmStart: 0,
+            pmEnd: 50,
+          },
+        ],
+        attrs: {
+          indent: {
+            left: 360,
+            firstLine: 720,
+            hanging: 144,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 25,
+            width: 280,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+          {
+            fromRun: 0,
+            fromChar: 25,
+            toRun: 0,
+            toChar: 50,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 25, toChar: 40, width: 80, x: 0 },
+              { runIndex: 0, fromChar: 40, toChar: 50, width: 100, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 2,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 50,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      // Get the second line's segments
+      const lines = container.querySelectorAll('.superdoc-line');
+      expect(lines.length).toBe(2);
+
+      const secondLine = lines[1];
+      const spans = Array.from(secondLine.querySelectorAll('span')).filter(
+        (s) => (s as HTMLElement).style.position === 'absolute',
+      ) as HTMLElement[];
+      expect(spans.length).toBeGreaterThan(0);
+
+      // For non-first lines, indentOffset should be: left (360) + 0 = 360
+      // (no firstLine or hanging adjustment)
+      const firstSpan = spans[0];
+      expect(firstSpan.style.left).toBe('360px');
+
+      const secondSpan = spans[1];
+      expect(secondSpan.style.left).toBe('510px'); // 150 + 360
+    });
+
+    it('calculates indentOffset with firstLine and hanging combined', () => {
+      const blockId = 'combined-indent-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 200,
+            firstLine: 400,
+            hanging: 100,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 13,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      // Verify segments are rendered with correct positioning
+      // indentOffset should be: left (200) + (firstLine (400) - hanging (100)) = 500
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      const spans = Array.from(lineEl.querySelectorAll('span')).filter(
+        (s) => (s as HTMLElement).style.position === 'absolute',
+      ) as HTMLElement[];
+      expect(spans.length).toBeGreaterThan(0);
+
+      const firstSpan = spans[0];
+      expect(firstSpan.style.left).toBe('500px');
+
+      const secondSpan = spans[1];
+      expect(secondSpan.style.left).toBe('650px'); // 150 + 500
+    });
+
+    it('handles zero indents correctly', () => {
+      const blockId = 'zero-indent-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 0,
+            firstLine: 0,
+            hanging: 0,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 1,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 13,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      // With all zero indents, indentOffset = 0
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      const spans = Array.from(lineEl.querySelectorAll('span')).filter(
+        (s) => (s as HTMLElement).style.position === 'absolute',
+      ) as HTMLElement[];
+      expect(spans.length).toBeGreaterThan(0);
+
+      const firstSpan = spans[0];
+      expect(firstSpan.style.left).toBe('0px');
+
+      const secondSpan = spans[1];
+      expect(secondSpan.style.left).toBe('150px');
+    });
+  });
+
+  describe('paddingLeft edge cases with hasExplicitSegmentPositioning', () => {
+    /**
+     * These tests verify the paddingLeft conditional logic that varies based on:
+     * - hasExplicitSegmentPositioning (true when segments exist)
+     * - isFirstLine (true for first line, false otherwise)
+     * - firstLineOffset (calculated from firstLine - hanging)
+     */
+
+    it('sets paddingLeft when hasExplicitPositioning=true, isFirstLine=true, firstLineOffset!=0', () => {
+      const blockId = 'explicit-first-nonzero';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout = createLayout(blockId, 13);
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // Should set paddingLeft = paraIndentLeft (100) + firstLineOffset (200) = 300
+      expect(lineEl.style.paddingLeft).toBe('300px');
+    });
+
+    it('does not set paddingLeft when hasExplicitPositioning=true, isFirstLine=true, firstLineOffset=0', () => {
+      const blockId = 'explicit-first-zero';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 0,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout = createLayout(blockId, 13);
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // firstLineOffset = 0, so paddingLeft should not be set
+      expect(lineEl.style.paddingLeft).toBe('');
+    });
+
+    it('does not set paddingLeft when hasExplicitPositioning=true, isFirstLine=false', () => {
+      const blockId = 'explicit-not-first';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [
+          {
+            text: 'First line text continues on second\twith tab',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            pmStart: 0,
+            pmEnd: 45,
+          },
+        ],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 20,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+          {
+            fromRun: 0,
+            fromChar: 20,
+            toRun: 0,
+            toChar: 45,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 20, toChar: 36, width: 80, x: 0 },
+              { runIndex: 0, fromChar: 36, toChar: 45, width: 100, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 2,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 45,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lines = container.querySelectorAll('.superdoc-line');
+      expect(lines.length).toBe(2);
+
+      const secondLine = lines[1] as HTMLElement;
+
+      // Non-first line with explicit positioning should not set paddingLeft
+      expect(secondLine.style.paddingLeft).toBe('');
+    });
+
+    it('sets paddingLeft when hasExplicitPositioning=false, isFirstLine=true', () => {
+      const blockId = 'no-explicit-first';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text without tabs', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 17 }],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 17,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            // No segments - no explicit positioning
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout = createLayout(blockId, 17);
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // Without explicit positioning, should set paddingLeft = paraIndentLeft (100)
+      expect(lineEl.style.paddingLeft).toBe('100px');
+
+      // textIndent should be set for first line offset (200)
+      expect(lineEl.style.textIndent).toBe('200px');
+    });
+
+    it('sets paddingLeft when hasExplicitPositioning=false, isFirstLine=false', () => {
+      const blockId = 'no-explicit-not-first';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [
+          {
+            text: 'First line text continues on second line',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            pmStart: 0,
+            pmEnd: 41,
+          },
+        ],
+        attrs: {
+          indent: {
+            left: 100,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 20,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+          {
+            fromRun: 0,
+            fromChar: 20,
+            toRun: 0,
+            toChar: 41,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      const layout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [
+              {
+                kind: 'para',
+                blockId,
+                fromLine: 0,
+                toLine: 2,
+                x: 30,
+                y: 40,
+                width: 300,
+                pmStart: 0,
+                pmEnd: 41,
+              },
+            ],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lines = container.querySelectorAll('.superdoc-line');
+      expect(lines.length).toBe(2);
+
+      const secondLine = lines[1] as HTMLElement;
+
+      // Without explicit positioning, should set paddingLeft = paraIndentLeft (100)
+      expect(secondLine.style.paddingLeft).toBe('100px');
+
+      // textIndent should be 0px for non-first lines
+      expect(secondLine.style.textIndent).toBe('0px');
+    });
+
+    it('handles negative firstLineOffset with explicit positioning', () => {
+      const blockId = 'explicit-negative-offset';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 360,
+            hanging: 144,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout = createLayout(blockId, 13);
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // firstLineOffset = firstLine (0) - hanging (144) = -144
+      // paddingLeft = paraIndentLeft (360) + firstLineOffset (-144) = 216
+      expect(lineEl.style.paddingLeft).toBe('216px');
+    });
+
+    it('handles zero left indent with explicit positioning and non-zero firstLineOffset', () => {
+      const blockId = 'explicit-zero-left';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: blockId,
+        runs: [{ text: 'Text\twith tab', fontFamily: 'Arial', fontSize: 12, pmStart: 0, pmEnd: 13 }],
+        attrs: {
+          indent: {
+            left: 0,
+            firstLine: 200,
+          },
+        },
+      };
+
+      const measure: Measure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 180,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+            segments: [
+              { runIndex: 0, fromChar: 0, toChar: 4, width: 50, x: 0 },
+              { runIndex: 0, fromChar: 4, toChar: 13, width: 130, x: 150 },
+            ],
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const layout = createLayout(blockId, 13);
+      const painter = createDomPainter({ blocks: [block], measures: [measure], container });
+      painter.paint(layout, container);
+
+      const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
+      expect(lineEl).toBeTruthy();
+
+      // paddingLeft = paraIndentLeft (0) + firstLineOffset (200) = 200
+      expect(lineEl.style.paddingLeft).toBe('200px');
+    });
+  });
 });
