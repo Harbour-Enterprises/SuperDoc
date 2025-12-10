@@ -1,59 +1,68 @@
 
-// Available actions dictionary - defined outside the class for easy access
+// Available actions dictionary - matches the planner's built-in tools
 const actionsDictionary = {
-  'find': { 
-    label: 'Find', 
-    description: 'Find the first occurrence of content in the document based on a search instruction',
-    method: (ai, prompt) => ai.action.find(prompt) 
-  },
   'findAll': { 
     label: 'Find All', 
-    description: 'Find all occurrences of content in the document based on a search instruction',
+    description: 'Locate all occurrences of content matching the instruction',
     method: (ai, prompt) => ai.action.findAll(prompt) 
   },
   'highlight': { 
     label: 'Highlight', 
-    description: 'Highlight specific text or sections in the document with optional color',
+    description: 'Visually highlight text without changing it. Use for: drawing attention to issues, marking items for discussion, indicating areas of concern.',
     method: (ai, prompt) => ai.action.highlight(prompt) 
-  },
-  'replace': { 
-    label: 'Replace', 
-    description: 'Replace the first occurrence of content in the document with new text',
-    method: (ai, prompt) => ai.action.replace(prompt) 
   },
   'replaceAll': { 
     label: 'Replace All', 
-    description: 'Replace all occurrences of content in the document with new text',
+    description: 'DIRECT batch editing (no tracking). Use ONLY when user explicitly wants all instances changed immediately AND the user does NOT provide exact find/replace text pairs.',
     method: (ai, prompt) => ai.action.replaceAll(prompt) 
   },
-  'insertTrackedChange': { 
-    label: 'Insert Tracked Change', 
-    description: 'Insert a single tracked change or suggestion in the document for review',
-    method: (ai, prompt) => ai.action.insertTrackedChange(prompt) 
+  'literalReplace': { 
+    label: 'Literal Replace', 
+    description: 'PREFERRED for explicit find-and-replace operations. Use when the user provides both the exact text to find AND the exact replacement text.',
+    method: (ai, prompt) => {
+      // For literal replace, we need to parse the prompt differently
+      // This is a simplified version - in practice, the planner would handle this
+      const parts = prompt.split(/ to | with /i);
+      if (parts.length >= 2) {
+        const findText = parts[0].trim();
+        const replaceText = parts.slice(1).join(' ').trim();
+        return ai.action.literalReplace(findText, replaceText, { trackChanges: false });
+      }
+      throw new Error('Literal replace requires format: "find X to replace with Y"');
+    }
   },
   'insertTrackedChanges': { 
-    label: 'Insert Multiple Tracked Changes', 
-    description: 'Insert multiple tracked changes or suggestions throughout the document',
+    label: 'Insert Tracked Changes', 
+    description: 'PRIMARY TOOL for suggesting multiple edits. Creates tracked changes across multiple locations. Use for: batch corrections, applying consistent changes, multiple editing suggestions.',
     method: (ai, prompt) => ai.action.insertTrackedChanges(prompt) 
   },
-  'insertComment': { 
-    label: 'Insert Comment', 
-    description: 'Add a single comment or annotation to a specific part of the document',
-    method: (ai, prompt) => ai.action.insertComment(prompt) 
-  },
   'insertComments': { 
-    label: 'Insert Multiple Comments', 
-    description: 'Add multiple comments or annotations throughout the document',
+    label: 'Insert Comments', 
+    description: 'PRIMARY TOOL for providing feedback in multiple locations when location criteria are complex or require AI interpretation. Use for: comprehensive document review, multiple questions, batch feedback.',
     method: (ai, prompt) => ai.action.insertComments(prompt) 
+  },
+  'literalInsertComment': { 
+    label: 'Literal Insert Comment', 
+    description: 'PREFERRED for explicit find-and-add-comment operations. Use when the user provides both the exact text to find AND the exact comment text to add.',
+    method: (ai, prompt) => {
+      // Simplified version - planner would handle this better
+      const parts = prompt.split(/ with comment | add comment /i);
+      if (parts.length >= 2) {
+        const findText = parts[0].trim();
+        const commentText = parts.slice(1).join(' ').trim();
+        return ai.action.literalInsertComment(findText, commentText);
+      }
+      throw new Error('Literal insert comment requires format: "find X with comment Y"');
+    }
   },
   'summarize': { 
     label: 'Summarize', 
-    description: 'Generate a summary of the document content or specific sections',
+    description: 'Generate a summary or clarification of content. Use for: creating executive summaries, explaining complex sections, condensing information.',
     method: (ai, prompt) => ai.action.summarize(prompt) 
   },
   'insertContent': { 
     label: 'Insert Content', 
-    description: 'Insert new content, text, or sections into the document at appropriate locations',
+    description: 'Draft and insert new content relative to the current selection. Use for inserting headings, lists, clauses, or replacing selected text.',
     method: (ai, prompt) => ai.action.insertContent(prompt) 
   },
 }

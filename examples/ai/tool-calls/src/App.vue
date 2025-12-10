@@ -80,10 +80,29 @@ function initializeAI(superdoc) {
     },
     provider,
     enableLogging: true,
+    planner: {
+      maxContextLength: 10000,
+      onProgress: (event) => {
+        console.log('Planner progress:', event)
+        if (event.type === 'planning') {
+          logger.updateCurrentLog({ status: event.message })
+          statusText.value = event.message
+        } else if (event.type === 'tool_start') {
+          logger.updateCurrentLog({ 
+            status: `Executing ${event.tool} (${event.stepIndex + 1}/${event.totalSteps})...` 
+          })
+          statusText.value = `Executing ${event.tool}...`
+        } else if (event.type === 'tool_complete') {
+          logger.updateCurrentLog({ 
+            status: `Completed ${event.tool} (${event.stepIndex + 1}/${event.totalSteps})` 
+          })
+        }
+      },
+    },
     onReady: () => {
       statusText.value = 'AI is ready. Select an action and enter a prompt.'
       buttonsEnabled.value = true
-      // Create action handler when AI is ready
+      // Create action handler when AI is ready (for backward compatibility)
       actionHandler = new ActionHandler(aiInstance, logger)
     },
     onStreamingStart: () => {
@@ -131,7 +150,7 @@ async function executeAction() {
   const promptToExecute = prompt.value
 
   // Create log entry for this action
-  const logLabel = mode.value === 'prompt' ? 'Open Prompt' : selectedAction.value.label
+  const logLabel = mode.value === 'prompt' ? 'Open Prompt (Planner)' : selectedAction.value.label
   logger.addActionLog(logLabel, promptToExecute)
   
   // Clear the prompt after a small delay to avoid editor transaction conflicts
@@ -142,24 +161,62 @@ async function executeAction() {
   buttonsEnabled.value = false
 
   try {
+    // Wait for AI to be ready
+    await aiInstance.value.waitUntilReady()
+
     if (mode.value === 'prompt') {
-      // Handle open prompt mode - calls AI and potentially executes tools
-      if (!actionHandler) {
-        throw new Error('Action handler not initialized')
-      }
+      // Use the planner to execute the user's request (similar to superchat)
+      const result = await aiInstance.value.planner.execute(promptToExecute)
       
-      const response = await actionHandler.handleOpenPrompt(promptToExecute)
-      
-      if (response.type === 'tool_calls') {
-        // Execute the tool calls returned by the AI
-        await actionHandler.executeToolCallsFromPrompt(response.toolCalls)
+      if (result.success) {
+        // Format the result for logging
+        const segments = []
+        
+        if (result.response) {
+          segments.push(result.response.trim())
+        }
+        
+        if (result.executedTools?.length) {
+          segments.push(`✓ Executed tools: ${result.executedTools.join(', ')}`)
+        }
+        
+        if (result.plan?.reasoning) {
+          segments.push(`Reasoning: ${result.plan.reasoning.trim()}`)
+        }
+        
+        if (result.plan?.steps?.length) {
+          const planLines = result.plan.steps.slice(0, 5).map((step, index) => {
+            const instruction = step.instruction?.trim() || 'No instruction provided'
+            return `${index + 1}. ${step.tool} — ${instruction}`
+          })
+          segments.push(`Plan:\n${planLines.join('\n')}`)
+        }
+        
+        if (result.warnings?.length) {
+          segments.push(`Warnings:\n${result.warnings.join('\n')}`)
+        }
+        
+        const resultText = segments.join('\n\n') || 'Done!'
+        logger.updateCurrentLog({ 
+          status: result.executedTools?.length 
+            ? `Executed ${result.executedTools.length} tool(s)` 
+            : 'Completed',
+          response: resultText
+        })
+        
+        const toolCount = result.executedTools?.length || 0
+        statusText.value = toolCount
+          ? `Executed ${toolCount} tool${toolCount === 1 ? '' : 's'}`
+          : 'Responded without document changes'
+      } else {
+        throw new Error(result.error || 'Execution failed')
       }
-      // Text responses are already handled in handleOpenPrompt
       
     } else {
       // Handle regular tool mode - execute selected action directly
-      await aiInstance.value.waitUntilReady()
       await selectedAction.value.method(aiInstance.value, promptToExecute)
+      logger.updateCurrentLog({ status: 'Done.' })
+      statusText.value = `${selectedAction.value.label} completed successfully`
     }
     
   } catch (error) {
@@ -212,6 +269,17 @@ function initializeSuperdoc(documentBlob = null) {
     document: documentBlob,
     rulers: true,
     toolbar: '#superdoc-toolbar',
+    useLayoutEngine: true,
+    user: {
+      name: 'AI Assistant',
+      email: 'ai@superdoc.com',
+    },
+    layoutEngineOptions: {
+      trackedChanges: {
+        mode: 'review',
+        enabled: true,
+      },
+    },
   }
   config.onEditorCreate = () => initializeAI(superdoc);
 
