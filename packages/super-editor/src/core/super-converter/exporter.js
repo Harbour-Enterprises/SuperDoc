@@ -578,7 +578,9 @@ export class DocxExporter {
               return el !== '<undefined>' && el !== '</undefined>';
             });
 
-            tags.push(...removeUndefined);
+            for (const element of removeUndefined) {
+              tags.push(element);
+            }
           }
         }
       }
