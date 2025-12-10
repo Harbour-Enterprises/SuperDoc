@@ -3,7 +3,7 @@ import { AIActionsService } from '../../services/ai-actions-service';
 import type { AIProvider, Editor } from '../../../shared/types';
 import { EditorAdapter } from '../../editor/editor-adapter';
 
-const createChain = (commands?: any) => {
+const createChain = (commands?: Record<string, unknown>) => {
   const chainApi = {
     setTextSelection: vi.fn((args) => {
       commands?.setTextSelection?.(args);
@@ -62,11 +62,11 @@ describe('AIActionsService', () => {
         doc: {
           textContent: 'Sample document text for testing',
           content: { size: 100 },
-          resolve: vi.fn((pos) => ({
-            pos,
+          resolve: vi.fn((_pos) => ({
+            pos: _pos,
             parent: { inlineContent: true },
-            min: vi.fn(() => pos),
-            max: vi.fn(() => pos),
+            min: vi.fn(() => _pos),
+            max: vi.fn(() => _pos),
             marks: vi.fn(() => []),
           })),
           textBetween: vi.fn((from, to) => 'Sample document text for testing'.slice(from, to)),
@@ -92,7 +92,7 @@ describe('AIActionsService', () => {
       },
       view: {
         dispatch: vi.fn(),
-        domAtPos: vi.fn((pos: number) => {
+        domAtPos: vi.fn(() => {
           return {
             node: {
               scrollIntoView: vi.fn(),
@@ -119,7 +119,7 @@ describe('AIActionsService', () => {
         insertContentAt: vi.fn(),
       },
       chain: vi.fn(),
-    } as any;
+    } as unknown as Editor;
     const chain = createChain(mockEditor.commands);
     chainFn = chain.chainFn;
     chainApi = chain.chainApi;
@@ -301,8 +301,8 @@ describe('AIActionsService', () => {
   });
 
   describe('literalReplace', () => {
-    let literalSpy: any;
-    let trackedSpy: any;
+    let literalSpy: ReturnType<typeof vi.spyOn<typeof EditorAdapter.prototype, 'findLiteralMatches'>>;
+    let trackedSpy: ReturnType<typeof vi.spyOn<typeof EditorAdapter.prototype, 'createTrackedChange'>>;
 
     beforeEach(() => {
       literalSpy = vi.spyOn(EditorAdapter.prototype, 'findLiteralMatches');
@@ -357,12 +357,12 @@ describe('AIActionsService', () => {
         from: 0,
         to: 6,
         empty: false,
-        $anchor: { pos: 0 } as any,
-        $head: { pos: 6 } as any,
-        ranges: [] as any[],
+        $anchor: { pos: 0 } as unknown as { pos: number },
+        $head: { pos: 6 } as unknown as { pos: number },
+        ranges: [] as unknown[],
         anchor: 0,
         head: 6,
-      } as any;
+      } as unknown as typeof mockEditor.view.state.selection;
 
       mockEditor.view = {
         state: {
@@ -370,7 +370,7 @@ describe('AIActionsService', () => {
           doc: docWithTextBetween,
         },
         dispatch: vi.fn(),
-      } as any;
+      } as unknown as Editor;
 
       mockEditor.state = {
         ...mockEditor.state,
@@ -384,7 +384,6 @@ describe('AIActionsService', () => {
       expect(result.success).toBe(true);
       expect(result.results).toHaveLength(1);
       expect(result.results[0].originalText).toBe('Sample');
-      // Should not call findLiteralMatches because selection was used directly
       expect(literalSpy).not.toHaveBeenCalled();
     });
 
@@ -445,6 +444,17 @@ describe('AIActionsService', () => {
 
       expect(result.success).toBe(true);
       expect(literalSpy.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    it('should allow replacements that only differ by casing when case insensitive', async () => {
+      const match = { from: 0, to: 5, text: 'apple' };
+      literalSpy.mockReturnValueOnce([match]).mockReturnValue([]);
+
+      const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+      const result = await actions.literalReplace('apple', 'Apple');
+
+      expect(result.success).toBe(true);
+      expect(result.results).toHaveLength(1);
     });
   });
 
@@ -581,7 +591,7 @@ describe('AIActionsService', () => {
       });
       const completionSpy = vi.fn().mockResolvedValue(response);
 
-      mockProvider.streamCompletion = streamSpy as any;
+      mockProvider.streamCompletion = streamSpy as typeof mockProvider.streamCompletion;
       mockProvider.getCompletion = completionSpy;
 
       const actions = new AIActionsService(
@@ -689,13 +699,40 @@ describe('AIActionsService', () => {
       });
 
       mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
-      const insertSpy = vi.spyOn(EditorAdapter.prototype, 'insertText').mockImplementation(() => {});
+      const insertSpy = vi.spyOn(EditorAdapter.prototype, 'insertText').mockImplementation(() => {
+        // Mock implementation
+      });
 
       const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
       const result = await actions.insertContent('add heading', { position: 'before' });
 
       expect(result.success).toBe(true);
       expect(insertSpy).toHaveBeenCalledWith('Heading content', { position: 'before' });
+
+      insertSpy.mockRestore();
+    });
+
+    it('should strip list numbering from suggested insertions while keeping leading whitespace', async () => {
+      const response = JSON.stringify({
+        success: true,
+        results: [
+          {
+            suggestedText: '\n1.2 Artificial intelligence clause',
+          },
+        ],
+      });
+
+      mockProvider.getCompletion = vi.fn().mockResolvedValue(response);
+      const insertSpy = vi.spyOn(EditorAdapter.prototype, 'insertText').mockImplementation(() => {
+        // Mock implementation
+      });
+
+      const actions = new AIActionsService(mockProvider, mockEditor, () => mockEditor.state.doc.textContent, false);
+      const result = await actions.insertContent('add clause');
+
+      expect(result.success).toBe(true);
+      expect(insertSpy).toHaveBeenCalledWith('\nArtificial intelligence clause', { position: 'replace' });
+      expect(result.results?.[0]?.suggestedText).toBe('\nArtificial intelligence clause');
 
       insertSpy.mockRestore();
     });
@@ -748,7 +785,7 @@ describe('AIActionsService', () => {
       });
       const completionSpy = vi.fn().mockResolvedValue(response);
 
-      mockProvider.streamCompletion = streamSpy as any;
+      mockProvider.streamCompletion = streamSpy as typeof mockProvider.streamCompletion;
       mockProvider.getCompletion = completionSpy;
 
       const actions = new AIActionsService(
@@ -770,7 +807,9 @@ describe('AIActionsService', () => {
 
   describe('error handling', () => {
     it('should respect enableLogging flag', async () => {
-      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
+        // Mock implementation
+      });
 
       mockProvider.getCompletion = vi.fn().mockResolvedValue('invalid json');
       mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 4 }]);

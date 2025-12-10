@@ -6,104 +6,101 @@
  * Safely reads response text, returning a generic error message on failure.
  */
 export async function safeReadText(response: Response): Promise<string> {
-    try {
-        return await response.text();
-    } catch {
-        return 'Unable to read response body';
-    }
+  try {
+    return await response.text();
+  } catch {
+    return 'Unable to read response body';
+  }
 }
 
 /**
  * Extracts text from Anthropic content blocks.
  */
-export function extractTextFromBlock(block: any): string {
-    if (typeof block === 'string') {
-        return block;
+export function extractTextFromBlock(block: unknown): string {
+  if (typeof block === 'string') {
+    return block;
+  }
+  if (block && typeof block === 'object') {
+    if (block.type === 'text' && typeof block.text === 'string') {
+      return block.text;
     }
-    if (block && typeof block === 'object') {
-        if (block.type === 'text' && typeof block.text === 'string') {
-            return block.text;
-        }
-    }
-    return '';
+  }
+  return '';
 }
 
 /**
  * Parses response payload and extracts text.
  */
-export async function parseResponsePayload(
-    response: Response,
-    parser: (payload: any) => string
-): Promise<string> {
-    const text = await response.text();
-    if (!text) return '';
-    
-    try {
-        const payload = JSON.parse(text);
-        return parser(payload);
-    } catch {
-        return text; // Return raw text if not JSON
-    }
+export async function parseResponsePayload(response: Response, parser: (payload: unknown) => string): Promise<string> {
+  const text = await response.text();
+  if (!text) return '';
+
+  try {
+    const payload = JSON.parse(text);
+    return parser(payload);
+  } catch {
+    return text; // Return raw text if not JSON
+  }
 }
 
 /**
  * Reads a streaming response and yields parsed chunks.
  */
 export async function* readStreamResponse(
-    response: Response,
-    parseChunk: (payload: any) => string | undefined,
-    parseCompletion: (payload: any) => string
+  response: Response,
+  parseChunk: (payload: unknown) => string | undefined,
+  parseCompletion: (payload: unknown) => string,
 ): AsyncGenerator<string, void, unknown> {
-    if (!response.body) {
-        return;
-    }
+  if (!response.body) {
+    return;
+  }
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
 
-    try {
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
 
-            for (const line of lines) {
-                if (!line.trim() || !line.startsWith('data: ')) continue;
-                
-                const data = line.slice(6);
-                if (data === '[DONE]') {
-                    continue;
-                }
+      for (const line of lines) {
+        if (!line.trim() || !line.startsWith('data: ')) continue;
 
-                try {
-                    const payload = JSON.parse(data);
-                    const chunk = parseChunk(payload);
-                    if (chunk !== undefined) {
-                        yield chunk;
-                    }
-                } catch {
-                    // Skip invalid JSON chunks
-                }
-            }
+        const data = line.slice(6);
+        if (data === '[DONE]') {
+          continue;
         }
 
-        // Process remaining buffer
-        if (buffer.trim()) {
-            try {
-                const payload = JSON.parse(buffer);
-                const text = parseCompletion(payload);
-                if (text) {
-                    yield text;
-                }
-            } catch {
-                // Final chunk might not be valid JSON
-            }
+        try {
+          const payload = JSON.parse(data);
+          const chunk = parseChunk(payload);
+          if (chunk !== undefined) {
+            yield chunk;
+          }
+        } catch {
+          // Skip invalid JSON chunks
         }
-    } finally {
-        reader.releaseLock();
+      }
     }
+
+    // Process remaining buffer
+    if (buffer.trim()) {
+      try {
+        const payload = JSON.parse(buffer);
+        const text = parseCompletion(payload);
+        if (text) {
+          yield text;
+        }
+      } catch {
+        // Final chunk might not be valid JSON
+      }
+    }
+  } finally {
+    reader.releaseLock();
+  }
 }

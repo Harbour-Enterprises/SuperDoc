@@ -14,13 +14,13 @@ import { createOpenAIProvider, createAnthropicProvider, createHttpProvider } fro
  * @param value - Candidate object to validate.
  * @returns True if the value satisfies the provider interface.
  */
-export function isAIProvider(value: any): value is AIProvider {
-    if (!value || typeof value !== 'object') {
-        return false;
-    }
+export function isAIProvider(value: unknown): value is AIProvider {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
 
-    const provider = value as AIProvider;
-    return typeof provider.getCompletion === 'function' && typeof provider.streamCompletion === 'function';
+  const provider = value as AIProvider;
+  return typeof provider.getCompletion === 'function' && typeof provider.streamCompletion === 'function';
 }
 
 /**
@@ -32,7 +32,7 @@ export function isAIProvider(value: any): value is AIProvider {
  * @param config - Provider instance or configuration object.
  * @returns An `AIProvider` ready for use by SuperDoc AI.
  * @throws Error when an unsupported provider type is supplied.
- * 
+ *
  * @example
  * ```typescript
  * const provider = createAIProvider({
@@ -43,19 +43,18 @@ export function isAIProvider(value: any): value is AIProvider {
  * ```
  */
 export function createAIProvider(config: AIProviderInput): AIProvider {
-    if (isAIProvider(config)) {
-        return config;
-    }
+  if (isAIProvider(config)) {
+    return config;
+  }
 
-    switch (config.type) {
-        case 'openai':
-            return createOpenAIProvider(config);
-        case 'anthropic':
-            return createAnthropicProvider(config);
-        case 'http':
-            return createHttpProvider(config);
-        default:
-            throw new Error(`Unsupported provider type: ${(config as any)?.type}`);
-    }
+  switch (config.type) {
+    case 'openai':
+      return createOpenAIProvider(config);
+    case 'anthropic':
+      return createAnthropicProvider(config);
+    case 'http':
+      return createHttpProvider(config);
+    default:
+      throw new Error(`Unsupported provider type: ${(config as { type?: unknown })?.type}`);
+  }
 }
-

@@ -8,15 +8,15 @@ import type { FetchLike } from './types';
 /**
  * Resolves the fetch implementation to use
  * Uses custom fetch if provided, otherwise falls back to global fetch
- * 
+ *
  * @param customFetch - Optional custom fetch implementation
  * @returns Fetch implementation to use
  * @throws {Error} If no fetch is available
  */
 export function resolveFetch(customFetch?: FetchLike): FetchLike {
-    if (customFetch) return customFetch;
-    if (!globalThis?.fetch) throw new Error('No fetch available. Provide fetch in provider config.');
-    return globalThis.fetch.bind(globalThis);
+  if (customFetch) return customFetch;
+  if (!globalThis?.fetch) throw new Error('No fetch available. Provide fetch in provider config.');
+  return globalThis.fetch.bind(globalThis);
 }
 
 /**
@@ -27,13 +27,13 @@ export function resolveFetch(customFetch?: FetchLike): FetchLike {
  * @returns Headers object guaranteed to include `Content-Type`.
  */
 export function ensureContentType(headers: Record<string, string>): Record<string, string> {
-    if (Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
-        return headers;
-    }
-    return {
-        ...headers,
-        'Content-Type': 'application/json',
-    };
+  if (Object.keys(headers).some((key) => key.toLowerCase() === 'content-type')) {
+    return headers;
+  }
+  return {
+    ...headers,
+    'Content-Type': 'application/json',
+  };
 }
 
 /**
@@ -43,10 +43,8 @@ export function ensureContentType(headers: Record<string, string>): Record<strin
  * @param object - Source object to clean.
  * @returns New object without undefined values.
  */
-export function cleanUndefined(object: Record<string, any>): Record<string, any> {
-    return Object.fromEntries(
-        Object.entries(object).filter(([, v]) => v !== undefined)
-    );
+export function cleanUndefined(object: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(object).filter(([, v]) => v !== undefined));
 }
 
 /**
@@ -57,11 +55,10 @@ export function cleanUndefined(object: Record<string, any>): Record<string, any>
  * @returns Normalized URL string.
  */
 export function joinUrl(base: string, path: string): string {
-    let normalizedBase = base;
-    while (normalizedBase.endsWith('/')) {
-        normalizedBase = normalizedBase.slice(0, -1);
-    }
+  let normalizedBase = base;
+  while (normalizedBase.endsWith('/')) {
+    normalizedBase = normalizedBase.slice(0, -1);
+  }
 
-    return `${normalizedBase}${path.startsWith('/') ? path : `/${path}`}`;
+  return `${normalizedBase}${path.startsWith('/') ? path : `/${path}`}`;
 }
-

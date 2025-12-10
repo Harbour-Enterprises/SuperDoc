@@ -1,6 +1,6 @@
 import type { Editor, FoundMatch, MarkType } from '../../shared';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
-import { generateId } from '../../shared';
+import { generateId, stripListPrefix } from '../../shared';
 
 /**
  * Default highlight color for text selections.
@@ -41,7 +41,20 @@ export class EditorAdapter {
     return results
       .map((match) => {
         const text = match.originalText;
-        const rawMatches = this.editor.commands?.search?.(text, { highlight }) ?? [];
+        let rawMatches: Array<{ from?: number; to?: number }> = [];
+
+        if (this.editor.commands?.search) {
+          // First try with original text
+          rawMatches = this.editor.commands.search(text, { highlight }) ?? [];
+
+          // If no matches and text has list prefix, try with stripped prefix
+          if (rawMatches.length === 0 && text && /^\d+(\.\d+)?\.\s+/.test(text)) {
+            const strippedText = stripListPrefix(text);
+            if (strippedText) {
+              rawMatches = this.editor.commands.search(strippedText, { highlight }) ?? [];
+            }
+          }
+        }
 
         let positions = rawMatches
           .map((match: { from?: number; to?: number }) => {
@@ -81,38 +94,49 @@ export class EditorAdapter {
       return [];
     }
 
-    query = caseSensitive ? query : query.toLowerCase();
-    if (!query.length) {
-      return [];
+    if (this.editor?.commands?.search && typeof this.editor.commands.search === 'function') {
+      const listPrefixMatch = query.match(/^\d+(\.\d+)?\.\s+/);
+
+      if (listPrefixMatch) {
+        // First try with original query (escaped for regex)
+        const escapedOriginal = this.escapeRegex(query);
+        const regexOriginal = new RegExp(escapedOriginal, caseSensitive ? 'g' : 'gi');
+        const originalResults = this.editor.commands.search(regexOriginal, { highlight: false }) || [];
+
+        // Then try with stripped prefix (also escaped for regex)
+        const strippedQuery = query.replace(/^\d+(\.\d+)?\.\s+/, '');
+        const escapedStripped = this.escapeRegex(strippedQuery);
+        const regexStripped = new RegExp(escapedStripped, caseSensitive ? 'g' : 'gi');
+        const strippedResults = this.editor.commands.search(regexStripped, { highlight: false }) || [];
+
+        // Return stripped results if found, otherwise original
+        const results = strippedResults.length > 0 ? strippedResults : originalResults;
+        return results.map((match: { from: number; to: number; text?: string }) => ({
+          from: match.from,
+          to: match.to,
+          text: match.text || doc.textBetween(match.from, match.to),
+        }));
+      }
+
+      // No list prefix, just search normally
+      const escapedQuery = this.escapeRegex(query);
+      const regex = new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi');
+      const results = this.editor.commands.search(regex, { highlight: false }) || [];
+
+      return results.map((match: { from: number; to: number; text?: string }) => ({
+        from: match.from,
+        to: match.to,
+        text: match.text || doc.textBetween(match.from, match.to),
+      }));
     }
+    return [];
+  }
 
-    const matches: Array<{ from: number; to: number; text: string }> = [];
-    const step = query.length || 1;
-
-    doc.descendants((node: any, pos: any) => {
-      if (!node.isText || typeof node.text !== 'string') {
-        return true;
-      }
-
-      const textValue = node.text;
-      const textValueStandard = caseSensitive ? textValue : textValue.toLowerCase();
-      let index = textValueStandard.indexOf(query);
-
-      while (index !== -1) {
-        const from = pos + index;
-        const to = from + query.length;
-        matches.push({
-          from,
-          to,
-          text: textValue.slice(index, index + query.length),
-        });
-        index = textValueStandard.indexOf(query, index + step);
-      }
-
-      return true;
-    });
-
-    return matches;
+  /**
+   * Escapes special regex characters in a string for use in a RegExp
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
@@ -559,20 +583,9 @@ export class EditorAdapter {
 
     // If replacing the entire range (no prefix or suffix), use original positions directly
     // Otherwise, map character offsets to document positions (handles node boundaries correctly)
-    let changeFrom: number;
-    let changeTo: number;
-
-    if (prefix === 0 && suffix === 0) {
-      // Full replacement - resolve position to ensure it points to actual text content
-      // This handles edge cases where search returns positions at node boundaries
-      changeFrom = this.mapCharOffsetToPosition(from, to, 0);
-      changeTo = to;
-    } else {
-      // Partial replacement - map character offsets to positions
-      changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
-      const originalTextLength = originalText.length;
-      changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
-    }
+    const changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
+    const originalTextLength = originalText.length;
+    const changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
 
     const replacementEnd = suggestedText.length - suffix;
     const replacementText = suggestedText.slice(prefix, replacementEnd);
@@ -613,8 +626,11 @@ export class EditorAdapter {
   createTrackedChange(from: number, to: number, suggestedText: string): string {
     const changeId = generateId('tracked-change');
     this.editor.commands.enableTrackChanges();
-    this.applyPatch(from, to, suggestedText);
-    this.editor.commands.disableTrackChanges();
+    try {
+      this.applyPatch(from, to, suggestedText);
+    } finally {
+      this.editor.commands.disableTrackChanges();
+    }
     return changeId;
   }
 
@@ -668,45 +684,6 @@ export class EditorAdapter {
       from = to;
     }
 
-    const normalizedText =
-      mode === 'replace' ? suggestedText : this.normalizeBlockInsertionText(suggestedText, mode, from, to);
-
-    this.applyPatch(from, to, normalizedText);
-  }
-
-  private normalizeBlockInsertionText(text: string, position: 'before' | 'after', from: number, to: number): string {
-    if (!text) {
-      return '';
-    }
-
-    const state = this.editor?.state;
-    const doc = state?.doc;
-    if (!doc) {
-      return text;
-    }
-
-    const charBefore = from > 0 ? doc.textBetween(from - 1, from, '', '') : '';
-    const charAfter = to < doc.content.size ? doc.textBetween(to, to + 1, '', '') : '';
-
-    let prefix = '';
-    let suffix = '';
-
-    if (position === 'before') {
-      if (from > 0 && charBefore !== '\n') {
-        prefix = '\n';
-      }
-      if (!text.endsWith('\n')) {
-        suffix = '\n';
-      }
-    } else {
-      if (!text.startsWith('\n')) {
-        prefix = '\n';
-      }
-      if (to < doc.content.size && charAfter !== '\n') {
-        suffix = '\n';
-      }
-    }
-
-    return `${prefix}${text}${suffix}`;
+    this.applyPatch(from, to, suggestedText);
   }
 }

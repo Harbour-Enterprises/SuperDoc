@@ -17,6 +17,10 @@ export const buildFindPrompt = (query: string, documentContext: string, findAll:
       - In the document context, locate ${scopeInstruction} that match the user request exactly.
       - User request (treat this as the literal text or exact criteria to match): "${query}"
       - Return ONLY the exact matched text from the document.
+      - Keep matches as tight as possible (ideally a single sentence or clause). Never include multiple clauses/sections unless they cannot be separated.
+      - LIST NUMBERING HANDLING: If the matched text starts with numbering/bullets (e.g., "1. ", "1.1 ", "6.1 ", "- ", "• "), include the numbering prefix in originalText so the search can locate it.
+        * The numbering is needed for matching even though it's not part of the actual text content
+        * Include ALL numbering levels if present (e.g., "6.1.1 " for nested lists)
       - Do NOT include any surrounding text before or after the match.
       - Do NOT modify, transform, summarize, or interpret the text.
       - Do NOT add explanations or metadata.
@@ -59,6 +63,19 @@ export const buildReplacePrompt = (query: string, documentContext: string, repla
             - DO NOT include HTML comments (<!-- -->), notes, or questions in suggestedText
             - DO NOT add inline annotations or explanations
             - suggestedText must be clean, final text ready for display
+            
+            LIST NUMBERING HANDLING (CRITICAL):
+            - The document context may include list numbering (e.g., "6. ", "6.1 ", "6.1.1 ", "- ", "• ") for section identification
+            - These numbers/bullets are NOT part of the actual text content—they are formatting markers
+            - When providing originalText or suggestedText: NEVER include numbering or bullet prefixes—only provide the actual text content
+              * Example: If updating "6.1 Ownership. Customer shall...", suggestedText should be "Ownership. Customer shall..." (without "6.1 ")
+            - Keep each originalText/suggestedText pair scoped to the smallest necessary unit (typically a single sentence or clause).
+            - If a request affects multiple clauses, split into multiple results rather than returning a large multi-clause block.
+              * The editor will automatically preserve the numbering structure—you only provide the text content
+            - This applies to ALL numbering levels: single-level ("1. "), nested ("1.1 ", "1.1.1 "), and bullets ("- ", "• ")
+            - If you're adding NEW content to an existing numbered section, still omit the numbering in suggestedText
+            - If you're replacing text within a numbered item, preserve the numbering structure by omitting it from suggestedText
+            
             - If you have questions or notes, they belong in a separate comment tool, NOT in suggestedText
             
             ---------------------
@@ -106,7 +123,7 @@ export const buildSummaryPrompt = (query: string, documentContext: string): stri
 
 export const buildInsertCommentPrompt = (query: string, documentContext: string, multiple: boolean): string => {
   const scope = multiple ? 'ALL locations' : 'the FIRST location';
-  
+
   return `You are a document review assistant. Your task is to find ${scope} where comments should be added based on the user's request, then provide the comment text to add at each location.
 
             Task:
@@ -116,6 +133,8 @@ export const buildInsertCommentPrompt = (query: string, documentContext: string,
             
             CRITICAL RULES:
             - originalText: The exact text from the document at the location where the comment should be added
+              * If the text includes numbering/bullets (e.g., "6.1 ", "1.1.1 ", "- "), include the numbering prefix in originalText so the search can locate it
+              * Include ALL numbering levels if present (needed for matching even though numbering is formatting, not content)
             - suggestedText: The comment text/question to add (e.g., "Is this correct?", "Review needed", etc.)
             - If the user specifies a location (e.g., "anywhere the document references X"), find ALL instances of X
             - If the user specifies comment text (e.g., "add a comment that says 'Y'"), use that exact text in suggestedText
@@ -159,6 +178,7 @@ export const buildInsertContentPrompt = (query: string, documentContext?: string
           - DO NOT include HTML comments (<!-- -->), notes, or questions in suggestedText
           - DO NOT add inline annotations, explanations, or markup
           - suggestedText must be clean, production-ready text for direct insertion
+          - NEVER include numbering, clause prefixes, or bullet characters (e.g., "1.", "1.2", "- ")—the editor handles list formatting separately
           
           ${documentContext ? `Document context (read-only reference):\n${documentContext}\n` : ''}
           Respond with JSON:
@@ -194,19 +214,33 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           - insertComments: ONLY use when location criteria are complex or require AI interpretation (e.g., "add comments asking about unclear sections" without specifying exact text to find).
           
           CRITICAL - Tool Usage:
-          - insertTrackedChanges: For text edits/replacements ONLY. Suggested text must be clean, final text (no HTML comments, no inline notes).
+          - insertTrackedChanges: For text edits/replacements ONLY. Use when:
+            * User says "update", "modify", "revise", "edit", "change", or "include [something] in [existing section]"
+            * User wants to edit existing content (even if adding new information to existing sections)
+            * User explicitly requests tracked changes
+            * Suggested text must be clean, final text (no HTML comments, no inline notes)
+          - insertContent: Inserts NEW content relative to selection. Use when:
+            * User says "add new section", "insert new clause", "add a new paragraph"
+            * User wants to create entirely new content (not modify existing)
+            * Position options:
+              * "before" - Insert before the selected text
+              * "after" - Insert after the selected text  
+              * "replace" - Replace the selected text (default)
           - insertComments: For questions, feedback, or notes. Use this if you have questions about the text.
-          - insertContent: Inserts content relative to selection. Position options:
-            * "before" - Insert before the selected text
-            * "after" - Insert after the selected text  
-            * "replace" - Replace the selected text (default)
           - If you need both edits AND questions, use BOTH tools in separate steps.
+          
+          CRITICAL - Update vs Add:
+          - "Update section X to include Y" → Use insertTrackedChanges (modifying existing section)
+          - "Add a new section about Y" → Use insertContent (creating new section)
+          - "Include Y in section X" → Use insertTrackedChanges (modifying existing section)
+          - "Add Y to section X" → Use insertTrackedChanges (modifying existing section)
           
           CRITICAL - Positioning Content:
           - insertContent works relative to the CURRENT SELECTION
-          - To insert after a specific clause/section: First use findAll/highlight to select it, THEN use insertContent with position: 'after'
-          - To insert before something: First select it with findAll/highlight, THEN use insertContent with position: 'before'
-          - Example: To add content after "Clause 7.1", you MUST first find "Clause 7.1", then insert with position: 'after'
+          - To insert after a specific clause/section: First use findAll to locate it, THEN use insertContent with position: 'after'
+          - To insert before something: First use findAll to locate it, THEN use insertContent with position: 'before'
+          - Example: To add content after "Clause 7.1", you MUST first find "Clause 7.1" with findAll, then insert with position: 'after'
+          - insertTrackedChanges automatically finds and selects the target content based on the instruction, no need for separate find step
           
           Response JSON:
           {
@@ -218,10 +252,12 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           
           Examples:
           Editing → {"reasoning":"Use tracked changes for clarity fixes","steps":[{"id":"revise","tool":"insertTrackedChanges","instruction":"Improve grammar and tone in the selected paragraph"}]}
+          Update existing section → {"reasoning":"User wants to update existing section with new information","steps":[{"id":"update","tool":"insertTrackedChanges","instruction":"Update Section 5 Personal Data to include information about the sale of personal data to third parties"}]}
+          Include in existing section → {"reasoning":"User wants to add content to existing section, use tracked changes","steps":[{"id":"update","tool":"insertTrackedChanges","instruction":"Include the sale of personal data to third parties in Section 5 Personal Data"}]}
           Editing with questions → {"reasoning":"Fix grammar and ask about entity","steps":[{"id":"fix","tool":"insertTrackedChanges","instruction":"Fix grammar errors"},{"id":"question","tool":"insertComments","instruction":"Ask if 'Iqidis' is the correct entity name"}]}
           Literal replace (single) → {"reasoning":"User provided exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Replace the legacy company name","args":{"find":"OldName","replace":"NewName","trackChanges":true}}]}
           Literal replace (all instances) → {"reasoning":"User wants all instances changed with exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Change all references to OldName to NewName","args":{"find":"OldName","replace":"NewName","trackChanges":false}}]}
           Literal insert comment (all instances) → {"reasoning":"User wants comments added at all locations with exact find/comment text","steps":[{"id":"comment","tool":"literalInsertComment","instruction":"Add comment anywhere OldName appears","args":{"find":"OldName","comment":"Is this the correct entity?"}}]}
           Insert after selection → {"reasoning":"Insert conclusion after current section","steps":[{"id":"conclude","tool":"insertContent","instruction":"Write a short conclusion paragraph summarizing next steps","args":{"position":"after"}}]}
-          Insert after specific clause → {"reasoning":"Find clause first, then add new content after it","steps":[{"id":"find","tool":"highlight","instruction":"Find and highlight Clause 7.1"},{"id":"add","tool":"insertContent","instruction":"Add a new Clause 7.2 about confidentiality","args":{"position":"after"}},{"id":"comment","tool":"insertComments","instruction":"Add comment saying 'review needed'"}]}`;
+          Insert after specific clause → {"reasoning":"Find clause first, then add new content after it","steps":[{"id":"find","tool":"findAll","instruction":"Find Clause 7.1"},{"id":"add","tool":"insertContent","instruction":"Add a new Clause 7.2 about confidentiality","args":{"position":"after"}},{"id":"comment","tool":"insertComments","instruction":"Add comment saying 'review needed'"}]}`;
 };

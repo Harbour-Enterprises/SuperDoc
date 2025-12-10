@@ -79,6 +79,7 @@ new AIActions(superdoc: SuperDocInstance, options: AIActionsOptions)
 - `provider` (required): AI provider configuration or instance
 - `systemPrompt?`: Custom system prompt for AI context
 - `enableLogging?`: Enable debug logging (default: false)
+- `maxContextLength?`: Maximum number of characters from the document that will accompany AI prompts (default: 8,000)
 - Callbacks:
   - `onReady?`: Called when AI is initialized
   - `onStreamingStart?`: Called when streaming begins
@@ -394,6 +395,18 @@ const ai = new AIActions(superdoc, {
 });
 ```
 
+### Context Budgeting
+
+`AIActions` automatically truncates the document context that accompanies provider calls to 8,000 characters (60% head + 40% tail) to prevent token overflows. Override the default when you need more or less context:
+
+```typescript
+const ai = new AIActions(superdoc, {
+  user: { displayName: 'AI', userId: 'ai-1' },
+  provider: { type: 'openai', apiKey: '...', model: 'gpt-4o' },
+  maxContextLength: 4000, // send at most 4k characters from the document
+});
+```
+
 ### Abort Streaming
 
 ```typescript
@@ -458,15 +471,15 @@ AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
 
 ## Version & Compatibility
 
-**Current Version**: 0.1.6-next.18 (Pre-release)
+**Current Version**: 0.1.7-next (Pre-release)
 
-**Supported SuperDoc Versions**: >=0.34.0 <1.0.0
+**Supported SuperDoc Versions**: >=1.0.0-beta.17 <2.0.0
 
 > **Before deploying to production**, you MUST:
 >
 > - ✅ Implement server-side API proxy (security)
 > - ✅ Never expose API keys in browser
-> - ✅ Add token budgeting for large documents
+> - ✅ Configure `maxContextLength` to respect your provider's token limits
 
 ### What's New in 0.1.x
 

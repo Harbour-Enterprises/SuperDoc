@@ -9,10 +9,10 @@
  * @returns True if valid, false otherwise
  */
 export function validateInput(input: string): boolean {
-    if (!input) {
-        return false;
-    }
-    return input.trim().length > 0;
+  if (!input) {
+    return false;
+  }
+  return input.trim().length > 0;
 }
 
 /**
@@ -24,23 +24,23 @@ export function validateInput(input: string): boolean {
  * @returns Parsed object or fallback
  */
 export function parseJSON<T>(response: string, fallback: T, enableLogging = false): T {
-    if (!response || !response.trim()) {
-        return fallback;
+  if (!response || !response.trim()) {
+    return fallback;
+  }
+
+  try {
+    let cleaned = response.trim();
+    cleaned = removeMarkdownCodeBlocks(cleaned);
+    return JSON.parse(cleaned) as T;
+  } catch (error) {
+    if (enableLogging) {
+      console.error('[parseJSON] Failed to parse JSON:', {
+        original: response.substring(0, 200),
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
     }
-    
-    try {
-        let cleaned = response.trim();
-        cleaned = removeMarkdownCodeBlocks(cleaned);
-        return JSON.parse(cleaned) as T;
-    } catch (error) {
-        if (enableLogging) {
-            console.error('[parseJSON] Failed to parse JSON:', {
-                original: response.substring(0, 200),
-                error: error instanceof Error ? error.message : 'Unknown error'
-            });
-        }
-        return fallback;
-    }
+    return fallback;
+  }
 }
 
 /**
@@ -50,28 +50,28 @@ export function parseJSON<T>(response: string, fallback: T, enableLogging = fals
  * @returns Cleaned text without markdown syntax
  */
 export function removeMarkdownCodeBlocks(text: string): string {
-    const trimmed = text.trim();
-    
-    if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
-        let startIndex = 3; // Length of '```'
-        const firstNewline = trimmed.indexOf('\n', startIndex);
-        
-        if (firstNewline !== -1) {
-            startIndex = firstNewline + 1;
-        } else {
-            const languageMatch = trimmed.substring(3).match(/^(?:json|javascript|typescript|js|ts)/);
-            if (languageMatch) {
-                startIndex = 3 + languageMatch[0].length;
-            }
-        }
-        
-        const endIndex = trimmed.lastIndexOf('```');
-        if (endIndex > startIndex) {
-            return trimmed.substring(startIndex, endIndex).trim();
-        }
+  const trimmed = text.trim();
+
+  if (trimmed.startsWith('```') && trimmed.endsWith('```')) {
+    let startIndex = 3; // Length of '```'
+    const firstNewline = trimmed.indexOf('\n', startIndex);
+
+    if (firstNewline !== -1) {
+      startIndex = firstNewline + 1;
+    } else {
+      const languageMatch = trimmed.substring(3).match(/^(?:json|javascript|typescript|js|ts)/);
+      if (languageMatch) {
+        startIndex = 3 + languageMatch[0].length;
+      }
     }
 
-    return text;
+    const endIndex = trimmed.lastIndexOf('```');
+    if (endIndex > startIndex) {
+      return trimmed.substring(startIndex, endIndex).trim();
+    }
+  }
+
+  return text;
 }
 
 /**
@@ -80,7 +80,7 @@ export function removeMarkdownCodeBlocks(text: string): string {
  * @returns Unique ID string
  */
 export function generateId(prefix: string): string {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 }
 
 /**
@@ -92,21 +92,20 @@ export function generateId(prefix: string): string {
  * @returns Extracted text or empty string on error
  */
 export function safeTextBetween(
-    doc: any,
-    from: number,
-    to: number,
-    separator = ' '
+  doc: { textBetween?: (from: number, to: number, separator?: string) => string } | null | undefined,
+  from: number,
+  to: number,
+  separator = ' ',
 ): string {
-    try {
-        if (!doc || typeof doc.textBetween !== 'function') {
-            return '';
-        }
-        return doc.textBetween(from, to, separator).trim();
-    } catch (error) {
-        return '';
+  try {
+    if (!doc || typeof doc.textBetween !== 'function') {
+      return '';
     }
+    return doc.textBetween(from, to, separator).trim();
+  } catch {
+    return '';
+  }
 }
-
 
 /**
  * Extracts error message from various error types
@@ -114,13 +113,13 @@ export function safeTextBetween(
  * @returns Error message string
  */
 export function getErrorMessage(error: unknown): string {
-    if (error instanceof Error) {
-        return error.message;
-    }
-    if (typeof error === 'string') {
-        return error;
-    }
-    return 'Unknown error';
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return 'Unknown error';
 }
 
 /**
@@ -129,21 +128,21 @@ export function getErrorMessage(error: unknown): string {
  * @param delay - Delay in milliseconds
  * @returns Debounced function
  */
-export function debounce<T extends (...args: any[]) => any>(
-    fn: T,
-    delay: number
+export function debounce<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  delay: number,
 ): (...args: Parameters<T>) => void {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null;
-    
-    return (...args: Parameters<T>) => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-        timeoutId = setTimeout(() => {
-            fn(...args);
-            timeoutId = null;
-        }, delay);
-    };
+  let timeoutId: ReturnType<typeof setTimeout> | null = null;
+
+  return (...args: Parameters<T>) => {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+    timeoutId = setTimeout(() => {
+      fn(...args);
+      timeoutId = null;
+    }, delay);
+  };
 }
 
 /**
@@ -152,10 +151,36 @@ export function debounce<T extends (...args: any[]) => any>(
  * @returns True if plain object, false otherwise
  */
 export function isPlainObject(value: unknown): value is Record<string, unknown> {
-    return (
-        value !== null &&
-        typeof value === 'object' &&
-        !Array.isArray(value) &&
-        Object.prototype.toString.call(value) === '[object Object]'
-    );
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    Object.prototype.toString.call(value) === '[object Object]'
+  );
+}
+
+const LIST_PREFIX_REGEX = /^(\s*)(?:[-+*•◦▪●·]|(?:\d+(?:\.\d+)*))(?:[.)])?\s+/;
+
+/**
+ * Removes common list numbering/bullet prefixes from a string.
+ * Examples removed: "1. ", "1.2. ", "- ", "• "
+ *
+ * @param text - Text potentially starting with numbering
+ * @returns Text without leading list prefix
+ */
+export function stripListPrefix(text: string): string {
+  if (!text || text.length === 0) {
+    return text ?? '';
+  }
+
+  const match = text.match(LIST_PREFIX_REGEX);
+  if (!match) {
+    return text;
+  }
+
+  if (match[1]?.length) {
+    return match[1] + text.slice(match[0].length);
+  }
+
+  return text.slice(match[0].length);
 }
