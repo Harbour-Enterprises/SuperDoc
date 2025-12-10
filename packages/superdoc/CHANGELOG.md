@@ -1,3 +1,13 @@
+## [0.35.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.1...v0.35.2) (2025-12-10)
+
+### Bug Fixes
+
+- cicd ([f3f2dc4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f3f2dc4c2ca347bedfa0f14cdb8ea2aa96310a04))
+- cicd ([4069de0](https://github.com/Harbour-Enterprises/SuperDoc/commit/4069de0ad259f5f3a84da8c0c8e97eb434ed9418))
+- cicd ([9203541](https://github.com/Harbour-Enterprises/SuperDoc/commit/9203541635add05680d5adb66d23bd592494b283))
+- cicd ([6162b55](https://github.com/Harbour-Enterprises/SuperDoc/commit/6162b55b51ab02f4b548027c9e7f10665a01d3b1))
+- remove custom empty text tags from header/footer xml ([fe79efd](https://github.com/Harbour-Enterprises/SuperDoc/commit/fe79efd9e990f71899b668b4d06e961006655edf))
+
 ## [0.35.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.0...v0.35.1) (2025-12-09)
 
 ### Bug Fixes
