@@ -221,28 +221,43 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   const getPageBounds = (documentId, page) => {
     const matchedPage = pages[documentId];
     if (!matchedPage) return;
-    const pageInfo = matchedPage.find((p) => p.page == page);
-    if (!pageInfo || !pageInfo.container) return;
-
-    const containerBounds = pageInfo.container.getBoundingClientRect();
-    const { height } = containerBounds;
-    const totalHeight = height * (page - 1);
+    const pageInfo = matchedPage.find((p) => p.page === page);
+    if (!pageInfo) return;
     return {
-      top: totalHeight,
+      top: pageInfo.offsetTop ?? 0,
     };
   };
 
-  const handlePageReady = (documentId, index, containerBounds) => {
+  const handlePageReady = (documentId, pageNumber, containerBounds, containerElement) => {
     if (!pages[documentId]) pages[documentId] = [];
-    pages[documentId].push({ page: index, containerBounds });
+    const zoomFactor = activeZoom.value ? activeZoom.value / 100 : 1;
+    let offsetTop = 0;
+
+    if (containerElement) {
+      const doc = getDocument(documentId);
+      const docContainerRect = doc?.container?.getBoundingClientRect();
+      const pageRect = containerElement.getBoundingClientRect();
+      if (docContainerRect) {
+        offsetTop = (pageRect.top - docContainerRect.top) / zoomFactor;
+      }
+    }
+
+    if (offsetTop === 0 && containerBounds?.height) {
+      offsetTop = containerBounds.height * (pageNumber - 1);
+    }
+
+    pages[documentId].push({ page: pageNumber, containerBounds, offsetTop });
 
     const doc = getDocument(documentId);
     if (!doc) return;
 
-    doc.pageContainers.push({
-      page: index,
-      containerBounds,
-    });
+    if (doc.pageContainers?.value) {
+      doc.pageContainers.value.push({
+        page: pageNumber,
+        containerBounds,
+        container: containerElement,
+      });
+    }
   };
 
   return {

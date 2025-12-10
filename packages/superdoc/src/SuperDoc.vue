@@ -91,6 +91,8 @@ const commentsModuleConfig = computed(() => {
   return config;
 });
 
+const PDF_SELECTION_OFFSET = 0;
+
 // Refs
 const layers = ref(null);
 
@@ -122,6 +124,13 @@ const {
 const hrbrFieldsLayer = ref(null);
 
 const pdfConfig = proxy.$superdoc.config.modules?.pdf || {};
+
+const getDocumentTitle = (doc) => {
+  if (!doc) return '';
+  if (doc.name) return doc.name;
+  if (doc.data?.name) return doc.data.name;
+  return doc.id || '';
+};
 
 const handleDocumentReady = (documentId, container) => {
   const doc = getDocument(documentId);
@@ -464,6 +473,20 @@ onBeforeUnmount(() => {
 const selectionLayer = ref(null);
 const isDragging = ref(false);
 
+const getPdfSelectionOffset = (selectionLike) => {
+  if (!selectionLike) return 0;
+  const docRef = selectionLike.documentId;
+  const documentId =
+    docRef && typeof docRef === 'object' && 'value' in docRef
+      ? docRef.value
+      : typeof docRef === 'function'
+        ? docRef()
+        : docRef;
+  if (!documentId) return 0;
+  const doc = getDocument(documentId);
+  return doc?.type === PDF ? PDF_SELECTION_OFFSET : 0;
+};
+
 const getSelectionPosition = computed(() => {
   if (!selectionPosition.value || selectionPosition.value.source === 'super-editor') {
     return { x: null, y: null };
@@ -484,19 +507,86 @@ const getSelectionPosition = computed(() => {
   return style;
 });
 
+const adjustSelectionBoundsToLayers = (selection) => {
+  if (!selection?.selectionBounds) return null;
+  const selectionSource = selection.source?.value ?? selection.source;
+  const baseBounds = selection.selectionBounds;
+  if (selectionSource === 'super-editor') {
+    return {
+      top: baseBounds.top,
+      bottom: baseBounds.bottom,
+      left: baseBounds.left,
+      right: baseBounds.right,
+    };
+  }
+  if (!layers.value)
+    return {
+      top: baseBounds.top,
+      bottom: baseBounds.bottom,
+      left: baseBounds.left,
+      right: baseBounds.right,
+    };
+
+  const doc = getDocument(selection.documentId);
+  if (!doc) return;
+
+  const layerBounds = layers.value.getBoundingClientRect();
+  const selectionLayerBounds = selectionLayer.value?.getBoundingClientRect() ?? layerBounds;
+  const zoomFactor = activeZoom.value ? activeZoom.value / 100 : 1;
+
+  let offsetTop = 0;
+  let offsetLeft = 0;
+
+  if (doc.container) {
+    const containerBounds = doc.container.getBoundingClientRect();
+    offsetTop += (containerBounds.top - selectionLayerBounds.top) / zoomFactor;
+    offsetLeft += (containerBounds.left - selectionLayerBounds.left) / zoomFactor;
+  }
+
+  if (selection.page != null) {
+    const pageValue = selection.page?.value ?? selection.page;
+    const pageOffset = selection.pageOffset?.value ?? selection.pageOffset;
+    if (pageOffset?.top != null) {
+      offsetTop += pageOffset.top;
+    } else {
+      const pageBounds = superdocStore.getPageBounds(selection.documentId, pageValue);
+      if (pageBounds?.top != null) {
+        offsetTop += pageBounds.top;
+      }
+    }
+
+    if (pageOffset?.left != null) {
+      offsetLeft += pageOffset.left;
+    }
+  }
+
+  const bounds = selection.selectionBounds;
+  return {
+    top: typeof bounds.top === 'number' ? bounds.top + offsetTop : offsetTop,
+    bottom: typeof bounds.bottom === 'number' ? bounds.bottom + offsetTop : offsetTop,
+    left: typeof bounds.left === 'number' ? bounds.left + offsetLeft : offsetLeft,
+    right: typeof bounds.right === 'number' ? bounds.right + offsetLeft : offsetLeft,
+  };
+};
+
 const handleSelectionChange = (selection) => {
   if (!selection.selectionBounds || !isCommentsEnabled.value) return;
+
+  const absoluteBounds = adjustSelectionBoundsToLayers(selection);
 
   resetSelection();
 
   const isMobileView = window.matchMedia('(max-width: 768px)').matches;
 
+  const boundsForOverlay = absoluteBounds || selection.selectionBounds;
+  const verticalOffset = getPdfSelectionOffset(selection);
+
   updateSelection({
-    startX: selection.selectionBounds.left,
-    startY: selection.selectionBounds.top,
-    x: selection.selectionBounds.right,
-    y: selection.selectionBounds.bottom,
-    source: selection.source,
+    startX: boundsForOverlay.left,
+    startY: boundsForOverlay.top + verticalOffset,
+    x: boundsForOverlay.right,
+    y: boundsForOverlay.bottom + verticalOffset,
+    source: selection.source?.value ?? selection.source,
   });
 
   if (!selectionPosition.value) return;
@@ -511,7 +601,8 @@ const handleSelectionChange = (selection) => {
   activeSelection.value = selection;
 
   // Place the tools menu at the level of the selection
-  let top = selection.selectionBounds.top;
+  const toolsTop = boundsForOverlay.top + verticalOffset;
+  let top = toolsTop;
   toolsMenuPosition.top = top + 'px';
   toolsMenuPosition.right = isMobileView ? '0' : '-25px';
 };
@@ -689,6 +780,9 @@ watch(getFloatingComments, () => {
         />
 
         <div class="superdoc__sub-document sub-document" v-for="doc in documents" :key="doc.id">
+          <div v-if="getDocumentTitle(doc)" class="superdoc__floating-title" :title="getDocumentTitle(doc)">
+            {{ getDocumentTitle(doc) }}
+          </div>
           <!-- PDF renderer -->
 
           <PdfViewer
@@ -808,6 +902,33 @@ watch(getFloatingComments, () => {
   position: relative;
 }
 
+.superdoc__floating-title {
+  position: absolute;
+  top: 16px;
+  left: -16px;
+  transform: translateX(-100%);
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #333;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  max-width: 220px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  z-index: 5;
+}
+
+.superdoc.high-contrast .superdoc__floating-title {
+  background: #000;
+  color: #fff;
+  box-shadow: none;
+  border: 1px solid #fff;
+}
+
 .superdoc__selection-layer {
   position: absolute;
   min-width: 100%;
@@ -892,6 +1013,13 @@ watch(getFloatingComments, () => {
 
   .superdoc__sub-document {
     max-width: 100%;
+  }
+
+  .superdoc__floating-title {
+    position: static;
+    transform: none;
+    margin-bottom: 12px;
+    max-width: none;
   }
 
   .superdoc__right-sidebar {

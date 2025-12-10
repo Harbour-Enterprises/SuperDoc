@@ -128,7 +128,7 @@ export class PDFJSAdapter extends PDFAdapter {
         pdfPageView.setPdfPage(page);
         await pdfPageView.draw();
 
-        emit('page-loaded', documentId, index, containerBounds);
+        emit('page-loaded', documentId, index + 1, containerBounds, container);
       }
 
       viewerContainer.append(...pageContainers);

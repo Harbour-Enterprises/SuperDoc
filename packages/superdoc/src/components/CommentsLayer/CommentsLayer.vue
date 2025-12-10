@@ -4,12 +4,13 @@ import { storeToRefs } from 'pinia';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import useComment from './use-comment';
+import { PDF } from '@harbour-enterprises/common';
 
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const { COMMENT_EVENTS } = commentsStore;
 const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList } = storeToRefs(commentsStore);
-const { documents, activeZoom } = storeToRefs(superdocStore);
+const { documents } = storeToRefs(superdocStore);
 const { proxy } = getCurrentInstance();
 
 const emit = defineEmits(['highlight-click']);
@@ -23,6 +24,8 @@ const props = defineProps({
     required: true,
   },
 });
+
+const PDF_SELECTION_OFFSET = 0;
 
 const addCommentEntry = (selection) => {
   const params = {
@@ -47,7 +50,14 @@ const addCommentEntry = (selection) => {
   }
 
   selection.selectionBounds = bounds;
-  const matchedDocument = documents.value.find((c) => c.id === selection.documentId);
+  const selectionDocRef = selection.documentId;
+  const selectionDocumentId =
+    selectionDocRef && typeof selectionDocRef === 'object' && 'value' in selectionDocRef
+      ? selectionDocRef.value
+      : typeof selectionDocRef === 'function'
+        ? selectionDocRef()
+        : selectionDocRef;
+  const matchedDocument = documents.value.find((c) => c.id === selectionDocumentId);
   const newConvo = useComment(params);
   activeComment.value = newConvo.commentId;
 
@@ -57,9 +67,12 @@ const addCommentEntry = (selection) => {
 
 const getStyle = (conversation) => {
   const { selection, commentId } = conversation;
-  const containerBounds = selection.getContainerLocation(props.parent);
   const placement = conversation.selection.selectionBounds;
-  const top = (parseFloat(placement.top) + containerBounds.top) * activeZoom.value;
+  const documentId =
+    selection.documentId?.value ??
+    (typeof selection.documentId === 'function' ? selection.documentId() : selection.documentId);
+  const matchedDocument = documents.value.find((doc) => doc.id === documentId);
+  const verticalOffset = matchedDocument?.type === PDF ? PDF_SELECTION_OFFSET : 0;
 
   const internalHighlightColor = '#078383';
   const externalHighlightColor = '#B1124B';
@@ -71,7 +84,7 @@ const getStyle = (conversation) => {
 
   return {
     position: 'absolute',
-    top: parseFloat(placement.top) + 'px',
+    top: parseFloat(placement.top) + verticalOffset + 'px',
     left: placement.left + 'px',
     width: placement.right - placement.left + 'px',
     height: placement.bottom - placement.top + 'px',
@@ -81,7 +94,14 @@ const getStyle = (conversation) => {
 };
 
 const setFloatingCommentOffset = (conversation) => {
-  floatingCommentsOffset.value = conversation.selection.selectionBounds.top;
+  const documentId =
+    conversation.selection.documentId?.value ??
+    (typeof conversation.selection.documentId === 'function'
+      ? conversation.selection.documentId()
+      : conversation.selection.documentId);
+  const matchedDocument = documents.value.find((doc) => doc.id === documentId);
+  const verticalOffset = matchedDocument?.type === PDF ? PDF_SELECTION_OFFSET : 0;
+  floatingCommentsOffset.value = conversation.selection.selectionBounds.top + verticalOffset;
 };
 
 const activateComment = (comment, e) => {

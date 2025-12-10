@@ -1,9 +1,9 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { ref, computed, watchEffect, nextTick, watch, onMounted } from 'vue';
+import { ref, computed, watchEffect, nextTick, watch } from 'vue';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
-import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import CommentDialog from '@superdoc/components/CommentsLayer/CommentDialog.vue';
+import { PDF } from '@harbour-enterprises/common';
 
 const props = defineProps({
   currentDocument: {
@@ -16,7 +16,6 @@ const props = defineProps({
   },
 });
 
-const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 
 const { getFloatingComments, hasInitializedLocations, activeComment, commentsList, editorCommentPositions } =
@@ -27,6 +26,7 @@ const renderedSizes = ref([]);
 const firstGroupRendered = ref(false);
 const verticalOffset = ref(0);
 const commentsRenderKey = ref(0);
+const PDF_SELECTION_OFFSET = 0;
 
 const getCommentPosition = computed(() => (comment) => {
   if (!floatingCommentsContainer.value) return { top: '0px' };
@@ -69,11 +69,11 @@ const handleDialog = (dialog) => {
     let position = editorCommentPositions.value[positionKey]?.bounds || {};
 
     // If this is a PDF, set the position based on selection bounds
-    if (props.currentDocument.type === 'application/pdf') {
+    if (props.currentDocument.type === PDF) {
       Object.entries(comment.selection?.selectionBounds).forEach(([key, value]) => {
         position[key] = Number(value);
       });
-      position.top += editorBounds.top;
+      position.top += editorBounds.top + PDF_SELECTION_OFFSET;
     }
 
     if (!position) return;
@@ -132,7 +132,10 @@ watch(activeComment, (newVal, oldVal) => {
     const renderedItem = renderedSizes.value.find((item) => item.id === commentKey);
     if (!renderedItem) return (verticalOffset.value = 0);
 
-    const selectionTop = comment.selection.selectionBounds.top;
+    let selectionTop = comment.selection.selectionBounds.top;
+    if (props.currentDocument.type === PDF) {
+      selectionTop += PDF_SELECTION_OFFSET;
+    }
     const renderedTop = renderedItem.top;
 
     const editorBounds = floatingCommentsContainer.value.getBoundingClientRect();

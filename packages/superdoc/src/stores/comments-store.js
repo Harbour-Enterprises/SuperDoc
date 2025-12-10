@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
-import { comments_module_events } from '@harbour-enterprises/common';
+import { comments_module_events, PDF } from '@harbour-enterprises/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
 import {
@@ -24,6 +24,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const isDebugging = false;
   const debounceTimers = {};
+  const PDF_SELECTION_OFFSET = 0;
 
   const COMMENT_EVENTS = comments_module_events;
   const hasInitializedComments = ref(false);
@@ -262,7 +263,12 @@ export const useCommentsStore = defineStore('comments', () => {
 
   const getCommentLocation = (selection, parent) => {
     const containerBounds = selection.getContainerLocation(parent);
-    const top = containerBounds.top + selection.selectionBounds.top;
+    const documentId =
+      selection.documentId?.value ??
+      (typeof selection.documentId === 'function' ? selection.documentId() : selection.documentId);
+    const doc = superdocStore.getDocument(documentId);
+    const verticalOffset = doc?.type === PDF ? PDF_SELECTION_OFFSET : 0;
+    const top = containerBounds.top + selection.selectionBounds.top + verticalOffset;
     const left = containerBounds.left + selection.selectionBounds.left;
     return {
       top: top,

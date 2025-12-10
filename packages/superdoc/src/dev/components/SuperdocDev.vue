@@ -8,6 +8,9 @@ import { BasicUpload, getFileObject } from '@harbour-enterprises/common';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@harbour-enterprises/common/data/blank.docx?url';
+import FormStateW4Pdf from '../../../public/form-state-w4.pdf?url';
+import LongerHeaderDocx from '../../../public/superdoc-labs.docx?url';
+import SuperdocTableTesterDocx from '../../../../super-editor/src/tests/data/superdoc_table_tester.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
 import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
@@ -24,6 +27,7 @@ const activeEditor = shallowRef(null);
 
 const title = ref('initial title');
 const currentFile = ref(null);
+const currentDocuments = ref([]);
 const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
 
@@ -36,6 +40,52 @@ const userRole = urlParams.get('role') || 'editor';
 const user = {
   name: testUserName,
   email: testUserEmail,
+};
+
+const createDocumentId = (prefix = 'document') => `${prefix}-${Math.random().toString(36).slice(2, 10)}`;
+
+const buildDocumentEntry = (file, overrides = {}) => {
+  if (!file) return null;
+
+  const { id, name, type, isNewFile = true, markdown, html } = overrides;
+
+  const entry = {
+    data: file,
+    id: id || createDocumentId(),
+    name: name || file.name || 'document',
+    type: type || file.type || DOCX,
+    isNewFile,
+  };
+
+  const markdownContent = markdown ?? file.markdownContent;
+  if (markdownContent) {
+    entry.markdown = markdownContent;
+  }
+
+  const htmlContent = html ?? file.htmlContent;
+  if (htmlContent) {
+    entry.html = htmlContent;
+  }
+
+  return entry;
+};
+
+const defaultDocuments = {
+  docx: {
+    url: LongerHeaderDocx,
+    name: 'superdoc-labs.docx',
+    type: DOCX,
+  },
+  pdf: {
+    url: FormStateW4Pdf,
+    name: 'form-state-w4.pdf',
+    type: PDF,
+  },
+  tableDocx: {
+    url: SuperdocTableTesterDocx,
+    name: 'superdoc_table_tester.docx',
+    type: DOCX,
+  },
 };
 
 const commentPermissionResolver = ({ permission, comment, defaultDecision, currentUser }) => {
@@ -79,9 +129,17 @@ const handleNewFile = async (file) => {
     currentFile.value = await getFileObject(url, file.name, file.type);
   }
 
-  nextTick(() => {
-    init();
+  await nextTick();
+
+  const documentEntry = buildDocumentEntry(currentFile.value, {
+    id: createDocumentId('uploaded'),
   });
+
+  if (documentEntry) {
+    currentDocuments.value = [documentEntry];
+  }
+
+  await init();
 };
 
 /**
@@ -100,22 +158,22 @@ const readFileAsText = (file) => {
 
 const init = async () => {
   let testId = 'document-123';
-  // const testId = "document_6a9fb1e0725d46989bdbb3f9879e9e1b";
 
-  // Prepare document config with content if available
-  const documentConfig = {
-    data: currentFile.value,
-    id: testId,
-    isNewFile: true,
-  };
+  const documentsConfig = currentDocuments.value.length
+    ? currentDocuments.value.map((doc, index) => ({
+        ...doc,
+        id: doc.id || `${testId}-${index}`,
+      }))
+    : [];
 
-  // Add markdown/HTML content if present
-  if (currentFile.value.markdownContent) {
-    documentConfig.markdown = currentFile.value.markdownContent;
+  if (!documentsConfig.length && currentFile.value) {
+    const fallbackDocument = buildDocumentEntry(currentFile.value, { id: testId });
+    if (fallbackDocument) {
+      documentsConfig.push(fallbackDocument);
+    }
   }
-  if (currentFile.value.htmlContent) {
-    documentConfig.html = currentFile.value.htmlContent;
-  }
+
+  const primaryDocument = documentsConfig[0];
 
   const config = {
     superdocId: 'superdoc-dev',
@@ -140,14 +198,8 @@ const init = async () => {
       { name: 'Nick Bernal', email: 'nick@harbourshare.com', access: 'internal' },
       { name: 'Eric Doversberger', email: 'eric@harbourshare.com', access: 'external' },
     ],
-    document: documentConfig,
-    // documents: [
-    //   {
-    //     data: currentFile.value,
-    //     id: testId,
-    //     isNewFile: true,
-    //   },
-    // ],
+    // document: primaryDocument,
+    documents: documentsConfig,
     // cspNonce: 'testnonce123',
     modules: {
       comments: {
@@ -401,8 +453,40 @@ const toggleCommentsPanel = () => {
   }
 };
 
+const loadDefaultDocuments = async (primaryFormat = 'docx') => {
+  const defaults = Object.entries(defaultDocuments);
+  const documentsToLoad = [];
+
+  for (const [format, config] of defaults) {
+    if (!config) continue;
+
+    const file = await getFileObject(config.url, config.name, config.type);
+    const documentEntry = buildDocumentEntry(file, {
+      id: createDocumentId(format),
+      name: config.name,
+      type: config.type,
+    });
+
+    if (documentEntry) {
+      documentsToLoad.push(documentEntry);
+      if (format === primaryFormat) {
+        currentFile.value = file;
+      }
+    }
+  }
+
+  if (!currentFile.value && documentsToLoad.length) {
+    currentFile.value = documentsToLoad[0].data;
+  }
+
+  if (documentsToLoad.length) {
+    currentDocuments.value = documentsToLoad;
+    await init();
+  }
+};
+
 onMounted(async () => {
-  handleNewFile(await getFileObject(BlankDOCX, 'test.docx', DOCX));
+  await loadDefaultDocuments();
 });
 </script>
 

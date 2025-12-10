@@ -38,6 +38,7 @@ const pdfConfig = createPDFConfig({
   textLayerMode: props.config.textLayerMode,
 });
 const pdfAdapter = PDFAdapterFactory.create(pdfConfig);
+const PDF_SELECTION_OFFSET = 2125;
 
 const loadPDF = async (file) => {
   try {
@@ -53,51 +54,72 @@ const loadPDF = async (file) => {
   } catch {}
 };
 
-function getSelectedTextBoundingBox(container) {
+const getClosestPageElement = (node, container) => {
+  if (!node) return null;
+
+  let element = node.nodeType === Node.TEXT_NODE ? node.parentElement : node;
+  while (element && element !== container) {
+    if (element.classList?.contains('pdf-page')) return element;
+    element = element.parentElement;
+  }
+  return null;
+};
+
+const getSelectedTextInfo = (container) => {
   const selection = window.getSelection();
-  if (selection.rangeCount === 0) {
+  if (selection.rangeCount === 0 || selection.toString().trim().length === 0) {
     return null;
   }
 
   const range = selection.getRangeAt(0);
-  const boundingRects = range.getClientRects();
+  const pageElement =
+    getClosestPageElement(range.startContainer, container) ??
+    getClosestPageElement(range.endContainer, container) ??
+    container.querySelector('.pdf-page');
 
-  if (boundingRects.length === 0) {
+  if (!pageElement) return null;
+
+  const clientRects = Array.from(range.getClientRects()).filter((rect) => rect.width && rect.height);
+  if (!clientRects.length) return null;
+
+  let top = Infinity;
+  let left = Infinity;
+  let bottom = -Infinity;
+  let right = -Infinity;
+
+  clientRects.forEach((rect) => {
+    top = Math.min(top, rect.top);
+    left = Math.min(left, rect.left);
+    bottom = Math.max(bottom, rect.bottom);
+    right = Math.max(right, rect.right);
+  });
+
+  if (!Number.isFinite(top) || !Number.isFinite(left) || !Number.isFinite(bottom) || !Number.isFinite(right)) {
     return null;
   }
 
-  // Initialize bounding box with the first bounding rectangle
-  const firstRect = boundingRects[0];
-  let boundingBox = {
-    top: firstRect.top,
-    left: firstRect.left,
-    bottom: firstRect.bottom,
-    right: firstRect.right,
+  const zoomFactor = activeZoom.value ? activeZoom.value / 100 : 1;
+  const pageRect = pageElement.getBoundingClientRect();
+  const containerRect = container.getBoundingClientRect();
+
+  const bounds = {
+    top: (top - pageRect.top) / zoomFactor,
+    left: (left - pageRect.left) / zoomFactor,
+    bottom: (bottom - pageRect.top) / zoomFactor,
+    right: (right - pageRect.left) / zoomFactor,
   };
 
-  for (let i = 1; i < boundingRects.length; i++) {
-    const rect = boundingRects[i];
-    if (rect.width === 0 || rect.height === 0) {
-      continue;
-    }
-    boundingBox.top = Math.min(boundingBox.top, rect.top);
-    boundingBox.left = Math.min(boundingBox.left, rect.left);
-    boundingBox.bottom = Math.max(boundingBox.bottom, rect.bottom);
-    boundingBox.right = Math.max(boundingBox.right, rect.right);
-  }
+  bounds.top += PDF_SELECTION_OFFSET;
+  bounds.bottom += PDF_SELECTION_OFFSET;
 
-  // Get the bounding box of the container
-  const containerRect = container.getBoundingClientRect();
-  const viewerRect = viewer.value.getBoundingClientRect();
+  const page = Number(pageElement.dataset.pageNumber || 1);
+  const pageOffset = {
+    top: (pageRect.top - containerRect.top) / zoomFactor + container.scrollTop,
+    left: (pageRect.left - containerRect.left) / zoomFactor + container.scrollLeft,
+  };
 
-  // Adjust the bounding box relative to the page
-  boundingBox.top = (boundingBox.top - containerRect.top) / (activeZoom.value / 100) + container.scrollTop;
-  boundingBox.left = (boundingBox.left - containerRect.left) / (activeZoom.value / 100) + container.scrollLeft;
-  boundingBox.bottom = (boundingBox.bottom - containerRect.top) / (activeZoom.value / 100) + container.scrollTop;
-  boundingBox.right = (boundingBox.right - containerRect.left) / (activeZoom.value / 100) + container.scrollLeft;
-
-  return boundingBox;
-}
+  return { bounds, page, pageOffset };
+};
 
 const handlePdfClick = (e) => {
   const { target } = e;
@@ -109,10 +131,15 @@ const handlePdfClick = (e) => {
 const handleMouseUp = (e) => {
   const selection = window.getSelection();
   if (selection.toString().length > 0) {
-    const selectionBounds = getSelectedTextBoundingBox(viewer.value);
+    const info = getSelectedTextInfo(viewer.value);
+    if (!info) return;
+    const { bounds: selectionBounds, page, pageOffset } = info;
     const sel = useSelection({
       selectionBounds,
       documentId: id,
+      page,
+      source: 'pdf-viewer',
+      pageOffset,
     });
     emit('selection-change', sel);
   }
@@ -164,21 +191,13 @@ onUnmounted(() => {
 }
 
 .superdoc-pdf-viewer :deep(.pdf-page) {
-  border-top: 1px solid #dfdfdf;
-  border-bottom: 1px solid #dfdfdf;
-  margin: 0 0 20px 0;
   position: relative;
+  margin: 0 0 24px 0;
+  border: 1px solid #d3d3d3;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 0 5px hsla(0, 0%, 0%, 0.05);
   overflow: hidden;
-}
-
-.superdoc-pdf-viewer :deep(.pdf-page):first-child {
-  border-radius: 16px 16px 0 0;
-  border-top: none;
-}
-
-.superdoc-pdf-viewer :deep(.pdf-page):last-child {
-  border-radius: 0 0 16px 16px;
-  border-bottom: none;
 }
 
 .superdoc-pdf-viewer :deep(.textLayer) {
