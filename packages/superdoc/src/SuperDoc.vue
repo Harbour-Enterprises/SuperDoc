@@ -249,7 +249,24 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   }
 
   const { documentId } = editor.options;
-  const { $from, $to } = transaction.selection;
+  const txnSelection = transaction?.selection;
+  const stateSelection = editor.state?.selection ?? editor.view?.state?.selection;
+  const selectionWithPositions =
+    (txnSelection?.$from && txnSelection?.$to && txnSelection) || stateSelection || txnSelection;
+
+  if (!selectionWithPositions) return;
+
+  const { $from, $to } = selectionWithPositions;
+  if (!$from || !$to) return;
+
+  const docSize =
+    editor.state?.doc?.content?.size ?? editor.view?.state?.doc?.content?.size ?? Number.POSITIVE_INFINITY;
+
+  if ($from.pos > docSize || $to.pos > docSize) {
+    updateSelection({ x: null, y: null, x2: null, y2: null, source: 'super-editor' });
+    return;
+  }
+
   if ($from.pos === $to.pos) updateSelection({ x: null, y: null, x2: null, y2: null, source: 'super-editor' });
 
   if (!layers.value) return;
@@ -258,8 +275,18 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   if (!presentation) {
     // Fallback to legacy coordinate calculation if PresentationEditor not yet initialized
     const { view } = editor;
-    const fromCoords = view.coordsAtPos($from.pos);
-    const toCoords = view.coordsAtPos($to.pos);
+    const safeCoordsAtPos = (pos) => {
+      try {
+        return view.coordsAtPos(pos);
+      } catch (err) {
+        console.warn('[superdoc] Ignoring selection coords error', err);
+        return null;
+      }
+    };
+
+    const fromCoords = safeCoordsAtPos($from.pos);
+    const toCoords = safeCoordsAtPos($to.pos);
+    if (!fromCoords || !toCoords) return;
 
     const layerBounds = layers.value.getBoundingClientRect();
     const HEADER_HEIGHT = 96;
@@ -272,13 +299,13 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
       bottom,
     };
 
-    const selection = useSelection({
+    const selectionResult = useSelection({
       selectionBounds,
       page: 1,
       documentId,
       source: 'super-editor',
     });
-    handleSelectionChange(selection);
+    handleSelectionChange(selectionResult);
     return;
   }
 
@@ -292,19 +319,29 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
       y: bounds.bottom,
       source: 'super-editor',
     });
-    const selection = useSelection({
+    const selectionResult = useSelection({
       selectionBounds: { ...bounds },
       page: pageIndex + 1,
       documentId,
       source: 'super-editor',
     });
-    handleSelectionChange(selection);
+    handleSelectionChange(selectionResult);
     return;
   }
 
   const { view } = editor;
-  const fromCoords = view.coordsAtPos($from.pos);
-  const toCoords = view.coordsAtPos($to.pos);
+  const safeCoordsAtPos = (pos) => {
+    try {
+      return view.coordsAtPos(pos);
+    } catch (err) {
+      console.warn('[superdoc] Ignoring selection coords error', err);
+      return null;
+    }
+  };
+
+  const fromCoords = safeCoordsAtPos($from.pos);
+  const toCoords = safeCoordsAtPos($to.pos);
+  if (!fromCoords || !toCoords) return;
 
   const layerBounds = layers.value.getBoundingClientRect();
   const HEADER_HEIGHT = 96;
@@ -318,14 +355,13 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
     bottom,
   };
 
-  const selection = useSelection({
+  const selectionResult = useSelection({
     selectionBounds,
     page: 1,
     documentId,
     source: 'super-editor',
   });
-
-  handleSelectionChange(selection);
+  handleSelectionChange(selectionResult);
 };
 
 function getSelectionBoundingBox() {
