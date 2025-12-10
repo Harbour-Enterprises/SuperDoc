@@ -1079,6 +1079,66 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     for (let segmentIndex = 0; segmentIndex < tabSegments.length; segmentIndex++) {
       const segment = tabSegments[segmentIndex];
       const isLastSegment = segmentIndex === tabSegments.length - 1;
+      if (/^[ ]+$/.test(segment)) {
+        const spacesLength = segment.length;
+        const spacesStartChar = charPosInRun;
+        const spacesEndChar = charPosInRun + spacesLength;
+        const spacesWidth = measureRunWidth(segment, font, ctx, run);
+
+        if (!currentLine) {
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: spacesStartChar,
+            toRun: runIndex,
+            toChar: spacesEndChar,
+            width: spacesWidth,
+            maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
+          };
+        } else {
+          const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+          if (
+            currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
+            currentLine.width > 0
+          ) {
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+            const completedLine: Line = {
+              ...currentLine,
+              ...metrics,
+            };
+            addBarTabsToLine(completedLine);
+            lines.push(completedLine);
+            tabStopCursor = 0;
+            pendingTabAlignment = null;
+            lastAppliedTabAlign = null;
+
+            currentLine = {
+              fromRun: runIndex,
+              fromChar: spacesStartChar,
+              toRun: runIndex,
+              toChar: spacesEndChar,
+              width: spacesWidth,
+              maxFontSize: run.fontSize,
+              maxFontInfo: getFontInfoFromRun(run),
+              maxWidth: getEffectiveWidth(contentWidth),
+              segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
+            };
+          } else {
+            currentLine.toRun = runIndex;
+            currentLine.toChar = spacesEndChar;
+            currentLine.width = roundValue(currentLine.width + boundarySpacing + spacesWidth);
+            currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+            currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+            appendSegment(currentLine.segments, runIndex, spacesStartChar, spacesEndChar, spacesWidth);
+          }
+        }
+
+        charPosInRun = spacesEndChar;
+        continue;
+      }
+
       const words = segment.split(' ');
 
       // Align this segment if a tab alignment is pending

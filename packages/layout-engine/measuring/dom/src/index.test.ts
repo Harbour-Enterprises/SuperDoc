@@ -1065,6 +1065,55 @@ describe('measureBlock', () => {
     });
   });
 
+  describe('space-only runs', () => {
+    it('counts width contributed by runs that contain only spaces', async () => {
+      const baseRun = { fontFamily: 'Arial', fontSize: 16 };
+
+      const combinedBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'space-between-runs',
+        runs: [
+          { ...baseRun, text: 'This' },
+          { ...baseRun, text: ' ' }, // space in its own run
+          { ...baseRun, text: 'CONFIDENTIALITY', bold: true },
+        ],
+        attrs: {},
+      };
+
+      const measureCombined = expectParagraphMeasure(await measureBlock(combinedBlock, 1000));
+      expect(measureCombined.lines).toHaveLength(1);
+      expect(measureCombined.lines[0].segments?.map((s) => s.runIndex)).toEqual([0, 1, 2]);
+
+      const measureThis = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-this', runs: [{ ...baseRun, text: 'This' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureSpace = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-space', runs: [{ ...baseRun, text: ' ' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureConf = expectParagraphMeasure(
+        await measureBlock(
+          {
+            kind: 'paragraph',
+            id: 'space-conf',
+            runs: [{ ...baseRun, text: 'CONFIDENTIALITY', bold: true }],
+            attrs: {},
+          },
+          1000,
+        ),
+      );
+
+      const expectedWidth = measureThis.lines[0].width + measureSpace.lines[0].width + measureConf.lines[0].width;
+
+      expect(measureCombined.lines[0].width).toBeCloseTo(expectedWidth, 0);
+    });
+  });
+
   describe('explicit X positioning for tab-aligned text', () => {
     /**
      * These tests verify the bug fix for explicit segment X positioning.
