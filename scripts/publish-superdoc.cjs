@@ -14,9 +14,27 @@ const path = require('node:path');
 const rootDir = path.resolve(__dirname, '..');
 const superdocDir = path.join(rootDir, 'packages', 'superdoc');
 const packageJsonPath = path.join(superdocDir, 'package.json');
+const defaultRegistry = process.env.NPM_CONFIG_REGISTRY || 'https://registry.npmjs.org';
 
 const run = (command, args, cwd) => {
   execFileSync(command, args, { stdio: 'inherit', cwd });
+};
+
+const isVersionPublished = (packageName, version) => {
+  try {
+    execFileSync(
+      'npm',
+      ['view', `${packageName}@${version}`, 'version', '--registry', defaultRegistry],
+      { stdio: 'pipe' }
+    );
+    return true;
+  } catch (error) {
+    // npm returns exit code 1 when a version is not found
+    if (error.status === 1) {
+      return false;
+    }
+    throw error;
+  }
 };
 
 const ensurePackageJson = () => {
@@ -35,11 +53,19 @@ const ensureDist = () => {
 };
 
 const publishScopedMirror = (packageJson, distTag, logger = console) => {
+  const scopedName = '@harbour-enterprises/superdoc';
+
+  if (isVersionPublished(scopedName, packageJson.version)) {
+    logger.log(`${scopedName}@${packageJson.version} already published, ensuring dist-tag "${distTag}" and skipping.`);
+    run('npm', ['dist-tag', 'add', `${scopedName}@${packageJson.version}`, distTag], rootDir);
+    return;
+  }
+
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'superdoc-publish-'));
   try {
     const scopedPackageJson = {
       ...packageJson,
-      name: '@harbour-enterprises/superdoc',
+      name: scopedName,
       publishConfig: {
         ...(packageJson.publishConfig || {}),
         access: 'public'
@@ -58,7 +84,7 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
     }
 
     logger.log(`Publishing @harbour-enterprises/superdoc with dist-tag "${distTag}"...`);
-    run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], tempDir);
+    run('npm', ['publish', '--access', 'public', '--tag', distTag], tempDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -79,8 +105,13 @@ const publishPackages = ({
   ensureDist();
 
   if (publishUnscoped) {
-    logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
-    run('npm', ['publish', '--access', 'public', '--tag', distTag, '--provenance'], superdocDir);
+    if (isVersionPublished(packageJson.name, packageJson.version)) {
+      logger.log(`superdoc@${packageJson.version} already published, ensuring dist-tag "${distTag}" and skipping.`);
+      run('npm', ['dist-tag', 'add', `${packageJson.name}@${packageJson.version}`, distTag], rootDir);
+    } else {
+      logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
+      run('npm', ['publish', '--access', 'public', '--tag', distTag], superdocDir);
+    }
   }
 
   publishScopedMirror(packageJson, distTag, logger);
