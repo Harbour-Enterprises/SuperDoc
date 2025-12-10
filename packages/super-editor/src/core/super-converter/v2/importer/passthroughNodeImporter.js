@@ -25,7 +25,8 @@ const INLINE_NODE_NAMES = new Set([
 const BLOCK_BOUNDARY_NAMES = new Set(['w:body', 'w:tbl', 'w:tc', 'w:tr']);
 
 export const isInlineContext = (path = [], currentNodeName) => {
-  if (currentNodeName && INLINE_NODE_NAMES.has(currentNodeName)) {
+  const immediateName = currentNodeName ?? path[path.length - 1]?.name;
+  if (immediateName && INLINE_NODE_NAMES.has(immediateName)) {
     return true;
   }
   if (!Array.isArray(path) || path.length === 0) return false;

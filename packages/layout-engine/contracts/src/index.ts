@@ -1432,6 +1432,12 @@ export type Layout = {
   pages: Page[];
   columns?: ColumnLayout;
   headerFooter?: Partial<Record<HeaderFooterType, HeaderFooterLayout>>;
+  /**
+   * Gap between pages in pixels. Used by hit testing to correctly calculate
+   * which page a click lands on when pages are rendered with spacing between them.
+   * Defaults to 0 if not specified (pages assumed to be stacked with no gap).
+   */
+  pageGap?: number;
 };
 
 export interface PainterDOM {

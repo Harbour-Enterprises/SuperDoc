@@ -318,6 +318,9 @@ export const onHeaderFooterDataUpdate = async ({ editor, transaction }, mainEdit
   }
   mainEditor.converter[`${type}s`][sectionId] = updatedData;
   mainEditor.setOptions({ isHeaderFooterChanged: editor.docChanged });
+  if (editor.docChanged && mainEditor.converter) {
+    mainEditor.converter.headerFooterModified = true;
+  }
 
   await updateYdocDocxData(mainEditor);
 };

@@ -42,6 +42,8 @@ export function handleImageNode(node, params, isAnchor) {
   if (!node) return null;
   const { docx, filename, converter } = params;
   const attributes = node?.attributes || {};
+  const { order, originalChildren } = collectPreservedDrawingChildren(node);
+
   const padding = {
     top: emuToPixels(attributes?.['distT']),
     bottom: emuToPixels(attributes?.['distB']),
@@ -285,6 +287,7 @@ export function handleImageNode(node, params, isAnchor) {
   const wrapValue = wrap;
 
   const nodeAttrs = {
+    // originalXml: carbonCopy(node),
     src: finalSrc,
     alt:
       isMetafileExtension(extension) && !wasConverted
@@ -324,6 +327,8 @@ export function handleImageNode(node, params, isAnchor) {
     },
     originalAttributes: node.attributes,
     rId: relAttributes['Id'],
+    ...(order.length ? { drawingChildOrder: order } : {}),
+    ...(originalChildren.length ? { originalDrawingChildren: originalChildren } : {}),
   };
 
   return {
@@ -373,6 +378,24 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   const fallbackType = textBoxContent ? 'textbox' : 'drawing';
   return buildShapePlaceholder(node, size, padding, marginOffset, fallbackType);
 };
+
+function collectPreservedDrawingChildren(node) {
+  const order = [];
+  const original = [];
+  if (!Array.isArray(node?.elements)) {
+    return { order, originalChildren: original };
+  }
+  node.elements.forEach((child, index) => {
+    if (!child) return;
+    const name = child.name ?? null;
+    order.push(name);
+    original.push({
+      index,
+      xml: carbonCopy(child),
+    });
+  });
+  return { order, originalChildren: original };
+}
 
 /**
  * Handles a shape group (wpg:wgp) within a WordprocessingML graphic node.

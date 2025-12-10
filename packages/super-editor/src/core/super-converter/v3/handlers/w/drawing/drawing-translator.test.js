@@ -75,13 +75,22 @@ describe('w:drawing translator', () => {
       expect(result).toEqual({ encodedAnchor: true });
     });
 
-    it('returns null if no valid children', () => {
+    it('returns passthroughBlock if no valid children', () => {
       const childNode = { name: 'w:tag' };
-      const params = { nodes: [{ elements: [childNode] }] };
+      const params = { nodes: [{ name: 'w:drawing', elements: [childNode] }] };
 
       const result = translator.encode(params);
 
-      expect(result).toBeNull();
+      expect(result).toEqual({
+        type: 'passthroughBlock',
+        attrs: {
+          originalName: 'w:drawing',
+          originalXml: {
+            name: 'w:drawing',
+            elements: [expect.objectContaining({ name: 'w:tag' })],
+          },
+        },
+      });
     });
   });
 

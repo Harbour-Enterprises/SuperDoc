@@ -2,6 +2,7 @@ import { NodeTranslator } from '../../../node-translator/node-translator';
 import { translator as wpAnchorTranslator } from '@converter/v3/handlers/wp/anchor/anchor-translator.js';
 import { translator as wpInlineTranslator } from '@converter/v3/handlers/wp/inline/inline-translator.js';
 import { wrapTextInRun } from '@converter/exporter.js';
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:drawing';
@@ -25,7 +26,7 @@ function encode(params) {
     'wp:inline': wpInlineTranslator,
   };
 
-  const result = node.elements.reduce((acc, child) => {
+  const result = (node.elements || []).reduce((acc, child) => {
     if (acc) return acc;
     const translator = translatorByChildName[child.name];
     if (!translator) return acc;
@@ -34,7 +35,16 @@ function encode(params) {
     return childResult || acc;
   }, null);
 
-  return result;
+  if (result) return result;
+
+  // Preserve unhandled drawings (e.g., charts/diagrams) as passthrough for round-tripping.
+  return {
+    type: 'passthroughBlock',
+    attrs: {
+      originalName: 'w:drawing',
+      originalXml: carbonCopy(node),
+    },
+  };
 }
 
 /**

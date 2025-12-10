@@ -401,6 +401,49 @@ describe('relationships-validator', () => {
       expect(root.elements[0].attributes.Target).toBe('styles.xml');
     });
 
+    it('preserves customXml relationships with relative paths going up from word/', () => {
+      // customXml files are stored at the package root (e.g., customXml/item1.xml)
+      // but referenced from word/_rels/document.xml.rels with relative paths like ../customXml/item1.xml
+      const relationships = [
+        createValidRelationship(
+          'rId1',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles',
+          'styles.xml',
+        ),
+        createValidRelationship(
+          'rId2',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml',
+          '../customXml/item1.xml',
+        ),
+        createValidRelationship(
+          'rId3',
+          'http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXml',
+          '../customXml/item2.xml',
+        ),
+      ];
+      const rels = createValidRelationshipsRoot(relationships);
+      const editor = makeEditorWithRelationships(rels, {
+        elements: [{ type: 'element', name: 'document', elements: [] }],
+      });
+      // Add the target files to convertedXml - note: customXml files are at package root, not word/
+      editor.converter.convertedXml['word/styles.xml'] = { elements: [] };
+      editor.converter.convertedXml['customXml/item1.xml'] = { elements: [] };
+      editor.converter.convertedXml['customXml/item2.xml'] = { elements: [] };
+
+      const logger = makeLogger();
+      const validator = createRelationshipsValidator({ editor, logger });
+      const result = validator();
+
+      // customXml relationships should be preserved (not removed as "missing")
+      const root = editor.converter.convertedXml['word/_rels/document.xml.rels'].elements[0];
+      expect(root.elements).toHaveLength(3);
+
+      const customXmlRels = root.elements.filter((r) => r.attributes.Target?.includes('customXml'));
+      expect(customXmlRels).toHaveLength(2);
+      expect(customXmlRels[0].attributes.Target).toBe('../customXml/item1.xml');
+      expect(customXmlRels[1].attributes.Target).toBe('../customXml/item2.xml');
+    });
+
     it('keeps image relationships even with missing targets', () => {
       const relationships = [
         createValidRelationship(

@@ -75,6 +75,8 @@ describe('translateAnchorNode', () => {
     expect(simplePos.attributes).toMatchObject({ x: '0', y: '0' });
   });
 
+  // originalXml passthrough removed; preserved children path handles round-trip now
+
   it('should add wp:positionH with posOffset when marginOffset.horizontal is defined', () => {
     const params = {
       node: {
@@ -176,6 +178,55 @@ describe('translateAnchorNode', () => {
       layoutInCell: true,
       allowOverlap: true,
     });
+  });
+
+  it('merges original drawing children back into the anchor output', () => {
+    translateImageNode.mockReturnValue({
+      attributes: {},
+      elements: [{ name: 'wp:extent' }, { name: 'wp:docPr' }, { name: 'a:graphic' }],
+    });
+
+    const params = {
+      node: {
+        attrs: {
+          drawingChildOrder: ['wp:extent', 'wp14:sizeRelH', 'wp:docPr', 'a:graphic'],
+          originalDrawingChildren: [{ index: 1, xml: { name: 'wp14:sizeRelH', attributes: { relativeFrom: 'page' } } }],
+        },
+      },
+    };
+
+    const result = translateAnchorNode(params);
+
+    expect(result.elements[1]).toMatchObject({ name: 'wp14:sizeRelH' });
+  });
+
+  it('reuses original drawing children (except wp:extent) when exporting', () => {
+    translateImageNode.mockReturnValue({
+      attributes: {},
+      elements: [
+        { name: 'wp:extent', attributes: { cx: 1, cy: 2 } },
+        { name: 'wp:docPr', attributes: { id: 'generated' } },
+        { name: 'a:graphic', attributes: { new: 'value' } },
+      ],
+    });
+
+    const params = {
+      node: {
+        attrs: {
+          drawingChildOrder: ['wp:extent', 'wp:docPr', 'a:graphic'],
+          originalDrawingChildren: [
+            { index: 1, xml: { name: 'wp:docPr', attributes: { id: 'original' } } },
+            { index: 2, xml: { name: 'a:graphic', attributes: { from: 'original' } } },
+          ],
+        },
+      },
+    };
+
+    const result = translateAnchorNode(params);
+
+    expect(result.elements[0]).toMatchObject({ name: 'wp:extent', attributes: { cx: 1, cy: 2 } });
+    expect(result.elements[1]).toMatchObject({ name: 'wp:docPr', attributes: { id: 'original' } });
+    expect(result.elements[2]).toMatchObject({ name: 'a:graphic', attributes: { from: 'original' } });
   });
 
   describe('wrap types', () => {

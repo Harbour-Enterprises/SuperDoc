@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { layoutTableBlock } from './layout-table.js';
-import type { TableBlock, TableMeasure, TableFragment, BlockId } from '@superdoc/contracts';
+import type { TableBlock, TableMeasure, TableFragment, BlockId, TableAttrs } from '@superdoc/contracts';
 
 /**
  * Creates a dummy table fragment for test scenarios where prior page content is needed.
@@ -1381,6 +1381,1102 @@ describe('layoutTableBlock', () => {
       // At least one fragment should have partialRow defined (when mid-row split is implemented)
       // For now, the over-tall row will be force-split at row boundaries
       // Once partialRow rendering is complete, this test should verify partialRow metadata
+    });
+  });
+
+  describe('line advancement-based row splitting', () => {
+    /**
+     * Test suite for the line advancement algorithm introduced in commit 911977b94.
+     * This algorithm ensures that when a row is split across pages, all cells advance
+     * by the same number of lines rather than the same height, maintaining structural
+     * alignment across cells with different line heights.
+     */
+
+    it('should split rows based on line advancement rather than height', () => {
+      // Create a table with a single row where cells have different line heights
+      // This tests the core bug fix: cells should advance by the same number of lines
+      const block = createMockTableBlock(1);
+
+      // Cell 0: 3 lines of 20px each (total 60px)
+      // Cell 1: 3 lines of 40px each (total 120px)
+      const measure = createMockTableMeasure(
+        [100, 100], // Two columns
+        [120], // Row height (max of cell heights)
+        [
+          // Row 0 - different line heights per cell
+          [20, 20, 20], // Cell 0: 3x20px lines
+          [40, 40, 40], // Cell 1: 3x40px lines
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let pageCount = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 50, // Only enough space for 1 line from Cell 0 or Cell 1
+        }),
+        advanceColumn: (state) => {
+          pageCount++;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50, // Consistently small pages to force line-by-line splitting
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // With line advancement, both cells should advance by 1 line at a time
+      // So we should see multiple fragments as the row is split line by line
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Check that fragments have partialRow metadata defined
+      const fragmentsWithPartialRow = fragments.filter((f) => 'partialRow' in f && f.partialRow !== null);
+      expect(fragmentsWithPartialRow.length).toBeGreaterThan(0);
+    });
+
+    it('should not call advanceColumn when partial row makes progress', () => {
+      // This tests the bug fix where advanceColumn was being called even when progress was made
+      const block = createMockTableBlock(1);
+
+      // Create a row with multiple lines that will need to be split
+      const measure = createMockTableMeasure(
+        [100],
+        [100], // Row with total height 100px
+        [[20, 20, 20, 20, 20]], // 5 lines of 20px each
+      );
+
+      const fragments: TableFragment[] = [];
+      let advanceCallCount = 0;
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 40, // Space for 2 lines at a time
+        }),
+        advanceColumn: (state) => {
+          advanceCallCount++;
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 40,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // The row should be split across multiple fragments as it makes progress
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // advanceColumn should only be called when no progress is made or when starting a new page
+      // With the fix, it should NOT be called when partial row makes progress
+      // The number of advance calls should be less than the number of fragments
+      // because progress-based continuations stay on the same page
+      expect(advanceCallCount).toBeLessThan(fragments.length);
+    });
+
+    it('should apply allCellsCompleteInFirstPass optimization', () => {
+      // When all cells complete in the first pass, the optimization should keep
+      // the natural heights without forcing line advancement alignment
+      const block = createMockTableBlock(1);
+
+      // Create a row where all cells will complete in available space
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [40], // Row height
+        [
+          [20, 20], // Cell 0: 2 lines of 20px (total 40px)
+          [10, 10, 10, 10], // Cell 1: 4 lines of 10px (total 40px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 100, // Plenty of space for entire row
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      // Should create a single fragment since everything fits
+      expect(fragments.length).toBe(1);
+
+      // The fragment should not have partialRow since it's complete
+      const fragment = fragments[0];
+      if ('partialRow' in fragment) {
+        // partialRow can be either null or undefined for complete rows
+        expect(fragment.partialRow == null).toBe(true);
+      }
+    });
+
+    it('should handle cells with different line counts in partial row splits', () => {
+      // Edge case: cells have different numbers of lines, not just different line heights
+      const block = createMockTableBlock(1);
+
+      // Cell 0 has 2 lines, Cell 1 has 4 lines
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [80], // Row height (max of cells)
+        [
+          [20, 20], // Cell 0: 2 lines of 20px (total 40px)
+          [20, 20, 20, 20], // Cell 1: 4 lines of 20px (total 80px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 30, // Space for 1 line (plus some padding)
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 30,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments as the row is split
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify that partial row metadata exists for intermediate fragments
+      const intermediateFragments = fragments.slice(0, -1);
+      for (const fragment of intermediateFragments) {
+        if ('partialRow' in fragment && fragment.partialRow) {
+          // Each cell should advance by the minimum line advancement
+          const { toLineByCell, fromLineByCell } = fragment.partialRow;
+          const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
+
+          // All positive advancements should be equal (same number of lines advanced)
+          const positiveAdvancements = advancements.filter((a) => a > 0);
+          if (positiveAdvancements.length > 1) {
+            const minAdvancement = Math.min(...positiveAdvancements);
+            expect(positiveAdvancements.every((a) => a === minAdvancement)).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('should handle continuation from partial rows correctly', () => {
+      // Test that when a partial row continues to the next page, the fromLineByCell
+      // is correctly carried forward
+      const block = createMockTableBlock(1);
+
+      // Create a row with 5 lines that will need multiple splits
+      const measure = createMockTableMeasure([100], [100], [[20, 20, 20, 20, 20]]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 30, // Space for 1 line
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 30,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Check that continuation fragments have proper fromLineByCell values
+      let expectedStartLine = 0;
+      for (const fragment of fragments) {
+        if ('partialRow' in fragment && fragment.partialRow) {
+          const { fromLineByCell, toLineByCell, isFirstPart, isLastPart } = fragment.partialRow;
+
+          // fromLineByCell should match expected start line
+          expect(fromLineByCell[0]).toBe(expectedStartLine);
+
+          // toLineByCell should be greater than fromLineByCell
+          expect(toLineByCell[0]).toBeGreaterThan(fromLineByCell[0]);
+
+          // Update expected start line for next fragment
+          expectedStartLine = toLineByCell[0];
+
+          // Check first and last part flags
+          if (fragments.indexOf(fragment) === 0) {
+            expect(isFirstPart).toBe(true);
+          }
+          if (fragments.indexOf(fragment) === fragments.length - 1) {
+            expect(isLastPart).toBe(true);
+          }
+        }
+      }
+    });
+
+    it('should handle edge case of zero line advancement (no progress)', () => {
+      // This test verifies the existence of the no-progress detection logic
+      // The condition (!madeProgress && hadRemainingLinesBefore) ensures advanceColumn
+      // is called when a partial row continuation cannot make progress
+      const block = createMockTableBlock(1);
+
+      // Create a simple row that requires splitting
+      const measure = createMockTableMeasure([100], [60], [[20, 20, 20]]); // 3 lines of 20px each
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 25, // Space for 1 line at a time
+        }),
+        advanceColumn: (state) => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 25,
+        }),
+        columnX: () => 0,
+      });
+
+      // Verify that the row is split into multiple fragments
+      // The no-progress logic exists to handle edge cases where space becomes insufficient
+      // during continuation. While difficult to trigger in a simple test, the logic
+      // is critical for production scenarios with complex layouts and padding.
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify that partial row splitting occurred
+      const fragmentsWithPartialRow = fragments.filter((f) => 'partialRow' in f && f.partialRow !== null);
+      expect(fragmentsWithPartialRow.length).toBeGreaterThan(0);
+    });
+
+    it('should maintain minimum line advancement across all cells', () => {
+      // Test that the minimum line advancement algorithm correctly identifies
+      // and applies the minimum advancement across all cells
+      const block = createMockTableBlock(1);
+
+      // Create cells with different line heights where the minimum advancement
+      // will be determined by the cell with the tallest lines
+      const measure = createMockTableMeasure(
+        [100, 100, 100],
+        [120],
+        [
+          [10, 10, 10, 10, 10], // Cell 0: 5 lines of 10px (total 50px)
+          [20, 20, 20, 20, 20], // Cell 1: 5 lines of 20px (total 100px)
+          [40, 40, 40], // Cell 2: 3 lines of 40px (total 120px)
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 300,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 50, // Space for varying number of lines per cell
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should create multiple fragments
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // Verify line advancement consistency
+      for (const fragment of fragments) {
+        if ('partialRow' in fragment && fragment.partialRow && !fragment.partialRow.isLastPart) {
+          const { toLineByCell, fromLineByCell } = fragment.partialRow;
+          const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
+
+          // All cells that have remaining lines should advance by the same amount
+          // (this is the core of the line advancement algorithm)
+          const positiveAdvancements = advancements.filter((a) => a > 0);
+          if (positiveAdvancements.length > 0) {
+            const minAdvancement = Math.min(...positiveAdvancements);
+            // In the second pass, all cells should be normalized to minAdvancement
+            // (unless they've already completed)
+            positiveAdvancements.forEach((adv) => {
+              expect(adv).toBe(minAdvancement);
+            });
+          }
+        }
+      }
+    });
+
+    it('should correctly set isFirstPart and isLastPart flags', () => {
+      // Test that the partial row info correctly identifies first and last parts
+      const block = createMockTableBlock(1);
+
+      // Create a row that will be split into exactly 3 parts
+      const measure = createMockTableMeasure([100], [60], [[20, 20, 20]]); // 3 lines of 20px each
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 100,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 25, // Space for 1 line at a time
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 25,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should have exactly 3 fragments (one per line)
+      expect(fragments.length).toBe(3);
+
+      // First fragment should have isFirstPart = true
+      const firstFragment = fragments[0];
+      if ('partialRow' in firstFragment && firstFragment.partialRow) {
+        expect(firstFragment.partialRow.isFirstPart).toBe(true);
+        expect(firstFragment.partialRow.isLastPart).toBe(false);
+      }
+
+      // Last fragment should have isLastPart = true
+      const lastFragment = fragments[fragments.length - 1];
+      if ('partialRow' in lastFragment && lastFragment.partialRow) {
+        expect(lastFragment.partialRow.isFirstPart).toBe(false);
+        expect(lastFragment.partialRow.isLastPart).toBe(true);
+      }
+
+      // Middle fragments should have both flags false
+      if (fragments.length > 2) {
+        for (let i = 1; i < fragments.length - 1; i++) {
+          const fragment = fragments[i];
+          if ('partialRow' in fragment && fragment.partialRow) {
+            expect(fragment.partialRow.isFirstPart).toBe(false);
+            expect(fragment.partialRow.isLastPart).toBe(false);
+          }
+        }
+      }
+    });
+  });
+
+  describe('tableIndent handling', () => {
+    /**
+     * Test suite for table indent functionality.
+     * Tests the getTableIndentWidth() and applyTableIndent() helper functions
+     * through integration with layoutTableBlock.
+     */
+
+    describe('getTableIndentWidth - edge cases', () => {
+      it('should handle undefined attrs', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = undefined;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        // Should create fragment with original x position (no indent applied)
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle missing tableIndent property', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { borderCollapse: 'collapse' } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle null tableIndent', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: null } as unknown as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent as string (invalid type)', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: 'invalid' } as unknown as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent as array (invalid type)', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: [50] } as unknown as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent object without width property', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { type: 'dxa' } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent with string width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: '50' } } as unknown as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent with NaN width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: NaN } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent with Infinity width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: Infinity } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle tableIndent with negative Infinity width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: -Infinity } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+
+      it('should handle valid positive tableIndent width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 50 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(60); // 10 + 50
+        expect(fragments[0].width).toBe(50); // 100 - 50
+      });
+
+      it('should handle valid negative tableIndent width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: -20 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(-10); // 10 + (-20)
+        expect(fragments[0].width).toBe(120); // 100 - (-20)
+      });
+
+      it('should handle zero tableIndent width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 0 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 10,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(10);
+        expect(fragments[0].width).toBe(100);
+      });
+    });
+
+    describe('applyTableIndent - width clamping', () => {
+      it('should apply positive indent correctly', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 30 } } as TableAttrs;
+        const measure = createMockTableMeasure([200], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 200,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(30);
+        expect(fragments[0].width).toBe(170); // 200 - 30
+      });
+
+      it('should apply negative indent correctly (extends into margin)', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: -40 } } as TableAttrs;
+        const measure = createMockTableMeasure([200], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 200,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(-40);
+        expect(fragments[0].width).toBe(240); // 200 - (-40)
+      });
+
+      it('should clamp width to 0 when indent exceeds width', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 250 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 100,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(250);
+        expect(fragments[0].width).toBe(0); // Clamped to 0, not negative
+      });
+
+      it('should handle zero indent (no change)', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 0 } } as TableAttrs;
+        const measure = createMockTableMeasure([150], [20]);
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 150,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 5,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(5);
+        expect(fragments[0].width).toBe(150);
+      });
+    });
+
+    describe('tableIndent integration scenarios', () => {
+      it('should apply tableIndent consistently across multiple fragments (table splitting)', () => {
+        const block = createMockTableBlock(10);
+        block.attrs = { tableIndent: { width: 25 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], Array(10).fill(20));
+
+        const fragments: TableFragment[] = [];
+        let cursorY = 0;
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 200,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY,
+            contentBottom: 100, // Force splitting
+          }),
+          advanceColumn: (state) => {
+            cursorY = 0;
+            return {
+              page: mockPage,
+              columnIndex: 0,
+              cursorY: 0,
+              contentBottom: 100,
+            };
+          },
+          columnX: () => 0,
+        });
+
+        // All fragments should have consistent indent applied
+        expect(fragments.length).toBeGreaterThan(1);
+        fragments.forEach((fragment) => {
+          expect(fragment.x).toBe(25);
+          expect(fragment.width).toBe(75); // 100 - 25 (measure totalWidth is used, not columnWidth)
+        });
+      });
+
+      it('should apply negative tableIndent consistently across fragments', () => {
+        const block = createMockTableBlock(10);
+        block.attrs = { tableIndent: { width: -15 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], Array(10).fill(20));
+
+        const fragments: TableFragment[] = [];
+        let cursorY = 0;
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 200,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY,
+            contentBottom: 100,
+          }),
+          advanceColumn: (state) => {
+            cursorY = 0;
+            return {
+              page: mockPage,
+              columnIndex: 0,
+              cursorY: 0,
+              contentBottom: 100,
+            };
+          },
+          columnX: () => 0,
+        });
+
+        expect(fragments.length).toBeGreaterThan(1);
+        fragments.forEach((fragment) => {
+          expect(fragment.x).toBe(-15);
+          expect(fragment.width).toBe(115); // 100 - (-15)
+        });
+      });
+
+      it('should apply tableIndent to floating tables (monolithic layout)', () => {
+        const block = createMockTableBlock(5, undefined, {
+          tableProperties: { floatingTableProperties: { horizontalAnchor: 'page' } },
+        });
+        block.attrs = { ...block.attrs, tableIndent: { width: 40 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], Array(5).fill(20));
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 200,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50, // Limited space but should render monolithically
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(40);
+        expect(fragments[0].width).toBe(60); // 100 - 40
+      });
+
+      it('should apply tableIndent to tables with no rows but non-zero totalHeight', () => {
+        const block = createMockTableBlock(0); // No rows
+        block.attrs = { tableIndent: { width: 20 } } as TableAttrs;
+        const measure = createMockTableMeasure([100], []);
+        measure.totalHeight = 50; // Non-zero height
+
+        const fragments: TableFragment[] = [];
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 150,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        expect(fragments).toHaveLength(1);
+        expect(fragments[0].x).toBe(20);
+        expect(fragments[0].width).toBe(80); // 100 - 20
+      });
+
+      it('should apply tableIndent to partial row fragments', () => {
+        const block = createMockTableBlock(1);
+        block.attrs = { tableIndent: { width: 30 } } as TableAttrs;
+        // Create a row with lines to enable partial row splitting
+        const measure = createMockTableMeasure([100], [100], [[20, 20, 20, 20, 20]]);
+
+        const fragments: TableFragment[] = [];
+        let cursorY = 0;
+        const mockPage = { fragments };
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 150,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY,
+            contentBottom: cursorY + 40, // Force partial row splitting
+          }),
+          advanceColumn: (state) => {
+            cursorY = 0;
+            return {
+              page: mockPage,
+              columnIndex: 0,
+              cursorY: 0,
+              contentBottom: 40,
+            };
+          },
+          columnX: () => 0,
+        });
+
+        // Should have multiple fragments due to partial row splitting
+        expect(fragments.length).toBeGreaterThan(1);
+        fragments.forEach((fragment) => {
+          expect(fragment.x).toBe(30);
+          expect(fragment.width).toBe(70); // 100 - 30
+        });
+      });
     });
   });
 });

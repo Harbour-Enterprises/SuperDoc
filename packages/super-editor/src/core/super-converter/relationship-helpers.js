@@ -25,7 +25,9 @@ export const getLargestRelationshipId = (relationships = []) => {
  * @returns {import('../types.js').XmlRelationshipElement[]} merged relationships array
  */
 export const mergeRelationshipElements = (existingRelationships = [], newRelationships = []) => {
-  if (!newRelationships?.length) return existingRelationships;
+  if (!newRelationships?.length) {
+    return existingRelationships;
+  }
 
   let largestId = getLargestRelationshipId(existingRelationships);
   const seenIds = new Set(existingRelationships.map((rel) => rel?.attributes?.Id).filter(Boolean));
@@ -79,5 +81,7 @@ export const mergeRelationshipElements = (existingRelationships = [], newRelatio
     additions.push(rel);
   });
 
-  return additions.length ? [...existingRelationships, ...additions] : existingRelationships;
+  const result = additions.length ? [...existingRelationships, ...additions] : existingRelationships;
+
+  return result;
 };

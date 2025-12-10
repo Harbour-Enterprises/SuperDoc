@@ -174,17 +174,11 @@ export class EditorOverlayManager {
    */
   showEditingOverlay(pageElement: HTMLElement, region: HeaderFooterRegion, zoom: number): ShowOverlayResult {
     try {
-      // Find the decoration container for this region
+      // Find the decoration container for this region (may not exist for empty headers/footers)
       const decorationContainer = this.#findDecorationContainer(pageElement, region.kind);
-      if (!decorationContainer) {
-        return {
-          success: false,
-          reason: `Decoration container not found for ${region.kind} on page ${region.pageIndex}`,
-        };
-      }
 
-      // Create or retrieve editor host as sibling to decoration container
-      const editorHost = this.#ensureEditorHost(pageElement, region.kind);
+      // Create or retrieve editor host (works with or without decoration container)
+      const editorHost = this.#ensureEditorHost(pageElement, region.kind, decorationContainer);
       if (!editorHost) {
         return {
           success: false,
@@ -192,11 +186,13 @@ export class EditorOverlayManager {
         };
       }
 
-      // Position editor host to match decoration container bounds
+      // Position editor host using region data (decoration container optional)
       this.#positionEditorHost(editorHost, region, decorationContainer, zoom);
 
-      // Hide static decoration content
-      decorationContainer.style.visibility = 'hidden';
+      // Hide static decoration content (if it exists)
+      if (decorationContainer) {
+        decorationContainer.style.visibility = 'hidden';
+      }
 
       // Show editor host
       editorHost.style.visibility = 'visible';
@@ -218,7 +214,7 @@ export class EditorOverlayManager {
       }
 
       // Create full-width border line across the page (MS Word style)
-      this.#showHeaderFooterBorder(pageElement, region, decorationContainer);
+      this.#showHeaderFooterBorder(pageElement, region, decorationContainer, zoom);
 
       // Store active elements for cleanup
       this.#activeEditorHost = editorHost;
@@ -360,17 +356,22 @@ export class EditorOverlayManager {
   }
 
   /**
-   * Ensures an editor host element exists as a sibling to the decoration container.
+   * Ensures an editor host element exists for editing.
    *
    * If the editor host doesn't exist, creates it. Otherwise, returns the existing one.
-   * The editor host is positioned as a sibling (not child) of the decoration container
-   * to avoid the pointer-events: none constraint.
+   * When a decoration container exists, the editor host is positioned as a sibling.
+   * When no decoration container exists (empty header/footer), it's appended to the page.
    *
    * @param pageElement - The page element to create the host within
    * @param kind - The region kind (header or footer)
+   * @param decorationContainer - The decoration container (optional, may not exist for empty regions)
    * @returns The editor host element
    */
-  #ensureEditorHost(pageElement: HTMLElement, kind: 'header' | 'footer'): HTMLElement | null {
+  #ensureEditorHost(
+    pageElement: HTMLElement,
+    kind: 'header' | 'footer',
+    decorationContainer: HTMLElement | null,
+  ): HTMLElement | null {
     const className = kind === 'header' ? 'superdoc-header-editor-host' : 'superdoc-footer-editor-host';
 
     // Check if editor host already exists
@@ -390,39 +391,36 @@ export class EditorOverlayManager {
         boxSizing: 'border-box',
       });
 
-      // Find decoration container to determine insertion point
-      const decorationContainer = this.#findDecorationContainer(pageElement, kind);
-      if (!decorationContainer) {
-        console.error(`[EditorOverlayManager] Decoration container not found for ${kind}`);
-        return null;
+      if (decorationContainer) {
+        // Insert editor host as sibling after decoration container
+        decorationContainer.parentNode?.insertBefore(editorHost, decorationContainer.nextSibling);
+      } else {
+        // No decoration container (empty header/footer) - append to page element
+        pageElement.appendChild(editorHost);
       }
-
-      // Insert editor host as sibling after decoration container
-      decorationContainer.parentNode?.insertBefore(editorHost, decorationContainer.nextSibling);
     }
 
     return editorHost;
   }
 
   /**
-   * Positions the editor host to match the decoration container bounds.
+   * Positions the editor host for header/footer editing.
    *
-   * The editor host is positioned absolutely within the page element to exactly
-   * overlap the decoration container's visual space.
+   * When a decoration container exists, positions are derived from its bounds.
+   * When no decoration container exists (empty header/footer), positions are
+   * derived directly from the region data.
    *
    * @param editorHost - The editor host element to position
    * @param region - The header/footer region with dimension data
-   * @param decorationContainer - The decoration container to match
+   * @param decorationContainer - The decoration container (optional, may not exist for empty regions)
    * @param zoom - Current zoom level
    */
   #positionEditorHost(
     editorHost: HTMLElement,
     region: HeaderFooterRegion,
-    decorationContainer: HTMLElement,
-    _zoom: number,
+    decorationContainer: HTMLElement | null,
+    zoom: number,
   ): void {
-    // Get decoration container bounds
-    const decorationRect = decorationContainer.getBoundingClientRect();
     const pageElement = editorHost.parentElement;
 
     if (!pageElement) {
@@ -430,13 +428,28 @@ export class EditorOverlayManager {
       return;
     }
 
-    const pageRect = pageElement.getBoundingClientRect();
+    let top: number;
+    let left: number;
+    let width: number;
+    let height: number;
 
-    // Calculate position relative to page element
-    const top = decorationRect.top - pageRect.top;
-    const left = decorationRect.left - pageRect.left;
-    const width = decorationRect.width;
-    const height = decorationRect.height;
+    if (decorationContainer) {
+      // Use decoration container bounds when available
+      const decorationRect = decorationContainer.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+
+      top = decorationRect.top - pageRect.top;
+      left = decorationRect.left - pageRect.left;
+      width = decorationRect.width;
+      height = decorationRect.height;
+    } else {
+      // Use region data directly (for empty headers/footers)
+      // Region coordinates are in layout units, apply zoom
+      top = region.localY * zoom;
+      left = region.localX * zoom;
+      width = region.width * zoom;
+      height = region.height * zoom;
+    }
 
     // Apply positioning
     Object.assign(editorHost.style, {
@@ -448,7 +461,7 @@ export class EditorOverlayManager {
 
     // For footers, we need to calculate the content offset to align with the static rendering
     // The layout engine pushes footer content to the bottom of the container
-    if (region.kind === 'footer') {
+    if (region.kind === 'footer' && decorationContainer) {
       const fragment = decorationContainer.querySelector('.superdoc-fragment');
       if (fragment instanceof HTMLElement) {
         // Get the top offset of the first fragment - this is where content starts
@@ -478,7 +491,8 @@ export class EditorOverlayManager {
   #showHeaderFooterBorder(
     pageElement: HTMLElement,
     region: HeaderFooterRegion,
-    decorationContainer: HTMLElement,
+    decorationContainer: HTMLElement | null,
+    zoom: number,
   ): void {
     this.#hideHeaderFooterBorder();
 
@@ -486,13 +500,22 @@ export class EditorOverlayManager {
     this.#borderLine = document.createElement('div');
     this.#borderLine.className = 'superdoc-header-footer-border';
 
-    // Get decoration container position to know where to place the border
-    const decorationRect = decorationContainer.getBoundingClientRect();
-    const pageRect = pageElement.getBoundingClientRect();
-
-    // Calculate position - for header, border is at bottom; for footer, border is at top
+    let topPosition: number;
     const isHeader = region.kind === 'header';
-    const topPosition = isHeader ? decorationRect.bottom - pageRect.top : decorationRect.top - pageRect.top;
+
+    if (decorationContainer) {
+      // Get decoration container position to know where to place the border
+      const decorationRect = decorationContainer.getBoundingClientRect();
+      const pageRect = pageElement.getBoundingClientRect();
+
+      // Calculate position - for header, border is at bottom; for footer, border is at top
+      topPosition = isHeader ? decorationRect.bottom - pageRect.top : decorationRect.top - pageRect.top;
+    } else {
+      // Use region data directly (for empty headers/footers)
+      // For header: border at bottom of region (localY + height)
+      // For footer: border at top of region (localY)
+      topPosition = isHeader ? (region.localY + region.height) * zoom : region.localY * zoom;
+    }
 
     Object.assign(this.#borderLine.style, {
       position: 'absolute',

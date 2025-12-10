@@ -1121,6 +1121,26 @@ describe('buildPositionMap', () => {
     expect(map.get(imageNode)).toEqual({ start: 1, end: 2 });
     expect(map.get(hardBreakNode)).toEqual({ start: 2, end: 3 });
   });
+
+  it('handles passthroughInline and bookmarkEnd as atomic inline types', () => {
+    const textNode = { type: 'text', text: 'Hello' };
+    const passthroughNode = { type: 'passthroughInline', attrs: {} };
+    const bookmarkEndNode = { type: 'bookmarkEnd', attrs: { id: 'bm1' } };
+    const textNode2 = { type: 'text', text: 'World' };
+
+    const paraNode = {
+      type: 'paragraph',
+      content: [textNode, passthroughNode, bookmarkEndNode, textNode2],
+    };
+
+    const map = buildPositionMap(paraNode);
+
+    // Each atomic node should occupy exactly 1 position
+    expect(map.get(textNode)).toEqual({ start: 1, end: 6 }); // 'Hello' = 5 chars
+    expect(map.get(passthroughNode)).toEqual({ start: 6, end: 7 }); // 1 position
+    expect(map.get(bookmarkEndNode)).toEqual({ start: 7, end: 8 }); // 1 position
+    expect(map.get(textNode2)).toEqual({ start: 8, end: 13 }); // 'World' = 5 chars
+  });
 });
 
 // ============================================================================

@@ -5,6 +5,7 @@ import {
   encodeCSSFromRPr,
   encodeCSSFromPPr,
   resolveRunProperties,
+  resolveParagraphProperties,
 } from './styles.js';
 
 beforeAll(() => {
@@ -297,6 +298,414 @@ describe('marks encoding/decoding round-trip', () => {
     const marksFromCaps = encodeMarksFromRPr(rPrCaps, {});
     // encodeMarksFromRPr doesn't handle 'caps', so it produces no textTransform mark.
     expect(marksFromCaps.some((m) => m.type === 'textStyle' && m.attrs.textTransform)).toBe(false);
+  });
+});
+
+describe('resolveRunProperties - numId=0 handling (OOXML spec §17.9.16)', () => {
+  // Mock minimal params structure for numbering tests
+  const createMockParamsForNumbering = () => ({
+    docx: {
+      'word/styles.xml': {
+        elements: [
+          {
+            elements: [
+              {
+                name: 'w:docDefaults',
+                elements: [
+                  {
+                    name: 'w:rPrDefault',
+                    elements: [{ name: 'w:rPr', elements: [] }],
+                  },
+                ],
+              },
+              {
+                name: 'w:style',
+                attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                elements: [{ name: 'w:rPr', elements: [] }],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    numbering: {
+      definitions: {
+        1: {
+          name: 'w:num',
+          attributes: { 'w:numId': '1' },
+          elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+        },
+      },
+      abstracts: {
+        0: {
+          name: 'w:abstractNum',
+          attributes: { 'w:abstractNumId': '0' },
+          elements: [
+            {
+              name: 'w:lvl',
+              attributes: { 'w:ilvl': '0' },
+              elements: [
+                { name: 'w:start', attributes: { 'w:val': '1' } },
+                { name: 'w:numFmt', attributes: { 'w:val': 'decimal' } },
+                {
+                  name: 'w:rPr',
+                  elements: [{ name: 'w:sz', attributes: { 'w:val': '24' } }],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  it('should not fetch numbering properties when numId is numeric 0', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        numId: 0,
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // numId=0 disables numbering, so numbering properties should not be fetched
+    // Result should only have basic properties, no numbering-specific fontSize
+    expect(result.fontSize).toBe(20); // baseline fallback
+  });
+
+  it('should not fetch numbering properties when numId is string "0"', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        numId: '0',
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // numId='0' disables numbering, so numbering properties should not be fetched
+    expect(result.fontSize).toBe(20); // baseline fallback
+  });
+
+  it('should fetch numbering properties when numId is valid (1)', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        numId: 1,
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // Valid numId should fetch numbering properties including fontSize from numbering definition
+    expect(result.fontSize).toBe(24); // from numbering definition w:sz
+  });
+
+  it('should fetch numbering properties when numId is valid string ("1")', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        numId: '1',
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // Valid string numId should fetch numbering properties
+    expect(result.fontSize).toBe(24); // from numbering definition
+  });
+
+  it('should not fetch numbering properties when numId is null', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        numId: null,
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // null numId should not fetch numbering properties
+    expect(result.fontSize).toBe(20); // baseline fallback
+  });
+
+  it('should not fetch numbering properties when numId is undefined', () => {
+    const params = createMockParamsForNumbering();
+    const inlineRpr = {};
+    const resolvedPpr = {
+      numberingProperties: {
+        ilvl: 0,
+        // numId is undefined
+      },
+    };
+
+    const result = resolveRunProperties(params, inlineRpr, resolvedPpr, true, false);
+
+    // undefined numId should not fetch numbering properties
+    expect(result.fontSize).toBe(20); // baseline fallback
+  });
+});
+
+describe('resolveParagraphProperties - numId=0 handling (OOXML spec §17.9.16)', () => {
+  // Mock minimal params structure
+  const createMockParamsForParagraph = () => ({
+    docx: {
+      'word/styles.xml': {
+        elements: [
+          {
+            elements: [
+              {
+                name: 'w:docDefaults',
+                elements: [
+                  {
+                    name: 'w:pPrDefault',
+                    elements: [{ name: 'w:pPr', elements: [] }],
+                  },
+                ],
+              },
+              {
+                name: 'w:style',
+                attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                elements: [{ name: 'w:pPr', elements: [] }],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    numbering: {
+      definitions: {
+        1: {
+          name: 'w:num',
+          attributes: { 'w:numId': '1' },
+          elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+        },
+      },
+      abstracts: {
+        0: {
+          name: 'w:abstractNum',
+          attributes: { 'w:abstractNumId': '0' },
+          elements: [
+            {
+              name: 'w:lvl',
+              attributes: { 'w:ilvl': '0' },
+              elements: [
+                { name: 'w:start', attributes: { 'w:val': '1' } },
+                { name: 'w:numFmt', attributes: { 'w:val': 'decimal' } },
+                {
+                  name: 'w:pPr',
+                  elements: [
+                    {
+                      name: 'w:ind',
+                      attributes: { 'w:left': '720', 'w:hanging': '360' },
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    },
+  });
+
+  it('should treat numId=0 as disabling numbering and set numId to null', () => {
+    const params = createMockParamsForParagraph();
+    const inlineProps = {
+      numberingProperties: {
+        numId: 0,
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // numId=0 should be treated as disabling numbering
+    // The function sets numId to null internally but numberingProperties still exists with numId=0
+    // The important part is that getNumberingProperties is NOT called (no numbering resolved from definitions)
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe(0);
+    // No additional properties from numbering definitions should be present
+    expect(result.numberingProperties.format).toBeUndefined();
+  });
+
+  it('should treat numId="0" as disabling numbering and set numId to null', () => {
+    const params = createMockParamsForParagraph();
+    const inlineProps = {
+      numberingProperties: {
+        numId: '0',
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // numId='0' should be treated as disabling numbering
+    // The function sets numId to null internally but numberingProperties still exists with numId='0'
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe('0');
+    // No additional properties from numbering definitions should be present
+    expect(result.numberingProperties.format).toBeUndefined();
+  });
+
+  it('should preserve valid numId=1 and fetch numbering properties', () => {
+    const params = createMockParamsForParagraph();
+    const inlineProps = {
+      numberingProperties: {
+        numId: 1,
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // Valid numId should fetch numbering properties
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe(1);
+  });
+
+  it('should preserve valid numId="5" and fetch numbering properties', () => {
+    const params = createMockParamsForParagraph();
+    // Add definition for numId 5
+    params.numbering.definitions['5'] = {
+      name: 'w:num',
+      attributes: { 'w:numId': '5' },
+      elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+    };
+    const inlineProps = {
+      numberingProperties: {
+        numId: '5',
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // Valid string numId should fetch numbering properties
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe('5');
+  });
+
+  it('should handle style-based numbering with numId=1', () => {
+    const params = createMockParamsForParagraph();
+    // Add a style with numbering
+    params.docx['word/styles.xml'].elements[0].elements.push({
+      name: 'w:style',
+      attributes: { 'w:styleId': 'ListParagraph' },
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:numPr',
+              elements: [
+                { name: 'w:numId', attributes: { 'w:val': '1' } },
+                { name: 'w:ilvl', attributes: { 'w:val': '0' } },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const inlineProps = {
+      styleId: 'ListParagraph',
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // Style-based numbering should be resolved
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe(1);
+  });
+
+  it('should override style numbering when inline numId=0 is present', () => {
+    const params = createMockParamsForParagraph();
+    // Add a style with numbering
+    params.docx['word/styles.xml'].elements[0].elements.push({
+      name: 'w:style',
+      attributes: { 'w:styleId': 'ListParagraph' },
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:numPr',
+              elements: [
+                { name: 'w:numId', attributes: { 'w:val': '1' } },
+                { name: 'w:ilvl', attributes: { 'w:val': '0' } },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const inlineProps = {
+      styleId: 'ListParagraph',
+      numberingProperties: {
+        numId: 0, // Inline override to disable numbering
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // Inline numId=0 should disable style-based numbering
+    // numberingProperties will still exist with numId=0, but no properties from definitions are fetched
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe(0);
+    expect(result.numberingProperties.format).toBeUndefined();
+  });
+
+  it('should override style numbering when inline numId="0" is present', () => {
+    const params = createMockParamsForParagraph();
+    // Add a style with numbering
+    params.docx['word/styles.xml'].elements[0].elements.push({
+      name: 'w:style',
+      attributes: { 'w:styleId': 'ListParagraph' },
+      elements: [
+        {
+          name: 'w:pPr',
+          elements: [
+            {
+              name: 'w:numPr',
+              elements: [
+                { name: 'w:numId', attributes: { 'w:val': '1' } },
+                { name: 'w:ilvl', attributes: { 'w:val': '0' } },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+
+    const inlineProps = {
+      styleId: 'ListParagraph',
+      numberingProperties: {
+        numId: '0', // Inline override to disable numbering (string form)
+        ilvl: 0,
+      },
+    };
+
+    const result = resolveParagraphProperties(params, inlineProps, false, false, null);
+
+    // Inline numId='0' should disable style-based numbering
+    // numberingProperties will still exist with numId='0', but no properties from definitions are fetched
+    expect(result.numberingProperties).toBeDefined();
+    expect(result.numberingProperties.numId).toBe('0');
+    expect(result.numberingProperties.format).toBeUndefined();
   });
 });
 

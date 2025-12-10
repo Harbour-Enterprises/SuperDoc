@@ -211,6 +211,9 @@ class SuperConverter {
     this.footers = {};
     this.footerIds = { default: null, even: null, odd: null, first: null };
     this.footerEditors = [];
+    this.importedBodyHasHeaderRef = false;
+    this.importedBodyHasFooterRef = false;
+    this.headerFooterModified = false;
 
     // Linked Styles
     this.linkedStyles = [];
@@ -1109,6 +1112,7 @@ class SuperConverter {
       this.headerIds.ids.push(rId);
     }
 
+    this.headerFooterModified = true;
     // Mark document as modified
     this.documentModified = true;
 
@@ -1181,6 +1185,7 @@ class SuperConverter {
       this.footerIds.ids.push(rId);
     }
 
+    this.headerFooterModified = true;
     // Mark document as modified
     this.documentModified = true;
 

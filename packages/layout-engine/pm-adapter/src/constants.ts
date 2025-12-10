@@ -108,9 +108,36 @@ export const DEFAULT_HYPERLINK_CONFIG: HyperlinkConfig = {
 };
 
 /**
- * Atomic inline node types that cannot contain content
+ * Atomic inline node types that cannot contain content.
+ *
+ * These nodes have `atom: true` in their ProseMirror schema definition, meaning they:
+ * - Occupy exactly 1 position in the document (not 2 like container nodes)
+ * - Cannot be directly edited or contain nested content
+ * - Are treated as a single unit for selection and cursor positioning
+ *
+ * CRITICAL: This set must stay in sync with schema definitions. If a node type has
+ * `atom: true` in its schema but is NOT listed here, buildPositionMap() will incorrectly
+ * calculate positions, leading to cursor positioning bugs during hit testing.
+ *
+ * Node types with atom: true:
+ * - image: Inline images
+ * - hardBreak, lineBreak: Line breaks
+ * - page-number, total-page-number: Document tokens
+ * - passthroughInline: Passthrough content like FORMCHECKBOX (see passthrough.js)
+ * - bookmarkEnd: Bookmark end markers (see bookmark-end.js)
+ *
+ * Note: bookmarkStart is NOT atomic - it has content: 'inline*' in the schema,
+ * allowing it to wrap inline content and therefore occupying 2 positions (open + close).
  */
-export const ATOMIC_INLINE_TYPES = new Set(['image', 'hardBreak', 'lineBreak', 'page-number', 'total-page-number']);
+export const ATOMIC_INLINE_TYPES = new Set([
+  'image',
+  'hardBreak',
+  'lineBreak',
+  'page-number',
+  'total-page-number',
+  'passthroughInline',
+  'bookmarkEnd',
+]);
 
 /**
  * Token inline types mapping

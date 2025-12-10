@@ -1796,7 +1796,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const customSettings = hasCustomSettings
         ? this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml']?.elements?.[0])
         : null;
+
       const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
+
       const media = this.converter.addedMedia;
 
       const updatedHeadersFooters: Record<string, string> = {};

@@ -50,6 +50,30 @@ const { resolveSpacingIndent } = Engines;
 
 const DEFAULT_DECIMAL_SEPARATOR = '.';
 
+/**
+ * Checks if a numbering ID represents valid numbering properties.
+ *
+ * Per OOXML spec §17.9.16, `numId="0"` is a special sentinel value that disables
+ * numbering inherited from paragraph styles. This function validates that a numId
+ * is not null/undefined and not the special zero value (either numeric 0 or string '0').
+ *
+ * @param numId - The numbering ID to validate (can be number, string, null, or undefined)
+ * @returns true if numId represents valid numbering (not null/undefined/0/'0'), false otherwise
+ *
+ * @example
+ * ```typescript
+ * isValidNumberingId(1)      // true  - valid numbering
+ * isValidNumberingId('5')    // true  - valid numbering (string form)
+ * isValidNumberingId(0)      // false - disables numbering (OOXML spec)
+ * isValidNumberingId('0')    // false - disables numbering (string form)
+ * isValidNumberingId(null)   // false - no numbering
+ * isValidNumberingId(undefined) // false - no numbering
+ * ```
+ */
+export const isValidNumberingId = (numId: number | string | null | undefined): boolean => {
+  return numId != null && numId !== 0 && numId !== '0';
+};
+
 type OoxmlElement = {
   name?: string;
   attributes?: Record<string, unknown>;
@@ -810,14 +834,19 @@ export const computeWordLayoutForParagraph = (
   }
 
   try {
-    // Merge paragraph indent with level-specific indent from numbering definition
+    // Merge paragraph indent with level-specific indent from numbering definition.
+    // Numbering level provides base indent, but paragraph/style can override specific properties.
+    // For example, a style may set firstLine=0 to remove numbering's firstLine indent.
     let effectiveIndent = paragraphAttrs.indent;
+
     if (numberingProps?.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(numberingProps.resolvedLevelIndent as ParagraphIndent);
-      // Level indent from numbering definition takes precedence
+      const numberingIndent = resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent);
+
+      // Numbering indent is the base, paragraph/style indent overrides
       effectiveIndent = {
+        ...numberingIndent,
         ...paragraphAttrs.indent,
-        ...(resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent)),
       };
     }
 
@@ -1107,16 +1136,6 @@ export const computeParagraphAttrs = (
     paragraphAttrs.alignment = computed.paragraph.alignment;
   }
 
-  // Word quirk: fully justified paragraphs ignore first-line indent.
-  // This behavior occurs even when the paragraph starts with plain text.
-  // See: https://answers.microsoft.com/en-us/msoffice/forum/all/first-line-indent-ignored-in-justified-paragraphs
-  const isJustified = paragraphAttrs.alignment === 'justify';
-  const hasFirstLineIndent = normalizedIndent?.firstLine && normalizedIndent.firstLine > 0;
-
-  if (isJustified && hasFirstLineIndent) {
-    paragraphAttrs.suppressFirstLineIndent = true;
-  }
-
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);
   if (spacingPx) paragraphAttrs.spacing = spacingPx;
   if (normalizedSpacing?.beforeAutospacing != null || normalizedSpacing?.afterAutospacing != null) {
@@ -1356,7 +1375,14 @@ export const computeParagraphAttrs = (
   const numberingSource =
     attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
   const rawNumberingProps = toAdapterNumberingProps(numberingSource);
-  if (rawNumberingProps) {
+
+  /**
+   * Validates that the paragraph has valid numbering properties.
+   * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables
+   * numbering inherited from paragraph styles. We skip word layout processing entirely for numId=0.
+   */
+  const hasValidNumbering = rawNumberingProps && isValidNumberingId(rawNumberingProps.numId);
+  if (hasValidNumbering) {
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;

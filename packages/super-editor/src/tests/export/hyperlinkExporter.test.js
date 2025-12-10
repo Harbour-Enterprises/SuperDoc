@@ -34,39 +34,38 @@ describe('HyperlinkNodeExporter', async () => {
         attributes: {
           'w:val': 'Hyperlink',
         },
+        elements: undefined,
+        text: undefined,
+        type: undefined,
       },
       {
         name: 'w:rFonts',
         attributes: {
           'w:ascii': 'Arial',
           'w:hAnsi': 'Arial',
-          'w:eastAsia': 'Arial',
           'w:cs': 'Arial',
         },
+        elements: undefined,
+        text: undefined,
+        type: undefined,
       },
       {
         name: 'w:sz',
         attributes: {
           'w:val': '20',
         },
+        elements: undefined,
+        text: undefined,
+        type: undefined,
       },
       {
         name: 'w:szCs',
         attributes: {
           'w:val': '20',
         },
-      },
-      {
-        name: 'w:u',
-        attributes: {
-          'w:val': 'single',
-        },
-      },
-      {
-        name: 'w:color',
-        attributes: {
-          'w:val': '467886',
-        },
+        elements: undefined,
+        text: undefined,
+        type: undefined,
       },
     ]);
   });
@@ -90,24 +89,7 @@ describe('HyperlinkNodeExporter', async () => {
         attributes: {
           'w:val': 'SubtitleChar',
         },
-      },
-      {
-        name: 'w:sz',
-        attributes: {
-          'w:val': '28',
-        },
-      },
-      {
-        name: 'w:color',
-        attributes: {
-          'w:val': '595959',
-        },
-      },
-      {
-        name: 'w:spacing',
-        attributes: {
-          'w:val': '15',
-        },
+        elements: undefined,
       },
     ]);
   });

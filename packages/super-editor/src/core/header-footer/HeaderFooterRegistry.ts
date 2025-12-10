@@ -480,18 +480,21 @@ export class HeaderFooterEditorManager extends EventEmitter {
    * ```
    */
   getDocumentJson(descriptor: HeaderFooterDescriptor): HeaderFooterDocument | null {
-    if (!descriptor?.id) return null;
+    if (!descriptor?.id) {
+      return null;
+    }
     const liveEntry = this.#editorEntries.get(descriptor.id);
     if (liveEntry) {
       try {
-        const json = liveEntry.editor.getJSON?.();
-        return json as HeaderFooterDocument | null;
+        return liveEntry.editor.getJSON?.() as HeaderFooterDocument | null;
       } catch {
         // fallback to converter snapshot
       }
     }
     const collections = this.#collections;
-    if (!collections) return null;
+    if (!collections) {
+      return null;
+    }
     if (descriptor.kind === 'header') {
       return (collections.headers?.[descriptor.id] as HeaderFooterDocument) ?? null;
     }
@@ -1009,7 +1012,9 @@ export class HeaderFooterLayoutAdapter {
    */
   getBatch(kind: HeaderFooterKind): HeaderFooterBatch | undefined {
     const descriptors = this.#manager.getDescriptors(kind);
-    if (!descriptors.length) return undefined;
+    if (!descriptors.length) {
+      return undefined;
+    }
 
     const batch: HeaderFooterBatch = {};
     let hasBlocks = false;

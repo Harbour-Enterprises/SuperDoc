@@ -121,7 +121,7 @@ describe('Image Import/Export Round Trip Tests', () => {
       const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
 
       // Verify round trip preservation
-      expect(xfrm.attributes.rot).toBe(degreesToRot(30));
+      expect(Number(xfrm.attributes.rot)).toBe(degreesToRot(30));
       expect(xfrm.attributes.flipV).toBe('1');
     });
 
@@ -309,10 +309,10 @@ describe('Image Import/Export Round Trip Tests', () => {
       const effectExtent = inline.elements.find((el) => el.name === 'wp:effectExtent');
 
       // Verify round trip preservation
-      expect(effectExtent.attributes.l).toBe(pixelsToEmu(emuToPixels('95250')));
-      expect(effectExtent.attributes.t).toBe(pixelsToEmu(emuToPixels('47625')));
-      expect(effectExtent.attributes.r).toBe(pixelsToEmu(emuToPixels('190500')));
-      expect(effectExtent.attributes.b).toBe(0);
+      expect(Number(effectExtent.attributes.l)).toBe(pixelsToEmu(emuToPixels('95250')));
+      expect(Number(effectExtent.attributes.t)).toBe(pixelsToEmu(emuToPixels('47625')));
+      expect(Number(effectExtent.attributes.r)).toBe(pixelsToEmu(emuToPixels('190500')));
+      expect(effectExtent.attributes.b).toBe('0');
     });
 
     it('handles combined transformations correctly', () => {
@@ -418,13 +418,13 @@ describe('Image Import/Export Round Trip Tests', () => {
       const effectExtent = inline.elements.find((el) => el.name === 'wp:effectExtent');
 
       // Verify all transformations preserved
-      expect(xfrm.attributes.rot).toBe(degreesToRot(45));
+      expect(Number(xfrm.attributes.rot)).toBe(degreesToRot(45));
       expect(xfrm.attributes.flipV).toBe('1');
       expect(xfrm.attributes.flipH).toBe('1');
-      expect(effectExtent.attributes.l).toBe(pixelsToEmu(emuToPixels('127000')));
-      expect(effectExtent.attributes.t).toBe(pixelsToEmu(emuToPixels('95250')));
-      expect(effectExtent.attributes.r).toBe(pixelsToEmu(emuToPixels('63500')));
-      expect(effectExtent.attributes.b).toBe(pixelsToEmu(emuToPixels('190500')));
+      expect(effectExtent.attributes.l).toBe('127000');
+      expect(effectExtent.attributes.t).toBe('95250');
+      expect(effectExtent.attributes.r).toBe('63500');
+      expect(effectExtent.attributes.b).toBe('190500');
     });
   });
 
@@ -526,8 +526,8 @@ describe('Image Import/Export Round Trip Tests', () => {
 
       // Check size preservation
       const extent = inline.elements.find((el) => el.name === 'wp:extent');
-      expect(extent.attributes.cx).toBe(pixelsToEmu(emuToPixels('4000000')));
-      expect(extent.attributes.cy).toBe(pixelsToEmu(emuToPixels('3000000')));
+      expect(Number(extent.attributes.cx)).toBe(pixelsToEmu(emuToPixels('4000000')));
+      expect(Number(extent.attributes.cy)).toBe(pixelsToEmu(emuToPixels('3000000')));
 
       // Check docPr preservation
       const docPr = inline.elements.find((el) => el.name === 'wp:docPr');
@@ -801,9 +801,9 @@ describe('Image Import/Export Round Trip Tests', () => {
         const xfrm = spPr.elements.find((el) => el.name === 'a:xfrm');
         expect(xfrm).toBeTruthy();
 
-        const { transformData = {} } = imageNode.attrs;
+        const { originalDrawingChildren, transformData = {} } = imageNode.attrs;
         if (transformData.rotation) {
-          expect(xfrm.attributes.rot).toBe(degreesToRot(transformData.rotation));
+          expect(Number(xfrm.attributes.rot)).toBe(degreesToRot(transformData.rotation));
         }
         if (transformData.verticalFlip) {
           expect(xfrm.attributes.flipV).toBe('1');
@@ -817,10 +817,20 @@ describe('Image Import/Export Round Trip Tests', () => {
         }
 
         const expectedSizeExtension = transformData.sizeExtension ?? { left: 0, top: 0, right: 0, bottom: 0 };
-        expect(effectExtent.attributes.l).toBe(pixelsToEmu(expectedSizeExtension.left ?? 0));
-        expect(effectExtent.attributes.t).toBe(pixelsToEmu(expectedSizeExtension.top ?? 0));
-        expect(effectExtent.attributes.r).toBe(pixelsToEmu(expectedSizeExtension.right ?? 0));
-        expect(effectExtent.attributes.b).toBe(pixelsToEmu(expectedSizeExtension.bottom ?? 0));
+        const expectedExtent = originalDrawingChildren.find((el) => el.xml.name === 'wp:effectExtent')?.xml;
+
+        expect(effectExtent.attributes.l).toBe(
+          expectedExtent?.attributes?.l ?? pixelsToEmu(expectedSizeExtension.left ?? 0),
+        );
+        expect(effectExtent.attributes.t).toBe(
+          expectedExtent?.attributes?.t ?? pixelsToEmu(expectedSizeExtension.top ?? 0),
+        );
+        expect(effectExtent.attributes.r).toBe(
+          expectedExtent?.attributes?.r ?? pixelsToEmu(expectedSizeExtension.right ?? 0),
+        );
+        expect(effectExtent.attributes.b).toBe(
+          expectedExtent?.attributes?.b ?? pixelsToEmu(expectedSizeExtension.bottom ?? 0),
+        );
 
         const reimported = handleImageImport(container, 'document.xml', { docx: docxFixture });
         expect(reimported).toBeTruthy();

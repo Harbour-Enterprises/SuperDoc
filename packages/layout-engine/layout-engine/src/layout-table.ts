@@ -21,6 +21,119 @@ export type TableLayoutContext = {
 };
 
 /**
+ * Safely extract the tableIndent width value from table attributes.
+ *
+ * The tableIndent attribute controls horizontal offset of tables from the left margin.
+ * Negative values are supported and allow tables to extend into the left margin,
+ * matching Microsoft Word behavior.
+ *
+ * Edge cases handled:
+ * - Missing attrs object: Returns 0
+ * - Missing tableIndent property: Returns 0
+ * - tableIndent is not an object: Returns 0
+ * - tableIndent.width is missing: Returns 0
+ * - tableIndent.width is not a number: Returns 0
+ * - tableIndent.width is NaN: Returns 0
+ * - tableIndent.width is Infinity/-Infinity: Returns 0
+ *
+ * @param attrs - Table attributes object (may be undefined)
+ * @returns Table indent width in pixels, or 0 if invalid/missing
+ *
+ * @example
+ * ```typescript
+ * // Valid positive indent (table moves right)
+ * getTableIndentWidth({ tableIndent: { width: 50 } }); // returns 50
+ *
+ * // Valid negative indent (table extends into left margin)
+ * getTableIndentWidth({ tableIndent: { width: -20 } }); // returns -20
+ *
+ * // Invalid cases - all return 0
+ * getTableIndentWidth(undefined); // returns 0
+ * getTableIndentWidth({}); // returns 0
+ * getTableIndentWidth({ tableIndent: null }); // returns 0
+ * getTableIndentWidth({ tableIndent: { width: 'invalid' } }); // returns 0
+ * getTableIndentWidth({ tableIndent: { width: NaN } }); // returns 0
+ * ```
+ */
+function getTableIndentWidth(attrs: TableBlock['attrs']): number {
+  // Guard: attrs must be defined
+  if (!attrs) {
+    return 0;
+  }
+
+  // Guard: tableIndent must exist and be an object
+  const tableIndent = attrs.tableIndent;
+  if (!tableIndent || typeof tableIndent !== 'object') {
+    return 0;
+  }
+
+  // Guard: width must exist in tableIndent
+  const width = (tableIndent as Record<string, unknown>).width;
+  if (width === undefined || width === null) {
+    return 0;
+  }
+
+  // Guard: width must be a number
+  if (typeof width !== 'number') {
+    return 0;
+  }
+
+  // Guard: width must be finite (not NaN or Infinity)
+  if (!Number.isFinite(width)) {
+    return 0;
+  }
+
+  return width;
+}
+
+/**
+ * Apply table indent offset to x position and width, ensuring width never goes negative.
+ *
+ * When a table has a tableIndent offset:
+ * - Positive indent: Shifts table right, reduces available width
+ * - Negative indent: Shifts table left (into margin), increases available width
+ *
+ * Width clamping prevents negative widths when indent is larger than available space,
+ * which would cause rendering issues. This is an edge case but must be handled safely.
+ *
+ * @param x - Original x position in pixels
+ * @param width - Original width in pixels
+ * @param indent - Table indent offset in pixels (positive or negative)
+ * @returns Object with adjusted x and width values
+ *
+ * @remarks
+ * Width clamping to 0 is a defensive measure. In production scenarios, this should
+ * rarely occur as the layout engine typically allocates sufficient column width.
+ * However, when it does occur (e.g., extreme negative indent or narrow columns),
+ * clamping prevents undefined behavior in the rendering layer.
+ *
+ * @example
+ * ```typescript
+ * // Normal positive indent
+ * applyTableIndent(100, 400, 50);
+ * // returns { x: 150, width: 350 }
+ *
+ * // Normal negative indent (extends into margin)
+ * applyTableIndent(100, 400, -20);
+ * // returns { x: 80, width: 420 }
+ *
+ * // Edge case: indent exceeds width (clamped)
+ * applyTableIndent(100, 200, 250);
+ * // returns { x: 350, width: 0 }
+ *
+ * // Zero indent (no change)
+ * applyTableIndent(100, 400, 0);
+ * // returns { x: 100, width: 400 }
+ * ```
+ */
+function applyTableIndent(x: number, width: number, indent: number): { x: number; width: number } {
+  return {
+    x: x + indent,
+    width: Math.max(0, width - indent),
+  };
+}
+
+/**
  * Calculate minimum width for a table column based on cell content.
  *
  * For now, uses a conservative minimum of 25px per column as the layout engine
@@ -262,21 +375,39 @@ function getCellTotalLines(cell: TableRowMeasure['cells'][number]): number {
  *
  * When a row exceeds the available height and cantSplit is not set,
  * this function calculates where to split within the row by finding
- * a common Y position across all cells, then determining per-cell line cutoffs.
+ * a common line advancement across all cells, ensuring structural alignment.
  *
- * Algorithm:
+ * Algorithm (Two-Pass):
+ *
+ * Pass 1 - Initial Line Fitting:
  * 1. For each cell, calculate available height for lines (subtract padding)
- * 2. Find cumulative line heights and determine cutoff point per cell
+ * 2. Find cumulative line heights and determine initial cutoff point per cell
  * 3. Calculate the actual height of lines that fit for each cell
- * 4. Use the minimum height across cells as the split point
- * 5. Recalculate per-cell line cutoffs at that common height
+ * 4. Check if all cells completed their content in this pass
+ *
+ * Pass 2 - Line Advancement Alignment:
+ * 1. Calculate line advancement for each cell (cutLine - startLine)
+ * 2. Find minimum line advancement across all cells
+ * 3. If all cells completed in pass 1, keep the pass 1 results (optimization)
+ * 4. Otherwise, recalculate cutoffs so all cells advance by the same number of lines
+ *
+ * Why Line Advancement Instead of Minimum Height:
+ * Using minimum line advancement (instead of minimum height) ensures that all cells
+ * advance by the same number of lines, which maintains structural alignment across
+ * cells. This prevents scenarios where cells with different line heights would
+ * desynchronize, causing layout inconsistencies in multi-part row splits.
+ *
+ * Optimization - allCellsCompleteInFirstPass:
+ * When all cells complete their remaining content in the first pass, we skip the
+ * line advancement normalization. This allows the last fragment of a split row to
+ * use the natural heights without artificial constraints, improving space utilization.
  *
  * @param rowIndex - Index of the row to split
  * @param blockRow - Table row data for accessing cell attributes (padding, etc.)
  * @param measure - Table measurements with cell line data
  * @param availableHeight - Available vertical space for the partial row
  * @param fromLineByCell - Starting line indices per cell (for continuations)
- * @returns PartialRowInfo with line cutoffs per cell
+ * @returns PartialRowInfo with line cutoffs per cell, partial height, and split flags
  */
 function computePartialRow(
   rowIndex: number,
@@ -297,7 +428,7 @@ function computePartialRow(
   const heightByCell: number[] = [];
 
   // Capture cell paddings to keep height math aligned with rendering
-  const cellPaddings = row.cells.map((_: unknown, idx: number) => getCellPadding(idx, blockRow));
+  const cellPaddings = row.cells.map((_, idx: number) => getCellPadding(idx, blockRow));
 
   // First pass: find cutoff for each cell based on available height
   for (let cellIdx = 0; cellIdx < cellCount; cellIdx++) {
@@ -326,11 +457,22 @@ function computePartialRow(
     heightByCell.push(cumulativeHeight);
   }
 
-  // Find minimum height across all cells (ensures consistent visual split)
-  const positiveHeights = heightByCell.filter((h) => h > 0);
-  const minHeight = positiveHeights.length > 0 ? Math.min(...positiveHeights) : 0;
+  // Check if ALL cells completed their remaining content in the first pass
+  const allCellsCompleteInFirstPass: boolean = toLineByCell.every((cutLine, idx: number) => {
+    const totalLines = getCellTotalLines(row.cells[idx]);
+    return cutLine >= totalLines;
+  });
 
-  // Second pass: adjust cutoffs to match the minimum height
+  // Calculate line advancement for each cell (how many lines advanced from startLine)
+  const lineAdvancements: number[] = toLineByCell.map((cutLine, idx: number) => cutLine - (startLines[idx] || 0));
+
+  // Find minimum LINE ADVANCEMENT across cells (not minimum height!)
+  // This ensures all cells advance by the same number of lines, keeping structural alignment
+  const positiveAdvancements = lineAdvancements.filter((adv) => adv > 0);
+  const minLineAdvancement = positiveAdvancements.length > 0 ? Math.min(...positiveAdvancements) : 0;
+
+  // Second pass: adjust cutoffs to match the minimum line advancement
+  // BUT: Skip this adjustment if all cells already completed - no need to artificially limit
   let actualPartialHeight = 0;
   let maxPaddingTotal = 0;
   for (let cellIdx = 0; cellIdx < cellCount; cellIdx++) {
@@ -341,29 +483,32 @@ function computePartialRow(
     const paddingTotal = cellPadding.top + cellPadding.bottom;
     maxPaddingTotal = Math.max(maxPaddingTotal, paddingTotal);
 
-    let cumulativeHeight = 0;
-    let cutLine = startLine;
+    // If all cells completed in first pass, keep the first pass results
+    if (allCellsCompleteInFirstPass) {
+      // Keep toLineByCell[cellIdx] as-is from first pass
+      actualPartialHeight = Math.max(actualPartialHeight, heightByCell[cellIdx] + paddingTotal);
+    } else {
+      // Recalculate at minimum LINE ADVANCEMENT for consistent structural alignment
+      // Each cell advances by the same number of lines
+      const targetLine = Math.min(startLine + minLineAdvancement, lines.length);
+      let cumulativeHeight = 0;
 
-    for (let i = startLine; i < lines.length; i++) {
-      const lineHeight = lines[i].lineHeight || 0;
-      if (cumulativeHeight + lineHeight > minHeight) {
-        break;
+      for (let i = startLine; i < targetLine; i++) {
+        cumulativeHeight += lines[i].lineHeight || 0;
       }
-      cumulativeHeight += lineHeight;
-      cutLine = i + 1;
-    }
 
-    toLineByCell[cellIdx] = cutLine;
-    actualPartialHeight = Math.max(actualPartialHeight, cumulativeHeight + paddingTotal);
+      toLineByCell[cellIdx] = targetLine;
+      actualPartialHeight = Math.max(actualPartialHeight, cumulativeHeight + paddingTotal);
+    }
   }
 
   // CRITICAL: Check if we made any progress (advanced any lines)
-  const madeProgress = toLineByCell.some((cutLine: number, idx: number) => cutLine > (startLines[idx] || 0));
+  const madeProgress = toLineByCell.some((cutLine, idx: number) => cutLine > (startLines[idx] || 0));
 
   const isFirstPart = startLines.every((l) => l === 0);
 
   // Determine if this is the last part (all cells exhausted OR no progress made)
-  const allCellsExhausted = toLineByCell.every((cutLine: number, idx: number) => {
+  const allCellsExhausted = toLineByCell.every((cutLine, idx: number) => {
     const totalLines = getCellTotalLines(row.cells[idx]);
     return cutLine >= totalLines;
   });
@@ -518,14 +663,20 @@ function layoutMonolithicTable(context: TableLayoutContext): void {
     coordinateSystem: 'fragment',
   };
 
+  // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+  const tableIndent = getTableIndentWidth(context.block.attrs);
+  const baseX = context.columnX(state.columnIndex);
+  const baseWidth = Math.min(context.columnWidth, context.measure.totalWidth || context.columnWidth);
+  const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
   const fragment: TableFragment = {
     kind: 'table',
     blockId: context.block.id,
     fromRow: 0,
     toRow: context.block.rows.length,
-    x: context.columnX(state.columnIndex),
+    x,
     y: state.cursorY,
-    width: Math.min(context.columnWidth, context.measure.totalWidth || context.columnWidth),
+    width,
     height,
     metadata,
   };
@@ -648,14 +799,21 @@ export function layoutTableBlock({
       columnBoundaries: generateColumnBoundaries(measure),
       coordinateSystem: 'fragment',
     };
+
+    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+    const tableIndent = getTableIndentWidth(block.attrs);
+    const baseX = columnX(state.columnIndex);
+    const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
     const fragment: TableFragment = {
       kind: 'table',
       blockId: block.id,
       fromRow: 0,
       toRow: 0,
-      x: columnX(state.columnIndex),
+      x,
       y: state.cursorY,
-      width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+      width,
       height,
       metadata,
     };
@@ -725,14 +883,20 @@ export function layoutTableBlock({
       // Only create a fragment if we made progress (rendered some lines)
       // Don't create empty fragments with just padding
       if (fragmentHeight > 0 && madeProgress) {
+        // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+        const tableIndent = getTableIndentWidth(block.attrs);
+        const baseX = columnX(state.columnIndex);
+        const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+        const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
         const fragment: TableFragment = {
           kind: 'table',
           blockId: block.id,
           fromRow: rowIndex,
           toRow: rowIndex + 1,
-          x: columnX(state.columnIndex),
+          x,
           y: state.cursorY,
-          width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+          width,
           height: fragmentHeight,
           continuesFromPrev: true,
           continuesOnNext: hasRemainingLinesAfterContinuation || rowIndex + 1 < block.rows.length,
@@ -751,10 +915,14 @@ export function layoutTableBlock({
         currentRow = rowIndex + 1;
         pendingPartialRow = null;
       } else if (!madeProgress && hadRemainingLinesBefore) {
+        // No progress made - need to advance to next page/column and retry
         state = advanceColumn(state);
         // Keep the same pendingPartialRow to retry on next page (no assignment needed)
       } else {
-        state = advanceColumn(state);
+        // Made progress but row not complete - continue on SAME page
+        // DO NOT call advanceColumn here! The cursor has already been advanced
+        // by the fragment height above. Just update pendingPartialRow to track
+        // remaining lines for the next iteration.
         pendingPartialRow = continuationPartialRow;
       }
 
@@ -779,14 +947,20 @@ export function layoutTableBlock({
       const forcedEndRow = bodyStartRow + 1;
       const fragmentHeight = forcedPartialRow.partialHeight + (repeatHeaderCount > 0 ? headerHeight : 0);
 
+      // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+      const tableIndent = getTableIndentWidth(block.attrs);
+      const baseX = columnX(state.columnIndex);
+      const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+      const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
       const fragment: TableFragment = {
         kind: 'table',
         blockId: block.id,
         fromRow: bodyStartRow,
         toRow: forcedEndRow,
-        x: columnX(state.columnIndex),
+        x,
         y: state.cursorY,
-        width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+        width,
         height: fragmentHeight,
         continuesFromPrev: isTableContinuation,
         continuesOnNext: !forcedPartialRow.isLastPart || forcedEndRow < block.rows.length,
@@ -815,15 +989,20 @@ export function layoutTableBlock({
       );
     }
 
-    // Create fragment
+    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+    const tableIndent = getTableIndentWidth(block.attrs);
+    const baseX = columnX(state.columnIndex);
+    const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
     const fragment: TableFragment = {
       kind: 'table',
       blockId: block.id,
       fromRow: bodyStartRow,
       toRow: endRow,
-      x: columnX(state.columnIndex),
+      x,
       y: state.cursorY,
-      width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+      width,
       height: fragmentHeight,
       continuesFromPrev: isTableContinuation,
       continuesOnNext: endRow < block.rows.length || (partialRow ? !partialRow.isLastPart : false),

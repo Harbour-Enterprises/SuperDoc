@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { clickToPosition } from '../src/index.ts';
+import { clickToPosition, hitTestPage } from '../src/index.ts';
+import type { Layout } from '@superdoc/contracts';
 import {
   simpleLayout,
   blocks,
@@ -34,5 +35,68 @@ describe('clickToPosition', () => {
     const result = clickToPosition(drawingLayout, [drawingBlock], [drawingMeasure], { x: 70, y: 90 });
     expect(result?.blockId).toBe('drawing-0');
     expect(result?.pos).toBe(20);
+  });
+});
+
+describe('hitTestPage with pageGap', () => {
+  const twoPageLayout: Layout = {
+    pageSize: { w: 400, h: 500 },
+    pageGap: 24,
+    pages: [
+      { number: 1, fragments: [] },
+      { number: 2, fragments: [] },
+      { number: 3, fragments: [] },
+    ],
+  };
+
+  it('correctly identifies page 0 with pageGap', () => {
+    // Page 0 spans y: [0, 500)
+    const result = hitTestPage(twoPageLayout, { x: 100, y: 250 });
+    expect(result?.pageIndex).toBe(0);
+  });
+
+  it('correctly identifies page 1 with pageGap', () => {
+    // Page 1 starts at y = 500 + 24 = 524, spans [524, 1024)
+    const result = hitTestPage(twoPageLayout, { x: 100, y: 600 });
+    expect(result?.pageIndex).toBe(1);
+  });
+
+  it('correctly identifies page 2 with pageGap', () => {
+    // Page 2 starts at y = 2*(500 + 24) = 1048, spans [1048, 1548)
+    const result = hitTestPage(twoPageLayout, { x: 100, y: 1100 });
+    expect(result?.pageIndex).toBe(2);
+  });
+
+  it('returns null when clicking in gap between pages', () => {
+    // Gap between page 0 and 1 is [500, 524)
+    const result = hitTestPage(twoPageLayout, { x: 100, y: 510 });
+    expect(result).toBeNull();
+  });
+
+  it('handles zero pageGap correctly', () => {
+    const layoutNoGap: Layout = {
+      pageSize: { w: 400, h: 500 },
+      pageGap: 0,
+      pages: [
+        { number: 1, fragments: [] },
+        { number: 2, fragments: [] },
+      ],
+    };
+    // Page 1 starts immediately at y = 500
+    const result = hitTestPage(layoutNoGap, { x: 100, y: 500 });
+    expect(result?.pageIndex).toBe(1);
+  });
+
+  it('handles undefined pageGap (defaults to 0)', () => {
+    const layoutUndefinedGap: Layout = {
+      pageSize: { w: 400, h: 500 },
+      pages: [
+        { number: 1, fragments: [] },
+        { number: 2, fragments: [] },
+      ],
+    };
+    // With no gap, page 1 starts at y = 500
+    const result = hitTestPage(layoutUndefinedGap, { x: 100, y: 500 });
+    expect(result?.pageIndex).toBe(1);
   });
 });

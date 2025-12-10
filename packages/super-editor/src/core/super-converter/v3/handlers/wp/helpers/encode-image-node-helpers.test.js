@@ -215,6 +215,21 @@ describe('handleImageNode', () => {
     expect(result.attrs.size).toEqual({ width: 5, height: 6 }); // emuToPixels mocked
   });
 
+  it('captures unhandled drawing children for passthrough preservation', () => {
+    const node = makeNode();
+    node.elements.push({
+      name: 'wp14:sizeRelH',
+      attributes: { relativeFrom: 'margin' },
+    });
+
+    const result = handleImageNode(node, makeParams(), false);
+
+    expect(result.attrs.drawingChildOrder).toContain('wp14:sizeRelH');
+    expect(result.attrs.originalDrawingChildren.map((c) => c.xml.name)).toEqual(
+      expect.arrayContaining(['wp14:sizeRelH', 'a:graphic', 'wp:docPr']),
+    );
+  });
+
   it('normalizes targetPath starting with /word', () => {
     const node = makeNode();
     const params = makeParams('/word/media/pic.jpg');

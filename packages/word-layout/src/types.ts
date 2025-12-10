@@ -123,6 +123,11 @@ export type WordParagraphLayoutOutput = {
   resolvedIndent?: ParagraphIndent;
   resolvedTabs?: ResolvedTabStop[];
   defaultTabIntervalPx?: number;
+  /**
+   * True when list uses firstLine indent pattern (marker at left+firstLine)
+   * instead of standard hanging pattern (marker at left-hanging).
+   */
+  firstLineIndentMode?: boolean;
 };
 
 export type ResolveMarkerRunPropsInput = {

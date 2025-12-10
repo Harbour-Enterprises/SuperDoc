@@ -319,4 +319,167 @@ describe('headerFooterUtils', () => {
       expect(secondPageType).toBe('default');
     });
   });
+
+  describe('buildMultiSectionIdentifier with converterIds parameter', () => {
+    it('should merge converter IDs as fallbacks for null values', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null, first: null },
+          footerRefs: { default: null, even: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first', odd: 'converter-h-odd' },
+        footerIds: { default: 'converter-f-default', even: 'converter-f-even' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Converter IDs should be used as fallbacks for null values in section metadata
+      expect(identifier.headerIds.default).toBe('converter-h-default');
+      expect(identifier.headerIds.first).toBe('converter-h-first');
+      expect(identifier.headerIds.odd).toBe('converter-h-odd');
+      expect(identifier.footerIds.default).toBe('converter-f-default');
+      expect(identifier.footerIds.even).toBe('converter-f-even');
+    });
+
+    it('should NOT override existing section metadata with converter IDs', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default', first: 'section-h-first' },
+          footerRefs: { default: 'section-f-default' },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first', even: 'converter-h-even' },
+        footerIds: { default: 'converter-f-default', odd: 'converter-f-odd' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata should take precedence over converter IDs
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBe('section-h-first');
+      // Converter IDs should only fill in gaps
+      expect(identifier.headerIds.even).toBe('converter-h-even');
+      expect(identifier.footerIds.default).toBe('section-f-default');
+      expect(identifier.footerIds.odd).toBe('converter-f-odd');
+    });
+
+    it('should handle missing converterIds parameter gracefully', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default' },
+          footerRefs: { default: 'section-f-default' },
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, undefined);
+
+      // Should work without converterIds
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBeNull();
+      expect(identifier.footerIds.default).toBe('section-f-default');
+      expect(identifier.footerIds.even).toBeNull();
+    });
+
+    it('should handle partial converterIds (only headerIds)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null },
+          footerRefs: { default: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first' },
+        // footerIds omitted
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Header IDs should be merged
+      expect(identifier.headerIds.default).toBe('converter-h-default');
+      expect(identifier.headerIds.first).toBe('converter-h-first');
+      // Footer IDs should remain null (no converter fallback)
+      expect(identifier.footerIds.default).toBeNull();
+      expect(identifier.footerIds.first).toBeNull();
+    });
+
+    it('should handle partial converterIds (only footerIds)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null },
+          footerRefs: { default: null },
+        },
+      ];
+
+      const converterIds = {
+        // headerIds omitted
+        footerIds: { default: 'converter-f-default', even: 'converter-f-even' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Header IDs should remain null (no converter fallback)
+      expect(identifier.headerIds.default).toBeNull();
+      expect(identifier.headerIds.first).toBeNull();
+      // Footer IDs should be merged
+      expect(identifier.footerIds.default).toBe('converter-f-default');
+      expect(identifier.footerIds.even).toBe('converter-f-even');
+    });
+
+    it('should handle empty converterIds object', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default' },
+        },
+      ];
+
+      const converterIds = {};
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata should be preserved
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBeNull();
+      expect(identifier.footerIds.default).toBeNull();
+    });
+
+    it('should merge converter IDs with null values in section metadata correctly', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default', first: null, even: null, odd: null },
+          footerRefs: { default: null, first: null, even: 'section-f-even', odd: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'conv-h-def', first: 'conv-h-first', even: 'conv-h-even', odd: 'conv-h-odd' },
+        footerIds: { default: 'conv-f-def', first: 'conv-f-first', even: 'conv-f-even', odd: 'conv-f-odd' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata takes precedence, converter fills nulls
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBe('conv-h-first');
+      expect(identifier.headerIds.even).toBe('conv-h-even');
+      expect(identifier.headerIds.odd).toBe('conv-h-odd');
+
+      expect(identifier.footerIds.default).toBe('conv-f-def');
+      expect(identifier.footerIds.first).toBe('conv-f-first');
+      expect(identifier.footerIds.even).toBe('section-f-even');
+      expect(identifier.footerIds.odd).toBe('conv-f-odd');
+    });
+  });
 });

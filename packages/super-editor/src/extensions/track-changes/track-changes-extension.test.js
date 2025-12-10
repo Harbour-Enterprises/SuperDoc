@@ -384,6 +384,33 @@ describe('TrackChanges extension commands', () => {
     expect(acceptSpy).toHaveBeenCalledWith(9, 17);
   });
 
+  it('acceptTrackedChangesById should link changes sharing the same id even if they are not directly connected', () => {
+    const id = 'shared-id';
+    const deletionMark = schema.marks[TrackDeleteMarkName].create({ id });
+    const insertionMark = schema.marks[TrackInsertMarkName].create({ id });
+    const paragraph = schema.nodes.paragraph.create(null, [
+      schema.text('deleted', [deletionMark]),
+      schema.text(' '), // Untracked space between
+      schema.text('inserted', [insertionMark]),
+    ]);
+
+    const doc = schema.nodes.doc.create(null, paragraph);
+    const state = createState(doc);
+
+    const acceptSpy = vi.fn().mockReturnValue(true);
+    const tr = state.tr;
+    const result = commands.acceptTrackedChangeById(id)({
+      state,
+      tr,
+      commands: { acceptTrackedChangesBetween: acceptSpy },
+    });
+
+    expect(result).toBe(true);
+    expect(acceptSpy).toHaveBeenCalledTimes(2);
+    expect(acceptSpy).toHaveBeenNthCalledWith(1, 1, 8);
+    expect(acceptSpy).toHaveBeenNthCalledWith(2, 9, 17);
+  });
+
   it('should NOT link two deletions', () => {
     const deletionMark1 = schema.marks[TrackDeleteMarkName].create({ id: 'del-1' });
     const deletionMark2 = schema.marks[TrackDeleteMarkName].create({ id: 'del-2' });
