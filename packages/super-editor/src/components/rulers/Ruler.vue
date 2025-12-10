@@ -104,8 +104,11 @@ const getHandlePosition = computed(() => (side) => {
  */
 const getVerticalIndicatorStyle = computed(() => {
   if (!ruler.value) return;
+  // Try to find .super-editor in parent (normal case) or fall back to document query
+  // (for teleported rulers in external containers)
   const parentElement = ruler.value.parentElement;
-  const editor = parentElement.querySelector('.super-editor');
+  const editor = parentElement?.querySelector('.super-editor') ?? document.querySelector('.super-editor');
+  if (!editor) return { left: `${currentHandle.value.x}px`, minHeight: '100%' };
   const editorBounds = editor.getBoundingClientRect();
   return {
     left: `${currentHandle.value.x}px`,
