@@ -58,6 +58,28 @@ const contextMenuDisabled = computed(() => {
   const active = activeEditor.value;
   return active?.options ? Boolean(active.options.disableContextMenu) : Boolean(props.options.disableContextMenu);
 });
+
+/**
+ * Reactive ruler visibility state.
+ * Uses a ref with a deep watcher to ensure proper reactivity when options.rulers changes.
+ */
+const rulersVisible = ref(Boolean(props.options.rulers));
+
+// Watch for changes in options.rulers with deep option to catch nested changes
+watch(
+  () => props.options,
+  (newOptions) => {
+    const rulers = newOptions?.rulers;
+    // Handle both ref and plain boolean
+    if (rulers && typeof rulers === 'object' && 'value' in rulers) {
+      rulersVisible.value = Boolean(rulers.value);
+    } else {
+      rulersVisible.value = Boolean(rulers);
+    }
+  },
+  { immediate: true, deep: true },
+);
+
 const message = useMessage();
 
 const editorWrapper = ref(null);
@@ -728,9 +750,13 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="super-editor-container">
+    <!-- Ruler: teleport to external container if specified, otherwise render inline -->
+    <Teleport v-if="options.rulerContainer && rulersVisible && !!activeEditor" :to="options.rulerContainer">
+      <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
+    </Teleport>
     <Ruler
+      v-else-if="rulersVisible && !!activeEditor"
       class="ruler"
-      v-if="options.rulers && !!activeEditor"
       :editor="activeEditor"
       @margin-change="handleMarginChange"
     />

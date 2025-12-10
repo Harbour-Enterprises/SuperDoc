@@ -64,6 +64,12 @@ import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
 import { applySdtContainerStyling } from './utils/sdt-helpers.js';
+import {
+  generateRulerDefinitionFromPx,
+  createRulerElement,
+  ensureRulerStyles,
+  RULER_CLASS_NAMES,
+} from './ruler/index.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -239,6 +245,18 @@ export type PageDecorationProvider = (
   page?: Page,
 ) => PageDecorationPayload | null;
 
+/**
+ * Ruler configuration options for per-page rulers.
+ */
+export type RulerOptions = {
+  /** Whether to show rulers on pages (default: false) */
+  enabled?: boolean;
+  /** Whether rulers are interactive with drag handles (default: false for per-page) */
+  interactive?: boolean;
+  /** Callback when margin handle drag ends (only used if interactive) */
+  onMarginChange?: (side: 'left' | 'right', marginInches: number) => void;
+};
+
 type PainterOptions = {
   pageStyles?: PageStyles;
   layoutMode?: LayoutMode;
@@ -251,6 +269,8 @@ type PainterOptions = {
     gap?: number;
     paddingTop?: number;
   };
+  /** Per-page ruler options */
+  ruler?: RulerOptions;
 };
 
 type BlockLookupEntry = {
@@ -305,6 +325,11 @@ const LIST_MARKER_GAP = 8;
  * This matches Microsoft Word's default tab interval behavior.
  */
 const DEFAULT_TAB_INTERVAL_PX = 48;
+/**
+ * Default page height in pixels (11 inches at 96 DPI).
+ * Used as a fallback when page size information is not available for ruler rendering.
+ */
+const DEFAULT_PAGE_HEIGHT_PX = 1056;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
 const COMMENT_INTERNAL_COLOR = '#078383';
 const COMMENT_INACTIVE_ALPHA = '22';
@@ -853,6 +878,9 @@ export class DomPainter {
     ensureFieldAnnotationStyles(doc);
     ensureSdtContainerStyles(doc);
     ensureImageSelectionStyles(doc);
+    if (this.options.ruler?.enabled) {
+      ensureRulerStyles(doc);
+    }
     mount.classList.add(CLASS_NAMES.container);
 
     if (this.mount && this.mount !== mount) {
@@ -1185,6 +1213,15 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.page);
     applyStyles(el, pageStyles(width, height, this.getEffectivePageStyles()));
+
+    // Render per-page ruler if enabled
+    if (this.options.ruler?.enabled) {
+      const rulerEl = this.renderPageRuler(width, page);
+      if (rulerEl) {
+        el.appendChild(rulerEl);
+      }
+    }
+
     const contextBase: FragmentRenderContext = {
       pageNumber: page.number,
       totalPages: this.totalPages,
@@ -1197,6 +1234,83 @@ export class DomPainter {
     });
     this.renderDecorationsForPage(el, page);
     return el;
+  }
+
+  /**
+   * Render a ruler element for a page.
+   *
+   * Creates a horizontal ruler with tick marks and optional interactive margin handles.
+   * The ruler is positioned at the top of the page and displays inch measurements.
+   *
+   * @param pageWidthPx - Page width in pixels
+   * @param page - Page data containing margins and optional size information
+   * @returns Ruler element, or null if this.doc is unavailable or page margins are missing
+   *
+   * Side effects:
+   * - Creates DOM elements and applies inline styles
+   * - May invoke the onMarginChange callback if interactive mode is enabled
+   *
+   * Fallback behavior:
+   * - Uses DEFAULT_PAGE_HEIGHT_PX (1056px = 11 inches) if page.size.h is not available
+   * - Defaults margins to 0 if not explicitly provided
+   */
+  private renderPageRuler(pageWidthPx: number, page: Page): HTMLElement | null {
+    if (!this.doc) {
+      console.warn('[renderPageRuler] Cannot render ruler: document is not available.');
+      return null;
+    }
+
+    if (!page.margins) {
+      console.warn(`[renderPageRuler] Cannot render ruler for page ${page.number}: margins not available.`);
+      return null;
+    }
+
+    const margins = page.margins;
+    const leftMargin = margins.left ?? 0;
+    const rightMargin = margins.right ?? 0;
+
+    try {
+      const rulerDefinition = generateRulerDefinitionFromPx({
+        pageWidthPx,
+        pageHeightPx: page.size?.h ?? DEFAULT_PAGE_HEIGHT_PX,
+        leftMarginPx: leftMargin,
+        rightMarginPx: rightMargin,
+      });
+
+      const interactive = this.options.ruler?.interactive ?? false;
+      const onMarginChange = this.options.ruler?.onMarginChange;
+
+      const rulerEl = createRulerElement({
+        definition: rulerDefinition,
+        doc: this.doc,
+        interactive,
+        onDragEnd:
+          interactive && onMarginChange
+            ? (side, x) => {
+                // Convert pixel position to inches for callback
+                try {
+                  const ppi = 96;
+                  const marginInches = side === 'left' ? x / ppi : (pageWidthPx - x) / ppi;
+                  onMarginChange(side, marginInches);
+                } catch (error) {
+                  console.error('[renderPageRuler] Error in onMarginChange callback:', error);
+                }
+              }
+            : undefined,
+      });
+
+      // Position ruler at top of page (above content area)
+      rulerEl.style.position = 'absolute';
+      rulerEl.style.top = '0';
+      rulerEl.style.left = '0';
+      rulerEl.style.zIndex = '20';
+      rulerEl.dataset.pageNumber = String(page.number);
+
+      return rulerEl;
+    } catch (error) {
+      console.error(`[renderPageRuler] Failed to create ruler for page ${page.number}:`, error);
+      return null;
+    }
   }
 
   private renderDecorationsForPage(pageEl: HTMLElement, page: Page): void {

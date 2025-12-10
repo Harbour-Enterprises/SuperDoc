@@ -30,7 +30,7 @@ import type {
   DropEvent,
 } from '@superdoc/layout-bridge';
 import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
-import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
+import type { LayoutMode, PageDecorationProvider, RulerOptions } from '@superdoc/painter-dom';
 import { measureBlock } from '@superdoc/measuring-dom';
 import type {
   ColumnLayout,
@@ -209,6 +209,12 @@ export type LayoutEngineOptions = {
   trackedChanges?: TrackedChangesOverrides;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
+  /**
+   * Per-page ruler options.
+   * When enabled, renders a horizontal ruler at the top of each page showing
+   * inch marks and optionally margin handles for interactive margin adjustment.
+   */
+  ruler?: RulerOptions;
 };
 
 export type TrackedChangesOverrides = {
@@ -1974,10 +1980,13 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    const editorState = this.#editor?.state;
+    if (!editorState) return;
+
+    const ystate = ySyncPluginKey.getState(editorState);
     if (!ystate?.binding?.mapping) return;
 
-    const { selection } = this.#editor.state;
+    const { selection } = editorState;
     const { anchor, head } = selection;
 
     try {
@@ -2008,7 +2017,10 @@ export class PresentationEditor extends EventEmitter {
     const provider = this.#options.collaborationProvider;
     if (!provider?.awareness) return new Map();
 
-    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    const editorState = this.#editor?.state;
+    if (!editorState) return new Map();
+
+    const ystate = ySyncPluginKey.getState(editorState);
     if (!ystate) return new Map(); // No ySync plugin
 
     const states = provider.awareness?.getStates();
@@ -3962,6 +3974,7 @@ export class PresentationEditor extends EventEmitter {
         pageStyles: this.#layoutOptions.pageStyles,
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
+        ruler: this.#layoutOptions.ruler,
       });
     }
     return this.#domPainter;
