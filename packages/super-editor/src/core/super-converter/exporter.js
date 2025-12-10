@@ -230,16 +230,18 @@ function translateBodyNode(params) {
   sectPr = ensureSectionLayoutDefaults(sectPr, params.converter);
 
   if (params.converter) {
+    const canExportHeaderRef = params.converter.importedBodyHasHeaderRef || params.converter.headerFooterModified;
+    const canExportFooterRef = params.converter.importedBodyHasFooterRef || params.converter.headerFooterModified;
     const hasHeader = sectPr.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
-    if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter) {
+    if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter && canExportHeaderRef) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
 
     const hasFooter = sectPr.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
-    if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
+    if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter && canExportFooterRef) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
       sectPr.elements.push(defaultFooter);
     }
