@@ -291,8 +291,8 @@ class SuperConverter {
       const converter = new SuperConverter();
       const content = customXml.content;
       const contentJson = converter.parseXmlToJson(content);
-      const properties = contentJson.elements.find((el) => el.name === 'Properties');
-      if (!properties.elements) return null;
+      const properties = contentJson.elements?.find((el) => el.name === 'Properties');
+      if (!properties?.elements) return null;
 
       const property = properties.elements.find((el) => el.name === 'property' && el.attributes.name === propertyName);
       if (!property) return null;

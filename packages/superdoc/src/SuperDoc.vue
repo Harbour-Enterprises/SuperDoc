@@ -418,6 +418,7 @@ const editorOptions = (doc) => {
     markdown: doc.markdown,
     documentMode: proxy.$superdoc.config.documentMode,
     rulers: doc.rulers,
+    rulerContainer: proxy.$superdoc.config.rulerContainer,
     isInternal: proxy.$superdoc.config.isInternal,
     annotations: proxy.$superdoc.config.annotations,
     isCommentsEnabled: Boolean(commentsModuleConfig.value),
@@ -865,7 +866,7 @@ watch(getFloatingComments, () => {
               :file-source="doc.data"
               :state="doc.state"
               :document-id="doc.id"
-              :options="editorOptions(doc)"
+              :options="{ ...editorOptions(doc), rulers: doc.rulers }"
               @editor-ready="onEditorReady"
               @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
             />

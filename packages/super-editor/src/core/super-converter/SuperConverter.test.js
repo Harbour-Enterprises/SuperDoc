@@ -233,6 +233,24 @@ describe('SuperConverter Document GUID', () => {
       );
       expect(value).toBeNull();
     });
+
+    it('returns null when custom.xml is malformed or missing Properties root', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const value = SuperConverter.getStoredCustomProperty(
+        [
+          {
+            name: 'docProps/custom.xml',
+            // Simulate a bad payload coming from collaboration sync
+            content: `<?xml version="1.0" encoding="UTF-8"?>
+            <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+            </Relationships>`,
+          },
+        ],
+        'DocumentGuid',
+      );
+      expect(value).toBeNull();
+      warnSpy.mockRestore();
+    });
   });
 
   describe('Backward Compatibility', () => {
