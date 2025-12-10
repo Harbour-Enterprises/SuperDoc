@@ -339,6 +339,10 @@ const FIELD_ANNOTATION_DATA_TYPE = 'fieldAnnotation' as const;
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter @ 72dpi
 const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 };
+/** Default gap between pages when virtualization is enabled (matches renderer.ts virtualGap) */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
+/** Default gap between pages without virtualization (from containerStyles in styles.ts) */
+const DEFAULT_PAGE_GAP = 24;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -1162,9 +1166,10 @@ export class PresentationEditor extends EventEmitter {
     // When in header/footer mode, we need to use the real page height from the layout context
     // to correctly map coordinates for selection highlighting
     const pageHeight = this.#session.mode === 'body' ? this.#getBodyPageHeight() : this.#getHeaderFooterPageHeight();
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
     return rawRects
       .map((rect: LayoutRect) => {
-        const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+        const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
         const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
         if (!coords) return null;
         // coords are in layout space, convert to screen space by multiplying by zoom
@@ -1534,7 +1539,8 @@ export class PresentationEditor extends EventEmitter {
 
       // Convert from overlay-relative to viewport coordinates
       const pageHeight = this.#getBodyPageHeight();
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
         return null;
@@ -2470,6 +2476,7 @@ export class PresentationEditor extends EventEmitter {
     const color = this.#getValidatedColor(cursor);
     const opacity = this.#layoutOptions.presence?.highlightOpacity ?? 0.35;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     const doc = this.#visibleHost.ownerDocument ?? document;
 
     // Performance guardrail: max rects per user to prevent DOM explosion
@@ -2477,7 +2484,7 @@ export class PresentationEditor extends EventEmitter {
 
     limitedRects.forEach((rect: LayoutRect) => {
       // Calculate page-local Y (rect.y is absolute from top of all pages)
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
 
       // Convert to overlay coordinates (handles zoom, scroll, virtualization)
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
@@ -3821,6 +3828,14 @@ export class PresentationEditor extends EventEmitter {
       }
 
       ({ layout, measures } = result);
+      // Add pageGap to layout for hit testing to account for gaps between rendered pages.
+      // Gap depends on virtualization mode and must be non-negative.
+      if (this.#layoutOptions.virtualization?.enabled) {
+        const gap = this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP;
+        layout.pageGap = Math.max(0, gap);
+      } else {
+        layout.pageGap = DEFAULT_PAGE_GAP;
+      }
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -4548,9 +4563,10 @@ export class PresentationEditor extends EventEmitter {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     if (pageHeight <= 0) return null;
-    const pageIndex = Math.max(0, Math.floor(y / pageHeight));
-    const pageLocalY = y - pageIndex * pageHeight;
+    const pageIndex = Math.max(0, Math.floor(y / (pageHeight + pageGap)));
+    const pageLocalY = y - pageIndex * (pageHeight + pageGap);
 
     const headerRegion = this.#headerRegions.get(pageIndex);
     if (headerRegion && this.#pointInRegion(headerRegion, x, pageLocalY)) {
@@ -5233,8 +5249,9 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
     rects.forEach((rect, _index) => {
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
         return;
@@ -5588,13 +5605,14 @@ export class PresentationEditor extends EventEmitter {
     // BOTH #painterHost and #selectionOverlay), both are in the same coordinate system.
     // We position overlay elements in layout-space coordinates, and the transform handles scaling.
     //
-    // Pages are rendered vertically stacked at y = pageIndex * pageHeight.
+    // Pages are rendered vertically stacked at y = pageIndex * (pageHeight + pageGap).
     // The page-local coordinates are already in layout space.
     const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
 
     return {
       x: pageLocalX,
-      y: pageIndex * pageHeight + pageLocalY,
+      y: pageIndex * (pageHeight + pageGap) + pageLocalY,
     };
   }
 
