@@ -537,6 +537,7 @@ export class SuperDoc extends EventEmitter {
   toggleRuler() {
     this.config.rulers = !this.config.rulers;
     this.superdocStore.documents.forEach((doc) => {
+      // In Pinia store, refs are auto-unwrapped, so rulers is a plain boolean
       doc.rulers = this.config.rulers;
     });
   }
@@ -586,6 +587,12 @@ export class SuperDoc extends EventEmitter {
     this.toolbarElement = this.config.modules?.toolbar?.selector || this.config.toolbar;
     this.toolbar = null;
 
+    // Build excludeItems list - hide ruler button if rulers not configured
+    const excludeItems = [...(moduleConfig.excludeItems || [])];
+    if (!this.config.rulers) {
+      excludeItems.push('ruler');
+    }
+
     const config = {
       selector: this.toolbarElement || null,
       isDev: this.isDev || false,
@@ -601,6 +608,7 @@ export class SuperDoc extends EventEmitter {
       aiApiKey: this.config.modules?.ai?.apiKey,
       aiEndpoint: this.config.modules?.ai?.endpoint,
       ...moduleConfig,
+      excludeItems, // Override moduleConfig.excludeItems with our computed list
     };
 
     this.toolbar = new SuperToolbar(config);

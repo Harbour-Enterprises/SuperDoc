@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, reactive } from 'vue';
+import { generateRulerDefinition, clampHandlePosition, calculateMarginFromHandle } from '@superdoc/painter-dom';
 
 const emit = defineEmits(['margin-change']);
 const props = defineProps({
@@ -17,10 +18,10 @@ const props = defineProps({
   },
 });
 
-const HANDLE_WIDTH = 5;
 const MIN_WIDTH = 200;
+const PPI = 96;
 const ruler = ref(null);
-const rulerDefinition = ref([]);
+const rulerDefinition = ref(null);
 const alignment = 'flex-end';
 
 const rulerHandleOriginalColor = ref('#CCCCCC');
@@ -37,72 +38,49 @@ const initialX = ref(0);
 let offsetX = 0;
 
 /**
- * Generate the ruler.
+ * Initialize the ruler using shared ruler-core logic.
  */
 const initRuler = () => {
-  if (props.editor.options.mode !== 'docx') return;
-  const rulerItems = [];
+  if (props.editor.options.mode !== 'docx') return null;
 
   const { pageMargins: docMargins, pageSize: docSize } = props.editor.getPageStyles();
   pageSize.value = docSize;
   pageMargins.value = docMargins;
 
-  rightHandle.x = docSize.width * 96 - docMargins.right * 96;
-  leftHandle.x = docMargins.left * 96;
-
-  for (let i = 0; i < docSize.width; i++) {
-    const marginNum = 0.0625 * 96 - 0.5;
-    const margin = `${marginNum}px`;
-
-    const diff = docSize.width - i;
-    rulerItems.push(...generateSection(1, 'main', '20%', margin, i));
-    rulerItems.push(...generateSection(3, 'eighth', '10%', margin));
-    rulerItems.push(...generateSection(1, 'half', '40%', margin));
-
-    if (diff <= 0.5) break;
-    rulerItems.push(...generateSection(3, 'eighth', '10%', margin));
-  }
-  return rulerItems;
-};
-
-/**
- * Generate a section of the ruler
- *
- * @param {Number} qty - Number of elements in the section
- * @param {String} size - Size of the element
- * @param {String} height - Height of the element
- * @param {String} margin - Margin of the element
- * @param {Number} index - Index of the element
- * @returns {Array} - Array of ruler elements
- */
-const generateSection = (qty, size, height, margin, index) => {
-  return Array.from({ length: qty }, (_, i) => {
-    const item = {
-      className: `${size}-unit ruler-section`,
-      height,
-      margin,
-    };
-
-    if (index !== undefined) item.numbering = index;
-    return item;
+  // Generate ruler definition using shared core logic
+  const definition = generateRulerDefinition({
+    pageSize: { width: docSize.width, height: docSize.height },
+    pageMargins: {
+      left: docMargins.left,
+      right: docMargins.right,
+      top: docMargins.top ?? 1,
+      bottom: docMargins.bottom ?? 1,
+    },
   });
+
+  // Set handle positions from the definition
+  leftHandle.x = definition.leftMarginPx;
+  rightHandle.x = definition.rightMarginPx;
+
+  return definition;
 };
 
 /**
- * Get the style for a ruler element
+ * Get the style for a ruler tick element.
+ * Uses the new RulerTick format from ruler-core.
  *
- * @param {Object} unit - Ruler element
+ * @param {Object} tick - Ruler tick from rulerDefinition.ticks
  * @returns {Object} - Style object
  */
-const getStyle = computed(() => (unit) => {
+const getTickStyle = computed(() => (tick) => {
   return {
+    position: 'absolute',
+    left: `${tick.x}px`,
+    bottom: '0',
     width: '1px',
-    minWidth: '1px',
-    maxWidth: '1px',
-    height: unit.height,
-    backgroundColor: unit.color || '#666',
-    marginLeft: unit.numbering === 0 ? null : unit.margin,
-    marginRight: unit.margin,
+    height: tick.height,
+    backgroundColor: '#666',
+    pointerEvents: 'none',
   };
 });
 
@@ -156,30 +134,21 @@ const handleMouseDown = (event) => {
 };
 
 /**
- * On mouse move, update the position of the margin handle
+ * On mouse move, update the position of the margin handle.
+ * Uses shared clampHandlePosition from ruler-core.
  *
  * @param {Event} event - Mouse move event
  * @returns {void}
  */
 const handleMouseMove = (event) => {
-  if (!isDragging.value) return;
+  if (!isDragging.value || !pageSize.value) return;
 
   const newLeft = event.clientX - offsetX;
-  currentHandle.value.x = newLeft;
+  const pageWidthPx = pageSize.value.width * PPI;
+  const otherHandleX = currentHandle.value.side === 'left' ? rightHandle.x : leftHandle.x;
 
-  if (currentHandle.value.side === 'left') {
-    if (newLeft <= 0) {
-      currentHandle.value.x = 0;
-    } else if (newLeft >= rightHandle.x - MIN_WIDTH) {
-      currentHandle.value.x = rightHandle.x - MIN_WIDTH;
-    }
-  } else {
-    if (newLeft >= pageSize.value.width * 96) {
-      currentHandle.value.x = pageSize.value.width * 96;
-    } else if (newLeft <= leftHandle.x + MIN_WIDTH) {
-      currentHandle.value.x = leftHandle.x + MIN_WIDTH;
-    }
-  }
+  // Use shared clampHandlePosition for consistent bounds checking
+  currentHandle.value.x = clampHandlePosition(newLeft, currentHandle.value.side, otherHandleX, pageWidthPx, MIN_WIDTH);
 };
 
 /**
@@ -221,25 +190,29 @@ const setRulerHandleInactive = () => {
 };
 
 /**
- * Get the new margin value based on the current handle position
+ * Get the new margin value based on the current handle position.
+ * Uses shared calculateMarginFromHandle from ruler-core.
  *
- * @returns {Number} - New margin value
+ * @returns {Number} - New margin value in inches
  */
 const getNewMarginValue = () => {
-  if (currentHandle.value.side === 'left') return currentHandle.value.x / 96;
-  else return (pageSize.value.width * 96 - currentHandle.value.x) / 96;
+  if (!pageSize.value) return 0;
+  const pageWidthPx = pageSize.value.width * PPI;
+  return calculateMarginFromHandle(currentHandle.value.x, currentHandle.value.side, pageWidthPx, PPI);
 };
 
 /**
- * Set ruler style variables
+ * Set ruler style variables including dynamic width from definition
  *
  * @returns {Object} - Style object
  */
 const getStyleVars = computed(() => {
+  const width = rulerDefinition.value?.widthPx ?? pageSize.value?.width * PPI ?? 816;
   return {
     '--alignment': alignment,
     '--ruler-handle-color': rulerHandleOriginalColor.value,
     '--ruler-handle-active-color': rulerHandleActiveColor.value,
+    '--ruler-width': `${width}px`,
   };
 });
 
@@ -274,13 +247,17 @@ onUnmounted(() => {
 
     <div v-if="showVerticalIndicator" class="vertical-indicator" :style="getVerticalIndicatorStyle"></div>
 
-    <!-- The ruler display -->
-    <div v-for="unit in rulerDefinition" :class="unit.className" :style="getStyle(unit)">
-      <div class="numbering">{{ unit.numbering }}</div>
-      <div v-for="half in unit.elements" :class="half.className" :style="getStyle(half)">
-        <div v-for="quarter in half.elements" :class="quarter.className" :style="getStyle(quarter)"></div>
+    <!-- The ruler display - using shared ruler-core tick format -->
+    <template v-if="rulerDefinition">
+      <div
+        v-for="(tick, index) in rulerDefinition.ticks"
+        :key="index"
+        :class="['ruler-tick', `ruler-tick--${tick.size}`]"
+        :style="getTickStyle(tick)"
+      >
+        <span v-if="tick.label !== undefined" class="numbering">{{ tick.label }}</span>
       </div>
-    </div>
+    </template>
   </div>
 </template>
 
@@ -293,6 +270,7 @@ onUnmounted(() => {
   top: 20px;
   z-index: 100;
 }
+
 .margin-handle {
   width: 56px;
   min-width: 5px;
@@ -304,43 +282,34 @@ onUnmounted(() => {
   margin-left: -2px;
   border-radius: 4px 4px 0 0;
   transition: background-color 250ms ease;
+  z-index: 10;
 }
+
 .margin-handle:hover {
   background-color: var(--ruler-handle-active-color);
 }
+
 .ruler {
-  max-height: 25px;
   height: 25px;
-  max-width: 8.5in;
-  display: flex;
+  width: var(--ruler-width, 8.5in);
   margin: 0;
   padding: 0;
-  align-items: var(--alignment);
   box-sizing: border-box;
   position: relative;
   color: #666;
 }
-.mouse-tracker {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 1px;
-  height: 100%;
-  background-color: var(--color);
+
+/* Tick marks - using absolute positioning from ruler-core */
+.ruler-tick {
   pointer-events: none;
+  user-select: none;
 }
+
 .numbering {
   position: absolute;
   top: -16px;
   left: -2px;
   font-size: 10px;
-  pointer-events: none;
-  user-select: none;
-}
-.ruler-section {
-  position: relative;
-  display: flex;
-  align-items: var(--alignment);
   pointer-events: none;
   user-select: none;
 }
