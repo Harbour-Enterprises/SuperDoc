@@ -36,6 +36,8 @@ export const PassthroughInline = Node.create({
   name: 'passthroughInline',
   group: 'inline',
   inline: true,
+  // IMPORTANT: This node is registered in pm-adapter/src/constants.ts ATOMIC_INLINE_TYPES
+  // If you change atom to false, you MUST remove it from that set to avoid positioning bugs
   atom: true,
   draggable: false,
   selectable: false,

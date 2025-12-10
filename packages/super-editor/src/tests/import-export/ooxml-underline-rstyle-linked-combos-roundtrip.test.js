@@ -77,26 +77,12 @@ describe('OOXML underline + rStyle + linked combinations round-trip', async () =
   const exportedRuns = collectUnderlineFromExport(exported);
 
   it('maintains underline presence from inline w:u across import/export', () => {
-    const overrideExpectations = new Map([
-      ["Styled underline (single)|  - rStyle='SD_UnderlineSingleChar' => expect single underline: ", true],
-      ["Styled underline (double)|  - rStyle='SD_UnderlineDoubleChar' => expect double underline: ", true],
-      ["Styled underline (none)|  - rStyle='SD_UnderlineNoneChar' => expect no underline: ", false],
-      [
-        "Linked Char style applied to run|  - rStyle='SD_LinkedUnderlineHeadingChar' (character side) => expect single underline: ",
-        true,
-      ],
-      [
-        "  - pStyle='SD_LinkedUnderlineHeading' + inline 'dashLongHeavy' on part of the line: |Linked Char style overridden off",
-        true,
-      ],
-    ]);
-
     const n = Math.min(sourceRuns.length, exportedRuns.length);
     for (let i = 0; i < n; i++) {
       expect(Boolean(exportedRuns[i].text)).toBe(true);
       const prevText = sourceRuns[i - 1]?.text || '';
       const key = `${sourceRuns[i].text}|${prevText}`;
-      const expected = overrideExpectations.has(key) ? overrideExpectations.get(key) : sourceRuns[i].underline;
+      const expected = sourceRuns[i].underline;
       expect(exportedRuns[i].underline).toBe(expected);
 
       const attributeExpectations = new Map([

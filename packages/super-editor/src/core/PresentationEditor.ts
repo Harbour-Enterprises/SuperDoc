@@ -24,6 +24,7 @@ import {
 import type {
   HeaderFooterIdentifier,
   HeaderFooterLayoutResult,
+  HeaderFooterType,
   PositionHit,
   MultiSectionHeaderFooterIdentifier,
   DropEvent,
@@ -182,6 +183,21 @@ export type PresenceOptions = {
   staleTimeout?: number;
 };
 
+/**
+ * Type-safe interface for Editor instances with SuperConverter attached.
+ * Used to access converter-specific properties for header/footer management
+ * without resorting to type assertions throughout the codebase.
+ */
+interface EditorWithConverter extends Editor {
+  converter?: {
+    pageStyles?: { alternateHeaders?: boolean };
+    headerIds?: { default?: string; first?: string; even?: string; odd?: string };
+    footerIds?: { default?: string; first?: string; even?: string; odd?: string };
+    createDefaultHeader?: (variant: string) => string;
+    createDefaultFooter?: (variant: string) => string;
+  };
+}
+
 export type LayoutEngineOptions = {
   pageSize?: PageSize;
   margins?: PageMargins;
@@ -339,6 +355,10 @@ const FIELD_ANNOTATION_DATA_TYPE = 'fieldAnnotation' as const;
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter @ 72dpi
 const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 };
+/** Default gap between pages when virtualization is enabled (matches renderer.ts virtualGap) */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
+/** Default gap between pages without virtualization (from containerStyles in styles.ts) */
+const DEFAULT_PAGE_GAP = 24;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -1162,9 +1182,10 @@ export class PresentationEditor extends EventEmitter {
     // When in header/footer mode, we need to use the real page height from the layout context
     // to correctly map coordinates for selection highlighting
     const pageHeight = this.#session.mode === 'body' ? this.#getBodyPageHeight() : this.#getHeaderFooterPageHeight();
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
     return rawRects
       .map((rect: LayoutRect) => {
-        const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+        const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
         const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
         if (!coords) return null;
         // coords are in layout space, convert to screen space by multiplying by zoom
@@ -1534,7 +1555,8 @@ export class PresentationEditor extends EventEmitter {
 
       // Convert from overlay-relative to viewport coordinates
       const pageHeight = this.#getBodyPageHeight();
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
         return null;
@@ -2470,6 +2492,7 @@ export class PresentationEditor extends EventEmitter {
     const color = this.#getValidatedColor(cursor);
     const opacity = this.#layoutOptions.presence?.highlightOpacity ?? 0.35;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     const doc = this.#visibleHost.ownerDocument ?? document;
 
     // Performance guardrail: max rects per user to prevent DOM explosion
@@ -2477,7 +2500,7 @@ export class PresentationEditor extends EventEmitter {
 
     limitedRects.forEach((rect: LayoutRect) => {
       // Calculate page-local Y (rect.y is absolute from top of all pages)
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
 
       // Convert to overlay coordinates (handles zoom, scroll, virtualization)
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
@@ -3821,6 +3844,14 @@ export class PresentationEditor extends EventEmitter {
       }
 
       ({ layout, measures } = result);
+      // Add pageGap to layout for hit testing to account for gaps between rendered pages.
+      // Gap depends on virtualization mode and must be non-negative.
+      if (this.#layoutOptions.virtualization?.enabled) {
+        const gap = this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP;
+        layout.pageGap = Math.max(0, gap);
+      } else {
+        layout.pageGap = DEFAULT_PAGE_GAP;
+      }
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -3830,9 +3861,12 @@ export class PresentationEditor extends EventEmitter {
 
     this.#sectionMetadata = sectionMetadata;
     // Build multi-section identifier from section metadata for section-aware header/footer selection
-    const converter = (this.#editor as Editor & { converter?: { pageStyles?: { alternateHeaders?: boolean } } })
-      .converter;
-    this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles);
+    // Pass converter's headerIds/footerIds as fallbacks for dynamically created headers/footers
+    const converter = (this.#editor as EditorWithConverter).converter;
+    this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles, {
+      headerIds: converter?.headerIds,
+      footerIds: converter?.footerIds,
+    });
     const anchorMap = this.#computeAnchorMap(bookmarks, layout);
     this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
@@ -4163,9 +4197,9 @@ export class PresentationEditor extends EventEmitter {
     }
     const headerBlocks = this.#headerFooterAdapter.getBatch('header');
     const footerBlocks = this.#headerFooterAdapter.getBatch('footer');
-    // Also get all blocks by rId for multi-section support
     const headerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('header');
     const footerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('footer');
+
     if (!headerBlocks && !footerBlocks && !headerBlocksByRId && !footerBlocksByRId) {
       return null;
     }
@@ -4314,15 +4348,15 @@ export class PresentationEditor extends EventEmitter {
     const results = kind === 'header' ? this.#headerLayoutResults : this.#footerLayoutResults;
     const layoutsByRId = kind === 'header' ? this.#headerLayoutsByRId : this.#footerLayoutsByRId;
 
-    // Allow per-rId fallback even if variant results are empty
     if ((!results || results.length === 0) && layoutsByRId.size === 0) {
       return undefined;
     }
-    // Use multi-section identifier if available for section-aware header/footer selection
+
     const multiSectionId = this.#multiSectionIdentifier;
     const legacyIdentifier =
       this.#headerFooterIdentifier ??
       extractIdentifierFromConverter((this.#editor as Editor & { converter?: unknown }).converter);
+
     const sectionFirstPageNumbers = new Map<number, number>();
     for (const p of layout.pages) {
       const idx = p.sectionIndex ?? 0;
@@ -4332,7 +4366,6 @@ export class PresentationEditor extends EventEmitter {
     }
 
     return (pageNumber, pageMargins, page) => {
-      // Use section-aware type resolution when we have a multi-section identifier and page section info
       const sectionIndex = page?.sectionIndex ?? 0;
       const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
       const sectionPageNumber =
@@ -4341,7 +4374,6 @@ export class PresentationEditor extends EventEmitter {
         ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
         : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
 
-      // Get the section-specific rId for this page (from sectionRefs stamped during layout)
       const sectionRId =
         page?.sectionRefs && kind === 'header'
           ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
@@ -4397,7 +4429,7 @@ export class PresentationEditor extends EventEmitter {
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      // Find the best page slot for this page number (exact match, then bucket representative)
+
       const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
       if (!slotPage) {
         return null;
@@ -4505,42 +4537,108 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  /**
+   * Computes the expected header/footer section type for a page based on document configuration.
+   *
+   * Unlike getHeaderFooterType/getHeaderFooterTypeForSection, this returns the appropriate
+   * variant even when no header/footer IDs are configured. This is needed to determine
+   * what variant to create when the user double-clicks an empty header/footer region.
+   *
+   * @param kind - Whether this is for a header or footer
+   * @param page - The page to compute the section type for
+   * @param sectionFirstPageNumbers - Map of section index to first page number in that section
+   * @returns The expected section type ('default', 'first', 'even', or 'odd')
+   */
+  #computeExpectedSectionType(
+    kind: 'header' | 'footer',
+    page: Page,
+    sectionFirstPageNumbers: Map<number, number>,
+  ): HeaderFooterType {
+    const sectionIndex = page.sectionIndex ?? 0;
+    const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
+    const sectionPageNumber =
+      typeof firstPageInSection === 'number' ? page.number - firstPageInSection + 1 : page.number;
+
+    // Get titlePg and alternateHeaders settings from identifiers
+    const multiSectionId = this.#multiSectionIdentifier;
+    const legacyIdentifier = this.#headerFooterIdentifier;
+
+    let titlePgEnabled = false;
+    let alternateHeaders = false;
+
+    if (multiSectionId) {
+      titlePgEnabled = multiSectionId.sectionTitlePg?.get(sectionIndex) ?? multiSectionId.titlePg;
+      alternateHeaders = multiSectionId.alternateHeaders;
+    } else if (legacyIdentifier) {
+      titlePgEnabled = legacyIdentifier.titlePg;
+      alternateHeaders = legacyIdentifier.alternateHeaders;
+    }
+
+    // First page of section with titlePg enabled
+    if (sectionPageNumber === 1 && titlePgEnabled) {
+      return 'first';
+    }
+
+    // Alternate headers (even/odd)
+    if (alternateHeaders) {
+      return page.number % 2 === 0 ? 'even' : 'odd';
+    }
+
+    return 'default';
+  }
+
   #rebuildHeaderFooterRegions(layout: Layout) {
     this.#headerRegions.clear();
     this.#footerRegions.clear();
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     if (pageHeight <= 0) return;
 
-    layout.pages.forEach((page, pageIndex) => {
-      const headerPayload = this.#headerDecorationProvider?.(page.number, page.margins, page);
-      if (headerPayload?.hitRegion) {
-        this.#headerRegions.set(pageIndex, {
-          kind: 'header',
-          headerId: headerPayload.headerId,
-          sectionType: headerPayload.sectionType,
-          pageIndex,
-          pageNumber: page.number,
-          localX: headerPayload.hitRegion.x ?? 0,
-          localY: headerPayload.hitRegion.y ?? 0,
-          width: headerPayload.hitRegion.width ?? headerPayload.box?.width ?? 0,
-          height: headerPayload.hitRegion.height ?? headerPayload.box?.height ?? 0,
-        });
+    // Build section first page numbers map (same logic as in #createDecorationProvider)
+    const sectionFirstPageNumbers = new Map<number, number>();
+    for (const p of layout.pages) {
+      const idx = p.sectionIndex ?? 0;
+      if (!sectionFirstPageNumbers.has(idx)) {
+        sectionFirstPageNumbers.set(idx, p.number);
       }
+    }
 
-      const footerPayload = this.#footerDecorationProvider?.(page.number, page.margins, page);
-      if (footerPayload?.hitRegion) {
-        this.#footerRegions.set(pageIndex, {
-          kind: 'footer',
-          headerId: footerPayload.headerId,
-          sectionType: footerPayload.sectionType,
-          pageIndex,
-          pageNumber: page.number,
-          localX: footerPayload.hitRegion.x ?? 0,
-          localY: footerPayload.hitRegion.y ?? 0,
-          width: footerPayload.hitRegion.width ?? footerPayload.box?.width ?? 0,
-          height: footerPayload.hitRegion.height ?? footerPayload.box?.height ?? 0,
-        });
-      }
+    layout.pages.forEach((page, pageIndex) => {
+      const margins = page.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+      const actualPageHeight = page.size?.h ?? pageHeight;
+
+      // Try to get payload from decoration provider (may be null if no content exists)
+      const headerPayload = this.#headerDecorationProvider?.(page.number, margins, page);
+
+      // Always create a hit region for headers - use payload's hitRegion or compute fallback
+      const headerBox = this.#computeDecorationBox('header', margins, actualPageHeight);
+      this.#headerRegions.set(pageIndex, {
+        kind: 'header',
+        headerId: headerPayload?.headerId,
+        sectionType:
+          headerPayload?.sectionType ?? this.#computeExpectedSectionType('header', page, sectionFirstPageNumbers),
+        pageIndex,
+        pageNumber: page.number,
+        localX: headerPayload?.hitRegion?.x ?? headerBox.x,
+        localY: headerPayload?.hitRegion?.y ?? headerBox.offset,
+        width: headerPayload?.hitRegion?.width ?? headerBox.width,
+        height: headerPayload?.hitRegion?.height ?? headerBox.height,
+      });
+
+      // Same for footer - always create a hit region
+      const footerPayload = this.#footerDecorationProvider?.(page.number, margins, page);
+      const footerBox = this.#computeDecorationBox('footer', margins, actualPageHeight);
+      this.#footerRegions.set(pageIndex, {
+        kind: 'footer',
+        headerId: footerPayload?.headerId,
+        sectionType:
+          footerPayload?.sectionType ?? this.#computeExpectedSectionType('footer', page, sectionFirstPageNumbers),
+        pageIndex,
+        pageNumber: page.number,
+        localX: footerPayload?.hitRegion?.x ?? footerBox.x,
+        localY: footerPayload?.hitRegion?.y ?? footerBox.offset,
+        width: footerPayload?.hitRegion?.width ?? footerBox.width,
+        height: footerPayload?.hitRegion?.height ?? footerBox.height,
+      });
     });
   }
 
@@ -4548,9 +4646,10 @@ export class PresentationEditor extends EventEmitter {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     if (pageHeight <= 0) return null;
-    const pageIndex = Math.max(0, Math.floor(y / pageHeight));
-    const pageLocalY = y - pageIndex * pageHeight;
+    const pageIndex = Math.max(0, Math.floor(y / (pageHeight + pageGap)));
+    const pageLocalY = y - pageIndex * (pageHeight + pageGap);
 
     const headerRegion = this.#headerRegions.get(pageIndex);
     if (headerRegion && this.#pointInRegion(headerRegion, x, pageLocalY)) {
@@ -4766,6 +4865,9 @@ export class PresentationEditor extends EventEmitter {
   #exitHeaderFooterMode() {
     if (this.#session.mode === 'body') return;
 
+    // Capture headerId before clearing session - needed for cache invalidation
+    const editedHeaderId = this.#session.headerId;
+
     if (this.#activeHeaderFooterEditor) {
       this.#activeHeaderFooterEditor.setEditable(false);
       this.#activeHeaderFooterEditor.setOptions({ documentMode: 'viewing' });
@@ -4780,6 +4882,14 @@ export class PresentationEditor extends EventEmitter {
     this.#emitHeaderFooterModeChanged();
     this.#emitHeaderFooterEditingContext(this.#editor);
     this.#inputBridge?.notifyTargetChanged();
+
+    // Invalidate layout cache and trigger re-render to show updated header/footer content
+    if (editedHeaderId) {
+      this.#headerFooterAdapter?.invalidate(editedHeaderId);
+    }
+    this.#headerFooterManager?.refresh();
+    this.#pendingDocChange = true;
+    this.#scheduleRerender();
 
     this.#editor.view?.focus();
   }
@@ -4897,45 +5007,36 @@ export class PresentationEditor extends EventEmitter {
    * but no content exists yet. It uses the converter API to create an empty
    * header/footer document.
    *
-   * @param region - The header/footer region to create content for
+   * @param region - The header/footer region containing kind ('header' | 'footer')
+   *   and sectionType ('default' | 'first' | 'even' | 'odd') information
+   *
+   * Side effects:
+   * - Calls converter.createDefaultHeader() or converter.createDefaultFooter() to
+   *   create a new header/footer document in the underlying document model
+   * - Updates this.#headerFooterIdentifier with the new header/footer IDs from
+   *   the converter after creation
+   *
+   * Behavior when converter is unavailable:
+   * - Returns early without creating any header/footer if converter is not attached
+   * - Returns early if the appropriate create method is not available on the converter
    */
   #createDefaultHeaderFooter(region: HeaderFooterRegion): void {
-    const converter = (
-      this.#editor as Editor & {
-        converter?: {
-          createDefaultHeader?: (variant: string) => string;
-          createDefaultFooter?: (variant: string) => string;
-        };
-      }
-    ).converter;
+    const converter = (this.#editor as EditorWithConverter).converter;
 
     if (!converter) {
-      console.error('[PresentationEditor] Converter not available for creating header/footer');
       return;
     }
 
-    // Determine the variant (default, first, even, odd)
     const variant = region.sectionType ?? 'default';
 
-    try {
-      if (region.kind === 'header') {
-        if (typeof converter.createDefaultHeader === 'function') {
-          const headerId = converter.createDefaultHeader(variant);
-          console.log(`[PresentationEditor] Created default header: ${headerId}`);
-        } else {
-          console.error('[PresentationEditor] converter.createDefaultHeader is not a function');
-        }
-      } else if (region.kind === 'footer') {
-        if (typeof converter.createDefaultFooter === 'function') {
-          const footerId = converter.createDefaultFooter(variant);
-          console.log(`[PresentationEditor] Created default footer: ${footerId}`);
-        } else {
-          console.error('[PresentationEditor] converter.createDefaultFooter is not a function');
-        }
-      }
-    } catch (error) {
-      console.error('[PresentationEditor] Failed to create default header/footer:', error);
+    if (region.kind === 'header' && typeof converter.createDefaultHeader === 'function') {
+      converter.createDefaultHeader(variant);
+    } else if (region.kind === 'footer' && typeof converter.createDefaultFooter === 'function') {
+      converter.createDefaultFooter(variant);
     }
+
+    // Update legacy identifier for getHeaderFooterType() fallback path
+    this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
   }
 
   /**
@@ -5233,8 +5334,9 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
     rects.forEach((rect, _index) => {
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
         return;
@@ -5588,13 +5690,14 @@ export class PresentationEditor extends EventEmitter {
     // BOTH #painterHost and #selectionOverlay), both are in the same coordinate system.
     // We position overlay elements in layout-space coordinates, and the transform handles scaling.
     //
-    // Pages are rendered vertically stacked at y = pageIndex * pageHeight.
+    // Pages are rendered vertically stacked at y = pageIndex * (pageHeight + pageGap).
     // The page-local coordinates are already in layout space.
     const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
 
     return {
       x: pageLocalX,
-      y: pageIndex * pageHeight + pageLocalY,
+      y: pageIndex * (pageHeight + pageGap) + pageLocalY,
     };
   }
 

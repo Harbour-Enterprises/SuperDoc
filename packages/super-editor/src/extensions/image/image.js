@@ -230,6 +230,14 @@ export const Image = Node.create({
           return { style };
         },
       },
+      drawingChildOrder: {
+        default: null,
+        rendered: false,
+      },
+      originalDrawingChildren: {
+        default: null,
+        rendered: false,
+      },
     };
   },
 

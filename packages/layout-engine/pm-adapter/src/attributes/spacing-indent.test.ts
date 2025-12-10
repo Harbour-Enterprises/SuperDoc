@@ -267,19 +267,22 @@ describe('indentPtToPx', () => {
     expect(result?.firstLine).toBe(-16);
   });
 
-  it('should convert all non-zero properties', () => {
+  it('should convert all non-zero properties and preserve zero firstLine/hanging', () => {
     const indent = { left: 18, right: 24, firstLine: 0, hanging: 15 };
     const result = indentPtToPx(indent);
     expect(result?.left).toBe(24);
     expect(result?.right).toBe(32);
-    expect(result?.firstLine).toBeUndefined();
+    // firstLine: 0 is preserved (explicit override for numbering)
+    expect(result?.firstLine).toBe(0);
     expect(result?.hanging).toBe(20);
   });
 
-  it('should return undefined when all values are zero', () => {
+  it('should preserve zero values for firstLine and hanging (meaningful overrides)', () => {
+    // Zero values for firstLine/hanging are meaningful - they override numbering level indents
     const indent = { left: 0, right: 0, firstLine: 0, hanging: 0 };
     const result = indentPtToPx(indent);
-    expect(result).toBeUndefined();
+    // firstLine: 0 and hanging: 0 are preserved as explicit overrides
+    expect(result).toEqual({ firstLine: 0, hanging: 0 });
   });
 
   it('should handle undefined properties', () => {
@@ -311,9 +314,9 @@ describe('normalizeAlignment', () => {
     expect(normalizeAlignment('start')).toBe('left');
   });
 
-  it('should return undefined for "left"', () => {
-    // Default alignment, not normalized
-    expect(normalizeAlignment('left')).toBeUndefined();
+  it('should return "left" for "left"', () => {
+    // Explicit left alignment must be returned so it can override style-based center/right
+    expect(normalizeAlignment('left')).toBe('left');
   });
 
   it('should return undefined for unknown values', () => {
@@ -575,11 +578,13 @@ describe('normalizePxIndent', () => {
       expect(result).toEqual({ firstLine: -10 });
     });
 
-    it('should return undefined for zero values (divisible by 15)', () => {
-      // Zero is divisible by 15 (0 % 15 === 0), triggering twips detection
+    it('should preserve zero values (explicit indent reset)', () => {
+      // Zero is now explicitly excluded from the divisibility check to
+      // support intentional zero overrides (e.g., style's firstLine=0 to
+      // cancel numbering level's firstLine indent)
       const input = { left: 0, right: 0 };
       const result = normalizePxIndent(input);
-      expect(result).toBeUndefined();
+      expect(result).toEqual({ left: 0, right: 0 });
     });
 
     it('should handle all four indent properties', () => {

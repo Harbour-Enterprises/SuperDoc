@@ -1065,6 +1065,354 @@ describe('measureBlock', () => {
     });
   });
 
+  describe('space-only runs', () => {
+    it('counts width contributed by runs that contain only spaces', async () => {
+      const baseRun = { fontFamily: 'Arial', fontSize: 16 };
+
+      const combinedBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'space-between-runs',
+        runs: [
+          { ...baseRun, text: 'This' },
+          { ...baseRun, text: ' ' }, // space in its own run
+          { ...baseRun, text: 'CONFIDENTIALITY', bold: true },
+        ],
+        attrs: {},
+      };
+
+      const measureCombined = expectParagraphMeasure(await measureBlock(combinedBlock, 1000));
+      expect(measureCombined.lines).toHaveLength(1);
+      expect(measureCombined.lines[0].segments?.map((s) => s.runIndex)).toEqual([0, 1, 2]);
+
+      const measureThis = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-this', runs: [{ ...baseRun, text: 'This' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureSpace = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-space', runs: [{ ...baseRun, text: ' ' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureConf = expectParagraphMeasure(
+        await measureBlock(
+          {
+            kind: 'paragraph',
+            id: 'space-conf',
+            runs: [{ ...baseRun, text: 'CONFIDENTIALITY', bold: true }],
+            attrs: {},
+          },
+          1000,
+        ),
+      );
+
+      const expectedWidth = measureThis.lines[0].width + measureSpace.lines[0].width + measureConf.lines[0].width;
+
+      expect(measureCombined.lines[0].width).toBeCloseTo(expectedWidth, 0);
+    });
+  });
+
+  describe('explicit X positioning for tab-aligned text', () => {
+    /**
+     * These tests verify the bug fix for explicit segment X positioning.
+     * The fix ensures that only the FIRST word after a tab gets explicit X coordinates,
+     * not all subsequent words in the segment. This prevents incorrect text positioning.
+     */
+
+    it('sets explicit X only for first word after a tab', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'tab-explicit-x',
+        runs: [
+          {
+            text: 'Before',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 200, val: 'left' }],
+            pmStart: 6,
+            pmEnd: 7,
+          },
+          {
+            text: 'First Second Third',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+
+      // Line should have segments due to tab alignment
+      expect(line.segments).toBeDefined();
+      expect(line.segments!.length).toBeGreaterThan(0);
+
+      // Find segment(s) for the text after the tab (run index 2)
+      const afterTabSegments = line.segments!.filter((seg) => seg.runIndex === 2);
+      expect(afterTabSegments.length).toBeGreaterThan(0);
+
+      // First segment after tab should have explicit X
+      const firstSegment = afterTabSegments[0];
+      expect(firstSegment.x).toBeDefined();
+      expect(firstSegment.x).toBeGreaterThan(0);
+
+      // If there are multiple words, subsequent segments should NOT have explicit X
+      // (they should be merged or have undefined X)
+      if (afterTabSegments.length > 1) {
+        for (let i = 1; i < afterTabSegments.length; i++) {
+          expect(afterTabSegments[i].x).toBeUndefined();
+        }
+      }
+    });
+
+    it('handles multiple words after tab without explicit X on subsequent words', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'multi-word-after-tab',
+        runs: [
+          {
+            text: 'Label',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 150, val: 'left' }],
+            pmStart: 5,
+            pmEnd: 6,
+          },
+          {
+            text: 'Word1 Word2 Word3 Word4',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+      expect(line.segments).toBeDefined();
+
+      const afterTabSegments = line.segments!.filter((seg) => seg.runIndex === 2);
+
+      // First word after tab gets explicit X
+      const firstWord = afterTabSegments.find((seg) => seg.fromChar === 0);
+      expect(firstWord).toBeDefined();
+      expect(firstWord!.x).toBeDefined();
+
+      // Subsequent words should not have explicit X
+      const subsequentWords = afterTabSegments.filter((seg) => seg.fromChar > 0);
+      subsequentWords.forEach((seg) => {
+        expect(seg.x).toBeUndefined();
+      });
+    });
+
+    it('sets explicit X for first word after each tab in multiple tab scenario', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'multiple-tabs',
+        runs: [
+          {
+            text: 'A',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 100, val: 'left' }],
+            pmStart: 1,
+            pmEnd: 2,
+          },
+          {
+            text: 'First Second',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 300, val: 'left' }],
+            pmStart: 14,
+            pmEnd: 15,
+          },
+          {
+            text: 'Third Fourth',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+      expect(line.segments).toBeDefined();
+
+      // After first tab (run 2)
+      const afterFirstTab = line.segments!.filter((seg) => seg.runIndex === 2);
+      const firstAfterTab1 = afterFirstTab.find((seg) => seg.fromChar === 0);
+      expect(firstAfterTab1).toBeDefined();
+      expect(firstAfterTab1!.x).toBeDefined();
+
+      // After second tab (run 4)
+      const afterSecondTab = line.segments!.filter((seg) => seg.runIndex === 4);
+      const firstAfterTab2 = afterSecondTab.find((seg) => seg.fromChar === 0);
+      expect(firstAfterTab2).toBeDefined();
+      expect(firstAfterTab2!.x).toBeDefined();
+
+      // Subsequent words in each segment should not have explicit X
+      const laterWordsTab1 = afterFirstTab.filter((seg) => seg.fromChar > 0);
+      laterWordsTab1.forEach((seg) => {
+        expect(seg.x).toBeUndefined();
+      });
+
+      const laterWordsTab2 = afterSecondTab.filter((seg) => seg.fromChar > 0);
+      laterWordsTab2.forEach((seg) => {
+        expect(seg.x).toBeUndefined();
+      });
+    });
+
+    it('does not set explicit X for words before tabs', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'before-tab',
+        runs: [
+          {
+            text: 'Multiple Words Before Tab',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 200, val: 'left' }],
+            pmStart: 25,
+            pmEnd: 26,
+          },
+          {
+            text: 'After',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+      expect(line.segments).toBeDefined();
+
+      // Words before tab should not have explicit X
+      const beforeTabSegments = line.segments!.filter((seg) => seg.runIndex === 0);
+      beforeTabSegments.forEach((seg) => {
+        expect(seg.x).toBeUndefined();
+      });
+
+      // First word after tab should have explicit X
+      const afterTabSegments = line.segments!.filter((seg) => seg.runIndex === 2);
+      const firstAfterTab = afterTabSegments[0];
+      expect(firstAfterTab.x).toBeDefined();
+    });
+
+    it('handles center-aligned tabs with explicit X only on first word', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'center-tab-explicit-x',
+        runs: [
+          {
+            text: 'Left',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 200, val: 'center' }],
+            pmStart: 4,
+            pmEnd: 5,
+          },
+          {
+            text: 'Centered Text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+      expect(line.segments).toBeDefined();
+
+      const afterTabSegments = line.segments!.filter((seg) => seg.runIndex === 2);
+      expect(afterTabSegments.length).toBeGreaterThan(0);
+
+      // First segment after center tab should have explicit X
+      const firstSegment = afterTabSegments[0];
+      expect(firstSegment.x).toBeDefined();
+    });
+
+    it('handles right-aligned tabs with explicit X only on first word', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'right-tab-explicit-x',
+        runs: [
+          {
+            text: 'Left',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: 300, val: 'right' }],
+            pmStart: 4,
+            pmEnd: 5,
+          },
+          {
+            text: 'Right Aligned Text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 1000));
+
+      expect(measure.lines).toHaveLength(1);
+      const line = measure.lines[0];
+      expect(line.segments).toBeDefined();
+
+      const afterTabSegments = line.segments!.filter((seg) => seg.runIndex === 2);
+      expect(afterTabSegments.length).toBeGreaterThan(0);
+
+      // First segment after right tab should have explicit X
+      const firstSegment = afterTabSegments[0];
+      expect(firstSegment.x).toBeDefined();
+    });
+  });
+
   describe('letter spacing', () => {
     it('includes letterSpacing in width calculations', async () => {
       const blockNoSpacing: FlowBlock = {

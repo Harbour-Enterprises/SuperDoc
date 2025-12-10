@@ -818,6 +818,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
+
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
@@ -1078,6 +1079,66 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     for (let segmentIndex = 0; segmentIndex < tabSegments.length; segmentIndex++) {
       const segment = tabSegments[segmentIndex];
       const isLastSegment = segmentIndex === tabSegments.length - 1;
+      if (/^[ ]+$/.test(segment)) {
+        const spacesLength = segment.length;
+        const spacesStartChar = charPosInRun;
+        const spacesEndChar = charPosInRun + spacesLength;
+        const spacesWidth = measureRunWidth(segment, font, ctx, run);
+
+        if (!currentLine) {
+          currentLine = {
+            fromRun: runIndex,
+            fromChar: spacesStartChar,
+            toRun: runIndex,
+            toChar: spacesEndChar,
+            width: spacesWidth,
+            maxFontSize: run.fontSize,
+            maxFontInfo: getFontInfoFromRun(run),
+            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
+          };
+        } else {
+          const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+          if (
+            currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
+            currentLine.width > 0
+          ) {
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+            const completedLine: Line = {
+              ...currentLine,
+              ...metrics,
+            };
+            addBarTabsToLine(completedLine);
+            lines.push(completedLine);
+            tabStopCursor = 0;
+            pendingTabAlignment = null;
+            lastAppliedTabAlign = null;
+
+            currentLine = {
+              fromRun: runIndex,
+              fromChar: spacesStartChar,
+              toRun: runIndex,
+              toChar: spacesEndChar,
+              width: spacesWidth,
+              maxFontSize: run.fontSize,
+              maxFontInfo: getFontInfoFromRun(run),
+              maxWidth: getEffectiveWidth(contentWidth),
+              segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
+            };
+          } else {
+            currentLine.toRun = runIndex;
+            currentLine.toChar = spacesEndChar;
+            currentLine.width = roundValue(currentLine.width + boundarySpacing + spacesWidth);
+            currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+            currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+            appendSegment(currentLine.segments, runIndex, spacesStartChar, spacesEndChar, spacesWidth);
+          }
+        }
+
+        charPosInRun = spacesEndChar;
+        continue;
+      }
+
       const words = segment.split(' ');
 
       // Align this segment if a tab alignment is pending
@@ -1181,7 +1242,17 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
             currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
             currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
-            appendSegment(currentLine.segments, runIndex, wordStartChar, wordEndNoSpace, wordOnlyWidth, segmentStartX);
+            // Only pass explicit X for the first word after a tab (wordIndex === 0)
+            // Bug fix: Previously passed segmentStartX for all words, causing incorrect positioning
+            const useExplicitXHere = wordIndex === 0 && segmentStartX !== undefined;
+            appendSegment(
+              currentLine.segments,
+              runIndex,
+              wordStartChar,
+              wordEndNoSpace,
+              wordOnlyWidth,
+              useExplicitXHere ? segmentStartX : undefined,
+            );
             // finish current line and start a new one on next iteration
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
             const completedLine: Line = { ...currentLine, ...metrics };
@@ -1243,6 +1314,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         tabStopCursor = nextIndex;
         const tabAdvance = Math.max(0, target - currentLine.width);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
+
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
         currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
         currentLine.toRun = runIndex;
@@ -2014,6 +2086,42 @@ const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext
   return roundValue(width);
 };
 
+/**
+ * Appends a segment to a line's segments array, with optimization for consecutive segments.
+ *
+ * Segments represent contiguous ranges of text within a run that may have explicit positioning
+ * (e.g., from tab alignment). This function handles two cases:
+ * 1. Merging: If the new segment is contiguous with the last segment in the same run and has no
+ *    explicit X positioning, it merges them to reduce the number of DOM elements created during rendering.
+ * 2. Appending: Otherwise, it adds a new segment to the array.
+ *
+ * CRITICAL: Explicit X positioning (via the `x` parameter) should only be set for the FIRST word
+ * after a tab character. This is enforced by the caller checking `wordIndex === 0`. Setting explicit X
+ * on all words after a tab would cause incorrect text positioning, as subsequent words should flow
+ * naturally from the first word's position.
+ *
+ * @param segments - The segments array to append to (from a Line object), or undefined if segments are not being tracked
+ * @param runIndex - The index of the run this segment belongs to
+ * @param fromChar - The starting character index within the run (inclusive)
+ * @param toChar - The ending character index within the run (exclusive)
+ * @param width - The measured width of this segment in pixels
+ * @param x - Optional explicit X position for this segment. Should only be provided for the first word
+ *            after a tab character to enable absolute positioning. Subsequent words should have undefined
+ *            X to allow natural text flow.
+ *
+ * @example
+ * // First word after tab - gets explicit X
+ * appendSegment(line.segments, 2, 0, 5, 50, 200);
+ *
+ * @example
+ * // Second word after tab - no explicit X (flows from first word)
+ * appendSegment(line.segments, 2, 6, 12, 60, undefined);
+ *
+ * @example
+ * // Consecutive segments get merged
+ * appendSegment(line.segments, 0, 0, 5, 40, undefined);
+ * appendSegment(line.segments, 0, 5, 10, 40, undefined); // Merged with previous
+ */
 const appendSegment = (
   segments: Line['segments'] | undefined,
   runIndex: number,

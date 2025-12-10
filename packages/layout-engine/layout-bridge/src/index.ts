@@ -317,8 +317,10 @@ const rangesOverlap = (startA: number | undefined, endA: number | undefined, sta
 
 /**
  * Find the page hit given layout and a coordinate relative to the layout container.
+ * Accounts for gaps between pages when calculating page boundaries.
  */
 export function hitTestPage(layout: Layout, point: Point): PageHit | null {
+  const pageGap = layout.pageGap ?? 0;
   let cursorY = 0;
   for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex += 1) {
     const page = layout.pages[pageIndex];
@@ -327,7 +329,8 @@ export function hitTestPage(layout: Layout, point: Point): PageHit | null {
     if (point.y >= top && point.y < bottom) {
       return { pageIndex, page };
     }
-    cursorY = bottom;
+    // Add gap after each page (gap appears between pages)
+    cursorY = bottom + pageGap;
   }
   return null;
 }
@@ -727,9 +730,11 @@ export function clickToPosition(
     return null;
   }
 
+  // Account for gaps between pages when calculating page-relative Y
+  const pageGap = layout.pageGap ?? 0;
   const pageRelativePoint: Point = {
     x: containerPoint.x,
-    y: containerPoint.y - pageHit.pageIndex * layout.pageSize.h,
+    y: containerPoint.y - pageHit.pageIndex * (layout.pageSize.h + pageGap),
   };
   logClickStage('log', 'page-hit', {
     pageIndex: pageHit.pageIndex,
@@ -1068,7 +1073,7 @@ export function selectionToRects(
           const rectY = fragment.y + lineOffset;
           rects.push({
             x: rectX,
-            y: rectY + pageIndex * layout.pageSize.h,
+            y: rectY + pageIndex * (layout.pageSize.h + (layout.pageGap ?? 0)),
             width: rectWidth,
             height: line.lineHeight,
             pageIndex,
@@ -1272,7 +1277,7 @@ export function selectionToRects(
 
                 rects.push({
                   x: rectX,
-                  y: rectY + pageIndex * layout.pageSize.h,
+                  y: rectY + pageIndex * (layout.pageSize.h + (layout.pageGap ?? 0)),
                   width: rectWidth,
                   height: line.lineHeight,
                   pageIndex,
@@ -1308,7 +1313,7 @@ export function selectionToRects(
         if (!rangesOverlap(pmRange.pmStart, pmRange.pmEnd, from, to)) return;
         rects.push({
           x: fragment.x,
-          y: fragment.y + pageIndex * layout.pageSize.h,
+          y: fragment.y + pageIndex * (layout.pageSize.h + (layout.pageGap ?? 0)),
           width: fragment.width,
           height: fragment.height,
           pageIndex,

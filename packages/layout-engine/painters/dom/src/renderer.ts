@@ -75,6 +75,10 @@ type WordLayoutMarker = {
   gutterWidthPx?: number;
   markerBoxWidthPx?: number;
   suffix?: 'tab' | 'space' | 'nothing';
+  /** Pre-calculated X position where the marker should be placed (used in firstLineIndentMode). */
+  markerX?: number;
+  /** Pre-calculated X position where paragraph text should begin after the marker (used in firstLineIndentMode). */
+  textStartX?: number;
   run: {
     fontFamily: string;
     fontSize: number;
@@ -87,12 +91,115 @@ type WordLayoutMarker = {
 
 /**
  * Minimal type for wordLayout property used in this renderer.
- * Full type is WordParagraphLayoutOutput from @superdoc/word-layout.
+ *
+ * This is a subset of the full WordParagraphLayoutOutput type from @superdoc/word-layout.
+ * We extract only the fields needed for rendering to avoid a direct dependency on the
+ * word-layout package from the renderer. This allows the renderer to work with any object
+ * that provides these properties, maintaining loose coupling between packages.
+ *
+ * The wordLayout property is attached to ParagraphBlock.attrs during block processing
+ * and contains layout metadata needed for proper list marker and indent rendering.
+ *
+ * @property marker - Optional list marker layout containing text, styling, and positioning info
+ * @property indentLeftPx - Left indent in pixels (used for marker positioning calculations)
+ * @property firstLineIndentMode - When true, indicates the paragraph uses firstLine indent
+ *   pattern (marker at left+firstLine) instead of standard hanging indent (marker at left-hanging).
+ *   This flag changes how markers are positioned and how tab spacing is calculated.
+ * @property textStartPx - X position where paragraph text should begin (used for tab width calculation)
+ * @property tabsPx - Array of explicit tab stop positions in pixels
  */
 type MinimalWordLayout = {
   marker?: WordLayoutMarker;
   indentLeftPx?: number;
+  /** True for firstLine indent pattern (marker at left+firstLine vs left-hanging). */
+  firstLineIndentMode?: boolean;
+  /** X position where paragraph text should begin. */
+  textStartPx?: number;
+  /** Array of explicit tab stop positions in pixels. */
+  tabsPx?: number[];
 };
+
+/**
+ * Type guard to check if a value is a valid MinimalWordLayout object.
+ *
+ * This guard validates that the object has the expected structure for MinimalWordLayout
+ * without unsafe type assertions. It checks for the presence of valid properties and
+ * ensures type safety when accessing wordLayout from block attributes.
+ *
+ * @param value - The value to check (typically from block.attrs?.wordLayout)
+ * @returns True if the value is a valid MinimalWordLayout object, false otherwise
+ *
+ * @example
+ * ```typescript
+ * const wordLayout = block.attrs?.wordLayout;
+ * if (isMinimalWordLayout(wordLayout)) {
+ *   // TypeScript now knows wordLayout is MinimalWordLayout
+ *   const marker = wordLayout.marker;
+ *   const isFirstLineMode = wordLayout.firstLineIndentMode === true;
+ * }
+ * ```
+ */
+function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const obj = value as Record<string, unknown>;
+
+  // Check marker property if present
+  if (obj.marker !== undefined) {
+    if (typeof obj.marker !== 'object' || obj.marker === null) {
+      return false;
+    }
+    const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerX if present
+    if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
+      return false;
+    }
+
+    // Validate marker.textStartX if present
+    if (marker.textStartX !== undefined && typeof marker.textStartX !== 'number') {
+      return false;
+    }
+  }
+
+  // Check indentLeftPx property if present
+  if (obj.indentLeftPx !== undefined) {
+    if (typeof obj.indentLeftPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check firstLineIndentMode property if present
+  if (obj.firstLineIndentMode !== undefined) {
+    if (typeof obj.firstLineIndentMode !== 'boolean') {
+      return false;
+    }
+  }
+
+  // Check textStartPx property if present
+  if (obj.textStartPx !== undefined) {
+    if (typeof obj.textStartPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check tabsPx property if present and validate all array elements are numbers
+  if (obj.tabsPx !== undefined) {
+    if (!Array.isArray(obj.tabsPx)) {
+      return false;
+    }
+    // Validate that all elements are numbers
+    for (const tab of obj.tabsPx) {
+      if (typeof tab !== 'number') {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 /**
  * Layout mode for document rendering.
@@ -1386,7 +1493,7 @@ export class DomPainter {
 
       const block = lookup.block as ParagraphBlock;
       const measure = lookup.measure as ParagraphMeasure;
-      const wordLayout = block.attrs?.wordLayout as MinimalWordLayout | undefined;
+      const wordLayout = isMinimalWordLayout(block.attrs?.wordLayout) ? block.attrs.wordLayout : undefined;
 
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment);
@@ -1458,9 +1565,6 @@ export class DomPainter {
       const suppressFirstLineIndent = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
       const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
 
-      // Paragraphs with list markers should not be justified
-      const isListParagraph = !!(fragment.markerWidth && wordLayout?.marker);
-
       // Check if the paragraph ends with a lineBreak run.
       // In Word, justified text stretches all lines EXCEPT the true last line of a paragraph.
       // However, if the paragraph ends with a <w:br/> (lineBreak), the visible text before
@@ -1469,10 +1573,27 @@ export class DomPainter {
       const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
 
       lines.forEach((line, index) => {
-        const availableWidthOverride = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        /**
+         * Calculate available width for text justification.
+         *
+         * Uses line.maxWidth (from measurement phase) as the canonical source because it
+         * correctly accounts for line-specific width constraints like firstLine indent
+         * offsets, drop cap width reduction, and exclusion zones from wrapped images.
+         *
+         * Bug fix: Previously calculated from fragment.width minus indents, which caused
+         * lines with firstLine indent to be justified to the wrong width. For example,
+         * a line measured at 624.8px was justified to 672.8px, causing right margin overflow.
+         */
+        const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        const availableWidthOverride = line.maxWidth ?? fallbackAvailableWidth;
 
         // Determine if this is the true last line of the paragraph that should skip justification.
         // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
+        //
+        // IMPORTANT: List paragraphs (paragraphs with fragment.markerWidth and wordLayout.marker)
+        // SHOULD be justified per MS Word specification when alignment is 'justify'. Do NOT add
+        // an isListParagraph check here - the last line rule applies equally to list and non-list
+        // paragraphs (both skip justification on the final line unless it ends with lineBreak).
         const isLastLineOfFragment = index === lines.length - 1;
         const isLastLineOfParagraph = isLastLineOfFragment && !fragment.continuesOnNext;
         const shouldSkipJustifyForLastLine = isLastLineOfParagraph && !paragraphEndsWithLineBreak;
@@ -1483,7 +1604,7 @@ export class DomPainter {
           context,
           availableWidthOverride,
           fragment.fromLine + index,
-          isListParagraph || shouldSkipJustifyForLastLine,
+          shouldSkipJustifyForLastLine,
         );
 
         // List first lines handle indentation via marker positioning and tab stops,
@@ -1531,9 +1652,16 @@ export class DomPainter {
            *   Normal: paddingLeft=360px, textIndent=720px → first line content at 1080px
            *   With tabs: paddingLeft=1080px, no textIndent → segments positioned correctly
            */
-          if (isFirstLine && hasExplicitSegmentPositioning && firstLineOffset !== 0) {
-            const adjustedPadding = paraIndentLeft + firstLineOffset;
-            lineEl.style.paddingLeft = `${adjustedPadding}px`;
+          if (hasExplicitSegmentPositioning) {
+            // When segments have explicit X positions (from tabs), they are absolutely positioned.
+            // Absolutely positioned elements ignore padding, so we must NOT set paddingLeft.
+            // The segment X positions already include the paragraph indent from layout calculation.
+            // For first lines with firstLineOffset, adjust the starting position.
+            if (isFirstLine && firstLineOffset !== 0) {
+              const adjustedPadding = paraIndentLeft + firstLineOffset;
+              lineEl.style.paddingLeft = `${adjustedPadding}px`;
+            }
+            // Otherwise, don't set paddingLeft - segment positions handle indentation
           } else if (paraIndentLeft) {
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
           }
@@ -1553,10 +1681,31 @@ export class DomPainter {
         }
 
         if (isListFirstLine && wordLayout?.marker && fragment.markerWidth) {
-          // Position marker at (indentLeft - hanging) from fragment edge.
-          // This matches Word's model where the marker "hangs" into the left margin.
-          const markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
-          lineEl.style.paddingLeft = `${markerStartPos}px`;
+          // Position marker based on indent pattern:
+          // - FirstLine mode: use pre-calculated markerX from word-layout (essential because
+          //   paraIndent may have style overrides that zero out firstLine)
+          // - Standard hanging: calculate from paraIndent (works because hanging isn't overridden)
+          const isFirstLineIndentMode = wordLayout.firstLineIndentMode === true;
+
+          let markerStartPos: number;
+          if (
+            isFirstLineIndentMode &&
+            wordLayout.marker.markerX !== undefined &&
+            Number.isFinite(wordLayout.marker.markerX)
+          ) {
+            // FirstLine mode: use pre-calculated marker position from word-layout
+            markerStartPos = wordLayout.marker.markerX;
+          } else if (isFirstLineIndentMode) {
+            // FirstLine mode fallback: calculate from paraIndent
+            markerStartPos = paraIndentLeft + (paraIndent?.firstLine ?? 0);
+          } else {
+            // Standard hanging: marker hangs back from left indent
+            markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
+          }
+
+          // Validate markerStartPos to handle NaN/Infinity values gracefully
+          const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
+          lineEl.style.paddingLeft = `${validMarkerStartPos}px`;
 
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
@@ -1581,7 +1730,7 @@ export class DomPainter {
           if (markerJustification === 'left') {
             markerContainer.style.position = 'relative';
           } else {
-            const markerLeftX = markerStartPos - fragment.markerWidth;
+            const markerLeftX = validMarkerStartPos - fragment.markerWidth;
             markerContainer.style.position = 'absolute';
             markerContainer.style.left = `${markerLeftX}px`;
             markerContainer.style.top = '0';
@@ -1634,14 +1783,65 @@ export class DomPainter {
                 : markerBoxWidth;
 
             if ((wordLayout.marker.justification ?? 'left') === 'left') {
-              const currentPos = markerStartPos + markerTextWidth;
-              const implicitTabStop = paraIndentLeft;
-              tabWidth = implicitTabStop - currentPos;
+              const currentPos = validMarkerStartPos + markerTextWidth;
 
-              // If past the implicit stop, use next default tab interval
-              if (tabWidth < 1) {
-                tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
-                if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+              if (isFirstLineIndentMode) {
+                // FirstLine pattern: find the appropriate tab stop for text alignment.
+                // Priority:
+                // 1. First explicit tab stop past currentPos
+                // 2. marker.textStartX (pre-calculated, consistent with marker.markerX)
+                // 3. textStartPx from word-layout
+                // 4. Minimum gap (LIST_MARKER_GAP) to ensure some separation
+
+                // Check for explicit tab stops past current position
+                const explicitTabs = wordLayout.tabsPx;
+                let targetTabStop: number | undefined;
+
+                if (Array.isArray(explicitTabs) && explicitTabs.length > 0) {
+                  // Find the first tab stop that's past the current position
+                  for (const tab of explicitTabs) {
+                    if (typeof tab === 'number' && tab > currentPos) {
+                      targetTabStop = tab;
+                      break;
+                    }
+                  }
+                }
+
+                // Get text start position - prefer marker.textStartX as it's consistent with markerX
+                const textStartTarget =
+                  wordLayout.marker.textStartX !== undefined && Number.isFinite(wordLayout.marker.textStartX)
+                    ? wordLayout.marker.textStartX
+                    : wordLayout.textStartPx;
+
+                if (targetTabStop !== undefined) {
+                  // Use explicit tab stop
+                  tabWidth = targetTabStop - currentPos;
+                } else if (
+                  textStartTarget !== undefined &&
+                  Number.isFinite(textStartTarget) &&
+                  textStartTarget > currentPos
+                ) {
+                  // Use pre-calculated text start position
+                  tabWidth = textStartTarget - currentPos;
+                } else {
+                  // Fallback: use minimum gap
+                  tabWidth = LIST_MARKER_GAP;
+                }
+
+                // Ensure minimum gap for readability
+                if (tabWidth < LIST_MARKER_GAP) {
+                  tabWidth = LIST_MARKER_GAP;
+                }
+              } else {
+                // Standard hanging: implicit tab stop at paraIndentLeft
+                const implicitTabStop = paraIndentLeft;
+                tabWidth = implicitTabStop - currentPos;
+
+                // If past the implicit stop, use next default tab interval
+                if (tabWidth < 1) {
+                  tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+                  if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+                }
               }
             } else {
               // For non-left justified markers, use gutter width from layout
@@ -3370,8 +3570,18 @@ export class DomPainter {
     if (hasExplicitPositioning && line.segments) {
       // Use segment-based rendering with absolute positioning for tab-aligned text
       // When rendering segments, we need to track cumulative X position
-      // for segments that don't have explicit X coordinates
-      let cumulativeX = 0;
+      // for segments that don't have explicit X coordinates.
+      //
+      // The segment x positions from layout are relative to the content area (left margin = 0).
+      // We need to add the paragraph indent to ALL positions (both explicit and calculated).
+      const paraIndent = (block.attrs as ParagraphAttrs | undefined)?.indent;
+      const indentLeft = paraIndent?.left ?? 0;
+      const firstLine = paraIndent?.firstLine ?? 0;
+      const hanging = paraIndent?.hanging ?? 0;
+      const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
+      const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
+      const indentOffset = indentLeft + firstLineOffsetForCumX;
+      let cumulativeX = 0; // Start at 0, we'll add indentOffset when positioning
       const segmentsByRun = new Map<number, LineSegment[]>();
       line.segments.forEach((segment) => {
         const list = segmentsByRun.get(segment.runIndex);
@@ -3387,6 +3597,19 @@ export class DomPainter {
        * Only returns the X if the very next run has a segment with explicit positioning.
        * This handles tab-aligned text where right/center alignment causes the text to start
        * before the tab stop target.
+       *
+       * WHY ONLY THE IMMEDIATE NEXT RUN:
+       * When rendering a tab, we need to know where the content IMMEDIATELY after this tab begins
+       * to correctly size the tab element. We don't look beyond the immediate next run because:
+       * 1. Each tab is independent and should only consider its directly adjacent content
+       * 2. Looking further ahead would incorrectly span multiple tabs or unrelated runs
+       * 3. If there's another tab between this tab and some content, that intermediate tab is
+       *    responsible for its own layout - we shouldn't reach across it
+       *
+       * For example, given: "Text[TAB1]Content[TAB2]MoreContent"
+       * - When sizing TAB1, we only check "Content" (immediate next run)
+       * - We don't check "MoreContent" because TAB2 is in between
+       * - TAB2 will independently check "MoreContent" when it's rendered
        *
        * @param fromRunIndex - The run index to search after
        * @returns The X position of the immediate next segment, or undefined if not found or not immediate
@@ -3422,7 +3645,7 @@ export class DomPainter {
 
           const tabEl = this.doc!.createElement('span');
           tabEl.style.position = 'absolute';
-          tabEl.style.left = `${tabStartX}px`;
+          tabEl.style.left = `${tabStartX + indentOffset}px`;
           tabEl.style.top = '0px';
           tabEl.style.width = `${actualTabWidth}px`;
           tabEl.style.height = `${line.lineHeight}px`;
@@ -3473,14 +3696,16 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Position image using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
             const runSegments = segmentsByRun.get(runIndex);
-            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
             const segWidth =
               (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : elem.offsetWidth) ?? 0;
             elem.style.position = 'absolute';
             elem.style.left = `${segX}px`;
             el.appendChild(elem);
-            cumulativeX = segX + segWidth;
+            cumulativeX = baseSegX + segWidth;
           }
           continue;
         }
@@ -3503,13 +3728,15 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Position using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
             const runSegments = segmentsByRun.get(runIndex);
-            const segX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
             const segWidth = (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : 0) ?? 0;
             elem.style.position = 'absolute';
             elem.style.left = `${segX}px`;
             el.appendChild(elem);
-            cumulativeX = segX + segWidth;
+            cumulativeX = baseSegX + segWidth;
           }
           continue;
         }
@@ -3548,7 +3775,10 @@ export class DomPainter {
               elem.setAttribute('styleid', styleId);
             }
             // Determine X position for this segment
-            const xPos = segment.x !== undefined ? segment.x : cumulativeX;
+            // Layout positions are relative to content area start (0).
+            // Add indentOffset to position content at the correct paragraph indent.
+            const baseX = segment.x !== undefined ? segment.x : cumulativeX;
+            const xPos = baseX + indentOffset;
 
             elem.style.position = 'absolute';
             elem.style.left = `${xPos}px`;
@@ -3556,6 +3786,8 @@ export class DomPainter {
 
             // Update cumulative X for next segment by measuring this element's width
             // This applies to ALL segments (both with and without explicit X)
+            // Use baseX (without indent) to keep cumulativeX relative to content area,
+            // matching how segment.x values are calculated in layout.
             let width = segment.width ?? 0;
             if (width <= 0 && this.doc) {
               const measureEl = elem.cloneNode(true) as HTMLElement;
@@ -3566,7 +3798,7 @@ export class DomPainter {
               width = measureEl.offsetWidth;
               this.doc.body.removeChild(measureEl);
             }
-            cumulativeX = xPos + width;
+            cumulativeX = baseX + width;
           }
         });
       }
