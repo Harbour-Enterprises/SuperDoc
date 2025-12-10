@@ -3,6 +3,7 @@ import type { Mark, Node } from 'prosemirror-model';
 import type { EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import type { AIPlan } from '../ai-actions/types';
+import { AIToolDefinition } from '../ai-actions/tools';
 
 export type MarkType = Mark;
 export type NodeType = Node;
@@ -115,7 +116,7 @@ export type AIActionsCallbacks = {
 export type PlannerOptions = {
   maxContextLength?: number;
   documentContextProvider?: () => string;
-  tools?: unknown[];
+  tools?: AIToolDefinition[];
   onProgress?: (event: unknown) => void;
 };
 

@@ -240,7 +240,7 @@ export function createAnthropicProvider(config: AnthropicProviderConfig): AIProv
  * @param payload - Provider response payload.
  * @returns Extracted text content suitable for callers.
  */
-function defaultParseCompletion(payload: unknown): string {
+function defaultParseCompletion(payload: any): string {
   if (typeof payload === 'string') return payload;
   if (!payload || typeof payload !== 'object') return '';
 
@@ -268,7 +268,7 @@ function defaultParseCompletion(payload: unknown): string {
  * @param payload - Raw OpenAI JSON payload.
  * @returns Message content or the default parsing result.
  */
-function parseOpenAICompletion(payload: unknown): string {
+function parseOpenAICompletion(payload: any): string {
   const message = payload?.choices?.[0]?.message;
   if (!message) return defaultParseCompletion(payload);
 
@@ -381,7 +381,7 @@ function convertToAnthropicMessages(messages: AIMessage[]) {
  * @param payload - Raw Anthropic JSON payload.
  * @returns Parsed text content, falling back to the default parser when needed.
  */
-function parseAnthropicCompletion(payload: unknown): string {
+function parseAnthropicCompletion(payload: any): string {
   if (!Array.isArray(payload?.content)) {
     return defaultParseCompletion(payload);
   }
@@ -395,7 +395,7 @@ function parseAnthropicCompletion(payload: unknown): string {
  * @param payload - Stream event payload emitted by Anthropic.
  * @returns Text chunk when available, otherwise undefined.
  */
-function parseAnthropicStreamChunk(payload: unknown): string | undefined {
+function parseAnthropicStreamChunk(payload: any): string | undefined {
   if (!payload || typeof payload !== 'object') {
     return undefined;
   }
