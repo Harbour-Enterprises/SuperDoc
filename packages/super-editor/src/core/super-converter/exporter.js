@@ -528,6 +528,42 @@ export class DocxExporter {
       .replace(/'/g, '&apos;');
   }
 
+  /**
+   * Recursively generates XML string representation from a JSON node structure.
+   * Handles special processing for different element types to maintain Word document integrity.
+   *
+   * Processing behavior by element type:
+   * - Text nodes (type='text'): Escapes special XML characters (&, <, >, ", ')
+   * - w:instrText: Joins child text nodes and escapes special characters; preserves field instruction syntax
+   * - w:t, w:delText, wp:posOffset: Removes [[sdspace]] placeholders that were added during import to preserve
+   *   whitespace, then escapes special characters. These placeholders are temporary markers used internally.
+   * - Other elements: Recursively processes child elements
+   *
+   * @param {Object} node - The JSON node to convert to XML
+   * @param {string} node.name - The XML element name (e.g., 'w:t', 'w:p')
+   * @param {Object} [node.attributes] - Key-value pairs of XML attributes
+   * @param {Array} [node.elements] - Array of child nodes to process recursively
+   * @param {string} [node.type] - Node type ('text' for text nodes, 'element' for XML elements)
+   * @param {string} [node.text] - The text content (only present when type='text')
+   * @returns {string[]|string|null} Array of XML string fragments for elements, string for text nodes, or null for invalid nodes
+   * @throws {Error} Logs error to console if text element processing fails, then continues processing
+   *
+   * @example
+   * // Simple text element
+   * const node = {
+   *   name: 'w:t',
+   *   elements: [{ type: 'text', text: 'Hello World' }]
+   * };
+   * // Returns: ['<w:t>', 'Hello World', '</w:t>']
+   *
+   * @example
+   * // Element with placeholder removal
+   * const node = {
+   *   name: 'w:t',
+   *   elements: [{ type: 'text', text: 'Text[[sdspace]]content' }]
+   * };
+   * // Returns: ['<w:t>', 'Textcontent', '</w:t>']
+   */
   #generateXml(node) {
     if (!node) return null;
     let { name } = node;
@@ -557,19 +593,31 @@ export class DocxExporter {
           .join('');
         tags.push(this.#replaceSpecialCharacters(textContent));
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
-        try {
-          // test for valid string
-          let text = String(elements[0].text);
+        // Validate that the first child element has valid text content
+        if (elements.length === 0) {
+          // Empty elements array - will be handled as self-closing tag, which is an error state
+          console.error(`${name} element has no child elements. Expected text node. Element will be self-closing.`);
+        } else if (elements[0] == null || typeof elements[0].text !== 'string') {
+          // Invalid or missing text content - push empty string to maintain XML structure
+          console.error(
+            `${name} element's first child is missing or does not have a valid text property. ` +
+              `Received: ${JSON.stringify(elements[0])}. Pushing empty string to maintain XML structure.`,
+          );
+          tags.push('');
+        } else {
+          // Valid text content - remove [[sdspace]] placeholders that were added during XML import
+          // to preserve whitespace, then escape special XML characters
+          let text = elements[0].text.replace(/\[\[sdspace\]\]/g, '');
           text = this.#replaceSpecialCharacters(text);
           tags.push(text);
-        } catch (error) {
-          console.error('Text element does not contain valid string:', error);
         }
       } else {
         if (elements) {
           for (let child of elements) {
             const newElements = this.#generateXml(child);
-            if (!newElements) continue;
+            if (!newElements) {
+              continue;
+            }
 
             if (typeof newElements === 'string') {
               tags.push(newElements);
@@ -577,7 +625,8 @@ export class DocxExporter {
             }
 
             const removeUndefined = newElements.filter((el) => {
-              return el !== '<undefined>' && el !== '</undefined>';
+              const isUndefined = el === '<undefined>' || el === '</undefined>';
+              return !isUndefined;
             });
 
             tags.push(...removeUndefined);
