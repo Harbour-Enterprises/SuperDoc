@@ -314,9 +314,9 @@ describe('normalizeAlignment', () => {
     expect(normalizeAlignment('start')).toBe('left');
   });
 
-  it('should return undefined for "left"', () => {
-    // Default alignment, not normalized
-    expect(normalizeAlignment('left')).toBeUndefined();
+  it('should return "left" for "left"', () => {
+    // Explicit left alignment must be returned so it can override style-based center/right
+    expect(normalizeAlignment('left')).toBe('left');
   });
 
   it('should return undefined for unknown values', () => {
