@@ -21,6 +21,119 @@ export type TableLayoutContext = {
 };
 
 /**
+ * Safely extract the tableIndent width value from table attributes.
+ *
+ * The tableIndent attribute controls horizontal offset of tables from the left margin.
+ * Negative values are supported and allow tables to extend into the left margin,
+ * matching Microsoft Word behavior.
+ *
+ * Edge cases handled:
+ * - Missing attrs object: Returns 0
+ * - Missing tableIndent property: Returns 0
+ * - tableIndent is not an object: Returns 0
+ * - tableIndent.width is missing: Returns 0
+ * - tableIndent.width is not a number: Returns 0
+ * - tableIndent.width is NaN: Returns 0
+ * - tableIndent.width is Infinity/-Infinity: Returns 0
+ *
+ * @param attrs - Table attributes object (may be undefined)
+ * @returns Table indent width in pixels, or 0 if invalid/missing
+ *
+ * @example
+ * ```typescript
+ * // Valid positive indent (table moves right)
+ * getTableIndentWidth({ tableIndent: { width: 50 } }); // returns 50
+ *
+ * // Valid negative indent (table extends into left margin)
+ * getTableIndentWidth({ tableIndent: { width: -20 } }); // returns -20
+ *
+ * // Invalid cases - all return 0
+ * getTableIndentWidth(undefined); // returns 0
+ * getTableIndentWidth({}); // returns 0
+ * getTableIndentWidth({ tableIndent: null }); // returns 0
+ * getTableIndentWidth({ tableIndent: { width: 'invalid' } }); // returns 0
+ * getTableIndentWidth({ tableIndent: { width: NaN } }); // returns 0
+ * ```
+ */
+function getTableIndentWidth(attrs: TableBlock['attrs']): number {
+  // Guard: attrs must be defined
+  if (!attrs) {
+    return 0;
+  }
+
+  // Guard: tableIndent must exist and be an object
+  const tableIndent = attrs.tableIndent;
+  if (!tableIndent || typeof tableIndent !== 'object') {
+    return 0;
+  }
+
+  // Guard: width must exist in tableIndent
+  const width = (tableIndent as Record<string, unknown>).width;
+  if (width === undefined || width === null) {
+    return 0;
+  }
+
+  // Guard: width must be a number
+  if (typeof width !== 'number') {
+    return 0;
+  }
+
+  // Guard: width must be finite (not NaN or Infinity)
+  if (!Number.isFinite(width)) {
+    return 0;
+  }
+
+  return width;
+}
+
+/**
+ * Apply table indent offset to x position and width, ensuring width never goes negative.
+ *
+ * When a table has a tableIndent offset:
+ * - Positive indent: Shifts table right, reduces available width
+ * - Negative indent: Shifts table left (into margin), increases available width
+ *
+ * Width clamping prevents negative widths when indent is larger than available space,
+ * which would cause rendering issues. This is an edge case but must be handled safely.
+ *
+ * @param x - Original x position in pixels
+ * @param width - Original width in pixels
+ * @param indent - Table indent offset in pixels (positive or negative)
+ * @returns Object with adjusted x and width values
+ *
+ * @remarks
+ * Width clamping to 0 is a defensive measure. In production scenarios, this should
+ * rarely occur as the layout engine typically allocates sufficient column width.
+ * However, when it does occur (e.g., extreme negative indent or narrow columns),
+ * clamping prevents undefined behavior in the rendering layer.
+ *
+ * @example
+ * ```typescript
+ * // Normal positive indent
+ * applyTableIndent(100, 400, 50);
+ * // returns { x: 150, width: 350 }
+ *
+ * // Normal negative indent (extends into margin)
+ * applyTableIndent(100, 400, -20);
+ * // returns { x: 80, width: 420 }
+ *
+ * // Edge case: indent exceeds width (clamped)
+ * applyTableIndent(100, 200, 250);
+ * // returns { x: 350, width: 0 }
+ *
+ * // Zero indent (no change)
+ * applyTableIndent(100, 400, 0);
+ * // returns { x: 100, width: 400 }
+ * ```
+ */
+function applyTableIndent(x: number, width: number, indent: number): { x: number; width: number } {
+  return {
+    x: x + indent,
+    width: Math.max(0, width - indent),
+  };
+}
+
+/**
  * Calculate minimum width for a table column based on cell content.
  *
  * For now, uses a conservative minimum of 25px per column as the layout engine
@@ -550,14 +663,20 @@ function layoutMonolithicTable(context: TableLayoutContext): void {
     coordinateSystem: 'fragment',
   };
 
+  // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+  const tableIndent = getTableIndentWidth(context.block.attrs);
+  const baseX = context.columnX(state.columnIndex);
+  const baseWidth = Math.min(context.columnWidth, context.measure.totalWidth || context.columnWidth);
+  const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
   const fragment: TableFragment = {
     kind: 'table',
     blockId: context.block.id,
     fromRow: 0,
     toRow: context.block.rows.length,
-    x: context.columnX(state.columnIndex),
+    x,
     y: state.cursorY,
-    width: Math.min(context.columnWidth, context.measure.totalWidth || context.columnWidth),
+    width,
     height,
     metadata,
   };
@@ -680,14 +799,21 @@ export function layoutTableBlock({
       columnBoundaries: generateColumnBoundaries(measure),
       coordinateSystem: 'fragment',
     };
+
+    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+    const tableIndent = getTableIndentWidth(block.attrs);
+    const baseX = columnX(state.columnIndex);
+    const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
     const fragment: TableFragment = {
       kind: 'table',
       blockId: block.id,
       fromRow: 0,
       toRow: 0,
-      x: columnX(state.columnIndex),
+      x,
       y: state.cursorY,
-      width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+      width,
       height,
       metadata,
     };
@@ -757,14 +883,20 @@ export function layoutTableBlock({
       // Only create a fragment if we made progress (rendered some lines)
       // Don't create empty fragments with just padding
       if (fragmentHeight > 0 && madeProgress) {
+        // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+        const tableIndent = getTableIndentWidth(block.attrs);
+        const baseX = columnX(state.columnIndex);
+        const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+        const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
         const fragment: TableFragment = {
           kind: 'table',
           blockId: block.id,
           fromRow: rowIndex,
           toRow: rowIndex + 1,
-          x: columnX(state.columnIndex),
+          x,
           y: state.cursorY,
-          width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+          width,
           height: fragmentHeight,
           continuesFromPrev: true,
           continuesOnNext: hasRemainingLinesAfterContinuation || rowIndex + 1 < block.rows.length,
@@ -815,14 +947,20 @@ export function layoutTableBlock({
       const forcedEndRow = bodyStartRow + 1;
       const fragmentHeight = forcedPartialRow.partialHeight + (repeatHeaderCount > 0 ? headerHeight : 0);
 
+      // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+      const tableIndent = getTableIndentWidth(block.attrs);
+      const baseX = columnX(state.columnIndex);
+      const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+      const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
       const fragment: TableFragment = {
         kind: 'table',
         blockId: block.id,
         fromRow: bodyStartRow,
         toRow: forcedEndRow,
-        x: columnX(state.columnIndex),
+        x,
         y: state.cursorY,
-        width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+        width,
         height: fragmentHeight,
         continuesFromPrev: isTableContinuation,
         continuesOnNext: !forcedPartialRow.isLastPart || forcedEndRow < block.rows.length,
@@ -851,15 +989,20 @@ export function layoutTableBlock({
       );
     }
 
-    // Create fragment
+    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
+    const tableIndent = getTableIndentWidth(block.attrs);
+    const baseX = columnX(state.columnIndex);
+    const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
+    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+
     const fragment: TableFragment = {
       kind: 'table',
       blockId: block.id,
       fromRow: bodyStartRow,
       toRow: endRow,
-      x: columnX(state.columnIndex),
+      x,
       y: state.cursorY,
-      width: Math.min(columnWidth, measure.totalWidth || columnWidth),
+      width,
       height: fragmentHeight,
       continuesFromPrev: isTableContinuation,
       continuesOnNext: endRow < block.rows.length || (partialRow ? !partialRow.isLastPart : false),
