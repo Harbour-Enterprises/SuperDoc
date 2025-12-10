@@ -629,7 +629,9 @@ export class DocxExporter {
               return !isUndefined;
             });
 
-            tags.push(...removeUndefined);
+            for (const element of removeUndefined) {
+              tags.push(element);
+            }
           }
         }
       }
