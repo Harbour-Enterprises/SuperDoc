@@ -177,6 +177,9 @@ export const defaultMultiSectionIdentifier = (): MultiSectionHeaderFooterIdentif
  *
  * @param sectionMetadata - Array of section metadata from layout options
  * @param pageStyles - Optional page styles containing alternateHeaders flag
+ * @param converterIds - Optional converter-provided header/footer IDs to use as fallbacks
+ *   for dynamically created headers/footers. These IDs are only used when the corresponding
+ *   section metadata value is null. Existing section metadata always takes precedence.
  * @returns MultiSectionHeaderFooterIdentifier with per-section mappings
  *
  * @example
@@ -189,10 +192,28 @@ export const defaultMultiSectionIdentifier = (): MultiSectionHeaderFooterIdentif
  * // identifier.sectionHeaderIds.get(0)?.default === 'rId1'
  * // identifier.sectionFooterIds.get(1)?.default === 'rId4'
  * ```
+ *
+ * @example
+ * ```typescript
+ * // With converter IDs as fallbacks
+ * const sections = [
+ *   { sectionIndex: 0, headerRefs: { default: null }, footerRefs: { default: null } },
+ * ];
+ * const converterIds = {
+ *   headerIds: { default: 'conv-header-1' },
+ *   footerIds: { default: 'conv-footer-1' },
+ * };
+ * const identifier = buildMultiSectionIdentifier(sections, undefined, converterIds);
+ * // identifier.headerIds.default === 'conv-header-1' (from converter fallback)
+ * ```
  */
 export function buildMultiSectionIdentifier(
   sectionMetadata: SectionMetadata[],
   pageStyles?: { alternateHeaders?: boolean },
+  converterIds?: {
+    headerIds?: { default?: string | null; first?: string | null; even?: string | null; odd?: string | null };
+    footerIds?: { default?: string | null; first?: string | null; even?: string | null; odd?: string | null };
+  },
 ): MultiSectionHeaderFooterIdentifier {
   const identifier = defaultMultiSectionIdentifier();
 
@@ -241,6 +262,21 @@ export function buildMultiSectionIdentifier(
     identifier.footerIds = { ...section0Footers };
   }
   identifier.titlePg = identifier.sectionTitlePg.get(0) ?? false;
+
+  // Merge converter IDs as fallbacks for dynamically created headers/footers
+  // Only fill in null values - don't override existing refs from section metadata
+  if (converterIds?.headerIds) {
+    identifier.headerIds.default = identifier.headerIds.default ?? converterIds.headerIds.default ?? null;
+    identifier.headerIds.first = identifier.headerIds.first ?? converterIds.headerIds.first ?? null;
+    identifier.headerIds.even = identifier.headerIds.even ?? converterIds.headerIds.even ?? null;
+    identifier.headerIds.odd = identifier.headerIds.odd ?? converterIds.headerIds.odd ?? null;
+  }
+  if (converterIds?.footerIds) {
+    identifier.footerIds.default = identifier.footerIds.default ?? converterIds.footerIds.default ?? null;
+    identifier.footerIds.first = identifier.footerIds.first ?? converterIds.footerIds.first ?? null;
+    identifier.footerIds.even = identifier.footerIds.even ?? converterIds.footerIds.even ?? null;
+    identifier.footerIds.odd = identifier.footerIds.odd ?? converterIds.footerIds.odd ?? null;
+  }
 
   return identifier;
 }
