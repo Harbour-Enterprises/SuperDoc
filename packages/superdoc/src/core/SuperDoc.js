@@ -220,6 +220,14 @@ export class SuperDoc extends EventEmitter {
     return this.config.selector;
   }
 
+  /**
+   * Convenience getter for the currently configured user
+   * @returns {User}
+   */
+  get currentUser() {
+    return this.user;
+  }
+
   #patchNaiveUIStyles() {
     const cspNonce = this.config.cspNonce;
 
