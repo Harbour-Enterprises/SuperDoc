@@ -103,6 +103,11 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Extract body-level sectPr before filtering it out from content
     const bodySectPr = node.elements?.find((n) => n.name === 'w:sectPr');
+    const bodySectPrElements = bodySectPr?.elements ?? [];
+    if (converter) {
+      converter.importedBodyHasHeaderRef = bodySectPrElements.some((el) => el?.name === 'w:headerReference');
+      converter.importedBodyHasFooterRef = bodySectPrElements.some((el) => el?.name === 'w:footerReference');
+    }
 
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
