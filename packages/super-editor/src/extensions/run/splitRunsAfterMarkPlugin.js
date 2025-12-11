@@ -37,7 +37,13 @@ export const splitRunsAfterMarkPlugin = new Plugin({
     if (!runType) return null;
 
     const runPositions = new Set();
+    const docSize = newState.doc.content.size;
     markRanges.forEach(({ from, to }) => {
+      // Validate positions are within document bounds and in correct order
+      // Position mapping after insertText can produce invalid ranges when text length changes
+      if (from < 0 || to < 0 || from > docSize || to > docSize || from > to) {
+        return;
+      }
       newState.doc.nodesBetween(from, to, (node, pos) => {
         if (node.type === runType) runPositions.add(pos);
       });
