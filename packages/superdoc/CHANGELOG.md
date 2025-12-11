@@ -1,3 +1,9 @@
+## [0.35.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.2...v0.35.3) (2025-12-11)
+
+### Bug Fixes
+
+- comments module typedef for disable [stable] ([#1494](https://github.com/Harbour-Enterprises/SuperDoc/issues/1494)) ([bdac63c](https://github.com/Harbour-Enterprises/SuperDoc/commit/bdac63c05f8f8ae122023d4eee70450ac12695a5))
+
 ## [0.35.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.1...v0.35.2) (2025-12-10)
 
 ### Bug Fixes
