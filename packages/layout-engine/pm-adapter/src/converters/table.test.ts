@@ -6,6 +6,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { tableNodeToBlock, handleTableNode } from './table.js';
 import type { PMNode, BlockIdGenerator, PositionMap, StyleContext } from '../types.js';
 import type { FlowBlock, ParagraphBlock, TableBlock } from '@superdoc/contracts';
+import { twipsToPx } from '../utilities.js';
 
 describe('table converter', () => {
   const mockStyleContext: StyleContext = {
@@ -241,6 +242,209 @@ describe('table converter', () => {
 
       expect(result).toBeDefined();
       expect(result.rows).toHaveLength(1);
+    });
+
+    it('converts rowHeight from twips to px for small values', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 277, rule: 'exact' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('exact');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(277));
+      // Verify conversion happened: 277 twips ≈ 18.5px (not 277px)
+      // Magic number 30 chosen as upper bound to confirm twips-to-px conversion occurred
+      expect(row.attrs?.rowHeight?.value).toBeLessThan(30);
+    });
+
+    it('converts rowHeight from twips to px for auto rule', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 360, rule: 'auto' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('auto');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(360));
+    });
+
+    it('handles missing rowHeight (should be undefined)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                // No rowHeight property
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight).toBeUndefined();
+    });
+
+    it('handles zero rowHeight value (preserves zero)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 0, rule: 'exact' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      // Zero is a valid value and should be preserved (0 twips = 0 px)
+      expect(row.attrs?.rowHeight?.value).toBe(0);
+      expect(row.attrs?.rowHeight?.rule).toBe('exact');
+    });
+
+    it('handles invalid/unknown rule values (defaults to atLeast)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 500, rule: 'invalidRule' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('atLeast');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(500));
     });
 
     it('handles rowspan and colspan attributes', () => {
