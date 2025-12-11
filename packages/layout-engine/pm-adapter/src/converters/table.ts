@@ -98,6 +98,28 @@ type NormalizedRowHeight =
     }
   | undefined;
 
+/**
+ * Normalize row height from DOCX row properties, converting from twips to pixels.
+ *
+ * Extracts the row height value and rule from OOXML table row properties and converts
+ * the height value from twips (twentieth of a point) to pixels for consistent rendering.
+ * This conversion is critical to prevent small twips values (e.g., 277 twips ≈ 18.5px)
+ * from being misinterpreted as large pixel values.
+ *
+ * @param rowProps - Table row properties object containing optional rowHeight configuration
+ * @returns Normalized height object with pixel value and rule, or undefined if no valid height is found
+ *
+ * @example
+ * // DOCX row with exact height of 277 twips
+ * const props = { rowHeight: { value: 277, rule: 'exact' } };
+ * const normalized = normalizeRowHeight(props);
+ * // Returns: { value: 18.467, rule: 'exact' }
+ *
+ * @example
+ * // Missing or invalid height
+ * normalizeRowHeight(undefined); // Returns: undefined
+ * normalizeRowHeight({}); // Returns: undefined
+ */
 const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHeight => {
   if (!rowProps || typeof rowProps !== 'object') return undefined;
   const rawRowHeight = (rowProps as Record<string, unknown>).rowHeight;
@@ -113,10 +135,9 @@ const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHe
       ? (rawRule as 'exact' | 'atLeast' | 'auto')
       : 'atLeast';
 
-  // Row heights from DOCX are typically in twips. Use a heuristic to avoid double-converting pixel values:
-  // convert when the value looks large enough to be twips (>= 300 twips ≈ 20px).
-  const isLikelyTwips = rawValue >= 300 || Math.abs(rawValue % 15) < 1e-6;
-  const valuePx = isLikelyTwips ? twipsToPx(rawValue) : rawValue;
+  // Row heights from DOCX are defined in twips. Always convert to px so small values (e.g. 277 twips)
+  // don't get misinterpreted as pixels.
+  const valuePx = twipsToPx(rawValue);
 
   return {
     value: valuePx,
@@ -124,6 +145,43 @@ const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHe
   };
 };
 
+/**
+ * Parse a ProseMirror table cell node into a TableCell block.
+ *
+ * Converts a PM table cell node (tableCell, table_cell, tableHeader, or table_header)
+ * into the SuperDoc TableCell contract format. Processes all paragraphs within the cell,
+ * extracts cell attributes (borders, padding, alignment, background), and handles
+ * merged cells (rowspan/colspan).
+ *
+ * @param args - Cell parsing arguments including node, position, context, and style cascade props
+ * @param args.cellNode - ProseMirror cell node to parse
+ * @param args.rowIndex - Zero-based row index for ID generation
+ * @param args.cellIndex - Zero-based cell index for ID generation
+ * @param args.context - Parser dependencies (block ID generator, converters, style context)
+ * @param args.defaultCellPadding - Optional default padding from table style
+ * @param args.tableStyleParagraphProps - Optional paragraph properties from table style for cascade
+ * @returns TableCell object with blocks and attributes, or null if the cell is invalid or empty
+ *
+ * @example
+ * // Valid cell with content
+ * const cell = parseTableCell({
+ *   cellNode: { type: 'tableCell', content: [paragraphNode] },
+ *   rowIndex: 0,
+ *   cellIndex: 1,
+ *   context: parserDeps,
+ * });
+ * // Returns: { id: 'cell-0-1', blocks: [...], attrs: {...} }
+ *
+ * @example
+ * // Empty cell returns null
+ * parseTableCell({
+ *   cellNode: { type: 'tableCell', content: [] },
+ *   rowIndex: 0,
+ *   cellIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: null
+ */
 const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   const { cellNode, rowIndex, cellIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableCellNode(cellNode) || !Array.isArray(cellNode.content)) {
@@ -218,6 +276,39 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   };
 };
 
+/**
+ * Parse a ProseMirror table row node into a TableRow block.
+ *
+ * Converts a PM table row node (tableRow or table_row) into the SuperDoc TableRow
+ * contract format. Processes all table cells within the row, extracts row attributes
+ * (row height with twips-to-pixels conversion), and preserves OOXML table row properties.
+ *
+ * @param args - Row parsing arguments including node, position, context, and style cascade props
+ * @param args.rowNode - ProseMirror row node to parse
+ * @param args.rowIndex - Zero-based row index for ID generation
+ * @param args.context - Parser dependencies (block ID generator, converters, style context)
+ * @param args.defaultCellPadding - Optional default padding from table style to pass to cells
+ * @param args.tableStyleParagraphProps - Optional paragraph properties from table style for cascade
+ * @returns TableRow object with cells and attributes, or null if the row contains no valid cells
+ *
+ * @example
+ * // Row with cells
+ * const row = parseTableRow({
+ *   rowNode: { type: 'tableRow', content: [cellNode1, cellNode2] },
+ *   rowIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: { id: 'row-0', cells: [...], attrs: {...} }
+ *
+ * @example
+ * // Row with no valid cells returns null
+ * parseTableRow({
+ *   rowNode: { type: 'tableRow', content: [] },
+ *   rowIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: null
+ */
 const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
   const { rowNode, rowIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableRowNode(rowNode) || !Array.isArray(rowNode.content)) {
