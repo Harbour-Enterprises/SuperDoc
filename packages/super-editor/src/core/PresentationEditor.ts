@@ -1188,8 +1188,17 @@ export class PresentationEditor extends EventEmitter {
     if (!rawRects.length) return [];
 
     // If we can get a DOM-based caret for the range start, compute a per-page delta to align highlights with painter DOM.
-    const domCaretStart = this.#computeDomCaretPageLocal(start);
-    const domCaretEnd = this.#computeDomCaretPageLocal(end);
+    let domCaretStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domCaretEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domCaretStart = this.#computeDomCaretPageLocal(start);
+      domCaretEnd = this.#computeDomCaretPageLocal(end);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in getRectsForRange:', error);
+      }
+    }
     const layoutCaretStart = this.#computeCaretLayoutRectGeometry(start, false);
     const layoutCaretEnd = this.#computeCaretLayoutRectGeometry(end, false);
     const pageDelta: Record<number, { dx: number; dy: number }> = {};
@@ -3914,6 +3923,22 @@ export class PresentationEditor extends EventEmitter {
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
+    // Keep the painter and overlay hosts sized to the actual page width so centering
+    // on a wider viewport does not introduce X offsets between content and overlays.
+    const pageWidth = layout.pageSize?.w ?? this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    if (this.#painterHost) {
+      this.#painterHost.style.width = `${pageWidth}px`;
+      this.#painterHost.style.marginLeft = '0';
+      this.#painterHost.style.marginRight = '0';
+    }
+    if (this.#selectionOverlay) {
+      this.#selectionOverlay.style.width = `${pageWidth}px`;
+      this.#selectionOverlay.style.left = '0';
+      this.#selectionOverlay.style.right = '';
+      this.#selectionOverlay.style.marginLeft = '0';
+      this.#selectionOverlay.style.marginRight = '0';
+    }
+
     // Process per-rId header/footer content for multi-section support
     await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
 
@@ -4173,7 +4198,7 @@ export class PresentationEditor extends EventEmitter {
       // Only clear old cursor after successfully computing new position
       try {
         this.#localSelectionLayer.innerHTML = '';
-        this.#renderCaretOverlay(caretLayout, from);
+        this.#renderCaretOverlay(caretLayout);
       } catch (error) {
         // DOM manipulation can fail if element is detached or in invalid state
         if (process.env.NODE_ENV === 'development') {
@@ -4188,8 +4213,17 @@ export class PresentationEditor extends EventEmitter {
 
     // Apply DOM-based position correction to align selection with actual rendered text
     // (same approach used in getRectsForRange for external consumers)
-    const domStart = this.#computeDomCaretPageLocal(from);
-    const domEnd = this.#computeDomCaretPageLocal(to);
+    let domStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domStart = this.#computeDomCaretPageLocal(from);
+      domEnd = this.#computeDomCaretPageLocal(to);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to uncorrected rects
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #renderLocalSelection:', error);
+      }
+    }
     const correctedRects = this.#applyDomCorrectionToRects(rects, domStart, domEnd);
 
     try {
@@ -5401,12 +5435,28 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
-   * Apply DOM-based position correction to layout-computed selection rectangles.
-   * This ensures selection highlights align with actual rendered text positions.
+   * Applies DOM-based position correction to layout-computed selection rectangles.
    *
-   * The layout engine calculates positions based on fragment geometry, but the painter
-   * applies additional CSS (padding, text-indent, word-spacing for justify) that can
-   * shift where text actually renders. This method corrects for that drift.
+   * This method ensures selection highlights align with actual rendered text positions
+   * by correcting for CSS effects (padding, text-indent, word-spacing) that the painter
+   * applies but the layout engine doesn't account for. Without this correction, selection
+   * highlights would be misaligned with the visible text.
+   *
+   * Algorithm:
+   * 1. Calculate per-page delta between DOM and layout positions at selection start
+   * 2. Apply horizontal and vertical deltas to all rectangles on the same page
+   * 3. For the first rectangle, override with exact DOM start position
+   * 4. For the last rectangle, compute width from DOM end position
+   *
+   * The correction is page-aware because multi-page selections may have different
+   * rendering contexts on each page (e.g., different header/footer heights, column layouts).
+   *
+   * @param rects - Layout-computed selection rectangles to correct
+   * @param domStart - DOM-measured start position {pageIndex, x, y} or null if unavailable
+   * @param domEnd - DOM-measured end position {pageIndex, x, y} or null if unavailable
+   * @returns Corrected selection rectangles with DOM-aligned positions
+   *
+   * @throws Never throws - gracefully handles null DOM positions by returning uncorrected rects
    */
   #applyDomCorrectionToRects(
     rects: LayoutRect[],
@@ -5532,7 +5582,7 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
-  #renderCaretOverlay(caretLayout: { pageIndex: number; x: number; y: number; height: number }, pos?: number) {
+  #renderCaretOverlay(caretLayout: { pageIndex: number; x: number; y: number; height: number }) {
     if (!this.#localSelectionLayer) {
       return;
     }
@@ -5785,6 +5835,31 @@ export class PresentationEditor extends EventEmitter {
    *
    * @private
    */
+
+  #getPageOffsetX(pageIndex: number): number | null {
+    if (!this.#painterHost || !this.#viewportHost) {
+      return null;
+    }
+
+    // Pages are horizontally centered inside the painter host. When the viewport is wider
+    // than the page, the left offset must be included in overlay coordinates or selections
+    // will appear shifted to the left of the rendered content.
+    const pageEl = this.#painterHost.querySelector(
+      `.superdoc-page[data-page-index="${pageIndex}"]`,
+    ) as HTMLElement | null;
+    if (!pageEl) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const viewportRect = this.#viewportHost.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // getBoundingClientRect includes the applied zoom transform; divide by zoom to return
+    // layout-space units that match the rest of the overlay math.
+    const offsetX = (pageRect.left - viewportRect.left) / zoom;
+
+    return offsetX;
+  }
+
   #convertPageLocalToOverlayCoords(
     pageIndex: number,
     pageLocalX: number,
@@ -5825,16 +5900,58 @@ export class PresentationEditor extends EventEmitter {
     // The page-local coordinates are already in layout space - just add the page stacking offset.
     const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+    const pageOffsetX = this.#getPageOffsetX(pageIndex) ?? 0;
 
-    return {
-      x: pageLocalX,
+    const coords = {
+      x: pageOffsetX + pageLocalX,
       y: pageIndex * (pageHeight + pageGap) + pageLocalY,
     };
+
+    return coords;
   }
 
   /**
-   * Compute DOM-based caret position in page-local coordinates.
-   * Returns null when DOM data is unavailable.
+   * Computes DOM-based caret position in page-local coordinates.
+   *
+   * This method queries the actual DOM to find the pixel-perfect caret position
+   * for a given ProseMirror position. It's used as the source of truth for caret
+   * rendering, as DOM measurements reflect the actual painted text (including CSS
+   * effects like word-spacing, text-indent, and padding).
+   *
+   * Algorithm:
+   * 1. Find all spans with data-pm-start and data-pm-end attributes
+   * 2. Locate the span containing the target PM position
+   * 3. Find the closest .superdoc-page ancestor to determine page context
+   * 4. Create a DOM Range at the character index within the text node
+   * 5. Measure the Range's bounding rect relative to the page
+   * 6. Return page-local coordinates (adjusted for zoom)
+   *
+   * Fallback Behavior:
+   * - If text node unavailable: Use span's bounding rect
+   * - If no matching span found: Return null
+   * - If page element not found: Return null
+   *
+   * Error Handling:
+   * DOM operations can throw exceptions (invalid ranges, detached nodes, etc.).
+   * Callers should wrap this method in try-catch to prevent crashes.
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @returns Object with {pageIndex, x, y} in page-local coordinates, or null if DOM unavailable
+   *
+   * @throws May throw DOM exceptions (InvalidStateError, IndexSizeError) if DOM is in invalid state
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const caretPos = this.#computeDomCaretPageLocal(42);
+   *   if (caretPos) {
+   *     // Render caret at caretPos.x, caretPos.y on page caretPos.pageIndex
+   *   }
+   * } catch (error) {
+   *   console.warn('DOM caret computation failed:', error);
+   *   // Fall back to geometry-based calculation
+   * }
+   * ```
    */
   #computeDomCaretPageLocal(pos: number): { pageIndex: number; x: number; y: number } | null {
     const pageEl = this.#viewportHost.querySelector(`.superdoc-page span[data-pm-start][data-pm-end]`)
@@ -5891,12 +6008,72 @@ export class PresentationEditor extends EventEmitter {
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
     // Convert from screen coordinates to layout coordinates by dividing by zoom
+    const baseX = (clientX - rect.left + scrollLeft) / zoom;
+    const baseY = (clientY - rect.top + scrollTop) / zoom;
+
+    // Adjust X by the actual page offset if the pointer is over a page. This keeps
+    // geometry-based hit testing aligned with the centered page content.
+    let adjustedX = baseX;
+    const doc = this.#visibleHost.ownerDocument ?? document;
+    const hitChain = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(clientX, clientY) : [];
+    const pageEl = Array.isArray(hitChain)
+      ? (hitChain.find((el) => (el as HTMLElement)?.classList?.contains('superdoc-page')) as HTMLElement | null)
+      : null;
+    if (pageEl) {
+      const pageIndex = Number(pageEl.dataset.pageIndex ?? 'NaN');
+      if (Number.isFinite(pageIndex)) {
+        const pageOffsetX = this.#getPageOffsetX(pageIndex);
+        if (pageOffsetX != null) {
+          adjustedX = baseX - pageOffsetX;
+        }
+      }
+    }
+
     return {
-      x: (clientX - rect.left + scrollLeft) / zoom,
-      y: (clientY - rect.top + scrollTop) / zoom,
+      x: adjustedX,
+      y: baseY,
     };
   }
 
+  /**
+   * Computes caret layout rectangle using geometry-based calculations.
+   *
+   * This method calculates the caret position and height from layout engine data
+   * (fragments, blocks, measures) without querying the DOM. It's used as a fallback
+   * when DOM-based measurements are unavailable or as a primary source in non-interactive
+   * scenarios (e.g., headless rendering, PDF export).
+   *
+   * The geometry-based calculation accounts for:
+   * - List markers (offset caret by marker width)
+   * - Paragraph indents (left, right, first-line, hanging)
+   * - Justified text alignment (extra space distributed across spaces)
+   * - Multi-column layouts
+   * - Table cell content
+   *
+   * Algorithm:
+   * 1. Find the fragment containing the PM position
+   * 2. Handle table fragments separately (delegate to #computeTableCaretLayoutRect)
+   * 3. For paragraph fragments:
+   *    a. Find the line containing the position
+   *    b. Convert PM position to character offset
+   *    c. Measure X coordinate using Canvas-based text measurement
+   *    d. Apply marker width and indent adjustments
+   *    e. Calculate Y offset from line heights
+   *    f. Return page-local coordinates with line height
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @param includeDomFallback - Whether to compare with DOM measurements for debugging (default: true).
+   *   When true, logs geometry vs DOM deltas for analysis. Has no effect on return value.
+   * @returns Object with {pageIndex, x, y, height} in page-local coordinates, or null if position not found
+   *
+   * @example
+   * ```typescript
+   * const caretGeometry = this.#computeCaretLayoutRectGeometry(42, false);
+   * if (caretGeometry) {
+   *   // Render caret at caretGeometry.x, caretGeometry.y with height caretGeometry.height
+   * }
+   * ```
+   */
   #computeCaretLayoutRectGeometry(
     pos: number,
     includeDomFallback = true,
@@ -6014,7 +6191,15 @@ export class PresentationEditor extends EventEmitter {
    */
   #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
     const geometry = this.#computeCaretLayoutRectGeometry(pos, true);
-    const dom = this.#computeDomCaretPageLocal(pos);
+    let dom: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      dom = this.#computeDomCaretPageLocal(pos);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #computeCaretLayoutRect:', error);
+      }
+    }
     if (dom && geometry) {
       return {
         pageIndex: dom.pageIndex,
