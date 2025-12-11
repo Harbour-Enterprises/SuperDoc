@@ -27,8 +27,11 @@ describe('SlashMenu extension', () => {
       disableContextMenu: false,
     });
     const plugins = SlashMenu.config.addPmPlugins.call({ editor });
-    expect(plugins).toHaveLength(1);
-    expect(typeof plugins[0].props.handleKeyDown).toBe('function');
+    expect(plugins).toHaveLength(2);
+    // First plugin is the slash menu plugin, second is position tracker
+    const slashMenuPlugin = plugins.find((p) => p.props.handleKeyDown);
+    expect(slashMenuPlugin).toBeDefined();
+    expect(typeof slashMenuPlugin.props.handleKeyDown).toBe('function');
     editor.destroy();
   });
 
