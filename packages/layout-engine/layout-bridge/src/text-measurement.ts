@@ -18,6 +18,7 @@ let measurementCanvas: HTMLCanvasElement | null = null;
 let measurementCtx: CanvasRenderingContext2D | null = null;
 
 const TAB_CHAR_LENGTH = 1;
+const SPACE_CHARS = new Set([' ', '\u00A0']);
 
 const isTabRun = (run: Run): run is TabRun => run?.kind === 'tab';
 
@@ -45,6 +46,67 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
 
   return measurementCtx;
 }
+
+type JustifyAdjustment = {
+  extraPerSpace: number;
+  totalSpaces: number;
+};
+
+const countSpaces = (text: string): number => {
+  let spaces = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (SPACE_CHARS.has(text[i])) {
+      spaces += 1;
+    }
+  }
+  return spaces;
+};
+
+/**
+ * Compute the per-space expansion applied when a line is justified.
+ * Mirrors the painter logic that distributes slack via word-spacing.
+ *
+ * @param availableWidthOverride - The available width for content (fragment width minus paragraph indents).
+ *   Must match what the painter uses to ensure consistent justify spacing.
+ */
+const getJustifyAdjustment = (block: FlowBlock, line: Line, availableWidthOverride?: number): JustifyAdjustment => {
+  if (block.kind !== 'paragraph') {
+    return { extraPerSpace: 0, totalSpaces: 0 };
+  }
+
+  const alignment = block.attrs?.alignment;
+  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+  // Use the same available width as the painter: override > maxWidth > width
+  const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
+  const slack = Math.max(0, availableWidth - line.width);
+
+  if (alignment !== 'justify' || hasExplicitPositioning || slack <= 0) {
+    return { extraPerSpace: 0, totalSpaces: 0 };
+  }
+
+  const runs = sliceRunsForLine(block, line);
+  const totalSpaces = runs.reduce((sum, run) => {
+    if (
+      isTabRun(run) ||
+      'src' in run ||
+      run.kind === 'lineBreak' ||
+      run.kind === 'break' ||
+      run.kind === 'fieldAnnotation'
+    ) {
+      return sum;
+    }
+    return sum + countSpaces(run.text ?? '');
+  }, 0);
+
+  if (totalSpaces <= 0) {
+    return { extraPerSpace: 0, totalSpaces: 0 };
+  }
+
+  return {
+    extraPerSpace: slack / totalSpaces,
+    totalSpaces,
+  };
+};
 
 /**
  * Generates a CSS font string from a run's formatting properties.
@@ -151,14 +213,33 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
  * @param charOffset - Character offset from the start of the line (0-based)
  * @returns The X coordinate (in pixels) from the start of the line
  */
-export function measureCharacterX(block: FlowBlock, line: Line, charOffset: number): number {
+export function measureCharacterX(
+  block: FlowBlock,
+  line: Line,
+  charOffset: number,
+  availableWidthOverride?: number,
+): number {
   const ctx = getMeasurementContext();
+  const availableWidth =
+    availableWidthOverride ??
+    line.maxWidth ??
+    // Fallback: if no maxWidth, approximate available width as line width (no slack)
+    line.width;
+  // Pass availableWidth to justify calculation to match painter's word-spacing
+  const justify = getJustifyAdjustment(block, line, availableWidth);
+  const renderedLineWidth = line.width + Math.max(0, availableWidth - line.width);
+  const alignment = block.kind === 'paragraph' ? block.attrs?.alignment : undefined;
+  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+  const alignmentOffset =
+    !hasExplicitPositioning && alignment === 'center'
+      ? Math.max(0, (availableWidth - renderedLineWidth) / 2)
+      : !hasExplicitPositioning && alignment === 'right'
+        ? Math.max(0, availableWidth - renderedLineWidth)
+        : 0;
 
   // Check if line has segment-based positioning (used for tab-aligned text)
   // When segments have explicit X positions, we must use segment-based calculation
   // to match the actual DOM positioning
-  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
-
   if (hasExplicitPositioning && line.segments && ctx) {
     return measureCharacterXSegmentBased(block, line, charOffset, ctx);
   }
@@ -175,12 +256,13 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
         return sum + (run.text ?? '').length;
       }, 0),
     );
-    return (charOffset / charsInLine) * line.width;
+    return (charOffset / charsInLine) * renderedLineWidth;
   }
 
   const runs = sliceRunsForLine(block, line);
   let currentX = 0;
   let currentCharOffset = 0;
+  let spaceTally = 0;
 
   for (const run of runs) {
     if (isTabRun(run)) {
@@ -211,19 +293,29 @@ export function measureCharacterX(block: FlowBlock, line: Line, charOffset: numb
 
       const measured = ctx.measureText(textUpToTarget);
       const spacingWidth = computeLetterSpacingWidth(run, offsetInRun, runLength);
-      return currentX + measured.width + spacingWidth;
+      const spacesInPortion = justify.extraPerSpace > 0 ? countSpaces(textUpToTarget) : 0;
+      return (
+        alignmentOffset +
+        currentX +
+        measured.width +
+        spacingWidth +
+        justify.extraPerSpace * (spaceTally + spacesInPortion)
+      );
     }
 
     // Measure entire run and advance
     ctx.font = getRunFontString(run);
     const measured = ctx.measureText(text);
-    currentX += measured.width + computeLetterSpacingWidth(run, runLength, runLength);
+    const runLetterSpacing = computeLetterSpacingWidth(run, runLength, runLength);
+    const spacesInRun = justify.extraPerSpace > 0 ? countSpaces(text) : 0;
+    currentX += measured.width + runLetterSpacing + justify.extraPerSpace * spacesInRun;
+    spaceTally += spacesInRun;
 
     currentCharOffset += runLength;
   }
 
   // If we're past the end, return the total width
-  return currentX;
+  return alignmentOffset + currentX;
 }
 
 /**
@@ -416,8 +508,25 @@ export function findCharacterAtX(
   line: Line,
   x: number,
   pmStart: number,
+  availableWidthOverride?: number,
 ): { charOffset: number; pmPosition: number } {
   const ctx = getMeasurementContext();
+  const availableWidth =
+    availableWidthOverride ??
+    line.maxWidth ??
+    // Fallback: approximate with line width when no maxWidth is present
+    line.width;
+  // Pass availableWidth to justify calculation to match painter's word-spacing
+  const justify = getJustifyAdjustment(block, line, availableWidth);
+  const renderedLineWidth = line.width + Math.max(0, availableWidth - line.width);
+  const alignment = block.kind === 'paragraph' ? block.attrs?.alignment : undefined;
+  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+  const alignmentOffset =
+    !hasExplicitPositioning && alignment === 'center'
+      ? Math.max(0, (availableWidth - renderedLineWidth) / 2)
+      : !hasExplicitPositioning && alignment === 'right'
+        ? Math.max(0, availableWidth - renderedLineWidth)
+        : 0;
 
   if (!ctx) {
     // Fallback to ratio-based calculation
@@ -431,7 +540,7 @@ export function findCharacterAtX(
         return sum + (run.text ?? '').length;
       }, 0),
     );
-    const ratio = Math.max(0, Math.min(1, x / line.width));
+    const ratio = Math.max(0, Math.min(1, (x - alignmentOffset) / renderedLineWidth));
     const charOffset = Math.round(ratio * charsInLine);
     const pmPosition = charOffsetToPm(block, line, charOffset, pmStart);
     return {
@@ -441,10 +550,11 @@ export function findCharacterAtX(
   }
 
   const runs = sliceRunsForLine(block, line);
-  const safeX = Math.max(0, Math.min(line.width, x));
+  const safeX = Math.max(0, Math.min(renderedLineWidth, x - alignmentOffset));
 
   let currentX = 0;
   let currentCharOffset = 0;
+  let spaceTally = 0;
 
   for (const run of runs) {
     if (isTabRun(run)) {
@@ -480,7 +590,12 @@ export function findCharacterAtX(
     for (let i = 0; i <= runLength; i++) {
       const textUpToChar = text.slice(0, i);
       const measured = ctx.measureText(textUpToChar);
-      const charX = currentX + measured.width + computeLetterSpacingWidth(run, i, runLength);
+      const spacesInPortion = justify.extraPerSpace > 0 ? countSpaces(textUpToChar) : 0;
+      const charX =
+        currentX +
+        measured.width +
+        computeLetterSpacingWidth(run, i, runLength) +
+        justify.extraPerSpace * (spaceTally + spacesInPortion);
 
       // If we've passed the target X, return the previous character
       // or this one, whichever is closer
@@ -514,7 +629,10 @@ export function findCharacterAtX(
 
     // Advance past this run
     const measured = ctx.measureText(text);
-    currentX += measured.width + computeLetterSpacingWidth(run, runLength, runLength);
+    const runLetterSpacing = computeLetterSpacingWidth(run, runLength, runLength);
+    const spacesInRun = justify.extraPerSpace > 0 ? countSpaces(text) : 0;
+    currentX += measured.width + runLetterSpacing + justify.extraPerSpace * spacesInRun;
+    spaceTally += spacesInRun;
     currentCharOffset += runLength;
   }
 
