@@ -523,5 +523,639 @@ describe('MeasureCache', () => {
       cache.invalidate(['invalidate-table']);
       expect(cache.get(table, 800, 600)).toBeUndefined();
     });
+
+    describe('formatting changes', () => {
+      it('invalidates cache when fontSize changes in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-font-size',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-font-size',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 16 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Different fontSize should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when fontFamily changes in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-font-family',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-font-family',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Times New Roman', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Different fontFamily should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when bold changes in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-bold',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, bold: false }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-bold',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, bold: true }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Different bold should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when italic changes in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-italic',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, italic: false }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-italic',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, italic: true }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Different italic should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when color changes in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-color',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, color: '#000000' }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-color',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12, color: '#FF0000' }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Different color should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('creates cache hit when table formatting is identical', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-identical',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 14,
+                        bold: true,
+                        italic: true,
+                        color: '#0000FF',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-identical',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 14,
+                        bold: true,
+                        italic: true,
+                        color: '#0000FF',
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Identical formatting should result in cache hit
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+    });
+
+    describe('edge cases with formatting', () => {
+      it('handles table cells with undefined fontSize', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-no-fontsize',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial' }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-no-fontsize',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial' }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Identical content with undefined fontSize should cache hit
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+
+      it('handles table cells with undefined fontFamily', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-no-fontfamily',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-no-fontfamily',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Identical content with undefined fontFamily should cache hit
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+
+      it('invalidates when fontSize changes from undefined to defined', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-fontsize-change',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial' }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-fontsize-change',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Adding fontSize should result in cache miss
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('handles table cells with non-text runs mixed with formatted text', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-mixed-runs',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      { text: 'Before', fontFamily: 'Arial', fontSize: 12, bold: true },
+                      { kind: 'image', src: 'img.png', width: 50, height: 50 },
+                      { text: 'After', fontFamily: 'Arial', fontSize: 12, italic: true },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-mixed-runs',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      { text: 'Before', fontFamily: 'Arial', fontSize: 12, bold: true },
+                      { kind: 'image', src: 'img.png', width: 50, height: 50 },
+                      { text: 'After', fontFamily: 'Arial', fontSize: 14, italic: true }, // fontSize changed
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 70 });
+        // Different fontSize in text run should invalidate cache
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('handles table cells with tracked changes and formatting', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-tracked-changes',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 12,
+                        bold: true,
+                        trackedChange: {
+                          kind: 'insert',
+                          id: 'tc-1',
+                          author: 'User A',
+                          date: '2023-01-01',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-tracked-changes',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 14, // fontSize changed
+                        bold: true,
+                        trackedChange: {
+                          kind: 'insert',
+                          id: 'tc-1',
+                          author: 'User A',
+                          date: '2023-01-01',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Formatting change should invalidate even with tracked changes
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('creates cache hit for identical tracked changes with formatting', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-tracked-identical',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 12,
+                        bold: true,
+                        trackedChange: {
+                          kind: 'insert',
+                          id: 'tc-1',
+                          author: 'User A',
+                          date: '2023-01-01',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-tracked-identical',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [
+                      {
+                        text: 'Hello',
+                        fontFamily: 'Arial',
+                        fontSize: 12,
+                        bold: true,
+                        trackedChange: {
+                          kind: 'insert',
+                          id: 'tc-1',
+                          author: 'User A',
+                          date: '2023-01-01',
+                        },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Identical formatting and tracked changes should cache hit
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+    });
   });
 });
