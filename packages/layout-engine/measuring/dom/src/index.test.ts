@@ -95,9 +95,12 @@ describe('measureBlock', () => {
       }
     });
 
-    it('uses content width for wordLayout list first lines with hanging indent', async () => {
+    it('uses content width minus marker space for wordLayout list first lines with hanging indent', async () => {
       const maxWidth = 200;
       const indentLeft = 32;
+      const markerBoxWidthPx = 20;
+      const gutterWidthPx = 12;
+      const leftJustifiedMarkerSpace = markerBoxWidthPx + gutterWidthPx;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list',
@@ -114,8 +117,8 @@ describe('measureBlock', () => {
             indentLeftPx: indentLeft,
             marker: {
               markerText: '1.',
-              markerBoxWidthPx: 20,
-              gutterWidthPx: 12,
+              markerBoxWidthPx,
+              gutterWidthPx,
               run: {
                 fontFamily: 'Times New Roman',
                 fontSize: 16,
@@ -129,7 +132,48 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft);
+      // For left-justified markers, the marker space is subtracted from content width
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft - leftJustifiedMarkerSpace);
+    });
+
+    it('uses textStartPx for wordLayout list first lines with firstLineIndentMode', async () => {
+      const maxWidth = 200;
+      const textStartPx = 100; // Where text actually starts in firstLineIndentMode
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'wordlayout-list-firstline',
+        runs: [
+          {
+            text: 'List item text in firstLineIndentMode should wrap based on textStartPx',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 0, firstLine: 48 },
+          wordLayout: {
+            indentLeftPx: 0,
+            firstLineIndentMode: true,
+            textStartPx,
+            marker: {
+              markerText: '(a)',
+              markerBoxWidthPx: 24,
+              gutterWidthPx: 8,
+              run: {
+                fontFamily: 'Times New Roman',
+                fontSize: 16,
+                bold: false,
+                italic: false,
+                letterSpacing: 0,
+              },
+            },
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      // In firstLineIndentMode, available width = maxWidth - textStartPx
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
     it('measures empty block correctly', async () => {

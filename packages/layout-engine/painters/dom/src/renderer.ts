@@ -1348,6 +1348,10 @@ export class DomPainter {
     container.style.height = `${data.height}px`;
     container.style.top = `${Math.max(0, offset)}px`;
     container.style.zIndex = '1';
+    // Allow header/footer content to overflow its container bounds.
+    // In OOXML, headers and footers can extend past their allocated margin space
+    // into the body region, similar to how body content can have negative indents.
+    container.style.overflow = 'visible';
 
     // For footers, calculate offset to push content to bottom of container
     // Fragments are absolutely positioned, so we need to adjust their y values
