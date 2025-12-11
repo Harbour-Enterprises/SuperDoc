@@ -35,6 +35,9 @@ server.get('/', async (req, res, next) => {
   if (text) editor.commands.insertContent(text);
   if (html) editor.commands.insertContent(html);
 
+  // Example: insert a new list item
+  insertListItem(editor);
+
   // Export the docx and create a buffer to return to the user
   const zipBuffer = await editor.exportDocx();
   documentData = Buffer.from(zipBuffer);
@@ -79,3 +82,50 @@ const getEditor = async (docxFileBuffer) => {
     mediaFiles,
   });
 };
+
+function insertListItem(editor) {
+  const { doc } = editor.state;
+
+  // Find the first list
+  let listPos = null;
+  let listNode = null;
+  doc.descendants((node, pos) => {
+    if (listNode) return false;
+    if (node.type.name === 'orderedList' || node.type.name === 'bulletList') {
+      console.log(`>>> Found ${node.type.name} at position ${pos} with ${node.childCount} items`);
+      listPos = pos;
+      listNode = node;
+    }
+  });
+
+  // Find the first list item
+  let listItemPos = null;
+  let listItemNode = null;
+  listNode.forEach((child, offset) => {
+    if (listItemNode) return;
+    if (child.type.name === 'listItem') {
+      listItemPos = listPos + 1 + offset;
+      listItemNode = child;
+    }
+  });
+
+  // Calculate the position within the list item's paragraph
+  const paragraph = listItemNode.lastChild;
+  const endOfParagraph = listItemPos + 1 + 1 + paragraph.content.size;
+
+  // Set cursor - expects range { from, to }
+  editor.commands.setTextSelection({ from: endOfParagraph, to: endOfParagraph });
+
+  // Split to create new list item
+  const splitResult = editor.commands.splitListItem('listItem');
+  if (!splitResult) {
+    console.log('>>> splitListItem failed');
+    return;
+  }
+  console.log('>>> splitListItem success');
+
+  // Insert content
+  const textToInsert = '[New list item]';
+  editor.commands.insertContent(textToInsert);
+  console.log('>>> Inserted text:', textToInsert);
+}
