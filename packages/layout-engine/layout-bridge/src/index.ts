@@ -764,9 +764,24 @@ export function clickToPosition(
     const line = measure.lines[lineIndex];
 
     const isRTL = isRtlBlock(block);
-    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
-    const paraIndentRight = block.attrs?.indent?.right ?? 0;
-    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    // Type guard: Validate indent structure and ensure numeric values
+    const indentLeft = typeof block.attrs?.indent?.left === 'number' ? block.attrs.indent.left : 0;
+    const indentRight = typeof block.attrs?.indent?.right === 'number' ? block.attrs.indent.right : 0;
+    const paraIndentLeft = Number.isFinite(indentLeft) ? indentLeft : 0;
+    const paraIndentRight = Number.isFinite(indentRight) ? indentRight : 0;
+
+    const totalIndent = paraIndentLeft + paraIndentRight;
+    const availableWidth = Math.max(0, fragment.width - totalIndent);
+
+    // Validation: Warn when indents exceed fragment width (potential layout issue)
+    if (totalIndent > fragment.width) {
+      console.warn(
+        `[clickToPosition] Paragraph indents (${totalIndent}px) exceed fragment width (${fragment.width}px) ` +
+          `for block ${fragment.blockId}. This may indicate a layout miscalculation. ` +
+          `Available width clamped to 0.`,
+      );
+    }
+
     const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth);
     if (pos == null) {
       logClickStage('warn', 'no-position', {
@@ -819,9 +834,24 @@ export function clickToPosition(
     if (lineIndex != null) {
       const line = cellMeasure.lines[lineIndex];
       const isRTL = isRtlBlock(cellBlock);
-      const paraIndentLeft = cellBlock.attrs?.indent?.left ?? 0;
-      const paraIndentRight = cellBlock.attrs?.indent?.right ?? 0;
-      const availableWidth = Math.max(0, tableHit.fragment.width - (paraIndentLeft + paraIndentRight));
+      // Type guard: Validate indent structure and ensure numeric values
+      const indentLeft = typeof cellBlock.attrs?.indent?.left === 'number' ? cellBlock.attrs.indent.left : 0;
+      const indentRight = typeof cellBlock.attrs?.indent?.right === 'number' ? cellBlock.attrs.indent.right : 0;
+      const paraIndentLeft = Number.isFinite(indentLeft) ? indentLeft : 0;
+      const paraIndentRight = Number.isFinite(indentRight) ? indentRight : 0;
+
+      const totalIndent = paraIndentLeft + paraIndentRight;
+      const availableWidth = Math.max(0, tableHit.fragment.width - totalIndent);
+
+      // Validation: Warn when indents exceed fragment width (potential layout issue)
+      if (totalIndent > tableHit.fragment.width) {
+        console.warn(
+          `[clickToPosition:table] Paragraph indents (${totalIndent}px) exceed fragment width (${tableHit.fragment.width}px) ` +
+            `for block ${tableHit.fragment.blockId}. This may indicate a layout miscalculation. ` +
+            `Available width clamped to 0.`,
+        );
+      }
+
       const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth);
 
       if (pos != null) {
@@ -1709,6 +1739,44 @@ const lineHeightBeforeIndex = (measure: Measure, absoluteLineIndex: number): num
   return height;
 };
 
+/**
+ * Maps an X coordinate within a line to a ProseMirror position.
+ *
+ * This function performs spatial-to-logical position mapping for click-to-position
+ * operations. It uses Canvas-based text measurement for pixel-perfect accuracy and
+ * handles RTL text, justified alignment, and complex formatting.
+ *
+ * Algorithm:
+ * 1. Validate the block is a paragraph and has valid PM range data
+ * 2. Use findCharacterAtX to find the character offset at the given X coordinate
+ * 3. For RTL text, reverse the character offset within the line
+ * 4. Convert the character offset to a ProseMirror position
+ *
+ * RTL Handling:
+ * - RTL text renders right-to-left but character offsets are still left-to-right
+ * - The function reverses the character offset to match visual position
+ * - Example: In a 10-character RTL line, visual position 2 maps to character offset 8
+ *
+ * @param block - The paragraph block containing the line
+ * @param line - The line to map within (must be from a paragraph block)
+ * @param x - The X coordinate in pixels from the start of the line (fragment-local space)
+ * @param isRTL - Whether the block has right-to-left text direction
+ * @param availableWidthOverride - Optional available width for justified text calculation
+ *   (fragment width minus paragraph indents). When provided, ensures justify spacing
+ *   matches the painter's rendering.
+ * @returns ProseMirror position at the X coordinate, or null if mapping fails
+ *
+ * @example
+ * ```typescript
+ * // LTR text: Click at x=50 in a line starting at PM position 10
+ * const pos = mapPointToPm(block, line, 50, false, 200);
+ * // Returns: 15 (character at pixel 50)
+ *
+ * // RTL text: Same click in RTL reverses the mapping
+ * const posRTL = mapPointToPm(block, line, 50, true, 200);
+ * // Returns: 25 (reversed character position)
+ * ```
+ */
 const mapPointToPm = (
   block: FlowBlock,
   line: Line,
@@ -1734,11 +1802,56 @@ const mapPointToPm = (
   return result.pmPosition;
 };
 
+/**
+ * Maps a character offset within a line to an X coordinate.
+ *
+ * This function performs logical-to-spatial position mapping for selection highlighting
+ * and caret positioning. It uses Canvas-based text measurement for pixel-perfect accuracy
+ * and accounts for paragraph indents, justified alignment, and complex formatting.
+ *
+ * The function calculates available width by subtracting left and right paragraph indents
+ * from the fragment width, ensuring that text measurements match the painter's rendering
+ * constraints. This available width is critical for justified text, where extra spacing
+ * is distributed proportionally.
+ *
+ * @param block - The paragraph block containing the line
+ * @param line - The line to map within
+ * @param offset - Character offset from the start of the line (0-based)
+ * @param fragmentWidth - The total width of the fragment containing this line (in pixels)
+ * @returns X coordinate in pixels from the start of the line, or 0 if inputs are invalid
+ *
+ * @example
+ * ```typescript
+ * // Measure position of character 5 in a 200px wide fragment
+ * const x = mapPmToX(block, line, 5, 200);
+ * // Returns: 47 (pixels from line start)
+ * ```
+ */
 const mapPmToX = (block: FlowBlock, line: Line, offset: number, fragmentWidth: number): number => {
   if (fragmentWidth <= 0 || line.width <= 0) return 0;
-  const paraIndentLeft = block.kind === 'paragraph' ? (block.attrs?.indent?.left ?? 0) : 0;
-  const paraIndentRight = block.kind === 'paragraph' ? (block.attrs?.indent?.right ?? 0) : 0;
-  const availableWidth = Math.max(0, fragmentWidth - (paraIndentLeft + paraIndentRight));
+
+  // Type guard: Validate indent structure and ensure numeric values
+  let paraIndentLeft = 0;
+  let paraIndentRight = 0;
+  if (block.kind === 'paragraph') {
+    const indentLeft = typeof block.attrs?.indent?.left === 'number' ? block.attrs.indent.left : 0;
+    const indentRight = typeof block.attrs?.indent?.right === 'number' ? block.attrs.indent.right : 0;
+    paraIndentLeft = Number.isFinite(indentLeft) ? indentLeft : 0;
+    paraIndentRight = Number.isFinite(indentRight) ? indentRight : 0;
+  }
+
+  const totalIndent = paraIndentLeft + paraIndentRight;
+  const availableWidth = Math.max(0, fragmentWidth - totalIndent);
+
+  // Validation: Warn when indents exceed fragment width (potential layout issue)
+  if (totalIndent > fragmentWidth) {
+    console.warn(
+      `[mapPmToX] Paragraph indents (${totalIndent}px) exceed fragment width (${fragmentWidth}px) ` +
+        `for block ${block.id}. This may indicate a layout miscalculation. ` +
+        `Available width clamped to 0.`,
+    );
+  }
+
   // Use shared text measurement utility for pixel-perfect accuracy
   return measureCharacterX(block, line, offset, availableWidth);
 };
