@@ -277,11 +277,77 @@ class SuperConverter {
   }
 
   /**
-   * Generic method to get a stored custom property from docx
+   * Checks if an element name matches the expected local name, with or without namespace prefix.
+   * This helper supports custom namespace prefixes in DOCX files (e.g., 'op:Properties', 'custom:property').
+   *
+   * @private
+   * @static
+   * @param {string|undefined|null} elementName - The element name to check (may include namespace prefix)
+   * @param {string} expectedLocalName - The expected local name without prefix
+   * @returns {boolean} True if the element name matches (with or without prefix)
+   *
+   * @example
+   * // Exact match without prefix
+   * _matchesElementName('Properties', 'Properties') // => true
+   *
+   * @example
+   * // Match with namespace prefix
+   * _matchesElementName('op:Properties', 'Properties') // => true
+   * _matchesElementName('custom:property', 'property') // => true
+   *
+   * @example
+   * // No match
+   * _matchesElementName('SomeOtherElement', 'Properties') // => false
+   * _matchesElementName(':Properties', 'Properties') // => false (empty prefix)
+   */
+  static _matchesElementName(elementName, expectedLocalName) {
+    if (!elementName || typeof elementName !== 'string') return false;
+    if (!expectedLocalName) return false;
+
+    // Exact match without prefix
+    if (elementName === expectedLocalName) return true;
+
+    // Check if it ends with :expectedLocalName and has a non-empty prefix
+    if (elementName.endsWith(`:${expectedLocalName}`)) {
+      const prefix = elementName.slice(0, -(expectedLocalName.length + 1));
+      return prefix.length > 0;
+    }
+
+    return false;
+  }
+
+  /**
+   * Generic method to get a stored custom property from docx.
+   * Supports both standard and custom namespace prefixes (e.g., 'op:Properties', 'custom:property').
+   *
    * @static
    * @param {Array} docx - Array of docx file objects
    * @param {string} propertyName - Name of the property to retrieve
    * @returns {string|null} The property value or null if not found
+   *
+   * Returns null in the following cases:
+   * - docx array is empty or doesn't contain 'docProps/custom.xml'
+   * - custom.xml cannot be parsed
+   * - Properties element is not found (with or without namespace prefix)
+   * - Property with the specified name is not found
+   * - Property has malformed structure (missing nested elements or text)
+   * - Any error occurs during parsing or retrieval
+   *
+   * @example
+   * // Standard property without namespace prefix
+   * const version = SuperConverter.getStoredCustomProperty(docx, 'SuperdocVersion');
+   * // => '1.2.3'
+   *
+   * @example
+   * // Property with namespace prefix (e.g., from Office 365)
+   * const guid = SuperConverter.getStoredCustomProperty(docx, 'DocumentGuid');
+   * // Works with both 'Properties' and 'op:Properties' elements
+   * // => 'abc-123-def-456'
+   *
+   * @example
+   * // Non-existent property
+   * const missing = SuperConverter.getStoredCustomProperty(docx, 'NonExistent');
+   * // => null
    */
   static getStoredCustomProperty(docx, propertyName) {
     try {
@@ -291,11 +357,22 @@ class SuperConverter {
       const converter = new SuperConverter();
       const content = customXml.content;
       const contentJson = converter.parseXmlToJson(content);
-      const properties = contentJson.elements?.find((el) => el.name === 'Properties');
+
+      // Handle namespace prefixes (e.g., 'op:Properties' or 'Properties')
+      const properties = contentJson?.elements?.find((el) => SuperConverter._matchesElementName(el.name, 'Properties'));
       if (!properties?.elements) return null;
 
-      const property = properties.elements.find((el) => el.name === 'property' && el.attributes.name === propertyName);
+      // Handle namespace prefixes for property element (e.g., 'op:property' or 'property')
+      const property = properties.elements.find(
+        (el) => SuperConverter._matchesElementName(el.name, 'property') && el.attributes?.name === propertyName,
+      );
       if (!property) return null;
+
+      // Add null safety for nested property structure
+      if (!property.elements?.[0]?.elements?.[0]?.text) {
+        console.warn(`Malformed property structure for "${propertyName}"`);
+        return null;
+      }
 
       return property.elements[0].elements[0].text;
     } catch (e) {
@@ -305,71 +382,125 @@ class SuperConverter {
   }
 
   /**
-   * Generic method to set a stored custom property in docx
+   * Generic method to set a stored custom property in docx.
+   * Supports both standard and custom namespace prefixes (e.g., 'op:Properties', 'custom:property').
+   *
    * @static
-   * @param {Object} docx - The docx object to store the property in
+   * @param {Object} docx - The docx object to store the property in (converted XML structure)
    * @param {string} propertyName - Name of the property
    * @param {string|Function} value - Value or function that returns the value
    * @param {boolean} preserveExisting - If true, won't overwrite existing values
-   * @returns {string} The stored value
+   * @returns {string|null} The stored value, or null if Properties element is not found
+   *
+   * @throws {Error} If an error occurs during property setting (logged as warning)
+   *
+   * @example
+   * // Set a new property
+   * const value = SuperConverter.setStoredCustomProperty(docx, 'MyProperty', 'MyValue');
+   * // => 'MyValue'
+   *
+   * @example
+   * // Set a property with a function
+   * const guid = SuperConverter.setStoredCustomProperty(docx, 'DocumentGuid', () => uuidv4());
+   * // => 'abc-123-def-456'
+   *
+   * @example
+   * // Preserve existing value
+   * SuperConverter.setStoredCustomProperty(docx, 'MyProperty', 'NewValue', true);
+   * // => 'MyValue' (original value preserved)
+   *
+   * @example
+   * // Works with namespace prefixes
+   * // If docx has 'op:Properties' and 'op:property' elements, this will handle them correctly
+   * const version = SuperConverter.setStoredCustomProperty(docx, 'Version', '2.0.0');
+   * // => '2.0.0'
    */
   static setStoredCustomProperty(docx, propertyName, value, preserveExisting = false) {
-    const customLocation = 'docProps/custom.xml';
-    if (!docx[customLocation]) docx[customLocation] = generateCustomXml();
+    try {
+      const customLocation = 'docProps/custom.xml';
+      if (!docx[customLocation]) docx[customLocation] = generateCustomXml();
 
-    const customXml = docx[customLocation];
-    const properties = customXml.elements?.find((el) => el.name === 'Properties');
-    if (!properties) return null;
-    if (!properties.elements) properties.elements = [];
+      const customXml = docx[customLocation];
 
-    // Check if property already exists
-    let property = properties.elements.find((el) => el.name === 'property' && el.attributes.name === propertyName);
+      // Handle namespace prefixes (e.g., 'op:Properties' or 'Properties')
+      const properties = customXml.elements?.find((el) => SuperConverter._matchesElementName(el.name, 'Properties'));
+      if (!properties) return null;
+      if (!properties.elements) properties.elements = [];
 
-    if (property && preserveExisting) {
-      // Return existing value
-      return property.elements[0].elements[0].text;
-    }
+      // Check if property already exists (handle namespace prefixes)
+      let property = properties.elements.find(
+        (el) => SuperConverter._matchesElementName(el.name, 'property') && el.attributes?.name === propertyName,
+      );
 
-    // Generate value if it's a function
-    const finalValue = typeof value === 'function' ? value() : value;
+      if (property && preserveExisting) {
+        // Add null safety when returning existing value
+        if (!property.elements?.[0]?.elements?.[0]?.text) {
+          console.warn(`Malformed existing property structure for "${propertyName}"`);
+          return null;
+        }
+        return property.elements[0].elements[0].text;
+      }
 
-    if (!property) {
-      // Get next available pid
-      const existingPids = properties.elements
-        .filter((el) => el.attributes?.pid)
-        .map((el) => parseInt(el.attributes.pid, 10)) // Add radix for clarity
-        .filter(Number.isInteger); // Use isInteger instead of isFinite since PIDs should be integers
-      const pid = existingPids.length > 0 ? Math.max(...existingPids) + 1 : 2;
+      // Generate value if it's a function
+      const finalValue = typeof value === 'function' ? value() : value;
 
-      property = {
-        type: 'element',
-        name: 'property',
-        attributes: {
-          name: propertyName,
-          fmtid: '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
-          pid,
-        },
-        elements: [
-          {
-            type: 'element',
-            name: 'vt:lpwstr',
-            elements: [
-              {
-                type: 'text',
-                text: finalValue,
-              },
-            ],
+      if (!property) {
+        // Get next available pid
+        const existingPids = properties.elements
+          .filter((el) => el.attributes?.pid)
+          .map((el) => parseInt(el.attributes.pid, 10)) // Add radix for clarity
+          .filter(Number.isInteger); // Use isInteger instead of isFinite since PIDs should be integers
+        const pid = existingPids.length > 0 ? Math.max(...existingPids) + 1 : 2;
+
+        property = {
+          type: 'element',
+          name: 'property',
+          attributes: {
+            name: propertyName,
+            fmtid: '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
+            pid,
           },
-        ],
-      };
+          elements: [
+            {
+              type: 'element',
+              name: 'vt:lpwstr',
+              elements: [
+                {
+                  type: 'text',
+                  text: finalValue,
+                },
+              ],
+            },
+          ],
+        };
 
-      properties.elements.push(property);
-    } else {
-      // Update existing property
-      property.elements[0].elements[0].text = finalValue;
+        properties.elements.push(property);
+      } else {
+        // Add null safety when updating existing property
+        if (!property.elements?.[0]?.elements?.[0]) {
+          console.warn(`Malformed property structure for "${propertyName}", recreating structure`);
+          property.elements = [
+            {
+              type: 'element',
+              name: 'vt:lpwstr',
+              elements: [
+                {
+                  type: 'text',
+                  text: finalValue,
+                },
+              ],
+            },
+          ];
+        } else {
+          property.elements[0].elements[0].text = finalValue;
+        }
+      }
+
+      return finalValue;
+    } catch (e) {
+      console.warn(`Error setting custom property ${propertyName}:`, e);
+      return null;
     }
-
-    return finalValue;
   }
 
   static getStoredSuperdocVersion(docx) {
