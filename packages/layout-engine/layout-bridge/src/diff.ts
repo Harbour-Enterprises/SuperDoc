@@ -145,6 +145,8 @@ const paragraphBlocksEqual = (a: FlowBlock & { kind: 'paragraph' }, b: FlowBlock
       ('bold' in runA ? runA.bold : false) !== ('bold' in runB ? runB.bold : false) ||
       ('italic' in runA ? runA.italic : false) !== ('italic' in runB ? runB.italic : false) ||
       ('color' in runA ? runA.color : undefined) !== ('color' in runB ? runB.color : undefined) ||
+      ('fontSize' in runA ? runA.fontSize : undefined) !== ('fontSize' in runB ? runB.fontSize : undefined) ||
+      ('fontFamily' in runA ? runA.fontFamily : undefined) !== ('fontFamily' in runB ? runB.fontFamily : undefined) ||
       getTrackedChangeKey(runA) !== getTrackedChangeKey(runB)
     ) {
       return false;
