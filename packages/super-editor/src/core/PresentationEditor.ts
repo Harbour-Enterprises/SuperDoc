@@ -4210,9 +4210,9 @@ export class PresentationEditor extends EventEmitter {
     }
     const headerBlocks = this.#headerFooterAdapter.getBatch('header');
     const footerBlocks = this.#headerFooterAdapter.getBatch('footer');
+    // Also get all blocks by rId for multi-section support
     const headerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('header');
     const footerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('footer');
-
     if (!headerBlocks && !footerBlocks && !headerBlocksByRId && !footerBlocksByRId) {
       return null;
     }
@@ -4234,14 +4234,37 @@ export class PresentationEditor extends EventEmitter {
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
     const marginLeft = margins.left ?? DEFAULT_MARGINS.left!;
     const marginRight = margins.right ?? DEFAULT_MARGINS.right!;
-    const width = pageSize.w - (marginLeft + marginRight);
-    if (!Number.isFinite(width) || width <= 0) {
+    const bodyContentWidth = pageSize.w - (marginLeft + marginRight);
+    if (!Number.isFinite(bodyContentWidth) || bodyContentWidth <= 0) {
       return null;
     }
-    const { headerSpace, footerSpace } = extractHeaderFooterSpace(margins);
-    const height = Math.max(headerSpace, footerSpace, 1);
+
+    // Use body content width for header/footer measurement.
+    // Headers/footers should respect the same left/right margins as the body.
+    // Note: Tables that need to span beyond margins should use negative indents
+    // or be handled via table-specific overflow logic, not by expanding the
+    // measurement width for all content.
+    const measurementWidth = bodyContentWidth;
+
+    // Compute available space for header/footer content.
+    // In OOXML, margins.header is the distance from page top to header top,
+    // and margins.top is the distance from page top to body content.
+    // The actual header content space is: top margin - header margin.
+    // Similarly for footer: bottom margin - footer margin.
+    const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
+    const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+    const headerMargin = margins.header ?? 0;
+    const footerMargin = margins.footer ?? 0;
+
+    // Available header space is from headerMargin to topMargin
+    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
+    // Available footer space is from footerMargin to bottomMargin
+    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+
+    // Use the larger of the two as the constraint height, with a minimum of 1
+    const height = Math.max(headerContentSpace, footerContentSpace, 1);
     return {
-      width,
+      width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
