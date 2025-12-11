@@ -1789,8 +1789,13 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost?.removeEventListener('pointermove', this.#handlePointerMove);
     this.#viewportHost?.removeEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost?.removeEventListener('pointerleave', this.#handlePointerLeave);
+    this.#viewportHost?.removeEventListener('dragenter', this.#handleDragEnter);
     this.#viewportHost?.removeEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost?.removeEventListener('dragleave', this.#handleDragLeave);
     this.#viewportHost?.removeEventListener('drop', this.#handleDrop);
+    document.removeEventListener('dragstart', this.#handleDragStart, true);
+    document.removeEventListener('dragend', this.#handleDragEnd);
+    document.removeEventListener('superdocFieldDragEnd', this.#handleSuperdocFieldDragEnd);
     this.#visibleHost?.removeEventListener('keydown', this.#handleKeyDown);
     this.#inputBridge?.notifyTargetChanged();
     this.#inputBridge?.destroy();
@@ -2579,9 +2584,16 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost.addEventListener('pointermove', this.#handlePointerMove);
     this.#viewportHost.addEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost.addEventListener('pointerleave', this.#handlePointerLeave);
+    // HTML5 drag-and-drop requires preventDefault on both dragenter and dragover
+    this.#viewportHost.addEventListener('dragenter', this.#handleDragEnter);
     this.#viewportHost.addEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost.addEventListener('dragleave', this.#handleDragLeave);
     this.#viewportHost.addEventListener('drop', this.#handleDrop);
     this.#visibleHost.addEventListener('keydown', this.#handleKeyDown);
+    // SortableJS workaround: document-level listeners for drag data capture and drop detection
+    document.addEventListener('dragstart', this.#handleDragStart, true);
+    document.addEventListener('dragend', this.#handleDragEnd);
+    document.addEventListener('superdocFieldDragEnd', this.#handleSuperdocFieldDragEnd);
   }
 
   /**
@@ -3562,6 +3574,82 @@ export class PresentationEditor extends EventEmitter {
   };
 
   /**
+   * Handles dragenter events for field annotation drag-and-drop operations.
+   * This handler is REQUIRED for HTML5 drag-and-drop to work - without preventing
+   * default on dragenter, the browser will not fire the drop event.
+   *
+   * @param event - The dragenter event from the browser
+   */
+  #handleDragEnter = (event: DragEvent) => {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) return;
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  /**
+   * Handles dragend events as a workaround for SortableJS.
+   * SortableJS intercepts native drop events and doesn't fire them when dropping
+   * outside its managed containers. We use dragend to detect when the drag operation
+   * ends while over our viewport and manually trigger the drop logic using the
+   * last captured dragover position.
+   *
+   * @param event - The dragend event from the browser
+   */
+  #handleDragEnd = (_event: DragEvent) => {
+    this.#processDragEnd();
+  };
+
+  /**
+   * Handles the custom superdocFieldDragEnd event dispatched by webapp's VueDraggable.
+   * SortableJS doesn't fire native dragend events, so the webapp dispatches this custom event.
+   */
+  #handleSuperdocFieldDragEnd = (_event: Event) => {
+    this.#processDragEnd();
+  };
+
+  /**
+   * Common logic for processing drag end (called by both native and custom event handlers).
+   * If we have a cached drag position with data, performs the synthetic drop.
+   */
+  #processDragEnd() {
+    if (this.#lastDragOverEvent?.fieldAnnotationData) {
+      const cachedData = this.#lastDragOverEvent.fieldAnnotationData;
+      const syntheticDataTransfer = {
+        getData: (type: string) => {
+          if (type.toLowerCase() === FIELD_ANNOTATION_DATA_TYPE.toLowerCase()) {
+            return cachedData;
+          }
+          return '';
+        },
+        types: [FIELD_ANNOTATION_DATA_TYPE],
+      } as unknown as DataTransfer;
+
+      this.#performDrop(this.#lastDragOverEvent.clientX, this.#lastDragOverEvent.clientY, syntheticDataTransfer);
+    }
+
+    // Clear the cached event and data (both local and global)
+    this.#lastDragOverEvent = null;
+    this.#cachedDragData = null;
+    window.__superdocDragData = undefined;
+  }
+
+  /**
+   * Handles dragleave events.
+   * Note: We intentionally do NOT clear #lastDragOverEvent here because:
+   * 1. A dragleave fires when releasing the mouse (before dragend/drop)
+   * 2. We need the cached position for the SortableJS workaround
+   * 3. The data will be cleared in #processDragEnd after the drop is handled
+   */
+  #handleDragLeave = (_event: DragEvent) => {
+    // Intentionally empty - do not clear cached data
+    // The dragleave event fires before the custom superdocFieldDragEnd event,
+    // so we need to preserve the cached position for the synthetic drop
+  };
+
+  /**
    * Handles dragover events for field annotation drag-and-drop operations.
    * Updates the cursor position during drag to provide visual feedback.
    *
@@ -3579,22 +3667,93 @@ export class PresentationEditor extends EventEmitter {
    * - If hit testing fails or document is unavailable
    * - If the cursor position hasn't changed
    */
+  // Track last drag position for SortableJS workaround
+  // SortableJS doesn't fire native drop events, so we capture the last position during dragover
+  // and use it when we detect a drag end via pointerup
+  #lastDragOverEvent: { clientX: number; clientY: number; fieldAnnotationData: string | null } | null = null;
+
+  // Cache drag data from dragstart since getData() is not available during dragover/dragend (browser security)
+  #cachedDragData: string | null = null;
+
+  /**
+   * Helper method to retrieve field annotation data from DataTransfer.
+   * Handles case-insensitive MIME type matching since browsers may lowercase MIME types.
+   *
+   * @param dt - The DataTransfer object from a drag event, or null
+   * @returns The field annotation data string, or empty string if not found
+   *
+   * @remarks
+   * This method tries both the original MIME type case and lowercase variant
+   * because some browsers normalize custom MIME types to lowercase.
+   */
+  #getFieldAnnotationData(dt: DataTransfer | null): string {
+    if (!dt) return '';
+    const data = dt.getData(FIELD_ANNOTATION_DATA_TYPE);
+    return data || dt.getData(FIELD_ANNOTATION_DATA_TYPE.toLowerCase());
+  }
+
+  /**
+   * Captures field annotation drag data at dragstart for later use during dragover/drop events.
+   * This is a document-level listener that captures data from external drag sources (like webapp).
+   *
+   * @param event - The native dragstart event from the browser
+   *
+   * @remarks
+   * Browser security restrictions prevent calling getData() on DataTransfer during dragover
+   * and dragend events. To work around this, we capture the field annotation data during
+   * dragstart and cache it in #cachedDragData for use throughout the drag operation.
+   *
+   * This listener is registered at the document level to catch drag operations that originate
+   * outside the editor (e.g., from the webapp's field list sidebar).
+   *
+   * Side effects:
+   * - Updates #cachedDragData with field annotation payload if present in the drag
+   * - Does not prevent default behavior or stop event propagation
+   *
+   * Early returns:
+   * - If the drag event does not contain field annotation data (checked via MIME type)
+   */
+  #handleDragStart = (event: DragEvent) => {
+    const dt = event.dataTransfer;
+    const dataTypeLower = FIELD_ANNOTATION_DATA_TYPE.toLowerCase();
+    const hasFieldAnnotation = dt?.types?.some((t) => t.toLowerCase() === dataTypeLower);
+
+    if (hasFieldAnnotation) {
+      const data = this.#getFieldAnnotationData(dt);
+      this.#cachedDragData = data || null;
+    }
+  };
+
   #handleDragOver = (event: DragEvent) => {
     const activeEditor = this.getActiveEditor();
-    if (!activeEditor?.isEditable) {
-      return;
-    }
+    if (!activeEditor?.isEditable) return;
+
     event.preventDefault();
     if (event.dataTransfer) {
       event.dataTransfer.dropEffect = 'copy';
     }
 
     const dt = event.dataTransfer;
-    const hasFieldAnnotation =
-      dt?.types?.includes(FIELD_ANNOTATION_DATA_TYPE) || Boolean(dt?.getData?.(FIELD_ANNOTATION_DATA_TYPE));
-    if (!hasFieldAnnotation) {
-      return;
+    const dataTypeLower = FIELD_ANNOTATION_DATA_TYPE.toLowerCase();
+
+    // Check for drag data from window.__superdocDragData (SortableJS workaround)
+    // SortableJS sets data after native dragstart, so we read from global
+    const globalDragData = window.__superdocDragData;
+    if (!this.#cachedDragData && globalDragData) {
+      this.#cachedDragData = globalDragData;
     }
+
+    const hasFieldAnnotation =
+      dt?.types?.some((t) => t.toLowerCase() === dataTypeLower) || this.#cachedDragData != null;
+
+    if (!hasFieldAnnotation) return;
+
+    // Cache position and data for SortableJS workaround (native drop events don't fire)
+    this.#lastDragOverEvent = {
+      clientX: event.clientX,
+      clientY: event.clientY,
+      fieldAnnotationData: this.#cachedDragData,
+    };
 
     const hit = this.hitTest(event.clientX, event.clientY);
     const doc = activeEditor.state?.doc;
@@ -3625,15 +3784,23 @@ export class PresentationEditor extends EventEmitter {
 
   /**
    * Handles drop events for field annotation drag-and-drop operations.
-   * Inserts a field annotation at the drop position and emits events for tracking.
+   * Supports two distinct payload formats for backward compatibility:
+   *
+   * 1. sourceField format (webapp): `{ sourceField: { type, inputtiletype, ... } }`
+   *    - Emits 'fieldAnnotationDropped' event and returns early
+   *    - External event listener (webapp) handles the actual insertion
+   *    - Preserves original FieldAnnotationPlugin behavior (handleDropOutside=true)
+   *
+   * 2. attributes format (example app): `{ attributes: { fieldId, fieldType, displayLabel, type } }`
+   *    - Inserts the field annotation directly using the provided attributes
+   *    - Used by example apps and internal drag operations
    *
    * @param event - The drop event from the browser
    *
    * Side effects:
    * - Prevents default browser drop behavior and stops event propagation
-   * - Inserts a field annotation node at the drop position
-   * - Moves the cursor to just after the inserted node
-   * - Emits 'fieldAnnotationDropped' event with drop metadata
+   * - Emits 'fieldAnnotationDropped' event with drop metadata (always)
+   * - For attributes format: inserts field annotation and moves cursor
    * - Focuses the editor view
    * - Triggers selection overlay updates via #scheduleSelectionUpdate
    *
@@ -3642,7 +3809,7 @@ export class PresentationEditor extends EventEmitter {
    * - If no field annotation data is present in the drop
    * - If JSON parsing of the payload fails
    * - If hit testing and fallback position both fail
-   * - If the parsed attributes fail validation
+   * - If sourceField is present (event listener handles insertion)
    *
    * Fallback behavior:
    * - If hit testing fails (e.g., during a reflow), falls back to current selection position
@@ -3650,31 +3817,44 @@ export class PresentationEditor extends EventEmitter {
    */
   #handleDrop = (event: DragEvent) => {
     const activeEditor = this.getActiveEditor();
-    if (!activeEditor?.isEditable) {
-      return;
-    }
+    if (!activeEditor?.isEditable) return;
 
-    // Internal layout-engine drags use a custom MIME type and are handled by #setupDragHandlers.
-    if (event.dataTransfer?.types?.includes('application/x-field-annotation')) {
+    // Internal layout-engine drags use a custom MIME type and are handled by #setupDragHandlers
+    if (event.dataTransfer?.types?.some((t) => t.toLowerCase() === 'application/x-field-annotation')) {
       return;
     }
 
     event.preventDefault();
     event.stopPropagation();
 
-    const fieldAnnotationData = event.dataTransfer?.getData(FIELD_ANNOTATION_DATA_TYPE);
-    if (!fieldAnnotationData) {
-      return;
-    }
+    // Clear cached drag data since we got a real drop
+    this.#lastDragOverEvent = null;
+    this.#cachedDragData = null;
+    window.__superdocDragData = undefined;
 
-    const hit = this.hitTest(event.clientX, event.clientY);
-    // If layout hit testing fails (e.g., during a reflow), fall back to the current selection.
+    this.#performDrop(event.clientX, event.clientY, event.dataTransfer);
+  };
+
+  /**
+   * Core drop logic extracted for reuse by both native drop and SortableJS workaround.
+   * @param clientX - X coordinate of drop position
+   * @param clientY - Y coordinate of drop position
+   * @param dataTransfer - DataTransfer object containing the drag payload
+   */
+  #performDrop(clientX: number, clientY: number, dataTransfer: DataTransfer | null) {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) return;
+
+    // Try both original case and lowercase for getData (browser lowercases MIME types)
+    const fieldAnnotationData = this.#getFieldAnnotationData(dataTransfer);
+    if (!fieldAnnotationData) return;
+
+    const hit = this.hitTest(clientX, clientY);
+    // Fall back to current selection if hit testing fails (e.g., during reflow)
     const selection = activeEditor.state?.selection;
     const fallbackPos = selection?.from ?? activeEditor.state?.doc?.content.size ?? null;
     const pos = hit?.pos ?? fallbackPos;
-    if (pos == null) {
-      return;
-    }
+    if (pos == null) return;
 
     let parsedData: FieldAnnotationDragPayload | null = null;
     try {
@@ -3685,6 +3865,7 @@ export class PresentationEditor extends EventEmitter {
 
     const { attributes, sourceField } = parsedData ?? {};
 
+    // Emit event for external listeners (webapp handles insertion via this event)
     activeEditor.emit?.('fieldAnnotationDropped', {
       sourceField,
       editor: activeEditor,
@@ -3692,18 +3873,32 @@ export class PresentationEditor extends EventEmitter {
       pos,
     });
 
-    // Validate attributes before attempting insertion
-    if (attributes && isValidFieldAnnotationAttributes(attributes)) {
-      activeEditor.commands?.addFieldAnnotation?.(pos, attributes, true);
-
-      // Move the caret to just after the inserted node so subsequent drops append instead of replacing.
-      const posAfter = Math.min(pos + 1, activeEditor.state?.doc?.content.size ?? pos + 1);
-      const tr = activeEditor.state?.tr.setSelection(TextSelection.create(activeEditor.state.doc, posAfter));
-      if (tr) {
-        activeEditor.view?.dispatch(tr);
-      }
-
+    // Path 1: sourceField format (webapp) - event listener handles insertion
+    if (sourceField) {
       this.#scheduleSelectionUpdate();
+      return;
+    }
+
+    // Path 2: attributes format (example app) - insert directly
+    if (attributes && isValidFieldAnnotationAttributes(attributes)) {
+      try {
+        activeEditor.commands?.addFieldAnnotation?.(pos, attributes, true);
+
+        // Move caret after inserted node
+        const posAfter = Math.min(pos + 1, activeEditor.state?.doc?.content.size ?? pos + 1);
+        const tr = activeEditor.state?.tr.setSelection(TextSelection.create(activeEditor.state.doc, posAfter));
+        if (tr) {
+          activeEditor.view?.dispatch(tr);
+        }
+
+        this.#scheduleSelectionUpdate();
+      } catch (error) {
+        // Log insertion errors but don't block the UI
+        console.error('Failed to insert field annotation during drop:', error);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('Drop context:', { pos, attributes, editorState: activeEditor.state });
+        }
+      }
     }
 
     const editorDom = activeEditor.view?.dom as HTMLElement | undefined;
@@ -3711,7 +3906,7 @@ export class PresentationEditor extends EventEmitter {
       editorDom.focus();
       activeEditor.view?.focus();
     }
-  };
+  }
 
   #handleDoubleClick = (event: MouseEvent) => {
     if (event.button !== 0) return;

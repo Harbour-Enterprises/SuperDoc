@@ -93,6 +93,7 @@ const commentsModuleConfig = computed(() => {
 
 // Refs
 const layers = ref(null);
+const telemetryUnsubscribers = new Set();
 
 // Comments layer
 const commentsLayer = ref(null);
@@ -206,9 +207,14 @@ const onEditorReady = ({ editor, presentationEditor }) => {
   presentationEditor.setContextMenuDisabled?.(proxy.$superdoc.config.disableContextMenu);
 
   // Subscribe to layout pipeline telemetry
-  presentationEditor.onTelemetry((telemetryPayload) => {
-    proxy.$superdoc.captureLayoutPipelineEvent(telemetryPayload);
+  const unsubscribeTelemetry = presentationEditor.onTelemetry((telemetryPayload) => {
+    const superdoc = proxy?.$superdoc;
+    if (!superdoc?.captureLayoutPipelineEvent) return;
+    superdoc.captureLayoutPipelineEvent(telemetryPayload);
   });
+  if (typeof unsubscribeTelemetry === 'function') {
+    telemetryUnsubscribers.add(unsubscribeTelemetry);
+  }
 
   // Listen for fresh comment positions from the layout engine.
   // PresentationEditor emits this after every layout with PM positions collected
@@ -605,6 +611,8 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   document.removeEventListener('mousedown', handleDocumentMouseDown);
+  telemetryUnsubscribers.forEach((unsubscribe) => unsubscribe?.());
+  telemetryUnsubscribers.clear();
 });
 
 const selectionLayer = ref(null);
