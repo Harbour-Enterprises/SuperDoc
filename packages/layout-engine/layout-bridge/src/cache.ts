@@ -29,11 +29,13 @@ const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ')
  * @returns A string hash representing the block's run content and formatting
  */
 const hashRuns = (block: FlowBlock): string => {
-  // FIX: For table blocks, include cell content in hash to invalidate cache when cell text changes.
-  // Previously tables were cached by ID only, causing stale measurements when editing cell content.
+  // FIX: For table blocks and paragraphs, include content AND formatting properties in hash.
+  // Formatting properties that affect measurement: fontSize, fontFamily, bold, italic, color.
+  // This ensures cache invalidation when text OR formatting changes.
+  // Previously tables only included text content, causing stale measurements when changing formatting.
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    const cellTexts: string[] = [];
+    const cellHashes: string[] = [];
 
     // Safety: Check that rows array exists before iterating
     if (!tableBlock.rows) {
@@ -59,15 +61,40 @@ const hashRuns = (block: FlowBlock): string => {
           }
 
           for (const run of paragraphBlock.runs) {
-            // Type guard: Check if run has text property and it's a string
-            if ('text' in run && typeof run.text === 'string') {
-              cellTexts.push(normalizeText(run.text));
+            // Include text content
+            const text = 'text' in run && typeof run.text === 'string' ? normalizeText(run.text) : '';
+
+            // Include formatting marks that affect measurement (mirroring paragraph approach)
+            const bold = 'bold' in run ? run.bold : false;
+            const italic = 'italic' in run ? run.italic : false;
+            const color = 'color' in run ? run.color : undefined;
+            const fontSize = 'fontSize' in run ? run.fontSize : undefined;
+            const fontFamily = 'fontFamily' in run ? run.fontFamily : undefined;
+
+            // Build marks string including all formatting properties
+            const marks = [
+              bold ? 'b' : '',
+              italic ? 'i' : '',
+              color ?? '',
+              fontSize !== undefined ? `fs:${fontSize}` : '',
+              fontFamily ? `ff:${fontFamily}` : '',
+            ].join('');
+
+            // Include tracked change metadata in hash
+            let trackedKey = '';
+            if (hasTrackedChange(run)) {
+              const tc = run.trackedChange;
+              const beforeHash = tc.before ? JSON.stringify(tc.before) : '';
+              const afterHash = tc.after ? JSON.stringify(tc.after) : '';
+              trackedKey = `|tc:${tc.kind ?? ''}:${tc.id ?? ''}:${tc.author ?? ''}:${tc.date ?? ''}:${beforeHash}:${afterHash}`;
             }
+
+            cellHashes.push(`${text}:${marks}${trackedKey}`);
           }
         }
       }
     }
-    const contentHash = cellTexts.join('|');
+    const contentHash = cellHashes.join('|');
     return `${block.id}:table:${contentHash}`;
   }
 
@@ -94,7 +121,15 @@ const hashRuns = (block: FlowBlock): string => {
       const bold = 'bold' in run ? run.bold : false;
       const italic = 'italic' in run ? run.italic : false;
       const color = 'color' in run ? run.color : undefined;
-      const marks = [bold ? 'b' : '', italic ? 'i' : '', color ?? ''].join('');
+      const fontSize = 'fontSize' in run ? run.fontSize : undefined;
+      const fontFamily = 'fontFamily' in run ? run.fontFamily : undefined;
+      const marks = [
+        bold ? 'b' : '',
+        italic ? 'i' : '',
+        color ?? '',
+        fontSize !== undefined ? `fs:${fontSize}` : '',
+        fontFamily ? `ff:${fontFamily}` : '',
+      ].join('');
 
       // Include tracked change metadata in hash
       let trackedKey = '';
