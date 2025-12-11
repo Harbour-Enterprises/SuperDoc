@@ -764,7 +764,10 @@ export function clickToPosition(
     const line = measure.lines[lineIndex];
 
     const isRTL = isRtlBlock(block);
-    const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL);
+    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
+    const paraIndentRight = block.attrs?.indent?.right ?? 0;
+    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth);
     if (pos == null) {
       logClickStage('warn', 'no-position', {
         blockId: fragment.blockId,
@@ -816,7 +819,10 @@ export function clickToPosition(
     if (lineIndex != null) {
       const line = cellMeasure.lines[lineIndex];
       const isRTL = isRtlBlock(cellBlock);
-      const pos = mapPointToPm(cellBlock, line, localX, isRTL);
+      const paraIndentLeft = cellBlock.attrs?.indent?.left ?? 0;
+      const paraIndentRight = cellBlock.attrs?.indent?.right ?? 0;
+      const availableWidth = Math.max(0, tableHit.fragment.width - (paraIndentLeft + paraIndentRight));
+      const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth);
 
       if (pos != null) {
         clickMappingTelemetry.geometrySuccess++;
@@ -1067,7 +1073,23 @@ export function selectionToRects(
           const endX = mapPmToX(block, line, charOffsetTo, fragment.width);
           // Align highlights with DOM-rendered list markers by offsetting for the marker box
           const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
-          const rectX = fragment.x + markerWidth + Math.min(startX, endX);
+
+          // Align with painter DOM indent handling (padding/text-indent on lines)
+          // The painter applies indent to ALL non-list lines:
+          // - For non-segment lines: via CSS paddingLeft + textIndent
+          // - For segment-based lines: via direct X offset added to segment positions
+          // List first lines handle indentation through marker positioning, not CSS indent.
+          const paraIndentLeft = block.attrs?.indent?.left ?? 0;
+          const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+          const isFirstLine = index === fragment.fromLine;
+          const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
+          let indentAdjust = 0;
+          if (!isListFirstLine) {
+            // Apply indent to all non-list lines (both segment-based and regular)
+            indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+          }
+
+          const rectX = fragment.x + markerWidth + indentAdjust + Math.min(startX, endX);
           const rectWidth = Math.max(1, Math.abs(endX - startX));
           const lineOffset = lineHeightBeforeIndex(measure, index) - lineHeightBeforeIndex(measure, fragment.fromLine);
           const rectY = fragment.y + lineOffset;
@@ -1687,13 +1709,19 @@ const lineHeightBeforeIndex = (measure: Measure, absoluteLineIndex: number): num
   return height;
 };
 
-const mapPointToPm = (block: FlowBlock, line: Line, x: number, isRTL: boolean): number | null => {
+const mapPointToPm = (
+  block: FlowBlock,
+  line: Line,
+  x: number,
+  isRTL: boolean,
+  availableWidthOverride?: number,
+): number | null => {
   if (block.kind !== 'paragraph') return null;
   const range = computeLinePmRange(block, line);
   if (range.pmStart == null || range.pmEnd == null) return null;
 
   // Use shared text measurement utility for pixel-perfect accuracy
-  const result = findCharacterAtX(block, line, x, range.pmStart);
+  const result = findCharacterAtX(block, line, x, range.pmStart, availableWidthOverride);
 
   // Handle RTL text by reversing the position
   if (isRTL) {
@@ -1708,8 +1736,11 @@ const mapPointToPm = (block: FlowBlock, line: Line, x: number, isRTL: boolean): 
 
 const mapPmToX = (block: FlowBlock, line: Line, offset: number, fragmentWidth: number): number => {
   if (fragmentWidth <= 0 || line.width <= 0) return 0;
+  const paraIndentLeft = block.kind === 'paragraph' ? (block.attrs?.indent?.left ?? 0) : 0;
+  const paraIndentRight = block.kind === 'paragraph' ? (block.attrs?.indent?.right ?? 0) : 0;
+  const availableWidth = Math.max(0, fragmentWidth - (paraIndentLeft + paraIndentRight));
   // Use shared text measurement utility for pixel-perfect accuracy
-  return measureCharacterX(block, line, offset);
+  return measureCharacterX(block, line, offset, availableWidth);
 };
 
 const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
