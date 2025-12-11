@@ -404,22 +404,26 @@ export class EditorOverlayManager {
   }
 
   /**
-   * Positions the editor host for header/footer editing.
+   * Positions the editor host for header/footer editing using pure layout coordinates.
    *
-   * When a decoration container exists, positions are derived from its bounds.
-   * When no decoration container exists (empty header/footer), positions are
-   * derived directly from the region data.
+   * This method uses ONLY layout-based coordinates from the region data, never
+   * getBoundingClientRect(). This ensures overlays stay aligned with content even
+   * when the editor is embedded in containers with CSS transforms, filters, or
+   * complex positioning contexts.
+   *
+   * The transform: scale() on #viewportHost handles zoom, so we don't multiply
+   * by zoom here - we use the raw layout coordinates directly.
    *
    * @param editorHost - The editor host element to position
-   * @param region - The header/footer region with dimension data
+   * @param region - The header/footer region with dimension data from layout engine
    * @param decorationContainer - The decoration container (optional, may not exist for empty regions)
-   * @param zoom - Current zoom level
+   * @param _zoom - Current zoom level (unused - zoom is handled by transform: scale())
    */
   #positionEditorHost(
     editorHost: HTMLElement,
     region: HeaderFooterRegion,
     decorationContainer: HTMLElement | null,
-    zoom: number,
+    _zoom: number,
   ): void {
     const pageElement = editorHost.parentElement;
 
@@ -428,30 +432,14 @@ export class EditorOverlayManager {
       return;
     }
 
-    let top: number;
-    let left: number;
-    let width: number;
-    let height: number;
+    // Prefer inline layout metrics from the decoration container (unscaled numbers),
+    // fall back to region data when no container exists (empty headers/footers).
+    const top = decorationContainer?.offsetTop ?? region.localY;
+    const left = decorationContainer?.offsetLeft ?? region.localX;
+    const width = decorationContainer?.offsetWidth ?? region.width;
+    const height = decorationContainer?.offsetHeight ?? region.height;
 
-    if (decorationContainer) {
-      // Use decoration container bounds when available
-      const decorationRect = decorationContainer.getBoundingClientRect();
-      const pageRect = pageElement.getBoundingClientRect();
-
-      top = decorationRect.top - pageRect.top;
-      left = decorationRect.left - pageRect.left;
-      width = decorationRect.width;
-      height = decorationRect.height;
-    } else {
-      // Use region data directly (for empty headers/footers)
-      // Region coordinates are in layout units, apply zoom
-      top = region.localY * zoom;
-      left = region.localX * zoom;
-      width = region.width * zoom;
-      height = region.height * zoom;
-    }
-
-    // Apply positioning
+    // Apply positioning using pure layout coordinates
     Object.assign(editorHost.style, {
       top: `${top}px`,
       left: `${left}px`,
@@ -487,12 +475,14 @@ export class EditorOverlayManager {
   /**
    * Shows a full-width border line at the bottom of the header or top of the footer.
    * This creates the MS Word style visual indicator spanning edge-to-edge of the page.
+   *
+   * Uses pure layout coordinates from region data to avoid coordinate system mixing.
    */
   #showHeaderFooterBorder(
     pageElement: HTMLElement,
     region: HeaderFooterRegion,
     decorationContainer: HTMLElement | null,
-    zoom: number,
+    _zoom: number,
   ): void {
     this.#hideHeaderFooterBorder();
 
@@ -500,22 +490,17 @@ export class EditorOverlayManager {
     this.#borderLine = document.createElement('div');
     this.#borderLine.className = 'superdoc-header-footer-border';
 
-    let topPosition: number;
     const isHeader = region.kind === 'header';
 
-    if (decorationContainer) {
-      // Get decoration container position to know where to place the border
-      const decorationRect = decorationContainer.getBoundingClientRect();
-      const pageRect = pageElement.getBoundingClientRect();
-
-      // Calculate position - for header, border is at bottom; for footer, border is at top
-      topPosition = isHeader ? decorationRect.bottom - pageRect.top : decorationRect.top - pageRect.top;
-    } else {
-      // Use region data directly (for empty headers/footers)
-      // For header: border at bottom of region (localY + height)
-      // For footer: border at top of region (localY)
-      topPosition = isHeader ? (region.localY + region.height) * zoom : region.localY * zoom;
-    }
+    // Use layout coordinates. If a decoration container exists, its offset* values
+    // already represent unscaled layout numbers relative to the page.
+    const decorationTop = decorationContainer?.offsetTop;
+    const decorationHeight = decorationContainer?.offsetHeight;
+    const topPosition = isHeader
+      ? decorationTop != null && decorationHeight != null
+        ? decorationTop + decorationHeight
+        : region.localY + region.height
+      : (decorationTop ?? region.localY);
 
     Object.assign(this.#borderLine.style, {
       position: 'absolute',

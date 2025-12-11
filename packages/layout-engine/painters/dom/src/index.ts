@@ -1,10 +1,30 @@
 import type { FlowBlock, Fragment, Layout, Measure, Page, PainterDOM, PageMargins } from '@superdoc/contracts';
 import { DomPainter } from './renderer.js';
 import type { PageStyles } from './styles.js';
+import type { RulerOptions } from './renderer.js';
 
 // Re-export constants
 export { DOM_CLASS_NAMES } from './constants.js';
 export type { DomClassName } from './constants.js';
+
+// Re-export ruler utilities
+export {
+  generateRulerDefinition,
+  generateRulerDefinitionFromPx,
+  createRulerElement,
+  ensureRulerStyles,
+  clampHandlePosition,
+  calculateMarginFromHandle,
+  RULER_CLASS_NAMES,
+} from './ruler/index.js';
+export type {
+  RulerDefinition,
+  RulerConfig,
+  RulerConfigPx,
+  RulerTick,
+  CreateRulerElementOptions,
+} from './ruler/index.js';
+export type { RulerOptions } from './renderer.js';
 
 // Re-export utility functions for testing
 export { sanitizeUrl, linkMetrics, applyRunDataAttributes } from './renderer.js';
@@ -68,6 +88,12 @@ export type DomPainterOptions = {
     /** Optional mount padding-top override (px) used in scroll mapping; defaults to computed style. */
     paddingTop?: number;
   };
+  /**
+   * Per-page ruler options.
+   * When enabled, renders a horizontal ruler at the top of each page showing
+   * inch marks and optionally margin handles for interactive margin adjustment.
+   */
+  ruler?: RulerOptions;
 };
 
 export const createDomPainter = (
@@ -81,6 +107,7 @@ export const createDomPainter = (
     headerProvider: options.headerProvider,
     footerProvider: options.footerProvider,
     virtualization: options.virtualization,
+    ruler: options.ruler,
   });
 
   return {

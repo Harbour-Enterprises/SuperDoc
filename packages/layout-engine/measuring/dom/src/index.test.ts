@@ -95,9 +95,12 @@ describe('measureBlock', () => {
       }
     });
 
-    it('uses content width for wordLayout list first lines with hanging indent', async () => {
+    it('uses content width minus marker space for wordLayout list first lines with hanging indent', async () => {
       const maxWidth = 200;
       const indentLeft = 32;
+      const markerBoxWidthPx = 20;
+      const gutterWidthPx = 12;
+      const leftJustifiedMarkerSpace = markerBoxWidthPx + gutterWidthPx;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list',
@@ -114,8 +117,8 @@ describe('measureBlock', () => {
             indentLeftPx: indentLeft,
             marker: {
               markerText: '1.',
-              markerBoxWidthPx: 20,
-              gutterWidthPx: 12,
+              markerBoxWidthPx,
+              gutterWidthPx,
               run: {
                 fontFamily: 'Times New Roman',
                 fontSize: 16,
@@ -129,7 +132,48 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft);
+      // For left-justified markers, the marker space is subtracted from content width
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft - leftJustifiedMarkerSpace);
+    });
+
+    it('uses textStartPx for wordLayout list first lines with firstLineIndentMode', async () => {
+      const maxWidth = 200;
+      const textStartPx = 100; // Where text actually starts in firstLineIndentMode
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'wordlayout-list-firstline',
+        runs: [
+          {
+            text: 'List item text in firstLineIndentMode should wrap based on textStartPx',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 0, firstLine: 48 },
+          wordLayout: {
+            indentLeftPx: 0,
+            firstLineIndentMode: true,
+            textStartPx,
+            marker: {
+              markerText: '(a)',
+              markerBoxWidthPx: 24,
+              gutterWidthPx: 8,
+              run: {
+                fontFamily: 'Times New Roman',
+                fontSize: 16,
+                bold: false,
+                italic: false,
+                letterSpacing: 0,
+              },
+            },
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      // In firstLineIndentMode, available width = maxWidth - textStartPx
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
     it('measures empty block correctly', async () => {
@@ -1062,6 +1106,55 @@ describe('measureBlock', () => {
         expect(tabRun.width).toBeGreaterThan(0);
         expect(tabRun.leader).toBe('dot');
       }
+    });
+  });
+
+  describe('space-only runs', () => {
+    it('counts width contributed by runs that contain only spaces', async () => {
+      const baseRun = { fontFamily: 'Arial', fontSize: 16 };
+
+      const combinedBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'space-between-runs',
+        runs: [
+          { ...baseRun, text: 'This' },
+          { ...baseRun, text: ' ' }, // space in its own run
+          { ...baseRun, text: 'CONFIDENTIALITY', bold: true },
+        ],
+        attrs: {},
+      };
+
+      const measureCombined = expectParagraphMeasure(await measureBlock(combinedBlock, 1000));
+      expect(measureCombined.lines).toHaveLength(1);
+      expect(measureCombined.lines[0].segments?.map((s) => s.runIndex)).toEqual([0, 1, 2]);
+
+      const measureThis = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-this', runs: [{ ...baseRun, text: 'This' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureSpace = expectParagraphMeasure(
+        await measureBlock(
+          { kind: 'paragraph', id: 'space-space', runs: [{ ...baseRun, text: ' ' }], attrs: {} },
+          1000,
+        ),
+      );
+      const measureConf = expectParagraphMeasure(
+        await measureBlock(
+          {
+            kind: 'paragraph',
+            id: 'space-conf',
+            runs: [{ ...baseRun, text: 'CONFIDENTIALITY', bold: true }],
+            attrs: {},
+          },
+          1000,
+        ),
+      );
+
+      const expectedWidth = measureThis.lines[0].width + measureSpace.lines[0].width + measureConf.lines[0].width;
+
+      expect(measureCombined.lines[0].width).toBeCloseTo(expectedWidth, 0);
     });
   });
 

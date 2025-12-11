@@ -1020,7 +1020,9 @@ export class HeaderFooterLayoutAdapter {
     let hasBlocks = false;
 
     descriptors.forEach((descriptor) => {
-      if (!descriptor.variant) return;
+      if (!descriptor.variant) {
+        return;
+      }
       const blocks = this.#getBlocks(descriptor);
       if (blocks && blocks.length > 0) {
         batch[descriptor.variant] = blocks;

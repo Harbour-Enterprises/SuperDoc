@@ -2,6 +2,40 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { FlowBlock, Line, Run } from '@superdoc/contracts';
 import { findCharacterAtX, measureCharacterX, charOffsetToPm } from '../src/text-measurement.ts';
 
+// Helper to count spaces (tests functionality indirectly through justify calculations)
+const countSpaces = (text: string): number => {
+  let spaces = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    if (text[i] === ' ' || text[i] === '\u00A0') {
+      spaces += 1;
+    }
+  }
+  return spaces;
+};
+
+// Helper to test justify adjustment by measuring with different available widths
+const testJustifyAdjustment = (
+  block: FlowBlock,
+  line: Line,
+  availableWidth: number,
+): { extraPerSpace: number; totalSpaces: number } => {
+  // Measure a position with normal width
+  const normalWidth = measureCharacterX(block, line, 1, line.width);
+  // Measure with increased available width (which should add justify spacing)
+  const wideWidth = measureCharacterX(block, line, 1, availableWidth);
+
+  // If justified, the difference reveals the extra spacing
+  const diff = wideWidth - normalWidth;
+  const spaceCount = countSpaces(
+    line.segments ? '' : block.kind === 'paragraph' ? block.runs.map((r) => ('text' in r ? r.text : '')).join('') : '',
+  );
+
+  return {
+    extraPerSpace: spaceCount > 0 ? diff / spaceCount : 0,
+    totalSpaces: spaceCount,
+  };
+};
+
 const CHAR_WIDTH = 10;
 
 const ensureDocumentStub = (): void => {
@@ -345,6 +379,78 @@ describe('text measurement utility', () => {
 
       const result = charOffsetToPm(block, line, 0, 5);
       expect(result).toBe(5);
+    });
+  });
+
+  describe('countSpaces helper', () => {
+    // These tests verify the countSpaces helper used above
+    it('counts regular spaces correctly', () => {
+      expect(countSpaces('Hello World')).toBe(1);
+      expect(countSpaces('A B C D')).toBe(3);
+      expect(countSpaces('   ')).toBe(3);
+    });
+
+    it('counts non-breaking spaces correctly', () => {
+      expect(countSpaces('Hello\u00A0World')).toBe(1);
+      expect(countSpaces('\u00A0\u00A0\u00A0')).toBe(3);
+    });
+
+    it('counts both regular and non-breaking spaces', () => {
+      expect(countSpaces('A \u00A0B')).toBe(2);
+      expect(countSpaces(' \u00A0 \u00A0 ')).toBe(5);
+    });
+
+    it('returns zero for text with no spaces', () => {
+      expect(countSpaces('HelloWorld')).toBe(0);
+      expect(countSpaces('no-spaces')).toBe(0);
+      expect(countSpaces('')).toBe(0);
+    });
+
+    it('does not count other whitespace characters', () => {
+      // Tab, newline, etc. are not counted
+      expect(countSpaces('Hello\tWorld')).toBe(0);
+      expect(countSpaces('Hello\nWorld')).toBe(0);
+    });
+  });
+
+  describe('justify alignment integration', () => {
+    // These tests verify that justify alignment works correctly through the public API
+    it('applies justify spacing for justified text', () => {
+      const block = createBlock([{ text: 'A B', fontFamily: 'Arial', fontSize: 16 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 3,
+        width: 30,
+        maxWidth: 100,
+      });
+      (block as any).attrs = { alignment: 'justify' };
+
+      // Measure position 2 (after the space 'A B') - this should show justify adjustment
+      const x2Normal = measureCharacterX(block, line, 2, 30); // No slack
+      const x2Justified = measureCharacterX(block, line, 2, 100); // With slack
+
+      // Justified should be wider (extra space distributed after first space)
+      expect(x2Justified).toBeGreaterThan(x2Normal);
+    });
+
+    it('does not apply justify spacing for non-justified text', () => {
+      const block = createBlock([{ text: 'A B', fontFamily: 'Arial', fontSize: 16 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 3,
+        width: 30,
+        maxWidth: 100,
+      });
+      (block as any).attrs = { alignment: 'left' };
+
+      // With left alignment, no extra spacing should be applied
+      const x2 = measureCharacterX(block, line, 2, 100);
+      const x2Base = measureCharacterX(block, line, 2, 30);
+
+      // Should be the same since no justify
+      expect(x2).toBe(x2Base);
     });
   });
 });

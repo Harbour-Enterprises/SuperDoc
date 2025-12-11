@@ -9,6 +9,7 @@ import {
   getFragmentAtPosition,
   computeLinePmRange,
   measureCharacterX,
+  pmPosToCharOffset,
   extractIdentifierFromConverter,
   getHeaderFooterType,
   getBucketForPageNumber,
@@ -30,7 +31,7 @@ import type {
   DropEvent,
 } from '@superdoc/layout-bridge';
 import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
-import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
+import type { LayoutMode, PageDecorationProvider, RulerOptions } from '@superdoc/painter-dom';
 import { measureBlock } from '@superdoc/measuring-dom';
 import type {
   ColumnLayout,
@@ -209,6 +210,12 @@ export type LayoutEngineOptions = {
   trackedChanges?: TrackedChangesOverrides;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
+  /**
+   * Per-page ruler options.
+   * When enabled, renders a horizontal ruler at the top of each page showing
+   * inch marks and optionally margin handles for interactive margin adjustment.
+   */
+  ruler?: RulerOptions;
 };
 
 export type TrackedChangesOverrides = {
@@ -1161,8 +1168,10 @@ export class PresentationEditor extends EventEmitter {
     // Zoom may be applied externally (e.g., by SuperDoc toolbar) without
     // updating PresentationEditor's internal zoom value.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    const overlayRect = this.#selectionOverlay.getBoundingClientRect();
     const relativeRect = relativeTo?.getBoundingClientRect() ?? null;
+    const containerRect = this.#visibleHost.getBoundingClientRect();
+    const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
+    const scrollTop = this.#visibleHost.scrollTop ?? 0;
 
     const layoutRectSource = () => {
       if (this.#session.mode !== 'body') {
@@ -1178,20 +1187,58 @@ export class PresentationEditor extends EventEmitter {
     const rawRects = layoutRectSource();
     if (!rawRects.length) return [];
 
+    // If we can get a DOM-based caret for the range start, compute a per-page delta to align highlights with painter DOM.
+    let domCaretStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domCaretEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domCaretStart = this.#computeDomCaretPageLocal(start);
+      domCaretEnd = this.#computeDomCaretPageLocal(end);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in getRectsForRange:', error);
+      }
+    }
+    const layoutCaretStart = this.#computeCaretLayoutRectGeometry(start, false);
+    const layoutCaretEnd = this.#computeCaretLayoutRectGeometry(end, false);
+    const pageDelta: Record<number, { dx: number; dy: number }> = {};
+    if (domCaretStart && layoutCaretStart && domCaretStart.pageIndex === layoutCaretStart.pageIndex) {
+      pageDelta[domCaretStart.pageIndex] = {
+        dx: domCaretStart.x - layoutCaretStart.x,
+        dy: domCaretStart.y - layoutCaretStart.y,
+      };
+    }
+
     // Fix Issue #1: Get actual header/footer page height instead of hardcoded 1
     // When in header/footer mode, we need to use the real page height from the layout context
     // to correctly map coordinates for selection highlighting
     const pageHeight = this.#session.mode === 'body' ? this.#getBodyPageHeight() : this.#getHeaderFooterPageHeight();
     const pageGap = this.#layoutState.layout?.pageGap ?? 0;
-    return rawRects
-      .map((rect: LayoutRect) => {
-        const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
-        const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
+    const finalRects = rawRects
+      .map((rect: LayoutRect, idx: number, allRects: LayoutRect[]) => {
+        const delta = pageDelta[rect.pageIndex];
+        let adjustedX = delta ? rect.x + delta.dx : rect.x;
+        const adjustedY = delta ? rect.y + delta.dy : rect.y;
+
+        // If we have DOM caret positions, override start/end rect edges for tighter alignment
+        const isFirstRect = idx === 0;
+        const isLastRect = idx === allRects.length - 1;
+        if (isFirstRect && domCaretStart && rect.pageIndex === domCaretStart.pageIndex) {
+          adjustedX = domCaretStart.x;
+        }
+        if (isLastRect && domCaretEnd && rect.pageIndex === domCaretEnd.pageIndex) {
+          const endX = domCaretEnd.x;
+          const newWidth = Math.max(1, endX - adjustedX);
+          // Temporarily stash width override by updating rect.width for downstream calculations
+          rect = { ...rect, width: newWidth };
+        }
+
+        const pageLocalY = adjustedY - rect.pageIndex * (pageHeight + pageGap);
+        const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, adjustedX, pageLocalY);
         if (!coords) return null;
-        // coords are in layout space, convert to screen space by multiplying by zoom
-        // This is for external consumers (like comments) that expect screen coordinates
-        const absLeft = coords.x * zoom + overlayRect.left;
-        const absTop = coords.y * zoom + overlayRect.top;
+        // coords are in layout space; convert to viewport coordinates using scroll + zoom
+        const absLeft = coords.x * zoom - scrollLeft + containerRect.left;
+        const absTop = coords.y * zoom - scrollTop + containerRect.top;
         const left = relativeRect ? absLeft - relativeRect.left : absLeft;
         const top = relativeRect ? absTop - relativeRect.top : absTop;
         const width = Math.max(1, rect.width * zoom);
@@ -1207,6 +1254,8 @@ export class PresentationEditor extends EventEmitter {
         };
       })
       .filter((rect: RangeRect | null): rect is RangeRect => Boolean(rect));
+
+    return finalRects;
   }
 
   /**
@@ -1548,27 +1597,23 @@ export class PresentationEditor extends EventEmitter {
       }
 
       const rect = rects[0];
-      const overlayRect = this.#selectionOverlay?.getBoundingClientRect();
-      if (!overlayRect) {
-        return null;
-      }
-
-      // Convert from overlay-relative to viewport coordinates
+      const zoom = this.#layoutOptions.zoom ?? 1;
+      const containerRect = this.#visibleHost.getBoundingClientRect();
+      const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
+      const scrollTop = this.#visibleHost.scrollTop ?? 0;
       const pageHeight = this.#getBodyPageHeight();
       const pageGap = this.#layoutState.layout?.pageGap ?? 0;
       const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
-      if (!coords) {
-        return null;
-      }
+      if (!coords) return null;
 
       return {
-        top: coords.y + overlayRect.top,
-        bottom: coords.y + overlayRect.top + rect.height,
-        left: coords.x + overlayRect.left,
-        right: coords.x + overlayRect.left + rect.width,
-        width: rect.width,
-        height: rect.height,
+        top: coords.y * zoom - scrollTop + containerRect.top,
+        bottom: coords.y * zoom - scrollTop + containerRect.top + rect.height * zoom,
+        left: coords.x * zoom - scrollLeft + containerRect.left,
+        right: coords.x * zoom - scrollLeft + containerRect.left + rect.width * zoom,
+        width: rect.width * zoom,
+        height: rect.height * zoom,
       };
     }
 
@@ -1974,10 +2019,13 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    const editorState = this.#editor?.state;
+    if (!editorState) return;
+
+    const ystate = ySyncPluginKey.getState(editorState);
     if (!ystate?.binding?.mapping) return;
 
-    const { selection } = this.#editor.state;
+    const { selection } = editorState;
     const { anchor, head } = selection;
 
     try {
@@ -2008,7 +2056,10 @@ export class PresentationEditor extends EventEmitter {
     const provider = this.#options.collaborationProvider;
     if (!provider?.awareness) return new Map();
 
-    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    const editorState = this.#editor?.state;
+    if (!editorState) return new Map();
+
+    const ystate = ySyncPluginKey.getState(editorState);
     if (!ystate) return new Map(); // No ySync plugin
 
     const states = provider.awareness?.getStates();
@@ -3872,6 +3923,22 @@ export class PresentationEditor extends EventEmitter {
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
+    // Keep the painter and overlay hosts sized to the actual page width so centering
+    // on a wider viewport does not introduce X offsets between content and overlays.
+    const pageWidth = layout.pageSize?.w ?? this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    if (this.#painterHost) {
+      this.#painterHost.style.width = `${pageWidth}px`;
+      this.#painterHost.style.marginLeft = '0';
+      this.#painterHost.style.marginRight = '0';
+    }
+    if (this.#selectionOverlay) {
+      this.#selectionOverlay.style.width = `${pageWidth}px`;
+      this.#selectionOverlay.style.left = '0';
+      this.#selectionOverlay.style.right = '';
+      this.#selectionOverlay.style.marginLeft = '0';
+      this.#selectionOverlay.style.marginRight = '0';
+    }
+
     // Process per-rId header/footer content for multi-section support
     await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
 
@@ -3962,6 +4029,7 @@ export class PresentationEditor extends EventEmitter {
         pageStyles: this.#layoutOptions.pageStyles,
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
+        ruler: this.#layoutOptions.ruler,
       });
     }
     return this.#domPainter;
@@ -4143,9 +4211,24 @@ export class PresentationEditor extends EventEmitter {
     const rects: LayoutRect[] =
       selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
 
+    // Apply DOM-based position correction to align selection with actual rendered text
+    // (same approach used in getRectsForRange for external consumers)
+    let domStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domStart = this.#computeDomCaretPageLocal(from);
+      domEnd = this.#computeDomCaretPageLocal(to);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to uncorrected rects
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #renderLocalSelection:', error);
+      }
+    }
+    const correctedRects = this.#applyDomCorrectionToRects(rects, domStart, domEnd);
+
     try {
       this.#localSelectionLayer.innerHTML = '';
-      this.#renderSelectionRects(rects);
+      this.#renderSelectionRects(correctedRects);
     } catch (error) {
       // DOM manipulation can fail if element is detached or in invalid state
       if (process.env.NODE_ENV === 'development') {
@@ -4197,9 +4280,9 @@ export class PresentationEditor extends EventEmitter {
     }
     const headerBlocks = this.#headerFooterAdapter.getBatch('header');
     const footerBlocks = this.#headerFooterAdapter.getBatch('footer');
+    // Also get all blocks by rId for multi-section support
     const headerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('header');
     const footerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('footer');
-
     if (!headerBlocks && !footerBlocks && !headerBlocksByRId && !footerBlocksByRId) {
       return null;
     }
@@ -4221,14 +4304,37 @@ export class PresentationEditor extends EventEmitter {
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
     const marginLeft = margins.left ?? DEFAULT_MARGINS.left!;
     const marginRight = margins.right ?? DEFAULT_MARGINS.right!;
-    const width = pageSize.w - (marginLeft + marginRight);
-    if (!Number.isFinite(width) || width <= 0) {
+    const bodyContentWidth = pageSize.w - (marginLeft + marginRight);
+    if (!Number.isFinite(bodyContentWidth) || bodyContentWidth <= 0) {
       return null;
     }
-    const { headerSpace, footerSpace } = extractHeaderFooterSpace(margins);
-    const height = Math.max(headerSpace, footerSpace, 1);
+
+    // Use body content width for header/footer measurement.
+    // Headers/footers should respect the same left/right margins as the body.
+    // Note: Tables that need to span beyond margins should use negative indents
+    // or be handled via table-specific overflow logic, not by expanding the
+    // measurement width for all content.
+    const measurementWidth = bodyContentWidth;
+
+    // Compute available space for header/footer content.
+    // In OOXML, margins.header is the distance from page top to header top,
+    // and margins.top is the distance from page top to body content.
+    // The actual header content space is: top margin - header margin.
+    // Similarly for footer: bottom margin - footer margin.
+    const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
+    const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+    const headerMargin = margins.header ?? 0;
+    const footerMargin = margins.footer ?? 0;
+
+    // Available header space is from headerMargin to topMargin
+    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
+    // Available footer space is from footerMargin to bottomMargin
+    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+
+    // Use the larger of the two as the constraint height, with a minimum of 1
+    const height = Math.max(headerContentSpace, footerContentSpace, 1);
     return {
-      width,
+      width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
@@ -5328,6 +5434,81 @@ export class PresentationEditor extends EventEmitter {
     return context.layout.pageSize?.h ?? context.region.height ?? 1;
   }
 
+  /**
+   * Applies DOM-based position correction to layout-computed selection rectangles.
+   *
+   * This method ensures selection highlights align with actual rendered text positions
+   * by correcting for CSS effects (padding, text-indent, word-spacing) that the painter
+   * applies but the layout engine doesn't account for. Without this correction, selection
+   * highlights would be misaligned with the visible text.
+   *
+   * Algorithm:
+   * 1. Calculate per-page delta between DOM and layout positions at selection start
+   * 2. Apply horizontal and vertical deltas to all rectangles on the same page
+   * 3. For the first rectangle, override with exact DOM start position
+   * 4. For the last rectangle, compute width from DOM end position
+   *
+   * The correction is page-aware because multi-page selections may have different
+   * rendering contexts on each page (e.g., different header/footer heights, column layouts).
+   *
+   * @param rects - Layout-computed selection rectangles to correct
+   * @param domStart - DOM-measured start position {pageIndex, x, y} or null if unavailable
+   * @param domEnd - DOM-measured end position {pageIndex, x, y} or null if unavailable
+   * @returns Corrected selection rectangles with DOM-aligned positions
+   *
+   * @throws Never throws - gracefully handles null DOM positions by returning uncorrected rects
+   */
+  #applyDomCorrectionToRects(
+    rects: LayoutRect[],
+    domStart: { pageIndex: number; x: number; y: number } | null,
+    domEnd: { pageIndex: number; x: number; y: number } | null,
+  ): LayoutRect[] {
+    if (rects.length === 0) return rects;
+
+    // Compute per-page delta from DOM vs layout at the start position
+    const pageDelta: Record<number, { dx: number; dy: number }> = {};
+    if (domStart && rects[0] && domStart.pageIndex === rects[0].pageIndex) {
+      const pageHeight = this.#getBodyPageHeight();
+      const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+      const layoutY = rects[0].y - rects[0].pageIndex * (pageHeight + pageGap);
+      pageDelta[domStart.pageIndex] = {
+        dx: domStart.x - rects[0].x,
+        dy: domStart.y - layoutY,
+      };
+    }
+
+    return rects.map((rect, idx) => {
+      const delta = pageDelta[rect.pageIndex];
+      let adjustedX = delta ? rect.x + delta.dx : rect.x;
+      let adjustedY = delta ? rect.y + delta.dy : rect.y;
+      let adjustedWidth = rect.width;
+
+      // For first rect, use DOM start position directly
+      const isFirstRect = idx === 0;
+      const isLastRect = idx === rects.length - 1;
+
+      if (isFirstRect && domStart && rect.pageIndex === domStart.pageIndex) {
+        const pageHeight = this.#getBodyPageHeight();
+        const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+        adjustedX = domStart.x;
+        adjustedY = domStart.y + rect.pageIndex * (pageHeight + pageGap);
+      }
+
+      // For last rect, compute width from DOM end position
+      if (isLastRect && domEnd && rect.pageIndex === domEnd.pageIndex) {
+        const endX = domEnd.x;
+        adjustedWidth = Math.max(1, endX - adjustedX);
+      }
+
+      return {
+        ...rect,
+        x: adjustedX,
+        y: adjustedY,
+        width: adjustedWidth,
+      };
+    });
+  }
+
   #renderSelectionRects(rects: LayoutRect[]) {
     const localSelectionLayer = this.#localSelectionLayer;
     if (!localSelectionLayer) {
@@ -5335,7 +5516,7 @@ export class PresentationEditor extends EventEmitter {
     }
     const pageHeight = this.#getBodyPageHeight();
     const pageGap = this.#layoutState.layout?.pageGap ?? 0;
-    rects.forEach((rect, _index) => {
+    rects.forEach((rect) => {
       const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
@@ -5654,6 +5835,31 @@ export class PresentationEditor extends EventEmitter {
    *
    * @private
    */
+
+  #getPageOffsetX(pageIndex: number): number | null {
+    if (!this.#painterHost || !this.#viewportHost) {
+      return null;
+    }
+
+    // Pages are horizontally centered inside the painter host. When the viewport is wider
+    // than the page, the left offset must be included in overlay coordinates or selections
+    // will appear shifted to the left of the rendered content.
+    const pageEl = this.#painterHost.querySelector(
+      `.superdoc-page[data-page-index="${pageIndex}"]`,
+    ) as HTMLElement | null;
+    if (!pageEl) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const viewportRect = this.#viewportHost.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // getBoundingClientRect includes the applied zoom transform; divide by zoom to return
+    // layout-space units that match the rest of the overlay math.
+    const offsetX = (pageRect.left - viewportRect.left) / zoom;
+
+    return offsetX;
+  }
+
   #convertPageLocalToOverlayCoords(
     pageIndex: number,
     pageLocalX: number,
@@ -5691,13 +5897,104 @@ export class PresentationEditor extends EventEmitter {
     // We position overlay elements in layout-space coordinates, and the transform handles scaling.
     //
     // Pages are rendered vertically stacked at y = pageIndex * (pageHeight + pageGap).
-    // The page-local coordinates are already in layout space.
+    // The page-local coordinates are already in layout space - just add the page stacking offset.
     const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+    const pageOffsetX = this.#getPageOffsetX(pageIndex) ?? 0;
 
-    return {
-      x: pageLocalX,
+    const coords = {
+      x: pageOffsetX + pageLocalX,
       y: pageIndex * (pageHeight + pageGap) + pageLocalY,
+    };
+
+    return coords;
+  }
+
+  /**
+   * Computes DOM-based caret position in page-local coordinates.
+   *
+   * This method queries the actual DOM to find the pixel-perfect caret position
+   * for a given ProseMirror position. It's used as the source of truth for caret
+   * rendering, as DOM measurements reflect the actual painted text (including CSS
+   * effects like word-spacing, text-indent, and padding).
+   *
+   * Algorithm:
+   * 1. Find all spans with data-pm-start and data-pm-end attributes
+   * 2. Locate the span containing the target PM position
+   * 3. Find the closest .superdoc-page ancestor to determine page context
+   * 4. Create a DOM Range at the character index within the text node
+   * 5. Measure the Range's bounding rect relative to the page
+   * 6. Return page-local coordinates (adjusted for zoom)
+   *
+   * Fallback Behavior:
+   * - If text node unavailable: Use span's bounding rect
+   * - If no matching span found: Return null
+   * - If page element not found: Return null
+   *
+   * Error Handling:
+   * DOM operations can throw exceptions (invalid ranges, detached nodes, etc.).
+   * Callers should wrap this method in try-catch to prevent crashes.
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @returns Object with {pageIndex, x, y} in page-local coordinates, or null if DOM unavailable
+   *
+   * @throws May throw DOM exceptions (InvalidStateError, IndexSizeError) if DOM is in invalid state
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const caretPos = this.#computeDomCaretPageLocal(42);
+   *   if (caretPos) {
+   *     // Render caret at caretPos.x, caretPos.y on page caretPos.pageIndex
+   *   }
+   * } catch (error) {
+   *   console.warn('DOM caret computation failed:', error);
+   *   // Fall back to geometry-based calculation
+   * }
+   * ```
+   */
+  #computeDomCaretPageLocal(pos: number): { pageIndex: number; x: number; y: number } | null {
+    const pageEl = this.#viewportHost.querySelector(`.superdoc-page span[data-pm-start][data-pm-end]`)
+      ? (this.#viewportHost.querySelector(`.superdoc-page`) as HTMLElement | null)
+      : null;
+
+    // Narrow search to matching page if possible
+    const spans = Array.from(this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]')) as HTMLElement[];
+    let targetSpan: HTMLElement | null = null;
+    for (const span of spans) {
+      const pmStart = Number(span.dataset.pmStart ?? 'NaN');
+      const pmEnd = Number(span.dataset.pmEnd ?? 'NaN');
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+      targetSpan = span;
+      break;
+    }
+    if (!targetSpan) return null;
+    const page = targetSpan.closest('.superdoc-page') as HTMLElement | null;
+    if (!page) return null;
+    const pageRect = page.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+    const textNode = targetSpan.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+      const spanRect = targetSpan.getBoundingClientRect();
+      return {
+        pageIndex: Number(page.dataset.pageIndex ?? '0'),
+        x: (spanRect.left - pageRect.left) / zoom,
+        y: (spanRect.top - pageRect.top) / zoom,
+      };
+    }
+    const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
+    const charIndex = Math.min(pos - pmStart, textNode.length);
+    const range = document.createRange();
+    range.setStart(textNode, Math.max(0, charIndex));
+    range.setEnd(textNode, Math.max(0, charIndex));
+    const rangeRect = range.getBoundingClientRect();
+    const lineEl = targetSpan.closest('.superdoc-line') as HTMLElement | null;
+    const lineRect = lineEl?.getBoundingClientRect() ?? rangeRect;
+    return {
+      pageIndex: Number(page.dataset.pageIndex ?? '0'),
+      x: (rangeRect.left - pageRect.left) / zoom,
+      y: (lineRect.top - pageRect.top) / zoom,
     };
   }
 
@@ -5711,24 +6008,80 @@ export class PresentationEditor extends EventEmitter {
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
     // Convert from screen coordinates to layout coordinates by dividing by zoom
+    const baseX = (clientX - rect.left + scrollLeft) / zoom;
+    const baseY = (clientY - rect.top + scrollTop) / zoom;
+
+    // Adjust X by the actual page offset if the pointer is over a page. This keeps
+    // geometry-based hit testing aligned with the centered page content.
+    let adjustedX = baseX;
+    const doc = this.#visibleHost.ownerDocument ?? document;
+    const hitChain = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(clientX, clientY) : [];
+    const pageEl = Array.isArray(hitChain)
+      ? (hitChain.find((el) => (el as HTMLElement)?.classList?.contains('superdoc-page')) as HTMLElement | null)
+      : null;
+    if (pageEl) {
+      const pageIndex = Number(pageEl.dataset.pageIndex ?? 'NaN');
+      if (Number.isFinite(pageIndex)) {
+        const pageOffsetX = this.#getPageOffsetX(pageIndex);
+        if (pageOffsetX != null) {
+          adjustedX = baseX - pageOffsetX;
+        }
+      }
+    }
+
     return {
-      x: (clientX - rect.left + scrollLeft) / zoom,
-      y: (clientY - rect.top + scrollTop) / zoom,
+      x: adjustedX,
+      y: baseY,
     };
   }
 
-  #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+  /**
+   * Computes caret layout rectangle using geometry-based calculations.
+   *
+   * This method calculates the caret position and height from layout engine data
+   * (fragments, blocks, measures) without querying the DOM. It's used as a fallback
+   * when DOM-based measurements are unavailable or as a primary source in non-interactive
+   * scenarios (e.g., headless rendering, PDF export).
+   *
+   * The geometry-based calculation accounts for:
+   * - List markers (offset caret by marker width)
+   * - Paragraph indents (left, right, first-line, hanging)
+   * - Justified text alignment (extra space distributed across spaces)
+   * - Multi-column layouts
+   * - Table cell content
+   *
+   * Algorithm:
+   * 1. Find the fragment containing the PM position
+   * 2. Handle table fragments separately (delegate to #computeTableCaretLayoutRect)
+   * 3. For paragraph fragments:
+   *    a. Find the line containing the position
+   *    b. Convert PM position to character offset
+   *    c. Measure X coordinate using Canvas-based text measurement
+   *    d. Apply marker width and indent adjustments
+   *    e. Calculate Y offset from line heights
+   *    f. Return page-local coordinates with line height
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @param includeDomFallback - Whether to compare with DOM measurements for debugging (default: true).
+   *   When true, logs geometry vs DOM deltas for analysis. Has no effect on return value.
+   * @returns Object with {pageIndex, x, y, height} in page-local coordinates, or null if position not found
+   *
+   * @example
+   * ```typescript
+   * const caretGeometry = this.#computeCaretLayoutRectGeometry(42, false);
+   * if (caretGeometry) {
+   *   // Render caret at caretGeometry.x, caretGeometry.y with height caretGeometry.height
+   * }
+   * ```
+   */
+  #computeCaretLayoutRectGeometry(
+    pos: number,
+    includeDomFallback = true,
+  ): { pageIndex: number; x: number; y: number; height: number } | null {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
 
-    // Try DOM-based positioning first - this matches how click-to-position works
-    // and correctly handles segment-based rendering with tab stops
-    const domResult = this.#computeCaretLayoutRectFromDOM(pos);
-    if (domResult) {
-      return domResult;
-    }
-
-    // Fallback to geometry-based calculation
+    // Geometry-based calculation from layout engine
     const hit = getFragmentAtPosition(layout, this.#layoutState.blocks, this.#layoutState.measures, pos);
     if (!hit) {
       return null;
@@ -5761,33 +6114,117 @@ export class PresentationEditor extends EventEmitter {
     const range = computeLinePmRange(block, line);
     if (range.pmStart == null || range.pmEnd == null) return null;
 
-    // Calculate character offset from PM position offset
-    const pmCharsInLine = Math.max(1, range.pmEnd - range.pmStart);
-    const pmOffset = Math.max(0, Math.min(pmCharsInLine, pos - range.pmStart));
+    // Calculate character offset from PM position using layout-aware mapping (accounts for PM gaps)
+    const pmOffset = pmPosToCharOffset(block, line, pos);
 
-    const localX = fragment.x + measureCharacterX(block, line, pmOffset);
+    // Account for list marker width - this matches selectionToRects behavior
+    const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
+    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
+    const paraIndentRight = block.attrs?.indent?.right ?? 0;
+    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    const charX = measureCharacterX(block, line, pmOffset, availableWidth);
+    // Align with painter DOM indent handling: add paragraph indent (left) and first-line offset when applicable
+    // The painter applies indent to ALL non-list lines (both segment-based and regular)
+    const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+    const isFirstLine = index === fragment.fromLine;
+    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
+    let indentAdjust = 0;
+    if (!isListFirstLine) {
+      indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+    }
+
+    const localX = fragment.x + markerWidth + indentAdjust + charX;
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
 
-    return {
+    const result = {
       pageIndex: hit.pageIndex,
       x: localX,
       y: localY,
       height: line.lineHeight,
     };
+
+    // DEBUG: Log layout engine caret calculation + compare to DOM
+    const pageEl = this.#painterHost?.querySelector(
+      `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+    ) as HTMLElement | null;
+    const pageRect = pageEl?.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // Find span containing this pos and measure actual DOM position
+    let domCaretX: number | null = null;
+    let domCaretY: number | null = null;
+    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
+    for (const spanEl of spanEls) {
+      const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+      const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+      if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+        const textNode = spanEl.firstChild as Text;
+        const charIndex = Math.min(pos - pmStart, textNode.length);
+        const rangeObj = document.createRange();
+        rangeObj.setStart(textNode, charIndex);
+        rangeObj.setEnd(textNode, charIndex);
+        const rangeRect = rangeObj.getBoundingClientRect();
+        if (pageRect) {
+          domCaretX = (rangeRect.left - pageRect.left) / zoom;
+          domCaretY = (rangeRect.top - pageRect.top) / zoom;
+        }
+        break;
+      }
+    }
+
+    // If we found a DOM caret position, prefer it to avoid residual drift
+    if (includeDomFallback && domCaretX != null && domCaretY != null) {
+      return {
+        pageIndex: hit.pageIndex,
+        x: domCaretX,
+        y: domCaretY,
+        height: line.lineHeight,
+      };
+    }
+
+    return result;
   }
 
   /**
-   * Computes caret position using DOM-based positioning.
-   * This matches how click-to-position mapping works and correctly handles
-   * segment-based rendering with tab stops.
-   *
-   * Returns page-local coordinates (x, y relative to the page element).
+   * Compute caret position, preferring DOM when available, falling back to geometry.
    */
-  #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
-    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
-    const zoom = this.#layoutOptions.zoom ?? 1;
+  #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    const geometry = this.#computeCaretLayoutRectGeometry(pos, true);
+    let dom: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      dom = this.#computeDomCaretPageLocal(pos);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #computeCaretLayoutRect:', error);
+      }
+    }
+    if (dom && geometry) {
+      return {
+        pageIndex: dom.pageIndex,
+        x: dom.x,
+        y: dom.y,
+        height: geometry.height,
+      };
+    }
+    return geometry;
+  }
 
+  /**
+   * DEPRECATED: Computes caret position using DOM-based positioning.
+   *
+   * This method is NO LONGER USED as of the fix for overlay positioning with external transforms.
+   * It uses getBoundingClientRect() which returns viewport coordinates affected by external
+   * transforms, causing caret drift when SuperDoc is embedded in containers with CSS transforms.
+   *
+   * Kept for reference only. Use layout engine geometry instead (see #computeCaretLayoutRect).
+   *
+   * @deprecated Use layout engine geometry directly - this method is incompatible with external transforms
+   * @private
+   */
+  // eslint-disable-next-line no-unused-private-class-members
+  #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
     // Optimization: Try to find the specific page containing this position
     // This narrows the DOM query scope significantly for large documents
     let targetPageEl: HTMLElement | null = null;
@@ -5834,13 +6271,20 @@ export class PresentationEditor extends EventEmitter {
       const pageIndex = Number(pageEl.dataset.pageIndex ?? '0');
       const pageRect = pageEl.getBoundingClientRect();
 
+      // Get zoom to convert from viewport space (scaled) to layout space (logical pixels)
+      // The #viewportHost has transform: scale(zoom), so getBoundingClientRect() returns
+      // viewport coordinates. We need to divide differences by zoom to get layout coordinates.
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
       // Use Range API to get exact character position within the span
       const textNode = spanEl.firstChild;
       if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
         // No text node - return span start position
         const spanRect = spanEl.getBoundingClientRect();
 
-        // Convert to page-local coordinates (unzoomed)
+        // Compute relative offset in viewport space, then convert to layout space
+        // Both pageRect and spanRect are in the same transformed hierarchy, so we can subtract
+        // them, but the result is in viewport pixels and must be divided by zoom to get layout pixels
         return {
           pageIndex,
           x: (spanRect.left - pageRect.left) / zoom,
@@ -5895,7 +6339,9 @@ export class PresentationEditor extends EventEmitter {
       const verticalOffset = (lineRect.height - caretHeight) / 2;
       const caretY = lineRect.top + verticalOffset;
 
-      // Return page-local coordinates (in layout space, unzoomed)
+      // Return page-local coordinates in layout space
+      // We compute differences in viewport space (both rects are scaled by transform),
+      // then divide by zoom to convert to layout space
       return {
         pageIndex,
         x: (rangeRect.left - pageRect.left) / zoom,
@@ -5908,10 +6354,17 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
-   * Computes caret position within a table cell using DOM-based positioning.
-   * This uses the actual rendered DOM elements to get accurate positions,
-   * matching how click-to-position mapping works.
+   * DEPRECATED: Computes caret position within a table cell using DOM-based positioning.
+   *
+   * This method is NO LONGER USED as the parent #computeCaretLayoutRect now uses layout
+   * engine geometry exclusively to avoid issues with external transforms.
+   *
+   * Kept for reference only.
+   *
+   * @deprecated Use layout engine geometry - this method is incompatible with external transforms
+   * @private
    */
+
   #computeTableCaretLayoutRect(
     pos: number,
     _fragment: TableFragment,

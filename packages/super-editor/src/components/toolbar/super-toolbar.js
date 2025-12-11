@@ -412,6 +412,7 @@ export class SuperToolbar extends EventEmitter {
      */
     toggleRuler: () => {
       this.superdoc.toggleRuler();
+      this.updateToolbarState();
     },
 
     /**
@@ -928,6 +929,15 @@ export class SuperToolbar extends EventEmitter {
           item.activate();
         } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
           item.activate();
+        }
+      }
+
+      // Activate ruler button when rulers are visible
+      if (item.name.value === 'ruler') {
+        if (this.superdoc?.config?.rulers) {
+          item.activate();
+        } else {
+          item.deactivate();
         }
       }
     });

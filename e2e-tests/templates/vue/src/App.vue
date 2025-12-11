@@ -10,6 +10,16 @@ import { nextTick } from 'process';
 window.fileData = null;
 const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
 const superdoc = shallowRef(null);
+const hideRulerByDefault = true;
+
+const hideRulerIfNeeded = () => {
+  if (!hideRulerByDefault) return;
+  const instance = superdoc.value;
+  if (!instance?.config?.rulers) return;
+  instance.toggleRuler();
+  instance.toolbar?.updateToolbarState();
+};
+
 const init = async () => {
   if (superdoc.value) superdoc.value.destroy();
 
@@ -19,6 +29,7 @@ const init = async () => {
     useLayoutEngine,
     toolbar: '#toolbar',
     toolbarGroups: ['center'],
+    rulers: true, // keep the toolbar button rendered; visibility is toggled separately
     onReady,
     onTransaction,
   };
@@ -94,6 +105,7 @@ const onReady = () => {
     window.editor = editor;
     window.superdoc = superdoc.value;
   });
+  hideRulerIfNeeded();
   if (window.superdocReady) {
     window.superdocReady();
   }

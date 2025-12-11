@@ -592,6 +592,36 @@ describe('SuperDoc.vue', () => {
     expect(wrapper.find('.floating-comments').exists()).toBe(true);
   });
 
+  it('does not crash when selectionUpdate carries stale positions after new file insert', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      view: {
+        coordsAtPos: vi.fn((pos) => {
+          if (pos > 5) {
+            throw new RangeError('Position out of range');
+          }
+          return { top: pos, bottom: pos + 10, left: 0, right: 0 };
+        }),
+        state: { selection: { $from: { pos: 1 }, $to: { pos: 1 }, empty: false } },
+      },
+      getPageStyles: vi.fn(() => ({ pageMargins: {} })),
+    };
+
+    const triggerSelectionUpdate = () =>
+      options.onSelectionUpdate({
+        editor: editorMock,
+        // Simulate a stale transaction selection that is past the new doc length
+        transaction: { selection: { $from: { pos: 10 }, $to: { pos: 10 } } },
+      });
+
+    expect(triggerSelectionUpdate).not.toThrow();
+  });
+
   // Note: The handlePresentationEditorReady test was removed because that function
   // no longer exists. PresentationEditor now registers itself automatically in the
   // constructor and manages zoom/layout data internally.
