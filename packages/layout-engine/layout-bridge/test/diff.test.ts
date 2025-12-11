@@ -60,6 +60,82 @@ describe('computeDirtyRegions', () => {
     expect(result.deletedBlockIds).toContain('20-paragraph');
   });
 
+  it('detects fontSize changes', () => {
+    const prev = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+      },
+    ];
+    const next = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 24 }],
+      },
+    ];
+    const result = computeDirtyRegions(prev, next);
+    expect(result.firstDirtyIndex).toBe(0);
+  });
+
+  it('detects fontFamily changes', () => {
+    const prev = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+      },
+    ];
+    const next = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Times New Roman', fontSize: 12 }],
+      },
+    ];
+    const result = computeDirtyRegions(prev, next);
+    expect(result.firstDirtyIndex).toBe(0);
+  });
+
+  it('treats identical fontSize and fontFamily as stable', () => {
+    const prev = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 14, bold: true }],
+      },
+    ];
+    const next = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 14, bold: true }],
+      },
+    ];
+    const result = computeDirtyRegions(prev, next);
+    expect(result.firstDirtyIndex).toBe(next.length);
+  });
+
+  it('detects fontSize change from undefined to defined', () => {
+    const prev = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello' }],
+      },
+    ];
+    const next = [
+      {
+        kind: 'paragraph' as const,
+        id: '0-paragraph',
+        runs: [{ text: 'Hello', fontSize: 16 }],
+      },
+    ];
+    const result = computeDirtyRegions(prev, next);
+    expect(result.firstDirtyIndex).toBe(0);
+  });
+
   it('treats unchanged drawing blocks as stable', () => {
     const prev = [drawing()];
     const next = [drawing()];
