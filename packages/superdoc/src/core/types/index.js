@@ -49,7 +49,7 @@
 
 /**
  * @typedef {Object} Modules
- * @property {Object} [comments] Comments module configuration
+ * @property {Object | false} [comments] Comments module configuration (false to disable)
  * @property {(params: {
  *   permission: string,
  *   role?: string,
