@@ -90,6 +90,9 @@ catalogs:
     jszip:
       specifier: 3.10.1
       version: 3.10.1
+    lib0:
+      specifier: ^0.2.114
+      version: 0.2.114
     lint-staged:
       specifier: ^16.1.4
       version: 16.2.7
@@ -228,9 +231,18 @@ catalogs:
     xml-js:
       specifier: 1.6.11
       version: 1.6.11
+    y-prosemirror:
+      specifier: ^1.3.7
+      version: 1.3.7
+    y-protocols:
+      specifier: ^1.0.6
+      version: 1.0.6
     y-websocket:
       specifier: ^3.0.0
       version: 3.0.0
+    yjs:
+      specifier: 13.6.19
+      version: 13.6.19
 
 importers:
 
@@ -419,6 +431,16 @@ importers:
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.2)(jiti@2.6.1)(jsdom@27.3.0(canvas@3.2.0)(postcss@8.5.6))(tsx@4.21.0)(yaml@2.8.2)
 
   packages/collaboration-yjs:
+    dependencies:
+      lib0:
+        specifier: 'catalog:'
+        version: 0.2.114
+      y-protocols:
+        specifier: 'catalog:'
+        version: 1.0.6(yjs@13.6.19)
+      yjs:
+        specifier: 'catalog:'
+        version: 13.6.19
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -696,10 +718,10 @@ importers:
         specifier: 'catalog:'
         version: 1.6.11
       y-prosemirror:
-        specifier: ^1.3.7
+        specifier: 'catalog:'
         version: 1.3.7(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.4)(y-protocols@1.0.6(yjs@13.6.19))(yjs@13.6.19)
       yjs:
-        specifier: 13.6.19
+        specifier: 'catalog:'
         version: 13.6.19
     devDependencies:
       '@floating-ui/dom':
@@ -793,13 +815,13 @@ importers:
         specifier: 'catalog:'
         version: 3.5.25(typescript@5.9.3)
       y-prosemirror:
-        specifier: ^1.3.7
+        specifier: 'catalog:'
         version: 1.3.7(prosemirror-model@1.25.4)(prosemirror-state@1.4.4)(prosemirror-view@1.41.4)(y-protocols@1.0.6(yjs@13.6.19))(yjs@13.6.19)
       y-websocket:
         specifier: 'catalog:'
         version: 3.0.0(yjs@13.6.19)
       yjs:
-        specifier: 13.6.19
+        specifier: 'catalog:'
         version: 13.6.19
     devDependencies:
       '@harbour-enterprises/super-editor':
