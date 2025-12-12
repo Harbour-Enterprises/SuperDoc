@@ -1,6 +1,7 @@
 /**
  * Streaming utilities for parsing incremental LLM responses
  */
+import { MAX_STREAM_ITERATIONS, MAX_STREAM_TIMEOUT_MS } from '../../shared';
 
 /**
  * Safely reads response text, returning a generic error message on failure.
@@ -16,7 +17,7 @@ export async function safeReadText(response: Response): Promise<string> {
 /**
  * Extracts text from Anthropic content blocks.
  */
-export function extractTextFromBlock(block: unknown): string {
+export function extractTextFromBlock(block: any): string {
   if (typeof block === 'string') {
     return block;
   }
@@ -45,6 +46,7 @@ export async function parseResponsePayload(response: Response, parser: (payload:
 
 /**
  * Reads a streaming response and yields parsed chunks.
+ * Includes safety mechanisms: timeout and iteration limit to prevent infinite loops.
  */
 export async function* readStreamResponse(
   response: Response,
@@ -58,9 +60,23 @@ export async function* readStreamResponse(
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let iterationCount = 0;
+  const startTime = Date.now();
 
   try {
     while (true) {
+      // Safety check: prevent infinite loops
+      iterationCount++;
+      if (iterationCount > MAX_STREAM_ITERATIONS) {
+        throw new Error(`Stream reader exceeded maximum iterations (${MAX_STREAM_ITERATIONS})`);
+      }
+
+      // Safety check: timeout protection
+      const elapsed = Date.now() - startTime;
+      if (elapsed > MAX_STREAM_TIMEOUT_MS) {
+        throw new Error(`Stream reader exceeded timeout (${MAX_STREAM_TIMEOUT_MS}ms)`);
+      }
+
       const { done, value } = await reader.read();
       if (done) break;
 

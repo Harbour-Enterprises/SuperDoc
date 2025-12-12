@@ -2,6 +2,7 @@
  * Utility functions for the AI package
  * @module utils
  */
+import { Logger } from './logger';
 
 /**
  * Validates that an input string is non-empty after trimming
@@ -34,13 +35,33 @@ export function parseJSON<T>(response: string, fallback: T, enableLogging = fals
     return JSON.parse(cleaned) as T;
   } catch (error) {
     if (enableLogging) {
-      console.error('[parseJSON] Failed to parse JSON:', {
+      const logger = new Logger(enableLogging);
+      logger.error('[parseJSON] Failed to parse JSON', error, {
         original: response.substring(0, 200),
-        error: error instanceof Error ? error.message : 'Unknown error',
       });
     }
     return fallback;
   }
+}
+
+/**
+ * Sanitizes user input for use in AI prompts to prevent prompt injection attacks.
+ * Escapes special characters that could break prompt structure or inject malicious content.
+ * @param input - User input string to sanitize
+ * @returns Sanitized string safe for use in prompts
+ */
+export function sanitizePromptInput(input: string): string {
+  if (!input || typeof input !== 'string') {
+    return '';
+  }
+
+  // Replace control characters and problematic sequences
+  return input
+    .replace(/\r\n/g, '\n') // Normalize line endings
+    .replace(/\r/g, '\n') // Normalize line endings
+    .replace(/\0/g, '') // Remove null bytes
+    .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control characters except \n and \t
+    .trim();
 }
 
 /**

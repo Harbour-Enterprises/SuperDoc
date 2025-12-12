@@ -1,6 +1,7 @@
 /**
  * AI prompt templates for document operations
  */
+import { sanitizePromptInput } from './utils';
 
 export const SYSTEM_PROMPTS = {
   SEARCH: 'You are a document search assistant. Always respond with valid JSON.',
@@ -11,11 +12,13 @@ export const SYSTEM_PROMPTS = {
 
 export const buildFindPrompt = (query: string, documentContext: string, findAll: boolean): string => {
   const scopeInstruction = findAll ? 'ALL occurrences' : 'the FIRST occurrence ONLY';
+  const sanitizedQuery = sanitizePromptInput(query);
+  const sanitizedContext = sanitizePromptInput(documentContext);
 
   return `You are a strict document search assistant.
       Task:
       - In the document context, locate ${scopeInstruction} that match the user request exactly.
-      - User request (treat this as the literal text or exact criteria to match): "${query}"
+      - User request (treat this as the literal text or exact criteria to match): "${sanitizedQuery}"
       - Return ONLY the exact matched text from the document.
       - Keep matches as tight as possible (ideally a single sentence or clause). Never include multiple clauses/sections unless they cannot be separated.
       - SECTION NUMBERING HANDLING: Section numbers (e.g., "10. ", "6.1 ") are formatting markers, NOT text content.
@@ -31,7 +34,7 @@ export const buildFindPrompt = (query: string, documentContext: string, findAll:
       - The entire response must be valid, parseable JSON
       
       Document context:
-      ${documentContext}
+      ${sanitizedContext}
       
       Respond with JSON:
       {
@@ -44,8 +47,10 @@ export const buildFindPrompt = (query: string, documentContext: string, findAll:
 
 export const buildReplacePrompt = (query: string, documentContext: string, replaceAll: boolean): string => {
   const scope = replaceAll ? 'ALL occurrences' : 'FIRST occurrence ONLY';
+  const sanitizedQuery = sanitizePromptInput(query);
+  const sanitizedContext = sanitizePromptInput(documentContext);
 
-  return `You are a document-editing engine. Read the user request in ${query} and perform ONE of the following operation types:
+  return `You are a document-editing engine. Read the user request in ${sanitizedQuery} and perform ONE of the following operation types:
             1. FIND & REPLACE (if the request involves replacing, deleting, inserting, or redlining text)
                - Search for EXACT matches of: ${scope}
                - Replace ONLY the matched text (no surrounding text).
@@ -108,16 +113,19 @@ export const buildReplacePrompt = (query: string, documentContext: string, repla
             ---------------------
             
             Document:
-            ${documentContext}
+            ${sanitizedContext}
             
             User Request:
-            ${query}`;
+            ${sanitizedQuery}`;
 };
 
 export const buildSummaryPrompt = (query: string, documentContext: string): string => {
+  const sanitizedQuery = sanitizePromptInput(query);
+  const sanitizedContext = sanitizePromptInput(documentContext);
+
   return `You are a document summarization assistant.
             Task:
-            - In the document context, ${query}
+            - In the document context, ${sanitizedQuery}
             - Generate a summary, review note, or analysis that the user can use for legal/business review.
             - Highlight the most critical clauses, risks, or action items in prose (no Markdown).
             
@@ -129,7 +137,7 @@ export const buildSummaryPrompt = (query: string, documentContext: string): stri
             - The entire response must be valid, parseable JSON
             
             Document context:
-            ${documentContext}
+            ${sanitizedContext}
             
             Respond with JSON:
             {
@@ -142,6 +150,8 @@ export const buildSummaryPrompt = (query: string, documentContext: string): stri
 
 export const buildInsertCommentPrompt = (query: string, documentContext: string, multiple: boolean): string => {
   const scope = multiple ? 'ALL locations' : 'the FIRST location';
+  const sanitizedQuery = sanitizePromptInput(query);
+  const sanitizedContext = sanitizePromptInput(documentContext);
 
   return `You are a document review assistant. Your task is to find ${scope} where comments should be added based on the user's request, then provide the comment text to add at each location.
 
@@ -188,16 +198,19 @@ export const buildInsertCommentPrompt = (query: string, documentContext: string,
             ---------------------
             
             Document:
-            ${documentContext}
+            ${sanitizedContext}
             
             User Request:
-            ${query}`;
+            ${sanitizedQuery}`;
 };
 
 export const buildInsertContentPrompt = (query: string, documentContext?: string): string => {
+  const sanitizedQuery = sanitizePromptInput(query);
+  const sanitizedContext = documentContext ? sanitizePromptInput(documentContext) : undefined;
+
   return `You are a document content generation assistant.
           Task:
-          - ${query}
+          - ${sanitizedQuery}
           - Use the document context strictly for understanding tone or nearby content. DO NOT copy, paraphrase, or return the context text itself unless explicitly asked.
           - Generate only the new content needed (e.g., a heading, paragraph, clause). Do not repeat or summarize the provided context.
           - Ensure the generated content is relevant and well-formed.
@@ -216,7 +229,7 @@ export const buildInsertContentPrompt = (query: string, documentContext?: string
           - Ensure all quotes, backslashes, and other special characters in text are properly escaped
           - The entire response must be valid, parseable JSON
           
-          ${documentContext ? `Document context (read-only reference):\n${documentContext}\n` : ''}
+          ${sanitizedContext ? `Document context (read-only reference):\n${sanitizedContext}\n` : ''}
           Respond with JSON:
           {
             "success": boolean,

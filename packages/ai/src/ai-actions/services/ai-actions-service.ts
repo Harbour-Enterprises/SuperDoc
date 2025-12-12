@@ -653,6 +653,7 @@ export class AIActionsService {
   /**
    * Performs a deterministic literal find-and-add-comment operation (no AI).
    * Finds all occurrences of the find text and adds the specified comment at each location.
+   * Uses maxPasses loop to handle cases where comment text might contain the search term.
    *
    * @param findText - Literal text to locate
    * @param commentText - Comment text to add at each match location
@@ -674,31 +675,54 @@ export class AIActionsService {
 
     const applied: FoundMatch[] = [];
 
-    // Find all literal matches
-    const matches = this.adapter.findLiteralMatches(findText, Boolean(options?.caseSensitive));
+    // Check if comment text contains the search term (could create new matches)
+    const commentContainsSearch = options?.caseSensitive
+      ? commentText.includes(findText)
+      : commentText.toLowerCase().includes(findText.toLowerCase());
 
-    if (!matches.length) {
-      return { success: false, results: [] };
-    }
+    const maxPasses = commentContainsSearch ? 10 : 1;
+    let pass = 0;
 
-    // Sort descending to process from end to start (prevents position shifting issues)
-    const descending = [...matches].sort((a, b) => b.from - a.from);
+    const collectMatches = () => this.adapter.findLiteralMatches(findText, Boolean(options?.caseSensitive));
 
-    for (const match of descending) {
-      try {
-        const commentId = await this.adapter.createComment(match.from, match.to, commentText);
+    while (pass < maxPasses) {
+      const matches = collectMatches();
+      if (!matches.length) {
+        break;
+      }
 
-        applied.push({
-          originalText: match.text,
-          suggestedText: commentText,
-          positions: [{ from: match.from, to: match.to }],
-          changeId: commentId,
-        } as FoundMatch);
-      } catch (error) {
-        if (this.enableLogging) {
-          this.logger.error(`Failed to add comment at position ${match.from}-${match.to}`, error);
+      // Sort descending to process from end to start (prevents position shifting issues)
+      const descending = [...matches].sort((a, b) => b.from - a.from);
+      const commentsThisPass: FoundMatch[] = [];
+
+      for (const match of descending) {
+        try {
+          const commentId = await this.adapter.createComment(match.from, match.to, commentText);
+
+          commentsThisPass.push({
+            originalText: match.text,
+            suggestedText: commentText,
+            positions: [{ from: match.from, to: match.to }],
+            changeId: commentId,
+          } as FoundMatch);
+        } catch (error) {
+          if (this.enableLogging) {
+            this.logger.error(`Failed to add comment at position ${match.from}-${match.to}`, error);
+          }
+          // Continue with other matches even if one fails
         }
-        // Continue with other matches even if one fails
+      }
+
+      if (!commentsThisPass.length) {
+        break;
+      }
+
+      commentsThisPass.reverse();
+      applied.push(...commentsThisPass);
+      pass++;
+
+      if (!commentContainsSearch) {
+        break;
       }
     }
 

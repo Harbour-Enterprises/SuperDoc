@@ -7,6 +7,7 @@
 import type { Editor } from '../../shared';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 import { safeTextBetween, LOG_PREFIXES } from '../../shared';
+import { Logger } from '../../shared/logger';
 
 /**
  * Result of extracting selection from editor
@@ -40,7 +41,8 @@ export function extractSelectionText(editor: Editor | null, enableLogging = fals
     return safeTextBetween(doc, selection.from, selection.to);
   } catch (error) {
     if (enableLogging) {
-      console.warn(`${LOG_PREFIXES.SERVICE} Failed to extract selection:`, error);
+      const logger = new Logger(enableLogging);
+      logger.warn(`${LOG_PREFIXES.SERVICE} Failed to extract selection:`, error);
     }
     return '';
   }
@@ -89,7 +91,8 @@ export function extractSelection(editor: Editor | null, enableLogging = false): 
     };
   } catch (error) {
     if (enableLogging) {
-      console.warn(`${LOG_PREFIXES.SERVICE} Failed to extract selection:`, error);
+      const logger = new Logger(enableLogging);
+      logger.warn(`${LOG_PREFIXES.SERVICE} Failed to extract selection:`, error);
     }
     return emptyResult;
   }
@@ -126,7 +129,8 @@ export function getDocumentText(editor: Editor | null, enableLogging = false): s
     return doc.textContent?.trim() ?? '';
   } catch (error) {
     if (enableLogging) {
-      console.warn(`${LOG_PREFIXES.SERVICE} Failed to get document text:`, error);
+      const logger = new Logger(enableLogging);
+      logger.warn(`${LOG_PREFIXES.SERVICE} Failed to get document text:`, error);
     }
     return '';
   }
