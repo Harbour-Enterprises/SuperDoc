@@ -117,6 +117,7 @@
     "@superdoc/word-layout": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
+    "canvas": "catalog:",
     "postcss-nested": "catalog:",
     "postcss-nested-import": "catalog:",
     "prosemirror-test-builder": "catalog:",
