@@ -493,6 +493,9 @@ importers:
       '@superdoc/geometry-utils':
         specifier: workspace:*
         version: link:../../geometry-utils
+      '@superdoc/word-layout':
+        specifier: workspace:*
+        version: link:../../../word-layout
 
   packages/layout-engine/painters/dom:
     dependencies:
@@ -740,9 +743,6 @@ importers:
 
   packages/superdoc:
     dependencies:
-      '@harbour-enterprises/super-editor':
-        specifier: workspace:*
-        version: link:../super-editor
       buffer-crc32:
         specifier: 'catalog:'
         version: 1.0.0
@@ -777,6 +777,9 @@ importers:
         specifier: 13.6.19
         version: 13.6.19
     devDependencies:
+      '@harbour-enterprises/super-editor':
+        specifier: workspace:*
+        version: link:../super-editor
       '@hocuspocus/provider':
         specifier: 'catalog:'
         version: 2.15.3(y-protocols@1.0.6(yjs@13.6.19))(yjs@13.6.19)
