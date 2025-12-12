@@ -776,12 +776,14 @@ watch(
   },
 );
 
-watch(getFloatingComments, () => {
-  hasInitializedLocations.value = false;
-  nextTick(() => {
-    hasInitializedLocations.value = true;
-  });
-});
+watch(
+  () => getFloatingComments.value.length,
+  (length) => {
+    if (length > 0 && !hasInitializedLocations.value) {
+      hasInitializedLocations.value = true;
+    }
+  },
+);
 </script>
 
 <template>

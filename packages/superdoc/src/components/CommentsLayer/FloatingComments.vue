@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { ref, computed, watchEffect, nextTick, watch, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, watchEffect, nextTick, watch, onBeforeUnmount } from 'vue';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import CommentDialog from '@superdoc/components/CommentsLayer/CommentDialog.vue';
@@ -19,8 +19,7 @@ const props = defineProps({
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 
-const { getFloatingComments, hasInitializedLocations, activeComment, commentsList, editorCommentPositions } =
-  storeToRefs(commentsStore);
+const { getFloatingComments, activeComment, editorCommentPositions } = storeToRefs(commentsStore);
 
 const floatingCommentsContainer = ref(null);
 const renderedSizes = ref([]);
@@ -100,6 +99,43 @@ const processLocations = async () => {
   firstGroupRendered.value = true;
 };
 
+const syncPlacementsWithEditor = () => {
+  if (!firstGroupRendered.value || renderedSizes.value.length === 0) return;
+  let hasUpdates = false;
+
+  const updatedPlacements = renderedSizes.value.map((placement) => {
+    const positionEntry = editorCommentPositions.value[placement.id];
+    const nextTop = Number(positionEntry?.bounds?.top);
+    const nextPageIndex = positionEntry?.pageIndex ?? placement.pageIndex ?? 0;
+
+    if (!Number.isFinite(nextTop)) return placement;
+    if (nextTop === placement.top && nextPageIndex === placement.pageIndex) return placement;
+
+    hasUpdates = true;
+    return {
+      ...placement,
+      top: nextTop,
+      pageIndex: nextPageIndex,
+    };
+  });
+
+  if (hasUpdates) {
+    renderedSizes.value = updatedPlacements;
+    nextTick(processLocations);
+  }
+};
+
+const removeStalePlacements = () => {
+  if (renderedSizes.value.length === 0) return;
+  const validIds = new Set(getFloatingComments.value.map((comment) => comment.commentId || comment.importedId));
+  const filteredPlacements = renderedSizes.value.filter((placement) => validIds.has(placement.id));
+
+  if (filteredPlacements.length !== renderedSizes.value.length) {
+    renderedSizes.value = filteredPlacements;
+    nextTick(processLocations);
+  }
+};
+
 // Ensures floating comments update after all are measured
 // Falls back to rendering what we have after a timeout if some comments fail to get positions
 watchEffect(() => {
@@ -128,6 +164,14 @@ watchEffect(() => {
       }
     }, 100);
   }
+});
+
+watch(editorCommentPositions, () => {
+  syncPlacementsWithEditor();
+});
+
+watch(getFloatingComments, () => {
+  removeStalePlacements();
 });
 
 const resetLayout = async () => {
