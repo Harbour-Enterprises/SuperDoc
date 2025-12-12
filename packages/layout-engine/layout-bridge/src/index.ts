@@ -1099,27 +1099,31 @@ export function selectionToRects(
           // (accounts for gaps in PM positions between runs)
           const charOffsetFrom = pmPosToCharOffset(block, line, sliceFrom);
           const charOffsetTo = pmPosToCharOffset(block, line, sliceTo);
-          const startX = mapPmToX(block, line, charOffsetFrom, fragment.width);
-          const endX = mapPmToX(block, line, charOffsetTo, fragment.width);
-          // Align highlights with DOM-rendered list markers by offsetting for the marker box
+          // Detect list items by checking for marker presence
           const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
+          const isListItem = markerWidth > 0;
+          // List items are always rendered with left alignment in the DOM (painter forces textAlign: 'left'),
+          // regardless of the paragraph's alignment attribute. Pass 'left' override to match DOM rendering.
+          const alignmentOverride = isListItem ? 'left' : undefined;
+          const startX = mapPmToX(block, line, charOffsetFrom, fragment.width, alignmentOverride);
+          const endX = mapPmToX(block, line, charOffsetTo, fragment.width, alignmentOverride);
 
           // Align with painter DOM indent handling (padding/text-indent on lines)
-          // The painter applies indent to ALL non-list lines:
-          // - For non-segment lines: via CSS paddingLeft + textIndent
-          // - For segment-based lines: via direct X offset added to segment positions
-          // List first lines handle indentation through marker positioning, not CSS indent.
+          // Text content always starts at paraIndentLeft from fragment.x:
+          // - For non-list lines: painter applies CSS paddingLeft + textIndent
+          // - For list lines: marker sits in hanging indent area, text starts at paraIndentLeft
+          // The markerWidth is just the marker's rendered width, not where text starts.
           const paraIndentLeft = block.attrs?.indent?.left ?? 0;
           const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
           const isFirstLine = index === fragment.fromLine;
-          const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
-          let indentAdjust = 0;
-          if (!isListFirstLine) {
-            // Apply indent to all non-list lines (both segment-based and regular)
-            indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+          // For list items, text starts at paraIndentLeft (marker sits in hanging indent area)
+          // For non-list first lines, also add firstLineOffset
+          let indentAdjust = paraIndentLeft;
+          if (isFirstLine && !isListItem) {
+            indentAdjust += firstLineOffset;
           }
 
-          const rectX = fragment.x + markerWidth + indentAdjust + Math.min(startX, endX);
+          const rectX = fragment.x + indentAdjust + Math.min(startX, endX);
           const rectWidth = Math.max(1, Math.abs(endX - startX));
           const lineOffset = lineHeightBeforeIndex(measure, index) - lineHeightBeforeIndex(measure, fragment.fromLine);
           const rectY = fragment.y + lineOffset;
@@ -1303,6 +1307,11 @@ export function selectionToRects(
 
             renderedBlocks.forEach((info) => {
               const paragraphMarkerWidth = info.measure.marker?.markerWidth ?? 0;
+              // List items in table cells are also rendered with left alignment
+              const isListItem = paragraphMarkerWidth > 0;
+              const alignmentOverride = isListItem ? 'left' : undefined;
+              // Get paragraph indent for text positioning (same logic as regular paragraphs)
+              const paraIndentLeft = info.block.kind === 'paragraph' ? (info.block.attrs?.indent?.left ?? 0) : 0;
               const intersectingLines = findLinesIntersectingRange(info.block, info.measure, from, to);
 
               intersectingLines.forEach(({ line, index }) => {
@@ -1318,10 +1327,11 @@ export function selectionToRects(
                 const charOffsetFrom = pmPosToCharOffset(info.block, line, sliceFrom);
                 const charOffsetTo = pmPosToCharOffset(info.block, line, sliceTo);
                 const availableWidth = Math.max(1, cellMeasure.width - padding.left - padding.right);
-                const startX = mapPmToX(info.block, line, charOffsetFrom, availableWidth);
-                const endX = mapPmToX(info.block, line, charOffsetTo, availableWidth);
+                const startX = mapPmToX(info.block, line, charOffsetFrom, availableWidth, alignmentOverride);
+                const endX = mapPmToX(info.block, line, charOffsetTo, availableWidth, alignmentOverride);
 
-                const rectX = fragment.x + cellX + padding.left + paragraphMarkerWidth + Math.min(startX, endX);
+                // Text starts at paraIndentLeft from the cell content area
+                const rectX = fragment.x + cellX + padding.left + paraIndentLeft + Math.min(startX, endX);
                 const rectWidth = Math.max(1, Math.abs(endX - startX));
                 const lineOffset =
                   lineHeightBeforeIndex(info.measure, index) - lineHeightBeforeIndex(info.measure, info.startLine);
@@ -1818,6 +1828,7 @@ const mapPointToPm = (
  * @param line - The line to map within
  * @param offset - Character offset from the start of the line (0-based)
  * @param fragmentWidth - The total width of the fragment containing this line (in pixels)
+ * @param alignmentOverride - Optional alignment override (e.g., 'left' for list items)
  * @returns X coordinate in pixels from the start of the line, or 0 if inputs are invalid
  *
  * @example
@@ -1827,7 +1838,13 @@ const mapPointToPm = (
  * // Returns: 47 (pixels from line start)
  * ```
  */
-const mapPmToX = (block: FlowBlock, line: Line, offset: number, fragmentWidth: number): number => {
+const mapPmToX = (
+  block: FlowBlock,
+  line: Line,
+  offset: number,
+  fragmentWidth: number,
+  alignmentOverride?: string,
+): number => {
   if (fragmentWidth <= 0 || line.width <= 0) return 0;
 
   // Type guard: Validate indent structure and ensure numeric values
@@ -1853,7 +1870,7 @@ const mapPmToX = (block: FlowBlock, line: Line, offset: number, fragmentWidth: n
   }
 
   // Use shared text measurement utility for pixel-perfect accuracy
-  return measureCharacterX(block, line, offset, availableWidth);
+  return measureCharacterX(block, line, offset, availableWidth, alignmentOverride);
 };
 
 const _sliceRunsForLine = (block: FlowBlock, line: Line): Run[] => {
