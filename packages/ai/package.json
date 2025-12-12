@@ -9,7 +9,7 @@
     "dev": "tsup --watch",
     "test": "vitest run",
     "lint": "eslint src --ext .ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "pnpm run build"
   },
   "keywords": [
     "superdoc",
