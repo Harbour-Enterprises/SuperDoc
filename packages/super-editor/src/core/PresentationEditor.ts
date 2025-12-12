@@ -3923,22 +3923,6 @@ export class PresentationEditor extends EventEmitter {
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
-    // Keep the painter and overlay hosts sized to the actual page width so centering
-    // on a wider viewport does not introduce X offsets between content and overlays.
-    const pageWidth = layout.pageSize?.w ?? this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
-    if (this.#painterHost) {
-      this.#painterHost.style.width = `${pageWidth}px`;
-      this.#painterHost.style.marginLeft = '0';
-      this.#painterHost.style.marginRight = '0';
-    }
-    if (this.#selectionOverlay) {
-      this.#selectionOverlay.style.width = `${pageWidth}px`;
-      this.#selectionOverlay.style.left = '0';
-      this.#selectionOverlay.style.right = '';
-      this.#selectionOverlay.style.marginLeft = '0';
-      this.#selectionOverlay.style.marginRight = '0';
-    }
-
     // Process per-rId header/footer content for multi-section support
     await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
 
