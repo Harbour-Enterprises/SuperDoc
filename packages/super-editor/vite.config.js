@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import vue from '@vitejs/plugin-vue'
@@ -21,6 +22,7 @@ export default defineConfig(({ mode }) => {
       testTimeout: 20000,
       hookTimeout: 10000,
       exclude: [
+        ...configDefaults.exclude,
         '**/*.spec.js',
       ],
       coverage: {
