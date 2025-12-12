@@ -20,9 +20,9 @@
     "@superdoc/painter-dom": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.13.1",
+    "@types/node": "catalog:",
     "tsup": "^8.0.2",
-    "typescript": "^5.7.3",
-    "vitest": "^3.2.4"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
