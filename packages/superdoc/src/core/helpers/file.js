@@ -1,4 +1,4 @@
-import { DOCX, PDF, HTML } from '@superdoc/common';
+import { DOC, DOCX, HTML, PDF } from '@superdoc/common';
 
 /**
  * @typedef {Object} UploadWrapper
@@ -60,6 +60,7 @@ export const extractBrowserFile = (input) => {
 const inferTypeFromName = (name = '') => {
   const lower = String(name).toLowerCase();
   if (lower.endsWith('.docx')) return DOCX;
+  if (lower.endsWith('.doc')) return DOC;
   if (lower.endsWith('.pdf')) return PDF;
   if (lower.endsWith('.html') || lower.endsWith('.htm')) return HTML;
   if (lower.endsWith('.md') || lower.endsWith('.markdown')) return 'text/markdown';

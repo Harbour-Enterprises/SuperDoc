@@ -4,7 +4,8 @@ import { EventEmitter } from 'eventemitter3';
 import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
-import { DOCX, PDF, HTML } from '@superdoc/common';
+import { DOCX, DOC, PDF, HTML } from '@superdoc/common';
+import { isDocFile, convertDocToDocx } from './helpers/documentConverter.js';
 import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app.js';
@@ -38,7 +39,7 @@ const DEFAULT_USER = Object.freeze({
  */
 export class SuperDoc extends EventEmitter {
   /** @type {Array<string>} */
-  static allowedTypes = [DOCX, PDF, HTML];
+  static allowedTypes = [DOCX, DOC, PDF, HTML];
 
   /** @type {string} */
   version;
@@ -103,6 +104,12 @@ export class SuperDoc extends EventEmitter {
     onListDefinitionsChange: () => null,
     onTransaction: () => null,
     onFontsResolved: null,
+
+    // Conversion events (for .doc to .docx conversion)
+    onConversionStart: () => null,
+    onConversionComplete: () => null,
+    onConversionError: () => null,
+
     // Image upload handler
     // async (file) => url;
     handleImageUpload: null,
@@ -171,8 +178,8 @@ export class SuperDoc extends EventEmitter {
     this.superdocId = config.superdocId || uuidv4();
     this.colors = this.config.colors;
 
-    // Preprocess document
-    this.#initDocuments();
+    // Preprocess document (may include .doc to .docx conversion)
+    await this.#initDocuments();
 
     // Initialize collaboration if configured
     await this.#initCollaboration(this.config.modules);
@@ -247,7 +254,7 @@ export class SuperDoc extends EventEmitter {
     };
   }
 
-  #initDocuments() {
+  async #initDocuments() {
     const doc = this.config.document;
     const hasDocumentConfig = !!doc && typeof doc === 'object' && Object.keys(this.config.document)?.length;
     const hasDocumentUrl = !!doc && typeof doc === 'string' && doc.length > 0;
@@ -314,6 +321,77 @@ export class SuperDoc extends EventEmitter {
         };
       });
     }
+
+    // Convert any .doc files to .docx if conversion is configured
+    await this.#convertDocFiles();
+  }
+
+  /**
+   * Convert .doc files to .docx using the configured conversion server
+   * @private
+   */
+  async #convertDocFiles() {
+    const conversionConfig = this.config.modules?.conversion;
+    if (!conversionConfig?.serverUrl) {
+      // No conversion server configured - check if any .doc files exist
+      const hasDocFiles = this.config.documents?.some((doc) => doc.data && isDocFile(doc.data));
+      if (hasDocFiles) {
+        this.#log(
+          '🦋 [superdoc] .doc files detected but no conversion server configured. Set modules.conversion.serverUrl to enable conversion.',
+        );
+      }
+      return;
+    }
+
+    if (!Array.isArray(this.config.documents) || this.config.documents.length === 0) {
+      return;
+    }
+
+    // Process each document and convert .doc files
+    const convertedDocuments = await Promise.all(
+      this.config.documents.map(async (doc) => {
+        if (!doc.data || !isDocFile(doc.data)) {
+          return doc;
+        }
+
+        const fileName = doc.name || doc.data.name || 'document.doc';
+        this.#log(`🦋 [superdoc] Converting .doc file: ${fileName}`);
+
+        // Emit conversion start event
+        this.config.onConversionStart?.({ fileName, document: doc });
+        this.emit('conversionStart', { fileName, document: doc });
+
+        const result = await convertDocToDocx(doc.data, conversionConfig);
+
+        if (result.success && result.file) {
+          // Emit conversion complete event
+          this.config.onConversionComplete?.({ fileName, document: doc, convertedFile: result.file });
+          this.emit('conversionComplete', { fileName, document: doc, convertedFile: result.file });
+
+          // Return updated document with converted file
+          return {
+            ...doc,
+            data: result.file,
+            name: result.file.name,
+            type: DOCX,
+            originalName: fileName,
+            wasConverted: true,
+          };
+        } else {
+          // Emit conversion error event
+          const error = result.error || new Error('Unknown conversion error');
+          this.config.onConversionError?.({ fileName, document: doc, error });
+          this.emit('conversionError', { fileName, document: doc, error });
+
+          console.error(`🦋 [superdoc] Failed to convert ${fileName}:`, error.message);
+
+          // Return original document - it will fail to load but we don't want to block other documents
+          return doc;
+        }
+      }),
+    );
+
+    this.config.documents = convertedDocuments;
   }
 
   #initVueApp() {

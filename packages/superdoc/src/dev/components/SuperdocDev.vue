@@ -1,18 +1,15 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
-import { nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, computed } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue';
 
-import { SuperDoc } from '@superdoc/index.js';
-import { DOCX, PDF, HTML } from '@superdoc/common';
-import { getFileObject } from '@superdoc/common';
-import { createPdfPainter } from '@superdoc/painter-pdf';
+import { DOCX, getFileObject } from '@superdoc/common';
 import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
-import SuperdocLogo from '../../../../layout-engine/v1-beta-demo/src/assets/superdoc-logo.webp?url';
-import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
-import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import { SuperDoc } from '@superdoc/index.js';
+import { createPdfPainter } from '@superdoc/painter-pdf';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
 import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer.mjs';
+import SuperdocLogo from '../../../../layout-engine/v1-beta-demo/src/assets/superdoc-logo.webp?url';
 import { getWorkerSrcFromCDN } from '../../components/PdfViewer/pdf/pdf-adapter.js';
 
 // Or set worker globally outside the component.
@@ -61,6 +58,13 @@ const commentPermissionResolver = ({ permission, comment, defaultDecision, curre
   return defaultDecision;
 };
 
+// .doc conversion state (used by SuperDoc's automatic conversion events)
+const isConverting = ref(false);
+const conversionError = ref(null);
+
+// Conversion server URL - adjust if running on different port
+const CONVERSION_SERVER_URL = 'http://localhost:3001';
+
 const handleNewFile = async (file) => {
   uploadedFileName.value = file?.name || '';
   // Generate a file url
@@ -70,6 +74,9 @@ const handleNewFile = async (file) => {
   const fileExtension = file.name.split('.').pop()?.toLowerCase();
   const isMarkdown = fileExtension === 'md';
   const isHtml = fileExtension === 'html' || fileExtension === 'htm';
+
+  // Note: .doc files are now handled automatically by SuperDoc via the
+  // modules.conversion config. They will be converted to .docx before loading.
 
   if (isMarkdown || isHtml) {
     // For text-based files, read the content and use a blank DOCX as base
@@ -83,7 +90,8 @@ const handleNewFile = async (file) => {
       currentFile.value.htmlContent = content;
     }
   } else {
-    // For binary files (DOCX, PDF), use as-is
+    // For binary files (DOCX, PDF, DOC), use as-is
+    // .doc files will be converted by SuperDoc if conversion server is configured
     currentFile.value = await getFileObject(url, file.name, file.type);
   }
 
@@ -162,6 +170,11 @@ const init = async () => {
     // cspNonce: 'testnonce123',
     useLayoutEngine: useLayoutEngine.value,
     modules: {
+      // .doc to .docx conversion server
+      conversion: {
+        serverUrl: CONVERSION_SERVER_URL,
+        timeout: 60000,
+      },
       comments: {
         // comments: sampleComments,
         // overflow: true,
@@ -309,6 +322,23 @@ const init = async () => {
         textLayerMode: 1,
       },
     },
+
+    // Conversion event handlers
+    onConversionStart: ({ fileName }) => {
+      console.log(`🔄 Converting .doc file: ${fileName}`);
+      isConverting.value = true;
+      conversionError.value = null;
+    },
+    onConversionComplete: ({ fileName, convertedFile }) => {
+      console.log(`✅ Conversion complete: ${fileName} → ${convertedFile.name}`);
+      isConverting.value = false;
+    },
+    onConversionError: ({ fileName, error }) => {
+      console.error(`❌ Conversion failed for ${fileName}:`, error.message);
+      isConverting.value = false;
+      conversionError.value = error.message;
+    },
+
     onEditorCreate,
     onContentError,
     // handleImageUpload: async (file) => url,
@@ -621,6 +651,36 @@ const closeExportMenu = () => {
               <div id="superdoc"></div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversion Status Indicator (shown when converting .doc files) -->
+    <div v-if="isConverting" class="doc-conversion-overlay">
+      <div class="doc-conversion-dialog">
+        <div class="doc-conversion-header">
+          <h3>Converting Document</h3>
+        </div>
+        <div class="doc-conversion-body">
+          <div class="doc-conversion-progress">Converting .doc file to .docx... Please wait.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversion Error Dialog -->
+    <div v-if="conversionError" class="doc-conversion-overlay">
+      <div class="doc-conversion-dialog">
+        <div class="doc-conversion-header">
+          <h3>Conversion Failed</h3>
+        </div>
+        <div class="doc-conversion-body">
+          <div class="doc-conversion-error">
+            {{ conversionError }}
+          </div>
+          <p style="margin-top: 12px">Make sure the conversion server is running at {{ CONVERSION_SERVER_URL }}</p>
+        </div>
+        <div class="doc-conversion-actions">
+          <button class="doc-conversion-btn doc-conversion-btn--primary" @click="conversionError = null">Close</button>
         </div>
       </div>
     </div>
@@ -1026,5 +1086,117 @@ const closeExportMenu = () => {
   display: grid;
   overflow-y: auto;
   scrollbar-width: none;
+}
+
+/* .doc Conversion Dialog Styles */
+.doc-conversion-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.doc-conversion-dialog {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 480px;
+  width: 90%;
+  overflow: hidden;
+}
+
+.doc-conversion-header {
+  background: #0f172a;
+  color: #fff;
+  padding: 16px 20px;
+}
+
+.doc-conversion-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.doc-conversion-body {
+  padding: 20px;
+  color: #333;
+  line-height: 1.6;
+}
+
+.doc-conversion-body p {
+  margin: 0 0 12px;
+}
+
+.doc-conversion-body p:last-child {
+  margin-bottom: 0;
+}
+
+.doc-conversion-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #dc2626;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+
+.doc-conversion-progress {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  color: #2563eb;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.doc-conversion-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 20px;
+  background: #f8fafc;
+  border-top: 1px solid #e2e8f0;
+}
+
+.doc-conversion-btn {
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.doc-conversion-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.doc-conversion-btn--secondary {
+  background: #fff;
+  border: 1px solid #d1d5db;
+  color: #374151;
+}
+
+.doc-conversion-btn--secondary:hover:not(:disabled) {
+  background: #f3f4f6;
+  border-color: #9ca3af;
+}
+
+.doc-conversion-btn--primary {
+  background: #3b82f6;
+  border: 1px solid #3b82f6;
+  color: #fff;
+}
+
+.doc-conversion-btn--primary:hover:not(:disabled) {
+  background: #2563eb;
+  border-color: #2563eb;
 }
 </style>
