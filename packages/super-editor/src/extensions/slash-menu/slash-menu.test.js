@@ -1,8 +1,8 @@
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { describe, expect, it, vi, afterEach, beforeEach } from 'vitest';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { schema, doc, p } from 'prosemirror-test-builder';
 import { initTestEditor, loadTestDataForEditorTests } from '@tests/helpers/helpers.js';
-import { SlashMenu, SlashMenuPluginKey } from './slash-menu.js';
+import { SlashMenu, SlashMenuPluginKey, findContainingBlockAncestor } from './slash-menu.js';
 vi.mock('@core/commands/list-helpers', () => ({
   isList: () => false,
 }));
@@ -825,5 +825,417 @@ describe('SlashMenu extension', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+});
+
+describe('findContainingBlockAncestor', () => {
+  let testContainer;
+
+  beforeEach(() => {
+    // Create a test container in the document body for DOM manipulation
+    testContainer = document.createElement('div');
+    testContainer.id = 'test-container';
+    document.body.appendChild(testContainer);
+  });
+
+  afterEach(() => {
+    // Clean up the test container
+    if (testContainer && testContainer.parentNode) {
+      testContainer.parentNode.removeChild(testContainer);
+    }
+    testContainer = null;
+  });
+
+  it('returns null for null input', () => {
+    expect(findContainingBlockAncestor(null)).toBe(null);
+  });
+
+  it('returns null for undefined input', () => {
+    expect(findContainingBlockAncestor(undefined)).toBe(null);
+  });
+
+  it('returns null when no containing block exists', () => {
+    const element = document.createElement('div');
+    testContainer.appendChild(element);
+    expect(findContainingBlockAncestor(element)).toBe(null);
+  });
+
+  it('detects transform property with non-none value', () => {
+    const parent = document.createElement('div');
+    parent.style.transform = 'translateX(10px)';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('ignores transform property with none value', () => {
+    const parent = document.createElement('div');
+    parent.style.transform = 'none';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('detects filter property with non-none value', () => {
+    const parent = document.createElement('div');
+    parent.style.filter = 'blur(5px)';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('ignores filter property with none value', () => {
+    const parent = document.createElement('div');
+    parent.style.filter = 'none';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('detects backdrop-filter property with non-none value', () => {
+    const parent = document.createElement('div');
+    parent.style.backdropFilter = 'blur(10px)';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    // Check if backdropFilter is supported in the test environment
+    const style = window.getComputedStyle(parent);
+    const backdropFilter = style.backdropFilter || style.webkitBackdropFilter;
+
+    if (!backdropFilter || backdropFilter === 'none') {
+      // Skip this test if backdropFilter is not supported
+      console.warn('backdrop-filter not supported in test environment, skipping test');
+      expect(true).toBe(true);
+      return;
+    }
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('ignores backdrop-filter property with none value', () => {
+    const parent = document.createElement('div');
+    parent.style.backdropFilter = 'none';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('detects perspective property with non-none value', () => {
+    const parent = document.createElement('div');
+    parent.style.perspective = '1000px';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('ignores perspective property with none value', () => {
+    const parent = document.createElement('div');
+    parent.style.perspective = 'none';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('detects will-change with transform value', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'transform';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects will-change with perspective value', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'perspective';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects will-change with multiple values including transform', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'opacity, transform, left';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects will-change with multiple values including perspective', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'opacity, perspective';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('ignores will-change with auto value', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'auto';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('ignores will-change without transform or perspective', () => {
+    const parent = document.createElement('div');
+    parent.style.willChange = 'opacity, left';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('does not incorrectly match will-change substring (e.g., will-transform)', () => {
+    const parent = document.createElement('div');
+    // This should not match because 'will-transform' is not 'transform'
+    parent.style.willChange = 'will-transform';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    // Should not match due to proper parsing
+    expect(findContainingBlockAncestor(child)).toBe(null);
+  });
+
+  it('detects contain with paint value', () => {
+    const parent = document.createElement('div');
+    parent.style.contain = 'paint';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects contain with layout value', () => {
+    const parent = document.createElement('div');
+    parent.style.contain = 'layout';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects contain with strict value', () => {
+    const parent = document.createElement('div');
+    parent.style.contain = 'strict';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('detects contain with content value', () => {
+    const parent = document.createElement('div');
+    parent.style.contain = 'content';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
+  });
+
+  it('returns first/closest matching ancestor when multiple exist', () => {
+    const grandparent = document.createElement('div');
+    grandparent.style.transform = 'translateY(50px)';
+    testContainer.appendChild(grandparent);
+
+    const parent = document.createElement('div');
+    parent.style.transform = 'translateX(20px)';
+    grandparent.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    const result = findContainingBlockAncestor(child);
+    // Should return the closest ancestor, which is parent
+    expect(result).toBe(parent);
+  });
+
+  it('stops at document.body', () => {
+    const element = document.createElement('div');
+    // Append directly to body
+    document.body.appendChild(element);
+
+    const result = findContainingBlockAncestor(element);
+    expect(result).toBe(null);
+
+    // Clean up
+    document.body.removeChild(element);
+  });
+
+  it('stops at document.documentElement', () => {
+    // This is a theoretical test - in practice elements are usually under body
+    const element = document.createElement('div');
+    testContainer.appendChild(element);
+
+    const result = findContainingBlockAncestor(element);
+    // Should stop before reaching documentElement
+    expect(result).toBe(null);
+  });
+
+  it('handles getComputedStyle errors gracefully', () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Create a mock element that will cause getComputedStyle to throw
+    const parent = document.createElement('div');
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    // Mock getComputedStyle to throw an error
+    const originalGetComputedStyle = window.getComputedStyle;
+    window.getComputedStyle = vi.fn(() => {
+      throw new Error('Element is detached');
+    });
+
+    // Should not throw, should return null and log warning
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(null);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'SlashMenu: Failed to get computed style for element',
+      expect.any(Object),
+      expect.any(Error),
+    );
+
+    // Restore
+    window.getComputedStyle = originalGetComputedStyle;
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('continues checking parent elements after getComputedStyle error on one element', () => {
+    const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const grandparent = document.createElement('div');
+    grandparent.style.transform = 'translateX(100px)';
+    testContainer.appendChild(grandparent);
+
+    const parent = document.createElement('div');
+    grandparent.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    // Mock getComputedStyle to throw only for parent, not grandparent
+    const originalGetComputedStyle = window.getComputedStyle;
+    let callCount = 0;
+    window.getComputedStyle = vi.fn((element) => {
+      callCount++;
+      if (element === parent) {
+        throw new Error('Error on parent');
+      }
+      return originalGetComputedStyle(element);
+    });
+
+    // Should continue to check grandparent after error on parent
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(grandparent);
+    expect(consoleWarnSpy).toHaveBeenCalledWith(
+      'SlashMenu: Failed to get computed style for element',
+      parent,
+      expect.any(Error),
+    );
+
+    // Restore
+    window.getComputedStyle = originalGetComputedStyle;
+    consoleWarnSpy.mockRestore();
+  });
+
+  it('handles deeply nested elements correctly', () => {
+    let current = testContainer;
+    const depth = 10;
+
+    // Create a deep nesting
+    for (let i = 0; i < depth; i++) {
+      const div = document.createElement('div');
+      current.appendChild(div);
+      current = div;
+    }
+
+    // Add transform to a middle ancestor
+    const targetAncestor = testContainer.children[0].children[0].children[0];
+    targetAncestor.style.transform = 'scale(1.5)';
+
+    // Create child element
+    const deepChild = document.createElement('div');
+    current.appendChild(deepChild);
+
+    const result = findContainingBlockAncestor(deepChild);
+    expect(result).toBe(targetAncestor);
+  });
+
+  it('handles elements with multiple CSS properties that create containing blocks', () => {
+    const parent = document.createElement('div');
+    parent.style.transform = 'translateX(10px)';
+    parent.style.filter = 'blur(5px)';
+    parent.style.willChange = 'transform';
+    testContainer.appendChild(parent);
+
+    const child = document.createElement('div');
+    parent.appendChild(child);
+
+    // Should still return parent (stops at first match which is transform)
+    const result = findContainingBlockAncestor(child);
+    expect(result).toBe(parent);
   });
 });
