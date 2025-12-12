@@ -62,7 +62,7 @@
   "dependencies": {
     "buffer-crc32": "catalog:",
     "eventemitter3": "catalog:",
-    "jsdom": "^25.0.1",
+    "jsdom": "catalog:",
     "naive-ui": "catalog:",
     "pinia": "catalog:",
     "rollup-plugin-copy": "catalog:",
