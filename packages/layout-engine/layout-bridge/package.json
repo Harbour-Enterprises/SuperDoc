@@ -14,10 +14,10 @@
     "dev": "tsup src/index.ts --format esm --watch"
   },
   "dependencies": {
-    "@superdoc/contracts": "*",
-    "@superdoc/layout-engine": "*",
-    "@superdoc/measuring-dom": "*",
-    "@superdoc/painter-dom": "*"
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/layout-engine": "workspace:*",
+    "@superdoc/measuring-dom": "workspace:*",
+    "@superdoc/painter-dom": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.13.1",
