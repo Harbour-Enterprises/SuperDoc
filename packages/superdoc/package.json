@@ -78,16 +78,18 @@
   },
   "devDependencies": {
     "@hocuspocus/provider": "catalog:",
-    "@vitejs/plugin-vue": "^5.2.1",
+    "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
+    "jszip": "catalog:",
     "nodemon": "catalog:",
     "pdfjs-dist": "catalog:",
     "postcss-nested": "catalog:",
     "postcss-prefixwrap": "catalog:",
     "rollup-plugin-visualizer": "catalog:",
     "typescript": "^5.7.3",
-    "vite": "^6.3.5",
+    "vite": "catalog:",
     "vite-plugin-node-polyfills": "catalog:",
-    "vitest": "^3.2.4"
+    "vitest": "catalog:",
+    "xml-js": "catalog:"
   }
 }

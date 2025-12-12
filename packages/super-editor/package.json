@@ -98,15 +98,15 @@
   },
   "devDependencies": {
     "@floating-ui/dom": "catalog:",
-    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "postcss-nested": "catalog:",
     "postcss-nested-import": "catalog:",
     "prosemirror-test-builder": "catalog:",
     "tippy.js": "catalog:",
     "typescript": "^5.7.3",
-    "vite": "^6.3.5",
+    "vite": "catalog:",
     "vite-plugin-node-polyfills": "catalog:",
-    "vitest": "^3.2.4"
+    "vitest": "catalog:"
   }
 }
