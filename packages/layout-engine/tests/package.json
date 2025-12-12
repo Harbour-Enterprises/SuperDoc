@@ -9,15 +9,15 @@
     "test:integration": "vitest run --grep 'Integration'"
   },
   "dependencies": {
-    "@superdoc/pm-adapter": "*",
-    "@superdoc/layout-engine": "*",
-    "@superdoc/measuring-dom": "*",
-    "@superdoc/contracts": "*",
-    "@superdoc/geometry-utils": "*",
-    "@superdoc/common": "*"
+    "@superdoc/pm-adapter": "workspace:*",
+    "@superdoc/layout-engine": "workspace:*",
+    "@superdoc/measuring-dom": "workspace:*",
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/geometry-utils": "workspace:*",
+    "@superdoc/common": "workspace:*"
   },
   "devDependencies": {
-    "tsx": "^4.20.6",
-    "jsdom": "^25.0.0"
+    "tsx": "catalog:",
+    "jsdom": "catalog:"
   }
 }

@@ -12,11 +12,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@harbour-enterprises/super-editor": "*",
-    "superdoc": "*"
+    "@harbour-enterprises/super-editor": "workspace:*",
+    "superdoc": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.7.3",
-    "vite": "^6.0.3"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }
