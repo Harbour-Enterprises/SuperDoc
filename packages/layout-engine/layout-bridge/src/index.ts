@@ -782,7 +782,12 @@ export function clickToPosition(
       );
     }
 
-    const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth);
+    // List items are rendered with left alignment in the DOM regardless of paragraph alignment
+    const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
+    const isListItem = markerWidth > 0;
+    const alignmentOverride = isListItem ? 'left' : undefined;
+
+    const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth, alignmentOverride);
     if (pos == null) {
       logClickStage('warn', 'no-position', {
         blockId: fragment.blockId,
@@ -852,7 +857,12 @@ export function clickToPosition(
         );
       }
 
-      const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth);
+      // List items in table cells are also rendered with left alignment
+      const cellMarkerWidth = cellMeasure.marker?.markerWidth ?? 0;
+      const isListItem = cellMarkerWidth > 0;
+      const alignmentOverride = isListItem ? 'left' : undefined;
+
+      const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth, alignmentOverride);
 
       if (pos != null) {
         clickMappingTelemetry.geometrySuccess++;
@@ -1774,6 +1784,7 @@ const lineHeightBeforeIndex = (measure: Measure, absoluteLineIndex: number): num
  * @param availableWidthOverride - Optional available width for justified text calculation
  *   (fragment width minus paragraph indents). When provided, ensures justify spacing
  *   matches the painter's rendering.
+ * @param alignmentOverride - Optional alignment override (e.g., 'left' for list items)
  * @returns ProseMirror position at the X coordinate, or null if mapping fails
  *
  * @example
@@ -1793,13 +1804,14 @@ const mapPointToPm = (
   x: number,
   isRTL: boolean,
   availableWidthOverride?: number,
+  alignmentOverride?: string,
 ): number | null => {
   if (block.kind !== 'paragraph') return null;
   const range = computeLinePmRange(block, line);
   if (range.pmStart == null || range.pmEnd == null) return null;
 
   // Use shared text measurement utility for pixel-perfect accuracy
-  const result = findCharacterAtX(block, line, x, range.pmStart, availableWidthOverride);
+  const result = findCharacterAtX(block, line, x, range.pmStart, availableWidthOverride, alignmentOverride);
 
   // Handle RTL text by reversing the position
   if (isRTL) {
