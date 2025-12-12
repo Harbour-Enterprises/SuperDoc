@@ -857,6 +857,12 @@ importers:
       postcss-prefixwrap:
         specifier: 'catalog:'
         version: 1.57.0(postcss@8.5.6)
+      prosemirror-model:
+        specifier: 'catalog:'
+        version: 1.25.4
+      prosemirror-state:
+        specifier: 'catalog:'
+        version: 1.4.4
       rollup-plugin-visualizer:
         specifier: 'catalog:'
         version: 5.14.0(rollup@4.53.3)

@@ -88,6 +88,8 @@
     "pdfjs-dist": "catalog:",
     "postcss-nested": "catalog:",
     "postcss-prefixwrap": "catalog:",
+    "prosemirror-model": "catalog:",
+    "prosemirror-state": "catalog:",
     "rollup-plugin-visualizer": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
