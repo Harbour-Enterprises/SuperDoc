@@ -16,12 +16,17 @@ catalog:
   '@playwright/test': ^1.57.0
   '@semantic-release/changelog': ^6.0.3
   '@semantic-release/git': ^10.0.1
+  '@types/node': ^22.13.1
+  '@typescript-eslint/parser': ^8.49.0
+  '@typescript-eslint/eslint-plugin': ^8.49.0
   '@vitejs/plugin-vue': ^6.0.2
+  '@vitest/coverage-v8': ^4.0.15
   '@vue/test-utils': ^2.4.6
   buffer-crc32: ^1.0.0
   canvas: ^2.11.2
   color2k: ^2.0.3
   concurrently: ^9.1.2
+  eslint: ^9.39.1
   eslint-plugin-jsdoc: ^54.1.0
   eventemitter3: ^5.0.1
   he: ^1.2.0
@@ -65,7 +70,7 @@ catalog:
   tippy.js: ^6.3.7
   tsx: ^4.20.6
   typescript: ^5.9.2
-  typescript-eslint: ^8.47.0
+  typescript-eslint: ^8.49.0
   unified: ^11.0.5
   uuid: ^9.0.1
   verdaccio: ^6.1.6
