@@ -5,7 +5,7 @@ import { onMounted, shallowRef } from 'vue';
 import { SuperDoc } from 'superdoc';
 
 import { CustomMark } from './custom-mark.js';
-import { nextTick } from 'process';
+import { nextTick } from 'vue';
 
 window.fileData = null;
 const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
