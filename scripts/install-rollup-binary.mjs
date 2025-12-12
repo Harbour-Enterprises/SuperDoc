@@ -87,6 +87,6 @@ if (existsSync(packageJsonPath)) {
 }
 
 console.log(`Installing Rollup native binary ${packageName}@${rollupVersion}...`);
-execSync(`npm install --no-save --no-package-lock ${packageName}@${rollupVersion}`, {
+execSync(`pnpm install --no-save --no-package-lock ${packageName}@${rollupVersion}`, {
   stdio: 'inherit'
 });
