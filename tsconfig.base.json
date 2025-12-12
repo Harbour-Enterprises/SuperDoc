@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2020",
     "module": "ESNext",
-    "moduleResolution": "node",
+    "moduleResolution": "bundler",
     "lib": ["ES2020", "DOM"],
     "allowJs": true,
     "checkJs": false,
@@ -16,17 +16,6 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
-      "@superdoc/contracts": ["packages/layout-engine/contracts/src"],
-      "@superdoc/geometry-utils": ["packages/layout-engine/geometry-utils/src"],
-      "@superdoc/pm-adapter": ["packages/layout-engine/pm-adapter/src"],
-      "@superdoc/measuring-dom": ["packages/layout-engine/measuring/dom/src"],
-      "@superdoc/layout-engine": ["packages/layout-engine/layout-engine/src"],
-      "@superdoc/painter-dom": ["packages/layout-engine/painters/dom/src"],
-      "@superdoc/painter-pdf": ["packages/layout-engine/painters/pdf/src"],
-      "@superdoc/layout-bridge": ["packages/layout-engine/layout-bridge/src"],
-      "@superdoc/style-engine": ["packages/layout-engine/style-engine/src"],
-      "@superdoc/url-validation": ["shared/url-validation/index.js"],
-      "@superdoc/preset-geometry": ["packages/preset-geometry/index.js"],
       "@core/*": ["packages/super-editor/src/core/*"],
       "@extensions/*": ["packages/super-editor/src/extensions/*"],
       "@features/*": ["packages/super-editor/src/features/*"],
@@ -35,7 +24,8 @@
       "@converter/*": ["packages/super-editor/src/core/super-converter/*"],
       "@tests/*": ["packages/super-editor/src/tests/*"],
       "@translator": ["packages/super-editor/src/core/super-converter/v3/node-translator/"]
-    }
+    },
+    "customConditions": ["source"]
   },
   "include": [
     "packages/super-editor/src/**/*",
