@@ -8,8 +8,8 @@ import {
   type HttpProviderConfig,
   type OpenAIProviderConfig,
   type AnthropicProviderConfig,
-} from './providers';
-import type { AIProvider, AIMessage } from './types';
+} from '../../providers';
+import type { AIProvider, AIMessage } from '../../../shared/types';
 
 describe('providers', () => {
   describe('isAIProvider', () => {
@@ -30,14 +30,14 @@ describe('providers', () => {
       expect(
         isAIProvider({
           getCompletion: () => {
-            /* noop */
+            // Mock implementation
           },
         }),
       ).toBe(false);
       expect(
         isAIProvider({
           streamCompletion: () => {
-            /* noop */
+            // Mock implementation
           },
         }),
       ).toBe(false);
@@ -103,7 +103,7 @@ describe('providers', () => {
 
     it('should throw for unsupported provider type', () => {
       const config = { type: 'unsupported' } as unknown as HttpProviderConfig;
-      expect(() => createAIProvider(config)).toThrow('Unsupported AI provider');
+      expect(() => createAIProvider(config)).toThrow('Unsupported provider type');
     });
   });
 
@@ -118,7 +118,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: HttpProviderConfig = {
@@ -148,7 +148,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: HttpProviderConfig = {
@@ -238,7 +238,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ result: 'custom' }),
+        text: async () => JSON.stringify({ result: 'custom' }),
       });
 
       const customBuilder = vi.fn().mockReturnValue({ custom: 'body' });
@@ -326,7 +326,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: OpenAIProviderConfig = {
@@ -353,7 +353,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: OpenAIProviderConfig = {
@@ -374,7 +374,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: OpenAIProviderConfig = {
@@ -402,7 +402,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ choices: [{ message: { content: 'response' } }] }),
+        text: async () => JSON.stringify({ choices: [{ message: { content: 'response' } }] }),
       });
 
       const config: OpenAIProviderConfig = {
@@ -434,7 +434,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ content: [{ text: 'response' }] }),
+        text: async () => JSON.stringify({ content: [{ text: 'response' }] }),
       });
 
       const config: AnthropicProviderConfig = {
@@ -462,7 +462,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ content: [{ text: 'response' }] }),
+        text: async () => JSON.stringify({ content: [{ text: 'response' }] }),
       });
 
       const config: AnthropicProviderConfig = {
@@ -492,7 +492,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ content: [{ text: 'response' }] }),
+        text: async () => JSON.stringify({ content: [{ text: 'response' }] }),
       });
 
       const config: AnthropicProviderConfig = {
@@ -520,7 +520,7 @@ describe('providers', () => {
       mockFetch.mockResolvedValue({
         ok: true,
         headers: { get: () => 'application/json' },
-        json: async () => ({ content: [{ text: 'response' }] }),
+        text: async () => JSON.stringify({ content: [{ text: 'response' }] }),
       });
 
       const config: AnthropicProviderConfig = {
