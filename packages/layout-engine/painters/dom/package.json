@@ -17,9 +17,9 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@superdoc/contracts": "*",
-    "@superdoc/preset-geometry": "*",
-    "@superdoc/url-validation": "*"
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/preset-geometry": "workspace:*",
+    "@superdoc/url-validation": "workspace:*"
   },
   "devDependencies": {
     "vitest": "^3.0.8"
