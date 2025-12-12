@@ -35,15 +35,15 @@
     "jszip": "catalog:",
     "patch-package": "catalog:",
     "playwright": "catalog:",
-    "vue": "^3.5.13"
+    "vue": "catalog:"
   },
   "devDependencies": {
-    "@types/node": "^22.15.3",
+    "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "jimp": "catalog:",
     "nodemon": "catalog:",
     "pixelmatch": "catalog:",
-    "vite": "^6.3.1"
+    "vite": "catalog:"
   },
   "workspaces": [
     "templates/vue"

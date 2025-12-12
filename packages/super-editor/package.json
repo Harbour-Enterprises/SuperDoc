@@ -97,7 +97,7 @@
     "remark-stringify": "catalog:",
     "unified": "catalog:",
     "uuid": "catalog:",
-    "vue": "^3.5.20",
+    "vue": "catalog:",
     "xml-js": "catalog:"
   },
   "peerDependencies": {
@@ -116,7 +116,7 @@
     "postcss-nested-import": "catalog:",
     "prosemirror-test-builder": "catalog:",
     "tippy.js": "catalog:",
-    "typescript": "^5.7.3",
+    "typescript": "catalog:",
     "vite": "catalog:",
     "vite-plugin-node-polyfills": "catalog:",
     "vitest": "catalog:"

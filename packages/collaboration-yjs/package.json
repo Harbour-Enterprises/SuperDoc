@@ -36,16 +36,16 @@
     "access": "public"
   },
   "devDependencies": {
-    "@types/node": "^22.10.2",
-    "@typescript-eslint/parser": "^8.46.3",
-    "@vitest/coverage-v8": "^2.0.5",
+    "@types/node": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
     "concurrently": "catalog:",
-    "eslint": "^9.39.1",
+    "eslint": "catalog:",
     "eslint-config-prettier": "^9.1.2",
     "nodemon": "catalog:",
     "prettier": "^3.5.3",
     "tsup": "^8.5.0",
-    "typescript": "^5.7.3",
-    "vitest": "^2.0.5"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

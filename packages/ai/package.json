@@ -47,17 +47,17 @@
     "superdoc": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "@typescript-eslint/eslint-plugin": "^6.0.0",
-    "@typescript-eslint/parser": "^6.0.0",
-    "eslint": "^8.0.0",
+    "@types/node": "catalog:",
+    "@typescript-eslint/eslint-plugin": "catalog:",
+    "@typescript-eslint/parser": "catalog:",
+    "eslint": "catalog:",
     "prosemirror-model": "catalog:",
     "prosemirror-state": "catalog:",
     "prosemirror-view": "catalog:",
     "superdoc": "workspace:",
     "tsup": "^8.5.1",
-    "typescript": "^5.0.0",
-    "vitest": "^3.2.4"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "files": [
     "dist",
