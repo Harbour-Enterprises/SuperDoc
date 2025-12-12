@@ -9,8 +9,8 @@
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "playwright": "^1.55.0"
+    "@playwright/test": "^1.57.0",
+    "playwright": "^1.57.0"
   },
   "dependencies": {
     "patch-package": "^8.0.1"
