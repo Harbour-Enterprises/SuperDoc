@@ -586,27 +586,6 @@ importers:
 
   packages/super-editor:
     dependencies:
-      '@superdoc/contracts':
-        specifier: workspace:*
-        version: link:../layout-engine/contracts
-      '@superdoc/layout-bridge':
-        specifier: workspace:*
-        version: link:../layout-engine/layout-bridge
-      '@superdoc/measuring-dom':
-        specifier: workspace:*
-        version: link:../layout-engine/measuring/dom
-      '@superdoc/painter-dom':
-        specifier: workspace:*
-        version: link:../layout-engine/painters/dom
-      '@superdoc/pm-adapter':
-        specifier: workspace:*
-        version: link:../layout-engine/pm-adapter
-      '@superdoc/url-validation':
-        specifier: workspace:*
-        version: link:../../shared/url-validation
-      '@superdoc/word-layout':
-        specifier: workspace:*
-        version: link:../word-layout
       buffer-crc32:
         specifier: 'catalog:'
         version: 1.0.0
@@ -701,6 +680,33 @@ importers:
       '@floating-ui/dom':
         specifier: 'catalog:'
         version: 1.7.4
+      '@superdoc/common':
+        specifier: workspace:*
+        version: link:../../shared/common
+      '@superdoc/contracts':
+        specifier: workspace:*
+        version: link:../layout-engine/contracts
+      '@superdoc/layout-bridge':
+        specifier: workspace:*
+        version: link:../layout-engine/layout-bridge
+      '@superdoc/measuring-dom':
+        specifier: workspace:*
+        version: link:../layout-engine/measuring/dom
+      '@superdoc/painter-dom':
+        specifier: workspace:*
+        version: link:../layout-engine/painters/dom
+      '@superdoc/pm-adapter':
+        specifier: workspace:*
+        version: link:../layout-engine/pm-adapter
+      '@superdoc/preset-geometry':
+        specifier: workspace:*
+        version: link:../preset-geometry
+      '@superdoc/url-validation':
+        specifier: workspace:*
+        version: link:../../shared/url-validation
+      '@superdoc/word-layout':
+        specifier: workspace:*
+        version: link:../word-layout
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
         version: 6.0.2(vite@7.2.7(@types/node@22.19.2)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))
@@ -774,6 +780,12 @@ importers:
       '@hocuspocus/provider':
         specifier: 'catalog:'
         version: 2.15.3(y-protocols@1.0.6(yjs@13.6.19))(yjs@13.6.19)
+      '@superdoc/common':
+        specifier: workspace:*
+        version: link:../../shared/common
+      '@superdoc/painter-pdf':
+        specifier: workspace:*
+        version: link:../layout-engine/painters/pdf
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
         version: 6.0.2(vite@7.2.7(@types/node@22.19.2)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))
