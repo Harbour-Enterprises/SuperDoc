@@ -23,11 +23,11 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
-    "@superdoc/common": "*",
-    "@superdoc/contracts": "*",
-    "@superdoc/measuring-dom": "*",
-    "@superdoc/style-engine": "*",
-    "@superdoc/word-layout": "*",
-    "@superdoc/url-validation": "*"
+    "@superdoc/common": "workspace:*",
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/measuring-dom": "workspace:*",
+    "@superdoc/style-engine": "workspace:*",
+    "@superdoc/word-layout": "workspace:*",
+    "@superdoc/url-validation": "workspace:*"
   }
 }
