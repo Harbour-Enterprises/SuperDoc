@@ -133,12 +133,17 @@ const countSpaces = (text: string): number => {
  * // Returns: { extraPerSpace: 10, totalSpaces: 5 }  (50px slack / 5 spaces)
  * ```
  */
-const getJustifyAdjustment = (block: FlowBlock, line: Line, availableWidthOverride?: number): JustifyAdjustment => {
+const getJustifyAdjustment = (
+  block: FlowBlock,
+  line: Line,
+  availableWidthOverride?: number,
+  alignmentOverride?: string,
+): JustifyAdjustment => {
   if (block.kind !== 'paragraph') {
     return { extraPerSpace: 0, totalSpaces: 0 };
   }
 
-  const alignment = block.attrs?.alignment;
+  const alignment = alignmentOverride ?? block.attrs?.alignment;
   const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
   // Use the same available width as the painter: override > maxWidth > width
   const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
@@ -275,6 +280,9 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
  * @param block - The paragraph block containing the line
  * @param line - The line to measure within
  * @param charOffset - Character offset from the start of the line (0-based)
+ * @param availableWidthOverride - Optional override for available width
+ * @param alignmentOverride - Optional override for text alignment (e.g., 'left' for list items
+ *   which are always rendered left-aligned in the DOM regardless of paragraph alignment)
  * @returns The X coordinate (in pixels) from the start of the line
  */
 export function measureCharacterX(
@@ -282,6 +290,7 @@ export function measureCharacterX(
   line: Line,
   charOffset: number,
   availableWidthOverride?: number,
+  alignmentOverride?: string,
 ): number {
   const ctx = getMeasurementContext();
   const availableWidth =
@@ -290,9 +299,12 @@ export function measureCharacterX(
     // Fallback: if no maxWidth, approximate available width as line width (no slack)
     line.width;
   // Pass availableWidth to justify calculation to match painter's word-spacing
-  const justify = getJustifyAdjustment(block, line, availableWidth);
-  const renderedLineWidth = line.width + Math.max(0, availableWidth - line.width);
-  const alignment = block.kind === 'paragraph' ? block.attrs?.alignment : undefined;
+  const justify = getJustifyAdjustment(block, line, availableWidth, alignmentOverride);
+  const alignment = alignmentOverride ?? (block.kind === 'paragraph' ? block.attrs?.alignment : undefined);
+  // For justify alignment, the line is stretched to fill available width (slack distributed across spaces)
+  // For center/right alignment, the line keeps its natural width and is positioned within the available space
+  const renderedLineWidth =
+    alignment === 'justify' ? line.width + Math.max(0, availableWidth - line.width) : line.width;
   const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
   const alignmentOffset =
     !hasExplicitPositioning && alignment === 'center'
@@ -565,6 +577,8 @@ export function charOffsetToPm(block: FlowBlock, line: Line, charOffset: number,
  * @param line - The line to search within
  * @param x - The X coordinate (in pixels) from the start of the line
  * @param pmStart - The ProseMirror position at the start of the line
+ * @param availableWidthOverride - Optional override for available width
+ * @param alignmentOverride - Optional override for text alignment (e.g., 'left' for list items)
  * @returns Object with charOffset (0-based from line start) and pmPosition
  */
 export function findCharacterAtX(
@@ -573,6 +587,7 @@ export function findCharacterAtX(
   x: number,
   pmStart: number,
   availableWidthOverride?: number,
+  alignmentOverride?: string,
 ): { charOffset: number; pmPosition: number } {
   const ctx = getMeasurementContext();
   const availableWidth =
@@ -581,9 +596,12 @@ export function findCharacterAtX(
     // Fallback: approximate with line width when no maxWidth is present
     line.width;
   // Pass availableWidth to justify calculation to match painter's word-spacing
-  const justify = getJustifyAdjustment(block, line, availableWidth);
-  const renderedLineWidth = line.width + Math.max(0, availableWidth - line.width);
-  const alignment = block.kind === 'paragraph' ? block.attrs?.alignment : undefined;
+  const justify = getJustifyAdjustment(block, line, availableWidth, alignmentOverride);
+  const alignment = alignmentOverride ?? (block.kind === 'paragraph' ? block.attrs?.alignment : undefined);
+  // For justify alignment, the line is stretched to fill available width (slack distributed across spaces)
+  // For center/right alignment, the line keeps its natural width and is positioned within the available space
+  const renderedLineWidth =
+    alignment === 'justify' ? line.width + Math.max(0, availableWidth - line.width) : line.width;
   const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
   const alignmentOffset =
     !hasExplicitPositioning && alignment === 'center'
