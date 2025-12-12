@@ -35,10 +35,12 @@ jobs:
           fetch-depth: 0
           token: ${{ steps.generate_token.outputs.token }}
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
-          cache: npm
+          cache: pnpm
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install canvas system dependencies
@@ -54,10 +56,10 @@ jobs:
             libpixman-1-dev
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install
 
       - name: Build packages
-        run: npm run build
+        run: pnpm run build
 
       - name: Release
         id: semantic
@@ -66,7 +68,7 @@ jobs:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          npx semantic-release
+          pnpx semantic-release
           echo "released=$?" >> $GITHUB_OUTPUT
 
       # Sync stable back to main after stable release
