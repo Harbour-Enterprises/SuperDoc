@@ -12,6 +12,9 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/super-editor.es.js"
     },
+    "./*": {
+      "source": "./src/*"
+    },
     "./converter": {
       "source": "./src/core/super-converter/SuperConverter.js",
       "import": "./dist/converter.es.js"
@@ -65,13 +68,6 @@
     "pack": "rm *.tgz 2>/dev/null || true && npm run build && npm pack && mv harbour-enterprises-super-editor-0.0.1-alpha.0.tgz ./super-editor.tgz"
   },
   "dependencies": {
-    "@superdoc/word-layout": "workspace:*",
-    "@superdoc/pm-adapter": "workspace:*",
-    "@superdoc/layout-bridge": "workspace:*",
-    "@superdoc/url-validation": "workspace:*",
-    "@superdoc/painter-dom": "workspace:*",
-    "@superdoc/contracts": "workspace:*",
-    "@superdoc/measuring-dom": "workspace:*",
     "buffer-crc32": "catalog:",
     "color2k": "catalog:",
     "eventemitter3": "catalog:",
@@ -110,6 +106,15 @@
   },
   "devDependencies": {
     "@floating-ui/dom": "catalog:",
+    "@superdoc/common": "workspace:*",
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/layout-bridge": "workspace:*",
+    "@superdoc/measuring-dom": "workspace:*",
+    "@superdoc/painter-dom": "workspace:*",
+    "@superdoc/pm-adapter": "workspace:*",
+    "@superdoc/preset-geometry": "workspace:*",
+    "@superdoc/url-validation": "workspace:*",
+    "@superdoc/word-layout": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "postcss-nested": "catalog:",

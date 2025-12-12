@@ -17,7 +17,10 @@
     "./list-numbering/*": "./list-numbering/*.ts",
     "./layout-constants": "./layout-constants.ts",
     "./list-marker-utils": "./list-marker-utils.ts",
-    "./*.ts": "./*.ts"
+    "./*.ts": "./*.ts",
+    "./*": {
+      "source": "./*"
+    }
   },
   "files": [
     "*.ts",
