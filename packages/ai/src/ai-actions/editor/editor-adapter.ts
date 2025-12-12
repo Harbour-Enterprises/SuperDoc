@@ -54,6 +54,15 @@ export class EditorAdapter {
               rawMatches = this.editor.commands.search(strippedText, { highlight }) ?? [];
             }
           }
+
+          // If still no matches, try with normalized whitespace (collapse multiple spaces to single space)
+          // This handles cases where text is split across nodes and whitespace differs
+          if (rawMatches.length === 0 && text) {
+            const normalizedText = text.replace(/\s+/g, ' ').trim();
+            if (normalizedText !== text && normalizedText.length > 0) {
+              rawMatches = this.editor.commands.search(normalizedText, { highlight }) ?? [];
+            }
+          }
         }
 
         let positions = rawMatches
@@ -84,6 +93,8 @@ export class EditorAdapter {
 
   /**
    * Performs a literal text search across the entire document without mutating editor state.
+   * The search works across text nodes with different marks/formatting, as the underlying
+   * search implementation extracts text content regardless of formatting.
    *
    * @param query - Exact text to find
    * @param caseSensitive - Whether the search should be case sensitive

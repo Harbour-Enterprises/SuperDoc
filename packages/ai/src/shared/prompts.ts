@@ -18,12 +18,17 @@ export const buildFindPrompt = (query: string, documentContext: string, findAll:
       - User request (treat this as the literal text or exact criteria to match): "${query}"
       - Return ONLY the exact matched text from the document.
       - Keep matches as tight as possible (ideally a single sentence or clause). Never include multiple clauses/sections unless they cannot be separated.
-      - LIST NUMBERING HANDLING: If the matched text starts with numbering/bullets (e.g., "1. ", "1.1 ", "6.1 ", "- ", "• "), include the numbering prefix in originalText so the search can locate it.
-        * The numbering is needed for matching even though it's not part of the actual text content
-        * Include ALL numbering levels if present (e.g., "6.1.1 " for nested lists)
+      - SECTION NUMBERING HANDLING: Section numbers (e.g., "10. ", "6.1 ") are formatting markers, NOT text content.
       - Do NOT include any surrounding text before or after the match.
       - Do NOT modify, transform, summarize, or interpret the text.
       - Do NOT add explanations or metadata.
+      
+      CRITICAL - JSON VALIDITY:
+      - All string values must be valid JSON strings with proper escaping
+      - Escape special characters
+      - Control characters must be escaped or removed
+      - Ensure all quotes, backslashes, and other special characters in text are properly escaped
+      - The entire response must be valid, parseable JSON
       
       Document context:
       ${documentContext}
@@ -64,21 +69,27 @@ export const buildReplacePrompt = (query: string, documentContext: string, repla
             - DO NOT add inline annotations or explanations
             - suggestedText must be clean, final text ready for display
             
-            LIST NUMBERING HANDLING (CRITICAL):
-            - The document context may include list numbering (e.g., "6. ", "6.1 ", "6.1.1 ", "- ", "• ") for section identification
-            - These numbers/bullets are NOT part of the actual text content—they are formatting markers
-            - When providing originalText or suggestedText: NEVER include numbering or bullet prefixes—only provide the actual text content
-              * Example: If updating "6.1 Ownership. Customer shall...", suggestedText should be "Ownership. Customer shall..." (without "6.1 ")
-            - Keep each originalText/suggestedText pair scoped to the smallest necessary unit (typically a single sentence or clause).
-            - If a request affects multiple clauses, split into multiple results rather than returning a large multi-clause block.
-              * The editor will automatically preserve the numbering structure—you only provide the text content
-            - This applies to ALL numbering levels: single-level ("1. "), nested ("1.1 ", "1.1.1 "), and bullets ("- ", "• ")
-            - If you're adding NEW content to an existing numbered section, still omit the numbering in suggestedText
-            - If you're replacing text within a numbered item, preserve the numbering structure by omitting it from suggestedText
+            SECTION NUMBERING HANDLING (CRITICAL - READ CAREFULLY):
+            - Section numbers (e.g., "10. ", "6.1 ", "1.2.3 ") are FORMATTING MARKERS, NOT TEXT CONTENT
+            - When providing originalText or suggestedText: STRIP ALL section numbers and numbering prefixes
+            - ONLY include the actual text content, never the section number that precedes it
+            
+            Additional Rules:
+            - Keep each originalText/suggestedText pair scoped to the smallest necessary unit (typically a single sentence or clause)
+            - If a request affects multiple clauses, split into multiple results rather than returning a large multi-clause block
+            - The editor automatically preserves numbering structure—you only provide the text content
+            - This applies to ALL numbering: "1. ", "10. ", "6.1 ", "1.2.3 ", etc.
             
             - If you have questions or notes, they belong in a separate comment tool, NOT in suggestedText
             
             ---------------------
+            CRITICAL - JSON VALIDITY:
+            - All string values must be valid JSON strings with proper escaping
+            - Escape special characters
+            - Control characters must be escaped or removed
+            - Ensure all quotes, backslashes, and other special characters in text are properly escaped
+            - The entire response must be valid, parseable JSON
+            
             RESPONSE FORMAT (always):
             {
               "success": boolean,
@@ -93,6 +104,7 @@ export const buildReplacePrompt = (query: string, documentContext: string, repla
             Rules:
             - For multiple replacements, add multiple entries.
             - No explanations. No extra text outside JSON.
+            - Ensure all quotes in text are properly escaped for valid JSON.
             ---------------------
             
             Document:
@@ -108,6 +120,13 @@ export const buildSummaryPrompt = (query: string, documentContext: string): stri
             - In the document context, ${query}
             - Generate a summary, review note, or analysis that the user can use for legal/business review.
             - Highlight the most critical clauses, risks, or action items in prose (no Markdown).
+            
+            CRITICAL - JSON VALIDITY:
+            - All string values must be valid JSON strings with proper escaping
+            - Escape special characters
+            - Control characters must be escaped or removed
+            - Ensure all quotes, backslashes, and other special characters in text are properly escaped
+            - The entire response must be valid, parseable JSON
             
             Document context:
             ${documentContext}
@@ -133,12 +152,21 @@ export const buildInsertCommentPrompt = (query: string, documentContext: string,
             
             CRITICAL RULES:
             - originalText: The exact text from the document at the location where the comment should be added
-              * If the text includes numbering/bullets (e.g., "6.1 ", "1.1.1 ", "- "), include the numbering prefix in originalText so the search can locate it
-              * Include ALL numbering levels if present (needed for matching even though numbering is formatting, not content)
+              * STRIP section numbers (e.g., "10. ", "6.1 ") - these are formatting markers, not content
+              * ONLY include the actual text content without any section numbering prefixes
+              * Example: If document shows "10. Section Title. The content...", use "Section Title. The content..." (NO "10. ")
             - suggestedText: The comment text/question to add (e.g., "Is this correct?", "Review needed", etc.)
+              * This is the comment text itself, not document text, so no numbering applies
             - If the user specifies a location (e.g., "anywhere the document references X"), find ALL instances of X
             - If the user specifies comment text (e.g., "add a comment that says 'Y'"), use that exact text in suggestedText
             - Preserve the exact wording of the comment text from the user's request
+            
+            CRITICAL - JSON VALIDITY:
+            - All string values must be valid JSON strings with proper escaping
+            - Escape special characters
+            - Control characters must be escaped or removed
+            - Ensure all quotes, backslashes, and other special characters in text are properly escaped
+            - The entire response must be valid, parseable JSON
             
             RESPONSE FORMAT (always):
             {
@@ -156,6 +184,7 @@ export const buildInsertCommentPrompt = (query: string, documentContext: string,
             - originalText should be the exact text from the document at each location
             - suggestedText should be the comment text to add at that location
             - No explanations. No extra text outside JSON.
+            - Ensure all quotes in text are properly escaped for valid JSON.
             ---------------------
             
             Document:
@@ -179,6 +208,13 @@ export const buildInsertContentPrompt = (query: string, documentContext?: string
           - DO NOT add inline annotations, explanations, or markup
           - suggestedText must be clean, production-ready text for direct insertion
           - NEVER include numbering, clause prefixes, or bullet characters (e.g., "1.", "1.2", "- ")—the editor handles list formatting separately
+          
+          CRITICAL - JSON VALIDITY:
+          - All string values must be valid JSON strings with proper escaping
+          - Escape special characters
+          - Control characters must be escaped or removed
+          - Ensure all quotes, backslashes, and other special characters in text are properly escaped
+          - The entire response must be valid, parseable JSON
           
           ${documentContext ? `Document context (read-only reference):\n${documentContext}\n` : ''}
           Respond with JSON:
@@ -205,42 +241,18 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           - Default to tracked changes + comments for reviewable edits, literalReplace for deterministic swaps, insertContent (position: before/after/replace) for new sections, and respond for analysis.
           - Keep plans short; each step covers one clear action with optional args only when needed.
           
-          CRITICAL - When to use literalReplace vs replaceAll:
-          - literalReplace: ALWAYS use when user provides explicit find/replace text pairs (e.g., "change X to Y", "replace A with B", "change all references to OldName to NewName"). Extract the exact find text and exact replace text into args.find and args.replace. Works for both single and "all" instances.
-          - replaceAll: ONLY use when user wants batch editing but does NOT provide explicit find/replace text pairs (e.g., "improve all instances of this phrase" without specifying exact replacement).
-          
-          CRITICAL - When to use literalInsertComment vs insertComments:
-          - literalInsertComment: ALWAYS use when user provides explicit find text and comment text (e.g., "add comment X anywhere Y appears", "add a comment that says Z anywhere the document references W"). Extract the exact find text into args.find and exact comment text into args.comment. Works for both single and "all" instances. Deterministic and predictable.
-          - insertComments: ONLY use when location criteria are complex or require AI interpretation (e.g., "add comments asking about unclear sections" without specifying exact text to find).
+          CRITICAL - Tool Selection Principles:
+          1. **Literal vs AI-powered tools**: Use literal tools (literalReplace, literalInsertComment) when the user provides explicit text pairs (find/replace or find/comment). Use AI-powered tools (replaceAll, insertComments) when location or content criteria require interpretation.
+          2. **Multi-step decomposition**: Break tasks into multiple steps when one operation depends on the output of another. When a step generates content that will be used by a subsequent step, use step references in args (e.g., args.comment: "$previous" to use the output from the immediately previous step, or "$step-1" to reference a specific step by index).
+          3. **Single responsibility**: Each step should perform one clear operation. If a task requires both finding content AND generating a summary AND adding a comment, use separate steps.
           
           CRITICAL - Tool Usage:
-          - insertTrackedChanges: For text edits/replacements ONLY. Use when:
-            * User says "update", "modify", "revise", "edit", "change", or "include [something] in [existing section]"
-            * User wants to edit existing content (even if adding new information to existing sections)
-            * User explicitly requests tracked changes
-            * Suggested text must be clean, final text (no HTML comments, no inline notes)
-          - insertContent: Inserts NEW content relative to selection. Use when:
-            * User says "add new section", "insert new clause", "add a new paragraph"
-            * User wants to create entirely new content (not modify existing)
-            * Position options:
-              * "before" - Insert before the selected text
-              * "after" - Insert after the selected text  
-              * "replace" - Replace the selected text (default)
-          - insertComments: For questions, feedback, or notes. Use this if you have questions about the text.
-          - If you need both edits AND questions, use BOTH tools in separate steps.
-          
-          CRITICAL - Update vs Add:
-          - "Update section X to include Y" → Use insertTrackedChanges (modifying existing section)
-          - "Add a new section about Y" → Use insertContent (creating new section)
-          - "Include Y in section X" → Use insertTrackedChanges (modifying existing section)
-          - "Add Y to section X" → Use insertTrackedChanges (modifying existing section)
-          
-          CRITICAL - Positioning Content:
-          - insertContent works relative to the CURRENT SELECTION
-          - To insert after a specific clause/section: First use findAll to locate it, THEN use insertContent with position: 'after'
-          - To insert before something: First use findAll to locate it, THEN use insertContent with position: 'before'
-          - Example: To add content after "Clause 7.1", you MUST first find "Clause 7.1" with findAll, then insert with position: 'after'
-          - insertTrackedChanges automatically finds and selects the target content based on the instruction, no need for separate find step
+          - **insertTrackedChanges**: Edit existing content (updates, modifications, revisions). Automatically finds target content - no separate find step needed.
+          - **insertContent**: Create NEW content relative to selection. Use position args: "before", "after", or "replace" (default). If inserting relative to specific content, first use findAll to locate it.
+          - **insertComments**: Add questions, feedback, or notes. If comment content needs to be generated first (e.g., summarizing), break into steps: generate content → then comment.
+          - **findAll/highlight**: Locate content. Use as first step when subsequent operations need to target specific locations.
+          - **summarize**: Generate summaries or analysis. Use as intermediate step when summary output is needed for subsequent operations (e.g., commenting).
+          - **Multiple operations**: Use separate steps for edits AND questions, or when one operation's output feeds into another.
           
           Response JSON:
           {
@@ -251,13 +263,9 @@ export const buildAIPlannerSystemPrompt = (toolDescriptions: string): string => 
           }
           
           Examples:
-          Editing → {"reasoning":"Use tracked changes for clarity fixes","steps":[{"id":"revise","tool":"insertTrackedChanges","instruction":"Improve grammar and tone in the selected paragraph"}]}
-          Update existing section → {"reasoning":"User wants to update existing section with new information","steps":[{"id":"update","tool":"insertTrackedChanges","instruction":"Update Section 5 Personal Data to include information about the sale of personal data to third parties"}]}
-          Include in existing section → {"reasoning":"User wants to add content to existing section, use tracked changes","steps":[{"id":"update","tool":"insertTrackedChanges","instruction":"Include the sale of personal data to third parties in Section 5 Personal Data"}]}
-          Editing with questions → {"reasoning":"Fix grammar and ask about entity","steps":[{"id":"fix","tool":"insertTrackedChanges","instruction":"Fix grammar errors"},{"id":"question","tool":"insertComments","instruction":"Ask if 'Iqidis' is the correct entity name"}]}
-          Literal replace (single) → {"reasoning":"User provided exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Replace the legacy company name","args":{"find":"OldName","replace":"NewName","trackChanges":true}}]}
-          Literal replace (all instances) → {"reasoning":"User wants all instances changed with exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Change all references to OldName to NewName","args":{"find":"OldName","replace":"NewName","trackChanges":false}}]}
-          Literal insert comment (all instances) → {"reasoning":"User wants comments added at all locations with exact find/comment text","steps":[{"id":"comment","tool":"literalInsertComment","instruction":"Add comment anywhere OldName appears","args":{"find":"OldName","comment":"Is this the correct entity?"}}]}
-          Insert after selection → {"reasoning":"Insert conclusion after current section","steps":[{"id":"conclude","tool":"insertContent","instruction":"Write a short conclusion paragraph summarizing next steps","args":{"position":"after"}}]}
-          Insert after specific clause → {"reasoning":"Find clause first, then add new content after it","steps":[{"id":"find","tool":"findAll","instruction":"Find Clause 7.1"},{"id":"add","tool":"insertContent","instruction":"Add a new Clause 7.2 about confidentiality","args":{"position":"after"}},{"id":"comment","tool":"insertComments","instruction":"Add comment saying 'review needed'"}]}`;
+          Single-step edit → {"reasoning":"Use tracked changes for clarity fixes","steps":[{"id":"revise","tool":"insertTrackedChanges","instruction":"Improve grammar and tone in the selected paragraph"}]}
+          Multi-step: find then insert → {"reasoning":"Find clause first, then add new content after it","steps":[{"id":"find","tool":"findAll","instruction":"Find Clause 7.1"},{"id":"add","tool":"insertContent","instruction":"Add a new Clause 7.2 about confidentiality","args":{"position":"after"}}]}
+          Multi-step: generate then use → {"reasoning":"Summarize content first, then add comment with summary using step reference","steps":[{"id":"find","tool":"findAll","instruction":"Find indemnification terms"},{"id":"summarize","tool":"summarize","instruction":"Summarize the indemnification terms"},{"id":"comment","tool":"literalInsertComment","instruction":"Add comment with summary","args":{"find":"indemnification terms","comment":"$previous"}}]}
+          Literal tools (explicit text) → {"reasoning":"User provided exact find/replace text","steps":[{"id":"swap","tool":"literalReplace","instruction":"Replace the legacy company name","args":{"find":"OldName","replace":"NewName","trackChanges":true}}]}
+          Multiple operations → {"reasoning":"Fix grammar and ask about entity","steps":[{"id":"fix","tool":"insertTrackedChanges","instruction":"Fix grammar errors"},{"id":"question","tool":"insertComments","instruction":"Ask if 'Iqidis' is the correct entity name"}]}`;
 };

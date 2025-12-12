@@ -81,12 +81,22 @@ export interface AIToolHandlerContext {
 }
 
 /**
+ * Result from a previous step in the plan
+ */
+export interface PreviousStepResult {
+  stepId?: string;
+  tool: AIToolName;
+  result: AIToolHandlerResult;
+}
+
+/**
  * Payload passed to tool handlers
  */
 export interface AIToolHandlerPayload {
   instruction: string;
   step: AIPlanStep;
   context: AIToolHandlerContext;
+  previousResults?: PreviousStepResult[];
 }
 
 /**

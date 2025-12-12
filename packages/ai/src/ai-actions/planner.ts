@@ -34,6 +34,7 @@ import type {
   AIPlannerProgressCallback,
   AIToolActions,
   SelectionSnapshot,
+  AIToolHandlerResult,
 } from './tools';
 
 export interface AIPlan {
@@ -267,6 +268,7 @@ export class AIPlanner {
       const executedTools: string[] = [];
       let assistantResponse: string | undefined;
       const totalSteps = planResult.plan.steps.length;
+      const previousResults: Array<{ stepId?: string; tool: string; result: AIToolHandlerResult }> = [];
 
       for (let stepIndex = 0; stepIndex < planResult.plan.steps.length; stepIndex++) {
         const step = planResult.plan.steps[stepIndex];
@@ -301,6 +303,11 @@ export class AIPlanner {
             instruction,
             step,
             context: { editor: this.editor, actions: this.actions },
+            previousResults: previousResults.map((pr) => ({
+              stepId: pr.stepId,
+              tool: pr.tool as AIToolName,
+              result: pr.result,
+            })),
           });
 
           if (!result?.success) {
@@ -324,6 +331,13 @@ export class AIPlanner {
           }
 
           executedTools.push(step.tool);
+
+          // Store result for subsequent steps
+          previousResults.push({
+            stepId: step.id,
+            tool: step.tool,
+            result,
+          });
 
           this.onProgress?.({
             type: 'tool_complete',

@@ -44,7 +44,7 @@ export function createInsertCommentsTool(actions: AIToolActions): AIToolDefiniti
   return {
     name: 'insertComments',
     description:
-      'PRIMARY TOOL for providing feedback in multiple locations when location criteria are complex or require AI interpretation. Use for: comprehensive document review, multiple questions, batch feedback. If user provides explicit find text and comment text (e.g., "add comment X anywhere Y appears"), use literalInsertComment instead.',
+      'PRIMARY TOOL for providing feedback in multiple locations when location criteria are complex or require AI interpretation. Use for: comprehensive document review, multiple questions, batch feedback. If user provides explicit find text and comment text, use literalInsertComment instead. If comment content needs to be generated first (e.g., summarizing), break into separate steps: generate content → then comment.',
     handler: async ({ instruction }) => {
       const action = actions.insertComments;
       if (typeof action !== 'function') {
@@ -71,12 +71,12 @@ export function createLiteralInsertCommentTool(actions: AIToolActions): AIToolDe
   return {
     name: 'literalInsertComment',
     description:
-      'PREFERRED for explicit find-and-add-comment operations. Use when the user provides both the exact text to find AND the exact comment text to add (e.g., "add comment X anywhere Y appears", "add a comment that says Z anywhere the document references W"). Automatically handles "all" instances. Requires args.find (the exact text to find) and args.comment (the exact comment text to add).',
-    handler: async ({ step }) => {
+      'PREFERRED for explicit find-and-add-comment operations. Use when the user provides both the exact text to find AND the exact comment text to add (e.g., "add comment X anywhere Y appears", "add a comment that says Z anywhere the document references W"). Automatically handles "all" instances. Requires args.find (the exact text to find) and args.comment (the exact comment text to add, or a step reference like "$previous" or "$step-1" to use output from a previous step).',
+    handler: async ({ step, previousResults }) => {
       const args = step.args ?? {};
       const findText = typeof args.find === 'string' ? args.find : '';
       const commentTextProvided = typeof args.comment === 'string';
-      const commentText = commentTextProvided ? (args.comment as string) : '';
+      let commentText = commentTextProvided ? (args.comment as string) : '';
       const caseSensitive = Boolean(args.caseSensitive);
 
       if (!findText.trim()) {
@@ -93,6 +93,46 @@ export function createLiteralInsertCommentTool(actions: AIToolActions): AIToolDe
           message: 'literalInsertComment requires a "comment" argument',
           data: null,
         };
+      }
+
+      // Check if commentText is a step reference (e.g., "$previous", "$step-1", "$summarize")
+      if (commentText.startsWith('$') && previousResults && previousResults.length > 0) {
+        const reference = commentText.slice(1).toLowerCase();
+        let targetResult = null;
+
+        if (reference === 'previous' || reference === 'last') {
+          targetResult = previousResults[previousResults.length - 1];
+        } else if (reference.startsWith('step-')) {
+          const stepIndex = parseInt(reference.slice(5), 10) - 1;
+          if (stepIndex >= 0 && stepIndex < previousResults.length) {
+            targetResult = previousResults[stepIndex];
+          }
+        } else {
+          targetResult =
+            previousResults.find((pr) => pr.stepId === reference || pr.tool.toLowerCase() === reference) || null;
+        }
+
+        if (targetResult) {
+          const resultData = targetResult.result.data as Result | undefined;
+          const firstResult = Array.isArray(resultData?.results) ? resultData.results[0] : null;
+          if (firstResult && typeof firstResult.suggestedText === 'string') {
+            commentText = firstResult.suggestedText;
+          } else if (firstResult && typeof firstResult.originalText === 'string') {
+            commentText = firstResult.originalText;
+          } else {
+            return {
+              success: false,
+              message: `Step reference "${commentText}" did not yield usable text content`,
+              data: null,
+            };
+          }
+        } else {
+          return {
+            success: false,
+            message: `Step reference "${commentText}" not found in previous results`,
+            data: null,
+          };
+        }
       }
 
       const action = actions.literalInsertComment;
