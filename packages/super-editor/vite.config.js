@@ -44,15 +44,6 @@ export default defineConfig(({ mode }) => {
         'yjs',
         'tippy.js',
         '@floating-ui/dom',
-        // Layout engine packages (use source, not pre-bundled)
-        '@superdoc/pm-adapter',
-        '@superdoc/layout-bridge',
-        '@superdoc/painter-dom',
-        '@superdoc/contracts',
-        '@superdoc/style-engine',
-        '@superdoc/measuring-dom',
-        '@superdoc/geometry-utils',
-        '@superdoc/word-layout',
       ]
     },
     build: {
@@ -65,6 +56,7 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         external: [
+          'vite-plugin-node-polyfills/shims/process',
           'vue',
           'yjs',
           'y-protocols',
@@ -105,9 +97,6 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        // IMPORTANT: @superdoc/common must point to source, not dist
-        '@superdoc/common': fileURLToPath(new URL('../../shared/common', import.meta.url)),
-        '@superdoc/url-validation': fileURLToPath(new URL('../../shared/url-validation', import.meta.url)),
         '@': fileURLToPath(new URL('./src', import.meta.url)),
         '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
         '@extensions': fileURLToPath(new URL('./src/extensions', import.meta.url)),
@@ -118,18 +107,9 @@ export default defineConfig(({ mode }) => {
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
         '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
-        '@superdoc/preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
-        // Layout engine packages
-        '@superdoc/contracts': fileURLToPath(new URL('../layout-engine/contracts/src', import.meta.url)),
-        '@superdoc/pm-adapter': fileURLToPath(new URL('../layout-engine/pm-adapter/src', import.meta.url)),
-        '@superdoc/layout-bridge': fileURLToPath(new URL('../layout-engine/layout-bridge/src', import.meta.url)),
-        '@superdoc/painter-dom': fileURLToPath(new URL('../layout-engine/painters/dom/src', import.meta.url)),
-        '@superdoc/style-engine': fileURLToPath(new URL('../layout-engine/style-engine/src', import.meta.url)),
-        '@superdoc/measuring-dom': fileURLToPath(new URL('../layout-engine/measuring/dom/src', import.meta.url)),
-        '@superdoc/geometry-utils': fileURLToPath(new URL('../layout-engine/geometry-utils/src', import.meta.url)),
-        '@superdoc/word-layout': fileURLToPath(new URL('../word-layout/src', import.meta.url)),
       },
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+      conditions: ['source'],
     },
     css: {
       postcss: './postcss.config.cjs',
