@@ -25,7 +25,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'cd templates/vue && pnpm run build && pnpm run preview',
+    command: 'pnpm run --prefix templates/vue build && pnpm run --prefix templates/vue preview',
     url: baseURL,
     reuseExistingServer: !process.env.CI,
   },
