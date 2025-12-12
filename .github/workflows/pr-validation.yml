@@ -122,7 +122,7 @@ jobs:
 
       - name: Build SuperDoc
         run: |
-          pnpm install && cd e2e-tests && pnpm build:superdoc
+          pnpm run build
         
       - name: Cache Playwright browsers
         uses: actions/cache@v4

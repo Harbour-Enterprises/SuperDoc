@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@fontsource/inter": "^5.2.8",
-    "superdoc": "file:../../superdoc.tgz",
+    "superdoc": "workspace:*",
     "vue": "catalog:"
   },
   "devDependencies": {
