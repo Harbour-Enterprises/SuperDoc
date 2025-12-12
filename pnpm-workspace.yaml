@@ -35,6 +35,7 @@ catalog:
   jimp: ^1.6.0
   jsdom: ^27.3.0
   jszip: 3.10.1
+  lib0: ^0.2.114
   lint-staged: ^16.1.4
   marked: ^16.2.0
   naive-ui: ^2.43.1
@@ -82,7 +83,10 @@ catalog:
   vitest: ^3.2.4
   vue: ^3.5.20
   xml-js: 1.6.11
+  y-prosemirror: ^1.3.7
+  y-protocols: ^1.0.6
   y-websocket: ^3.0.0
+  yjs: 13.6.19
 
 onlyBuiltDependencies:
   - canvas

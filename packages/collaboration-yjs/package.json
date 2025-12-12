@@ -35,6 +35,11 @@
   "publishConfig": {
     "access": "public"
   },
+  "dependencies": {
+    "lib0": "catalog:",
+    "y-protocols": "catalog:",
+    "yjs": "catalog:"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "@typescript-eslint/parser": "catalog:",
