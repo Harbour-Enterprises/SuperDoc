@@ -19,7 +19,6 @@
     "shared/*"
   ],
   "scripts": {
-    "postinstall": "node scripts/install-rollup-binary.mjs",
     "test": "vitest run",
     "test:debug": "pnpm --prefix packages/super-editor run test:debug",
     "test:inspect": "NODE_OPTIONS=\"--inspect-brk=9229\" vitest --pool threads --poolOptions.threads.singleThread",
