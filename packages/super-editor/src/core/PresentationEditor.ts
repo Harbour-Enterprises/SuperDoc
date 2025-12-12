@@ -1,4 +1,5 @@
 import { NodeSelection, TextSelection } from 'prosemirror-state';
+import type { EditorState, Transaction } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -834,6 +835,114 @@ export class PresentationEditor extends EventEmitter {
   get commands() {
     const activeEditor = this.getActiveEditor();
     return activeEditor.commands;
+  }
+
+  /**
+   * Get the ProseMirror editor state for the currently active editor (header/footer-aware).
+   *
+   * This property dynamically returns the state from the appropriate editor instance:
+   * - In body mode, returns the main editor's state
+   * - In header/footer mode, returns the active header/footer editor's state
+   *
+   * This enables components like SlashMenu and context menus to access document
+   * state, selection, and schema information in the correct editing context.
+   *
+   * @returns The EditorState for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { selection, doc } = presentationEditor.state;
+   * const selectedText = doc.textBetween(selection.from, selection.to);
+   * ```
+   */
+  get state(): EditorState {
+    return this.getActiveEditor().state;
+  }
+
+  /**
+   * Check if the editor is currently editable (header/footer-aware).
+   *
+   * This property checks the editable state of the currently active editor:
+   * - In body mode, returns whether the main editor is editable
+   * - In header/footer mode, returns whether the header/footer editor is editable
+   *
+   * The editor may be non-editable due to:
+   * - Document mode set to 'viewing'
+   * - Explicit `editable: false` option
+   * - Editor not fully initialized
+   *
+   * @returns true if the active editor accepts input, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (presentationEditor.isEditable) {
+   *   presentationEditor.commands.insertText('Hello');
+   * }
+   * ```
+   */
+  get isEditable(): boolean {
+    return this.getActiveEditor().isEditable;
+  }
+
+  /**
+   * Get the editor options for the currently active editor (header/footer-aware).
+   *
+   * This property returns the options object from the appropriate editor instance,
+   * providing access to configuration like document mode, AI settings, and custom
+   * slash menu configuration.
+   *
+   * @returns The options object for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { documentMode, isAiEnabled } = presentationEditor.options;
+   * ```
+   */
+  get options() {
+    return this.getActiveEditor().options;
+  }
+
+  /**
+   * Dispatch a ProseMirror transaction to the currently active editor (header/footer-aware).
+   *
+   * This method routes transactions to the appropriate editor instance:
+   * - In body mode, dispatches to the main editor
+   * - In header/footer mode, dispatches to the active header/footer editor
+   *
+   * Use this for direct state manipulation when commands are insufficient.
+   * For most use cases, prefer using `commands` or `dispatchInActiveEditor`.
+   *
+   * @param tr - The ProseMirror transaction to dispatch
+   *
+   * @example
+   * ```typescript
+   * const { state } = presentationEditor;
+   * const tr = state.tr.insertText('Hello', state.selection.from);
+   * presentationEditor.dispatch(tr);
+   * ```
+   */
+  dispatch(tr: Transaction): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.dispatch(tr);
+  }
+
+  /**
+   * Focus the editor, routing focus to the appropriate editing surface.
+   *
+   * In PresentationEditor, the actual ProseMirror EditorView is hidden and input
+   * is bridged from the visible layout surface. This method focuses the hidden
+   * editor view to enable keyboard input while the visual focus remains on the
+   * rendered presentation.
+   *
+   * @example
+   * ```typescript
+   * // After closing a modal, restore focus to the editor
+   * presentationEditor.focus();
+   * ```
+   */
+  focus(): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.focus();
   }
 
   /**

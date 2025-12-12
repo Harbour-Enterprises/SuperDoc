@@ -399,8 +399,10 @@ export function assertEventListenersSetup(editor, documentSpies) {
   const { docAddEventListener } = documentSpies;
 
   // Check document listeners
+  // Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   expect(docAddEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
-  expect(docAddEventListener).toHaveBeenCalledWith('mousedown', expect.any(Function));
+  expect(docAddEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
 
   // Check editor listeners
   expect(editor.on).toHaveBeenCalledWith('update', expect.any(Function));
@@ -419,8 +421,10 @@ export function assertEventListenersCleanup(editor, documentSpies) {
   const { docRemoveEventListener } = documentSpies;
 
   // Check document listeners cleanup
+  // Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   expect(docRemoveEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
-  expect(docRemoveEventListener).toHaveBeenCalledWith('mousedown', expect.any(Function));
+  expect(docRemoveEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
 
   // Check editor listeners cleanup (now with specific handlers to prevent leaks)
   expect(editor.off).toHaveBeenCalledWith('slashMenu:open', expect.any(Function));
