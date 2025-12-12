@@ -6,18 +6,18 @@ packages:
   - shared/*
 
 catalog:
-  "@commitlint/cli": ^19.8.1
-  "@commitlint/config-conventional": ^19.8.1
-  "@eslint/js": ^9.31.0
-  "@floating-ui/dom": ^1.7.0
-  "@fontsource/inter": ^5.2.8
-  "@hocuspocus/provider": ^2.13.6
-  "@linear/sdk": ^53.0.0
-  "@playwright/test": ^1.57.0
-  "@semantic-release/changelog": ^6.0.3
-  "@semantic-release/git": ^10.0.1
-  "@vitejs/plugin-vue": ^6.0.2
-  "@vue/test-utils": ^2.4.6
+  '@commitlint/cli': ^19.8.1
+  '@commitlint/config-conventional': ^19.8.1
+  '@eslint/js': ^9.31.0
+  '@floating-ui/dom': ^1.7.0
+  '@fontsource/inter': ^5.2.8
+  '@hocuspocus/provider': ^2.13.6
+  '@linear/sdk': ^53.0.0
+  '@playwright/test': ^1.57.0
+  '@semantic-release/changelog': ^6.0.3
+  '@semantic-release/git': ^10.0.1
+  '@vitejs/plugin-vue': ^6.0.2
+  '@vue/test-utils': ^2.4.6
   buffer-crc32: ^1.0.0
   canvas: ^2.11.2
   color2k: ^2.0.3
@@ -27,7 +27,7 @@ catalog:
   he: ^1.2.0
   husky: ^9.1.7
   jimp: ^1.6.0
-  jszip: ^3.10.1
+  jszip: 3.10.1
   lint-staged: ^16.1.4
   marked: ^16.2.0
   naive-ui: ^2.43.1
@@ -74,5 +74,5 @@ catalog:
   vite-plugin-node-polyfills: ^0.24.0
   vitest: ^4.0.15
   vue: ^3.5.20
-  xml-js: ^1.6.11
+  xml-js: 1.6.11
   y-websocket: ^3.0.0

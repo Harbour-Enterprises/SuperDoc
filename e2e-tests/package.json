@@ -39,7 +39,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
-    "@vitejs/plugin-vue": "^5.2.2",
+    "@vitejs/plugin-vue": "catalog:",
     "jimp": "catalog:",
     "nodemon": "catalog:",
     "pixelmatch": "catalog:",
