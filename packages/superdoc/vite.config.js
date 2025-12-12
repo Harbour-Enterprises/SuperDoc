@@ -16,7 +16,7 @@ const visualizerConfig = {
   open: true
 }
 
-export const getAliases = (isDev) => {
+export const getAliases = (_isDev) => {
   const aliases = {
     // IMPORTANT: Specific @superdoc/* package aliases must come BEFORE the generic '@superdoc'
     // to avoid partial matches swallowing them.
@@ -53,10 +53,6 @@ export const getAliases = (isDev) => {
     '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
   };
 
-  if (isDev) {
-    aliases['@harbour-enterprises/super-editor'] = path.resolve(__dirname, '../super-editor/src');
-  }
-
   return aliases;
 };
 
@@ -67,10 +63,6 @@ export default defineConfig(({ mode, command}) => {
     vue(),
     copy({
       targets: [
-        {
-          src: path.resolve(__dirname, '../super-editor/dist/*'),
-          dest: 'dist/super-editor',
-        },
         { 
           src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
           dest: 'dist/images',
@@ -122,6 +114,7 @@ export default defineConfig(({ mode, command}) => {
           'yjs',
           '@hocuspocus/provider',
           'vite-plugin-node-polyfills',
+          'vite-plugin-node-polyfills/shims/process',
           'pdfjs-dist',
           'pdfjs-dist/build/pdf.mjs',
           'pdfjs-dist/legacy/build/pdf.mjs',
@@ -176,6 +169,7 @@ export default defineConfig(({ mode, command}) => {
     resolve: {
       alias: getAliases(isDev),
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+      conditions: ['source'],
     },
     css: {
       postcss: './postcss.config.mjs',
