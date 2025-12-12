@@ -29,20 +29,20 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@fontsource/inter": "^5.2.8",
-    "@linear/sdk": "^53.0.0",
-    "@playwright/test": "^1.57.0",
-    "jszip": "^3.10.1",
-    "patch-package": "^8.0.1",
-    "playwright": "^1.56.0",
+    "@fontsource/inter": "catalog:",
+    "@linear/sdk": "catalog:",
+    "@playwright/test": "catalog:",
+    "jszip": "catalog:",
+    "patch-package": "catalog:",
+    "playwright": "catalog:",
     "vue": "^3.5.13"
   },
   "devDependencies": {
     "@types/node": "^22.15.3",
     "@vitejs/plugin-vue": "^5.2.2",
-    "jimp": "^1.6.0",
-    "nodemon": "^3.1.10",
-    "pixelmatch": "^7.1.0",
+    "jimp": "catalog:",
+    "nodemon": "catalog:",
+    "pixelmatch": "catalog:",
     "vite": "^6.3.1"
   },
   "workspaces": [
