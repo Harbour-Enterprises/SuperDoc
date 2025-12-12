@@ -49,9 +49,9 @@
   "module": "./dist/superdoc.es.js",
   "scripts": {
     "dev": "vite",
-    "build": "cd ../super-editor && npm run build && cd ../superdoc && vite build && tsc && npm run build:umd",
+    "build": "vite build && tsc && npm run build:umd",
     "postbuild": "node ./scripts/ensure-types.cjs",
-    "build:es": "cd ../super-editor && npm run build && cd ../superdoc && vite build",
+    "build:es": "vite build",
     "watch:es": "nodemon --watch src --watch ../super-editor/src --ext js,ts,vue --exec \"npm run build:es\" --delay 100ms",
     "build:umd": "vite build --config vite.config.umd.js",
     "clean": "rm -rf dist",
@@ -60,6 +60,7 @@
     "test": "vitest"
   },
   "dependencies": {
+    "@harbour-enterprises/super-editor": "workspace:*",
     "buffer-crc32": "catalog:",
     "eventemitter3": "catalog:",
     "jsdom": "^25.0.1",

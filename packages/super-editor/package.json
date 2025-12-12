@@ -8,32 +8,44 @@
   ],
   "exports": {
     ".": {
+      "source": "./src/index.js",
       "types": "./dist/index.d.ts",
       "import": "./dist/super-editor.es.js"
     },
     "./converter": {
+      "source": "./src/core/super-converter/SuperConverter.js",
       "import": "./dist/converter.es.js"
     },
     "./docx-zipper": {
+      "source": "./src/core/DocxZipper.js",
       "import": "./dist/docx-zipper.es.js"
     },
     "./toolbar": {
+      "source": "./src/components/toolbar/Toolbar.vue",
       "import": "./dist/toolbar.es.js"
     },
     "./super-input": {
+      "source": "./src/components/SuperInput.vue",
       "import": "./dist/super-input.es.js"
     },
     "./editor": {
+      "source": "./src/core/Editor.ts",
       "import": "./dist/super-editor.es.js"
     },
     "./file-zipper": {
+      "source": "./src/core/super-converter/zipper.js",
       "import": "./dist/file-zipper.es.js"
     },
     "./ai-writer": {
+      "source": "./src/core/components/AIWriter.vue",
       "import": "./dist/ai-writer.es.js"
     },
-    "./style.css": "./dist/style.css",
+    "./style.css": {
+      "source": "./src/style.css",
+      "import": "./dist/style.css"
+    },
     "./presentation-editor": {
+      "source": "./src/index.js",
       "import": "./dist/super-editor.es.js",
       "types": "./dist/index.d.ts"
     }
