@@ -1,6 +1,7 @@
 import path from 'path';
 import copy from 'rollup-plugin-copy'
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -85,6 +86,7 @@ export default defineConfig(({ mode, command}) => {
       testTimeout: 20000,
       hookTimeout: 10000,
       exclude: [
+        ...configDefaults.exclude,
         '**/*.spec.js',
       ],
     },
