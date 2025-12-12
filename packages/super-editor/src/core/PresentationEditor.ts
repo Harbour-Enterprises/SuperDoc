@@ -1551,6 +1551,93 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the page styles for the section containing the current caret position.
+   *
+   * In multi-section documents, different sections can have different page sizes,
+   * margins, and orientations. This method returns the styles for the section
+   * where the caret is currently located, enabling section-aware UI components
+   * like rulers to display accurate information.
+   *
+   * @returns Object containing:
+   *   - pageSize: { width, height } in inches
+   *   - pageMargins: { left, right, top, bottom } in inches
+   *   - sectionIndex: The current section index (0-based)
+   *   - orientation: 'portrait' or 'landscape'
+   *
+   * Falls back to document-level defaults if section info is unavailable.
+   *
+   * @example
+   * ```typescript
+   * const sectionStyles = presentation.getCurrentSectionPageStyles();
+   * console.log(`Section ${sectionStyles.sectionIndex}: ${sectionStyles.pageSize.width}" x ${sectionStyles.pageSize.height}"`);
+   * ```
+   */
+  getCurrentSectionPageStyles(): {
+    pageSize: { width: number; height: number };
+    pageMargins: { left: number; right: number; top: number; bottom: number };
+    sectionIndex: number;
+    orientation: 'portrait' | 'landscape';
+  } {
+    const PPI = 96;
+    const layout = this.#layoutState.layout;
+    const pageIndex = this.#getCurrentPageIndex();
+    const page = layout?.pages?.[pageIndex];
+
+    const converterStyles = this.#editor.converter?.pageStyles ?? {};
+    const defaultMargins = converterStyles.pageMargins ?? { left: 1, right: 1, top: 1, bottom: 1 };
+
+    // Validate margin values to prevent NaN
+    const safeMargins = {
+      left: typeof defaultMargins.left === 'number' ? defaultMargins.left : 1,
+      right: typeof defaultMargins.right === 'number' ? defaultMargins.right : 1,
+      top: typeof defaultMargins.top === 'number' ? defaultMargins.top : 1,
+      bottom: typeof defaultMargins.bottom === 'number' ? defaultMargins.bottom : 1,
+    };
+
+    if (!page) {
+      return {
+        pageSize: { width: 8.5, height: 11 },
+        pageMargins: safeMargins,
+        sectionIndex: 0,
+        orientation: 'portrait',
+      };
+    }
+
+    // Validate orientation
+    const pageOrientation =
+      page.orientation === 'landscape' || page.orientation === 'portrait' ? page.orientation : 'portrait';
+
+    // Determine page size based on orientation if not explicitly set.
+    // Don't use converterStyles.pageSize as fallback - it may be from a different section.
+    const standardPortrait = { w: 8.5 * PPI, h: 11 * PPI };
+    const standardLandscape = { w: 11 * PPI, h: 8.5 * PPI };
+    const orientationDefault = pageOrientation === 'landscape' ? standardLandscape : standardPortrait;
+
+    const pageWidthPx = page.size?.w ?? orientationDefault.w;
+    const pageHeightPx = page.size?.h ?? orientationDefault.h;
+
+    const marginLeftPx = page.margins?.left ?? safeMargins.left * PPI;
+    const marginRightPx = page.margins?.right ?? safeMargins.right * PPI;
+    const marginTopPx = page.margins?.top ?? safeMargins.top * PPI;
+    const marginBottomPx = page.margins?.bottom ?? safeMargins.bottom * PPI;
+
+    return {
+      pageSize: {
+        width: pageWidthPx / PPI,
+        height: pageHeightPx / PPI,
+      },
+      pageMargins: {
+        left: marginLeftPx / PPI,
+        right: marginRightPx / PPI,
+        top: marginTopPx / PPI,
+        bottom: marginBottomPx / PPI,
+      },
+      sectionIndex: page.sectionIndex ?? 0,
+      orientation: pageOrientation,
+    };
+  }
+
+  /**
    * Get current remote cursor states (normalized to absolute PM positions).
    * Returns an array of cursor states for all remote collaborators, excluding the local user.
    *
@@ -6577,11 +6664,35 @@ export class PresentationEditor extends EventEmitter {
     }
     const layout = this.#layoutState.layout;
     const selection = this.#editor.state?.selection;
-    if (!layout || !selection) return 0;
+    if (!layout || !selection) {
+      return 0;
+    }
+
+    // Try selectionToRects first
     const rects =
       selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, selection.from, selection.to) ??
       [];
-    return rects[0]?.pageIndex ?? 0;
+
+    if (rects.length > 0) {
+      return rects[0]?.pageIndex ?? 0;
+    }
+
+    // Fallback: scan pages to find which one contains this position via fragments
+    // Note: pmStart/pmEnd are only present on some fragment types (ParaFragment, ImageFragment, DrawingFragment)
+    const pos = selection.from;
+    for (let pageIdx = 0; pageIdx < layout.pages.length; pageIdx++) {
+      const page = layout.pages[pageIdx];
+      for (const fragment of page.fragments) {
+        const frag = fragment as { pmStart?: number; pmEnd?: number };
+        if (frag.pmStart != null && frag.pmEnd != null) {
+          if (pos >= frag.pmStart && pos <= frag.pmEnd) {
+            return pageIdx;
+          }
+        }
+      }
+    }
+
+    return 0;
   }
 
   #findRegionForPage(kind: 'header' | 'footer', pageIndex: number): HeaderFooterRegion | null {
