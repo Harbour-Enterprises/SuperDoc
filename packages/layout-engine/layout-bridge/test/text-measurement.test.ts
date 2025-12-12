@@ -453,4 +453,107 @@ describe('text measurement utility', () => {
       expect(x2).toBe(x2Base);
     });
   });
+
+  describe('center and right alignment', () => {
+    it('applies center alignment offset', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50, // 5 chars * 10px CHAR_WIDTH
+      });
+      (block as any).attrs = { alignment: 'center' };
+
+      // With available width of 200 and line width of 50, center offset should be (200-50)/2 = 75
+      const x0 = measureCharacterX(block, line, 0, 200);
+      expect(x0).toBe(75); // Should start at center offset
+
+      const x3 = measureCharacterX(block, line, 3, 200);
+      expect(x3).toBe(75 + 3 * CHAR_WIDTH); // Center offset + 3 chars
+    });
+
+    it('applies right alignment offset', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50, // 5 chars * 10px CHAR_WIDTH
+      });
+      (block as any).attrs = { alignment: 'right' };
+
+      // With available width of 200 and line width of 50, right offset should be 200-50 = 150
+      const x0 = measureCharacterX(block, line, 0, 200);
+      expect(x0).toBe(150); // Should start at right offset
+
+      const x3 = measureCharacterX(block, line, 3, 200);
+      expect(x3).toBe(150 + 3 * CHAR_WIDTH); // Right offset + 3 chars
+    });
+
+    it('findCharacterAtX accounts for center alignment', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50, // 5 chars * 10px CHAR_WIDTH
+      });
+      (block as any).attrs = { alignment: 'center' };
+
+      // Center offset = (200-50)/2 = 75
+      // Click at x=75 should be at char 0
+      const result0 = findCharacterAtX(block, line, 75, 0, 200);
+      expect(result0.charOffset).toBe(0);
+      expect(result0.pmPosition).toBe(0);
+
+      // Click at x=85 should be near char 1 (75 + 10 = 85)
+      const result1 = findCharacterAtX(block, line, 85, 0, 200);
+      expect(result1.charOffset).toBe(1);
+      expect(result1.pmPosition).toBe(1);
+
+      // Click at x=0 (before centered text) should clamp to start
+      const resultBefore = findCharacterAtX(block, line, 0, 0, 200);
+      expect(resultBefore.charOffset).toBe(0);
+    });
+
+    it('findCharacterAtX accounts for right alignment', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 5 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50, // 5 chars * 10px CHAR_WIDTH
+      });
+      (block as any).attrs = { alignment: 'right' };
+
+      // Right offset = 200-50 = 150
+      // Click at x=150 should be at char 0
+      const result0 = findCharacterAtX(block, line, 150, 0, 200);
+      expect(result0.charOffset).toBe(0);
+      expect(result0.pmPosition).toBe(0);
+
+      // Click at x=0 (before right-aligned text) should clamp to start
+      const resultBefore = findCharacterAtX(block, line, 0, 0, 200);
+      expect(resultBefore.charOffset).toBe(0);
+    });
+
+    it('does not apply alignment offset for left-aligned text', () => {
+      const block = createBlock([{ text: 'Hello', fontFamily: 'Arial', fontSize: 16 }]);
+      const line = baseLine({
+        fromRun: 0,
+        toRun: 0,
+        toChar: 5,
+        width: 50,
+      });
+      (block as any).attrs = { alignment: 'left' };
+
+      // With left alignment, no offset should be applied regardless of available width
+      const x0 = measureCharacterX(block, line, 0, 200);
+      expect(x0).toBe(0); // No offset for left alignment
+
+      const x3 = measureCharacterX(block, line, 3, 200);
+      expect(x3).toBe(3 * CHAR_WIDTH); // Just character position
+    });
+  });
 });
