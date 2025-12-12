@@ -7,7 +7,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "source": "./src/index.ts",
+      "source": "./src/index.js",
       "default": "./dist/index.js"
     }
   },
