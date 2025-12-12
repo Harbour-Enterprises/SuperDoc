@@ -995,6 +995,8 @@ const closeExportMenu = () => {
   display: flex;
   justify-content: center;
   overflow: auto;
+  /* Test: creates a containing block for position:fixed elements (like context menu) */
+  backdrop-filter: blur(0.5px);
 }
 
 .dev-app__view {
