@@ -81,7 +81,7 @@
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-jsdoc": "catalog:",
     "husky": "catalog:",
-    "jsdom": "^25.0.1",
+    "jsdom": "catalog:",
     "lint-staged": "catalog:",
     "prettier": "3.3.3",
     "semantic-release": "catalog:",
