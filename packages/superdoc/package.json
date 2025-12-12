@@ -49,14 +49,14 @@
   "module": "./dist/superdoc.es.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.build.json && npm run build:umd",
+    "build": "vite build && tsc -p tsconfig.build.json && pnpm run build:umd",
     "postbuild": "node ./scripts/ensure-types.cjs",
     "build:es": "vite build",
-    "watch:es": "nodemon --watch src --watch ../super-editor/src --ext js,ts,vue --exec \"npm run build:es\" --delay 100ms",
+    "watch:es": "nodemon --watch src --watch ../super-editor/src --ext js,ts,vue --exec \"pnpm run build:es\" --delay 100ms",
     "build:umd": "vite build --config vite.config.umd.js",
     "clean": "rm -rf dist",
-    "pack:local": "npm run build:es && npm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
-    "pack": "npm run build:es && npm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
+    "pack:local": "pnpm run pack",
+    "pack": "pnpm run build:es && pnpm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
     "test": "vitest"
   },
   "dependencies": {
