@@ -133,20 +133,22 @@ const getExtendedDetails = (commentEx) => {
 const extractCommentRangesFromDocument = (docx) => {
   const documentXml = docx['word/document.xml'];
   if (!documentXml) {
-    return { rangeEvents: [], rangePositions: new Map() };
+    return { rangeEvents: [], rangePositions: new Map(), commentsInTrackedChanges: new Map() };
   }
 
   const rangeEvents = [];
   const rangePositions = new Map();
+  const commentsInTrackedChanges = new Map(); // Maps comment ID to tracked change ID
   let positionIndex = 0;
   let lastElementWasCommentMarker = false;
 
-  const walkElements = (elements) => {
+  const walkElements = (elements, currentTrackedChangeId = null) => {
     if (!elements || !Array.isArray(elements)) return;
 
     elements.forEach((element) => {
       const isCommentStart = element.name === 'w:commentRangeStart';
       const isCommentEnd = element.name === 'w:commentRangeEnd';
+      const isTrackedChange = element.name === 'w:ins' || element.name === 'w:del';
 
       if (isCommentStart) {
         const commentId = element.attributes?.['w:id'];
@@ -160,6 +162,10 @@ const extractCommentRangesFromDocument = (docx) => {
             rangePositions.set(id, { startIndex: positionIndex, endIndex: -1 });
           } else {
             rangePositions.get(id).startIndex = positionIndex;
+          }
+          // Track if this comment range starts inside a tracked change
+          if (currentTrackedChangeId !== null) {
+            commentsInTrackedChanges.set(id, currentTrackedChangeId);
           }
         }
         lastElementWasCommentMarker = true;
@@ -178,6 +184,15 @@ const extractCommentRangesFromDocument = (docx) => {
           }
         }
         lastElementWasCommentMarker = true;
+      } else if (isTrackedChange) {
+        // Enter tracked change context - pass the tracked change ID to children
+        const trackedChangeId = element.attributes?.['w:id'];
+        if (element.elements && Array.isArray(element.elements)) {
+          walkElements(
+            element.elements,
+            trackedChangeId !== undefined ? String(trackedChangeId) : currentTrackedChangeId,
+          );
+        }
       } else {
         if (lastElementWasCommentMarker) {
           positionIndex++;
@@ -185,7 +200,7 @@ const extractCommentRangesFromDocument = (docx) => {
         }
 
         if (element.elements && Array.isArray(element.elements)) {
-          walkElements(element.elements);
+          walkElements(element.elements, currentTrackedChangeId);
         }
       }
     });
@@ -198,7 +213,7 @@ const extractCommentRangesFromDocument = (docx) => {
     }
   }
 
-  return { rangeEvents, rangePositions };
+  return { rangeEvents, rangePositions, commentsInTrackedChanges };
 };
 
 const detectThreadingFromNestedRanges = (comments, rangeEvents, skipComments = new Set()) => {
@@ -283,9 +298,37 @@ const detectThreadingFromMissingRanges = (comments, rangePositions) => {
   return parentMap;
 };
 
+/**
+ * Detect threading from comments whose ranges are inside tracked changes (w:ins or w:del).
+ * When a comment range starts inside a tracked change, that comment should be threaded
+ * under the tracked change (which becomes a pseudo-comment with trackedChange: true).
+ *
+ * @param {Array} comments The comments array
+ * @param {Map} commentsInTrackedChanges Map of comment ID to tracked change ID
+ * @returns {Map} Map of comment importedId to tracked change ID (parent)
+ */
+const detectThreadingFromTrackedChanges = (comments, commentsInTrackedChanges) => {
+  const parentMap = new Map();
+
+  if (!commentsInTrackedChanges || commentsInTrackedChanges.size === 0) {
+    return parentMap;
+  }
+
+  comments.forEach((comment) => {
+    const trackedChangeId = commentsInTrackedChanges.get(comment.importedId);
+    if (trackedChangeId !== undefined) {
+      // The tracked change ID becomes the commentId of the tracked change pseudo-comment
+      // We store it as a special marker that will be resolved later
+      parentMap.set(comment.importedId, { trackedChangeId, isTrackedChangeParent: true });
+    }
+  });
+
+  return parentMap;
+};
+
 const detectThreadingFromRanges = (comments, rangeData) => {
-  const { rangeEvents, rangePositions } = Array.isArray(rangeData)
-    ? { rangeEvents: rangeData, rangePositions: new Map() }
+  const { rangeEvents, rangePositions, commentsInTrackedChanges } = Array.isArray(rangeData)
+    ? { rangeEvents: rangeData, rangePositions: new Map(), commentsInTrackedChanges: new Map() }
     : rangeData;
 
   if (!rangeEvents || rangeEvents.length === 0) {
@@ -300,10 +343,11 @@ const detectThreadingFromRanges = (comments, rangeData) => {
   const nestedParentMap = detectThreadingFromNestedRanges(comments, rangeEvents, commentsWithSharedPosition);
   const sharedPositionParentMap = detectThreadingFromSharedPosition(comments, rangePositions);
   const missingRangeParentMap = detectThreadingFromMissingRanges(comments, rangePositions);
+  const trackedChangeParentMap = detectThreadingFromTrackedChanges(comments, commentsInTrackedChanges);
 
   const mergedParentMap = new Map([...missingRangeParentMap, ...nestedParentMap, ...sharedPositionParentMap]);
 
-  return applyParentRelationships(comments, mergedParentMap);
+  return applyParentRelationships(comments, mergedParentMap, trackedChangeParentMap);
 };
 
 const findCommentsWithSharedStartPosition = (comments, rangePositions) => {
@@ -330,8 +374,19 @@ const findCommentsWithSharedStartPosition = (comments, rangePositions) => {
   return sharedPositionComments;
 };
 
-const applyParentRelationships = (comments, parentMap) => {
+const applyParentRelationships = (comments, parentMap, trackedChangeParentMap = new Map()) => {
   return comments.map((comment) => {
+    // First check if this comment has a tracked change as its parent
+    const trackedChangeParent = trackedChangeParentMap.get(comment.importedId);
+    if (trackedChangeParent && trackedChangeParent.isTrackedChangeParent) {
+      // The tracked change ID becomes the commentId of the tracked change pseudo-comment
+      return {
+        ...comment,
+        parentCommentId: trackedChangeParent.trackedChangeId,
+      };
+    }
+
+    // Otherwise check for regular comment parent
     const parentImportedId = parentMap.get(comment.importedId);
     if (parentImportedId) {
       const parentComment = comments.find((c) => c.importedId === parentImportedId);
