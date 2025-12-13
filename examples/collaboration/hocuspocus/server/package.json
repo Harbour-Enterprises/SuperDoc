@@ -1,0 +1,10 @@
+{
+  "name": "hocuspocus-server",
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "@hocuspocus/server": "^3.4.0"
+  }
+}

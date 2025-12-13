@@ -41,18 +41,18 @@ export const getDefaultStyleDefinition = (defaultStyleId, docx) => {
   const tabs = pPr?.elements?.find((el) => el.name === 'w:tabs');
 
   let lineSpaceBefore, lineSpaceAfter, line;
-  if (spacing) {
-    lineSpaceBefore = twipsToPixels(spacing?.attributes['w:before']);
-    lineSpaceAfter = twipsToPixels(spacing?.attributes['w:after']);
-    line = twipsToLines(spacing?.attributes['w:line']);
+  if (spacing?.attributes) {
+    lineSpaceBefore = twipsToPixels(spacing.attributes['w:before']);
+    lineSpaceAfter = twipsToPixels(spacing.attributes['w:after']);
+    line = twipsToLines(spacing.attributes['w:line']);
   }
 
   let textAlign, leftIndent, rightIndent, firstLine;
-  if (indent) {
-    textAlign = justify?.attributes['w:val'];
-    leftIndent = twipsToPixels(indent?.attributes['w:left']);
-    rightIndent = twipsToPixels(indent?.attributes['w:right']);
-    firstLine = twipsToPixels(indent?.attributes['w:firstLine']);
+  if (indent?.attributes) {
+    textAlign = justify?.attributes?.['w:val'];
+    leftIndent = twipsToPixels(indent.attributes['w:left']);
+    rightIndent = twipsToPixels(indent.attributes['w:right']);
+    firstLine = twipsToPixels(indent.attributes['w:firstLine']);
   }
 
   let tabStops = [];

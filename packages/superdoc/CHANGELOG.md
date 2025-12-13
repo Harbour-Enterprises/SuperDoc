@@ -1,3 +1,56 @@
+## [0.35.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.2...v0.35.3) (2025-12-11)
+
+### Bug Fixes
+
+- comments module typedef for disable [stable] ([#1494](https://github.com/Harbour-Enterprises/SuperDoc/issues/1494)) ([bdac63c](https://github.com/Harbour-Enterprises/SuperDoc/commit/bdac63c05f8f8ae122023d4eee70450ac12695a5))
+
+## [0.35.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.1...v0.35.2) (2025-12-10)
+
+### Bug Fixes
+
+- cicd ([f3f2dc4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f3f2dc4c2ca347bedfa0f14cdb8ea2aa96310a04))
+- cicd ([4069de0](https://github.com/Harbour-Enterprises/SuperDoc/commit/4069de0ad259f5f3a84da8c0c8e97eb434ed9418))
+- cicd ([9203541](https://github.com/Harbour-Enterprises/SuperDoc/commit/9203541635add05680d5adb66d23bd592494b283))
+- cicd ([6162b55](https://github.com/Harbour-Enterprises/SuperDoc/commit/6162b55b51ab02f4b548027c9e7f10665a01d3b1))
+- remove custom empty text tags from header/footer xml ([fe79efd](https://github.com/Harbour-Enterprises/SuperDoc/commit/fe79efd9e990f71899b668b4d06e961006655edf))
+
+## [0.35.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.0...v0.35.1) (2025-12-09)
+
+### Bug Fixes
+
+- block keyboard, paste, and drop events in view mode during collab ([#1471](https://github.com/Harbour-Enterprises/SuperDoc/issues/1471)) ([48b2555](https://github.com/Harbour-Enterprises/SuperDoc/commit/48b2555552ca124d23444d1569b47c43746050da))
+
+# [0.35.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.9...v0.35.0) (2025-12-08)
+
+### Bug Fixes
+
+- collaboratio tests and more scenarios ([4153017](https://github.com/Harbour-Enterprises/SuperDoc/commit/4153017da205a32c853da3cbafad57fda881cc94))
+
+### Features
+
+- add y-sweet example + remove type file ([#1463](https://github.com/Harbour-Enterprises/SuperDoc/issues/1463)) ([ac26255](https://github.com/Harbour-Enterprises/SuperDoc/commit/ac2625599395230d78293fff9255562a58d5e9fa))
+- make collab provider agnostic ([0096abc](https://github.com/Harbour-Enterprises/SuperDoc/commit/0096abc581b297ec4594a96eae20e90c7b9a572c))
+- y-sweet example ([fa71867](https://github.com/Harbour-Enterprises/SuperDoc/commit/fa71867f22b5c6f0bac5435c3b11d47afbdbf66a))
+
+## [0.34.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.8...v0.34.9) (2025-12-06)
+
+### Bug Fixes
+
+- tests ([a59aae8](https://github.com/Harbour-Enterprises/SuperDoc/commit/a59aae887989c5433274c2d0d916e939f65219ba))
+
+## [0.34.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.7...v0.34.8) (2025-12-06)
+
+### Bug Fixes
+
+- onlyoffice docs fail to import from null pointer crash ([2892612](https://github.com/Harbour-Enterprises/SuperDoc/commit/289261257d6c081304833cbe1fcad15c446f51ad))
+
+## [0.34.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.6...v0.34.7) (2025-12-05)
+
+### Bug Fixes
+
+- temp workaround for docx ydoc updates ([4d5e23f](https://github.com/Harbour-Enterprises/SuperDoc/commit/4d5e23f996bcb08b883b53fd7110a00c1d7a0a24))
+- temp workaround for docx ydoc updates ([#1429](https://github.com/Harbour-Enterprises/SuperDoc/issues/1429)) ([addaab8](https://github.com/Harbour-Enterprises/SuperDoc/commit/addaab886d42cdea5cd519b4f80d1aa51741a7f9))
+
 ## [0.34.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.5...v0.34.6) (2025-12-03)
 
 ### Bug Fixes
