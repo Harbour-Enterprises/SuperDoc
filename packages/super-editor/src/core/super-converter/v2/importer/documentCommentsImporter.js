@@ -69,7 +69,7 @@ export function importCommentData({ docx, editor, converter }) {
     };
   });
 
-  const extendedComments = generateCommentsWithExtendedData({ docx, comments: extractedComments });
+  const extendedComments = generateCommentsWithExtendedData({ docx, comments: extractedComments, converter });
   return extendedComments;
 }
 
@@ -80,14 +80,15 @@ export function importCommentData({ docx, editor, converter }) {
  * @param {Object} param0
  * @param {ParsedDocx} param0.docx The parsed docx object
  * @param {Array} param0.comments The comments to be extended
+ * @param {SuperConverter} param0.converter The super converter instance
  * @returns {Array} The comments with extended details
  */
-const generateCommentsWithExtendedData = ({ docx, comments }) => {
+const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   if (!comments?.length) return [];
 
   const commentsExtended = docx['word/commentsExtended.xml'];
   if (!commentsExtended) {
-    const rangeData = extractCommentRangesFromDocument(docx);
+    const rangeData = extractCommentRangesFromDocument(docx, converter);
     const commentsWithThreading = detectThreadingFromRanges(comments, rangeData);
     return commentsWithThreading.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
   }
@@ -141,12 +142,13 @@ const getExtendedDetails = (commentEx) => {
  * and identifying comment range markers and their positions.
  *
  * @param {ParsedDocx} docx The parsed docx object containing document.xml
+ * @param {SuperConverter} converter The super converter instance
  * @returns {Object} Object containing:
  *   - rangeEvents: Array of {type: 'start'|'end', commentId} events
  *   - rangePositions: Map of comment ID → {startIndex: number, endIndex: number}
  *   - commentsInTrackedChanges: Map of comment ID → tracked change ID
  */
-const extractCommentRangesFromDocument = (docx) => {
+const extractCommentRangesFromDocument = (docx, converter) => {
   const documentXml = docx['word/document.xml'];
   if (!documentXml) {
     return { rangeEvents: [], rangePositions: new Map(), commentsInTrackedChanges: new Map() };
@@ -201,11 +203,21 @@ const extractCommentRangesFromDocument = (docx) => {
         lastElementWasCommentMarker = true;
       } else if (isTrackedChange) {
         const trackedChangeId = element.attributes?.['w:id'];
+        let mappedId = trackedChangeId;
+
+        if (trackedChangeId !== undefined && converter) {
+          if (!converter.trackedChangeIdMap) {
+            converter.trackedChangeIdMap = new Map();
+          }
+
+          if (!converter.trackedChangeIdMap.has(String(trackedChangeId))) {
+            converter.trackedChangeIdMap.set(String(trackedChangeId), uuidv4());
+          }
+          mappedId = converter.trackedChangeIdMap.get(String(trackedChangeId));
+        }
+
         if (element.elements && Array.isArray(element.elements)) {
-          walkElements(
-            element.elements,
-            trackedChangeId !== undefined ? String(trackedChangeId) : currentTrackedChangeId,
-          );
+          walkElements(element.elements, mappedId !== undefined ? String(mappedId) : currentTrackedChangeId);
         }
       } else {
         if (lastElementWasCommentMarker) {
