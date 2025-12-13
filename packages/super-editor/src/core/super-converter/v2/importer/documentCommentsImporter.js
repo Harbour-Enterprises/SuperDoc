@@ -86,13 +86,8 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 
   const commentsExtended = docx['word/commentsExtended.xml'];
   if (!commentsExtended) {
-    // Google Docs uses nested comment ranges in document.xml to indicate threading
-    // A child comment's range is nested inside the parent comment's range
-    const commentRanges = extractCommentRangesFromDocument(docx);
-
-    // Detect threading based on nested ranges
-    const commentsWithThreading = detectThreadingFromRanges(comments, commentRanges);
-
+    const rangeData = extractCommentRangesFromDocument(docx);
+    const commentsWithThreading = detectThreadingFromRanges(comments, rangeData);
     return commentsWithThreading.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
   }
 
@@ -135,52 +130,63 @@ const getExtendedDetails = (commentEx) => {
   return { paraId, isDone, paraIdParent };
 };
 
-/**
- * Extract comment range order from document.xml
- * Google Docs uses nested comment ranges to indicate threading:
- * If comment B's range starts after comment A's range starts but before A's range ends,
- * then B is a child of A
- *
- * @param {Object} docx The parsed docx object
- * @returns {Array} Array of comment range events in order
- */
 const extractCommentRangesFromDocument = (docx) => {
   const documentXml = docx['word/document.xml'];
   if (!documentXml) {
-    return [];
+    return { rangeEvents: [], rangePositions: new Map() };
   }
 
-  const pendingComments = [];
+  const rangeEvents = [];
+  const rangePositions = new Map();
+  let positionIndex = 0;
+  let lastElementWasCommentMarker = false;
 
-  /**
-   * Recursively walk through the document structure to find comment ranges
-   * @param {Array} elements The XML elements to traverse
-   */
   const walkElements = (elements) => {
     if (!elements || !Array.isArray(elements)) return;
 
     elements.forEach((element) => {
-      if (element.name === 'w:commentRangeStart') {
-        const commentId = element.attributes?.['w:id'];
-        if (commentId !== undefined) {
-          pendingComments.push({
-            type: 'start',
-            commentId: String(commentId),
-          });
-        }
-      } else if (element.name === 'w:commentRangeEnd') {
-        const commentId = element.attributes?.['w:id'];
-        if (commentId !== undefined) {
-          pendingComments.push({
-            type: 'end',
-            commentId: String(commentId),
-          });
-        }
-      }
+      const isCommentStart = element.name === 'w:commentRangeStart';
+      const isCommentEnd = element.name === 'w:commentRangeEnd';
 
-      // Recursively process child elements
-      if (element.elements && Array.isArray(element.elements)) {
-        walkElements(element.elements);
+      if (isCommentStart) {
+        const commentId = element.attributes?.['w:id'];
+        if (commentId !== undefined) {
+          const id = String(commentId);
+          rangeEvents.push({
+            type: 'start',
+            commentId: id,
+          });
+          if (!rangePositions.has(id)) {
+            rangePositions.set(id, { startIndex: positionIndex, endIndex: -1 });
+          } else {
+            rangePositions.get(id).startIndex = positionIndex;
+          }
+        }
+        lastElementWasCommentMarker = true;
+      } else if (isCommentEnd) {
+        const commentId = element.attributes?.['w:id'];
+        if (commentId !== undefined) {
+          const id = String(commentId);
+          rangeEvents.push({
+            type: 'end',
+            commentId: id,
+          });
+          if (!rangePositions.has(id)) {
+            rangePositions.set(id, { startIndex: -1, endIndex: positionIndex });
+          } else {
+            rangePositions.get(id).endIndex = positionIndex;
+          }
+        }
+        lastElementWasCommentMarker = true;
+      } else {
+        if (lastElementWasCommentMarker) {
+          positionIndex++;
+          lastElementWasCommentMarker = false;
+        }
+
+        if (element.elements && Array.isArray(element.elements)) {
+          walkElements(element.elements);
+        }
       }
     });
   };
@@ -192,35 +198,22 @@ const extractCommentRangesFromDocument = (docx) => {
     }
   }
 
-  return pendingComments;
+  return { rangeEvents, rangePositions };
 };
 
-/**
- * Detect threading relationships based on nested comment ranges
- * In Google Docs, a child comment's range is nested inside the parent's range.
- * We track the order of commentRangeStart/End events to detect nesting.
- *
- * @param {Array} comments Array of comment objects
- * @param {Array} rangeEvents Array of comment range events (start/end) in document order
- * @returns {Array} Comments with parentCommentId relationships established
- */
-const detectThreadingFromRanges = (comments, rangeEvents) => {
-  if (!rangeEvents || rangeEvents.length === 0) {
-    return comments;
-  }
-
-  // Build a stack to track which comment ranges are currently open
-  // When we see a start event, push it onto the stack
-  // When we see an end event, pop until we find the matching start
-  // Comments that start while another comment is on the stack are children of that comment
+const detectThreadingFromNestedRanges = (comments, rangeEvents, skipComments = new Set()) => {
   const openRanges = [];
   const parentMap = new Map();
 
   rangeEvents.forEach((event) => {
     if (event.type === 'start') {
-      if (openRanges.length > 0) {
-        const parentCommentId = openRanges[openRanges.length - 1];
-        parentMap.set(event.commentId, parentCommentId);
+      if (!skipComments.has(event.commentId) && openRanges.length > 0) {
+        for (let i = openRanges.length - 1; i >= 0; i--) {
+          if (!skipComments.has(openRanges[i])) {
+            parentMap.set(event.commentId, openRanges[i]);
+            break;
+          }
+        }
       }
       openRanges.push(event.commentId);
     } else if (event.type === 'end') {
@@ -231,11 +224,117 @@ const detectThreadingFromRanges = (comments, rangeEvents) => {
     }
   });
 
-  // Apply parent relationships to comments
+  return parentMap;
+};
+
+const detectThreadingFromSharedPosition = (comments, rangePositions) => {
+  const parentMap = new Map();
+  const commentsByStartPosition = new Map();
+
+  comments.forEach((comment) => {
+    const position = rangePositions.get(comment.importedId);
+    if (position && position.startIndex >= 0) {
+      const startKey = position.startIndex;
+      if (!commentsByStartPosition.has(startKey)) {
+        commentsByStartPosition.set(startKey, []);
+      }
+      commentsByStartPosition.get(startKey).push(comment);
+    }
+  });
+
+  commentsByStartPosition.forEach((commentsAtPosition) => {
+    if (commentsAtPosition.length <= 1) return;
+
+    const sorted = [...commentsAtPosition].sort((a, b) => a.createdTime - b.createdTime);
+    const parentComment = sorted[0];
+
+    for (let i = 1; i < sorted.length; i++) {
+      parentMap.set(sorted[i].importedId, parentComment.importedId);
+    }
+  });
+
+  return parentMap;
+};
+
+const detectThreadingFromMissingRanges = (comments, rangePositions) => {
+  const parentMap = new Map();
+  const commentsWithRanges = [];
+  const commentsWithoutRanges = [];
+
+  comments.forEach((comment) => {
+    const position = rangePositions.get(comment.importedId);
+    if (position && position.startIndex >= 0) {
+      commentsWithRanges.push(comment);
+    } else {
+      commentsWithoutRanges.push(comment);
+    }
+  });
+
+  commentsWithoutRanges.forEach((comment) => {
+    const potentialParents = commentsWithRanges
+      .filter((c) => c.createdTime < comment.createdTime)
+      .sort((a, b) => b.createdTime - a.createdTime);
+
+    if (potentialParents.length > 0) {
+      parentMap.set(comment.importedId, potentialParents[0].importedId);
+    }
+  });
+
+  return parentMap;
+};
+
+const detectThreadingFromRanges = (comments, rangeData) => {
+  const { rangeEvents, rangePositions } = Array.isArray(rangeData)
+    ? { rangeEvents: rangeData, rangePositions: new Map() }
+    : rangeData;
+
+  if (!rangeEvents || rangeEvents.length === 0) {
+    if (comments.length > 1) {
+      const parentMap = detectThreadingFromMissingRanges(comments, rangePositions);
+      return applyParentRelationships(comments, parentMap);
+    }
+    return comments;
+  }
+
+  const commentsWithSharedPosition = findCommentsWithSharedStartPosition(comments, rangePositions);
+  const nestedParentMap = detectThreadingFromNestedRanges(comments, rangeEvents, commentsWithSharedPosition);
+  const sharedPositionParentMap = detectThreadingFromSharedPosition(comments, rangePositions);
+  const missingRangeParentMap = detectThreadingFromMissingRanges(comments, rangePositions);
+
+  const mergedParentMap = new Map([...missingRangeParentMap, ...nestedParentMap, ...sharedPositionParentMap]);
+
+  return applyParentRelationships(comments, mergedParentMap);
+};
+
+const findCommentsWithSharedStartPosition = (comments, rangePositions) => {
+  const sharedPositionComments = new Set();
+  const commentsByStartPosition = new Map();
+
+  comments.forEach((comment) => {
+    const position = rangePositions.get(comment.importedId);
+    if (position && position.startIndex >= 0) {
+      const startKey = position.startIndex;
+      if (!commentsByStartPosition.has(startKey)) {
+        commentsByStartPosition.set(startKey, []);
+      }
+      commentsByStartPosition.get(startKey).push(comment.importedId);
+    }
+  });
+
+  commentsByStartPosition.forEach((commentIds) => {
+    if (commentIds.length > 1) {
+      commentIds.forEach((id) => sharedPositionComments.add(id));
+    }
+  });
+
+  return sharedPositionComments;
+};
+
+const applyParentRelationships = (comments, parentMap) => {
   return comments.map((comment) => {
-    const parentCommentId = parentMap.get(comment.importedId);
-    if (parentCommentId) {
-      const parentComment = comments.find((c) => c.importedId === parentCommentId);
+    const parentImportedId = parentMap.get(comment.importedId);
+    if (parentImportedId) {
+      const parentComment = comments.find((c) => c.importedId === parentImportedId);
       if (parentComment) {
         return {
           ...comment,

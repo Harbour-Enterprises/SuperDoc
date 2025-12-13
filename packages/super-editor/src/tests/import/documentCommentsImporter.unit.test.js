@@ -361,15 +361,152 @@ describe('Google Docs threading (missing commentsExtended.xml)', () => {
         { id: 0, internalId: 'comment-1' },
         { id: 1, internalId: 'comment-2' },
       ],
-      // No documentRanges provided, so no comment ranges in document.xml
     });
 
     const comments = importCommentData({ docx });
     expect(comments).toHaveLength(2);
 
-    // Without ranges, no threading should be detected
     comments.forEach((comment) => {
       expect(comment.parentCommentId).toBeUndefined();
     });
+  });
+
+  it('detects threading from comments sharing same range start position (multi-author)', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'parent-id', author: 'Author A', date: '2024-01-01T10:00:00Z' },
+        { id: 1, internalId: 'child-id', author: 'Author B', date: '2024-01-01T10:05:00Z' },
+        { id: 2, internalId: 'grandchild-id', author: 'Author C', date: '2024-01-01T10:10:00Z' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '0' } },
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '1' } },
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '2' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Shared text' }] }],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '0' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '1' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '2' } },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(3);
+
+    const parent = comments.find((c) => c.commentId === 'parent-id');
+    const child = comments.find((c) => c.commentId === 'child-id');
+    const grandchild = comments.find((c) => c.commentId === 'grandchild-id');
+
+    expect(parent.parentCommentId).toBeUndefined();
+    expect(child.parentCommentId).toBe(parent.commentId);
+    expect(grandchild.parentCommentId).toBe(parent.commentId);
+  });
+
+  it('detects threading from sequential ranges at same position (different authors)', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'author-a-comment', author: 'Author A', date: '2024-01-01T10:00:00Z' },
+        { id: 1, internalId: 'author-b-reply', author: 'Author B', date: '2024-01-01T10:05:00Z' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '0' } },
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '1' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Selected text' }] }],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '0' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '1' } },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const parentComment = comments.find((c) => c.commentId === 'author-a-comment');
+    const childComment = comments.find((c) => c.commentId === 'author-b-reply');
+
+    expect(parentComment.parentCommentId).toBeUndefined();
+    expect(childComment.parentCommentId).toBe(parentComment.commentId);
+  });
+
+  it('detects threading when reply comments have no ranges (only in comments.xml)', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'parent-with-range', author: 'Author A', date: '2024-01-01T10:00:00Z' },
+        { id: 1, internalId: 'reply-no-range', author: 'Author B', date: '2024-01-01T10:05:00Z' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '0' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Commented text' }] }],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '0' } },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const parentComment = comments.find((c) => c.commentId === 'parent-with-range');
+    const replyComment = comments.find((c) => c.commentId === 'reply-no-range');
+
+    expect(parentComment.parentCommentId).toBeUndefined();
+    expect(replyComment.parentCommentId).toBe(parentComment.commentId);
+  });
+
+  it('preserves existing nested range detection while adding shared position detection', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'parent-nested', author: 'Author A', date: '2024-01-01T10:00:00Z' },
+        { id: 1, internalId: 'child-nested', author: 'Author B', date: '2024-01-01T10:05:00Z' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '0' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Outer' }] }],
+            },
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '1' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Inner' }] }],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '1' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '0' } },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const parent = comments.find((c) => c.commentId === 'parent-nested');
+    const child = comments.find((c) => c.commentId === 'child-nested');
+
+    expect(parent.parentCommentId).toBeUndefined();
+    expect(child.parentCommentId).toBe(parent.commentId);
   });
 });
