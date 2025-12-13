@@ -164,3 +164,38 @@ describe('editor integration with Google Docs comments', () => {
     expect(commentMarkCount).toBeGreaterThan(0);
   });
 });
+
+describe('python-docx generated comments [python_docx_comment_test.docx]', () => {
+  const dataName = 'python_docx_comment_test.docx';
+  let docx;
+  let comments;
+
+  beforeAll(async () => {
+    docx = await getTestDataByFileName(dataName);
+    comments = importCommentData({ docx });
+  });
+
+  it('imports comments from python-docx generated files', () => {
+    expect(comments).toHaveLength(1);
+
+    const comment = comments[0];
+    expect(comment.commentId).toHaveLength(36);
+    expect(comment.creatorName).toBe('Python-docx Script');
+    expect(comment.initials).toBe('PS');
+  });
+
+  it('applies comment marks in editor', async () => {
+    const { docx: editorDocx, media, mediaFiles, fonts } = await loadTestDataForEditorTests(dataName);
+    const { editor } = initTestEditor({ content: editorDocx, media, mediaFiles, fonts });
+
+    let commentMarkCount = 0;
+    editor.state.doc.descendants((node) => {
+      node.marks?.forEach((mark) => {
+        if (mark.type.name === CommentMarkName) commentMarkCount += 1;
+      });
+    });
+
+    expect(commentMarkCount).toBeGreaterThan(0);
+    editor.destroy();
+  });
+});
