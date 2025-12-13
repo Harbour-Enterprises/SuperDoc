@@ -101,8 +101,6 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 
   return comments.map((comment) => {
     const extendedDef = commentEx.find((ce) => {
-      // Check if any of the comment's elements are included in the extended comment's elements
-      // Comments might have multiple elements, so we need to check if any of them are included in the extended comments
       const isIncludedInCommentElements = comment.elements.some(
         (el) => el.attrs['w14:paraId'] === ce.attributes['w15:paraId'],
       );
@@ -127,8 +125,8 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
 /**
  * Extract the details from the commentExtended node
  *
- * @param {Object} commentEx The commentExtended node
- * @returns {Object} Object contianing paraId, isDone and paraIdParent
+ * @param {Object} commentEx The commentExtended node from commentsExtended.xml
+ * @returns {Object} Object containing paraId, isDone and paraIdParent
  */
 const getExtendedDetails = (commentEx) => {
   const { attributes } = commentEx;
@@ -138,6 +136,16 @@ const getExtendedDetails = (commentEx) => {
   return { paraId, isDone, paraIdParent };
 };
 
+/**
+ * Extracts comment range information from document.xml by walking the XML tree
+ * and identifying comment range markers and their positions.
+ *
+ * @param {ParsedDocx} docx The parsed docx object containing document.xml
+ * @returns {Object} Object containing:
+ *   - rangeEvents: Array of {type: 'start'|'end', commentId} events
+ *   - rangePositions: Map of comment ID → {startIndex: number, endIndex: number}
+ *   - commentsInTrackedChanges: Map of comment ID → tracked change ID
+ */
 const extractCommentRangesFromDocument = (docx) => {
   const documentXml = docx['word/document.xml'];
   if (!documentXml) {
@@ -146,7 +154,7 @@ const extractCommentRangesFromDocument = (docx) => {
 
   const rangeEvents = [];
   const rangePositions = new Map();
-  const commentsInTrackedChanges = new Map(); // Maps comment ID to tracked change ID
+  const commentsInTrackedChanges = new Map();
   let positionIndex = 0;
   let lastElementWasCommentMarker = false;
 
@@ -171,7 +179,6 @@ const extractCommentRangesFromDocument = (docx) => {
           } else {
             rangePositions.get(id).startIndex = positionIndex;
           }
-          // Track if this comment range starts inside a tracked change
           if (currentTrackedChangeId !== null) {
             commentsInTrackedChanges.set(id, currentTrackedChangeId);
           }
@@ -193,7 +200,6 @@ const extractCommentRangesFromDocument = (docx) => {
         }
         lastElementWasCommentMarker = true;
       } else if (isTrackedChange) {
-        // Enter tracked change context - pass the tracked change ID to children
         const trackedChangeId = element.attributes?.['w:id'];
         if (element.elements && Array.isArray(element.elements)) {
           walkElements(
@@ -224,6 +230,16 @@ const extractCommentRangesFromDocument = (docx) => {
   return { rangeEvents, rangePositions, commentsInTrackedChanges };
 };
 
+/**
+ * Detects parent-child relationships when comment ranges are nested within each other.
+ * Uses a stack-based approach where a comment starting inside another comment's range
+ * becomes a child of the most recent open comment.
+ *
+ * @param {Array} comments The comments array
+ * @param {Array} rangeEvents Array of {type: 'start'|'end', commentId} events in document order
+ * @param {Set} skipComments Set of comment IDs to skip (e.g., comments sharing positions)
+ * @returns {Map} Map of child comment ID → parent comment ID (both as importedId)
+ */
 const detectThreadingFromNestedRanges = (comments, rangeEvents, skipComments = new Set()) => {
   const openRanges = [];
   const parentMap = new Map();
@@ -250,6 +266,15 @@ const detectThreadingFromNestedRanges = (comments, rangeEvents, skipComments = n
   return parentMap;
 };
 
+/**
+ * Detects parent-child relationships when multiple comments share the same start position.
+ * This handles cases where different authors comment on the same text selection.
+ * The earliest comment (by creation time) becomes the parent of all others at that position.
+ *
+ * @param {Array} comments The comments array
+ * @param {Map} rangePositions Map of comment importedId → {startIndex: number, endIndex: number}
+ * @returns {Map} Map of child comment importedId → parent comment importedId
+ */
 const detectThreadingFromSharedPosition = (comments, rangePositions) => {
   const parentMap = new Map();
   const commentsByStartPosition = new Map();
@@ -279,6 +304,15 @@ const detectThreadingFromSharedPosition = (comments, rangePositions) => {
   return parentMap;
 };
 
+/**
+ * Handles reply comments that don't have corresponding ranges in document.xml.
+ * Links these comments to the most recently created preceding comment that has a range.
+ * This handles Google Docs exports where reply comments may only exist in comments.xml.
+ *
+ * @param {Array} comments The comments array
+ * @param {Map} rangePositions Map of comment importedId → {startIndex: number, endIndex: number}
+ * @returns {Map} Map of comment importedId → parent comment importedId
+ */
 const detectThreadingFromMissingRanges = (comments, rangePositions) => {
   const parentMap = new Map();
   const commentsWithRanges = [];
@@ -307,13 +341,14 @@ const detectThreadingFromMissingRanges = (comments, rangePositions) => {
 };
 
 /**
- * Detect threading from comments whose ranges are inside tracked changes (w:ins or w:del).
- * When a comment range starts inside a tracked change, that comment should be threaded
- * under the tracked change (which becomes a pseudo-comment with trackedChange: true).
+ * Detects parent-child relationships for comments whose ranges start inside tracked changes.
+ * When a comment range starts inside a tracked change (w:ins or w:del), that tracked change
+ * becomes the comment's parent. The tracked change ID is stored as a special marker object
+ * that will be resolved later in applyParentRelationships.
  *
  * @param {Array} comments The comments array
- * @param {Map} commentsInTrackedChanges Map of comment ID to tracked change ID
- * @returns {Map} Map of comment importedId to tracked change ID (parent)
+ * @param {Map<string, string>} commentsInTrackedChanges Map of comment importedId → tracked change ID
+ * @returns {Map} Map of comment importedId → {trackedChangeId: string, isTrackedChangeParent: true}
  */
 const detectThreadingFromTrackedChanges = (comments, commentsInTrackedChanges) => {
   const parentMap = new Map();
@@ -325,8 +360,6 @@ const detectThreadingFromTrackedChanges = (comments, commentsInTrackedChanges) =
   comments.forEach((comment) => {
     const trackedChangeId = commentsInTrackedChanges.get(comment.importedId);
     if (trackedChangeId !== undefined) {
-      // The tracked change ID becomes the commentId of the tracked change pseudo-comment
-      // We store it as a special marker that will be resolved later
       parentMap.set(comment.importedId, { trackedChangeId, isTrackedChangeParent: true });
     }
   });
@@ -334,6 +367,17 @@ const detectThreadingFromTrackedChanges = (comments, commentsInTrackedChanges) =
   return parentMap;
 };
 
+/**
+ * Main orchestration function that detects comment threading using multiple strategies.
+ * Applies nested range detection, shared position detection, missing range detection,
+ * and tracked change detection, then merges and applies all relationships.
+ *
+ * @param {Array} comments The comments array
+ * @param {Object|Array} rangeData Either:
+ *   - Object with {rangeEvents, rangePositions, commentsInTrackedChanges}
+ *   - Array of rangeEvents (legacy format)
+ * @returns {Array} Comments array with parentCommentId set where relationships were detected
+ */
 const detectThreadingFromRanges = (comments, rangeData) => {
   const { rangeEvents, rangePositions, commentsInTrackedChanges } = Array.isArray(rangeData)
     ? { rangeEvents: rangeData, rangePositions: new Map(), commentsInTrackedChanges: new Map() }
@@ -358,6 +402,15 @@ const detectThreadingFromRanges = (comments, rangeData) => {
   return applyParentRelationships(comments, mergedParentMap, trackedChangeParentMap);
 };
 
+/**
+ * Identifies comments that share the same start position in the document.
+ * These comments are excluded from nested range detection to avoid conflicts,
+ * as they're handled separately by detectThreadingFromSharedPosition.
+ *
+ * @param {Array} comments The comments array
+ * @param {Map} rangePositions Map of comment importedId → {startIndex: number, endIndex: number}
+ * @returns {Set} Set of comment importedIds that share start positions with other comments
+ */
 const findCommentsWithSharedStartPosition = (comments, rangePositions) => {
   const sharedPositionComments = new Set();
   const commentsByStartPosition = new Map();
@@ -382,19 +435,26 @@ const findCommentsWithSharedStartPosition = (comments, rangePositions) => {
   return sharedPositionComments;
 };
 
+/**
+ * Applies detected parent-child relationships to comments by setting parentCommentId.
+ * Handles both tracked change parents (special case) and regular comment parents.
+ * Converts parent importedId to commentId in the final output.
+ *
+ * @param {Array} comments The comments array
+ * @param {Map} parentMap Map of child comment importedId → parent comment importedId
+ * @param {Map} trackedChangeParentMap Map of comment importedId → {trackedChangeId, isTrackedChangeParent}
+ * @returns {Array} Comments array with parentCommentId set where relationships exist
+ */
 const applyParentRelationships = (comments, parentMap, trackedChangeParentMap = new Map()) => {
   return comments.map((comment) => {
-    // First check if this comment has a tracked change as its parent
     const trackedChangeParent = trackedChangeParentMap.get(comment.importedId);
     if (trackedChangeParent && trackedChangeParent.isTrackedChangeParent) {
-      // The tracked change ID becomes the commentId of the tracked change pseudo-comment
       return {
         ...comment,
         parentCommentId: trackedChangeParent.trackedChangeId,
       };
     }
 
-    // Otherwise check for regular comment parent
     const parentImportedId = parentMap.get(comment.importedId);
     if (parentImportedId) {
       const parentComment = comments.find((c) => c.importedId === parentImportedId);
