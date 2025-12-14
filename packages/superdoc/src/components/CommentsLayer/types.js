@@ -24,6 +24,12 @@
  * @property {string|null} resolvedByEmail - Email of user who resolved the comment
  * @property {string|null} resolvedByName - Name of user who resolved the comment
  * @property {CommentJSON} commentJSON - Structured JSON representation of the comment content
+ * @property {'word' | 'google-docs' | 'unknown'} origin - Document origin where comment was imported from
+ * @property {'commentsExtended' | 'range-based' | 'mixed'} threadingMethod - Method used for comment threading
+ * @property {Object} originalXmlStructure - Original XML structure metadata
+ * @property {boolean} originalXmlStructure.hasCommentsExtended - Whether original had commentsExtended.xml
+ * @property {boolean} originalXmlStructure.hasCommentsExtensible - Whether original had commentsExtensible.xml
+ * @property {boolean} originalXmlStructure.hasCommentsIds - Whether original had commentsIds.xml
  */
 
 /**

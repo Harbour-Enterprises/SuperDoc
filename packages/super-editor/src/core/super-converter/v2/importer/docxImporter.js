@@ -46,9 +46,45 @@ import { ensureNumberingCache } from './numberingCache.js';
  * @param {Editor} editor instance.
  * @returns {{pmDoc: PmNodeJson, savedTagsToRestore: XmlNode, pageStyles: *}|null}
  */
+/**
+ * Detect document origin (Word vs Google Docs) based on XML structure
+ * @param {ParsedDocx} docx The parsed docx object
+ * @returns {'word' | 'google-docs' | 'unknown'} The detected origin
+ */
+const detectDocumentOrigin = (docx) => {
+  // Check for commentsExtended.xml - Word typically has this with valid w15:commentEx elements
+  const commentsExtended = docx['word/commentsExtended.xml'];
+  if (commentsExtended) {
+    const { elements: initialElements = [] } = commentsExtended;
+    if (initialElements?.length > 0) {
+      const { elements = [] } = initialElements[0] ?? {};
+      const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
+      // If we have valid commentEx elements, it's likely Word
+      if (commentEx.length > 0) {
+        return 'word';
+      }
+    }
+  }
+
+  // Check for comments.xml - if it exists but no commentsExtended.xml, likely Google Docs
+  const comments = docx['word/comments.xml'];
+  if (comments && !commentsExtended) {
+    // Google Docs often exports without commentsExtended.xml, using range-based threading
+    return 'google-docs';
+  }
+
+  // Fallback to unknown (defaults to Word format for backward compatibility)
+  return 'unknown';
+};
+
 export const createDocumentJson = (docx, converter, editor) => {
   const json = carbonCopy(getInitialJSON(docx));
   if (!json) return null;
+
+  // Detect and store document origin
+  if (converter) {
+    converter.documentOrigin = detectDocumentOrigin(docx);
+  }
 
   // Track initial document structure
   if (converter?.telemetry) {

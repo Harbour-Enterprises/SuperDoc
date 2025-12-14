@@ -40,6 +40,11 @@ const encode = (params, encodedAttrs = {}) => {
 
   encodedAttrs.importedAuthor = `${encodedAttrs.author} (imported)`;
 
+  // Add origin metadata from converter if available
+  if (converter?.documentOrigin) {
+    encodedAttrs.origin = converter.documentOrigin;
+  }
+
   subs.forEach((subElement) => {
     subElement.marks = [];
     if (subElement?.content?.[0]) {

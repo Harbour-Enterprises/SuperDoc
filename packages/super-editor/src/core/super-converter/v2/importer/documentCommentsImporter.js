@@ -51,6 +51,10 @@ export function importCommentData({ docx, editor, converter }) {
     const { attrs } = parsedElements[0];
     const paraId = attrs['w14:paraId'];
 
+    // Determine threading method based on whether commentsExtended.xml exists
+    const commentsExtended = docx['word/commentsExtended.xml'];
+    const threadingMethod = commentsExtended ? 'commentsExtended' : 'range-based';
+
     return {
       commentId: internalId || uuidv4(),
       importedId,
@@ -66,6 +70,13 @@ export function importCommentData({ docx, editor, converter }) {
       trackedChangeType,
       trackedDeletedText,
       isDone: false,
+      origin: converter?.documentOrigin || 'word',
+      threadingMethod,
+      originalXmlStructure: {
+        hasCommentsExtended: !!commentsExtended,
+        hasCommentsExtensible: !!docx['word/commentsExtensible.xml'],
+        hasCommentsIds: !!docx['word/commentsIds.xml'],
+      },
     };
   });
 
