@@ -235,10 +235,7 @@ export function resolveParagraphProperties(
   // Resolve property chain - regular properties are treated differently from indentation
   //   Chain for regular properties
   let defaultsChain;
-  if (insideTable && overrideInlineStyleId) {
-    const { properties: overrideProps } = getStyleProperties(params, overrideInlineStyleId, w_pPrTranslator);
-    defaultsChain = [defaultProps, overrideProps, normalProps];
-  } else if (isNormalDefault) {
+  if (isNormalDefault) {
     defaultsChain = [defaultProps, normalProps];
   } else {
     defaultsChain = [normalProps, defaultProps];
@@ -278,6 +275,12 @@ export function resolveParagraphProperties(
   );
   finalProps.indent = finalIndent.indent;
 
+  // TODO: the following likely isn't exactly true --- rather, the doc-default spacing can be overridden by table-level paragraph settings. See 17.7.2 (Style Hierarchy) in the spec.
+  if (insideTable && !inlineProps?.spacing && !styleProps.spacing) {
+    // Word ignores doc-default spacing inside table cells unless explicitly set,
+    // so drop the derived values when nothing is defined inline or via style.
+    finalProps.spacing = undefined;
+  }
   return finalProps;
 }
 
