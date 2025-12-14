@@ -868,4 +868,52 @@ describe('Word tracked change comment threading (with commentsExtended.xml)', ()
     // Reply should point to tracked change (flattened)
     expect(reply.parentCommentId).toBe('99');
   });
+
+  it('detects comments that end before a deletion in the same paragraph as children of the deletion', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 7, internalId: 'comment-on-delete', author: 'Author', date: '2024-01-01T10:00:00Z' },
+        { id: 8, internalId: 'thread-on-delete', author: 'Author', date: '2024-01-01T10:01:00Z' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '7' } },
+            { name: 'w:commentRangeStart', attributes: { 'w:id': '8' } },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'an' }] }],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '7' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '8' } },
+            {
+              name: 'w:del',
+              attributes: { 'w:id': '9', 'w:author': 'Author', 'w:date': '2024-01-01T09:00:00Z' },
+              elements: [
+                {
+                  name: 'w:r',
+                  elements: [{ name: 'w:delText', elements: [{ type: 'text', text: 'deletion' }] }],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      extended: [
+        { paraId: 'para-7', done: '0' },
+        { paraId: 'para-8', done: '0', parent: 'para-7' },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const comment1 = comments.find((c) => c.commentId === 'comment-on-delete');
+    const comment2 = comments.find((c) => c.commentId === 'thread-on-delete');
+
+    // Both comments should be associated with the deletion (flattened, not threaded)
+    expect(comment1.parentCommentId).toBe('9');
+    expect(comment2.parentCommentId).toBe('9');
+  });
 });

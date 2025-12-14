@@ -190,6 +190,8 @@ const extractCommentRangesFromDocument = (docx, converter) => {
   const commentsInTrackedChanges = new Map();
   let positionIndex = 0;
   let lastElementWasCommentMarker = false;
+  // Track recently closed comments that might be associated with adjacent tracked changes
+  const recentlyClosedComments = new Set();
 
   const walkElements = (elements, currentTrackedChangeId = null) => {
     if (!elements || !Array.isArray(elements)) return;
@@ -198,6 +200,7 @@ const extractCommentRangesFromDocument = (docx, converter) => {
       const isCommentStart = element.name === 'w:commentRangeStart';
       const isCommentEnd = element.name === 'w:commentRangeEnd';
       const isTrackedChange = element.name === 'w:ins' || element.name === 'w:del';
+      const isDeletion = element.name === 'w:del';
 
       if (isCommentStart) {
         const commentId = element.attributes?.['w:id'];
@@ -217,6 +220,8 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           }
         }
         lastElementWasCommentMarker = true;
+        // Clear recently closed comments when a new comment starts
+        recentlyClosedComments.clear();
       } else if (isCommentEnd) {
         const commentId = element.attributes?.['w:id'];
         if (commentId !== undefined) {
@@ -230,6 +235,8 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           } else {
             rangePositions.get(id).endIndex = positionIndex;
           }
+          // Track this comment as recently closed - it might be associated with an adjacent deletion
+          recentlyClosedComments.add(id);
         }
         lastElementWasCommentMarker = true;
       } else if (isTrackedChange) {
@@ -247,6 +254,21 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           mappedId = converter.trackedChangeIdMap.get(String(trackedChangeId));
         }
 
+        // For deletions, associate recently closed comments that ended just before this deletion
+        // This handles the case where Word places comment ranges before w:del elements
+        // For insertions, we also check recently closed comments in case they're adjacent
+        if (mappedId && recentlyClosedComments.size > 0) {
+          recentlyClosedComments.forEach((commentId) => {
+            // Only associate if the comment isn't already associated with another tracked change
+            if (!commentsInTrackedChanges.has(commentId)) {
+              commentsInTrackedChanges.set(commentId, String(mappedId));
+            }
+          });
+        }
+        // Clear recently closed comments after processing this tracked change
+        // This prevents associating comments with later tracked changes
+        recentlyClosedComments.clear();
+
         if (element.elements && Array.isArray(element.elements)) {
           walkElements(element.elements, mappedId !== undefined ? String(mappedId) : currentTrackedChangeId);
         }
@@ -254,6 +276,12 @@ const extractCommentRangesFromDocument = (docx, converter) => {
         if (lastElementWasCommentMarker) {
           positionIndex++;
           lastElementWasCommentMarker = false;
+        }
+
+        // Clear recently closed comments when we encounter a new paragraph
+        // This prevents associating comments from one paragraph with tracked changes in another
+        if (element.name === 'w:p') {
+          recentlyClosedComments.clear();
         }
 
         if (element.elements && Array.isArray(element.elements)) {
