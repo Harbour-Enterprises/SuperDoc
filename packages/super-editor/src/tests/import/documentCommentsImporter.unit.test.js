@@ -790,3 +790,82 @@ describe('Google Docs tracked change comment threading', () => {
     expect(tcComment.parentCommentId).toBe('1');
   });
 });
+
+describe('Word tracked change comment threading (with commentsExtended.xml)', () => {
+  it('detects comment inside tracked change insertion as child of tracked change even when commentsExtended.xml exists', () => {
+    const docx = buildDocx({
+      comments: [{ id: 7, internalId: 'comment-on-insertion', author: 'Missy Fox', date: '2024-01-01T10:00:00Z' }],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            {
+              name: 'w:ins',
+              attributes: { 'w:id': '2', 'w:author': 'Missy Fox', 'w:date': '2024-01-01T09:00:00Z' },
+              elements: [
+                { name: 'w:commentRangeStart', attributes: { 'w:id': '7' } },
+                {
+                  name: 'w:r',
+                  elements: [{ name: 'w:t', elements: [{ type: 'text', text: ' more more ' }] }],
+                },
+              ],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '7' } },
+          ],
+        },
+      ],
+      extended: [{ paraId: 'para-7', done: '0' }],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(1);
+
+    const comment = comments[0];
+    expect(comment.parentCommentId).toBe('2');
+  });
+
+  it('detects root comment of a thread as child of tracked change, and replies as child of root', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 10, internalId: 'root-comment', paraId: 'para-10' },
+        { id: 11, internalId: 'reply-comment', paraId: 'para-11' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            {
+              name: 'w:ins',
+              attributes: { 'w:id': '99', 'w:author': 'Author', 'w:date': '2024-01-01T09:00:00Z' },
+              elements: [
+                { name: 'w:commentRangeStart', attributes: { 'w:id': '10' } },
+                { name: 'w:commentRangeStart', attributes: { 'w:id': '11' } },
+                {
+                  name: 'w:r',
+                  elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Threaded text' }] }],
+                },
+              ],
+            },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '10' } },
+            { name: 'w:commentRangeEnd', attributes: { 'w:id': '11' } },
+          ],
+        },
+      ],
+      extended: [
+        { paraId: 'para-10', done: '0' },
+        { paraId: 'para-11', done: '0', parent: 'para-10' },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const root = comments.find((c) => c.commentId === 'root-comment');
+    const reply = comments.find((c) => c.commentId === 'reply-comment');
+
+    // Root should point to tracked change
+    expect(root.parentCommentId).toBe('99');
+    // Reply should point to tracked change (flattened)
+    expect(reply.parentCommentId).toBe('99');
+  });
+});

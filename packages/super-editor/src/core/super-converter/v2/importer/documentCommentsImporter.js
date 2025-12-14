@@ -97,9 +97,13 @@ export function importCommentData({ docx, editor, converter }) {
 const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   if (!comments?.length) return [];
 
+  // Always extract range data to get tracked change relationships
+  const rangeData = extractCommentRangesFromDocument(docx, converter);
+  const { commentsInTrackedChanges } = rangeData;
+  const trackedChangeParentMap = detectThreadingFromTrackedChanges(comments, commentsInTrackedChanges);
+
   const commentsExtended = docx['word/commentsExtended.xml'];
   if (!commentsExtended) {
-    const rangeData = extractCommentRangesFromDocument(docx, converter);
     const commentsWithThreading = detectThreadingFromRanges(comments, rangeData);
     return commentsWithThreading.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
   }
@@ -112,25 +116,41 @@ const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
 
   return comments.map((comment) => {
+    // 1. Find extended definition for additional metadata (isDone, parent)
     const extendedDef = commentEx.find((ce) => {
       const isIncludedInCommentElements = comment.elements.some(
         (el) => el.attrs['w14:paraId'] === ce.attributes['w15:paraId'],
       );
       return isIncludedInCommentElements;
     });
-    if (!extendedDef) return { ...comment, isDone: comment.isDone ?? false };
 
-    const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
+    let isDone = comment.isDone ?? false;
+    let parentCommentId = undefined;
 
-    let parentComment;
-    if (paraIdParent) parentComment = comments.find((c) => c.paraId === paraIdParent);
+    // Check if this comment is part of a tracked change
+    // If inside a tracked change, it takes precedence as parent (flattening the thread)
+    const trackedChangeParent = trackedChangeParentMap.get(comment.importedId);
+    const isInsideTrackedChange = trackedChangeParent && trackedChangeParent.isTrackedChangeParent;
 
-    const newComment = {
+    if (extendedDef) {
+      const details = getExtendedDetails(extendedDef);
+      isDone = details.isDone ?? false;
+
+      if (!isInsideTrackedChange && details.paraIdParent) {
+        const parentComment = comments.find((c) => c.paraId === details.paraIdParent);
+        parentCommentId = parentComment?.commentId;
+      }
+    }
+
+    if (isInsideTrackedChange) {
+      parentCommentId = trackedChangeParent.trackedChangeId;
+    }
+
+    return {
       ...comment,
-      isDone: isDone ?? false,
-      parentCommentId: parentComment?.commentId,
+      isDone,
+      parentCommentId,
     };
-    return newComment;
   });
 };
 
