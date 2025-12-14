@@ -63,6 +63,9 @@ if (!isPrerelease) {
   ])
 }
 
+// Linear integration - labels issues with version on release
+config.plugins.push(['semantic-release-linear-app', { teamKeys: ['SD'] }])
+
 // GitHub plugin comes last
 config.plugins.push('@semantic-release/github')
 
