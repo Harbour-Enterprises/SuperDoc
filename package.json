@@ -86,7 +86,6 @@
     "lint-staged": "^16.1.4",
     "prettier": "3.3.3",
     "semantic-release": "^24.2.7",
-    "semantic-release-linear-app": "^0.4.0",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.47.0",
     "verdaccio": "^6.1.6",
