@@ -173,6 +173,33 @@ export type PositionHit = {
 
 export type Rect = { x: number; y: number; width: number; height: number; pageIndex: number };
 
+/**
+ * Result of hit-testing a table fragment.
+ * Contains all information needed to identify the cell and paragraph at a click point.
+ */
+export type TableHitResult = {
+  /** The table fragment that was hit */
+  fragment: TableFragment;
+  /** The table block from the document structure */
+  block: TableBlock;
+  /** The table measurement data */
+  measure: TableMeasure;
+  /** Index of the page containing the hit */
+  pageIndex: number;
+  /** Row index of the hit cell (0-based) */
+  cellRowIndex: number;
+  /** Column index of the hit cell (0-based) */
+  cellColIndex: number;
+  /** The paragraph block inside the cell */
+  cellBlock: ParagraphBlock;
+  /** Measurement data for the paragraph inside the cell */
+  cellMeasure: ParagraphMeasure;
+  /** X coordinate relative to the cell content area */
+  localX: number;
+  /** Y coordinate relative to the cell content area */
+  localY: number;
+};
+
 type AtomicFragment = DrawingFragment | ImageFragment;
 
 const isAtomicFragment = (fragment: Fragment): fragment is AtomicFragment => {
@@ -415,22 +442,6 @@ const hitTestAtomicFragment = (
 };
 
 /**
- * Type for table hit test result containing cell and paragraph info
- */
-type TableHitResult = {
-  fragment: TableFragment;
-  block: TableBlock;
-  measure: TableMeasure;
-  pageIndex: number;
-  cellRowIndex: number;
-  cellColIndex: number;
-  cellBlock: ParagraphBlock;
-  cellMeasure: ParagraphMeasure;
-  localX: number;
-  localY: number;
-};
-
-/**
  * Hit-test table fragments to find the cell and paragraph at a click point.
  *
  * This function performs a multi-stage spatial lookup to map a 2D coordinate to a specific
@@ -467,7 +478,7 @@ type TableHitResult = {
  * - Mismatched block and measure arrays
  * - Invalid cell padding values
  */
-const hitTestTableFragment = (
+export const hitTestTableFragment = (
   pageHit: PageHit,
   blocks: FlowBlock[],
   measures: Measure[],
