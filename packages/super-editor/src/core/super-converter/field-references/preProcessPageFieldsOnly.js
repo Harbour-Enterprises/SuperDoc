@@ -37,8 +37,10 @@ export const preProcessPageFieldsOnly = (nodes = [], depth = 0) => {
         const preprocessor = fieldInfo.fieldType === 'PAGE' ? preProcessPageInstruction : preProcessNumPagesInstruction;
 
         // Collect nodes between separate and end for the preprocessor
+        // Also pass the captured rPr from field sequence nodes (begin, instrText, separate)
+        // which is where Word stores the styling for page number fields
         const contentNodes = fieldInfo.contentNodes;
-        const processedField = preprocessor(contentNodes, fieldInfo.instrText);
+        const processedField = preprocessor(contentNodes, fieldInfo.instrText, fieldInfo.fieldRunRPr);
         processedNodes.push(...processedField);
 
         // Skip past the entire field sequence
@@ -79,13 +81,25 @@ export const preProcessPageFieldsOnly = (nodes = [], depth = 0) => {
  *
  * @param {OpenXmlNode[]} nodes - All nodes
  * @param {number} beginIndex - Index of the 'begin' fldChar node
- * @returns {{ fieldType: string, instrText: string, contentNodes: OpenXmlNode[], endIndex: number } | null}
+ * @returns {{ fieldType: string, instrText: string, contentNodes: OpenXmlNode[], fieldRunRPr: OpenXmlNode | null, endIndex: number } | null}
  */
 function scanFieldSequence(nodes, beginIndex) {
   let instrText = '';
   let separateIndex = -1;
   let endIndex = -1;
   const contentNodes = [];
+
+  // Capture the first w:rPr found in the field sequence (begin, instrText, or separate nodes)
+  // Word stores styling on these nodes, not just on content between separate and end
+  /** @type {OpenXmlNode | null} */
+  let fieldRunRPr = null;
+
+  // Start by checking the begin node itself for rPr
+  const beginNode = nodes[beginIndex];
+  const beginRPr = beginNode.elements?.find((el) => el.name === 'w:rPr');
+  if (beginRPr && hasSignificantStyling(beginRPr)) {
+    fieldRunRPr = beginRPr;
+  }
 
   for (let i = beginIndex + 1; i < nodes.length; i++) {
     const node = nodes[i];
@@ -95,6 +109,15 @@ function scanFieldSequence(nodes, beginIndex) {
 
     if (instrTextEl) {
       instrText += (instrTextEl.elements?.[0]?.text || '') + ' ';
+    }
+
+    // Capture rPr from field sequence nodes (before separate) if we don't have one yet
+    // or if this one has more significant styling
+    if (!fieldRunRPr || (separateIndex === -1 && fldType !== 'end')) {
+      const rPrNode = node.elements?.find((el) => el.name === 'w:rPr');
+      if (rPrNode && hasSignificantStyling(rPrNode)) {
+        fieldRunRPr = rPrNode;
+      }
     }
 
     if (fldType === 'separate') {
@@ -118,6 +141,41 @@ function scanFieldSequence(nodes, beginIndex) {
     fieldType,
     instrText: instrText.trim(),
     contentNodes,
+    fieldRunRPr,
     endIndex,
   };
+}
+
+/**
+ * Checks if an rPr node has significant styling beyond just rStyle references.
+ * Significant styling includes fonts, sizes, bold, italic, colors, etc.
+ *
+ * @param {OpenXmlNode} rPrNode - The w:rPr node to check
+ * @returns {boolean} True if the node has significant styling
+ */
+function hasSignificantStyling(rPrNode) {
+  if (!rPrNode?.elements?.length) {
+    return false;
+  }
+
+  // List of elements that indicate significant styling
+  const significantElements = [
+    'w:rStyle', // Run style reference (Word commonly uses this for page number formatting)
+    'w:rFonts', // Font family
+    'w:sz', // Font size
+    'w:szCs', // Complex script font size
+    'w:b', // Bold
+    'w:bCs', // Complex script bold
+    'w:i', // Italic
+    'w:iCs', // Complex script italic
+    'w:u', // Underline
+    'w:color', // Font color
+    'w:highlight', // Highlight color
+    'w:strike', // Strikethrough
+    'w:dstrike', // Double strikethrough
+    'w:caps', // All caps
+    'w:smallCaps', // Small caps
+  ];
+
+  return rPrNode.elements.some((el) => significantElements.includes(el.name));
 }

@@ -1140,16 +1140,24 @@ export class HeaderFooterLayoutAdapter {
     const blockIdPrefix = `hf-${descriptor.kind}-${descriptor.id}-`;
     const converterContext = this.#getConverterContext();
     const rootConverter = (this.#manager.rootEditor as EditorWithConverter | undefined)?.converter as
-      | { media?: Record<string, string> }
+      | { media?: Record<string, string>; getDocumentDefaultStyles?: () => { typeface?: string; fontSizePt?: number } }
       | undefined;
     const providedMedia = this.#mediaFiles;
     const fallbackMedia = rootConverter?.media;
     const mediaFiles = providedMedia && Object.keys(providedMedia).length > 0 ? providedMedia : fallbackMedia;
 
+    // Get document defaults for consistent rendering with main document
+    const docDefaults = rootConverter?.getDocumentDefaultStyles?.();
+    const defaultFont = docDefaults?.typeface;
+    // Convert pt to px: 1pt = 96/72 px ≈ 1.333px
+    const defaultSize = docDefaults?.fontSizePt != null ? docDefaults.fontSizePt * (96 / 72) : undefined;
+
     const result = toFlowBlocks(doc as object, {
       mediaFiles,
       blockIdPrefix,
       converterContext,
+      defaultFont,
+      defaultSize,
     });
     const blocks = result.blocks;
 

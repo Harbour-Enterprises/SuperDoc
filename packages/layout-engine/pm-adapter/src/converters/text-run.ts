@@ -147,7 +147,16 @@ export function tokenNodeToRun(
     run.pmEnd = pos.end;
   }
 
-  const marks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
+  // For page-number and total-page-number tokens, marks may be stored in attrs.marksAsAttrs
+  // (from the autoPageNumber/totalPageNumber translator) rather than node.marks.
+  // Check both locations to ensure styling is properly applied.
+  const nodeMarks = node.marks ?? [];
+  // marksAsAttrs is set by autoPageNumber/totalPageNumber translators during import
+  // and is guaranteed to be PMMark[] when present. Validate it's an array for safety.
+  const marksAsAttrs = Array.isArray(node.attrs?.marksAsAttrs) ? (node.attrs.marksAsAttrs as PMMark[]) : [];
+  const effectiveMarks = nodeMarks.length > 0 ? nodeMarks : marksAsAttrs;
+
+  const marks = [...effectiveMarks, ...(inheritedMarks ?? [])];
   applyMarksToRun(run, marks, hyperlinkConfig, themeColors);
   return run;
 }
