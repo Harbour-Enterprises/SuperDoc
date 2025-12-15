@@ -60,5 +60,23 @@ export const findTrackedMarkBetween = ({
     }
   });
 
+  const nodeAtEndPosition = doc.nodeAt(endPos);
+  if (nodeAtEndPosition?.type?.name === 'run') {
+    const node = nodeAtEndPosition.content?.content?.[0];
+    const isTextNode = node?.type?.name === 'text';
+    if (isTextNode) {
+      const mark = node.marks.find(
+        (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
+      );
+
+      if (mark && !markFound) {
+        markFound = {
+          from: endPos,
+          to: endPos + node.nodeSize,
+          mark,
+        };
+      }
+    }
+  }
   return markFound;
 };
