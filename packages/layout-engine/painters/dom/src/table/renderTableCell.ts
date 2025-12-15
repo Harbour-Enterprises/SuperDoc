@@ -581,11 +581,26 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
             paraWrapper.appendChild(lineContainer);
           } else {
             /**
-             * For lines without markers, apply indent padding if this is a list paragraph.
-             * This ensures consistent indentation for continuation lines in list items.
+             * For lines without markers, apply appropriate indentation:
+             * - For list paragraphs: apply indent padding for continuation lines
+             * - For non-list paragraphs: preserve the paragraph's own indent styling
              */
             if (markerLayout && indentLeftPx) {
               lineEl.style.paddingLeft = `${indentLeftPx}px`;
+            } else {
+              // Preserve non-list paragraph indentation that was cleared above
+              const indent = block.attrs?.indent;
+              if (indent) {
+                if (typeof indent.left === 'number' && indent.left > 0) {
+                  lineEl.style.paddingLeft = `${indent.left}px`;
+                }
+                if (typeof indent.right === 'number' && indent.right > 0) {
+                  lineEl.style.paddingRight = `${indent.right}px`;
+                }
+                if (lineIdx === 0 && typeof indent.firstLine === 'number' && indent.firstLine !== 0) {
+                  lineEl.style.textIndent = `${indent.firstLine}px`;
+                }
+              }
             }
             paraWrapper.appendChild(lineEl);
           }

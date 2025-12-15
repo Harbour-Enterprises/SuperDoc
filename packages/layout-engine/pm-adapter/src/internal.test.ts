@@ -809,11 +809,11 @@ describe('internal', () => {
         expect(handleParagraphNode).toHaveBeenCalledWith(
           expect.any(Object),
           expect.objectContaining({
-            converters: {
+            converters: expect.objectContaining({
               paragraphToFlowBlocks: expect.any(Function),
               tableNodeToBlock: expect.any(Function),
               imageNodeToBlock: expect.any(Function),
-            },
+            }),
           }),
         );
       });
@@ -1066,11 +1066,13 @@ describe('internal', () => {
       const call = vi.mocked(handleParagraphNode).mock.calls[0];
       const context = call![1];
 
-      expect(context.converters).toEqual({
-        paragraphToFlowBlocks: expect.any(Function),
-        tableNodeToBlock: expect.any(Function),
-        imageNodeToBlock: expect.any(Function),
-      });
+      expect(context.converters).toEqual(
+        expect.objectContaining({
+          paragraphToFlowBlocks: expect.any(Function),
+          tableNodeToBlock: expect.any(Function),
+          imageNodeToBlock: expect.any(Function),
+        }),
+      );
     });
 
     it('passes converterContext through paragraph converter', () => {

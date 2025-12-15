@@ -207,8 +207,8 @@ describe('table converter', () => {
       ) as TableBlock;
 
       expect(result).toBeDefined();
-    expect(result.rows).toHaveLength(1);
-  });
+      expect(result.rows).toHaveLength(1);
+    });
 
     it('forwards listCounterContext into paragraph conversion', () => {
       const node: PMNode = {
@@ -233,7 +233,7 @@ describe('table converter', () => {
       };
 
       const paragraphSpy = vi.fn((para, ...args) => {
-        const [, , , , , , passedListContext] = args;
+        const [, , , , , passedListContext] = args;
         expect(passedListContext).toBe(listCounterContext);
         return mockParagraphConverter(para);
       });
@@ -302,11 +302,11 @@ describe('table converter', () => {
       expect(result.rows[0].cells[0].blocks?.[0]).toBe(imageBlock);
     });
 
-  it('handles tableHeader cell type', () => {
-    const node: PMNode = {
-      type: 'table',
-      content: [
-        {
+    it('handles tableHeader cell type', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
             type: 'tableRow',
             content: [
               {
