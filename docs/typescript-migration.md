@@ -124,22 +124,6 @@ npm run type-check
 
 ## Common Issues
 
-### Path aliases not resolving
-
-Ensure your package's `tsconfig.json` has the correct `paths`:
-
-```json
-{
-  "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@core/*": ["./src/core/*"],
-      "@extensions/*": ["./src/extensions/*"]
-    }
-  }
-}
-```
-
 ### Type errors in JavaScript files
 
 Ensure `checkJs: false` in your tsconfig. We only type-check `.ts` files during migration.
@@ -190,7 +174,7 @@ export function updateNodeAttrs(node: PMNode, attrs: Record<string, any>): PMNod
 ### Extension Pattern
 
 ```typescript
-import { Extension } from '@/core/Extension';
+import { Extension } from '@core/Extension';
 
 export interface MyExtensionOptions {
   enabled?: boolean;

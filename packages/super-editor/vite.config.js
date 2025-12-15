@@ -105,7 +105,6 @@ export default defineConfig(({ mode }) => {
         '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
         '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
         '@helpers': fileURLToPath(new URL('./src/core/helpers', import.meta.url)),
-        '@packages': fileURLToPath(new URL('../', import.meta.url)),
         '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
         '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
         '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),

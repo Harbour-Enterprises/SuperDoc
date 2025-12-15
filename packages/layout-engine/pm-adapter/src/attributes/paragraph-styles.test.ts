@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
-import * as converterStyles from '@converter/styles.js';
+import * as converterStyles from '@superdoc/super-editor/converter/internal/styles.js';
 
 // Mock the external super-converter module that's imported by paragraph-styles.ts
 // This module is part of super-editor package and not available in pm-adapter tests
-vi.mock('@converter/styles.js');
+vi.mock('@superdoc/super-editor/converter/internal/styles.js');
 
 describe('hydrateParagraphStyleAttrs', () => {
   beforeEach(() => {

@@ -19,6 +19,9 @@
       "source": "./src/core/super-converter/SuperConverter.js",
       "import": "./dist/converter.es.js"
     },
+    "./converter/internal/*": {
+      "default": "./src/core/super-converter/*"
+    },
     "./docx-zipper": {
       "source": "./src/core/DocxZipper.js",
       "import": "./dist/docx-zipper.es.js"

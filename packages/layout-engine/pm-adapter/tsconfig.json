@@ -6,6 +6,6 @@
     "declarationMap": true,
     "outDir": "dist"
   },
-  "include": ["src/**/*.ts", "../style-engine/src/**/*.ts", "../../word-layout/src/**/*.ts"],
+  "include": ["src/**/*.ts"],
   "references": [{ "path": "../contracts" }]
 }
