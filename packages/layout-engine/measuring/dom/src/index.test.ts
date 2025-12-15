@@ -109,12 +109,11 @@ describe('measureBlock', () => {
       }
     });
 
-    it('uses content width minus marker space for wordLayout list first lines with hanging indent', async () => {
+    it('uses content width for wordLayout list first lines with standard hanging indent', async () => {
+      // Standard hanging indent pattern: marker is positioned in the hanging area (left of text),
+      // NOT inline with text. The marker doesn't consume horizontal space on the first line.
       const maxWidth = 200;
       const indentLeft = 32;
-      const markerBoxWidthPx = 20;
-      const gutterWidthPx = 12;
-      const leftJustifiedMarkerSpace = markerBoxWidthPx + gutterWidthPx;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list',
@@ -129,10 +128,11 @@ describe('measureBlock', () => {
           indent: { left: indentLeft, hanging: indentLeft },
           wordLayout: {
             indentLeftPx: indentLeft,
+            // Note: firstLineIndentMode is NOT set, so this is standard hanging indent
             marker: {
               markerText: '1.',
-              markerBoxWidthPx,
-              gutterWidthPx,
+              markerBoxWidthPx: 20,
+              gutterWidthPx: 12,
               run: {
                 fontFamily: 'Times New Roman',
                 fontSize: 16,
@@ -146,19 +146,20 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      // For left-justified markers, the marker space is subtracted from content width
-      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft - leftJustifiedMarkerSpace);
+      // For standard hanging indent, the marker is in the hanging area (doesn't take in-flow space).
+      // First line available width = maxWidth - indentLeft (same as subsequent lines).
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft);
     });
 
-    it('uses textStartPx for wordLayout list first lines with firstLineIndentMode', async () => {
+    it('uses textStartPx for wordLayout list first lines when textStartPx > indentLeft', async () => {
       const maxWidth = 200;
-      const textStartPx = 100; // Where text actually starts in firstLineIndentMode
+      const textStartPx = 100; // Where text actually starts (after marker + tab)
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list-firstline',
         runs: [
           {
-            text: 'List item text in firstLineIndentMode should wrap based on textStartPx',
+            text: 'List item text should wrap based on textStartPx when marker occupies space',
             fontFamily: 'Times New Roman',
             fontSize: 16,
           },
@@ -167,7 +168,6 @@ describe('measureBlock', () => {
           indent: { left: 0, firstLine: 48 },
           wordLayout: {
             indentLeftPx: 0,
-            firstLineIndentMode: true,
             textStartPx,
             marker: {
               markerText: '(a)',
@@ -186,7 +186,7 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      // In firstLineIndentMode, available width = maxWidth - textStartPx
+      // When textStartPx > indentLeft, available width = maxWidth - textStartPx
       expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
