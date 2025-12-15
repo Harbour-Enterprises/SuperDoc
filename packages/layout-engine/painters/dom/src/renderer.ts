@@ -3794,10 +3794,13 @@ export class DomPainter {
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
         0,
       );
-      const slack = Math.max(0, availableWidth - line.width);
-      if (spaceCount > 0 && slack > 0) {
-        const extraPerSpace = slack / spaceCount;
-        el.style.wordSpacing = `${extraPerSpace}px`;
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack !== 0) {
+        // Positive slack = expand spaces to fill line (normal justify)
+        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
+        const spacingPerSpace = slack / spaceCount;
+        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
+        el.style.wordSpacing = `${spacingPerSpace}px`;
       }
     }
 

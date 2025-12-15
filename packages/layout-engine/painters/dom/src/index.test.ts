@@ -1067,6 +1067,86 @@ describe('DomPainter', () => {
     expect(lastLineWordSpacing).toBe(0);
   });
 
+  it('applies negative word-spacing when line width exceeds available width (compression case)', () => {
+    // When the measurer allows small overflow for justified text (assuming space compression),
+    // the renderer must apply negative word-spacing to actually compress the spaces.
+    const compressBlock: ParagraphBlock = {
+      kind: 'paragraph',
+      id: 'compress-test',
+      runs: [{ text: 'Word one two three four', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'justify' },
+    };
+
+    // Simulate a line where width > maxWidth (measurer allowed overflow assuming compression)
+    const compressMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 14, // "Word one two t" - not last line
+          width: 210, // Width exceeds maxWidth
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 0,
+          fromChar: 14,
+          toRun: 0,
+          toChar: 24, // rest of text - last line
+          width: 80,
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const compressLayout: Layout = {
+      pageSize: { w: 300, h: 300 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'compress-test',
+              x: 0,
+              y: 0,
+              width: 200,
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [compressBlock], measures: [compressMeasure] });
+    painter.paint(compressLayout, mount);
+
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should have NEGATIVE word-spacing (compression)
+    // line.width (210) > maxWidth (200), so slack = -10
+    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
+    // slack = availableWidth (200) - line.width (210) = -10
+    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
+    const expectedSpacing = (200 - 210) / 3;
+    expect(firstLineWordSpacing).toBeCloseTo(expectedSpacing, 1);
+
+    // Last line should NOT be justified
+    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
+    expect(lastLineWordSpacing).toBe(0);
+  });
+
   it('emits pm metadata attributes', () => {
     const painter = createDomPainter({ blocks: [block], measures: [measure] });
     painter.paint(layout, mount);

@@ -1186,6 +1186,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
         const word = words[wordIndex];
+        /**
+         * Handle empty strings from split(' ') representing space characters.
+         *
+         * Background: segment.split(' ') produces empty strings for leading/consecutive spaces:
+         *   " Hello" → ['', 'Hello']  (leading space)
+         *   "A  B"   → ['A', '', 'B'] (consecutive spaces)
+         *
+         * Previously these were skipped (just incremented charPosInRun), causing spaces
+         * to be dropped from measurements and rendering.
+         */
         if (word === '') {
           // Empty string from split(' ') indicates a space character (leading or consecutive spaces).
           // We must add the space width to the line, not just skip it.
@@ -1209,6 +1219,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             };
           } else {
             // Add space to existing line
+            // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
             const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
             if (
               currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
@@ -1274,6 +1285,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: 0,
           };
           // If a trailing space exists and fits safely, include it on this line
+          // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           const ls = (run as TextRun).letterSpacing ?? 0;
           if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
@@ -1291,12 +1303,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // For TOC entries, never break lines - allow them to extend beyond maxWidth
         const isTocEntry = block.attrs?.isTocEntry;
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
+        // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
         const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
         const justifyAlignment = block.attrs?.alignment === 'justify';
         const totalWidthWithWord =
           currentLine.width +
           boundarySpacing +
           wordCommitWidth +
+          // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           (isLastWord ? 0 : ((run as TextRun).letterSpacing ?? 0));
         const availableWidth = currentLine.maxWidth - WIDTH_FUDGE_PX;
         let shouldBreak =
