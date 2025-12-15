@@ -27,6 +27,7 @@ import type {
   TrackedChangeKind,
 } from '@superdoc/contracts';
 import type { PageDecorationProvider } from './index.js';
+import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 
 const PX_TO_PT = 72 / 96;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
@@ -519,7 +520,7 @@ export class PdfPainter {
       const markerText = wordLayout.marker.markerText ?? '';
       const markerRun: Run = {
         text: markerText,
-        fontFamily: wordLayout.marker.run.fontFamily,
+        fontFamily: toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily,
         fontSize: wordLayout.marker.run.fontSize,
         bold: wordLayout.marker.run.bold,
         italic: wordLayout.marker.run.italic,
@@ -656,7 +657,7 @@ export class PdfPainter {
       markerJustification = marker.justification;
       markerRun = {
         text: marker.markerText,
-        fontFamily: marker.run.fontFamily,
+        fontFamily: toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily,
         fontSize: marker.run.fontSize,
         bold: marker.run.bold,
         italic: marker.run.italic,

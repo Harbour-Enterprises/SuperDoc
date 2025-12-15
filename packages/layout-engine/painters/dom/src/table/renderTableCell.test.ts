@@ -736,7 +736,7 @@ describe('renderTableCell', () => {
       const lineContainer = paraWrapper.firstElementChild as HTMLElement;
       const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
 
-      expect(markerEl.style.fontFamily).toBe('Times New Roman');
+      expect(markerEl.style.fontFamily).toBe('Times New Roman, sans-serif');
       expect(markerEl.style.fontSize).toBe('18px');
       expect(markerEl.style.fontWeight).toBe('bold');
       expect(markerEl.style.fontStyle).toBe('italic');
