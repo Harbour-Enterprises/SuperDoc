@@ -25,32 +25,6 @@ export const findTrackedMarkBetween = ({
       (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
     );
 
-    // const dfs = (node) => {
-    //   const mark = node.marks.find(
-    //     (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
-    //   );
-
-    //   if (mark) {
-    //     return mark;
-    //   }
-
-    //   // In ProseMirror, node.content is a Fragment, children are in node.content.content
-    //   const children = node.content?.content;
-    //   if (Array.isArray(children)) {
-    //     for (const child of children) {
-    //       const found = dfs(child);
-    //       if (found) {
-    //         console.log('found on node:', child);
-    //         return found;
-    //       }
-    //     }
-    //   }
-
-    //   return null;
-    // };
-
-    // const mark = dfs(node);
-
     if (mark && !markFound) {
       markFound = {
         from: pos,
@@ -61,6 +35,8 @@ export const findTrackedMarkBetween = ({
   });
 
   const nodeAtEndPosition = doc.nodeAt(endPos);
+  // We wrap text nodes inside a run node but the `nodesBetween` above only return nodes that are contained inside the range
+  // Since the text will be inside a run node, it likely won't be contained within the range, so we need to do this extra check
   if (nodeAtEndPosition?.type?.name === 'run') {
     const node = nodeAtEndPosition.content?.content?.[0];
     const isTextNode = node?.type?.name === 'text';
