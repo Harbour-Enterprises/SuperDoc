@@ -597,40 +597,42 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Get position from client-space coordinates. Falls back to PresentationEditor hit testing in layout mode.
+   * Get position from client-space coordinates.
+   * In layout/presentation mode, uses PresentationEditor hit testing for accurate coordinate mapping.
+   * Falls back to ProseMirror view for standard editing mode.
    */
   posAtCoords(coords: Parameters<PmEditorView['posAtCoords']>[0]): ReturnType<PmEditorView['posAtCoords']> {
+    // In presentation/layout mode, use the layout engine's hit testing
+    // which properly converts visible surface coordinates to document positions
+    if (typeof this.presentationEditor?.hitTest === 'function') {
+      // Extract coordinates from various possible coordinate formats
+      const coordsObj = coords as {
+        clientX?: number;
+        clientY?: number;
+        left?: number;
+        top?: number;
+        x?: number;
+        y?: number;
+      };
+      const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
+      const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
+      if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
+        if (hit) {
+          return {
+            pos: hit.pos,
+            inside: hit.pos,
+          };
+        }
+      }
+    }
+
+    // Fall back to ProseMirror view for standard editing mode
     if (this.view) {
       return this.view.posAtCoords(coords);
     }
-    if (typeof this.presentationEditor?.hitTest !== 'function') {
-      return null;
-    }
 
-    // Extract coordinates from various possible coordinate formats
-    const coordsObj = coords as {
-      clientX?: number;
-      clientY?: number;
-      left?: number;
-      top?: number;
-      x?: number;
-      y?: number;
-    };
-    const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
-    const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
-    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-      return null;
-    }
-
-    const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
-    if (!hit) {
-      return null;
-    }
-
-    return {
-      pos: hit.pos,
-      inside: hit.pos,
-    };
+    return null;
   }
 
   #registerCopyHandler(): void {
