@@ -260,7 +260,19 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       bookmarks,
       hyperlinkConfig,
       themeColorsParam ?? themeColors,
+      paragraphConverter,
       converterCtx ?? converterContext,
+      {
+        listCounterContext: { getListCounter, incrementListCounter, resetListCounter },
+        converters: {
+          paragraphToFlowBlocks: paragraphConverter,
+          imageNodeToBlock,
+          vectorShapeNodeToDrawingBlock,
+          shapeGroupNodeToDrawingBlock,
+          shapeContainerNodeToDrawingBlock,
+          shapeTextboxNodeToDrawingBlock,
+        },
+      },
     );
 
   // Build handler context for node processing
@@ -286,6 +298,10 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       paragraphToFlowBlocks: paragraphConverter,
       tableNodeToBlock: tableConverter,
       imageNodeToBlock,
+      vectorShapeNodeToDrawingBlock,
+      shapeGroupNodeToDrawingBlock,
+      shapeContainerNodeToDrawingBlock,
+      shapeTextboxNodeToDrawingBlock,
     },
   };
 
@@ -468,6 +484,17 @@ function paragraphToFlowBlocks(
           themeColors,
           paragraphToFlowBlocks,
           converterCtx ?? converterContext,
+          {
+            listCounterContext,
+            converters: {
+              paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+              imageNodeToBlock,
+              vectorShapeNodeToDrawingBlock,
+              shapeGroupNodeToDrawingBlock,
+              shapeContainerNodeToDrawingBlock,
+              shapeTextboxNodeToDrawingBlock,
+            },
+          },
         ),
     },
     converterContext,
@@ -508,5 +535,15 @@ function tableNodeToBlock(
     themeColors,
     paragraphToFlowBlocks,
     converterContext,
+    {
+      converters: {
+        paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+        imageNodeToBlock,
+        vectorShapeNodeToDrawingBlock,
+        shapeGroupNodeToDrawingBlock,
+        shapeContainerNodeToDrawingBlock,
+        shapeTextboxNodeToDrawingBlock,
+      },
+    },
   );
 }

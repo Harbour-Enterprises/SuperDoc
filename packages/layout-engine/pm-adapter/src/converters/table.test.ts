@@ -5,7 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { tableNodeToBlock, handleTableNode } from './table.js';
 import type { PMNode, BlockIdGenerator, PositionMap, StyleContext } from '../types.js';
-import type { FlowBlock, ParagraphBlock, TableBlock } from '@superdoc/contracts';
+import type { FlowBlock, ParagraphBlock, TableBlock, ImageBlock } from '@superdoc/contracts';
 import { twipsToPx } from '../utilities.js';
 
 describe('table converter', () => {
@@ -208,6 +208,98 @@ describe('table converter', () => {
 
       expect(result).toBeDefined();
       expect(result.rows).toHaveLength(1);
+    });
+
+    it('forwards listCounterContext into paragraph conversion', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'List item' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const listCounterContext = {
+        getListCounter: vi.fn(),
+        incrementListCounter: vi.fn(),
+        resetListCounter: vi.fn(),
+      };
+
+      const paragraphSpy = vi.fn((para, ...args) => {
+        const [, , , , , passedListContext] = args;
+        expect(passedListContext).toBe(listCounterContext);
+        return mockParagraphConverter(para);
+      });
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        paragraphSpy,
+        undefined,
+        { listCounterContext },
+      ) as TableBlock;
+
+      expect(result.rows[0].cells[0].blocks?.[0].kind).toBe('paragraph');
+      expect(paragraphSpy).toHaveBeenCalled();
+    });
+
+    it('converts images inside table cells when image converter is provided', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'image', attrs: { src: 'image.png' } }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const imageBlock: ImageBlock = { kind: 'image', id: 'image-1', src: 'image.png' };
+      const imageConverter = vi.fn().mockReturnValue(imageBlock);
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+        undefined,
+        {
+          converters: {
+            imageNodeToBlock: imageConverter,
+            paragraphToFlowBlocks: mockParagraphConverter,
+          },
+        },
+      ) as TableBlock;
+
+      expect(imageConverter).toHaveBeenCalled();
+      expect(result.rows[0].cells[0].blocks?.[0]).toBe(imageBlock);
     });
 
     it('handles tableHeader cell type', () => {

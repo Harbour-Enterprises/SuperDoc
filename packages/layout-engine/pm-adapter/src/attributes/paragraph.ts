@@ -1372,9 +1372,48 @@ export const computeParagraphAttrs = (
   }
 
   // Track B: Compute wordLayout for paragraphs with numberingProperties
+  const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
   const numberingSource =
     attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
-  const rawNumberingProps = toAdapterNumberingProps(numberingSource);
+  let rawNumberingProps = toAdapterNumberingProps(numberingSource);
+
+  /**
+   * Fallback mechanism for table paragraphs with list rendering but no numbering properties.
+   *
+   * **Why this is needed:**
+   * Some document sources (particularly table cells imported from certain formats) provide
+   * listRendering attributes (marker text, path, styling) but lack the traditional OOXML
+   * numberingProperties structure (numId, ilvl). This fallback synthesizes minimal
+   * numbering properties from the listRendering data to ensure list markers render correctly.
+   *
+   * **When this is used:**
+   * - Table paragraphs that have listRendering but no numberingProperties
+   * - Imported documents where numbering context was lost but visual marker info was preserved
+   * - Fallback rendering path when traditional OOXML numbering is unavailable
+   *
+   * **Synthesis logic:**
+   * - `numId`: Set to -1 (sentinel value indicating synthesized/unavailable)
+   * - `ilvl`: Calculated from path length (path.length - 1), defaults to 0
+   * - `path`: Preserved from listRendering (e.g., [1, 2, 3] for nested lists)
+   * - `counterValue`: Extracted from last element of path array
+   * - Other properties (markerText, format, justification, suffix) copied from listRendering
+   */
+  if (!rawNumberingProps && listRendering) {
+    const path = listRendering.path;
+    const counterFromPath = path && path.length ? path[path.length - 1] : undefined;
+    const ilvl = path && path.length > 1 ? path.length - 1 : 0;
+
+    rawNumberingProps = {
+      numId: -1,
+      ilvl,
+      path,
+      counterValue: Number.isFinite(counterFromPath) ? Number(counterFromPath) : undefined,
+      markerText: listRendering.markerText,
+      format: listRendering.numberingType as NumberingFormat | undefined,
+      lvlJc: listRendering.justification,
+      suffix: listRendering.suffix,
+    } as AdapterNumberingProps;
+  }
 
   /**
    * Validates that the paragraph has valid numbering properties.
@@ -1386,7 +1425,6 @@ export const computeParagraphAttrs = (
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
-    const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
     const numericNumId = typeof numId === 'number' ? numId : undefined;
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
