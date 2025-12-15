@@ -4671,8 +4671,44 @@ const deriveBlockVersion = (block: FlowBlock): string => {
       })
       .join('|');
 
-    // Combine marker version with runs version
-    return markerVersion ? `${markerVersion}|${runsVersion}` : runsVersion;
+    // Include paragraph-level attributes that affect rendering (alignment, spacing, indent, etc.)
+    // This ensures DOM updates when toolbar commands like "align center" change these properties.
+    const attrs = block.attrs as
+      | {
+          alignment?: string;
+          spacing?: { before?: number; after?: number; line?: number; lineRule?: string };
+          indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+          borders?: Record<string, unknown>;
+          shading?: { fill?: string; color?: string };
+          direction?: string;
+          rtl?: boolean;
+          tabs?: Array<{ val?: string; pos?: number; leader?: string }>;
+        }
+      | undefined;
+
+    const paragraphAttrsVersion = attrs
+      ? [
+          attrs.alignment ?? '',
+          attrs.spacing?.before ?? '',
+          attrs.spacing?.after ?? '',
+          attrs.spacing?.line ?? '',
+          attrs.spacing?.lineRule ?? '',
+          attrs.indent?.left ?? '',
+          attrs.indent?.right ?? '',
+          attrs.indent?.firstLine ?? '',
+          attrs.indent?.hanging ?? '',
+          attrs.borders ? JSON.stringify(attrs.borders) : '',
+          attrs.shading?.fill ?? '',
+          attrs.shading?.color ?? '',
+          attrs.direction ?? '',
+          attrs.rtl ? '1' : '',
+          attrs.tabs?.length ? JSON.stringify(attrs.tabs) : '',
+        ].join(':')
+      : '';
+
+    // Combine marker version, runs version, and paragraph attrs version
+    const parts = [markerVersion, runsVersion, paragraphAttrsVersion].filter(Boolean);
+    return parts.join('|');
   }
 
   if (block.kind === 'list') {
