@@ -70,6 +70,7 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
+import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -158,6 +159,11 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
       return false;
     }
     const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerText if present (must be a string)
+    if (marker.markerText !== undefined && typeof marker.markerText !== 'string') {
+      return false;
+    }
 
     // Validate marker.markerX if present
     if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
@@ -1877,8 +1883,9 @@ export class DomPainter {
             markerContainer.style.top = '0';
           }
 
-          // Apply marker run styling
-          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          // Apply marker run styling with font fallback chain
+          markerEl.style.fontFamily =
+            toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily;
           markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
           markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
           markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
@@ -2173,8 +2180,8 @@ export class DomPainter {
         markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
         markerEl.style.textAlign = marker.justification ?? 'left';
 
-        // Apply marker run styling
-        markerEl.style.fontFamily = marker.run.fontFamily;
+        // Apply marker run styling with font fallback chain
+        markerEl.style.fontFamily = toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily;
         markerEl.style.fontSize = `${marker.run.fontSize}px`;
         if (marker.run.bold) markerEl.style.fontWeight = 'bold';
         if (marker.run.italic) markerEl.style.fontStyle = 'italic';
