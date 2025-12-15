@@ -1985,18 +1985,26 @@ export class DomPainter {
                 const textStart = paraIndentLeft + firstLine;
                 tabWidth = textStart - currentPos;
 
-                // If calculation gives negative/zero, use minimum gap
-                if (tabWidth < LIST_MARKER_GAP) {
+                // If marker extends past implicit tab stop (negative/zero tabWidth),
+                // advance to next default 48px tab interval, matching Word behavior.
+                if (tabWidth <= 0) {
+                  tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+                } else if (tabWidth < LIST_MARKER_GAP) {
                   tabWidth = LIST_MARKER_GAP;
                 }
               }
             } else {
-              // For non-left justified markers (right/center), the marker is absolutely positioned
-              // and doesn't affect inline flow. The line has paddingLeft = validMarkerStartPos,
-              // so the tab fills the remaining distance to where text starts (left + firstLine).
-              const firstLine = paraIndent?.firstLine ?? 0;
-              const textStart = paraIndentLeft + firstLine;
-              tabWidth = textStart - validMarkerStartPos;
+              // For non-left justified markers (right/center), use the pre-calculated gutter width
+              // from layout measurement, which matches Word's spacing exactly.
+              const gutterWidth = fragment.markerGutter ?? wordLayout.marker.gutterWidthPx;
+              if (gutterWidth !== undefined && Number.isFinite(gutterWidth) && gutterWidth > 0) {
+                tabWidth = gutterWidth;
+              } else {
+                // Fallback: calculate from positions
+                const firstLine = paraIndent?.firstLine ?? 0;
+                const textStart = paraIndentLeft + firstLine;
+                tabWidth = textStart - validMarkerStartPos;
+              }
               if (tabWidth < LIST_MARKER_GAP) {
                 tabWidth = LIST_MARKER_GAP;
               }
