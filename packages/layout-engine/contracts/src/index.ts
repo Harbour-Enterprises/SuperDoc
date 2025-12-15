@@ -989,6 +989,42 @@ export type DropCapDescriptor = {
   measuredHeight?: number;
 };
 
+/**
+ * Word layout configuration for list items created via input rules.
+ *
+ * This type represents the structure of wordLayout data produced by @superdoc/word-layout
+ * for paragraphs with list markers. It contains metadata about marker positioning and
+ * text alignment that differs from standard hanging-indent lists.
+ *
+ * Two distinct list rendering modes exist:
+ * 1. **Standard hanging indent**: Marker sits in hanging indent area, text starts at paraIndentLeft
+ * 2. **First-line indent mode**: Marker is at paraIndentLeft + firstLine, text starts at textStartPx
+ *
+ * This type enables type-safe access to word-layout-specific properties without unsafe casts.
+ */
+export type WordLayoutConfig = {
+  /**
+   * Whether this list uses first-line indent mode (true for input-rule-created lists).
+   * When true, text positioning uses textStartPx instead of standard hanging indent calculations.
+   */
+  firstLineIndentMode?: boolean;
+  /**
+   * Absolute X position in pixels where text content starts on the first line.
+   * Includes marker width, tab width, and any additional spacing.
+   * Only meaningful when firstLineIndentMode is true.
+   */
+  textStartPx?: number;
+  /**
+   * Marker metadata for word-layout lists.
+   * Present when the paragraph is part of a list structure.
+   */
+  marker?: unknown;
+  /**
+   * Additional word-layout properties may be present but are not yet typed.
+   */
+  [key: string]: unknown;
+};
+
 export type ParagraphAttrs = {
   styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
@@ -1024,8 +1060,12 @@ export type ParagraphAttrs = {
   tocInstruction?: string;
   /** Floating alignment for positioned paragraphs (from w:framePr/@w:xAlign). */
   floatAlignment?: 'left' | 'right' | 'center';
-  /** Word paragraph layout output from @superdoc/word-layout. */
-  wordLayout?: unknown;
+  /**
+   * Word paragraph layout output from @superdoc/word-layout.
+   * Contains metadata about list marker positioning and text alignment for word-layout lists.
+   * Use WordLayoutConfig type for type-safe access to known properties.
+   */
+  wordLayout?: WordLayoutConfig;
   sdt?: SdtMetadata;
   /** Container SDT for blocks with both primary and container metadata. */
   containerSdt?: SdtMetadata;
