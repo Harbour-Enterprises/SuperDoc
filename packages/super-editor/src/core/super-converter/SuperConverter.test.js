@@ -340,6 +340,7 @@ describe('SuperConverter Document GUID', () => {
 
         SuperConverter.setStoredCustomProperty(docx, 'MyCustomProp', 'MyValue');
         const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+        expect(prop.name).toBe('op:property'); // Verify namespace prefix is preserved
         expect(prop.attributes.name).toBe('MyCustomProp');
         expect(prop.elements[0].elements[0].text).toBe('MyValue');
       });

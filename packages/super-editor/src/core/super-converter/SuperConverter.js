@@ -317,6 +317,25 @@ class SuperConverter {
   }
 
   /**
+   * Extracts the namespace prefix from an element name.
+   *
+   * @private
+   * @static
+   * @param {string} elementName - The element name (may include namespace prefix, e.g., 'op:Properties')
+   * @returns {string} The namespace prefix (e.g., 'op') or empty string if no prefix
+   *
+   * @example
+   * _extractNamespacePrefix('op:Properties') // => 'op'
+   * _extractNamespacePrefix('Properties') // => ''
+   * _extractNamespacePrefix('custom:property') // => 'custom'
+   */
+  static _extractNamespacePrefix(elementName) {
+    if (!elementName || typeof elementName !== 'string') return '';
+    const colonIndex = elementName.indexOf(':');
+    return colonIndex > 0 ? elementName.slice(0, colonIndex) : '';
+  }
+
+  /**
    * Generic method to get a stored custom property from docx.
    * Supports both standard and custom namespace prefixes (e.g., 'op:Properties', 'custom:property').
    *
@@ -427,6 +446,10 @@ class SuperConverter {
       if (!properties) return null;
       if (!properties.elements) properties.elements = [];
 
+      // Extract namespace prefix from Properties element to use for new property elements
+      const namespacePrefix = SuperConverter._extractNamespacePrefix(properties.name);
+      const propertyElementName = namespacePrefix ? `${namespacePrefix}:property` : 'property';
+
       // Check if property already exists (handle namespace prefixes)
       let property = properties.elements.find(
         (el) => SuperConverter._matchesElementName(el.name, 'property') && el.attributes?.name === propertyName,
@@ -454,7 +477,7 @@ class SuperConverter {
 
         property = {
           type: 'element',
-          name: 'property',
+          name: propertyElementName,
           attributes: {
             name: propertyName,
             fmtid: '{D5CDD505-2E9C-101B-9397-08002B2CF9AE}',
