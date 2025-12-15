@@ -220,6 +220,7 @@ vi.mock('@superdoc/layout-bridge', () => ({
     return () => {};
   }),
   getFragmentAtPosition: vi.fn(() => null),
+  hitTestTableFragment: vi.fn(() => null),
   computeLinePmRange: vi.fn(() => ({ from: 0, to: 0 })),
   measureCharacterX: vi.fn(() => 0),
   extractIdentifierFromConverter: vi.fn((_converter) => ({
@@ -285,6 +286,10 @@ describe('PresentationEditor', () => {
 
     // Clear all mocks
     vi.clearAllMocks();
+    // Reset mockIncrementalLayout to default implementation (clearAllMocks doesn't reset mockResolvedValue)
+    mockIncrementalLayout.mockReset();
+    mockIncrementalLayout.mockResolvedValue({ layout: { pages: [] }, measures: [] });
+
     mockEditorConverterStore.current = {
       ...createDefaultConverter(),
       headerEditors: [],
@@ -1443,7 +1448,7 @@ describe('PresentationEditor', () => {
     });
 
     it('exits header mode on Escape and announces the transition', async () => {
-      mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
+      mockIncrementalLayout.mockResolvedValue(buildLayoutResult());
 
       editor = new PresentationEditor({
         element: container,
