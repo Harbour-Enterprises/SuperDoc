@@ -111,9 +111,6 @@ watchEffect(() => {
 
   const totalComments = getFloatingComments.value.length;
   const measuredComments = renderedSizes.value.length;
-  console.log('FloatingComments: measured', measuredComments, 'of', totalComments);
-  console.log('Rendered Sizes:', renderedSizes.value);
-  console.log('getFloatingComments', getFloatingComments.value);
 
   if (totalComments === 0) {
     return;
