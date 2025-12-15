@@ -311,7 +311,7 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
   const tblPr = styleTag.elements.find((el) => el.name === 'w:tblPr');
   if (tblPr && tblPr.elements) {
     if (baseTblPr && baseTblPr.elements) {
-      tblPr.elements.push(...baseTblPr.elements);
+      tblPr.elements = [...baseTblPr.elements, ...tblPr.elements];
     }
     const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     if (tableProperties) {
