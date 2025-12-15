@@ -111,23 +111,15 @@ watchEffect(() => {
 
   const totalComments = getFloatingComments.value.length;
   const measuredComments = renderedSizes.value.length;
+  console.log('FloatingComments: measured', measuredComments, 'of', totalComments);
+  console.log('Rendered Sizes:', renderedSizes.value);
+  console.log('getFloatingComments', getFloatingComments.value);
 
   if (totalComments === 0) {
     return;
   }
 
-  if (measuredComments === totalComments) {
-    // All comments measured, process immediately
-    nextTick(processLocations);
-  } else if (measuredComments > 0 && !firstGroupRendered.value) {
-    // Some comments measured but not all - set a fallback timeout
-    // This handles cases where some comments fail to get valid positions
-    measurementTimeoutId.value = setTimeout(() => {
-      if (!firstGroupRendered.value && renderedSizes.value.length > 0) {
-        processLocations();
-      }
-    }, 100);
-  }
+  nextTick(processLocations);
 });
 
 const resetLayout = async () => {
