@@ -1270,6 +1270,137 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const wordEndNoSpace = charPosInRun + word.length;
         const wordEndWithSpace = charPosInRun + (isLastWord ? word.length : word.length + 1);
 
+        // Determine the effective maxWidth for character-level breaking
+        const effectiveMaxWidth = currentLine
+          ? currentLine.maxWidth
+          : getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : contentWidth);
+
+        // Character-level word breaking: if a single word exceeds maxWidth, break it into chunks
+        // This handles narrow table cells where long words would otherwise overflow and be clipped
+        // Note: We use effectiveMaxWidth without WIDTH_FUDGE_PX here because:
+        // - WIDTH_FUDGE_PX is meant to give leeway for fitting text that's very close
+        // - We only want to break mid-word when the word truly exceeds available width
+        // - Breaking words that exactly fit would cause unnecessary fragmentation
+        if (wordOnlyWidth > effectiveMaxWidth && word.length > 1) {
+          // First, finish any existing currentLine before processing the long word
+          // Only push the line if it has actual text content (segments), not just tab positioning.
+          // If the line only has width from tab advances but no text, we should keep it so the
+          // long word can use the pending tab alignment.
+          if (currentLine && currentLine.width > 0 && currentLine.segments.length > 0) {
+            const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+            const { spaceCount: _sc, ...lineBase } = currentLine;
+            const completedLine: Line = { ...lineBase, ...metrics };
+            addBarTabsToLine(completedLine);
+            lines.push(completedLine);
+            tabStopCursor = 0;
+            pendingTabAlignment = null;
+            currentLine = null;
+          }
+
+          // Break the word into chunks that fit within maxWidth
+          const lineMaxWidth = getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : contentWidth);
+
+          // If currentLine exists with tab positioning but no text segments, we need to handle
+          // the first chunk specially to preserve the tab alignment
+          const hasTabOnlyLine = currentLine && currentLine.segments.length === 0 && currentLine.width > 0;
+          const remainingWidthAfterTab = hasTabOnlyLine ? currentLine!.maxWidth - currentLine!.width : lineMaxWidth;
+
+          // Use remaining width for chunking if we have a tab-only line, otherwise use full line width
+          const chunkWidth = hasTabOnlyLine ? Math.max(remainingWidthAfterTab, lineMaxWidth * 0.25) : lineMaxWidth;
+          const chunks = breakWordIntoChunks(word, chunkWidth - WIDTH_FUDGE_PX, font, ctx, run);
+
+          // Process all chunks except the last one as complete lines
+          let chunkCharOffset = wordStartChar;
+          for (let chunkIndex = 0; chunkIndex < chunks.length; chunkIndex++) {
+            const chunk = chunks[chunkIndex];
+            const chunkStartChar = chunkCharOffset;
+            const chunkEndChar = chunkCharOffset + chunk.text.length;
+            const isLastChunk = chunkIndex === chunks.length - 1;
+            const isFirstChunk = chunkIndex === 0;
+
+            // First chunk: if we have a tab-only line, add to it; otherwise create new line
+            if (isFirstChunk && hasTabOnlyLine && currentLine) {
+              // Add first chunk to the existing line with tab positioning
+              currentLine.toRun = runIndex;
+              currentLine.toChar = chunkEndChar;
+              currentLine.width = roundValue(currentLine.width + chunk.width);
+              currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+              currentLine.maxFontInfo = getFontInfoFromRun(run);
+              currentLine.segments.push({
+                runIndex,
+                fromChar: chunkStartChar,
+                toChar: chunkEndChar,
+                width: chunk.width,
+              });
+
+              if (isLastChunk) {
+                // If this is also the last chunk, keep currentLine open for more content
+                const ls = (run as TextRun).letterSpacing ?? 0;
+                if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+                  currentLine.toChar = wordEndWithSpace;
+                  currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
+                  charPosInRun = wordEndWithSpace;
+                  currentLine.spaceCount += 1;
+                } else {
+                  charPosInRun = wordEndWithSpace;
+                }
+              } else {
+                // More chunks to come - finish this line and push it
+                const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+                const { spaceCount: _sc, ...lineBase } = currentLine;
+                const completedLine: Line = { ...lineBase, ...metrics };
+                addBarTabsToLine(completedLine);
+                lines.push(completedLine);
+                tabStopCursor = 0;
+                pendingTabAlignment = null;
+                currentLine = null;
+              }
+            } else if (isLastChunk) {
+              // Last chunk becomes the start of a new line (will be continued with next word)
+              currentLine = {
+                fromRun: runIndex,
+                fromChar: chunkStartChar,
+                toRun: runIndex,
+                toChar: chunkEndChar,
+                width: chunk.width,
+                maxFontSize: run.fontSize,
+                maxFontInfo: getFontInfoFromRun(run),
+                maxWidth: getEffectiveWidth(contentWidth),
+                segments: [{ runIndex, fromChar: chunkStartChar, toChar: chunkEndChar, width: chunk.width }],
+                spaceCount: 0,
+              };
+              // If trailing space fits, include it
+              const ls = (run as TextRun).letterSpacing ?? 0;
+              if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+                currentLine.toChar = wordEndWithSpace;
+                currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
+                charPosInRun = wordEndWithSpace;
+                currentLine.spaceCount += 1;
+              } else {
+                charPosInRun = wordEndWithSpace;
+              }
+            } else {
+              // Not the last chunk - create a complete line
+              const chunkLineMaxWidth = getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : contentWidth);
+              const metrics = calculateTypographyMetrics(run.fontSize, spacing, getFontInfoFromRun(run));
+              const chunkLine: Line = {
+                fromRun: runIndex,
+                fromChar: chunkStartChar,
+                toRun: runIndex,
+                toChar: chunkEndChar,
+                width: chunk.width,
+                maxWidth: chunkLineMaxWidth,
+                segments: [{ runIndex, fromChar: chunkStartChar, toChar: chunkEndChar, width: chunk.width }],
+                ...metrics,
+              };
+              addBarTabsToLine(chunkLine);
+              lines.push(chunkLine);
+            }
+            chunkCharOffset = chunkEndChar;
+          }
+          continue;
+        }
+
         if (!currentLine) {
           currentLine = {
             fromRun: runIndex,
@@ -2233,6 +2364,84 @@ const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext
   const letterSpacing = run.kind === 'text' || run.kind === undefined ? (run as TextRun).letterSpacing || 0 : 0;
   const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
   return roundValue(width);
+};
+
+/**
+ * Breaks a word that exceeds maxWidth into character-level chunks that fit within the constraint.
+ *
+ * This function handles the case where a single word is wider than the available line width,
+ * which commonly occurs in table cells with narrow columns. Instead of letting the word overflow
+ * and get clipped, this function determines where to break the word across multiple lines.
+ *
+ * The algorithm uses a greedy approach:
+ * 1. Start with an empty chunk
+ * 2. Add characters one by one, measuring the accumulated width
+ * 3. When adding a character would exceed maxWidth, finalize the current chunk
+ * 4. Start a new chunk with the remaining characters
+ * 5. Repeat until all characters are processed
+ *
+ * @param word - The word to break into chunks
+ * @param maxWidth - Maximum width in pixels for each chunk
+ * @param font - CSS font string for measurement
+ * @param ctx - Canvas context for text measurement
+ * @param run - The Run object containing styling (for letterSpacing)
+ * @returns Array of chunks, each containing the text and its measured width
+ *
+ * @example
+ * // Word "Supercalifragilisticexpialidocious" in a 50px cell
+ * breakWordIntoChunks("Supercalifragilisticexpialidocious", 50, "16px Arial", ctx, run)
+ * // Returns: [
+ * //   { text: "Super", width: 48 },
+ * //   { text: "calif", width: 45 },
+ * //   { text: "ragil", width: 42 },
+ * //   ...
+ * // ]
+ */
+const breakWordIntoChunks = (
+  word: string,
+  maxWidth: number,
+  font: string,
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+): Array<{ text: string; width: number }> => {
+  const chunks: Array<{ text: string; width: number }> = [];
+
+  // Edge case: maxWidth is too small for even a single character
+  // In this case, put one character per line as a fallback
+  if (maxWidth <= 0) {
+    for (const char of word) {
+      const charWidth = measureRunWidth(char, font, ctx, run);
+      chunks.push({ text: char, width: charWidth });
+    }
+    return chunks;
+  }
+
+  let currentChunk = '';
+  let currentWidth = 0;
+
+  for (let i = 0; i < word.length; i++) {
+    const char = word[i];
+    const testChunk = currentChunk + char;
+    const testWidth = measureRunWidth(testChunk, font, ctx, run);
+
+    if (testWidth > maxWidth && currentChunk.length > 0) {
+      // Current chunk is full, save it and start a new one
+      chunks.push({ text: currentChunk, width: currentWidth });
+      currentChunk = char;
+      currentWidth = measureRunWidth(char, font, ctx, run);
+    } else {
+      // Character fits (or it's the first character and we must include it)
+      currentChunk = testChunk;
+      currentWidth = testWidth;
+    }
+  }
+
+  // Don't forget the last chunk
+  if (currentChunk.length > 0) {
+    chunks.push({ text: currentChunk, width: currentWidth });
+  }
+
+  return chunks;
 };
 
 /**

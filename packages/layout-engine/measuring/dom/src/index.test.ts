@@ -855,7 +855,7 @@ describe('measureBlock', () => {
       expect(measure.totalHeight).toBeGreaterThan(0);
     });
 
-    it('handles single long word exceeding maxWidth', async () => {
+    it('handles single long word exceeding maxWidth by breaking mid-word', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
         id: '0-paragraph',
@@ -871,9 +871,148 @@ describe('measureBlock', () => {
 
       const measure = expectParagraphMeasure(await measureBlock(block, 100));
 
-      // Should keep the word on a single line even if it exceeds maxWidth
-      expect(measure.lines).toHaveLength(1);
-      expect(measure.lines[0].width).toBeGreaterThan(100);
+      // Should break the word across multiple lines, with each line fitting within maxWidth
+      expect(measure.lines.length).toBeGreaterThan(1);
+      // Each line (except possibly the last) should fit within maxWidth
+      for (let i = 0; i < measure.lines.length - 1; i++) {
+        expect(measure.lines[i].width).toBeLessThanOrEqual(100);
+      }
+      // All lines together should contain the full word
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe('Supercalifragilisticexpialidocious'.length);
+    });
+  });
+
+  describe('mid-word breaking for table cells', () => {
+    it('breaks a long word into multiple lines that fit within narrow maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-1',
+        runs: [
+          {
+            text: 'Antidisestablishmentarianism',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use a narrow maxWidth to force breaking
+      const measure = expectParagraphMeasure(await measureBlock(block, 80));
+
+      // Should break into multiple lines
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // Each line should fit within maxWidth (with some tolerance for the last line)
+      for (let i = 0; i < measure.lines.length - 1; i++) {
+        expect(measure.lines[i].width).toBeLessThanOrEqual(80 + 1); // +1 for floating point
+      }
+    });
+
+    it('preserves correct character positions when breaking mid-word', async () => {
+      const word = 'HelloWorld';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-2',
+        runs: [
+          {
+            text: word,
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use very narrow width to force multiple breaks
+      const measure = expectParagraphMeasure(await measureBlock(block, 40));
+
+      // Verify character continuity - each line should pick up where the last left off
+      let lastChar = 0;
+      for (const line of measure.lines) {
+        expect(line.fromChar).toBe(lastChar);
+        expect(line.toChar).toBeGreaterThan(line.fromChar);
+        lastChar = line.toChar;
+      }
+
+      // All characters should be accounted for
+      expect(lastChar).toBe(word.length);
+    });
+
+    it('finishes existing line content before breaking a long word', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-3',
+        runs: [
+          {
+            text: 'Hi Supercalifragilisticexpialidocious',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // First line should contain "Hi " before the long word breaks
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // The first line should have content from "Hi " or be part of the broken word
+      // Total chars should equal the full text length
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe('Hi Supercalifragilisticexpialidocious'.length);
+    });
+
+    it('handles words that fit exactly without unnecessary breaking', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-4',
+        runs: [
+          {
+            text: 'Hello',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // First measure to get the exact width
+      const initialMeasure = expectParagraphMeasure(await measureBlock(block, 1000));
+      const exactWidth = initialMeasure.lines[0].width;
+
+      // Now measure with maxWidth equal to text width - should NOT break
+      const exactMeasure = expectParagraphMeasure(await measureBlock(block, exactWidth));
+      expect(exactMeasure.lines).toHaveLength(1);
+    });
+
+    it('handles very narrow cells with at least one character per line', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-5',
+        runs: [
+          {
+            text: 'ABC',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use extremely narrow width (1px) - should still render each character
+      const measure = expectParagraphMeasure(await measureBlock(block, 1));
+
+      // Should have at least 1 character per line
+      for (const line of measure.lines) {
+        expect(line.toChar - line.fromChar).toBeGreaterThanOrEqual(1);
+      }
+
+      // All characters should be present
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe(3);
     });
   });
 
