@@ -34,14 +34,6 @@ export const findTrackedMarkBetween = ({
     }
   };
 
-  doc.nodesBetween(startPos, endPos, (node, pos) => {
-    if (!node || node?.nodeSize === undefined) {
-      return;
-    }
-
-    tryMatch(node, pos);
-  });
-
   const inspectAroundPosition = (pos) => {
     if (pos < 0 || pos > doc.content.size) {
       return;
