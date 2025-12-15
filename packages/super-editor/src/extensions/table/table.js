@@ -177,6 +177,7 @@ import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
 import { isInTable } from '@helpers/isInTable.js';
+import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
 import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
@@ -1109,7 +1110,7 @@ export const Table = Node.create({
             if (['tableCell', 'tableHeader'].includes(node.type.name)) {
               tr.setNodeMarkup(pos, undefined, {
                 ...node.attrs,
-                borders: null,
+                borders: createCellBorders({ size: 0, space: 0, val: 'none', color: 'auto' }),
               });
             }
           });

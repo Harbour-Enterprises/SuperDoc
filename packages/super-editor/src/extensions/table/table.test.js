@@ -134,7 +134,19 @@ describe('Table commands', async () => {
         // Expect table cell borders to be removed
         table.children.forEach((tableRow) => {
           tableRow.children.forEach((tableCell) => {
-            expect(tableCell.attrs.borders ?? null).toBeNull();
+            expect(tableCell.attrs.borders).toEqual(
+              Object.assign(
+                {},
+                ...['top', 'left', 'bottom', 'right'].map((side) => ({
+                  [side]: {
+                    color: 'auto',
+                    size: 0,
+                    space: 0,
+                    val: 'none',
+                  },
+                })),
+              ),
+            );
           });
         });
 
@@ -158,7 +170,7 @@ describe('Table commands', async () => {
         const tbl = body.elements.find((el) => el.name === 'w:tbl');
         expect(tbl).toBeDefined();
 
-        // Expect tcBorders to all be removed
+        // Expect all table cells to have a tcBorders with zero border
         tbl.elements
           .filter((el) => el.name === 'w:tr')
           .forEach((tr) => {
@@ -167,7 +179,19 @@ describe('Table commands', async () => {
               .forEach((tc) => {
                 const tcPr = tc.elements.find((el) => el.name === 'w:tcPr');
                 const tcBorders = tcPr?.elements?.find((el) => el.name === 'w:tcBorders');
-                expect(tcBorders).to.toBeUndefined();
+                expect(tcBorders.elements).toEqual(
+                  expect.arrayContaining(
+                    ['w:top', 'w:bottom', 'w:left', 'w:right'].map((name) => ({
+                      name: name,
+                      attributes: {
+                        'w:val': 'nil',
+                        'w:sz': '0',
+                        'w:space': '0',
+                        'w:color': 'auto',
+                      },
+                    })),
+                  ),
+                );
               });
           });
 
