@@ -516,7 +516,7 @@ const normalizeBooleanMarkValue = (value: unknown): boolean | undefined => {
   }
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (normalized === '0' || normalized === 'false' || normalized === 'off') {
+    if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'none') {
       return false;
     }
     if (normalized === '1' || normalized === 'true' || normalized === 'on') {
