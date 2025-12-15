@@ -280,42 +280,7 @@ export interface NodeHandlerContext {
   };
 
   // Converters for nested content
-  converters?: {
-    paragraphToFlowBlocks?: (
-      para: PMNode,
-      nextBlockId: BlockIdGenerator,
-      positions: PositionMap,
-      defaultFont: string,
-      defaultSize: number,
-      styleContext: StyleContext,
-      listCounterContext?: ListCounterContext,
-      trackedChanges?: TrackedChangesConfig,
-      bookmarks?: Map<string, number>,
-      hyperlinkConfig?: HyperlinkConfig,
-      themeColors?: ThemeColorPalette,
-      converterContext?: ConverterContext,
-    ) => FlowBlock[];
-    tableNodeToBlock?: (
-      node: PMNode,
-      nextBlockId: BlockIdGenerator,
-      positions: PositionMap,
-      defaultFont: string,
-      defaultSize: number,
-      styleContext: StyleContext,
-      trackedChanges?: TrackedChangesConfig,
-      bookmarks?: Map<string, number>,
-      hyperlinkConfig?: HyperlinkConfig,
-      themeColors?: ThemeColorPalette,
-      converterContext?: ConverterContext,
-    ) => FlowBlock | null;
-    imageNodeToBlock?: (
-      node: PMNode,
-      nextBlockId: BlockIdGenerator,
-      positions: PositionMap,
-      trackedMeta?: TrackedChangeMeta,
-      trackedChanges?: TrackedChangesConfig,
-    ) => FlowBlock | null;
-  };
+  converters?: NestedConverters;
 }
 
 /**
@@ -331,6 +296,66 @@ export type ListCounterContext = {
   getListCounter: (numId: number, ilvl: number) => number;
   incrementListCounter: (numId: number, ilvl: number) => number;
   resetListCounter: (numId: number, ilvl: number) => void;
+};
+
+export type ParagraphToFlowBlocksConverter = (
+  para: PMNode,
+  nextBlockId: BlockIdGenerator,
+  positions: PositionMap,
+  defaultFont: string,
+  defaultSize: number,
+  styleContext: StyleContext,
+  listCounterContext?: ListCounterContext,
+  trackedChanges?: TrackedChangesConfig,
+  bookmarks?: Map<string, number>,
+  hyperlinkConfig?: HyperlinkConfig,
+  themeColors?: ThemeColorPalette,
+  converterContext?: ConverterContext,
+) => FlowBlock[];
+
+export type ImageNodeToBlockConverter = (
+  node: PMNode,
+  nextBlockId: BlockIdGenerator,
+  positions: PositionMap,
+  trackedMeta?: TrackedChangeMeta,
+  trackedChanges?: TrackedChangesConfig,
+) => FlowBlock | null;
+
+export type DrawingNodeToBlockConverter = (
+  node: PMNode,
+  nextBlockId: BlockIdGenerator,
+  positions: PositionMap,
+) => FlowBlock | null;
+
+export type TableNodeToBlockOptions = {
+  listCounterContext?: ListCounterContext;
+  converters?: NestedConverters;
+};
+
+export type TableNodeToBlockConverter = (
+  node: PMNode,
+  nextBlockId: BlockIdGenerator,
+  positions: PositionMap,
+  defaultFont: string,
+  defaultSize: number,
+  styleContext: StyleContext,
+  trackedChanges?: TrackedChangesConfig,
+  bookmarks?: Map<string, number>,
+  hyperlinkConfig?: HyperlinkConfig,
+  themeColors?: ThemeColorPalette,
+  paragraphToFlowBlocks?: ParagraphToFlowBlocksConverter,
+  converterContext?: ConverterContext,
+  options?: TableNodeToBlockOptions,
+) => FlowBlock | null;
+
+export type NestedConverters = {
+  paragraphToFlowBlocks?: ParagraphToFlowBlocksConverter;
+  tableNodeToBlock?: TableNodeToBlockConverter;
+  imageNodeToBlock?: ImageNodeToBlockConverter;
+  vectorShapeNodeToDrawingBlock?: DrawingNodeToBlockConverter;
+  shapeGroupNodeToDrawingBlock?: DrawingNodeToBlockConverter;
+  shapeContainerNodeToDrawingBlock?: DrawingNodeToBlockConverter;
+  shapeTextboxNodeToDrawingBlock?: DrawingNodeToBlockConverter;
 };
 
 /**

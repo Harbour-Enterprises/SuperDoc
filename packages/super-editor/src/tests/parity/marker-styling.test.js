@@ -208,7 +208,8 @@ describe('marker styling parity', () => {
 
     const adapterAttrs = computeParagraphAttrs(mockListPara, styleContext, createListCounterContext());
 
-    // Without numberingProperties the adapter will not compute wordLayout; just ensure it doesn't throw
-    expect(adapterAttrs?.wordLayout).toBeUndefined();
+    // When listRendering is present, wordLayout should be computed even without numberingProperties
+    expect(adapterAttrs?.wordLayout).toBeDefined();
+    expect(adapterAttrs?.wordLayout?.marker?.markerText).toBe('1.');
   });
 });
