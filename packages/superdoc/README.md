@@ -76,7 +76,7 @@ SuperDoc consists of two main packages:
 SuperDoc uses a **paginated-only** rendering approach powered by `PresentationEditor` and the layout engine:
 
 - **For web applications**: Use `SuperDoc` - it automatically uses `PresentationEditor` for paginated rendering
-- **For Node.js/CLI/headless environments**: Use `Editor` directly from `@harbour-enterprises/super-editor`
+- **For Node.js/CLI/headless environments**: Use `Editor` directly from `@superdoc/super-editor`
 
 The layout engine provides:
 - True WYSIWYG page rendering with accurate pagination
