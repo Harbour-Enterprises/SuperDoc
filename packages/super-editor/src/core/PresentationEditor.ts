@@ -5784,7 +5784,7 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
     caretEl.style.height = `${finalHeight}px`;
-    caretEl.style.backgroundColor = '#3366FF';
+    caretEl.style.backgroundColor = '#000000';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
     this.#localSelectionLayer.appendChild(caretEl);
