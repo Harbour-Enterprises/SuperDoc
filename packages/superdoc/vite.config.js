@@ -33,7 +33,6 @@ export const getAliases = (_isDev) => {
 
     // Workspace packages (source paths for dev)
     { find: '@stores', replacement: fileURLToPath(new URL('./src/stores', import.meta.url)) },
-    { find: '@packages', replacement: fileURLToPath(new URL('../', import.meta.url)) },
 
     // Super Editor aliases
     { find: '@', replacement: '@superdoc/super-editor' },

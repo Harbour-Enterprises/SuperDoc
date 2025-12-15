@@ -1,5 +1,5 @@
 import type { BoxSpacing } from '@superdoc/contracts';
-import { _getReferencedTableStyles } from '@converter/v3/handlers/w/tbl/tbl-translator.js';
+import { _getReferencedTableStyles } from '@superdoc/super-editor/converter/internal/v3/handlers/w/tbl/tbl-translator.js';
 import type { PMNode } from '../types.js';
 import type { ConverterContext, TableStyleParagraphProps } from '../converter-context.js';
 import { hasTableStyleContext } from '../converter-context.js';

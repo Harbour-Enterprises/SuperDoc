@@ -22,7 +22,11 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "type-check": "tsc --noEmit"
   },
+  "devDependencies": {
+    "vitest": "catalog:"
+  },
   "dependencies": {
+    "@superdoc/super-editor": "workspace:*",
     "@superdoc/common": "workspace:*",
     "@superdoc/contracts": "workspace:*",
     "@superdoc/measuring-dom": "workspace:*",
