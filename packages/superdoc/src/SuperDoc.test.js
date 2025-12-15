@@ -101,8 +101,8 @@ const AiLayerStub = stubComponent('AiLayer');
 const PdfViewerStub = stubComponent('PdfViewer');
 const HtmlViewerStub = stubComponent('HtmlViewer');
 
-// Mock @harbour-enterprises/super-editor with stubs and PresentationEditor class
-vi.mock('@harbour-enterprises/super-editor', () => ({
+// Mock @superdoc/super-editor with stubs and PresentationEditor class
+vi.mock('@superdoc/super-editor', () => ({
   SuperEditor: SuperEditorStub,
   AIWriter: AIWriterStub,
   PresentationEditor: class PresentationEditorMock {

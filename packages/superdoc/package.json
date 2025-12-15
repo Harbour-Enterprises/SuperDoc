@@ -77,7 +77,7 @@
     "yjs": "catalog:"
   },
   "devDependencies": {
-    "@harbour-enterprises/super-editor": "workspace:*",
+    "@superdoc/super-editor": "workspace:*",
     "@hocuspocus/provider": "catalog:",
     "@superdoc/common": "workspace:*",
     "@superdoc/painter-pdf": "workspace:*",

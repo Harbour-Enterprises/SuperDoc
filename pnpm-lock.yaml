@@ -824,9 +824,6 @@ importers:
         specifier: 'catalog:'
         version: 13.6.19
     devDependencies:
-      '@harbour-enterprises/super-editor':
-        specifier: workspace:*
-        version: link:../super-editor
       '@hocuspocus/provider':
         specifier: 'catalog:'
         version: 2.15.3(y-protocols@1.0.6(yjs@13.6.19))(yjs@13.6.19)
@@ -836,6 +833,9 @@ importers:
       '@superdoc/painter-pdf':
         specifier: workspace:*
         version: link:../layout-engine/painters/pdf
+      '@superdoc/super-editor':
+        specifier: workspace:*
+        version: link:../super-editor
       '@vitejs/plugin-vue':
         specifier: 'catalog:'
         version: 6.0.2(vite@7.2.7(@types/node@22.19.2)(jiti@2.6.1)(tsx@4.21.0)(yaml@2.8.2))(vue@3.5.25(typescript@5.9.3))

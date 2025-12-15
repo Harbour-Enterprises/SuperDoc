@@ -27,7 +27,7 @@ export const getAliases = (_isDev) => {
     // with "@superdoc/" that don't also match one of the known packages.
 
     {
-      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry)(.*)/,
+      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor)(.*)/,
       replacement: path.resolve(__dirname, './src/$1'),
     },
 
@@ -36,7 +36,7 @@ export const getAliases = (_isDev) => {
     { find: '@packages', replacement: fileURLToPath(new URL('../', import.meta.url)) },
 
     // Super Editor aliases
-    { find: '@', replacement: '@harbour-enterprises/super-editor' },
+    { find: '@', replacement: '@superdoc/super-editor' },
     { find: '@core', replacement: fileURLToPath(new URL('../super-editor/src/core', import.meta.url)) },
     { find: '@extensions', replacement: fileURLToPath(new URL('../super-editor/src/extensions', import.meta.url)) },
     { find: '@features', replacement: fileURLToPath(new URL('../super-editor/src/features', import.meta.url)) },
