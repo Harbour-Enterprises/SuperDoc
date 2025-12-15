@@ -1,6 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderTableCell } from './renderTableCell.js';
-import type { ParagraphBlock, ParagraphMeasure, TableCell, TableCellMeasure } from '@superdoc/contracts';
+import type {
+  ParagraphBlock,
+  ParagraphMeasure,
+  TableCell,
+  TableCellMeasure,
+  ImageBlock,
+} from '@superdoc/contracts';
 
 describe('renderTableCell', () => {
   let doc: Document;
@@ -122,6 +128,44 @@ describe('renderTableCell', () => {
     });
 
     expect(cellElement.style.overflow).toBe('hidden');
+  });
+
+  it('renders image blocks inside table cells', () => {
+    const imageBlock: ImageBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,AAA',
+    };
+    const imageMeasure = {
+      kind: 'image' as const,
+      width: 50,
+      height: 40,
+    };
+
+    const cellMeasure: TableCellMeasure = {
+      blocks: [imageMeasure],
+      width: 80,
+      height: 40,
+      gridColumnStart: 0,
+      colSpan: 1,
+      rowSpan: 1,
+    };
+
+    const cell: TableCell = {
+      id: 'cell-with-image',
+      blocks: [imageBlock],
+      attrs: {},
+    };
+
+    const { cellElement } = renderTableCell({
+      ...createBaseDeps(),
+      cellMeasure,
+      cell,
+    });
+
+    const imgEl = cellElement.querySelector('img.superdoc-table-image') as HTMLImageElement | null;
+    expect(imgEl).toBeTruthy();
+    expect(imgEl?.parentElement?.style.height).toBe('40px');
   });
 
   describe('spacing.after margin-bottom rendering', () => {

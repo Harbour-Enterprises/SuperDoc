@@ -1,8 +1,10 @@
 import type {
   CellBorders,
+  DrawingBlock,
   Line,
   ParagraphBlock,
   ParagraphMeasure,
+  ImageBlock,
   SdtMetadata,
   TableBlock,
   TableMeasure,
@@ -157,6 +159,22 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
 
+  try {
+    console.log(
+      '[DomPainter.renderTableCell] cell render input',
+      JSON.stringify({
+        cellId: cell?.id,
+        blockKinds: cellBlocks.map((b) => b.kind),
+        measureKinds: blockMeasures.map((m) => m.kind),
+        width: cellMeasure?.width,
+        height: cellMeasure?.height,
+        rowHeight,
+      }),
+    );
+  } catch {
+    // ignore logging failures
+  }
+
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     // Content is a child of the cell, positioned relative to it
     // Cell's overflow:hidden handles clipping, no explicit width needed
@@ -199,7 +217,110 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       const blockMeasure = blockMeasures[i];
       const block = cellBlocks[i];
 
+      if (blockMeasure.kind === 'image' && block?.kind === 'image') {
+        console.log(
+          '[DomPainter.renderTableCell] rendering image block in cell',
+          JSON.stringify({
+            cellId: cell?.id,
+            blockId: block.id,
+            width: blockMeasure.width,
+            height: blockMeasure.height,
+          }),
+        );
+        const imageWrapper = doc.createElement('div');
+        imageWrapper.style.position = 'relative';
+        imageWrapper.style.width = `${blockMeasure.width}px`;
+        imageWrapper.style.height = `${blockMeasure.height}px`;
+        imageWrapper.style.maxWidth = '100%';
+        imageWrapper.style.boxSizing = 'border-box';
+        applySdtDataset(imageWrapper, (block as ImageBlock).attrs?.sdt);
+
+        const imgEl = doc.createElement('img');
+        imgEl.classList.add('superdoc-table-image');
+        if (block.src) {
+          imgEl.src = block.src;
+        }
+        imgEl.alt = block.alt ?? '';
+        imgEl.style.width = '100%';
+        imgEl.style.height = '100%';
+        imgEl.style.objectFit = block.objectFit ?? 'contain';
+        imgEl.style.display = 'block';
+
+        imageWrapper.appendChild(imgEl);
+        content.appendChild(imageWrapper);
+        continue;
+      }
+
+      if (blockMeasure.kind === 'drawing' && block?.kind === 'drawing') {
+        console.log(
+          '[DomPainter.renderTableCell] rendering drawing block in cell',
+          JSON.stringify({
+            cellId: cell?.id,
+            blockId: block.id,
+            drawingKind: block.drawingKind,
+            width: blockMeasure.width,
+            height: blockMeasure.height,
+          }),
+        );
+        const drawingWrapper = doc.createElement('div');
+        drawingWrapper.style.position = 'relative';
+        drawingWrapper.style.width = `${blockMeasure.width}px`;
+        drawingWrapper.style.height = `${blockMeasure.height}px`;
+        drawingWrapper.style.maxWidth = '100%';
+        drawingWrapper.style.boxSizing = 'border-box';
+        applySdtDataset(drawingWrapper, (block as DrawingBlock).attrs as SdtMetadata | undefined);
+
+        const drawingInner = doc.createElement('div');
+        drawingInner.classList.add('superdoc-table-drawing');
+        drawingInner.style.width = '100%';
+        drawingInner.style.height = '100%';
+        drawingInner.style.display = 'flex';
+        drawingInner.style.alignItems = 'center';
+        drawingInner.style.justifyContent = 'center';
+        drawingInner.style.overflow = 'hidden';
+
+        if (block.drawingKind === 'image' && 'src' in block && block.src) {
+          const img = doc.createElement('img');
+          img.classList.add('superdoc-drawing-image');
+          img.src = block.src;
+          img.alt = block.alt ?? '';
+          img.style.width = '100%';
+          img.style.height = '100%';
+          img.style.objectFit = block.objectFit ?? 'contain';
+          drawingInner.appendChild(img);
+        } else {
+          const placeholder = doc.createElement('div');
+          placeholder.style.width = '100%';
+          placeholder.style.height = '100%';
+          placeholder.style.background =
+            'repeating-linear-gradient(45deg, rgba(15,23,42,0.1), rgba(15,23,42,0.1) 6px, rgba(15,23,42,0.2) 6px, rgba(15,23,42,0.2) 12px)';
+          placeholder.style.border = '1px dashed rgba(15, 23, 42, 0.3)';
+          drawingInner.appendChild(placeholder);
+        }
+
+        drawingWrapper.appendChild(drawingInner);
+        content.appendChild(drawingWrapper);
+        continue;
+      }
+
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+        try {
+          const runKinds = (block.runs ?? []).map((r) => (r as { kind?: string }).kind ?? 'text');
+          const imageRuns = (block.runs ?? [])
+            .filter((r) => (r as { kind?: string }).kind === 'image')
+            .map((r) => ({ src: (r as { src?: string }).src }));
+          console.log(
+            '[DomPainter.renderTableCell] rendering paragraph block in cell',
+            JSON.stringify({
+              cellId: cell?.id,
+              blockId: block.id,
+              runKinds,
+              imageRuns,
+            }),
+          );
+        } catch {
+          // ignore
+        }
         const lines = (blockMeasure as ParagraphMeasure).lines;
         const blockLineCount = lines?.length || 0;
 

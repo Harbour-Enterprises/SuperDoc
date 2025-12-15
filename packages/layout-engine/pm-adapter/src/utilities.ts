@@ -1048,46 +1048,99 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
   };
 
   return blocks.map((block) => {
-    // Handle ImageBlocks (top-level images)
-    if (block.kind === 'image') {
-      if (!block.src || block.src.startsWith('data:')) {
-        return block;
+    const hydrateBlock = (blk: FlowBlock): FlowBlock => {
+      // Handle ImageBlocks (top-level images)
+      if (blk.kind === 'image') {
+        if (!blk.src || blk.src.startsWith('data:')) {
+          return blk;
+        }
+
+        const attrs = (blk.attrs ?? {}) as Record<string, unknown>;
+        const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
+        const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
+        const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+
+        const resolvedSrc = resolveImageSrc(blk.src, relId, attrSrc, extension);
+        if (resolvedSrc) {
+          return { ...blk, src: resolvedSrc };
+        }
+        return blk;
       }
 
-      const attrs = (block.attrs ?? {}) as Record<string, unknown>;
-      const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
-      const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
-      const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+      // Handle ParagraphBlocks (may contain ImageRuns)
+      if (blk.kind === 'paragraph') {
+        const paragraphBlock = blk as ParagraphBlock;
+        if (!paragraphBlock.runs || paragraphBlock.runs.length === 0) {
+          return blk;
+        }
 
-      const resolvedSrc = resolveImageSrc(block.src, relId, attrSrc, extension);
-      if (resolvedSrc) {
-        return { ...block, src: resolvedSrc };
-      }
-      return block;
-    }
-
-    // Handle ParagraphBlocks (may contain ImageRuns)
-    if (block.kind === 'paragraph') {
-      const paragraphBlock = block as ParagraphBlock;
-      if (!paragraphBlock.runs || paragraphBlock.runs.length === 0) {
-        return block;
+        const hydratedRuns = hydrateRuns(paragraphBlock.runs);
+        if (hydratedRuns !== paragraphBlock.runs) {
+          return { ...paragraphBlock, runs: hydratedRuns };
+        }
+        return blk;
       }
 
-      const hydratedRuns = hydrateRuns(paragraphBlock.runs);
-      if (hydratedRuns !== paragraphBlock.runs) {
-        return { ...paragraphBlock, runs: hydratedRuns };
-      }
-      return block;
-    }
+      if (blk.kind === 'table') {
+        let rowsChanged = false;
+        const newRows = blk.rows.map((row) => {
+          let cellsChanged = false;
+          const newCells = row.cells.map((cell) => {
+            let cellChanged = false;
+            const hydratedBlocks = (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []))
+              .map((cb) => hydrateBlock(cb as unknown as FlowBlock));
 
-    return block;
+            if (cell.blocks && hydratedBlocks !== cell.blocks) {
+              cellChanged = true;
+            }
+
+            // Backward compatibility: hydrate legacy cell.paragraph
+            let hydratedParagraph = cell.paragraph;
+            if (!cell.blocks && cell.paragraph && cell.paragraph.kind === 'paragraph') {
+              const hydratedPara = hydrateBlock(cell.paragraph) as ParagraphBlock;
+              if (hydratedPara !== cell.paragraph) {
+                hydratedParagraph = hydratedPara;
+                cellChanged = true;
+              }
+            }
+
+            if (cellChanged) {
+              return {
+                ...cell,
+                blocks: hydratedBlocks.length > 0 ? hydratedBlocks : cell.blocks,
+                paragraph: hydratedParagraph,
+              };
+            }
+            return cell;
+          });
+
+          if (newCells.some((c, idx) => c !== row.cells[idx])) {
+            cellsChanged = true;
+          }
+
+          if (cellsChanged) {
+            rowsChanged = true;
+            return { ...row, cells: newCells };
+          }
+          return row;
+        });
+
+        if (rowsChanged) {
+          return { ...blk, rows: newRows };
+        }
+        return blk;
+      }
+
+      return blk;
+    };
+
+    return hydrateBlock(block);
   });
 }
 
 // ============================================================================
 // Shallow Object Comparison
 // ============================================================================
-
 /**
  * Performs a shallow equality comparison between two objects.
  *
