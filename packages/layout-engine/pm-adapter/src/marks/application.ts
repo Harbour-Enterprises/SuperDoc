@@ -477,15 +477,22 @@ export const collectTrackedChangeFromMarks = (marks?: PMMark[]): TrackedChangeMe
 
 /**
  * Normalizes underline style value from PM mark attributes.
- * Returns a valid UnderlineStyle or 'single' as default for invalid/missing values.
+ * Returns a valid UnderlineStyle, or undefined only for explicit 'none'.
+ * Missing/undefined values default to 'single' (presence of underline mark implies underline).
  *
  * @param value - Unknown value from mark attributes that should be an underline style
- * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), defaulting to 'single'
+ * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), or undefined if explicitly 'none'
  */
 export const normalizeUnderlineStyle = (value: unknown): UnderlineStyle | undefined => {
+  // Return undefined only for explicitly "none" - this means "no underline"
+  if (value === 'none') {
+    return undefined;
+  }
   if (value === 'double' || value === 'dotted' || value === 'dashed' || value === 'wavy') {
     return value;
   }
+  // Default to 'single' for missing values or other underline types (e.g., 'single', 'words', 'thick', etc.)
+  // The presence of an underline mark implies underline should be applied
   return 'single';
 };
 
