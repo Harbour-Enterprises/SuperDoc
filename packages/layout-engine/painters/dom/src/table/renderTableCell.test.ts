@@ -55,7 +55,7 @@ describe('renderTableCell', () => {
     borders: undefined,
     useDefaultBorder: false,
     context: { sectionIndex: 0, pageIndex: 0, columnIndex: 0 },
-    renderLine: () => doc.createElement('div'),
+    renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
     applySdtDataset: () => {
       // noop for tests
     },

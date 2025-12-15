@@ -2866,10 +2866,24 @@ export class DomPainter {
       this.applyFragmentFrame(el, frag, context.section);
     };
 
-    // Create a wrapper for renderLine that always skips justification for table cell content.
-    // Word does not justify text inside table cells, even if jc="both" is specified.
-    const renderLineForTableCell = (block: ParagraphBlock, line: Line, ctx: FragmentRenderContext): HTMLElement => {
-      return this.renderLine(block, line, ctx, undefined, undefined, true); // skipJustify = true
+    // Create a wrapper for renderLine that applies Word's justification rules for table cells.
+    // Word DOES justify text inside table cells, but skips justification on the last line
+    // (unless the paragraph ends with a line break, which shifts the "last line" down).
+    const renderLineForTableCell = (
+      block: ParagraphBlock,
+      line: Line,
+      ctx: FragmentRenderContext,
+      lineIndex: number,
+      isLastLine: boolean,
+    ): HTMLElement => {
+      // Check if paragraph ends with a line break
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
+      // Skip justify only on the last line, unless the paragraph ends with a line break
+      const shouldSkipJustify = isLastLine && !paragraphEndsWithLineBreak;
+
+      return this.renderLine(block, line, ctx, undefined, lineIndex, shouldSkipJustify);
     };
 
     /**
@@ -3686,11 +3700,12 @@ export class DomPainter {
       el.setAttribute('styleid', styleId);
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
+    const effectiveAlignment = alignment;
     // Note: skipJustify only affects word-spacing for justify alignment, not other alignments.
     // Center and right alignment should always be respected.
-    if (alignment === 'center' || alignment === 'right') {
-      el.style.textAlign = alignment;
-    } else if (alignment === 'justify') {
+    if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
+      el.style.textAlign = effectiveAlignment;
+    } else if (effectiveAlignment === 'justify') {
       // Use manual spacing distribution; avoid native justify to prevent double stretching
       el.style.textAlign = 'left';
     } else {
@@ -3773,16 +3788,19 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    const shouldJustify = !skipJustify && alignment === 'justify' && !hasExplicitPositioning;
+    const shouldJustify = !skipJustify && effectiveAlignment === 'justify' && !hasExplicitPositioning;
     if (shouldJustify) {
       const spaceCount = textSlices.reduce(
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
         0,
       );
-      const slack = Math.max(0, availableWidth - line.width);
-      if (spaceCount > 0 && slack > 0) {
-        const extraPerSpace = slack / spaceCount;
-        el.style.wordSpacing = `${extraPerSpace}px`;
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack !== 0) {
+        // Positive slack = expand spaces to fill line (normal justify)
+        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
+        const spacingPerSpace = slack / spaceCount;
+        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
+        el.style.wordSpacing = `${spacingPerSpace}px`;
       }
     }
 

@@ -31,7 +31,13 @@ export type TableRenderDependencies = {
   /** Lookup map for retrieving block data and measurements */
   blockLookup: BlockLookup;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
   /** Function to render drawing content (images, shapes, shape groups) */
   renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Function to apply fragment positioning and dimensions */
