@@ -4667,6 +4667,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.pmStart ?? '',
           textRun.pmEnd ?? '',
           textRun.token ?? '',
+          // Tracked changes - force re-render when added or removed tracked change
+          textRun.trackedChange ? 1 : 0,
         ].join(',');
       })
       .join('|');
