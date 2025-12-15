@@ -160,6 +160,7 @@ function hasSignificantStyling(rPrNode) {
 
   // List of elements that indicate significant styling
   const significantElements = [
+    'w:rStyle', // Run style reference (Word commonly uses this for page number formatting)
     'w:rFonts', // Font family
     'w:sz', // Font size
     'w:szCs', // Complex script font size
