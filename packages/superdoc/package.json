@@ -77,7 +77,7 @@
     "postcss-prefixwrap": "^1.56.2",
     "rollup-plugin-visualizer": "^5.12.0",
     "typescript": "^5.7.3",
-    "vite": "^6.3.5",
+    "vite": "^7.3.0",
     "vite-plugin-node-polyfills": "^0.24.0",
     "vitest": "^3.2.4"
   }
