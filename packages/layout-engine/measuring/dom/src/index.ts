@@ -1283,7 +1283,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // - Breaking words that exactly fit would cause unnecessary fragmentation
         if (wordOnlyWidth > effectiveMaxWidth && word.length > 1) {
           // First, finish any existing currentLine before processing the long word
-          if (currentLine && currentLine.width > 0) {
+          // Only push the line if it has actual text content (segments), not just tab positioning.
+          // If the line only has width from tab advances but no text, we should keep it so the
+          // long word can use the pending tab alignment.
+          if (currentLine && currentLine.width > 0 && currentLine.segments.length > 0) {
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
             const { spaceCount: _sc, ...lineBase } = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
@@ -1296,7 +1299,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
           // Break the word into chunks that fit within maxWidth
           const lineMaxWidth = getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : contentWidth);
-          const chunks = breakWordIntoChunks(word, lineMaxWidth - WIDTH_FUDGE_PX, font, ctx, run);
+
+          // If currentLine exists with tab positioning but no text segments, we need to handle
+          // the first chunk specially to preserve the tab alignment
+          const hasTabOnlyLine = currentLine && currentLine.segments.length === 0 && currentLine.width > 0;
+          const remainingWidthAfterTab = hasTabOnlyLine ? currentLine!.maxWidth - currentLine!.width : lineMaxWidth;
+
+          // Use remaining width for chunking if we have a tab-only line, otherwise use full line width
+          const chunkWidth = hasTabOnlyLine ? Math.max(remainingWidthAfterTab, lineMaxWidth * 0.25) : lineMaxWidth;
+          const chunks = breakWordIntoChunks(word, chunkWidth - WIDTH_FUDGE_PX, font, ctx, run);
 
           // Process all chunks except the last one as complete lines
           let chunkCharOffset = wordStartChar;
@@ -1305,8 +1316,46 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             const chunkStartChar = chunkCharOffset;
             const chunkEndChar = chunkCharOffset + chunk.text.length;
             const isLastChunk = chunkIndex === chunks.length - 1;
+            const isFirstChunk = chunkIndex === 0;
 
-            if (isLastChunk) {
+            // First chunk: if we have a tab-only line, add to it; otherwise create new line
+            if (isFirstChunk && hasTabOnlyLine && currentLine) {
+              // Add first chunk to the existing line with tab positioning
+              currentLine.toRun = runIndex;
+              currentLine.toChar = chunkEndChar;
+              currentLine.width = roundValue(currentLine.width + chunk.width);
+              currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+              currentLine.maxFontInfo = getFontInfoFromRun(run);
+              currentLine.segments.push({
+                runIndex,
+                fromChar: chunkStartChar,
+                toChar: chunkEndChar,
+                width: chunk.width,
+              });
+
+              if (isLastChunk) {
+                // If this is also the last chunk, keep currentLine open for more content
+                const ls = (run as TextRun).letterSpacing ?? 0;
+                if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+                  currentLine.toChar = wordEndWithSpace;
+                  currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
+                  charPosInRun = wordEndWithSpace;
+                  currentLine.spaceCount += 1;
+                } else {
+                  charPosInRun = wordEndWithSpace;
+                }
+              } else {
+                // More chunks to come - finish this line and push it
+                const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+                const { spaceCount: _sc, ...lineBase } = currentLine;
+                const completedLine: Line = { ...lineBase, ...metrics };
+                addBarTabsToLine(completedLine);
+                lines.push(completedLine);
+                tabStopCursor = 0;
+                pendingTabAlignment = null;
+                currentLine = null;
+              }
+            } else if (isLastChunk) {
               // Last chunk becomes the start of a new line (will be continued with next word)
               currentLine = {
                 fromRun: runIndex,
