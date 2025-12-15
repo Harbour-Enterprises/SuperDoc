@@ -4624,6 +4624,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           shading?: { fill?: string; color?: string };
           direction?: string;
           rtl?: boolean;
+          tabs?: Array<{ val?: string; pos?: number; leader?: string }>;
         }
       | undefined;
 
@@ -4643,6 +4644,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           attrs.shading?.color ?? '',
           attrs.direction ?? '',
           attrs.rtl ? '1' : '',
+          attrs.tabs?.length ? JSON.stringify(attrs.tabs) : '',
         ].join(':')
       : '';
 
