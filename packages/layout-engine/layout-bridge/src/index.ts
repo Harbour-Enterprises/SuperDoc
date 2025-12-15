@@ -15,6 +15,12 @@ import type {
 } from '@superdoc/contracts';
 import { charOffsetToPm, findCharacterAtX, measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom } from './dom-mapping.js';
+import {
+  isListItem,
+  getWordLayoutConfig,
+  calculateTextStartIndent,
+  extractParagraphIndent,
+} from './list-indent-utils.js';
 
 export type { HeaderFooterType } from '@superdoc/contracts';
 export {
@@ -50,6 +56,8 @@ export { computeDisplayPageNumber, type DisplayPageInfo } from '../../layout-eng
 export { remeasureParagraph } from './remeasure';
 export { measureCharacterX } from './text-measurement';
 export { clickToPositionDom } from './dom-mapping';
+export { isListItem, getWordLayoutConfig, calculateTextStartIndent, extractParagraphIndent } from './list-indent-utils';
+export type { TextIndentCalculationParams } from './list-indent-utils';
 export { LayoutVersionManager } from './layout-version-manager';
 export type { VersionedLayoutState, LayoutVersionMetrics } from './layout-version-manager';
 export { LayoutVersionLogger, LayoutVersionMetricsCollector, globalLayoutVersionMetrics } from './instrumentation';
@@ -1122,27 +1130,26 @@ export function selectionToRects(
           const charOffsetTo = pmPosToCharOffset(block, line, sliceTo);
           // Detect list items by checking for marker presence
           const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
-          const isListItem = markerWidth > 0;
+          const isListItemFlag = isListItem(markerWidth, block);
           // List items are always rendered with left alignment in the DOM (painter forces textAlign: 'left'),
           // regardless of the paragraph's alignment attribute. Pass 'left' override to match DOM rendering.
-          const alignmentOverride = isListItem ? 'left' : undefined;
+          const alignmentOverride = isListItemFlag ? 'left' : undefined;
           const startX = mapPmToX(block, line, charOffsetFrom, fragment.width, alignmentOverride);
           const endX = mapPmToX(block, line, charOffsetTo, fragment.width, alignmentOverride);
 
-          // Align with painter DOM indent handling (padding/text-indent on lines)
-          // Text content always starts at paraIndentLeft from fragment.x:
-          // - For non-list lines: painter applies CSS paddingLeft + textIndent
-          // - For list lines: marker sits in hanging indent area, text starts at paraIndentLeft
-          // The markerWidth is just the marker's rendered width, not where text starts.
-          const paraIndentLeft = block.attrs?.indent?.left ?? 0;
-          const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+          // Calculate text indent using shared utility
+          const indent = extractParagraphIndent(block.attrs?.indent);
+          const wordLayout = getWordLayoutConfig(block);
           const isFirstLine = index === fragment.fromLine;
-          // For list items, text starts at paraIndentLeft (marker sits in hanging indent area)
-          // For non-list first lines, also add firstLineOffset
-          let indentAdjust = paraIndentLeft;
-          if (isFirstLine && !isListItem) {
-            indentAdjust += firstLineOffset;
-          }
+          const indentAdjust = calculateTextStartIndent({
+            isFirstLine,
+            isListItem: isListItemFlag,
+            markerWidth,
+            paraIndentLeft: indent.left,
+            firstLineIndent: indent.firstLine,
+            hangingIndent: indent.hanging,
+            wordLayout,
+          });
 
           const rectX = fragment.x + indentAdjust + Math.min(startX, endX);
           const rectWidth = Math.max(1, Math.abs(endX - startX));
@@ -1329,10 +1336,14 @@ export function selectionToRects(
             renderedBlocks.forEach((info) => {
               const paragraphMarkerWidth = info.measure.marker?.markerWidth ?? 0;
               // List items in table cells are also rendered with left alignment
-              const isListItem = paragraphMarkerWidth > 0;
-              const alignmentOverride = isListItem ? 'left' : undefined;
-              // Get paragraph indent for text positioning (same logic as regular paragraphs)
-              const paraIndentLeft = info.block.kind === 'paragraph' ? (info.block.attrs?.indent?.left ?? 0) : 0;
+              const cellIsListItem = isListItem(paragraphMarkerWidth, info.block);
+              const alignmentOverride = cellIsListItem ? 'left' : undefined;
+              // Extract paragraph indent for text positioning
+              const cellIndent = extractParagraphIndent(
+                info.block.kind === 'paragraph' ? info.block.attrs?.indent : undefined,
+              );
+              const cellWordLayout = getWordLayoutConfig(info.block);
+
               const intersectingLines = findLinesIntersectingRange(info.block, info.measure, from, to);
 
               intersectingLines.forEach(({ line, index }) => {
@@ -1351,8 +1362,19 @@ export function selectionToRects(
                 const startX = mapPmToX(info.block, line, charOffsetFrom, availableWidth, alignmentOverride);
                 const endX = mapPmToX(info.block, line, charOffsetTo, availableWidth, alignmentOverride);
 
-                // Text starts at paraIndentLeft from the cell content area
-                const rectX = fragment.x + cellX + padding.left + paraIndentLeft + Math.min(startX, endX);
+                // Calculate text indent using shared utility
+                const isFirstLine = index === info.startLine;
+                const textIndentAdjust = calculateTextStartIndent({
+                  isFirstLine,
+                  isListItem: cellIsListItem,
+                  markerWidth: paragraphMarkerWidth,
+                  paraIndentLeft: cellIndent.left,
+                  firstLineIndent: cellIndent.firstLine,
+                  hangingIndent: cellIndent.hanging,
+                  wordLayout: cellWordLayout,
+                });
+
+                const rectX = fragment.x + cellX + padding.left + textIndentAdjust + Math.min(startX, endX);
                 const rectWidth = Math.max(1, Math.abs(endX - startX));
                 const lineOffset =
                   lineHeightBeforeIndex(info.measure, index) - lineHeightBeforeIndex(info.measure, info.startLine);
