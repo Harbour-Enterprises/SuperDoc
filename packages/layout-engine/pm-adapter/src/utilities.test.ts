@@ -936,6 +936,293 @@ describe('Media Utilities', () => {
       expect(result[0].src).toBe('data:image/png;base64,iVBORw0KGgoAAAANS');
     });
   });
+
+  describe('hydrateImageBlocks - ShapeGroup image hydration', () => {
+    it('hydrates image children inside shapeGroup drawing blocks', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 500, height: 300, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 0,
+                y: 0,
+                width: 200,
+                height: 150,
+                src: 'word/media/image1.jpeg',
+              },
+            },
+            {
+              shapeType: 'vectorShape',
+              attrs: {
+                x: 200,
+                y: 0,
+                width: 100,
+                height: 100,
+                kind: 'rect',
+                fillColor: '#ff0000',
+              },
+            },
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 300,
+                y: 0,
+                width: 200,
+                height: 150,
+                src: 'word/media/image2.png',
+              },
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = {
+        'word/media/image1.jpeg': 'base64ImageData1',
+        'word/media/image2.png': 'base64ImageData2',
+      };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const drawingBlock = result[0] as unknown as {
+        shapes: Array<{ shapeType: string; attrs: { src?: string } }>;
+      };
+
+      // First image should be hydrated
+      expect(drawingBlock.shapes[0].attrs.src).toBe('data:image/jpeg;base64,base64ImageData1');
+      // Vector shape should remain unchanged
+      expect(drawingBlock.shapes[1].shapeType).toBe('vectorShape');
+      expect(drawingBlock.shapes[1].attrs.src).toBeUndefined();
+      // Second image should be hydrated
+      expect(drawingBlock.shapes[2].attrs.src).toBe('data:image/png;base64,base64ImageData2');
+    });
+
+    it('leaves shapeGroup images with data URLs unchanged', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 0,
+                y: 0,
+                width: 200,
+                height: 150,
+                src: 'data:image/png;base64,existingData',
+              },
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'newData' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const drawingBlock = result[0] as unknown as {
+        shapes: Array<{ shapeType: string; attrs: { src?: string } }>;
+      };
+
+      expect(drawingBlock.shapes[0].attrs.src).toBe('data:image/png;base64,existingData');
+    });
+
+    it('returns shapeGroup unchanged when no matching media files', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 0,
+                y: 0,
+                width: 200,
+                height: 150,
+                src: 'word/media/missing.png',
+              },
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/other.png': 'someData' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0]).toBe(blocks[0]); // Same reference, no changes
+    });
+
+    it('skips non-shapeGroup drawing blocks', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'vectorShape',
+          geometry: { width: 100, height: 100, rotation: 0, flipH: false, flipV: false },
+          shapeKind: 'rect',
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0]).toBe(blocks[0]); // Same reference, no changes
+    });
+
+    it('handles shapeGroup with empty shapes array', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 100, height: 100, rotation: 0, flipH: false, flipV: false },
+          shapes: [],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      expect(result[0]).toBe(blocks[0]); // Same reference, no changes
+    });
+
+    it('handles shapeGroup with image child that has attrs: undefined', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: undefined, // Edge case: attrs is undefined
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      // Should handle gracefully and return unchanged (no src to hydrate)
+      expect(result[0]).toBe(blocks[0]);
+    });
+
+    it('handles shapeGroup with image child that has attrs: {} (no src)', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: {}, // Edge case: attrs exists but has no src
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      // Should handle gracefully and return unchanged (no src to hydrate)
+      expect(result[0]).toBe(blocks[0]);
+    });
+
+    it('handles shapeGroup with image child that has attrs with src: undefined', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 0,
+                y: 0,
+                width: 100,
+                height: 100,
+                src: undefined, // Edge case: src is explicitly undefined
+              },
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = { 'word/media/image.png': 'base64data' };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      // Should handle gracefully and return unchanged (src is undefined)
+      expect(result[0]).toBe(blocks[0]);
+    });
+
+    it('handles shapeGroup with mixed valid and invalid image children', () => {
+      const blocks: FlowBlock[] = [
+        {
+          kind: 'drawing',
+          id: 'drawing-1',
+          drawingKind: 'shapeGroup',
+          geometry: { width: 500, height: 300, rotation: 0, flipH: false, flipV: false },
+          shapes: [
+            {
+              shapeType: 'image',
+              attrs: undefined, // Invalid: attrs is undefined
+            },
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 100,
+                y: 0,
+                width: 100,
+                height: 100,
+                src: 'word/media/image1.png', // Valid: should be hydrated
+              },
+            },
+            {
+              shapeType: 'image',
+              attrs: {}, // Invalid: no src
+            },
+            {
+              shapeType: 'image',
+              attrs: {
+                x: 300,
+                y: 0,
+                width: 100,
+                height: 100,
+                src: 'word/media/image2.png', // Valid: should be hydrated
+              },
+            },
+          ],
+        } as unknown as FlowBlock,
+      ];
+      const mediaFiles = {
+        'word/media/image1.png': 'base64data1',
+        'word/media/image2.png': 'base64data2',
+      };
+
+      const result = hydrateImageBlocks(blocks, mediaFiles);
+      const drawingBlock = result[0] as unknown as {
+        shapes: Array<{ shapeType: string; attrs?: { src?: string } }>;
+      };
+
+      // First shape should remain unchanged (attrs is undefined)
+      expect(drawingBlock.shapes[0].attrs).toBeUndefined();
+
+      // Second shape should be hydrated
+      expect(drawingBlock.shapes[1].attrs?.src).toBe('data:image/png;base64,base64data1');
+
+      // Third shape should remain unchanged (no src)
+      expect(drawingBlock.shapes[2].attrs?.src).toBeUndefined();
+
+      // Fourth shape should be hydrated
+      expect(drawingBlock.shapes[3].attrs?.src).toBe('data:image/png;base64,base64data2');
+    });
+  });
 });
 
 // ============================================================================

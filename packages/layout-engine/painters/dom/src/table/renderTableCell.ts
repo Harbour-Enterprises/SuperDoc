@@ -194,6 +194,14 @@ type TableCellRenderDependencies = {
   useDefaultBorder?: boolean;
   /** Function to render a line of paragraph content */
   renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  /**
+   * Optional callback function to render drawing content (vectorShapes, shapeGroups).
+   * If provided, this callback is used to render DrawingBlocks with drawingKind of 'vectorShape' or 'shapeGroup'.
+   * The callback receives a DrawingBlock and must return an HTMLElement.
+   * The returned element will have width: 100% and height: 100% styles applied automatically.
+   * If undefined, a placeholder element with diagonal stripes pattern is rendered instead.
+   */
+  renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Rendering context */
   context: FragmentRenderContext;
   /** Function to apply SDT metadata as data attributes */
@@ -255,6 +263,12 @@ export type TableCellRenderResult = {
  *   borders,
  *   useDefaultBorder: false,
  *   renderLine,
+ *   renderDrawingContent: (block) => {
+ *     // Custom drawing renderer for vectorShapes and shapeGroups
+ *     const el = document.createElement('div');
+ *     // Render drawing content...
+ *     return el;
+ *   },
  *   context,
  *   applySdtDataset
  * });
@@ -272,6 +286,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     borders,
     useDefaultBorder,
     renderLine,
+    renderDrawingContent,
     context,
     applySdtDataset,
     fromLine,
@@ -443,7 +458,14 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
           img.style.height = '100%';
           img.style.objectFit = block.objectFit ?? 'contain';
           drawingInner.appendChild(img);
+        } else if (renderDrawingContent) {
+          // Use the callback for other drawing types (vectorShape, shapeGroup, etc.)
+          const drawingContent = renderDrawingContent(block as DrawingBlock);
+          drawingContent.style.width = '100%';
+          drawingContent.style.height = '100%';
+          drawingInner.appendChild(drawingContent);
         } else {
+          // Fallback placeholder when no rendering callback is provided
           const placeholder = doc.createElement('div');
           placeholder.style.width = '100%';
           placeholder.style.height = '100%';
