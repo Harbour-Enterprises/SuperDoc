@@ -493,35 +493,33 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const firstLineOffset = isWordLayoutList ? 0 : clampedFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
 
-  // For left-justified list markers, the marker is rendered in-flow (position: relative),
-  // so it occupies horizontal space on the first line. Reduce the first line's available
-  // width by the marker space to prevent overflow.
-  let leftJustifiedMarkerSpace = 0;
-  if (wordLayout?.marker) {
-    const markerJustification = wordLayout.marker.justification ?? 'left';
-    if (markerJustification === 'left') {
-      // Marker space = marker box width + gutter between marker and text
-      const markerBoxWidth = wordLayout.marker.markerBoxWidthPx ?? 0;
-      const gutterWidth = wordLayout.marker.gutterWidthPx ?? LIST_MARKER_GAP;
-      leftJustifiedMarkerSpace = markerBoxWidth + gutterWidth;
-    }
-  }
-
   // Calculate available width for the first line.
-  // For firstLineIndentMode (OOXML pattern where marker is at left+firstLine instead of left-hanging),
-  // the text starts at textStartPx from the left edge, so available width = maxWidth - textStartPx - indentRight.
-  // This matches the renderer which applies paddingLeft based on marker position in firstLineIndentMode.
+  // There are two list marker layout patterns in OOXML:
+  //
+  // 1. firstLineIndentMode (marker inline with text):
+  //    - Uses indent.firstLine > 0 with no hanging
+  //    - Marker is rendered in-flow, occupying horizontal space
+  //    - Text starts at textStartPx from the left edge
+  //    - Available width = maxWidth - textStartPx - indentRight
+  //
+  // 2. Standard hanging indent (marker in hanging area):
+  //    - Uses indent.left with indent.hanging
+  //    - Marker is positioned absolutely in the hanging region (left of text start)
+  //    - Text starts at indent.left on ALL lines (first and subsequent)
+  //    - Available width = maxWidth - indentLeft - indentRight (same as subsequent lines)
+  //
+  // Note: wordLayout.marker.justification (from lvlJc) describes text alignment WITHIN
+  // the marker box (left/center/right), NOT whether the marker takes in-flow space.
   let initialAvailableWidth: number;
-  const isFirstLineIndentMode =
-    (wordLayout as { firstLineIndentMode?: boolean } | undefined)?.firstLineIndentMode === true;
   const textStartPx = (wordLayout as { textStartPx?: number } | undefined)?.textStartPx;
 
-  if (isFirstLineIndentMode && typeof textStartPx === 'number' && textStartPx > 0) {
-    // In firstLineIndentMode, text starts at textStartPx (after marker+tab).
-    // Available width is from textStartPx to the right margin.
+  if (typeof textStartPx === 'number' && textStartPx > indentLeft) {
+    // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
+    // Available width = from textStartPx to right margin.
     initialAvailableWidth = Math.max(1, maxWidth - textStartPx - indentRight);
   } else {
-    initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset - leftJustifiedMarkerSpace);
+    // No textStartPx or it's <= indentLeft: text starts at the normal indent position.
+    initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   }
 
   const tabStops = buildTabStopsPx(

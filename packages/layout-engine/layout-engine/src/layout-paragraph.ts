@@ -18,9 +18,105 @@ import { computeAnchorX } from './floating-objects.js';
 
 const spacingDebugEnabled = false;
 
+/**
+ * Type definition for Word layout attributes attached to paragraph blocks.
+ * This is a subset of the WordParagraphLayoutOutput from @superdoc/word-layout.
+ */
+type WordLayoutAttrs = {
+  /** List marker layout information */
+  marker?: {
+    /** Width of the marker box in pixels */
+    markerBoxWidthPx?: number;
+  };
+  /**
+   * True when list uses firstLine indent pattern (marker at left+firstLine)
+   * instead of standard hanging pattern (marker at left-hanging).
+   */
+  firstLineIndentMode?: boolean;
+  /** Horizontal position where paragraph text begins in pixels */
+  textStartPx?: number;
+};
+
 const spacingDebugLog = (..._args: unknown[]): void => {
   if (!spacingDebugEnabled) return;
 };
+
+/**
+ * Calculates the first line indent for list markers when remeasuring paragraphs.
+ *
+ * In Word layout, there are two distinct list marker layout patterns:
+ *
+ * 1. **firstLineIndentMode** (marker inline with text):
+ *    - The marker is positioned at `left + firstLine` and consumes horizontal space on the first line
+ *    - Text begins after the marker (at `textStartPx`)
+ *    - The first line's available width must account for the marker's width
+ *    - This pattern is indicated by `firstLineIndentMode === true`
+ *
+ * 2. **Standard hanging indent** (marker in hanging area):
+ *    - The marker is positioned absolutely in the hanging region at `left - hanging`
+ *    - The marker does NOT consume horizontal space from the text flow
+ *    - Text begins at `left` on ALL lines (first and subsequent)
+ *    - The first line's available width is the same as subsequent lines
+ *    - This is the default pattern when `firstLineIndentMode` is not set
+ *
+ * This function determines which pattern is in use and calculates the appropriate
+ * first line indent for the remeasurement operation.
+ *
+ * @param block - The paragraph block being remeasured
+ * @param measure - The current paragraph measurement (may contain marker measurements)
+ * @returns The first line indent in pixels. Returns 0 for standard hanging indent,
+ *   or the marker width + gutter width for firstLineIndentMode.
+ *
+ * @example
+ * ```typescript
+ * // Standard hanging indent - marker doesn't consume first line space
+ * const block1 = {
+ *   attrs: {
+ *     wordLayout: {
+ *       marker: { markerBoxWidthPx: 20 },
+ *       // firstLineIndentMode is NOT set
+ *     }
+ *   }
+ * };
+ * const indent1 = calculateFirstLineIndent(block1, measure);
+ * // Returns: 0 (marker is in hanging area)
+ *
+ * // firstLineIndentMode - marker consumes first line space
+ * const block2 = {
+ *   attrs: {
+ *     wordLayout: {
+ *       marker: { markerBoxWidthPx: 20 },
+ *       firstLineIndentMode: true
+ *     }
+ *   }
+ * };
+ * const indent2 = calculateFirstLineIndent(block2, measure);
+ * // Returns: markerWidth + gutterWidth (marker is inline)
+ * ```
+ */
+function calculateFirstLineIndent(block: ParagraphBlock, measure: ParagraphMeasure): number {
+  const wordLayout = block.attrs?.wordLayout as WordLayoutAttrs | undefined;
+
+  // Only apply first line indent in firstLineIndentMode
+  if (!wordLayout?.firstLineIndentMode) {
+    return 0;
+  }
+
+  // Ensure marker exists in both wordLayout and measure
+  if (!wordLayout.marker || !measure.marker) {
+    return 0;
+  }
+
+  // Extract marker width with fallback chain and validation
+  const markerWidthRaw = measure.marker.markerWidth ?? wordLayout.marker.markerBoxWidthPx ?? 0;
+  const markerWidth = Number.isFinite(markerWidthRaw) && markerWidthRaw >= 0 ? markerWidthRaw : 0;
+
+  // Extract gutter width with validation
+  const gutterWidthRaw = measure.marker.gutterWidth ?? 0;
+  const gutterWidth = Number.isFinite(gutterWidthRaw) && gutterWidthRaw >= 0 ? gutterWidthRaw : 0;
+
+  return markerWidth + gutterWidth;
+}
 
 export type ParagraphLayoutContext = {
   block: ParagraphBlock;
@@ -211,19 +307,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     typeof measurementWidth === 'number' &&
     measurementWidth > columnWidth
   ) {
-    // Calculate firstLineIndent for list markers (same logic as float remeasurement)
-    let firstLineIndent = 0;
-    const wordLayout = block.attrs?.wordLayout as
-      | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
-      | undefined;
-    if (wordLayout?.marker && measure.marker) {
-      const markerJustification = wordLayout.marker.justification ?? 'left';
-      if (markerJustification === 'left') {
-        const markerWidth = measure.marker.markerWidth ?? 0;
-        const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
-        firstLineIndent = markerWidth + gutterWidth;
-      }
-    }
+    const firstLineIndent = calculateFirstLineIndent(block, measure);
     const newMeasure = remeasureParagraph(block, columnWidth, firstLineIndent);
     lines = normalizeLines(newMeasure);
     didRemeasureForColumnWidth = true;
@@ -331,20 +415,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     // If we found a narrower width, remeasure the entire paragraph once with that width
     if (narrowestWidth < columnWidth) {
-      // Calculate firstLineIndent for left-justified list markers (position: relative, in-flow)
-      let firstLineIndent = 0;
-      const wordLayout = block.attrs?.wordLayout as
-        | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
-        | undefined;
-      if (wordLayout?.marker && measure.marker) {
-        const markerJustification = wordLayout.marker.justification ?? 'left';
-        if (markerJustification === 'left') {
-          const markerWidth = measure.marker.markerWidth ?? 0;
-          const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
-          firstLineIndent = markerWidth + gutterWidth;
-        }
-      }
-
+      const firstLineIndent = calculateFirstLineIndent(block, measure);
       const newMeasure = remeasureParagraph(block, narrowestWidth, firstLineIndent);
       lines = normalizeLines(newMeasure);
       didRemeasureForFloats = true;
