@@ -1,5 +1,5 @@
 import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing } from '@superdoc/contracts';
-import { resolveParagraphProperties } from '@converter/styles.js';
+import { resolveParagraphProperties } from '@superdoc/super-editor/converter/internal/styles.js';
 import type { PMNode } from '../types.js';
 import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 import { hasParagraphStyleContext } from '../converter-context.js';

@@ -23,7 +23,6 @@
       "@features/*": ["./src/features/*"],
       "@components/*": ["./src/components/*"],
       "@helpers/*": ["./src/core/helpers/*"],
-      "@packages/*": ["../*"],
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
       "@translator": ["./src/core/super-converter/v3/node-translator/"]
