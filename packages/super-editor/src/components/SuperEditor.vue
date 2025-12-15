@@ -122,7 +122,13 @@ const tableResizeState = reactive({
 /**
  * Image resize overlay state management
  */
-const imageResizeState = reactive({
+interface ImageResizeState {
+  visible: boolean;
+  imageElement: HTMLElement | null;
+  blockId: string | null;
+}
+
+const imageResizeState: ImageResizeState = reactive({
   visible: false,
   imageElement: null,
   blockId: null,
@@ -362,13 +368,31 @@ const hideTableResizeOverlay = () => {
 };
 
 /**
- * Update image resize overlay visibility based on mouse position
- * Shows overlay when hovering over images with data-image-metadata attribute
+ * Update image resize overlay visibility based on mouse position.
+ * Shows overlay when hovering over images with data-image-metadata attribute.
+ * Supports both standalone image fragments (ImageBlock) and inline images (ImageRun).
+ *
+ * Edge Cases:
+ * - If editorElem is not mounted, returns early without modifying overlay state
+ * - If event.target is not an Element (e.g., text node), hides overlay and returns
+ * - When hovering over the overlay itself, preserves visibility without changing imageElement
+ * - Ignores images without data-image-metadata attribute (non-resizable images)
+ *
+ * @param {MouseEvent} event - The mouse event containing target and coordinates
+ * @returns {void}
  */
-const updateImageResizeOverlay = (event) => {
+const updateImageResizeOverlay = (event: MouseEvent): void => {
   if (!editorElem.value) return;
 
-  let target = event.target;
+  // Type guard: ensure event target is an Element
+  if (!(event.target instanceof Element)) {
+    imageResizeState.visible = false;
+    imageResizeState.imageElement = null;
+    imageResizeState.blockId = null;
+    return;
+  }
+
+  let target: Element | null = event.target;
   // Walk up DOM tree to find image fragment or overlay
   while (target && target !== document.body) {
     // Check if we're over the image resize overlay or any of its children (handles, guideline)
@@ -380,10 +404,20 @@ const updateImageResizeOverlay = (event) => {
       return;
     }
 
+    // Check for standalone image fragments (ImageBlock)
     if (target.classList?.contains('superdoc-image-fragment') && target.hasAttribute('data-image-metadata')) {
       imageResizeState.visible = true;
-      imageResizeState.imageElement = target;
+      imageResizeState.imageElement = target as HTMLElement;
       imageResizeState.blockId = target.getAttribute('data-sd-block-id');
+      return;
+    }
+
+    // Check for inline images (ImageRun inside paragraphs)
+    if (target.classList?.contains('superdoc-inline-image') && target.hasAttribute('data-image-metadata')) {
+      imageResizeState.visible = true;
+      imageResizeState.imageElement = target as HTMLElement;
+      // Inline images don't have block IDs, use pmStart as identifier
+      imageResizeState.blockId = target.getAttribute('data-pm-start');
       return;
     }
     target = target.parentElement;

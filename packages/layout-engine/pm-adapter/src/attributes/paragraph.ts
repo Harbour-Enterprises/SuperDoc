@@ -281,16 +281,24 @@ const resolveNumberingFromContext = (
 ): Partial<AdapterNumberingProps> | undefined => {
   const definitions = numbering?.definitions as Record<string, unknown> | undefined;
   const abstracts = numbering?.abstracts as Record<string, unknown> | undefined;
-  if (!definitions || !abstracts) return undefined;
+  if (!definitions || !abstracts) {
+    return undefined;
+  }
 
   const numDef = asOoxmlElement(definitions[String(numId)]);
-  if (!numDef) return undefined;
+  if (!numDef) {
+    return undefined;
+  }
 
   const abstractId = getAttribute(findChild(numDef, 'w:abstractNumId'), 'w:val');
-  if (abstractId == null) return undefined;
+  if (abstractId == null) {
+    return undefined;
+  }
 
   const abstract = asOoxmlElement(abstracts[String(abstractId)]);
-  if (!abstract) return undefined;
+  if (!abstract) {
+    return undefined;
+  }
 
   let levelDef = abstract.elements?.find(
     (el) => el?.name === 'w:lvl' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
@@ -305,7 +313,9 @@ const resolveNumberingFromContext = (
   }
   const startOverride = parseNumberAttr(getAttribute(findChild(override, 'w:startOverride'), 'w:val'));
 
-  if (!levelDef) return undefined;
+  if (!levelDef) {
+    return undefined;
+  }
 
   const numFmtEl = findNumFmtElement(levelDef);
   const lvlText = getAttribute(findChild(levelDef, 'w:lvlText'), 'w:val') as string | undefined;
@@ -1372,9 +1382,48 @@ export const computeParagraphAttrs = (
   }
 
   // Track B: Compute wordLayout for paragraphs with numberingProperties
+  const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
   const numberingSource =
     attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
-  const rawNumberingProps = toAdapterNumberingProps(numberingSource);
+  let rawNumberingProps = toAdapterNumberingProps(numberingSource);
+
+  /**
+   * Fallback mechanism for table paragraphs with list rendering but no numbering properties.
+   *
+   * **Why this is needed:**
+   * Some document sources (particularly table cells imported from certain formats) provide
+   * listRendering attributes (marker text, path, styling) but lack the traditional OOXML
+   * numberingProperties structure (numId, ilvl). This fallback synthesizes minimal
+   * numbering properties from the listRendering data to ensure list markers render correctly.
+   *
+   * **When this is used:**
+   * - Table paragraphs that have listRendering but no numberingProperties
+   * - Imported documents where numbering context was lost but visual marker info was preserved
+   * - Fallback rendering path when traditional OOXML numbering is unavailable
+   *
+   * **Synthesis logic:**
+   * - `numId`: Set to -1 (sentinel value indicating synthesized/unavailable)
+   * - `ilvl`: Calculated from path length (path.length - 1), defaults to 0
+   * - `path`: Preserved from listRendering (e.g., [1, 2, 3] for nested lists)
+   * - `counterValue`: Extracted from last element of path array
+   * - Other properties (markerText, format, justification, suffix) copied from listRendering
+   */
+  if (!rawNumberingProps && listRendering) {
+    const path = listRendering.path;
+    const counterFromPath = path && path.length ? path[path.length - 1] : undefined;
+    const ilvl = path && path.length > 1 ? path.length - 1 : 0;
+
+    rawNumberingProps = {
+      numId: -1,
+      ilvl,
+      path,
+      counterValue: Number.isFinite(counterFromPath) ? Number(counterFromPath) : undefined,
+      markerText: listRendering.markerText,
+      format: listRendering.numberingType as NumberingFormat | undefined,
+      lvlJc: listRendering.justification,
+      suffix: listRendering.suffix,
+    } as AdapterNumberingProps;
+  }
 
   /**
    * Validates that the paragraph has valid numbering properties.
@@ -1386,7 +1435,6 @@ export const computeParagraphAttrs = (
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
-    const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
     const numericNumId = typeof numId === 'number' ? numId : undefined;
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
@@ -1484,25 +1532,36 @@ export const computeParagraphAttrs = (
         }
       }
       paragraphAttrs.wordLayout = wordLayout;
+    }
 
-      // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
-      // Per OOXML spec, paragraph indent MERGES with numbering definition:
-      // - Numbering definition provides base values (left, hanging from level)
-      // - Paragraph's explicit indent properties override specific values
-      // - Missing paragraph indent properties inherit from numbering definition
-      // This fixes cases where a paragraph only specifies w:hanging but should
-      // inherit w:left from the numbering level definition.
-      if (enrichedNumberingProps.resolvedLevelIndent) {
-        const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-        const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+    // Always merge resolvedLevelIndent into paragraphAttrs.indent, regardless of wordLayout success.
+    // This ensures sublists get correct indentation even if wordLayout computation fails.
+    // Per OOXML spec, paragraph indent MERGES with numbering definition:
+    // - Numbering definition provides base values (left, hanging from level)
+    // - Paragraph's explicit indent properties override specific values
+    // - Missing paragraph indent properties inherit from numbering definition
+    // This fixes cases where a paragraph only specifies w:hanging but should
+    // inherit w:left from the numbering level definition.
+    if (enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
 
-        // Merge: numbering definition as base, paragraph explicit values override
-        paragraphAttrs.indent = {
-          ...baseIndent,
-          ...(normalizedIndent ?? {}),
-        };
+      // Merge: numbering definition as base, paragraph explicit values override
+      paragraphAttrs.indent = {
+        ...baseIndent,
+        ...(normalizedIndent ?? {}),
+      };
+
+      // In OOXML, hanging and firstLine are mutually exclusive.
+      // If the paragraph explicitly specifies one, the other should be cleared.
+      // This ensures proper marker positioning when paragraph overrides numbering indent.
+      if (normalizedIndent?.firstLine !== undefined) {
+        delete paragraphAttrs.indent.hanging;
+      } else if (normalizedIndent?.hanging !== undefined) {
+        delete paragraphAttrs.indent.firstLine;
       }
     }
+
     // Preserve numberingProperties for downstream consumers (e.g., measurement stage)
     paragraphAttrs.numberingProperties = enrichedNumberingProps as Record<string, unknown>;
   }
@@ -1527,6 +1586,13 @@ export const mergeParagraphAttrs = (base?: ParagraphAttrs, override?: ParagraphA
   }
   if (override.indent) {
     merged.indent = { ...(base.indent ?? {}), ...override.indent };
+    // In OOXML, hanging and firstLine are mutually exclusive.
+    // If override specifies one, clear the other from the merged result.
+    if (override.indent.firstLine !== undefined) {
+      delete merged.indent.hanging;
+    } else if (override.indent.hanging !== undefined) {
+      delete merged.indent.firstLine;
+    }
   }
   if (override.borders) {
     merged.borders = { ...(base.borders ?? {}), ...override.borders };

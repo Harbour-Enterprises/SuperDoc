@@ -1,4 +1,5 @@
 import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { CellSelection, TableMap } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
@@ -22,6 +23,7 @@ import {
   findWordBoundaries,
   findParagraphBoundaries,
   createDragHandler,
+  hitTestTableFragment,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -30,6 +32,8 @@ import type {
   PositionHit,
   MultiSectionHeaderFooterIdentifier,
   DropEvent,
+  TableHitResult,
+  PageHit,
 } from '@superdoc/layout-bridge';
 import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
 import type { LayoutMode, PageDecorationProvider, RulerOptions } from '@superdoc/painter-dom';
@@ -164,6 +168,30 @@ export type RemoteCursorState = {
   head: number;
   /** Timestamp of last update (for recency-based rendering limits) */
   updatedAt: number;
+};
+
+/**
+ * Cell anchor state for table cell drag selection.
+ *
+ * Lifecycle:
+ * - Created when a drag operation starts inside a table cell (#setCellAnchor)
+ * - Persists throughout the drag to track the anchor cell
+ * - Cleared when drag ends (#clearCellAnchor) or document changes
+ *
+ * Used by the cell selection state machine to determine when to transition
+ * from text selection to cell selection mode during table drag operations.
+ */
+type CellAnchorState = {
+  /** PM position of the table node */
+  tablePos: number;
+  /** PM position at the start of the anchor cell */
+  cellPos: number;
+  /** Row index of the anchor cell (0-based) */
+  cellRowIndex: number;
+  /** Column index of the anchor cell (0-based) */
+  cellColIndex: number;
+  /** Cached reference to table block ID for performance */
+  tableBlockId: string;
 };
 
 /**
@@ -558,6 +586,13 @@ export class PresentationEditor extends EventEmitter {
   #dragAnchor: number | null = null;
   #isDragging = false;
   #dragExtensionMode: 'char' | 'word' | 'para' = 'char';
+
+  // Cell selection drag state
+  // Tracks cell-specific context when drag starts in a table for multi-cell selection
+  #cellAnchor: CellAnchorState | null = null;
+
+  /** Cell drag mode state machine: 'none' = not in table, 'pending' = in table but haven't crossed cell boundary, 'active' = crossed cell boundary */
+  #cellDragMode: 'none' | 'pending' | 'active' = 'none';
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -2016,6 +2051,9 @@ export class PresentationEditor extends EventEmitter {
     this.#remoteCursorElements.clear();
     this.#remoteCursorOverlay = null;
 
+    // Clean up cell selection drag state to prevent memory leaks
+    this.#clearCellAnchor();
+
     // Unregister from static registry
     if (this.#options?.documentId) {
       PresentationEditor.#instances.delete(this.#options.documentId);
@@ -2072,6 +2110,9 @@ export class PresentationEditor extends EventEmitter {
       // This ensures cursor position is broadcast with each keystroke
       if (transaction?.docChanged) {
         this.#updateLocalAwarenessCursor();
+        // Clear cell anchor on document changes to prevent stale references
+        // (table structure may have changed, cell positions may be invalid)
+        this.#clearCellAnchor();
       }
     };
     const handleSelection = () => {
@@ -3338,6 +3379,20 @@ export class PresentationEditor extends EventEmitter {
     // (the second click can return a slightly different position due to mouse movement)
     if (clickDepth === 1) {
       this.#dragAnchor = hit.pos;
+
+      // Check if click is inside a table cell for potential cell selection
+      // Only set up cell anchor on single click (not double/triple for word/para selection)
+      const tableHit = this.#hitTestTable(x, y);
+
+      if (tableHit) {
+        const tablePos = this.#getTablePosFromHit(tableHit);
+        if (tablePos !== null) {
+          this.#setCellAnchor(tableHit, tablePos);
+        }
+      } else {
+        // Clicked outside table - clear any existing cell anchor
+        this.#clearCellAnchor();
+      }
     }
     this.#isDragging = true;
     if (clickDepth >= 3) {
@@ -3458,6 +3513,332 @@ export class PresentationEditor extends EventEmitter {
     this.#lastClickPosition = { x: event.clientX, y: event.clientY };
 
     return this.#clickCount;
+  }
+
+  // ============================================================================
+  // Cell Selection Utilities
+  // ============================================================================
+
+  /**
+   * Gets the ProseMirror position at the start of a table cell from a table hit result.
+   *
+   * This method navigates the ProseMirror document structure to find the exact position where
+   * a table cell begins. The position returned is suitable for use with CellSelection.create().
+   *
+   * Algorithm:
+   * 1. Validate input (tableHit structure and cell indices)
+   * 2. Traverse document to find the table node matching tableHit.block.id
+   * 3. Navigate through table structure (table > row > cell) to target row
+   * 4. Track logical column position accounting for colspan (handles merged cells)
+   * 5. Return position when target column falls within a cell's span
+   *
+   * Merged cell handling:
+   * - Does NOT assume 1:1 mapping between cell index and logical column
+   * - Tracks cumulative logical column position by summing colspan values
+   * - A cell with colspan=3 occupies logical columns [n, n+1, n+2]
+   * - Finds the cell whose logical span contains the target column index
+   *
+   * Error handling:
+   * - Input validation with console warnings for debugging
+   * - Try-catch around document traversal (catches corrupted document errors)
+   * - Bounds checking for row indices
+   * - Null checks at each navigation step
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment containing:
+   *   - block: TableBlock with the table's block ID
+   *   - cellRowIndex: 0-based row index of the target cell
+   *   - cellColIndex: 0-based logical column index of the target cell
+   * @returns The PM position at the start of the cell, or null if:
+   *   - Invalid input (null tableHit, negative indices)
+   *   - Table not found in document
+   *   - Target row out of bounds
+   *   - Target column not found in row
+   *   - Document traversal error
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, returns null on failure
+   */
+  #getCellPosFromTableHit(tableHit: TableHitResult): number | null {
+    // Input validation: Check for valid tableHit structure
+    if (!tableHit || !tableHit.block || typeof tableHit.block.id !== 'string') {
+      console.warn('[getCellPosFromTableHit] Invalid tableHit input:', tableHit);
+      return null;
+    }
+
+    // Validate cell indices are non-negative
+    if (
+      typeof tableHit.cellRowIndex !== 'number' ||
+      typeof tableHit.cellColIndex !== 'number' ||
+      tableHit.cellRowIndex < 0 ||
+      tableHit.cellColIndex < 0
+    ) {
+      console.warn('[getCellPosFromTableHit] Invalid cell indices:', {
+        row: tableHit.cellRowIndex,
+        col: tableHit.cellColIndex,
+      });
+      return null;
+    }
+
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Find the table node in the document by searching for the block ID
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    try {
+      doc.descendants((node, pos) => {
+        if (node.type.name === 'table') {
+          if (currentTableIndex === targetTableIndex) {
+            tablePos = pos;
+            return false; // Stop iteration
+          }
+          currentTableIndex++;
+        }
+        return true;
+      });
+    } catch (error: unknown) {
+      console.error('[getCellPosFromTableHit] Error during document traversal:', error);
+      return null;
+    }
+
+    if (tablePos === null) return null;
+
+    const tableNode = doc.nodeAt(tablePos);
+    if (!tableNode || tableNode.type.name !== 'table') return null;
+
+    // Navigate to the specific cell
+    const targetRowIndex = tableHit.cellRowIndex;
+    const targetColIndex = tableHit.cellColIndex;
+
+    // Bounds check: Validate target row exists in table
+    if (targetRowIndex >= tableNode.childCount) {
+      console.warn('[getCellPosFromTableHit] Target row index out of bounds:', {
+        targetRowIndex,
+        tableChildCount: tableNode.childCount,
+      });
+      return null;
+    }
+
+    // Calculate position by traversing table structure
+    // Table structure: table > tableRow > tableCell
+    let currentPos = tablePos + 1; // +1 to enter the table node
+
+    // Iterate through rows to find the target row
+    for (let r = 0; r < tableNode.childCount && r <= targetRowIndex; r++) {
+      const row = tableNode.child(r);
+      if (r === targetRowIndex) {
+        // Found the target row, now find the cell
+        currentPos += 1; // +1 to enter the row node
+
+        // Track logical column position accounting for colspan
+        let logicalCol = 0;
+        for (let cellIndex = 0; cellIndex < row.childCount; cellIndex++) {
+          const cell = row.child(cellIndex);
+          // Type guard: Validate colspan is a positive number
+          const rawColspan = cell.attrs?.colspan;
+          const colspan =
+            typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+
+          // Check if target column falls within this cell's span
+          if (targetColIndex >= logicalCol && targetColIndex < logicalCol + colspan) {
+            // Found the target cell - return position at cell start
+            return currentPos;
+          }
+
+          // Move past this cell
+          currentPos += cell.nodeSize;
+          logicalCol += colspan;
+        }
+
+        // Target column not found in this row (shouldn't happen in valid tables)
+        console.warn('[getCellPosFromTableHit] Target column not found in row:', {
+          targetColIndex,
+          logicalColReached: logicalCol,
+          rowCellCount: row.childCount,
+        });
+        return null;
+      } else {
+        // Move past this row
+        currentPos += row.nodeSize;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Gets the table position (start of table node) from a table hit result.
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment
+   * @returns The PM position at the start of the table, or null if not found
+   * @private
+   */
+  #getTablePosFromHit(tableHit: TableHitResult): number | null {
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'table') {
+        if (currentTableIndex === targetTableIndex) {
+          tablePos = pos;
+          return false;
+        }
+        currentTableIndex++;
+      }
+      return true;
+    });
+
+    return tablePos;
+  }
+
+  /**
+   * Determines if the current drag should create a CellSelection instead of TextSelection.
+   *
+   * Implements a state machine for table cell selection:
+   * - 'none': Not in a table, use TextSelection
+   * - 'pending': Started drag in a table, but haven't crossed cell boundary yet
+   * - 'active': Crossed cell boundary, use CellSelection
+   *
+   * State transitions:
+   * - none → pending: When drag starts in a table cell (#setCellAnchor)
+   * - pending → active: When drag crosses into a different cell (this method returns true)
+   * - active → none: When drag ends (#clearCellAnchor)
+   * - * → none: When document changes or clicking outside table
+   *
+   * Decision logic:
+   * 1. No cell anchor → false (not in table drag mode)
+   * 2. Current position outside table → return current state (stay in 'active' if already there)
+   * 3. Different table → treat as outside table
+   * 4. Different cell in same table → true (activate cell selection)
+   * 5. Same cell → return current state (stay in 'active' if already there, else false)
+   *
+   * This state machine ensures:
+   * - Text selection works normally within a single cell
+   * - Cell selection activates smoothly when crossing cell boundaries
+   * - Once activated, cell selection persists even if dragging back to anchor cell
+   *
+   * @param currentTableHit - The table hit result for the current pointer position, or null if not in a table
+   * @returns true if we should create a CellSelection, false for TextSelection
+   * @private
+   */
+  #shouldUseCellSelection(currentTableHit: TableHitResult | null): boolean {
+    // No cell anchor means we didn't start in a table
+    if (!this.#cellAnchor) return false;
+
+    // Current position is outside any table - keep last cell selection
+    if (!currentTableHit) return this.#cellDragMode === 'active';
+
+    // Check if we're in the same table
+    if (currentTableHit.block.id !== this.#cellAnchor.tableBlockId) {
+      // Different table - treat as outside table
+      return this.#cellDragMode === 'active';
+    }
+
+    // Check if we've crossed a cell boundary
+    const sameCell =
+      currentTableHit.cellRowIndex === this.#cellAnchor.cellRowIndex &&
+      currentTableHit.cellColIndex === this.#cellAnchor.cellColIndex;
+
+    if (!sameCell) {
+      // We've crossed into a different cell - activate cell selection
+      return true;
+    }
+
+    // Same cell - only use cell selection if we were already in active mode
+    return this.#cellDragMode === 'active';
+  }
+
+  /**
+   * Stores the cell anchor when a drag operation starts inside a table cell.
+   *
+   * @param tableHit - The table hit result for the initial click position
+   * @param tablePos - The PM position of the table node
+   * @private
+   */
+  #setCellAnchor(tableHit: TableHitResult, tablePos: number): void {
+    const cellPos = this.#getCellPosFromTableHit(tableHit);
+    if (cellPos === null) {
+      return;
+    }
+
+    this.#cellAnchor = {
+      tablePos,
+      cellPos,
+      cellRowIndex: tableHit.cellRowIndex,
+      cellColIndex: tableHit.cellColIndex,
+      tableBlockId: tableHit.block.id,
+    };
+    this.#cellDragMode = 'pending';
+  }
+
+  /**
+   * Clears the cell drag state.
+   * Called when drag ends or when clicking outside a table.
+   *
+   * @private
+   */
+  #clearCellAnchor(): void {
+    this.#cellAnchor = null;
+    this.#cellDragMode = 'none';
+  }
+
+  /**
+   * Attempts to perform a table hit test for the given normalized coordinates.
+   *
+   * @param normalizedX - X coordinate in layout space
+   * @param normalizedY - Y coordinate in layout space
+   * @returns TableHitResult if the point is inside a table cell, null otherwise
+   * @private
+   */
+  #hitTestTable(normalizedX: number, normalizedY: number): TableHitResult | null {
+    if (!this.#layoutState.layout) {
+      return null;
+    }
+
+    // Find the page at these coordinates
+    const layout = this.#layoutState.layout;
+    // Get configured page size as fallback (page.size may be undefined for single-section docs)
+    const configuredPageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
+
+    let pageY = 0;
+    let pageHit: PageHit | null = null;
+
+    for (let i = 0; i < layout.pages.length; i++) {
+      const page = layout.pages[i];
+      // Use page.size.h if available, otherwise fall back to configured page size
+      const pageHeight = page.size?.h ?? configuredPageSize.h;
+      const gap = this.#layoutOptions.virtualization?.gap ?? DEFAULT_PAGE_GAP;
+
+      if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
+        pageHit = { pageIndex: i, page };
+        break;
+      }
+      pageY += pageHeight + gap;
+    }
+
+    if (!pageHit) {
+      return null;
+    }
+
+    // Convert to page-relative coordinates
+    const pageRelativeY = normalizedY - pageY;
+    const point = { x: normalizedX, y: pageRelativeY };
+
+    return hitTestTableFragment(pageHit, this.#layoutState.blocks, this.#layoutState.measures, point);
   }
 
   /**
@@ -3697,6 +4078,57 @@ export class PresentationEditor extends EventEmitter {
       // If we can't find a position, keep the last selection
       if (!hit) return;
 
+      // Check for cell selection mode (table drag)
+      const currentTableHit = this.#hitTestTable(normalized.x, normalized.y);
+      const shouldUseCellSel = this.#shouldUseCellSelection(currentTableHit);
+
+      if (shouldUseCellSel && this.#cellAnchor) {
+        // Cell selection mode - create CellSelection spanning anchor to current cell
+        const headCellPos = currentTableHit ? this.#getCellPosFromTableHit(currentTableHit) : null;
+
+        if (headCellPos !== null) {
+          // Transition to active mode if we weren't already
+          if (this.#cellDragMode !== 'active') {
+            this.#cellDragMode = 'active';
+          }
+
+          try {
+            const doc = this.#editor.state.doc;
+            const anchorCellPos = this.#cellAnchor.cellPos;
+
+            // Validate positions are within document bounds
+            const clampedAnchor = Math.max(0, Math.min(anchorCellPos, doc.content.size));
+            const clampedHead = Math.max(0, Math.min(headCellPos, doc.content.size));
+
+            const cellSelection = CellSelection.create(doc, clampedAnchor, clampedHead);
+            const tr = this.#editor.state.tr.setSelection(cellSelection);
+            this.#editor.view?.dispatch(tr);
+            this.#scheduleSelectionUpdate();
+          } catch (error) {
+            // CellSelection creation can fail if positions are invalid
+            // Fall back to text selection
+            console.warn('[CELL-SELECTION] Failed to create CellSelection, falling back to TextSelection:', error);
+
+            const anchor = this.#dragAnchor;
+            const head = hit.pos;
+            const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+            try {
+              const tr = this.#editor.state.tr.setSelection(
+                TextSelection.create(this.#editor.state.doc, selAnchor, selHead),
+              );
+              this.#editor.view?.dispatch(tr);
+              this.#scheduleSelectionUpdate();
+            } catch {
+              // Position may be invalid during layout updates - ignore
+            }
+          }
+
+          return; // Skip header/footer hover logic during drag
+        }
+      }
+
+      // Text selection mode (default)
       const anchor = this.#dragAnchor;
       const head = hit.pos;
 
@@ -3764,6 +4196,13 @@ export class PresentationEditor extends EventEmitter {
     // the first click must persist to the second click) and for shift+click
     // to extend selection in the same mode (word/para) after a multi-click
     this.#isDragging = false;
+
+    // Reset cell drag mode but preserve #cellAnchor for potential shift+click extension
+    // If we were in active cell selection mode, the CellSelection is already dispatched
+    // and preserved in the editor state
+    if (this.#cellDragMode !== 'none') {
+      this.#cellDragMode = 'none';
+    }
   };
 
   /**
@@ -4341,6 +4780,17 @@ export class PresentationEditor extends EventEmitter {
 
     if (!layout) {
       // No layout yet - keep existing cursor visible until layout is ready
+      return;
+    }
+
+    // Handle CellSelection - render cell backgrounds for selected table cells
+    if (selection instanceof CellSelection) {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCellSelectionOverlay(selection, layout);
+      } catch (error) {
+        console.warn('[PresentationEditor] Failed to render cell selection overlay:', error);
+      }
       return;
     }
 
@@ -5689,6 +6139,242 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Renders visual highlighting for CellSelection (multiple table cells selected).
+   *
+   * This method creates blue overlay rectangles for each selected cell in a table,
+   * accounting for merged cells (colspan/rowspan), multi-page tables, and accurate
+   * row/column positioning from layout measurements.
+   *
+   * Algorithm:
+   * 1. Locate the table node by walking up the selection hierarchy
+   * 2. Find the corresponding table block in layout state
+   * 3. Collect all table fragments (tables can span multiple pages)
+   * 4. Use TableMap to convert cell positions to row/column indices
+   * 5. For each selected cell:
+   *    - Find the fragment containing this cell's row
+   *    - Look up column boundary information from fragment metadata
+   *    - Calculate cell width (sum widths for colspan > 1)
+   *    - Calculate cell height from row measurements (sum heights for rowspan > 1)
+   *    - Convert page-local coordinates to overlay coordinates
+   *    - Create and append highlight DOM element
+   *
+   * Edge cases handled:
+   * - Tables spanning multiple pages (iterate all fragments)
+   * - Merged cells (colspan and rowspan attributes)
+   * - Missing measure data (fallback to estimated row heights)
+   * - Invalid table structures (TableMap.get wrapped in try-catch)
+   * - Cells outside fragment boundaries (skipped)
+   *
+   * @param selection - The CellSelection from ProseMirror tables plugin
+   * @param layout - The current layout containing table fragments and measurements
+   * @returns void - Renders directly to this.#localSelectionLayer
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, rendering gracefully degrades
+   */
+  #renderCellSelectionOverlay(selection: CellSelection, layout: Layout): void {
+    const localSelectionLayer = this.#localSelectionLayer;
+    if (!localSelectionLayer) {
+      return;
+    }
+
+    // Validate input parameters
+    if (!selection || !layout || !layout.pages) {
+      console.warn('[renderCellSelectionOverlay] Invalid input parameters');
+      return;
+    }
+
+    // Find the table node by walking up from the anchor cell
+    const $anchorCell = selection.$anchorCell;
+    if (!$anchorCell) {
+      console.warn('[renderCellSelectionOverlay] No anchor cell in selection');
+      return;
+    }
+
+    let tableDepth = $anchorCell.depth;
+    while (tableDepth > 0 && $anchorCell.node(tableDepth).type.name !== 'table') {
+      tableDepth--;
+    }
+
+    // Validate we found a table node
+    if (tableDepth === 0 && $anchorCell.node(0).type.name !== 'table') {
+      console.warn('[renderCellSelectionOverlay] Could not find table node in selection hierarchy');
+      return;
+    }
+
+    const tableNode = $anchorCell.node(tableDepth);
+    const tableStart = $anchorCell.start(tableDepth) - 1;
+
+    // Find the corresponding table block in layout state
+    let tableBlock: TableBlock | undefined;
+    if (this.#cellAnchor?.tableBlockId) {
+      tableBlock = this.#layoutState.blocks.find(
+        (block) => block.kind === 'table' && block.id === this.#cellAnchor?.tableBlockId,
+      ) as TableBlock | undefined;
+    }
+    if (!tableBlock) {
+      const expectedBlockId = `${tableStart}-table`;
+      tableBlock = this.#layoutState.blocks.find((block) => block.kind === 'table' && block.id === expectedBlockId) as
+        | TableBlock
+        | undefined;
+    }
+    if (!tableBlock) {
+      const tableBlocks = this.#layoutState.blocks.filter((block) => block.kind === 'table') as TableBlock[];
+      if (tableBlocks.length === 1) {
+        tableBlock = tableBlocks[0];
+      }
+    }
+    if (!tableBlock) {
+      return;
+    }
+
+    // Find table fragments on all pages
+    const tableFragments: Array<{ fragment: TableFragment; pageIndex: number }> = [];
+    layout.pages.forEach((page, pageIndex) => {
+      page.fragments.forEach((fragment) => {
+        if (fragment.kind === 'table' && fragment.blockId === tableBlock.id) {
+          tableFragments.push({ fragment: fragment as TableFragment, pageIndex });
+        }
+      });
+    });
+    if (tableFragments.length === 0) {
+      return;
+    }
+
+    // Use TableMap to get accurate row/column positions for selected cells
+    // Wrap TableMap.get in try-catch as it may throw on invalid table structures
+    let tableMap;
+    try {
+      tableMap = TableMap.get(tableNode);
+    } catch (error: unknown) {
+      console.error('[renderCellSelectionOverlay] TableMap.get failed:', error);
+      return;
+    }
+
+    const selectedCells: Array<{ row: number; col: number; colspan: number; rowspan: number }> = [];
+
+    selection.forEachCell((cellNode, cellPos) => {
+      const cellOffset = cellPos - tableStart - 1;
+      const mapIndex = tableMap.map.indexOf(cellOffset);
+      if (mapIndex === -1) {
+        return;
+      }
+
+      const row = Math.floor(mapIndex / tableMap.width);
+      const col = mapIndex % tableMap.width;
+      // Type guard: Validate colspan and rowspan are positive numbers
+      const rawColspan = cellNode.attrs?.colspan;
+      const rawRowspan = cellNode.attrs?.rowspan;
+      const colspan = typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+      const rowspan = typeof rawRowspan === 'number' && Number.isFinite(rawRowspan) && rawRowspan > 0 ? rawRowspan : 1;
+
+      selectedCells.push({ row, col, colspan, rowspan });
+    });
+
+    // Get row heights from table measure (measures array corresponds to blocks array by index)
+    const tableBlockIndex = this.#layoutState.blocks.indexOf(tableBlock as FlowBlock);
+    const measureAtIndex = tableBlockIndex !== -1 ? this.#layoutState.measures[tableBlockIndex] : undefined;
+    const tableMeasure = measureAtIndex?.kind === 'table' ? (measureAtIndex as TableMeasure) : undefined;
+
+    // Compute row Y positions from measure data
+    const rowPositions: Array<{ y: number; height: number }> = [];
+    if (tableMeasure?.rows) {
+      let currentY = 0;
+      for (const rowMeasure of tableMeasure.rows) {
+        rowPositions.push({ y: currentY, height: rowMeasure.height });
+        currentY += rowMeasure.height;
+      }
+    }
+
+    // Render selection rectangles for each selected cell
+    for (const { fragment, pageIndex } of tableFragments) {
+      const { columnBoundaries } = fragment.metadata ?? {};
+      if (!columnBoundaries) {
+        continue;
+      }
+
+      for (const { row, col, colspan, rowspan } of selectedCells) {
+        // Skip cells outside this fragment's row range
+        if (row < fragment.fromRow || row >= fragment.toRow) {
+          continue;
+        }
+
+        // Find column boundary
+        const colBoundary = columnBoundaries.find((cb) => cb.index === col);
+        if (!colBoundary) {
+          continue;
+        }
+
+        // Calculate cell width (accounting for colspan)
+        let cellWidth = colBoundary.width;
+        if (colspan > 1) {
+          for (let c = 1; c < colspan; c++) {
+            const nextColBoundary = columnBoundaries.find((cb) => cb.index === col + c);
+            if (nextColBoundary) {
+              cellWidth += nextColBoundary.width;
+            }
+          }
+        }
+
+        // Calculate row Y position and height
+        let rowY: number;
+        let rowHeight: number;
+
+        // Bounds check: Ensure row index is within valid range
+        if (row >= 0 && row < rowPositions.length && rowPositions[row]) {
+          // Use measure data - compute Y relative to fragment's first row
+          const fragmentStartY =
+            fragment.fromRow > 0 && fragment.fromRow < rowPositions.length && rowPositions[fragment.fromRow]
+              ? rowPositions[fragment.fromRow].y
+              : 0;
+          rowY = rowPositions[row].y - fragmentStartY;
+          rowHeight = rowPositions[row].height;
+
+          // Account for rowspan with bounds checking
+          if (rowspan > 1) {
+            for (let r = 1; r < rowspan && row + r < rowPositions.length && rowPositions[row + r]; r++) {
+              rowHeight += rowPositions[row + r].height;
+            }
+          }
+        } else {
+          // Fallback: estimate from fragment height
+          const rowCount = fragment.toRow - fragment.fromRow;
+          const estimatedRowHeight = rowCount > 0 ? fragment.height / rowCount : 20;
+          const fragmentRelativeRow = row - fragment.fromRow;
+          rowY = fragmentRelativeRow * estimatedRowHeight;
+          rowHeight = estimatedRowHeight * rowspan;
+        }
+
+        // Compute cell rectangle in page-local coordinates
+        const cellX = fragment.x + colBoundary.x;
+        const cellY = fragment.y + rowY;
+
+        // Convert to overlay coordinates
+        const coords = this.#convertPageLocalToOverlayCoords(pageIndex, cellX, cellY);
+        if (!coords) {
+          continue;
+        }
+
+        // Create and append highlight element
+        const highlight = localSelectionLayer.ownerDocument?.createElement('div');
+        if (!highlight) {
+          continue;
+        }
+
+        highlight.className = 'presentation-editor__cell-selection-rect';
+        highlight.style.position = 'absolute';
+        highlight.style.left = `${coords.x}px`;
+        highlight.style.top = `${coords.y}px`;
+        highlight.style.width = `${Math.max(1, cellWidth)}px`;
+        highlight.style.height = `${Math.max(1, rowHeight)}px`;
+        highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
+        highlight.style.pointerEvents = 'none';
+        localSelectionLayer.appendChild(highlight);
+      }
+    }
+  }
+
   #renderSelectionRects(rects: LayoutRect[]) {
     const localSelectionLayer = this.#localSelectionLayer;
     if (!localSelectionLayer) {
@@ -5784,7 +6470,7 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
     caretEl.style.height = `${finalHeight}px`;
-    caretEl.style.backgroundColor = '#3366FF';
+    caretEl.style.backgroundColor = '#000000';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
     this.#localSelectionLayer.appendChild(caretEl);

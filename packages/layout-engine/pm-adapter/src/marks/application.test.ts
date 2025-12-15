@@ -503,10 +503,19 @@ describe('mark application', () => {
       expect(normalizeUnderlineStyle('wavy')).toBe('wavy');
     });
 
-    it('returns "single" as default for unknown values', () => {
-      expect(normalizeUnderlineStyle('unknown')).toBe('single');
+    it('returns undefined for explicit "none" value', () => {
+      expect(normalizeUnderlineStyle('none')).toBeUndefined();
+    });
+
+    it('returns "single" for undefined/null (default)', () => {
       expect(normalizeUnderlineStyle(null)).toBe('single');
       expect(normalizeUnderlineStyle(undefined)).toBe('single');
+    });
+
+    it('returns "single" for unknown underline types', () => {
+      expect(normalizeUnderlineStyle('words')).toBe('single');
+      expect(normalizeUnderlineStyle('thick')).toBe('single');
+      expect(normalizeUnderlineStyle('unknown')).toBe('single');
       expect(normalizeUnderlineStyle(123)).toBe('single');
     });
   });
