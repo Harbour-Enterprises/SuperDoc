@@ -3708,8 +3708,6 @@ export class DomPainter {
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
     const effectiveAlignment = alignment;
-    // Note: skipJustify only affects word-spacing for justify alignment, not other alignments.
-    // Center and right alignment should always be respected.
     if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
       el.style.textAlign = effectiveAlignment;
     } else if (effectiveAlignment === 'justify') {
@@ -3736,6 +3734,8 @@ export class DomPainter {
             .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
             .map((r) => r.text)
         : gatherTextSlicesForLine(block, line);
+
+    // Targeted debug removed now that issue is understood.
 
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
@@ -3795,7 +3795,8 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    const shouldJustify = !skipJustify && effectiveAlignment === 'justify' && !hasExplicitPositioning;
+    // Check if paragraph has justified alignment ('both' means justify) and line should be justified
+    const shouldJustify = block.attrs?.alignment === 'both' && !hasExplicitPositioning;
     if (shouldJustify) {
       const spaceCount = textSlices.reduce(
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,

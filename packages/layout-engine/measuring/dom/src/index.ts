@@ -1435,7 +1435,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
         const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
-        const justifyAlignment = block.attrs?.alignment === 'justify';
+        // Check if paragraph has justified alignment ('both' means justify)
+        const justifyAlignment = block.attrs?.alignment === 'both';
         const totalWidthWithWord =
           currentLine.width +
           boundarySpacing +
