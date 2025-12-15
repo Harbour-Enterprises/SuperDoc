@@ -67,4 +67,51 @@ describe('findTrackedMarkBetween', () => {
       }),
     );
   });
+
+  it('finds mark in run node at start position when nodesBetween does not include it', () => {
+    const deleteMark = schema.marks[TrackDeleteMarkName].create({
+      id: '9f4213cc-7829-46c6-a8a8-55334c90c777',
+      author: user.name,
+      authorEmail: user.email,
+      date,
+    });
+    const run1 = schema.nodes.run.create({}, schema.text('tes', [deleteMark]));
+    const run2 = schema.nodes.run.create({}, schema.text('t'));
+    const paragraph = schema.nodes.paragraph.create({}, [run1, run2]);
+    const doc = schema.nodes.doc.create({}, paragraph);
+
+    const state = createState(doc);
+    const tr = state.tr;
+
+    let run2Pos;
+    doc.descendants((node, pos) => {
+      if (node === run2 && run2Pos == null) {
+        run2Pos = pos;
+        return false;
+      }
+      return true;
+    });
+
+    const from = run2Pos + 1;
+    const to = from + run2.content.size;
+
+    const found = findTrackedMarkBetween({
+      tr,
+      from,
+      to,
+      markName: TrackDeleteMarkName,
+      attrs: { authorEmail: user.email },
+    });
+
+    expect(found).toEqual(
+      expect.objectContaining({
+        mark: expect.objectContaining({
+          attrs: expect.objectContaining({
+            id: '9f4213cc-7829-46c6-a8a8-55334c90c777',
+            authorEmail: user.email,
+          }),
+        }),
+      }),
+    );
+  });
 });

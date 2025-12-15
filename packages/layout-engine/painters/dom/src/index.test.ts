@@ -2080,6 +2080,54 @@ describe('DomPainter', () => {
     expect(span.dataset.trackChangeKind).toBeUndefined();
   });
 
+  it('re-renders tracked changes when metadata is added without text edits', () => {
+    const blockId = 'tracked-version-block';
+    const trackedAttrs = {
+      trackedChangesMode: 'review' as const,
+      trackedChangesEnabled: true,
+    };
+    const originalBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: blockId,
+      runs: [
+        {
+          text: 'Pending review',
+          fontFamily: 'Arial',
+          fontSize: 16,
+        },
+      ],
+      attrs: trackedAttrs,
+    };
+
+    const updatedBlock: FlowBlock = {
+      ...originalBlock,
+      runs: [
+        {
+          ...originalBlock.runs[0],
+          trackedChange: {
+            kind: 'delete',
+            id: 'tc-new',
+          },
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(blockId, originalBlock.runs[0].text.length);
+
+    const painter = createDomPainter({ blocks: [originalBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    expect(mount.querySelector('[data-track-change-id]')).toBeNull();
+
+    painter.setData?.([updatedBlock], [paragraphMeasure]);
+    painter.paint(paragraphLayout, mount);
+
+    const trackedSpan = mount.querySelector('[data-track-change-id="tc-new"]') as HTMLElement;
+    expect(trackedSpan).toBeTruthy();
+    expect(trackedSpan.classList.contains('track-delete-dec')).toBe(true);
+    expect(trackedSpan.classList.contains('highlighted')).toBe(true);
+  });
+
   describe('token resolution tests', () => {
     it('renders footer with page numbers resolved', () => {
       const footerBlock: FlowBlock = {
