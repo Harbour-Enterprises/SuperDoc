@@ -14,10 +14,10 @@ export const findTrackedMarkBetween = ({
   const startPos = Math.max(from - offset, 0); // $from.start()
   const endPos = Math.min(to + offset, doc.content.size); // $from.end()
 
-  let markFound;
+  let markFound = null;
 
   const tryMatch = (node, pos) => {
-    if (!node) {
+    if (!node || node?.nodeSize === undefined) {
       return;
     }
 
@@ -31,15 +31,13 @@ export const findTrackedMarkBetween = ({
         to: pos + node.nodeSize,
         mark,
       };
+      // Return false to stop the search
+      return false;
     }
   };
 
   doc.nodesBetween(startPos, endPos, (node, pos) => {
-    if (!node || node?.nodeSize === undefined) {
-      return;
-    }
-
-    tryMatch(node, pos);
+    return tryMatch(node, pos);
   });
 
   const inspectAroundPosition = (pos) => {
@@ -66,7 +64,10 @@ export const findTrackedMarkBetween = ({
     }
   };
 
-  inspectAroundPosition(startPos);
-  inspectAroundPosition(endPos);
+  if (!markFound) {
+    inspectAroundPosition(startPos);
+    inspectAroundPosition(endPos);
+  }
+
   return markFound;
 };
