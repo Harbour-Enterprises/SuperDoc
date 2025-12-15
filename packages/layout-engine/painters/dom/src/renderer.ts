@@ -2872,12 +2872,45 @@ export class DomPainter {
       return this.renderLine(block, line, ctx, undefined, undefined, true); // skipJustify = true
     };
 
+    /**
+     * Wrapper function for rendering drawing content inside table cells.
+     *
+     * This function delegates to the appropriate DomPainter methods based on the drawing kind:
+     * - 'image': Creates a standard image element with src and object-fit
+     * - 'shapeGroup': Creates a group container with positioned child shapes (images and vectors)
+     * - 'vectorShape': Creates an SVG element for the vector shape (without geometry transforms in table cells)
+     *
+     * For unsupported or unrecognized drawing kinds, returns a placeholder element with diagonal stripes.
+     *
+     * @param block - The DrawingBlock to render
+     * @returns HTMLElement representing the rendered drawing content
+     *
+     * @remarks
+     * This wrapper is specifically designed for table cell rendering where:
+     * - Vector shapes are rendered without geometry transforms (to avoid layout conflicts)
+     * - The returned element will have width: 100% and height: 100% applied by the table cell renderer
+     */
+    const renderDrawingContentForTableCell = (block: DrawingBlock): HTMLElement => {
+      if (block.drawingKind === 'image') {
+        return this.createDrawingImageElement(block);
+      }
+      if (block.drawingKind === 'shapeGroup') {
+        return this.createShapeGroupElement(block);
+      }
+      if (block.drawingKind === 'vectorShape') {
+        // For vectorShapes in table cells, render without geometry transforms
+        return this.createVectorShapeElement(block, block.geometry, false);
+      }
+      return this.createDrawingPlaceholder();
+    };
+
     return renderTableFragmentElement({
       doc: this.doc,
       fragment,
       context,
       blockLookup: this.blockLookup,
       renderLine: renderLineForTableCell,
+      renderDrawingContent: renderDrawingContentForTableCell,
       applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
