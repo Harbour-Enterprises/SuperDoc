@@ -4567,6 +4567,18 @@ const hasListMarkerProperties = (
   return true;
 };
 
+const trackedChangeSignature = (meta: TextRun['trackedChange']): string => {
+  if (!meta) {
+    return '';
+  }
+  try {
+    return JSON.stringify(meta);
+  } catch {
+    // As a last resort, fall back to a simple identifier to avoid crashing signature generation.
+    return `${meta.kind}:${meta.id}`;
+  }
+};
+
 /**
  * Derives a version string for a flow block based on its content and styling properties.
  *
@@ -4642,6 +4654,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.pmStart ?? '',
           textRun.pmEnd ?? '',
           textRun.token ?? '',
+          trackedChangeSignature(textRun.trackedChange),
         ].join(',');
       })
       .join('|');
