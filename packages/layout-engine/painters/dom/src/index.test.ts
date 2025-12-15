@@ -2080,7 +2080,7 @@ describe('DomPainter', () => {
     expect(span.dataset.trackChangeKind).toBeUndefined();
   });
 
-  it('re-renders tracked changes when metadata is added without text edits', () => {
+  it('re-renders tracked changes if current version has no tracked changes but next version does', () => {
     const blockId = 'tracked-version-block';
     const trackedAttrs = {
       trackedChangesMode: 'review' as const,
