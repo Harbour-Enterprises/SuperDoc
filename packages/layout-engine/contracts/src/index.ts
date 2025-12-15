@@ -1001,6 +1001,59 @@ export type DropCapDescriptor = {
  * 2. **First-line indent mode**: Marker is at paraIndentLeft + firstLine, text starts at textStartPx
  *
  * This type enables type-safe access to word-layout-specific properties without unsafe casts.
+ *
+ * @example
+ * ```typescript
+ * // Standard hanging indent list (marker in hanging indent area)
+ * const standardListConfig: WordLayoutConfig = {
+ *   marker: {
+ *     markerText: "1.",
+ *     justification: "right",
+ *     gutterWidthPx: 18
+ *   }
+ * };
+ * // Text starts at paraIndentLeft, marker is placed in hanging indent area
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // First-line indent mode list (input-rule created, e.g., typing "1. ")
+ * const firstLineIndentConfig: WordLayoutConfig = {
+ *   firstLineIndentMode: true,
+ *   textStartPx: 56,  // Pre-calculated: paraIndentLeft + firstLine + markerWidth + tabWidth
+ *   marker: {
+ *     markerText: "1.",
+ *     markerX: 36,      // Position where marker renders
+ *     textStartX: 56    // Where text starts after marker
+ *   }
+ * };
+ * // Text starts at textStartPx (56px), marker is at markerX (36px)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Checking for first-line indent mode in layout code
+ * const wordLayout = block.attrs?.wordLayout;
+ * if (wordLayout?.firstLineIndentMode) {
+ *   const textStart = wordLayout.textStartPx ?? 0;
+ *   // Use textStart for positioning text on first line
+ * } else {
+ *   // Use standard hanging indent calculations
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Non-list paragraph (no word layout config)
+ * const regularParagraph = {
+ *   kind: 'paragraph',
+ *   attrs: {
+ *     indent: { left: 36, firstLine: 18 }
+ *     // No wordLayout property
+ *   }
+ * };
+ * // Text positioning uses standard paragraph indent logic
+ * ```
  */
 export type WordLayoutConfig = {
   /**

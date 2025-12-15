@@ -88,7 +88,79 @@ export function isListItem(markerWidth: number, block: ParagraphBlock | undefine
 
 /**
  * Configuration for calculating text start indent.
- * All measurements in pixels.
+ *
+ * This type defines all the parameters needed to calculate where text content
+ * starts horizontally within a paragraph fragment. It supports both standard
+ * paragraphs and list items (with standard hanging indent or first-line indent mode).
+ *
+ * All measurements are in pixels.
+ *
+ * @example
+ * ```typescript
+ * // Standard list item (hanging indent mode)
+ * const standardListParams: TextIndentCalculationParams = {
+ *   isFirstLine: true,
+ *   isListItem: true,
+ *   markerWidth: 18,
+ *   paraIndentLeft: 36,
+ *   firstLineIndent: 0,
+ *   hangingIndent: 18,
+ *   wordLayout: undefined
+ * };
+ * const indent = calculateTextStartIndent(standardListParams);
+ * // Returns: 36 (text starts at paraIndentLeft)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // First-line indent mode list item (input-rule created)
+ * const firstLineIndentParams: TextIndentCalculationParams = {
+ *   isFirstLine: true,
+ *   isListItem: true,
+ *   markerWidth: 20,
+ *   paraIndentLeft: 36,
+ *   firstLineIndent: 0,
+ *   hangingIndent: 18,
+ *   wordLayout: {
+ *     firstLineIndentMode: true,
+ *     textStartPx: 56  // Pre-calculated position after marker + tab
+ *   }
+ * };
+ * const indent = calculateTextStartIndent(firstLineIndentParams);
+ * // Returns: 56 (from textStartPx)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Non-list paragraph with first-line indent
+ * const paragraphParams: TextIndentCalculationParams = {
+ *   isFirstLine: true,
+ *   isListItem: false,
+ *   markerWidth: 0,
+ *   paraIndentLeft: 36,
+ *   firstLineIndent: 18,
+ *   hangingIndent: 0,
+ *   wordLayout: undefined
+ * };
+ * const indent = calculateTextStartIndent(paragraphParams);
+ * // Returns: 54 (paraIndentLeft + firstLineIndent)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Second line of a list item (no first-line indent applied)
+ * const secondLineParams: TextIndentCalculationParams = {
+ *   isFirstLine: false,
+ *   isListItem: true,
+ *   markerWidth: 20,
+ *   paraIndentLeft: 36,
+ *   firstLineIndent: 0,
+ *   hangingIndent: 18,
+ *   wordLayout: { firstLineIndentMode: true, textStartPx: 56 }
+ * };
+ * const indent = calculateTextStartIndent(secondLineParams);
+ * // Returns: 36 (paraIndentLeft only, no special handling on non-first lines)
+ * ```
  */
 export type TextIndentCalculationParams = {
   /** Whether this is the first line of the paragraph fragment */
