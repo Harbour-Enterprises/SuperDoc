@@ -1534,6 +1534,57 @@ export function findLinesIntersectingRange(
   return hits;
 }
 
+/**
+ * Computes the ProseMirror position range for a line within a paragraph block.
+ *
+ * This function calculates the start and end PM positions by iterating through all runs
+ * that contribute to the line, handling partial runs at line boundaries and accounting
+ * for various run types (text, images, breaks, annotations).
+ *
+ * **Empty Run Handling (SD-1108 Fix):**
+ * Unlike `pmPosToCharOffset` which skips empty runs during position-to-character mapping,
+ * this function intentionally PRESERVES empty runs to support cursor positioning in
+ * zero-width content like empty table cells. Empty runs carry PM position metadata that
+ * enables click-to-position mapping even when there's no visible text.
+ *
+ * **Why the difference?**
+ * - `computeLinePmRange`: Used for spatial operations (click mapping, selection highlighting)
+ *   where we need to know the PM range of ALL content, including zero-width positions.
+ * - `pmPosToCharOffset`: Used for text measurement where only visible characters matter.
+ *   Empty runs contribute no pixels and should be skipped during character-based calculations.
+ *
+ * **Algorithm:**
+ * 1. Filter out atomic runs (images, line breaks, field annotations) - they have no text length
+ * 2. For each text run in the line:
+ *    a. If the run is empty (length 0), preserve its PM positions for cursor support
+ *    b. If the run has text, calculate PM positions based on character offsets
+ *    c. Handle partial runs (first/last in line) by adjusting offsets
+ * 3. Return the accumulated PM range
+ *
+ * **Edge Cases Handled:**
+ * - Empty runs (zero text length but valid PM positions) - PRESERVED for SD-1108
+ * - Atomic runs (images, breaks) - skipped, don't contribute to text range
+ * - Runs with missing PM data - skipped with warning logged
+ * - Runs with invalid PM positions (negative, Infinity, NaN) - logged as warnings
+ * - Partial runs at line boundaries - offset calculations applied
+ *
+ * @param block - The flow block to compute PM range for (must be a paragraph block)
+ * @param line - The line specification including run range (fromRun to toRun) and character offsets
+ * @returns Object containing pmStart and pmEnd positions, or empty object if block is not a paragraph
+ *
+ * @example
+ * ```typescript
+ * // Normal text run
+ * const range = computeLinePmRange(paragraphBlock, line);
+ * // { pmStart: 10, pmEnd: 25 }
+ *
+ * // Empty table cell (SD-1108 fix)
+ * const emptyRange = computeLinePmRange(emptyParagraphBlock, line);
+ * // { pmStart: 15, pmEnd: 15 } - zero-width but valid for cursor positioning
+ * ```
+ *
+ * @see pmPosToCharOffset - Related function that skips empty runs during character offset calculation
+ */
 export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: number; pmEnd?: number } {
   if (block.kind !== 'paragraph') return {};
 
@@ -1553,6 +1604,34 @@ export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: nu
     const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
 
     if (runPmStart == null || runPmEnd == null) continue;
+
+    // Runtime validation: warn about invalid PM positions that indicate data corruption
+    if (!Number.isFinite(runPmStart) || runPmStart < 0) {
+      console.warn(
+        `[computeLinePmRange] Invalid runPmStart (${runPmStart}) in block ${block.id}, run ${runIndex}. ` +
+          `This may indicate layout data corruption. Expected a non-negative finite number.`,
+      );
+    }
+    if (!Number.isFinite(runPmEnd) || runPmEnd < 0) {
+      console.warn(
+        `[computeLinePmRange] Invalid runPmEnd (${runPmEnd}) in block ${block.id}, run ${runIndex}. ` +
+          `This may indicate layout data corruption. Expected a non-negative finite number.`,
+      );
+    }
+
+    // Empty runs still carry caret information via their PM positions.
+    // Preserve those positions so zero-width lines (e.g., empty table cells)
+    // expose pmStart/pmEnd for cursor hit testing.
+    // This is intentional behavior for SD-1108 - DO NOT remove.
+    // NOTE: pmPosToCharOffset skips empty runs because they contribute no pixels,
+    // but we preserve them here for spatial operations like click-to-position.
+    if (runLength === 0) {
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+      continue;
+    }
 
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
