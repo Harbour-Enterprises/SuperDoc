@@ -25,6 +25,32 @@ export const findTrackedMarkBetween = ({
       (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
     );
 
+    // const dfs = (node) => {
+    //   const mark = node.marks.find(
+    //     (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
+    //   );
+
+    //   if (mark) {
+    //     return mark;
+    //   }
+
+    //   // In ProseMirror, node.content is a Fragment, children are in node.content.content
+    //   const children = node.content?.content;
+    //   if (Array.isArray(children)) {
+    //     for (const child of children) {
+    //       const found = dfs(child);
+    //       if (found) {
+    //         console.log('found on node:', child);
+    //         return found;
+    //       }
+    //     }
+    //   }
+
+    //   return null;
+    // };
+
+    // const mark = dfs(node);
+
     if (mark && !markFound) {
       markFound = {
         from: pos,
