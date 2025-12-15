@@ -1187,7 +1187,68 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       for (let wordIndex = 0; wordIndex < words.length; wordIndex++) {
         const word = words[wordIndex];
         if (word === '') {
-          charPosInRun += 1;
+          // Empty string from split(' ') indicates a space character (leading or consecutive spaces).
+          // We must add the space width to the line, not just skip it.
+          const spaceStartChar = charPosInRun;
+          const spaceEndChar = charPosInRun + 1;
+          const singleSpaceWidth = measureRunWidth(' ', font, ctx, run);
+
+          if (!currentLine) {
+            // Start a new line with just the space
+            currentLine = {
+              fromRun: runIndex,
+              fromChar: spaceStartChar,
+              toRun: runIndex,
+              toChar: spaceEndChar,
+              width: singleSpaceWidth,
+              maxFontSize: run.fontSize,
+              maxFontInfo: getFontInfoFromRun(run),
+              maxWidth: getEffectiveWidth(initialAvailableWidth),
+              segments: [{ runIndex, fromChar: spaceStartChar, toChar: spaceEndChar, width: singleSpaceWidth }],
+              spaceCount: 1,
+            };
+          } else {
+            // Add space to existing line
+            const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+            if (
+              currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
+              currentLine.width > 0
+            ) {
+              // Space doesn't fit - finish current line and start new one with the space
+              const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
+              const { spaceCount: _sc, ...lineBase } = currentLine;
+              const completedLine: Line = { ...lineBase, ...metrics };
+              addBarTabsToLine(completedLine);
+              lines.push(completedLine);
+              tabStopCursor = 0;
+              pendingTabAlignment = null;
+              lastAppliedTabAlign = null;
+
+              currentLine = {
+                fromRun: runIndex,
+                fromChar: spaceStartChar,
+                toRun: runIndex,
+                toChar: spaceEndChar,
+                width: singleSpaceWidth,
+                maxFontSize: run.fontSize,
+                maxFontInfo: getFontInfoFromRun(run),
+                maxWidth: getEffectiveWidth(contentWidth),
+                segments: [{ runIndex, fromChar: spaceStartChar, toChar: spaceEndChar, width: singleSpaceWidth }],
+                spaceCount: 1,
+              };
+            } else {
+              // Space fits - add it to current line
+              currentLine.toRun = runIndex;
+              currentLine.toChar = spaceEndChar;
+              currentLine.width = roundValue(currentLine.width + boundarySpacing + singleSpaceWidth);
+              currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
+              currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
+              appendSegment(currentLine.segments, runIndex, spaceStartChar, spaceEndChar, singleSpaceWidth);
+              currentLine.spaceCount += 1;
+            }
+          }
+
+          charPosInRun = spaceEndChar;
           continue;
         }
         const isLastWordInSegment = wordIndex === words.length - 1;

@@ -1659,6 +1659,70 @@ describe('measureBlock', () => {
       expect(lineWithRepresentado).toContain('neste ato representado por seu representante legal');
     });
 
+    it('preserves leading spaces in runs (xml:space="preserve" case)', async () => {
+      // When a run starts with a space (common in DOCX with xml:space="preserve"),
+      // the space should be included in the line width, not dropped.
+      // This tests the fix for segments like " Headquarters:" where split(' ') produces ['', 'Headquarters:']
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'leading-space-test',
+        runs: [
+          {
+            text: 'Location',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: ' ',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: 'of',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: ' Headquarters:',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+      const lineText = extractLineText(block, measure.lines[0]);
+
+      // The extracted text should include all spaces
+      expect(lineText).toBe('Location of Headquarters:');
+
+      // Also verify there's a space between 'of' and 'Headquarters'
+      expect(lineText).toContain('of Headquarters');
+    });
+
+    it('preserves multiple consecutive spaces from split', async () => {
+      // Test consecutive spaces which produce multiple empty strings from split(' ')
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'consecutive-spaces-test',
+        runs: [
+          {
+            text: 'Hello  World', // Two spaces between Hello and World
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+      const lineText = extractLineText(block, measure.lines[0]);
+
+      // Both spaces should be preserved
+      expect(lineText).toBe('Hello  World');
+    });
+
     it('prevents line width from exceeding maxWidth after appending segment with trailing space', async () => {
       // This test verifies the post-append overflow guard
       // Scenario: Word fits without space, but word+space exceeds maxWidth
