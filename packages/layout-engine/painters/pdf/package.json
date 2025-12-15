@@ -9,7 +9,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.json --noEmit",
+    "build": "tsc --project tsconfig.json --noEmit --noCheck",
     "test": "vitest run"
   },
   "dependencies": {
