@@ -2536,3 +2536,304 @@ describe('computeParagraphAttrs - alignment priority cascade', () => {
     });
   });
 });
+
+describe('computeParagraphAttrs - numbering properties fallback from listRendering', () => {
+  const createStyleContext = () =>
+    ({
+      styles: {},
+      defaults: {},
+    }) as never;
+
+  describe('fallback synthesis when numberingProperties is missing', () => {
+    it('should synthesize numbering props when only listRendering provided', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '1.',
+            justification: 'left',
+            numberingType: 'decimal',
+            suffix: 'tab',
+            path: [1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.markerText).toBe('1.');
+      expect(result?.numberingProperties?.format).toBe('decimal');
+      expect(result?.numberingProperties?.lvlJc).toBe('left');
+      expect(result?.numberingProperties?.suffix).toBe('tab');
+    });
+
+    it('should correctly extract counter value from path array', () => {
+      const testCases = [
+        { path: [1], expectedCounter: 1 },
+        { path: [1, 2], expectedCounter: 2 },
+        { path: [1, 2, 3], expectedCounter: 3 },
+        { path: [5, 10, 15], expectedCounter: 15 },
+      ];
+
+      testCases.forEach(({ path, expectedCounter }) => {
+        const para: PMNode = {
+          attrs: {
+            listRendering: {
+              markerText: `${expectedCounter}.`,
+              path,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.numberingProperties?.counterValue).toBe(expectedCounter);
+        expect(result?.numberingProperties?.path).toEqual(path);
+      });
+    });
+
+    it('should correctly calculate ilvl from path length', () => {
+      const testCases = [
+        { path: [1], expectedIlvl: 0 },
+        { path: [1, 2], expectedIlvl: 1 },
+        { path: [1, 2, 3], expectedIlvl: 2 },
+        { path: [1, 2, 3, 4], expectedIlvl: 3 },
+      ];
+
+      testCases.forEach(({ path, expectedIlvl }) => {
+        const para: PMNode = {
+          attrs: {
+            listRendering: {
+              markerText: '•',
+              path,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.numberingProperties?.ilvl).toBe(expectedIlvl);
+      });
+    });
+
+    it('should handle empty path array', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            path: [],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      // When path is empty, buildNumberingPath creates [1] and counterValue becomes 1
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1]);
+    });
+
+    it('should handle missing path array', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '1.',
+            justification: 'left',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      // When path is undefined, buildNumberingPath creates [1] and counterValue becomes 1
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1]);
+    });
+
+    it('should preserve original numberingProperties when present', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 5,
+            ilvl: 2,
+          },
+          listRendering: {
+            markerText: 'a)',
+            path: [1, 2, 3],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should use original numberingProperties, not synthesize from listRendering
+      expect(result?.numberingProperties?.numId).toBe(5);
+      expect(result?.numberingProperties?.ilvl).toBe(2);
+    });
+
+    it('should not synthesize when listRendering is missing', () => {
+      const para: PMNode = {
+        attrs: {},
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should not create numberingProperties from nothing
+      expect(result?.numberingProperties).toBeUndefined();
+    });
+
+    it('should synthesize all properties from listRendering', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: 'II.',
+            justification: 'right',
+            numberingType: 'upperRoman',
+            suffix: 'space',
+            path: [1, 2],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.ilvl).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1, 2]);
+      expect(result?.numberingProperties?.counterValue).toBe(2);
+      expect(result?.numberingProperties?.markerText).toBe('II.');
+      expect(result?.numberingProperties?.format).toBe('upperRoman');
+      expect(result?.numberingProperties?.lvlJc).toBe('right');
+      expect(result?.numberingProperties?.suffix).toBe('space');
+    });
+
+    it('should handle single-level list (path with one element)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '3.',
+            path: [3],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      expect(result?.numberingProperties?.counterValue).toBe(3);
+      expect(result?.numberingProperties?.path).toEqual([3]);
+    });
+
+    it('should handle bullet list with path', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            justification: 'left',
+            numberingType: 'bullet',
+            path: [1, 1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.format).toBe('bullet');
+      expect(result?.numberingProperties?.ilvl).toBe(1);
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.markerText).toBe('•');
+    });
+
+    it('should handle non-finite counter values gracefully', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            path: [NaN],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // NaN gets filtered out during path normalization, so buildNumberingPath creates [1]
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+    });
+
+    it('should handle deep nesting (path with many levels)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: 'i.',
+            path: [1, 1, 1, 1, 1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(4);
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1, 1, 1, 1, 1]);
+    });
+
+    it('should handle partial listRendering (only markerText)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '-',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      expect(result?.numberingProperties?.markerText).toBe('-');
+      expect(result?.numberingProperties?.format).toBeUndefined();
+      expect(result?.numberingProperties?.lvlJc).toBeUndefined();
+      expect(result?.numberingProperties?.suffix).toBeUndefined();
+    });
+
+    it('should prioritize paragraphProperties.numberingProperties over fallback', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            numberingProperties: {
+              numId: 10,
+              ilvl: 3,
+            },
+          },
+          listRendering: {
+            markerText: 'Should not be used',
+            path: [99],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should use paragraphProperties, not listRendering fallback
+      expect(result?.numberingProperties?.numId).toBe(10);
+      expect(result?.numberingProperties?.ilvl).toBe(3);
+    });
+  });
+});

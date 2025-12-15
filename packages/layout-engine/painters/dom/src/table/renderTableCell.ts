@@ -8,11 +8,166 @@ import type {
   SdtMetadata,
   TableBlock,
   TableMeasure,
+  BlockKind,
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 
+/**
+ * Default gap between list marker and text content in pixels.
+ * This is applied when a gutter width is not explicitly provided in the marker layout.
+ * The 8px default matches Microsoft Word's standard list marker spacing.
+ */
+const LIST_MARKER_GAP = 8;
+
+/**
+ * Word layout information for paragraph list markers.
+ * Contains positioning, styling, and rendering details for list markers (bullets/numbers).
+ */
+type WordLayoutMarker = {
+  /** Text content of the marker (e.g., "1.", "a)", "•") */
+  markerText?: string;
+  /** Width of the marker box in pixels */
+  markerBoxWidthPx?: number;
+  /** Width of the gutter (space between marker and text) in pixels */
+  gutterWidthPx?: number;
+  /** Horizontal justification of marker within its box */
+  justification?: 'left' | 'center' | 'right';
+  /** Absolute x position of the marker start */
+  markerX?: number;
+  /** Run properties for marker styling */
+  run: {
+    /** Font family for the marker */
+    fontFamily?: string;
+    /** Font size in pixels */
+    fontSize?: number;
+    /** Whether marker is bold */
+    bold?: boolean;
+    /** Whether marker is italic */
+    italic?: boolean;
+    /** Text color as hex string */
+    color?: string;
+    /** Letter spacing in pixels */
+    letterSpacing?: number;
+  };
+};
+
+/**
+ * Word layout information for a paragraph.
+ * Computed by the word-layout engine to provide accurate list marker positioning
+ * and indent calculations matching Microsoft Word's behavior.
+ */
+type WordLayoutInfo = {
+  /** Marker layout information if this is a list paragraph */
+  marker?: WordLayoutMarker;
+  /** Left indent in pixels */
+  indentLeftPx?: number;
+  /** Whether first-line indent mode is enabled */
+  firstLineIndentMode?: boolean;
+};
+
 type TableRowMeasure = TableMeasure['rows'][number];
+
+/**
+ * Parameters for rendering a list marker element.
+ */
+type MarkerRenderParams = {
+  /** Document object for creating DOM elements */
+  doc: Document;
+  /** Line element to which the marker will be attached */
+  lineEl: HTMLElement;
+  /** Marker layout information from word-layout engine */
+  markerLayout: WordLayoutMarker;
+  /** Marker measurement data from measurement stage */
+  markerMeasure: ParagraphMeasure['marker'];
+  /** Left indent in pixels */
+  indentLeftPx: number;
+};
+
+/**
+ * Renders a list marker (bullet or number) for a paragraph line.
+ *
+ * This function creates a positioned marker element and wraps the line in a container
+ * to support absolute positioning of the marker relative to the text.
+ *
+ * **Marker Positioning Logic:**
+ * - `markerStartPos`: The x-coordinate where text content begins (after the marker + gutter)
+ * - `markerLeftPos`: The x-coordinate where the marker box starts (markerStartPos - markerBoxWidth)
+ * - The marker is absolutely positioned within the line container
+ * - Text gets left padding equal to markerStartPos to align with the marker end
+ *
+ * **Justification Handling:**
+ * - `left`: Marker box starts at indentLeftPx, text follows after box + gutter
+ * - `right`: Uses markerX from layout engine, marker right-aligns within its box
+ * - `center`: Uses markerX from layout engine, marker center-aligns within its box
+ *
+ * @param params - Marker rendering parameters
+ * @returns Container element with marker and line as children
+ */
+function renderListMarker(params: MarkerRenderParams): HTMLElement {
+  const { doc, lineEl, markerLayout, markerMeasure, indentLeftPx } = params;
+
+  const markerJustification = markerLayout?.justification ?? 'left';
+
+  // Extract marker box width with fallback chain: layout -> measure -> 0
+  const markerBoxWidth =
+    (typeof markerLayout?.markerBoxWidthPx === 'number' ? markerLayout.markerBoxWidthPx : undefined) ??
+    markerMeasure?.markerWidth ??
+    0;
+
+  // Extract gutter width with fallback chain: layout -> measure -> default gap
+  const gutter =
+    (typeof markerLayout?.gutterWidthPx === 'number' ? markerLayout.gutterWidthPx : undefined) ??
+    markerMeasure?.gutterWidth ??
+    LIST_MARKER_GAP;
+
+  // Calculate marker start position based on justification
+  const markerStartPos =
+    markerJustification === 'left'
+      ? indentLeftPx
+      : ((typeof markerLayout?.markerX === 'number' ? markerLayout.markerX : undefined) ?? indentLeftPx);
+
+  // Marker left position is marker start minus the width of the marker box
+  const markerLeftPos = markerStartPos - markerBoxWidth;
+
+  // Create container to hold both marker and line
+  const lineContainer = doc.createElement('div');
+  lineContainer.style.position = 'relative';
+  lineContainer.style.width = '100%';
+
+  // Create marker element with styling from layout engine
+  const markerEl = doc.createElement('span');
+  markerEl.classList.add('superdoc-paragraph-marker');
+  markerEl.textContent = markerLayout?.markerText ?? '';
+  markerEl.style.display = 'inline-block';
+  markerEl.style.fontFamily = markerLayout?.run?.fontFamily ?? '';
+  if (markerLayout?.run?.fontSize != null) {
+    markerEl.style.fontSize = `${markerLayout.run.fontSize}px`;
+  }
+  markerEl.style.fontWeight = markerLayout?.run?.bold ? 'bold' : '';
+  markerEl.style.fontStyle = markerLayout?.run?.italic ? 'italic' : '';
+  if (markerLayout?.run?.color) {
+    markerEl.style.color = markerLayout.run.color;
+  }
+  if (markerLayout?.run?.letterSpacing != null) {
+    markerEl.style.letterSpacing = `${markerLayout.run.letterSpacing}px`;
+  }
+
+  // Position marker absolutely within the container
+  markerEl.style.position = 'absolute';
+  markerEl.style.left = `${markerLeftPos}px`;
+  markerEl.style.width = `${markerBoxWidth}px`;
+  markerEl.style.textAlign = markerJustification;
+  markerEl.style.paddingRight = `${gutter}px`;
+
+  // Align text start to the marker start position (gutter spacing comes from marker padding)
+  lineEl.style.paddingLeft = `${markerStartPos}px`;
+
+  lineContainer.appendChild(markerEl);
+  lineContainer.appendChild(lineEl);
+
+  return lineContainer;
+}
 
 /**
  * Dependencies required for rendering a table cell.
@@ -164,8 +319,8 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       '[DomPainter.renderTableCell] cell render input',
       JSON.stringify({
         cellId: cell?.id,
-        blockKinds: cellBlocks.map((b) => b.kind),
-        measureKinds: blockMeasures.map((m) => m.kind),
+        blockKinds: cellBlocks.map((b: { kind: BlockKind }) => b.kind),
+        measureKinds: blockMeasures.map((m: { kind: BlockKind }) => m.kind),
         width: cellMeasure?.width,
         height: cellMeasure?.height,
         rowHeight,
@@ -304,11 +459,14 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
 
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+        type RunWithKind = { kind?: string };
+        type ImageRunWithSrc = { kind?: string; src?: string };
+
         try {
-          const runKinds = (block.runs ?? []).map((r) => (r as { kind?: string }).kind ?? 'text');
+          const runKinds = (block.runs ?? []).map((r: RunWithKind) => r.kind ?? 'text');
           const imageRuns = (block.runs ?? [])
-            .filter((r) => (r as { kind?: string }).kind === 'image')
-            .map((r) => ({ src: (r as { src?: string }).src }));
+            .filter((r: RunWithKind) => r.kind === 'image')
+            .map((r: ImageRunWithSrc) => ({ src: r.src }));
           console.log(
             '[DomPainter.renderTableCell] rendering paragraph block in cell',
             JSON.stringify({
@@ -321,8 +479,33 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         } catch {
           // ignore
         }
-        const lines = (blockMeasure as ParagraphMeasure).lines;
+        const paragraphMeasure = blockMeasure as ParagraphMeasure;
+        const lines = paragraphMeasure.lines;
         const blockLineCount = lines?.length || 0;
+
+        /**
+         * Extract Word layout information from paragraph attributes.
+         * This contains computed marker positioning and indent details from the word-layout engine.
+         * The wordLayout is pre-computed during paragraph attribute processing and provides
+         * accurate positioning for list markers matching Microsoft Word's behavior.
+         */
+        const wordLayout = (block.attrs?.wordLayout ?? null) as WordLayoutInfo | null;
+
+        /**
+         * Marker layout contains the rendering details for list markers (bullets/numbers).
+         * This includes the marker text, positioning, justification, and styling.
+         */
+        const markerLayout = wordLayout?.marker;
+
+        /**
+         * Marker measurement data from the measurement stage.
+         * Contains computed dimensions (width, gutter) for the marker.
+         */
+        const markerMeasure = paragraphMeasure.marker;
+        const indentLeftPx =
+          markerMeasure?.indentLeft ??
+          wordLayout?.indentLeftPx ??
+          (block.attrs?.indent && typeof block.attrs.indent.left === 'number' ? block.attrs.indent.left : 0);
 
         // Calculate the global line indices for this block
         const blockStartGlobal = cumulativeLineCount;
@@ -353,11 +536,60 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         // Calculate height of rendered content for proper block accumulation
         let renderedHeight = 0;
 
-        // Render only the lines in the local range
+        /**
+         * Render lines for this paragraph block.
+         * Lines are rendered within the local range (localStartLine to localEndLine).
+         * List markers are only rendered on the first line if we're rendering from the start.
+         */
         for (let lineIdx = localStartLine; lineIdx < localEndLine && lineIdx < lines.length; lineIdx++) {
           const line = lines[lineIdx];
+
+          /**
+           * Render line without extra paragraph padding to enable explicit marker/text offset control.
+           * This mirrors the main renderer behavior where list markers clear padding/textIndent.
+           */
           const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
-          paraWrapper.appendChild(lineEl);
+          lineEl.style.paddingLeft = '';
+          lineEl.style.paddingRight = '';
+          lineEl.style.textIndent = '';
+
+          /**
+           * Determine if we should render a list marker for this line.
+           * Markers are only rendered on the first line of a paragraph, and only if:
+           * - We have marker layout information from word-layout engine
+           * - We have marker measurement data
+           * - This is the first line (lineIdx === 0)
+           * - We're rendering from the start of the paragraph (localStartLine === 0)
+           * - The marker has a non-zero width
+           */
+          const shouldRenderMarker =
+            markerLayout && markerMeasure && lineIdx === 0 && localStartLine === 0 && markerMeasure.markerWidth > 0;
+
+          if (shouldRenderMarker) {
+            /**
+             * Render the list marker using the extracted helper function.
+             * This creates a container with the marker positioned absolutely
+             * and the line content positioned with appropriate padding.
+             */
+            const lineContainer = renderListMarker({
+              doc,
+              lineEl,
+              markerLayout,
+              markerMeasure,
+              indentLeftPx,
+            });
+            paraWrapper.appendChild(lineContainer);
+          } else {
+            /**
+             * For lines without markers, apply indent padding if this is a list paragraph.
+             * This ensures consistent indentation for continuation lines in list items.
+             */
+            if (markerLayout && indentLeftPx) {
+              lineEl.style.paddingLeft = `${indentLeftPx}px`;
+            }
+            paraWrapper.appendChild(lineEl);
+          }
+
           renderedHeight += line.lineHeight;
         }
 

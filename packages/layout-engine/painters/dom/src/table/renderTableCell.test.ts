@@ -1,12 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderTableCell } from './renderTableCell.js';
-import type {
-  ParagraphBlock,
-  ParagraphMeasure,
-  TableCell,
-  TableCellMeasure,
-  ImageBlock,
-} from '@superdoc/contracts';
+import type { ParagraphBlock, ParagraphMeasure, TableCell, TableCellMeasure, ImageBlock } from '@superdoc/contracts';
 
 describe('renderTableCell', () => {
   let doc: Document;
@@ -579,6 +573,447 @@ describe('renderTableCell', () => {
 
       // Full render SHOULD apply spacing.after
       expect(fullWrapper.style.marginBottom).toBe('15px');
+    });
+  });
+
+  describe('list marker rendering', () => {
+    const createParagraphWithMarker = (markerText: string, markerWidth = 20, gutterWidth = 8, indentLeft = 30) => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-list',
+        runs: [{ text: 'List item text', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          wordLayout: {
+            marker: {
+              markerText,
+              markerBoxWidthPx: markerWidth,
+              gutterWidthPx: gutterWidth,
+              justification: 'left' as const,
+              run: {
+                fontFamily: 'Arial',
+                fontSize: 14,
+                bold: false,
+                italic: false,
+                color: '#000000',
+              },
+            },
+            indentLeftPx: indentLeft,
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 14,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+        marker: {
+          markerWidth,
+          gutterWidth,
+          indentLeft,
+        },
+      };
+
+      return { para, measure };
+    };
+
+    it('should render bullet list marker with correct positioning', () => {
+      const { para, measure } = createParagraphWithMarker('•');
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-bullet-list',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lineContainer = paraWrapper.firstElementChild as HTMLElement;
+
+      // Marker should be in a positioned container
+      expect(lineContainer.style.position).toBe('relative');
+
+      const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+      expect(markerEl).toBeTruthy();
+      expect(markerEl.textContent).toBe('•');
+      expect(markerEl.style.position).toBe('absolute');
+    });
+
+    it('should render numbered list marker with correct text', () => {
+      const { para, measure } = createParagraphWithMarker('1.');
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-numbered-list',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lineContainer = paraWrapper.firstElementChild as HTMLElement;
+      const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+
+      expect(markerEl).toBeTruthy();
+      expect(markerEl.textContent).toBe('1.');
+    });
+
+    it('should apply marker styling (font, color, bold, italic)', () => {
+      const { para, measure } = createParagraphWithMarker('a)');
+      if (para.attrs?.wordLayout?.marker) {
+        para.attrs.wordLayout.marker.run = {
+          fontFamily: 'Times New Roman',
+          fontSize: 18,
+          bold: true,
+          italic: true,
+          color: '#FF0000',
+          letterSpacing: 2,
+        };
+      }
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-styled-marker',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lineContainer = paraWrapper.firstElementChild as HTMLElement;
+      const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+
+      expect(markerEl.style.fontFamily).toBe('Times New Roman');
+      expect(markerEl.style.fontSize).toBe('18px');
+      expect(markerEl.style.fontWeight).toBe('bold');
+      expect(markerEl.style.fontStyle).toBe('italic');
+      expect(markerEl.style.color).toBe('rgb(255, 0, 0)');
+      expect(markerEl.style.letterSpacing).toBe('2px');
+    });
+
+    it('should handle marker justification (left, center, right)', () => {
+      const testCases: Array<{ justification: 'left' | 'center' | 'right'; expectedAlign: string }> = [
+        { justification: 'left', expectedAlign: 'left' },
+        { justification: 'center', expectedAlign: 'center' },
+        { justification: 'right', expectedAlign: 'right' },
+      ];
+
+      testCases.forEach(({ justification, expectedAlign }) => {
+        const { para, measure } = createParagraphWithMarker('•');
+        if (para.attrs?.wordLayout?.marker) {
+          para.attrs.wordLayout.marker.justification = justification;
+        }
+
+        const cellMeasure: TableCellMeasure = {
+          blocks: [measure],
+          width: 120,
+          height: 40,
+          gridColumnStart: 0,
+          colSpan: 1,
+          rowSpan: 1,
+        };
+
+        const cell: TableCell = {
+          id: `cell-marker-${justification}`,
+          blocks: [para],
+          attrs: {},
+        };
+
+        const { cellElement } = renderTableCell({
+          ...createBaseDeps(),
+          cellMeasure,
+          cell,
+        });
+
+        const contentElement = cellElement.firstElementChild as HTMLElement;
+        const paraWrapper = contentElement.firstElementChild as HTMLElement;
+        const lineContainer = paraWrapper.firstElementChild as HTMLElement;
+        const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
+
+        expect(markerEl.style.textAlign).toBe(expectedAlign);
+      });
+    });
+
+    it('should apply proper indentation when marker is present', () => {
+      const indentLeft = 50;
+      const { para, measure } = createParagraphWithMarker('1.', 20, 8, indentLeft);
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-indented-marker',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lineContainer = paraWrapper.firstElementChild as HTMLElement;
+      const lineEl = lineContainer.querySelector('div:not(.superdoc-paragraph-marker)') as HTMLElement;
+
+      // Text should have padding equal to indentLeft
+      expect(lineEl.style.paddingLeft).toBe(`${indentLeft}px`);
+    });
+
+    it('should only render marker on first line of paragraph', () => {
+      const { para, measure } = createParagraphWithMarker('•');
+
+      // Add a second line
+      const measureWith2Lines: ParagraphMeasure = {
+        ...measure,
+        lines: [
+          ...(measure.lines ?? []),
+          {
+            fromRun: 0,
+            fromChar: 14,
+            toRun: 0,
+            toChar: 28,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measureWith2Lines],
+        width: 120,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-multiline-list',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // First child should be a container with marker
+      const firstLineContainer = paraWrapper.children[0] as HTMLElement;
+      const firstMarker = firstLineContainer.querySelector('.superdoc-paragraph-marker');
+      expect(firstMarker).toBeTruthy();
+
+      // Second child should be just a line element without marker
+      const secondLine = paraWrapper.children[1] as HTMLElement;
+      const secondMarker = secondLine.querySelector('.superdoc-paragraph-marker');
+      expect(secondMarker).toBeNull();
+    });
+
+    it('should handle missing markerLayout gracefully', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-no-marker',
+        runs: [{ text: 'Regular paragraph', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {},
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 17,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-no-marker',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const markerEl = paraWrapper.querySelector('.superdoc-paragraph-marker');
+
+      expect(markerEl).toBeNull();
+    });
+
+    it('should handle paragraphs with markerLayout but zero markerWidth', () => {
+      const { para, measure } = createParagraphWithMarker('', 0, 8, 30);
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-zero-width-marker',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const markerEl = paraWrapper.querySelector('.superdoc-paragraph-marker');
+
+      // Marker should not be rendered when markerWidth is 0
+      expect(markerEl).toBeNull();
+    });
+
+    it('should handle partial line rendering without marker on continuation', () => {
+      const { para, measure } = createParagraphWithMarker('1.');
+
+      const measureWith2Lines: ParagraphMeasure = {
+        ...measure,
+        lines: [
+          ...(measure.lines ?? []),
+          {
+            fromRun: 0,
+            fromChar: 14,
+            toRun: 0,
+            toChar: 28,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measureWith2Lines],
+        width: 120,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-partial-render',
+        blocks: [para],
+        attrs: {},
+      };
+
+      // Render only the second line (skip first line with marker)
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        fromLine: 1,
+        toLine: 2,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const markerEl = paraWrapper.querySelector('.superdoc-paragraph-marker');
+
+      // Marker should not be rendered when starting from line > 0
+      expect(markerEl).toBeNull();
     });
   });
 });
