@@ -66,7 +66,7 @@ import type {
   ParagraphToFlowBlocksConverter,
   TableNodeToBlockConverter,
 } from './types.js';
-import { defaultDecimalSeparatorFor } from '../../../../shared/locale-utils/index.js';
+import { defaultDecimalSeparatorFor } from '@superdoc/locale-utils';
 import { DEFAULT_HYPERLINK_CONFIG } from './constants';
 
 const DEFAULT_FONT = 'Arial';

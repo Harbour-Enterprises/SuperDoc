@@ -29,6 +29,7 @@
     "@superdoc/super-editor": "workspace:*",
     "@superdoc/common": "workspace:*",
     "@superdoc/contracts": "workspace:*",
+    "@superdoc/locale-utils": "workspace:*",
     "@superdoc/measuring-dom": "workspace:*",
     "@superdoc/style-engine": "workspace:*",
     "@superdoc/word-layout": "workspace:*",
