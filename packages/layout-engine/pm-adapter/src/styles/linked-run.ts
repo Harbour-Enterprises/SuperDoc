@@ -32,10 +32,37 @@ const toColor = (value: unknown): string | undefined => {
   return `#${raw}`;
 };
 
+/**
+ * Converts an underline value to a valid UnderlineStyle.
+ * Handles multiple format variations from different parts of the conversion pipeline.
+ *
+ * @param value - The underline value, which can be:
+ *   - A direct string like 'single', 'double', 'dotted', 'dashed', 'wavy'
+ *   - An object with { underline: 'single' } from parseMarks/getDefaultStyleDefinition
+ *   - An object with { underlineType: 'single' } from encodeMarksFromRPr
+ *   - An object with { value: 'single' } legacy format
+ * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), or undefined for 'none'/empty values
+ */
 const toUnderlineStyle = (value: unknown): 'single' | 'double' | 'dotted' | 'dashed' | 'wavy' | undefined => {
-  const raw = `${extractValue(value) ?? ''}`.toLowerCase();
-  if (!raw) return undefined;
-  if (raw === 'double' || raw === 'dotted' || raw === 'dashed' || raw === 'wavy') return raw;
+  // Handle multiple possible formats for underline value:
+  // - { underline: 'single' } from parseMarks/getDefaultStyleDefinition
+  // - { underlineType: 'single' } from encodeMarksFromRPr
+  // - { value: 'single' } legacy format
+  // - 'single' as a direct string
+  let raw: unknown;
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    raw = obj.underline ?? obj.underlineType ?? obj.value ?? value;
+  } else {
+    raw = extractValue(value);
+  }
+  const normalized = `${raw ?? ''}`.toLowerCase();
+  if (!normalized || normalized === 'none' || normalized === '0' || normalized === '[object object]') {
+    return undefined;
+  }
+  if (normalized === 'double' || normalized === 'dotted' || normalized === 'dashed' || normalized === 'wavy') {
+    return normalized;
+  }
   return 'single';
 };
 
@@ -118,13 +145,16 @@ export const applyLinkedStyleToRun = (run: TextRun, options: RunStyleOptions): v
   const { resolver, paragraphStyleId, inlineStyleId, runStyleId } = options;
   const maps: StyleRecord[] = [];
   if (paragraphStyleId) {
-    maps.push(resolver.getStyleMap(paragraphStyleId));
+    const pMap = resolver.getStyleMap(paragraphStyleId);
+    maps.push(pMap);
   }
   if (inlineStyleId && !paragraphStyleId?.startsWith('TOC')) {
-    maps.push(resolver.getStyleMap(inlineStyleId));
+    const iMap = resolver.getStyleMap(inlineStyleId);
+    maps.push(iMap);
   }
   if (runStyleId) {
-    maps.push(resolver.getStyleMap(runStyleId));
+    const rMap = resolver.getStyleMap(runStyleId);
+    maps.push(rMap);
   }
   if (!maps.length) return;
 
