@@ -15,12 +15,14 @@ export function calculateResolvedParagraphProperties(editor, node, $pos) {
   if (cached) {
     return cached;
   }
-  const inTable = Boolean(findParentNodeClosestToPos($pos, (node) => node.type.name === 'table'));
+  const tableNode = findParentNodeClosestToPos($pos, (node) => node.type.name === 'table');
+  const tableStyleId = tableNode?.node.attrs.tableStyleId || null;
   const paragraphProperties = resolveParagraphProperties(
     { docx: editor.converter.convertedXml, numbering: editor.converter.numbering },
     node.attrs.paragraphProperties || {},
-    inTable,
+    Boolean(tableNode),
     false,
+    tableStyleId,
   );
   resolvedParagraphPropertiesCache.set(node, paragraphProperties);
   return paragraphProperties;
