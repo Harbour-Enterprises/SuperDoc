@@ -1831,12 +1831,13 @@ export class DomPainter {
           ) {
             // FirstLine mode: use pre-calculated marker position from word-layout
             markerStartPos = wordLayout.marker.markerX;
-          } else if (isFirstLineIndentMode) {
-            // FirstLine mode fallback: calculate from paraIndent
-            markerStartPos = paraIndentLeft + (paraIndent?.firstLine ?? 0);
           } else {
-            // Standard hanging: marker hangs back from left indent
-            markerStartPos = paraIndentLeft - (paraIndent?.hanging ?? 0);
+            // OOXML marker position: left - hanging + firstLine
+            // - hanging: outdents the first line (marker moves left)
+            // - firstLine: indents the first line (marker moves right)
+            const hanging = paraIndent?.hanging ?? 0;
+            const firstLine = paraIndent?.firstLine ?? 0;
+            markerStartPos = paraIndentLeft - hanging + firstLine;
           }
 
           // Validate markerStartPos to handle NaN/Infinity values gracefully
@@ -1866,6 +1867,10 @@ export class DomPainter {
           if (markerJustification === 'left') {
             markerContainer.style.position = 'relative';
           } else {
+            // For right/center-justified markers, position relative to the first-line start.
+            // First-line starts at: left - hanging + firstLine (same as markerStartPos).
+            // The marker's right edge aligns near this position.
+            // Using validMarkerStartPos ensures consistent alignment with left-justified markers.
             const markerLeftX = validMarkerStartPos - fragment.markerWidth;
             markerContainer.style.position = 'absolute';
             markerContainer.style.left = `${markerLeftX}px`;
@@ -1969,26 +1974,32 @@ export class DomPainter {
                   tabWidth = LIST_MARKER_GAP;
                 }
               } else {
-                // Standard hanging: implicit tab stop at paraIndentLeft
-                const implicitTabStop = paraIndentLeft;
-                tabWidth = implicitTabStop - currentPos;
+                // Standard hanging mode: tab fills from marker end to text start position.
+                // In OOXML:
+                //   - markerStartPos = left - hanging + firstLine
+                //   - currentPos = markerStartPos + markerTextWidth
+                //   - textStart = left + firstLine (where first-line text begins)
+                //   - tabWidth = textStart - currentPos = hanging - markerTextWidth
+                // This positions text correctly at `left + firstLine` regardless of marker width.
+                const firstLine = paraIndent?.firstLine ?? 0;
+                const textStart = paraIndentLeft + firstLine;
+                tabWidth = textStart - currentPos;
 
-                // If past the implicit stop, use next default tab interval
-                if (tabWidth < 1) {
-                  tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
-                  if (tabWidth === 0) tabWidth = DEFAULT_TAB_INTERVAL_PX;
+                // If calculation gives negative/zero, use minimum gap
+                if (tabWidth < LIST_MARKER_GAP) {
+                  tabWidth = LIST_MARKER_GAP;
                 }
               }
             } else {
-              // For non-left justified markers, use gutter width from layout
-              tabWidth =
-                fragment.markerGutter != null && isFinite(fragment.markerGutter)
-                  ? fragment.markerGutter
-                  : typeof wordLayout.marker.gutterWidthPx === 'number' &&
-                      isFinite(wordLayout.marker.gutterWidthPx) &&
-                      wordLayout.marker.gutterWidthPx > 0
-                    ? wordLayout.marker.gutterWidthPx
-                    : LIST_MARKER_GAP;
+              // For non-left justified markers (right/center), the marker is absolutely positioned
+              // and doesn't affect inline flow. The line has paddingLeft = validMarkerStartPos,
+              // so the tab fills the remaining distance to where text starts (left + firstLine).
+              const firstLine = paraIndent?.firstLine ?? 0;
+              const textStart = paraIndentLeft + firstLine;
+              tabWidth = textStart - validMarkerStartPos;
+              if (tabWidth < LIST_MARKER_GAP) {
+                tabWidth = LIST_MARKER_GAP;
+              }
             }
 
             tabEl.style.display = 'inline-block';

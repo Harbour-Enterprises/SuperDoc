@@ -281,16 +281,24 @@ const resolveNumberingFromContext = (
 ): Partial<AdapterNumberingProps> | undefined => {
   const definitions = numbering?.definitions as Record<string, unknown> | undefined;
   const abstracts = numbering?.abstracts as Record<string, unknown> | undefined;
-  if (!definitions || !abstracts) return undefined;
+  if (!definitions || !abstracts) {
+    return undefined;
+  }
 
   const numDef = asOoxmlElement(definitions[String(numId)]);
-  if (!numDef) return undefined;
+  if (!numDef) {
+    return undefined;
+  }
 
   const abstractId = getAttribute(findChild(numDef, 'w:abstractNumId'), 'w:val');
-  if (abstractId == null) return undefined;
+  if (abstractId == null) {
+    return undefined;
+  }
 
   const abstract = asOoxmlElement(abstracts[String(abstractId)]);
-  if (!abstract) return undefined;
+  if (!abstract) {
+    return undefined;
+  }
 
   let levelDef = abstract.elements?.find(
     (el) => el?.name === 'w:lvl' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
@@ -305,7 +313,9 @@ const resolveNumberingFromContext = (
   }
   const startOverride = parseNumberAttr(getAttribute(findChild(override, 'w:startOverride'), 'w:val'));
 
-  if (!levelDef) return undefined;
+  if (!levelDef) {
+    return undefined;
+  }
 
   const numFmtEl = findNumFmtElement(levelDef);
   const lvlText = getAttribute(findChild(levelDef, 'w:lvlText'), 'w:val') as string | undefined;
@@ -1484,25 +1494,36 @@ export const computeParagraphAttrs = (
         }
       }
       paragraphAttrs.wordLayout = wordLayout;
+    }
 
-      // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
-      // Per OOXML spec, paragraph indent MERGES with numbering definition:
-      // - Numbering definition provides base values (left, hanging from level)
-      // - Paragraph's explicit indent properties override specific values
-      // - Missing paragraph indent properties inherit from numbering definition
-      // This fixes cases where a paragraph only specifies w:hanging but should
-      // inherit w:left from the numbering level definition.
-      if (enrichedNumberingProps.resolvedLevelIndent) {
-        const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-        const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+    // Always merge resolvedLevelIndent into paragraphAttrs.indent, regardless of wordLayout success.
+    // This ensures sublists get correct indentation even if wordLayout computation fails.
+    // Per OOXML spec, paragraph indent MERGES with numbering definition:
+    // - Numbering definition provides base values (left, hanging from level)
+    // - Paragraph's explicit indent properties override specific values
+    // - Missing paragraph indent properties inherit from numbering definition
+    // This fixes cases where a paragraph only specifies w:hanging but should
+    // inherit w:left from the numbering level definition.
+    if (enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
 
-        // Merge: numbering definition as base, paragraph explicit values override
-        paragraphAttrs.indent = {
-          ...baseIndent,
-          ...(normalizedIndent ?? {}),
-        };
+      // Merge: numbering definition as base, paragraph explicit values override
+      paragraphAttrs.indent = {
+        ...baseIndent,
+        ...(normalizedIndent ?? {}),
+      };
+
+      // In OOXML, hanging and firstLine are mutually exclusive.
+      // If the paragraph explicitly specifies one, the other should be cleared.
+      // This ensures proper marker positioning when paragraph overrides numbering indent.
+      if (normalizedIndent?.firstLine !== undefined) {
+        delete paragraphAttrs.indent.hanging;
+      } else if (normalizedIndent?.hanging !== undefined) {
+        delete paragraphAttrs.indent.firstLine;
       }
     }
+
     // Preserve numberingProperties for downstream consumers (e.g., measurement stage)
     paragraphAttrs.numberingProperties = enrichedNumberingProps as Record<string, unknown>;
   }
@@ -1527,6 +1548,13 @@ export const mergeParagraphAttrs = (base?: ParagraphAttrs, override?: ParagraphA
   }
   if (override.indent) {
     merged.indent = { ...(base.indent ?? {}), ...override.indent };
+    // In OOXML, hanging and firstLine are mutually exclusive.
+    // If override specifies one, clear the other from the merged result.
+    if (override.indent.firstLine !== undefined) {
+      delete merged.indent.hanging;
+    } else if (override.indent.hanging !== undefined) {
+      delete merged.indent.firstLine;
+    }
   }
   if (override.borders) {
     merged.borders = { ...(base.borders ?? {}), ...override.borders };
