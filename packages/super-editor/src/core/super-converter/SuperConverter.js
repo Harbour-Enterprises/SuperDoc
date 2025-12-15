@@ -499,6 +499,12 @@ class SuperConverter {
 
         properties.elements.push(property);
       } else {
+        // Normalize namespace prefix to match parent Properties element for consistency
+        const existingPropertyPrefix = SuperConverter._extractNamespacePrefix(property.name);
+        if (existingPropertyPrefix !== namespacePrefix) {
+          property.name = propertyElementName;
+        }
+
         // Add null safety when updating existing property
         if (!property.elements?.[0]?.elements?.[0]) {
           console.warn(`Malformed property structure for "${propertyName}", recreating structure`);
