@@ -575,6 +575,9 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@superdoc/locale-utils':
+        specifier: workspace:*
+        version: link:../../../shared/locale-utils
       '@superdoc/measuring-dom':
         specifier: workspace:*
         version: link:../measuring/dom
