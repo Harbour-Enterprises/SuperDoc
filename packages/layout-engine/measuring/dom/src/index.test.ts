@@ -14,6 +14,20 @@ const expectParagraphMeasure = (measure: Measure): ParagraphMeasure => {
   return measure as ParagraphMeasure;
 };
 
+const extractLineText = (block: FlowBlock, line: ParagraphMeasure['lines'][number]): string => {
+  if (block.kind !== 'paragraph') return '';
+  const runs = (block as FlowBlock).runs || [];
+  const parts: string[] = [];
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex++) {
+    const run = runs[runIndex] as { text?: string };
+    if (!run || typeof run.text !== 'string') continue;
+    const start = runIndex === line.fromRun ? line.fromChar : 0;
+    const end = runIndex === line.toRun ? line.toChar : run.text.length;
+    parts.push(run.text.slice(start, end));
+  }
+  return parts.join('');
+};
+
 const expectImageMeasure = (measure: Measure): ImageMeasure => {
   expect(measure.kind).toBe('image');
   return measure as ImageMeasure;
@@ -1599,6 +1613,52 @@ describe('measureBlock', () => {
   });
 
   describe('overflow protection', () => {
+    it('keeps justified line packed by allowing small space flex (Word parity case)', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'justify-word-parity',
+        runs: [
+          {
+            text: 'Por este instrumento particular, de um lado a empresa ',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+          },
+          {
+            text: 'EMPRESA',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+          {
+            text: ' ABC',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+          {
+            text: ', pessoa jurídica de direito privado, inscrita no CNPJ sob n. XXXXXXXX com sede à Av. Presidente Juscelino Kubitschek, N° 2041, 22° Andar, Torre D, no Bairro Vila Nova Conceição na Cidade de São Paulo – SP – CEP 04.543-011, neste ato representado por seu representante legal',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+          },
+          {
+            text: ' FULANO DE TAL',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+        ],
+        attrs: { alignment: 'justify' },
+      };
+
+      // Page width 12240 twips (8.5in) minus margins 1701/1134 twips ≈ 627px content width at 96dpi
+      const measure = expectParagraphMeasure(await measureBlock(block, 627));
+      const lineTexts = measure.lines.map((line) => extractLineText(block, line));
+      const lineWithRepresentado = lineTexts.find((text) => text.includes('representado'));
+
+      expect(lineWithRepresentado).toBeDefined();
+      expect(lineWithRepresentado).toContain('neste ato representado por seu representante legal');
+    });
+
     it('prevents line width from exceeding maxWidth after appending segment with trailing space', async () => {
       // This test verifies the post-append overflow guard
       // Scenario: Word fits without space, but word+space exceeds maxWidth

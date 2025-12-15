@@ -856,9 +856,9 @@ describe('DomPainter', () => {
     expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
   });
 
-  it('does not justify text inside table cells (Word quirk)', () => {
-    // Word does not justify text inside table cells, even if jc="both" is specified.
-    // This test verifies that table cell paragraphs have no word-spacing applied.
+  it('does not justify last line in table cell (same as regular paragraph)', () => {
+    // Word justifies text inside table cells, but skips the last line (like regular paragraphs).
+    // Single-line cells are their own "last line", so they should not be justified.
     const tableBlock: TableBlock = {
       kind: 'table',
       id: 'table-block',
@@ -873,7 +873,7 @@ describe('DomPainter', () => {
                   kind: 'paragraph',
                   id: 'cell-para',
                   runs: [{ text: 'Cell text with spaces here', fontFamily: 'Arial', fontSize: 16 }],
-                  attrs: { alignment: 'justify' }, // Justify is specified but should be ignored
+                  attrs: { alignment: 'justify' },
                 },
               ],
             },
@@ -946,8 +946,125 @@ describe('DomPainter', () => {
     // Find the line inside the table cell
     const line = mount.querySelector('.superdoc-line') as HTMLElement;
     expect(line).toBeTruthy();
-    // Table cell text should NOT be justified (word-spacing should be 0 or empty)
+    // Single-line cell = last line, so should NOT be justified
     expect(parseFloat(line.style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('justifies non-last lines in multi-line table cell', () => {
+    // Word justifies text inside table cells, applying word-spacing to all lines except the last.
+    // This test verifies that the first line of a multi-line cell IS justified.
+    const tableBlock: TableBlock = {
+      kind: 'table',
+      id: 'table-block',
+      rows: [
+        {
+          id: 'row-1',
+          cells: [
+            {
+              id: 'cell-1',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'cell-para',
+                  runs: [
+                    {
+                      text: 'First line of text in this cell. Second line of text here.',
+                      fontFamily: 'Arial',
+                      fontSize: 16,
+                    },
+                  ],
+                  attrs: { alignment: 'justify' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const tableMeasure: TableMeasure = {
+      kind: 'table',
+      rows: [
+        {
+          height: 50,
+          cells: [
+            {
+              width: 200,
+              height: 50,
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  lines: [
+                    {
+                      fromRun: 0,
+                      fromChar: 0,
+                      toRun: 0,
+                      toChar: 33,
+                      width: 150,
+                      maxWidth: 200,
+                      ascent: 12,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                    {
+                      fromRun: 0,
+                      fromChar: 33,
+                      toRun: 0,
+                      toChar: 59,
+                      width: 140,
+                      maxWidth: 200,
+                      ascent: 12,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                  ],
+                  totalHeight: 40,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [200],
+      totalWidth: 200,
+      totalHeight: 50,
+    };
+
+    const tableLayout: Layout = {
+      pageSize: { w: 300, h: 300 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'table',
+              blockId: 'table-block',
+              x: 0,
+              y: 0,
+              width: 200,
+              height: 50,
+              fromRow: 0,
+              toRow: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [tableBlock], measures: [tableMeasure] });
+    painter.paint(tableLayout, mount);
+
+    // Find both lines inside the table cell
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should be justified (has word-spacing > 0)
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
+    expect(firstLineWordSpacing).toBeGreaterThan(0);
+
+    // Last line should NOT be justified (word-spacing = 0)
+    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
+    expect(lastLineWordSpacing).toBe(0);
   });
 
   it('emits pm metadata attributes', () => {

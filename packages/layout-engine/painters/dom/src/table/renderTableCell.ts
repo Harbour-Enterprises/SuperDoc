@@ -193,7 +193,13 @@ type TableCellRenderDependencies = {
   /** Whether to apply default border if no borders specified */
   useDefaultBorder?: boolean;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
   /**
    * Optional callback function to render drawing content (vectorShapes, shapeGroups).
    * If provided, this callback is used to render DrawingBlocks with drawingKind of 'vectorShape' or 'shapeGroup'.
@@ -565,12 +571,19 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
          */
         for (let lineIdx = localStartLine; lineIdx < localEndLine && lineIdx < lines.length; lineIdx++) {
           const line = lines[lineIdx];
+          const isLastLine = lineIdx === lines.length - 1;
 
           /**
            * Render line without extra paragraph padding to enable explicit marker/text offset control.
            * This mirrors the main renderer behavior where list markers clear padding/textIndent.
            */
-          const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
+          const lineEl = renderLine(
+            block as ParagraphBlock,
+            line,
+            { ...context, section: 'body' },
+            lineIdx,
+            isLastLine,
+          );
           lineEl.style.paddingLeft = '';
           lineEl.style.paddingRight = '';
           lineEl.style.textIndent = '';
