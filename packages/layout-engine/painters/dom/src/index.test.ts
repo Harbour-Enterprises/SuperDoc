@@ -4044,6 +4044,271 @@ describe('DomPainter', () => {
       const img = mount.querySelector('img') as HTMLElement;
       expect(img?.style.verticalAlign).toBe('bottom');
     });
+
+    describe('data-image-metadata attribute', () => {
+      it('produces metadata with correct aspectRatio for valid dimensions', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 100,
+              height: 50,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 100,
+              ascent: 50,
+              descent: 0,
+              lineHeight: 50,
+            },
+          ],
+          totalHeight: 50,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 100,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeTruthy();
+
+        const metadata = JSON.parse(metadataAttr!);
+        expect(metadata.originalWidth).toBe(100);
+        expect(metadata.originalHeight).toBe(50);
+        expect(metadata.aspectRatio).toBe(2); // 100 / 50 = 2
+        expect(metadata.minWidth).toBe(20);
+        expect(metadata.minHeight).toBe(20);
+        expect(metadata.maxWidth).toBe(1000); // Math.max(100 * 3, 1000) = 1000
+        expect(metadata.maxHeight).toBe(1000); // Math.max(50 * 3, 1000) = 1000
+      });
+
+      it('produces NO metadata attribute when width is zero', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 0,
+              height: 100,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 0,
+              ascent: 100,
+              descent: 0,
+              lineHeight: 100,
+            },
+          ],
+          totalHeight: 100,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 0,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeNull();
+      });
+
+      it('produces NO metadata attribute when height is zero', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 100,
+              height: 0,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 100,
+              ascent: 0,
+              descent: 0,
+              lineHeight: 0,
+            },
+          ],
+          totalHeight: 0,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 100,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeNull();
+      });
+
+      it('calculates maxWidth/maxHeight based on 3x multiplier for large images', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 800,
+              height: 600,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 800,
+              ascent: 600,
+              descent: 0,
+              lineHeight: 600,
+            },
+          ],
+          totalHeight: 600,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 1000, h: 1200 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 800,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeTruthy();
+
+        const metadata = JSON.parse(metadataAttr!);
+        expect(metadata.originalWidth).toBe(800);
+        expect(metadata.originalHeight).toBe(600);
+        expect(metadata.aspectRatio).toBeCloseTo(800 / 600, 5);
+        // For large images, 3x multiplier is used (800 * 3 = 2400 > 1000)
+        expect(metadata.maxWidth).toBe(2400);
+        expect(metadata.maxHeight).toBe(1800);
+        expect(metadata.minWidth).toBe(20);
+        expect(metadata.minHeight).toBe(20);
+      });
+    });
   });
 });
 
