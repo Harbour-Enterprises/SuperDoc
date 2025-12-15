@@ -369,6 +369,24 @@ const MAX_DATA_URL_LENGTH = 10 * 1024 * 1024; // 10MB
 const VALID_IMAGE_DATA_URL = /^data:image\/(png|jpeg|jpg|gif|svg\+xml|webp|bmp|ico|tiff?);base64,/i;
 
 /**
+ * Maximum resize multiplier for image metadata.
+ * Images can be resized up to 3x their original dimensions.
+ */
+const MAX_RESIZE_MULTIPLIER = 3;
+
+/**
+ * Fallback maximum dimension for image resizing when original size is small.
+ * Ensures images can be resized to at least 1000px even if original is smaller.
+ */
+const FALLBACK_MAX_DIMENSION = 1000;
+
+/**
+ * Minimum image dimension in pixels.
+ * Ensures images remain visible and interactive during resizing.
+ */
+const MIN_IMAGE_DIMENSION = 20;
+
+/**
  * Pattern to detect ambiguous link text that doesn't convey destination (WCAG 2.4.4).
  * Matches common generic phrases like "click here", "read more", etc.
  */
@@ -3205,14 +3223,25 @@ export class DomPainter {
    * - Only allows safe image MIME types (png, jpeg, gif, etc.) with base64 encoding
    * - Non-data URLs are sanitized through sanitizeUrl to prevent XSS
    *
+   * METADATA ATTRIBUTE:
+   * - Adds `data-image-metadata` attribute to enable interactive resizing via ImageResizeOverlay
+   * - Metadata includes: originalWidth, originalHeight, aspectRatio, min/max dimensions
+   * - Only added when run.width > 0 && run.height > 0 to prevent invalid metadata
+   * - Max dimensions: 3x original size or 1000px (whichever is larger)
+   * - Min dimensions: 20px to ensure visibility and interactivity
+   *
    * @param run - The ImageRun to render containing image source, dimensions, and spacing
    * @returns HTMLElement (img) or null if src is missing or invalid
    *
    * @example
    * ```typescript
-   * // Valid data URL
+   * // Valid data URL with metadata
    * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 100, height: 100 })
-   * // Returns: <img> element
+   * // Returns: <img> element with data-image-metadata attribute
+   *
+   * // Invalid dimensions - no metadata
+   * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 0, height: 0 })
+   * // Returns: <img> element WITHOUT data-image-metadata attribute
    *
    * // Invalid MIME type
    * renderImageRun({ kind: 'image', src: 'data:text/html;base64,PHNjcmlwdD4...', width: 100, height: 100 })
@@ -3220,7 +3249,7 @@ export class DomPainter {
    *
    * // HTTP URL
    * renderImageRun({ kind: 'image', src: 'https://example.com/image.png', width: 100, height: 100 })
-   * // Returns: <img> element (after sanitization)
+   * // Returns: <img> element (after sanitization) with data-image-metadata attribute
    * ```
    */
   private renderImageRun(run: ImageRun): HTMLElement | null {
@@ -3260,6 +3289,26 @@ export class DomPainter {
     // Set dimensions
     img.width = run.width;
     img.height = run.height;
+
+    // Add metadata for interactive image resizing (inline images)
+    // Only add metadata if dimensions are valid (positive, non-zero values)
+    if (run.width > 0 && run.height > 0) {
+      // This enables the ImageResizeOverlay to work with inline images
+      const aspectRatio = run.width / run.height;
+      const inlineImageMetadata = {
+        originalWidth: run.width,
+        originalHeight: run.height,
+        // Max dimensions: MAX_RESIZE_MULTIPLIER x original size or FALLBACK_MAX_DIMENSION, whichever is larger
+        // This provides generous constraints while preventing excessive scaling
+        maxWidth: Math.max(run.width * MAX_RESIZE_MULTIPLIER, FALLBACK_MAX_DIMENSION),
+        maxHeight: Math.max(run.height * MAX_RESIZE_MULTIPLIER, FALLBACK_MAX_DIMENSION),
+        aspectRatio,
+        // Min dimensions: MIN_IMAGE_DIMENSION to ensure images remain visible and interactive
+        minWidth: MIN_IMAGE_DIMENSION,
+        minHeight: MIN_IMAGE_DIMENSION,
+      };
+      img.setAttribute('data-image-metadata', JSON.stringify(inlineImageMetadata));
+    }
 
     // Set alt text (required for accessibility)
     img.alt = run.alt ?? '';
