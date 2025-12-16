@@ -69,6 +69,8 @@ export type DomPainterOptions = {
   measures: Measure[];
   pageStyles?: PageStyles;
   layoutMode?: LayoutMode;
+  /** Gap between pages in pixels (default: 24px for vertical, 20px for horizontal) */
+  pageGap?: number;
   headerProvider?: PageDecorationProvider;
   footerProvider?: PageDecorationProvider;
   /**
@@ -106,6 +108,7 @@ export const createDomPainter = (
   const painter = new DomPainter(options.blocks, options.measures, {
     pageStyles: options.pageStyles,
     layoutMode: options.layoutMode,
+    pageGap: options.pageGap,
     headerProvider: options.headerProvider,
     footerProvider: options.footerProvider,
     virtualization: options.virtualization,

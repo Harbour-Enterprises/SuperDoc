@@ -275,12 +275,15 @@ export type RulerOptions = {
 type PainterOptions = {
   pageStyles?: PageStyles;
   layoutMode?: LayoutMode;
+  /** Gap between pages in pixels (default: 24px for vertical, 20px for horizontal) */
+  pageGap?: number;
   headerProvider?: PageDecorationProvider;
   footerProvider?: PageDecorationProvider;
   virtualization?: {
     enabled?: boolean;
     window?: number;
     overscan?: number;
+    /** Virtualization gap override (if not set, uses pageGap; default: 72px for virtual mode) */
     gap?: number;
     paddingTop?: number;
   };
@@ -759,11 +762,13 @@ export class DomPainter {
    * @private
    */
   private pendingTooltips = new WeakMap<HTMLElement, string>();
+  // Page gap for normal (non-virtualized) rendering
+  private pageGap = 24; // px, default for vertical mode
   // Virtualization state (vertical mode only)
   private virtualEnabled = false;
   private virtualWindow = 5;
   private virtualOverscan = 0;
-  private virtualGap = 72; // px, approximates prior margin + gap look
+  private virtualGap = 72; // px, approximates prior margin + gap look (default for virtualized mode)
   private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
   private topSpacerEl: HTMLElement | null = null;
   private bottomSpacerEl: HTMLElement | null = null;
@@ -784,13 +789,24 @@ export class DomPainter {
     this.blockLookup = this.buildBlockLookup(blocks, measures);
     this.headerProvider = options.headerProvider;
     this.footerProvider = options.footerProvider;
+
+    // Initialize page gap (defaults: 24px vertical, 20px horizontal)
+    const defaultGap = this.layoutMode === 'horizontal' ? 20 : 24;
+    this.pageGap =
+      typeof options.pageGap === 'number' && Number.isFinite(options.pageGap)
+        ? Math.max(0, options.pageGap)
+        : defaultGap;
+
     // Initialize virtualization config (feature-flagged)
     if (this.layoutMode === 'vertical' && options.virtualization?.enabled) {
       this.virtualEnabled = true;
       this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
       this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
+      // Virtualization gap: use explicit virtualization.gap if provided, otherwise use pageGap, default to 72
       if (typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap)) {
         this.virtualGap = Math.max(0, options.virtualization.gap);
+      } else {
+        this.virtualGap = this.pageGap;
       }
       if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
         this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
@@ -926,6 +942,8 @@ export class DomPainter {
     const mode = this.layoutMode;
     if (mode === 'horizontal') {
       applyStyles(mount, containerStylesHorizontal);
+      // Use configured page gap for horizontal rendering
+      mount.style.gap = `${this.pageGap}px`;
       this.renderHorizontal(layout, mount);
       this.currentLayout = layout;
       this.pageStates = [];
@@ -953,6 +971,8 @@ export class DomPainter {
       return;
     }
 
+    // Use configured page gap for normal vertical rendering
+    mount.style.gap = `${this.pageGap}px`;
     if (!this.currentLayout || this.pageStates.length === 0) {
       this.fullRender(layout);
     } else {
