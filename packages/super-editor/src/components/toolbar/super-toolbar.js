@@ -25,6 +25,7 @@ import { isList } from '@core/commands/list-helpers';
 import { calculateResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 import { twipsToLines } from '@converter/helpers';
 import { parseSizeUnit } from '@core/utilities';
+import { getNumberingIcon } from './numbering-icon-map.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -1013,18 +1014,7 @@ export class SuperToolbar extends EventEmitter {
    * @param {string} numberingType - The current numbering type
    */
   updateNumberedListIcon(item, numberingType) {
-    const iconMap = {
-      decimalPlain: toolbarIcons.numberedListDecimalPlain,
-      decimal: toolbarIcons.numberedListDecimal,
-      decimalParen: toolbarIcons.numberedListDecimalParen,
-      upperLetter: toolbarIcons.numberedListAlphaUpper,
-      lowerLetter: toolbarIcons.numberedListAlphaLower,
-      letterParen: toolbarIcons.numberedListAlphaLowerParen,
-      upperRoman: toolbarIcons.numberedListRomanUpper,
-      lowerRoman: toolbarIcons.numberedListRomanLower,
-    };
-
-    const icon = iconMap[numberingType] || toolbarIcons.numberedListDecimal;
+    const icon = getNumberingIcon(numberingType);
     if (item.icon && item.icon.value !== icon) {
       item.icon.value = icon;
     }
