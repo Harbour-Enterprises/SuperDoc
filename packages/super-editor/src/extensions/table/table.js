@@ -177,8 +177,8 @@ import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
 import { isInTable } from '@helpers/isInTable.js';
-import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
+import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
 import { isCellSelection } from './tableHelpers/isCellSelection.js';
@@ -1110,7 +1110,7 @@ export const Table = Node.create({
             if (['tableCell', 'tableHeader'].includes(node.type.name)) {
               tr.setNodeMarkup(pos, undefined, {
                 ...node.attrs,
-                borders: createCellBorders({ size: 0 }),
+                borders: createCellBorders({ size: 0, space: 0, val: 'none', color: 'auto' }),
               });
             }
           });
@@ -1119,6 +1119,13 @@ export const Table = Node.create({
           tr.setNodeMarkup(table.pos, undefined, {
             ...table.node.attrs,
             borders: createTableBorders({ size: 0 }),
+            // TODO: This works around the issue that table borders are duplicated between
+            // the attributes of the table and the tableProperties attribute.
+            // This can be removed when the redundancy is eliminated.
+            tableProperties: {
+              ...table.node.attrs.tableProperties,
+              borders: createTableBorders({ size: 0, space: 0, val: 'none', color: 'auto' }),
+            },
           });
 
           return true;
