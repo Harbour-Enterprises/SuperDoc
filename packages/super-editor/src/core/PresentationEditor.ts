@@ -5560,6 +5560,9 @@ export class PresentationEditor extends EventEmitter {
           if (region.minY != null && region.minY < 0) {
             const shiftDown = Math.abs(region.minY);
             editorContainer.style.transform = `translateY(${shiftDown}px)`;
+          } else {
+            // Clear any leftover transform from previous sessions to avoid misalignment
+            editorContainer.style.transform = '';
           }
         }
       }

@@ -280,6 +280,7 @@ export class EditorOverlayManager {
         const editorContainer = this.#activeEditorHost.querySelector('.super-editor');
         if (editorContainer instanceof HTMLElement) {
           editorContainer.style.top = '0';
+          editorContainer.style.transform = '';
         }
       }
     }
