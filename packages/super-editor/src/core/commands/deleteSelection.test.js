@@ -120,6 +120,21 @@ describe('deleteSelection', () => {
     expect(res).toBe('delegated-non-empty');
   });
 
+  // Fix for SD-1013: prevent single-character selections from being treated as backspace
+  it('returns false when current DOM selection is a single character', () => {
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+    const sel = TextSelection.create(doc, 2, 5);
+    const state = EditorState.create({ schema, doc, selection: sel });
+
+    vi.spyOn(document, 'getSelection').mockReturnValue({
+      baseNode: { data: 'a' },
+    });
+
+    const cmd = deleteSelection();
+    const ok = cmd({ state, tr: state.tr });
+    expect(ok).toBe(false);
+  });
+
   it('returns true when dispatch is omitted (list content case)', () => {
     const doc = schema.node('doc', null, [
       schema.node('bulletList', null, [
