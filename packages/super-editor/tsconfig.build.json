@@ -3,6 +3,5 @@
   "compilerOptions": {
     "checkJs": false,
     "skipLibCheck": true
-  },
-  "exclude": ["**/*.test.js", "**/*.test.ts", "**/*.spec.js", "**/*.spec.ts"]
+  }
 }

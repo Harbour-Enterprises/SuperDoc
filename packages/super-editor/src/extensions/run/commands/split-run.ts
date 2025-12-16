@@ -3,7 +3,7 @@ import type { Transaction, EditorState } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { canSplit } from 'prosemirror-transform';
 import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
-import type { Command } from '@core/types/ChainedCommands.js';
+import type { Command, CommandProps } from '@core/types/ChainedCommands.js';
 
 /**
  * Splits a run node at the current selection into two paragraphs.
@@ -81,7 +81,7 @@ export function splitBlockPatch(state: EditorState, dispatch?: (tr: Transaction)
   return true;
 }
 
-export const splitRunAtCursor = () => (props) => {
+export const splitRunAtCursor = () => (props: CommandProps) => {
   const { state, dispatch, tr } = props;
   const sel = state.selection;
   if (!sel.empty) return false;

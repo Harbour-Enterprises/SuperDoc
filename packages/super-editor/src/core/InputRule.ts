@@ -2,7 +2,7 @@ import { Plugin, PluginKey } from 'prosemirror-state';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { EditorView } from 'prosemirror-view';
 import { Slice, Fragment, DOMParser as PMDOMParser } from 'prosemirror-model';
-import type { Node as PmNode } from 'prosemirror-model';
+import type { ResolvedPos } from 'prosemirror-model';
 import { CommandService } from './CommandService.js';
 import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
@@ -323,7 +323,7 @@ function isGoogleDocsHtml(html: string): boolean {
  * @param {ResolvedPos} $from The resolved position to search from.
  * @returns {{ node: Node | null, depth: number }} The paragraph node and its depth, or null if not found.
  */
-function findParagraphAncestor($from) {
+function findParagraphAncestor($from: ResolvedPos) {
   for (let d = $from.depth; d >= 0; d--) {
     const node = $from.node(d);
     if (node.type.name === 'paragraph') {
@@ -341,10 +341,8 @@ function findParagraphAncestor($from) {
  * @param source HTML content source
  * @returns Returns true if the paste was handled.
  */
-export function handleHtmlPaste(html: string, editor: Editor, source?: string): boolean {
-  let cleanedHtml: DocumentFragment;
-  if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
-  else cleanedHtml = htmlHandler(html, editor);
+export function handleHtmlPaste(html: string, editor: Editor, _source?: string): boolean {
+  const cleanedHtml = htmlHandler(html, editor);
 
   let doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
 

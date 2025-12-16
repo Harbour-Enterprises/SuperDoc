@@ -194,7 +194,7 @@ export class SuperToolbar extends EventEmitter {
     aiApiKey: string | null;
     aiEndpoint: string | null;
     customButtons: Array<ToolbarItem | ToolbarItemOptions>;
-    superdoc: unknown;
+    superdoc: { config?: { rulers?: unknown } } | null;
   } = {
     selector: null,
     element: null,
@@ -243,7 +243,7 @@ export class SuperToolbar extends EventEmitter {
    * SuperDoc instance
    * @type {unknown}
    */
-  superdoc: unknown = null;
+  superdoc: { config?: { rulers?: unknown } } | null = null;
 
   /**
    * Toolbar role

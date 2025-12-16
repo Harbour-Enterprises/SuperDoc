@@ -137,7 +137,7 @@ export function updateNumberingProperties(
     delete newProperties.indent;
   }
 
-  const newAttrs = {
+  const newAttrs: Record<string, unknown> = {
     ...paragraphNode.attrs,
     paragraphProperties: newProperties,
     numberingProperties: newProperties.numberingProperties,
@@ -147,7 +147,7 @@ export function updateNumberingProperties(
   // When adding/updating list properties, let numberingPlugin compute it via appendTransaction.
   // This prevents cache issues where the first transaction caches with null marker data.
   if (!newNumberingProperties) {
-    newAttrs.listRendering = null;
+    (newAttrs as { listRendering?: unknown }).listRendering = null;
   }
 
   tr.setNodeMarkup(pos, null, newAttrs);

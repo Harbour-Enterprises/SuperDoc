@@ -678,13 +678,15 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const provider = this.options.collaborationProvider;
 
     const postSyncInit = () => {
-      provider.off('synced', postSyncInit);
+      if (typeof provider.off === 'function') {
+        provider.off('synced', postSyncInit);
+      }
       this.#insertNewFileData();
     };
 
     if (provider.synced) this.#insertNewFileData();
     // If we are not sync'd yet, wait for the event then insert the data
-    else provider.on('synced', postSyncInit);
+    else if (typeof provider.on === 'function') provider.on('synced', postSyncInit);
   }
 
   /**
@@ -880,7 +882,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
       return;
     }
 
-    const mediaMap = this.options.ydoc.getMap('media');
+    const mediaMap = (this.options.ydoc as unknown as { getMap: (name: string) => Map<string, unknown> }).getMap(
+      'media',
+    );
 
     // We are creating a new file and need to set the media
     if (this.options.isNewFile) {
@@ -1372,7 +1376,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (!this.options.isNewFile) {
       this.#initComments();
-      updateYdocDocxData(this, this.options.ydoc ?? undefined);
+      updateYdocDocxData(this, undefined);
     }
   }
 
@@ -1921,7 +1925,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     try {
       console.debug('🔗 [super-editor] Ending collaboration');
       this.options.collaborationProvider?.disconnect?.();
-      this.options.ydoc.destroy();
+      (this.options.ydoc as unknown as { destroy?: () => void }).destroy?.();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.emit('exception', { error: err, editor: this });
@@ -1978,7 +1982,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
     if (!this.options.ydoc) return;
 
-    const metaMap = this.options.ydoc.getMap('meta');
+    const metaMap = (this.options.ydoc as unknown as { getMap: (name: string) => Map<string, unknown> }).getMap('meta');
     let docVersion = metaMap.get('version') as string | undefined;
     if (!docVersion) docVersion = 'initial';
     console.debug('[checkVersionMigrations] Document version', docVersion);
@@ -2030,7 +2034,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.initDefaultStyles();
 
     if (this.options.ydoc && this.options.collaborationProvider) {
-      updateYdocDocxData(this, this.options.ydoc);
+      updateYdocDocxData(this, undefined);
       this.initializeCollaborationData();
     } else {
       this.#insertNewFileData();

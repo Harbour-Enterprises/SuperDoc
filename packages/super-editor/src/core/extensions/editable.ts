@@ -1,6 +1,5 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '../Extension.js';
-import type { Editor } from '../Editor.js';
 
 /**
  * Editable extension controls whether the editor accepts user input.
@@ -24,21 +23,21 @@ export const Editable = Extension.create({
         editable: () => Boolean(editor?.options?.editable),
         handleDOMEvents: {
           beforeinput: (_view, event) => {
-            if (!editor.options.editable) {
+            if (!editor?.options?.editable) {
               event.preventDefault();
               return true;
             }
             return false;
           },
           mousedown: (_view, event) => {
-            if (!editor.options.editable) {
+            if (!editor?.options?.editable) {
               event.preventDefault();
               return true;
             }
             return false;
           },
           focus: (view, event) => {
-            if (!editor.options.editable) {
+            if (!editor?.options?.editable) {
               event.preventDefault();
               view.dom.blur();
               return true;
@@ -46,12 +45,12 @@ export const Editable = Extension.create({
             return false;
           },
         },
-        handleClick: () => !editor.options.editable,
-        handleDoubleClick: () => !editor.options.editable,
-        handleTripleClick: () => !editor.options.editable,
-        handleKeyDown: () => !editor.options.editable,
-        handlePaste: () => !editor.options.editable,
-        handleDrop: () => !editor.options.editable,
+        handleClick: () => !editor?.options?.editable,
+        handleDoubleClick: () => !editor?.options?.editable,
+        handleTripleClick: () => !editor?.options?.editable,
+        handleKeyDown: () => !editor?.options?.editable,
+        handlePaste: () => !editor?.options?.editable,
+        handleDrop: () => !editor?.options?.editable,
       },
     });
 

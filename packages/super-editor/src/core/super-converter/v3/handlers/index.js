@@ -305,7 +305,7 @@ const translatorList = Array.from(
 
 const additionalHandlers = Object.freeze(
   translatorList.reduce((acc, translator) => {
-    const key = translator?.xmlName;
+    const key = /** @type {any} */ (translator)?.xmlName;
     if (!key) return acc;
     acc[key] = translator;
     return acc;

@@ -21,11 +21,12 @@
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
       "@translator": ["./src/core/super-converter/v3/node-translator/"],
-      "@superdoc/painter-dom": ["../layout-engine/painters/dom/src"],
+      "@superdoc/painter-dom": ["./src/types/superdoc-painter-dom.d.ts"],
       "@superdoc/pm-adapter": ["./src/types/pm-adapter-shim.d.ts"],
-      "@superdoc/layout-bridge": ["../layout-engine/layout-bridge/src"],
-      "@superdoc/contracts": ["../layout-engine/contracts/src"],
-      "@superdoc/geometry-utils": ["../layout-engine/geometry-utils/src"],
+      "@superdoc/layout-bridge": ["./src/types/superdoc-layout-bridge.d.ts"],
+      "@superdoc/contracts": ["./src/types/superdoc-contracts.d.ts"],
+      "@superdoc/measuring-dom": ["./src/types/superdoc-measuring-dom.d.ts"],
+      "@superdoc/word-layout": ["./src/types/superdoc-word-layout.d.ts"],
       "@superdoc/url-validation": ["../../shared/url-validation/index.js"],
       "@superdoc/preset-geometry": ["../preset-geometry/index.js"]
     }

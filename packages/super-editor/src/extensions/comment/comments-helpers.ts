@@ -67,13 +67,22 @@ export const prepareCommentsForExport = (
     commentId: string | number;
     parentCommentId?: string | number | null;
     createdTime?: number | string | null;
+    isInternal?: boolean | null;
   }> = [],
 ) => {
+  const toCreatedTimeMs = (value: unknown): number => {
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    if (typeof value === 'string') {
+      const parsedDate = Date.parse(value);
+      if (!Number.isNaN(parsedDate)) return parsedDate;
+      const parsedNumber = Number(value);
+      if (Number.isFinite(parsedNumber)) return parsedNumber;
+    }
+    return 0;
+  };
+
   // Create a map of commentId -> comment for quick lookup
-  const commentMap = new Map<
-    string | number,
-    { commentId: string | number; parentCommentId?: string | number | null }
-  >();
+  const commentMap = new Map<string | number, (typeof comments)[number]>();
   comments.forEach((c) => {
     commentMap.set(c.commentId, c);
   });
@@ -82,13 +91,13 @@ export const prepareCommentsForExport = (
   const startNodes: Array<{
     pos: number;
     node: PmNode;
-    commentId?: string | number;
+    commentId: string | number;
     parentCommentId?: string | number | null;
   }> = [];
   const endNodes: Array<{
     pos: number;
     node: PmNode;
-    commentId?: string | number;
+    commentId: string | number;
     parentCommentId?: string | number | null;
   }> = [];
   const seen = new Set<string | number>();
@@ -126,7 +135,7 @@ export const prepareCommentsForExport = (
       // Find child comments that should be nested inside this comment
       const childComments = comments
         .filter((c) => c.parentCommentId === commentId)
-        .sort((a, b) => a.createdTime - b.createdTime);
+        .sort((a, b) => toCreatedTimeMs(a.createdTime) - toCreatedTimeMs(b.createdTime));
 
       childComments.forEach((c) => {
         if (seen.has(c.commentId)) return;
@@ -169,7 +178,7 @@ export const prepareCommentsForExport = (
     if (a.parentCommentId && a.parentCommentId === b.parentCommentId) {
       const aComment = commentMap.get(a.commentId);
       const bComment = commentMap.get(b.commentId);
-      return (aComment?.createdTime || 0) - (bComment?.createdTime || 0);
+      return toCreatedTimeMs(aComment?.createdTime) - toCreatedTimeMs(bComment?.createdTime);
     }
     return 0;
   });
@@ -188,7 +197,7 @@ export const prepareCommentsForExport = (
     if (a.parentCommentId && a.parentCommentId === b.parentCommentId) {
       const aComment = commentMap.get(a.commentId);
       const bComment = commentMap.get(b.commentId);
-      return (aComment?.createdTime || 0) - (bComment?.createdTime || 0);
+      return toCreatedTimeMs(aComment?.createdTime) - toCreatedTimeMs(bComment?.createdTime);
     }
     return 0;
   });

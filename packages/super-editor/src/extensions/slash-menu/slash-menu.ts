@@ -17,7 +17,7 @@ import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
  * @returns {HTMLElement|null} The containing block ancestor, or null if fixed is relative to viewport
  * @throws {Error} Never throws - errors from getComputedStyle are caught and logged
  */
-export function findContainingBlockAncestor(element) {
+export function findContainingBlockAncestor(element: HTMLElement | null | undefined): HTMLElement | null {
   if (!element) return null;
 
   let current = element.parentElement;
@@ -28,7 +28,8 @@ export function findContainingBlockAncestor(element) {
       // Check for properties that create a containing block for fixed positioning
       const transform = style.transform;
       const filter = style.filter;
-      const backdropFilter = style.backdropFilter || style.webkitBackdropFilter;
+      const backdropFilter =
+        style.backdropFilter || (style as unknown as { webkitBackdropFilter?: string }).webkitBackdropFilter;
       const perspective = style.perspective;
       const willChange = style.willChange;
       const contain = style.contain;

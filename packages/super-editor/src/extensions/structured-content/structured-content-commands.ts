@@ -325,7 +325,11 @@ export const StructuredContentCommands = Extension.create({
 
             try {
               const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
-              nodeForValidation.check();
+              if (Array.isArray(nodeForValidation)) {
+                nodeForValidation.forEach((validatedNode) => validatedNode.check());
+              } else {
+                nodeForValidation.check();
+              }
             } catch (error) {
               console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
               return false;
@@ -489,7 +493,11 @@ export const StructuredContentCommands = Extension.create({
               // Validate the node before adding to updates
               try {
                 const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
-                nodeForValidation.check();
+                if (Array.isArray(nodeForValidation)) {
+                  nodeForValidation.forEach((validatedNode) => validatedNode.check());
+                } else {
+                  nodeForValidation.check();
+                }
               } catch (error) {
                 console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
                 return false;

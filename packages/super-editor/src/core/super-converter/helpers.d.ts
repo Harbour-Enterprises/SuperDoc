@@ -41,6 +41,7 @@ export function getDocxHighlightKeywordFromHex(hexColor: any): any;
 export function normalizeHexColor(hex: any): any;
 export function isValidHexColor(color: any): boolean;
 export function rgbToHex(rgb: any): string;
+export function pointsToTwips(points: any): number;
 export function ptToTwips(pt: any): number;
 export function twipsToPt(twips: any): number;
 export function getLineHeightValueString(

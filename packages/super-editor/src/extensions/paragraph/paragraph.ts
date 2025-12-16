@@ -144,7 +144,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
       },
       ...(this.options?.headingLevels ?? []).map((level) => ({
         tag: `h${level}`,
-        getAttrs: (node) => {
+        getAttrs: (node: Element) => {
           const attrs = parseAttrs(node);
           return {
             ...attrs,

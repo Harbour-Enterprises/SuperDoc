@@ -1,5 +1,5 @@
 import type { Transaction } from 'prosemirror-state';
-import type { Mark as PmMark } from 'prosemirror-model';
+import type { Mark as PmMark, Node as PmNode } from 'prosemirror-model';
 
 export type TrackedMark = {
   from: number;
@@ -32,13 +32,10 @@ export const findTrackedMarkBetween = ({
 
   let markFound: TrackedMark | undefined;
 
-  const tryMatch = (node: unknown, pos: number) => {
-    if (!node || node?.nodeSize === undefined) {
-      return;
-    }
-
+  const tryMatch = (node: PmNode, pos: number): false | void => {
     const mark = node.marks?.find(
-      (mark) => mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
+      (mark: PmMark) =>
+        mark.type.name === markName && Object.keys(attrs).every((attr) => mark.attrs[attr] === attrs[attr]),
     );
 
     if (mark && !markFound) {
@@ -56,7 +53,7 @@ export const findTrackedMarkBetween = ({
     return tryMatch(node, pos);
   });
 
-  const inspectAroundPosition = (pos) => {
+  const inspectAroundPosition = (pos: number) => {
     if (pos < 0 || pos > doc.content.size) {
       return;
     }

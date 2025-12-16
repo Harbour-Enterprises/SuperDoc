@@ -24,7 +24,7 @@ const key = new PluginKey('ImageRegistration');
  * @param {import('prosemirror-model').Node} node
  * @returns {boolean}
  */
-export const needsImageRegistration = (node) => {
+export const needsImageRegistration = (node: PmNode | null | undefined): boolean => {
   if (!node || node.type?.name !== 'image') return false;
 
   const src = node.attrs?.src;

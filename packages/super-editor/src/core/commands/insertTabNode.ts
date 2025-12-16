@@ -36,7 +36,7 @@ export const insertTabNode =
         newPos = $pos.start() - 1;
       } else {
         // In middle of run, split it at the cursor
-        splitRunAtCursor()({ tr, state });
+        splitRunAtCursor()({ tr, state } as unknown as CommandProps);
         newPos = tr.selection.from;
       }
     }

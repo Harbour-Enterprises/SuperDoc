@@ -11,10 +11,12 @@ import type { Editor } from '../Editor.js';
 export function getEditorSurfaceElement(editor: Editor | null | undefined): HTMLElement | null {
   if (!editor) return null;
 
+  const maybePresentationEditor = editor as unknown as { hitTest?: unknown; element?: unknown };
+
   // Check if editor IS a PresentationEditor by looking for PresentationEditor-specific method (hitTest)
   // and the element property. This distinguishes from flow Editor which delegates hitTest to presentationEditor.
-  if (typeof editor.hitTest === 'function' && editor.element instanceof HTMLElement) {
-    return editor.element;
+  if (typeof maybePresentationEditor.hitTest === 'function' && maybePresentationEditor.element instanceof HTMLElement) {
+    return maybePresentationEditor.element;
   }
 
   // For flow Editor: check for attached PresentationEditor, then fall back to view.dom or options.element
