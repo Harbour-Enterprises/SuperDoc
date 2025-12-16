@@ -85,6 +85,15 @@ export type LayoutOptions = {
    * Values are the actual content heights in pixels.
    */
   headerContentHeights?: Partial<Record<'default' | 'first' | 'even' | 'odd', number>>;
+  /**
+   * Actual measured footer content heights per variant type.
+   * When provided, the layout engine will ensure body content ends above
+   * the footer content, preventing overlap when footers exceed their allocated margin space.
+   *
+   * Keys correspond to footer variant types: 'default', 'first', 'even', 'odd'
+   * Values are the actual content heights in pixels.
+   */
+  footerContentHeights?: Partial<Record<'default' | 'first' | 'even' | 'odd', number>>;
 };
 
 export type HeaderFooterConstraints = {
@@ -266,12 +275,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   }
 
   /**
-   * Validates and normalizes a header height value to ensure it is a non-negative finite number.
+   * Validates and normalizes a header or footer content height value to ensure it is a non-negative finite number.
+   * Used to validate both header and footer heights before using them in layout calculations.
    *
-   * @param height - The header height value to validate (may be undefined)
+   * @param height - The content height value to validate (may be undefined)
    * @returns A valid non-negative number, or 0 if the input is invalid
    */
-  const validateHeaderHeight = (height: number | undefined): number => {
+  const validateContentHeight = (height: number | undefined): number => {
     if (height === undefined) return 0;
     if (!Number.isFinite(height) || height < 0) return 0;
     return height;
@@ -283,10 +293,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   const maxHeaderContentHeight = headerContentHeights
     ? Math.max(
         0,
-        validateHeaderHeight(headerContentHeights.default),
-        validateHeaderHeight(headerContentHeights.first),
-        validateHeaderHeight(headerContentHeights.even),
-        validateHeaderHeight(headerContentHeights.odd),
+        validateContentHeight(headerContentHeights.default),
+        validateContentHeight(headerContentHeights.first),
+        validateContentHeight(headerContentHeights.even),
+        validateContentHeight(headerContentHeights.odd),
       )
     : 0;
 
@@ -298,8 +308,29 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   const effectiveTopMargin =
     maxHeaderContentHeight > 0 ? Math.max(margins.top, headerDistance + maxHeaderContentHeight) : margins.top;
 
+  // Calculate the maximum footer content height across all variants.
+  // This ensures body content always ends above footer content, regardless of which variant is used.
+  const footerContentHeights = options.footerContentHeights;
+  const maxFooterContentHeight = footerContentHeights
+    ? Math.max(
+        0,
+        validateContentHeight(footerContentHeights.default),
+        validateContentHeight(footerContentHeights.first),
+        validateContentHeight(footerContentHeights.even),
+        validateContentHeight(footerContentHeights.odd),
+      )
+    : 0;
+
+  // Calculate effective bottom margin: ensure body content ends above footer content.
+  // The footer starts at footerDistance (margins.footer) from the page bottom.
+  // Body content must end at footerDistance + actualFooterHeight (at minimum) from page bottom.
+  // We take the max of the document's bottom margin and the footer-required space.
+  const footerDistance = margins.footer ?? margins.bottom;
+  const effectiveBottomMargin =
+    maxFooterContentHeight > 0 ? Math.max(margins.bottom, footerDistance + maxFooterContentHeight) : margins.bottom;
+
   let activeTopMargin = effectiveTopMargin;
-  let activeBottomMargin = margins.bottom;
+  let activeBottomMargin = effectiveBottomMargin;
   let pendingTopMargin: number | null = null;
   let pendingBottomMargin: number | null = null;
   let activeHeaderDistance = margins.header ?? margins.top;
@@ -350,7 +381,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     state: SectionState;
   } => {
     if (typeof scheduleSectionBreakExport === 'function') {
-      return scheduleSectionBreakExport(block, state, baseMargins, maxHeaderContentHeight);
+      return scheduleSectionBreakExport(block, state, baseMargins, maxHeaderContentHeight, maxFooterContentHeight);
     }
     // Fallback inline logic (mirrors section-breaks.ts)
     const next = { ...state };
@@ -376,7 +407,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const footerDistance = Math.max(0, block.margins.footer);
         next.activeFooterDistance = footerDistance;
         next.pendingFooterDistance = footerDistance;
-        next.activeBottomMargin = Math.max(baseMargins.bottom, footerDistance);
+        // Account for actual footer content height
+        const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
+        next.activeBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
         next.pendingBottomMargin = next.activeBottomMargin;
       }
       if (block.columns) {
@@ -432,7 +465,15 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     } else {
       next.pendingTopMargin = nextTop;
     }
-    next.pendingBottomMargin = typeof footerPx === 'number' ? Math.max(baseMargins.bottom, footerPx) : nextBottom;
+
+    // Account for actual footer content height when calculating bottom margin
+    if (typeof footerPx === 'number') {
+      const sectionFooter = next.pendingFooterDistance;
+      const requiredBottom = maxFooterContentHeight > 0 ? sectionFooter + maxFooterContentHeight : sectionFooter;
+      next.pendingBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
+    } else {
+      next.pendingBottomMargin = nextBottom;
+    }
     if (block.pageSize) next.pendingPageSize = { w: block.pageSize.w, h: block.pageSize.h };
     if (block.orientation) next.pendingOrientation = block.orientation;
     const sectionType = block.type ?? 'continuous';
@@ -771,7 +812,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const footerDistance = Math.max(0, block.margins.footer);
         activeFooterDistance = footerDistance;
         pendingFooterDistance = footerDistance;
-        activeBottomMargin = Math.max(margins.bottom, footerDistance);
+        // Account for actual footer content height
+        const requiredBottomMargin =
+          maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
+        activeBottomMargin = Math.max(margins.bottom, requiredBottomMargin);
         pendingBottomMargin = activeBottomMargin;
       }
       if (block.columns) {
@@ -836,7 +880,15 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     } else {
       pendingTopMargin = nextTop;
     }
-    pendingBottomMargin = typeof footerPx === 'number' ? Math.max(margins.bottom, footerPx) : nextBottom;
+
+    // Account for actual footer content height when calculating bottom margin
+    if (typeof footerPx === 'number') {
+      const sectionFooter = pendingFooterDistance;
+      const requiredForFooter = maxFooterContentHeight > 0 ? sectionFooter + maxFooterContentHeight : sectionFooter;
+      pendingBottomMargin = Math.max(margins.bottom, requiredForFooter);
+    } else {
+      pendingBottomMargin = nextBottom;
+    }
 
     // Schedule page size change if present
     if (block.pageSize) {
