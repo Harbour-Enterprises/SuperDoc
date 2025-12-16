@@ -9,6 +9,7 @@ import type {
   BoxSpacing,
   DrawingBlock,
   DrawingContentSnapshot,
+  ImageBlock,
   ParagraphIndent,
   ShapeGroupChild,
   ShapeGroupDrawing,
@@ -1135,7 +1136,10 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
             if (cellChanged) {
               return {
                 ...cell,
-                blocks: hydratedBlocks.length > 0 ? hydratedBlocks : cell.blocks,
+                // Cast to expected type - hydrateBlock preserves block kinds, just hydrates image sources
+                blocks: (hydratedBlocks.length > 0 ? hydratedBlocks : cell.blocks) as
+                  | (ParagraphBlock | ImageBlock | DrawingBlock)[]
+                  | undefined,
                 paragraph: hydratedParagraph,
               };
             }

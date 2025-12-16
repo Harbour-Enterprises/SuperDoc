@@ -224,7 +224,7 @@ export type PresenceOptions = {
  * without resorting to type assertions throughout the codebase.
  */
 interface EditorWithConverter extends Editor {
-  converter?: {
+  converter: Editor['converter'] & {
     pageStyles?: { alternateHeaders?: boolean };
     headerIds?: { default?: string; first?: string; even?: string; odd?: string };
     footerIds?: { default?: string; first?: string; even?: string; odd?: string };
@@ -2336,22 +2336,28 @@ export class PresentationEditor extends EventEmitter {
       // Skip local client
       if (clientId === provider.awareness?.clientID) return;
 
+      // Type assertion for awareness state properties
+      const awState = aw as {
+        cursor?: { anchor: unknown; head: unknown };
+        user?: { name?: string; email?: string; color?: string };
+      };
+
       // Skip states without cursor data
-      if (!aw.cursor) return;
+      if (!awState.cursor) return;
 
       try {
         // Convert relative positions to absolute PM positions
         const anchor = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.anchor),
+          Y.createRelativePositionFromJSON(awState.cursor.anchor),
           ystate.binding.mapping,
         );
 
         const head = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.head),
+          Y.createRelativePositionFromJSON(awState.cursor.head),
           ystate.binding.mapping,
         );
 
@@ -2372,9 +2378,9 @@ export class PresentationEditor extends EventEmitter {
         normalized.set(clientId, {
           clientId,
           user: {
-            name: aw.user?.name,
-            email: aw.user?.email,
-            color: aw.user?.color || this.#getFallbackColor(clientId),
+            name: awState.user?.name,
+            email: awState.user?.email,
+            color: awState.user?.color || this.#getFallbackColor(clientId),
           },
           anchor: clampedAnchor,
           head: clampedHead,
@@ -7001,7 +7007,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
-    const charIndex = Math.min(pos - pmStart, textNode.length);
+    const charIndex = Math.min(pos - pmStart, (textNode as Text).length);
     const range = document.createRange();
     range.setStart(textNode, Math.max(0, charIndex));
     range.setEnd(textNode, Math.max(0, charIndex));
@@ -7180,8 +7186,8 @@ export class PresentationEditor extends EventEmitter {
 
       let domCaretX: number | null = null;
       let domCaretY: number | null = null;
-      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
-      for (const spanEl of spanEls) {
+      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+      for (const spanEl of Array.from(spanEls ?? [])) {
         const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
         const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
         if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
@@ -7243,8 +7249,8 @@ export class PresentationEditor extends EventEmitter {
     // Find span containing this pos and measure actual DOM position
     let domCaretX: number | null = null;
     let domCaretY: number | null = null;
-    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
-    for (const spanEl of spanEls) {
+    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+    for (const spanEl of Array.from(spanEls ?? [])) {
       const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
       const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
       if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {

@@ -8,7 +8,6 @@ import type {
   SdtMetadata,
   TableBlock,
   TableMeasure,
-  BlockKind,
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
