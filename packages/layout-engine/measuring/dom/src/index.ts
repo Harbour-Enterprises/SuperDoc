@@ -2563,7 +2563,7 @@ const sanitizePositive = (value: number | undefined): number =>
  * @param value - The indent value to sanitize (may be undefined, NaN, or Infinity)
  * @returns The sanitized indent value (0 if invalid, preserves negative if valid)
  */
-const sanitizeIndent = (value: number | undefined): number =>
+export const sanitizeIndent = (value: number | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
 const sanitizeDecimalSeparator = (value: unknown): string => {

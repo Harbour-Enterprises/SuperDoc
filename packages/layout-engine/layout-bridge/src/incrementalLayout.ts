@@ -369,23 +369,22 @@ export async function incrementalLayout(
 const DEFAULT_PAGE_SIZE = { w: 612, h: 792 };
 const DEFAULT_MARGINS = { top: 72, right: 72, bottom: 72, left: 72 };
 
+/**
+ * Normalizes a margin value, using a fallback for undefined or non-finite values.
+ * Prevents NaN content sizes when margin properties are partially defined.
+ *
+ * @param value - The margin value to normalize (may be undefined)
+ * @param fallback - The default margin value to use if value is invalid
+ * @returns The normalized margin value (guaranteed to be finite)
+ */
+export const normalizeMargin = (value: number | undefined, fallback: number): number =>
+  Number.isFinite(value) ? (value as number) : fallback;
+
 export function resolveMeasurementConstraints(options: LayoutOptions): {
   measurementWidth: number;
   measurementHeight: number;
 } {
   const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
-  // Merge defaults per side, ignoring undefined so we don't override with undefined
-  // and end up with NaN content sizes.
-  /**
-   * Normalizes a margin value, using a fallback for undefined or non-finite values.
-   * Prevents NaN content sizes when margin properties are partially defined.
-   *
-   * @param value - The margin value to normalize (may be undefined)
-   * @param fallback - The default margin value to use if value is invalid
-   * @returns The normalized margin value (guaranteed to be finite)
-   */
-  const normalizeMargin = (value: number | undefined, fallback: number): number =>
-    Number.isFinite(value) ? (value as number) : fallback;
   const margins = {
     top: normalizeMargin(options.margins?.top, DEFAULT_MARGINS.top),
     right: normalizeMargin(options.margins?.right, DEFAULT_MARGINS.right),
