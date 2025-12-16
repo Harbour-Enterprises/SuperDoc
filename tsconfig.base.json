@@ -14,7 +14,6 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "baseUrl": ".",
     "paths": {},
     "customConditions": ["source"]
   },
@@ -36,8 +35,6 @@
     "dist",
     "examples",
     "e2e-tests",
-    "**/*.test.js",
-    "**/*.test.ts",
     "packages/collaboration-yjs/examples/**",
     "packages/super-editor/src/core/super-converter/**/*"
   ]
