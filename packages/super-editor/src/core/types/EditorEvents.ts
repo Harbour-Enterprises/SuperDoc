@@ -30,11 +30,20 @@ export interface CommentsPayload {
  * Payload for comment locations/positions
  */
 export interface CommentLocationsPayload {
-  locations: Array<{
+  locations?: Array<{
     commentId: string;
     position: { top: number; left: number; height: number; width: number };
     [key: string]: unknown;
   }>;
+  allCommentPositions?: Record<
+    string,
+    {
+      threadId: string;
+      start: number;
+      end: number;
+      bounds: { top: number; bottom: number; left: number; right: number };
+    }
+  >;
 }
 
 /**

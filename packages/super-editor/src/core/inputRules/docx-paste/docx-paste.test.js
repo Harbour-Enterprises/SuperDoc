@@ -17,11 +17,19 @@ vi.mock('prosemirror-model', () => ({
 const convertEmToPtMock = vi.hoisted(() => vi.fn((html) => html));
 const cleanHtmlMock = vi.hoisted(() => vi.fn((html) => html));
 const handleHtmlPasteMock = vi.hoisted(() => vi.fn(() => false));
+const sanitizeHtmlMock = vi.hoisted(() =>
+  vi.fn((html) => {
+    const container = document.createElement('div');
+    container.innerHTML = html;
+    return container;
+  }),
+);
 
 vi.mock('../../InputRule.js', () => ({
   convertEmToPt: convertEmToPtMock,
   cleanHtmlUnnecessaryTags: cleanHtmlMock,
   handleHtmlPaste: handleHtmlPasteMock,
+  sanitizeHtml: sanitizeHtmlMock,
 }));
 
 const normalizeLvlTextCharMock = vi.hoisted(() => vi.fn((value) => value || '%1.'));

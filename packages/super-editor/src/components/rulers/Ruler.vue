@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed, reactive, watch } from 'vue';
 import { generateRulerDefinition, clampHandlePosition, calculateMarginFromHandle } from '@superdoc/painter-dom';
 

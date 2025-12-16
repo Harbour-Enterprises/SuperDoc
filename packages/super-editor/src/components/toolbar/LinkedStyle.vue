@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 import { generateLinkedStyleString, getQuickFormatList } from '@extensions/linked-styles/index.js';

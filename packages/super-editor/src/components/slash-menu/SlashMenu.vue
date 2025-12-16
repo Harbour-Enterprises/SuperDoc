@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, watch, nextTick, computed, markRaw } from 'vue';
 import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';

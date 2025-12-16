@@ -168,6 +168,7 @@ describe('[base-custom.docx] Can import and import the custom lists', () => {
       justification: 'left',
       path: [2, 1],
       numberingType: 'decimal',
+      suffix: null,
     });
     const paragraphText = extractParagraphText(item1);
     expect(paragraphText).toBe('2.1');

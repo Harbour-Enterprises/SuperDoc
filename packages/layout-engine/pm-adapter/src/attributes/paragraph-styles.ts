@@ -167,7 +167,7 @@ export const hydrateParagraphStyleAttrs = (
   }
 
   const hydrated: ParagraphStyleHydration = {
-    resolved,
+    resolved: resolved as ResolvedParagraphProperties,
     spacing: resolvedSpacing,
     indent: resolvedIndent,
     borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],

@@ -41,6 +41,7 @@ export function getDocxHighlightKeywordFromHex(hexColor: any): any;
 export function normalizeHexColor(hex: any): any;
 export function isValidHexColor(color: any): boolean;
 export function rgbToHex(rgb: any): string;
+export function pointsToTwips(points: any): number;
 export function ptToTwips(pt: any): number;
 export function twipsToPt(twips: any): number;
 export function getLineHeightValueString(
@@ -66,4 +67,5 @@ export function hasSomeParentWithClass(element: any, classname: any): any;
 export function getTextIndentExportValue(indent: string | number): number;
 export function polygonUnitsToPixels(pu: any): number;
 export function pixelsToPolygonUnits(pixels: any): number;
+export function convertSizeToCSS(value: any, type: any): string | null;
 //# sourceMappingURL=helpers.d.ts.map

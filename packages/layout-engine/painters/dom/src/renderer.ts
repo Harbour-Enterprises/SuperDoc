@@ -20,7 +20,6 @@ import type {
   ImageDrawing,
   ParagraphAttrs,
   ParagraphBorder,
-  ParagraphBorders,
   ListItemFragment,
   ListBlock,
   ListMeasure,
@@ -67,12 +66,7 @@ import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
 import { applySdtContainerStyling } from './utils/sdt-helpers.js';
-import {
-  generateRulerDefinitionFromPx,
-  createRulerElement,
-  ensureRulerStyles,
-  RULER_CLASS_NAMES,
-} from './ruler/index.js';
+import { generateRulerDefinitionFromPx, createRulerElement, ensureRulerStyles } from './ruler/index.js';
 import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 import {
   hashParagraphBorders,
@@ -1887,7 +1881,6 @@ export class DomPainter {
         // When using explicit segment positioning, segments are absolutely positioned and textIndent
         // has no effect, so we skip it to avoid confusion.
         // Also skip when left indent is negative - fragment positioning already handles that case.
-        const hasNegativeLeftIndent = paraIndentLeft != null && paraIndentLeft < 0;
         if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
           if (!hasExplicitSegmentPositioning) {
             lineEl.style.textIndent = `${firstLineOffset}px`;
@@ -3767,7 +3760,7 @@ export class DomPainter {
     context: FragmentRenderContext,
     availableWidthOverride?: number,
     lineIndex?: number,
-    skipJustify?: boolean,
+    _skipJustify?: boolean,
   ): HTMLElement {
     if (!this.doc) {
       throw new Error('DomPainter: document is not available');

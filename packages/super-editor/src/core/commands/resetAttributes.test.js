@@ -45,7 +45,7 @@ describe('resetAttributes', () => {
     let state = createState(doc);
     let appliedTr = null;
 
-    const command = resetAttributes('paragraph', ['title', 'nested.deep.drop']);
+    const command = resetAttributes('paragraph', 'title', 'nested.deep.drop');
     const dispatched = command({
       state,
       tr: state.tr,
@@ -72,7 +72,7 @@ describe('resetAttributes', () => {
     let state = createState(doc);
     let appliedTr = null;
 
-    const command = resetAttributes('highlight', ['color', 'meta.temp']);
+    const command = resetAttributes('highlight', 'color', 'meta.temp');
     const dispatched = command({
       state,
       tr: state.tr,
@@ -96,7 +96,7 @@ describe('resetAttributes', () => {
     const doc = schema.nodes.doc.create({}, paragraph);
     const state = createState(doc);
 
-    const command = resetAttributes('unknown', ['foo']);
+    const command = resetAttributes('unknown', 'foo');
     const result = command({ state, tr: state.tr, dispatch: () => {} });
 
     expect(result).toBe(false);

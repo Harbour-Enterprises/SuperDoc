@@ -1,7 +1,7 @@
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
-import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
+import type { EditorOptions, User, FieldValue, DocxFileEntry, EditorExtension } from './types/EditorConfig.js';
 import type {
   EditorHelpers,
   ExtensionStorage,
@@ -354,7 +354,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   #initRichText(): void {
     if (!this.options.extensions || !this.options.extensions.length) {
-      this.options.extensions = getRichTextExtensions();
+      this.options.extensions = getRichTextExtensions() as EditorExtension[];
     }
 
     this.#createExtensionService();
@@ -466,7 +466,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Get extension helpers.
    */
   get helpers(): EditorHelpers {
-    return this.extensionService.helpers;
+    return this.extensionService.helpers as EditorHelpers;
   }
 
   /**
@@ -975,7 +975,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
   static async loadXmlData(
     fileSource: File | Blob | Buffer,
     isNode: boolean = false,
-  ): Promise<[DocxFileEntry[], Record<string, unknown>, Record<string, unknown>, Record<string, unknown>] | undefined> {
+  ): Promise<
+    [DocxFileEntry[], Record<string, string>, Record<string, string>, Record<string, Uint8Array>] | undefined
+  > {
     if (!fileSource) return;
 
     const zipper = new DocxZipper();
@@ -996,7 +998,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Set the document version
    */
   static setDocumentVersion(doc: DocxFileEntry[], version: string): string {
-    return SuperConverter.setStoredSuperdocVersion(doc, version) ?? version;
+    const result = SuperConverter.setStoredSuperdocVersion(doc, version);
+    return (result as unknown as string | undefined) ?? version;
   }
 
   /**
@@ -1026,12 +1029,12 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const suppressedNames = new Set(
       (this.extensionService?.extensions || [])
-        .filter((ext: { config?: { excludeFromSummaryJSON?: boolean } }) => {
-          const config = (ext as { config?: { excludeFromSummaryJSON?: boolean } })?.config;
+        .filter((ext) => {
+          const config = ext?.config as { excludeFromSummaryJSON?: boolean } | undefined;
           const suppressFlag = config?.excludeFromSummaryJSON;
           return Boolean(suppressFlag);
         })
-        .map((ext: { name: string }) => ext.name),
+        .map((ext) => ext.name),
     );
 
     const summary = buildSchemaSummary(this.schema, schemaVersion);
@@ -1091,7 +1094,15 @@ export class Editor extends EventEmitter<EditorEventMap> {
           doc = this.schema.nodeFromJSON(content);
           doc = this.#prepareDocumentForImport(doc);
         } else {
-          doc = createDocument(this.converter, this.schema, this);
+          const createdDoc = createDocument(
+            this.converter as Parameters<typeof createDocument>[0],
+            this.schema,
+            this as Parameters<typeof createDocument>[2],
+          );
+          if (!createdDoc) {
+            throw new Error('Failed to create document from converter');
+          }
+          doc = createdDoc;
           // Perform any additional document processing prior to finalizing the doc here
           doc = this.#prepareDocumentForImport(doc);
 
@@ -1159,8 +1170,10 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (this.options.skipViewCreation || typeof this.view?.setProps !== 'function') {
       return;
     }
+
     this.view.setProps({
-      nodeViews: this.extensionService.nodeViews,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- ProseMirror nodeViews type is complex and varies by node
+      nodeViews: this.extensionService.nodeViews as any,
     });
   }
 
@@ -1359,7 +1372,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (!this.options.isNewFile) {
       this.#initComments();
-      updateYdocDocxData(this, this.options.ydoc);
+      updateYdocDocxData(this, undefined);
     }
   }
 
@@ -1649,7 +1662,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Or paragraph fields that rely on the same underlying document and list defintions
    */
   createChildEditor(options: Partial<EditorOptions>): Editor {
-    return createLinkedChildEditor(this, options);
+    const childEditor = createLinkedChildEditor(this, options);
+    if (!childEditor) {
+      throw new Error('Failed to create child editor - current editor is already a child editor');
+    }
+    return childEditor;
   }
 
   /**
@@ -1672,7 +1689,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       hasMadeUpdate = true;
     }
 
-    if (hasMadeUpdate && this.view && !isHeadless()) {
+    if (hasMadeUpdate && this.view && !isHeadless(this)) {
       const newTr = this.view.state.tr;
       newTr.setMeta('forceUpdatePagination', true);
       this.#dispatchTransaction(newTr);
@@ -1724,7 +1741,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
   migrateListsToV2(): Array<{ from: number; to: number; slice: unknown }> {
     if (this.options.isHeaderOrFooter) return [];
     const replacements = migrateListsToV2IfNecessary(this);
-    return replacements;
+    return replacements as unknown as Array<{ from: number; to: number; slice: unknown }>;
   }
 
   /**
@@ -1741,7 +1758,16 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     const { tr, doc } = newState;
 
-    prepareCommentsForExport(doc, tr, this.schema, comments);
+    prepareCommentsForExport(
+      doc,
+      tr,
+      this.schema,
+      comments.map((c) => ({
+        commentId: c.id,
+        parentCommentId: (c as Record<string, unknown>).parentCommentId as string | number | undefined,
+        createdTime: (c as Record<string, unknown>).createdTime as number | string | undefined,
+      })),
+    );
     const updatedState = newState.apply(tr);
     return updatedState.doc.toJSON();
   }
@@ -1851,24 +1877,27 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const zipper = new DocxZipper();
 
       if (getUpdatedDocs) {
-        updatedDocs['[Content_Types].xml'] = await zipper.updateContentTypes(
+        const contentTypesResult = await zipper.updateContentTypes(
           {
-            files: this.options.content,
+            files: this.options.content as DocxFileEntry[] | Record<string, string>,
           },
           media,
           true,
           updatedDocs,
         );
+        if (typeof contentTypesResult === 'string') {
+          updatedDocs['[Content_Types].xml'] = contentTypesResult;
+        }
         return updatedDocs;
       }
 
       const result = await zipper.updateZip({
-        docx: this.options.content,
+        docx: this.options.content as DocxFileEntry[] | Record<string, string>,
         updatedDocs: updatedDocs,
-        originalDocxFile: this.options.fileSource,
+        originalDocxFile: this.options.fileSource ?? undefined,
         media,
-        fonts: this.options.fonts,
-        isHeadless: this.options.isHeadless,
+        fonts: this.options.fonts as Record<string, Uint8Array>,
+        isHeadless: this.options.isHeadless ?? false,
       });
 
       (this.options.telemetry as TelemetryData | null)?.trackUsage?.('document_export', {
@@ -1950,7 +1979,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (!this.options.ydoc) return;
 
     const metaMap = (this.options.ydoc as { getMap: (name: string) => Map<string, unknown> }).getMap('meta');
-    let docVersion = metaMap.get('version');
+    let docVersion = metaMap.get('version') as string | undefined;
     if (!docVersion) docVersion = 'initial';
     console.debug('[checkVersionMigrations] Document version', docVersion);
     const migrations = getNecessaryMigrations(docVersion) || [];
@@ -1971,8 +2000,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
     if (!hasRunMigrations) return;
 
     // Return the updated ydoc
-    const pluginState = syncPlugin?.getState(this.state);
-    return pluginState.doc;
+    const pluginState = syncPlugin?.getState(this.state) as { doc?: unknown } | undefined;
+    return pluginState?.doc;
   }
 
   /**
@@ -1980,7 +2009,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   async replaceFile(newFile: File | Blob | Buffer): Promise<void> {
     this.setOptions({ annotations: true });
-    const [docx, media, mediaFiles, fonts] = (await Editor.loadXmlData(newFile))!;
+    const result = await Editor.loadXmlData(newFile);
+    if (!result) {
+      throw new Error('Failed to load XML data from file');
+    }
+    const [docx, media, mediaFiles, fonts] = result;
     this.setOptions({
       fileSource: newFile,
       content: docx,
@@ -1997,7 +2030,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.initDefaultStyles();
 
     if (this.options.ydoc && this.options.collaborationProvider) {
-      updateYdocDocxData(this, this.options.ydoc);
+      updateYdocDocxData(this, undefined);
       this.initializeCollaborationData();
     } else {
       this.#insertNewFileData();
@@ -2013,16 +2046,22 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * @param name - File name
    * @param type - type of result (json, string)
    */
-  getInternalXmlFile(name: string, type: 'json' | 'string' = 'json'): unknown | string | null {
-    if (!this.converter.convertedXml[name]) {
+  getInternalXmlFile(name: string, type: 'json' | 'string' = 'json'): unknown | null {
+    const convertedXml = this.converter?.convertedXml;
+    if (!convertedXml || !convertedXml[name]) {
       console.warn('Cannot find file in docx');
       return null;
     }
 
-    if (type === 'json') {
-      return this.converter.convertedXml[name].elements[0] || null;
+    const fileData = convertedXml[name] as { elements?: unknown[] } | undefined;
+    if (!fileData?.elements?.[0]) {
+      return null;
     }
-    return this.converter.schemaToXml(this.converter.convertedXml[name].elements[0]);
+
+    if (type === 'json') {
+      return fileData.elements[0];
+    }
+    return this.converter.schemaToXml(fileData.elements[0]);
   }
 
   /**
@@ -2100,7 +2139,6 @@ export class Editor extends EventEmitter<EditorEventMap> {
       annotationValues,
       hiddenFieldIds: hiddenIds,
       removeEmptyFields,
-      editor: this,
     });
 
     // Dispatch everything in a single transaction, which makes this undo-able in a single undo

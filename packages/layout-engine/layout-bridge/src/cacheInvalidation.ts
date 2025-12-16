@@ -66,7 +66,14 @@ export function computeSectionMetadataHash(sections: SectionMetadata[]): string 
   const parts: string[] = [];
 
   for (const section of sections) {
-    parts.push(`section:${section.sectionIndex}`);
+    const sectionId = (section as { id?: string | null }).id;
+    parts.push(`section:${sectionId ?? section.sectionIndex}`);
+
+    // Include section break type if present
+    const sectionType = (section as { type?: string | null }).type;
+    if (sectionType) {
+      parts.push(`type:${sectionType}`);
+    }
 
     // Include numbering properties that affect display
     if (section.numbering) {

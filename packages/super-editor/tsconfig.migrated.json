@@ -27,32 +27,18 @@
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
       "@translator": ["./src/core/super-converter/v3/node-translator/"],
-      "@superdoc/painter-dom": ["../layout-engine/painters/dom/src"],
+      "@superdoc/painter-dom": ["./src/types/superdoc-painter-dom.d.ts"],
       "@superdoc/pm-adapter": ["./src/types/pm-adapter-shim.d.ts"],
-      "@superdoc/layout-bridge": ["../layout-engine/layout-bridge/src"],
-      "@superdoc/contracts": ["../layout-engine/contracts/src"],
+      "@superdoc/layout-bridge": ["./src/types/superdoc-layout-bridge.d.ts"],
+      "@superdoc/contracts": ["./src/types/superdoc-contracts.d.ts"],
+      "@superdoc/measuring-dom": ["./src/types/superdoc-measuring-dom.d.ts"],
+      "@superdoc/word-layout": ["./src/types/superdoc-word-layout.d.ts"],
       "@superdoc/geometry-utils": ["../layout-engine/geometry-utils/src"],
       "@superdoc/url-validation": ["../../shared/url-validation/index.d.ts"],
       "@superdoc/preset-geometry": ["../preset-geometry/index.d.ts"]
     }
   },
-  "include": [
-    "src/types/**/*.d.ts",
-    "src/schema/**/*.d.ts",
-    "src/core/Attribute.ts",
-    "src/core/EventEmitter.ts",
-    "src/core/Extension.ts",
-    "src/core/Mark.ts",
-    "src/core/Node.ts",
-    "src/core/OxmlNode.ts",
-    "src/core/PresentationEditor.ts",
-    "src/core/commands/core-command-map.d.ts",
-    "src/core/helpers/getExtensionConfigField.ts",
-    "src/core/header-footer/HeaderFooterRegistry.ts",
-    "src/core/types/**/*.ts",
-    "src/core/utilities/callOrGet.ts",
-    "src/extensions/types/**/*.ts"
-  ],
+  "include": ["src/types/**/*.d.ts", "src/schema/**/*.d.ts", "src/core/**/*.ts", "src/extensions/types/**/*.ts"],
   "exclude": [
     "node_modules",
     "dist",
@@ -60,8 +46,6 @@
     "**/*.test.ts",
     "**/*.test.js",
     "src/core/super-converter",
-    "src/core/index.ts",
-    "src/core/Editor.ts",
     "src/tests"
   ]
 }

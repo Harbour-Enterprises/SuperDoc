@@ -5,48 +5,11 @@ type ExtractCommandSignature<F> = F extends (...args: infer A) => (props: Comman
   ? (...args: A) => R
   : (...args: unknown[]) => unknown;
 
-type CoreCommandNames =
-  | 'first'
-  | 'command'
-  | 'insertTabChar'
-  | 'insertTabNode'
-  | 'setMeta'
-  | 'splitBlock'
-  | 'liftEmptyBlock'
-  | 'createParagraphNear'
-  | 'newlineInCode'
-  | 'exitCode'
-  | 'setMark'
-  | 'unsetMark'
-  | 'unsetAllMarks'
-  | 'toggleMark'
-  | 'toggleMarkCascade'
-  | 'clearNodes'
-  | 'setNode'
-  | 'toggleNode'
-  | 'selectAll'
-  | 'deleteSelection'
-  | 'updateAttributes'
-  | 'resetAttributes'
-  | 'joinUp'
-  | 'joinDown'
-  | 'joinBackward'
-  | 'joinForward'
-  | 'selectNodeBackward'
-  | 'selectNodeForward'
-  | 'selectTextblockStart'
-  | 'selectTextblockEnd'
-  | 'insertContent'
-  | 'insertContentAt'
-  | 'undoInputRule'
-  | 'toggleList'
-  | 'increaseListIndent'
-  | 'decreaseListIndent'
-  | 'changeListLevel'
-  | 'removeNumberingProperties'
-  | 'restoreSelection'
-  | 'setTextSelection'
-  | 'getSelectionMarks';
+type CoreCommandNames = {
+  [K in keyof typeof CoreCommandExports]: (typeof CoreCommandExports)[K] extends (...args: unknown[]) => unknown
+    ? K
+    : never;
+}[keyof typeof CoreCommandExports];
 
 type CoreCommandSignatures = {
   [K in CoreCommandNames]: ExtractCommandSignature<(typeof CoreCommandExports)[K]>;

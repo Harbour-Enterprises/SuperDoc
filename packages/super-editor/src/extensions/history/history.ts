@@ -1,0 +1,101 @@
+import { history, redo as originalRedo, undo as originalUndo } from 'prosemirror-history';
+import { undo as yUndo, redo as yRedo, yUndoPlugin } from 'y-prosemirror';
+import { Extension } from '@core/Extension.js';
+import type { Plugin, EditorState, Transaction } from 'prosemirror-state';
+
+/**
+ * Configuration options for History
+ */
+export interface HistoryOptions extends Record<string, unknown> {
+  /**
+   * Maximum undo/redo steps to remember
+   * @default 100
+   */
+  depth: number;
+  /**
+   * Milliseconds to wait before starting a new history group
+   * @default 500
+   */
+  newGroupDelay: number;
+}
+
+/**
+ * @module History
+ * @sidebarTitle History
+ * @snippetPath /snippets/extensions/history.mdx
+ * @shortcut Mod-z | undo | Undo last action
+ * @shortcut Mod-Shift-z | redo | Redo last action
+ * @shortcut Mod-y | redo | Redo last action (alternative)
+ */
+export const History = Extension.create<HistoryOptions>({
+  name: 'history',
+
+  addOptions() {
+    // https://prosemirror.net/docs/ref/#history.history
+    return {
+      depth: 100,
+      newGroupDelay: 500,
+    };
+  },
+
+  addPmPlugins() {
+    if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
+      const undoPlugin = createUndoPlugin();
+      return [undoPlugin];
+    }
+    const historyPlugin = history(this.options);
+    return [historyPlugin];
+  },
+
+  //prettier-ignore
+  addCommands() {
+    return {
+      /**
+       * Undo the last action
+       * @category Command
+       * @example
+       * editor.commands.undo()
+       * @note Groups changes within the newGroupDelay window
+       */
+      undo: () =>
+        ({ state, dispatch, tr }: { state: EditorState; dispatch?: (tr: Transaction) => void; tr: Transaction }) => {
+        if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
+          tr.setMeta('preventDispatch', true);
+          return yUndo(state);
+        }
+        tr.setMeta('inputType', 'historyUndo');
+        return originalUndo(state, dispatch);
+      },
+
+      /**
+       * Redo the last undone action
+       * @category Command
+       * @example
+       * editor.commands.redo()
+       * @note Only available after an undo action
+       */
+      redo: () =>
+        ({ state, dispatch, tr }: { state: EditorState; dispatch?: (tr: Transaction) => void; tr: Transaction }) => {
+        if (this.editor?.options.collaborationProvider && this.editor.options.ydoc) {
+          tr.setMeta('preventDispatch', true);
+          return yRedo(state);
+        }
+        tr.setMeta('inputType', 'historyRedo');
+        return originalRedo(state, dispatch);
+      },
+    };
+  },
+
+  addShortcuts() {
+    return {
+      'Mod-z': () => this.editor?.commands.undo() ?? false,
+      'Mod-Shift-z': () => this.editor?.commands.redo() ?? false,
+      'Mod-y': () => this.editor?.commands.redo() ?? false,
+    };
+  },
+});
+
+const createUndoPlugin = (): Plugin => {
+  const yUndoPluginInstance = yUndoPlugin();
+  return yUndoPluginInstance;
+};

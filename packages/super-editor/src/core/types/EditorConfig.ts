@@ -71,13 +71,24 @@ export interface Awareness {
  */
 export interface CollaborationProvider {
   awareness?: Awareness | null;
-  on?(event: any, handler: (...args: any[]) => void): void;
-  off?(event: any, handler: (...args: any[]) => void): void;
+  on?(event: unknown, handler: (...args: unknown[]) => void): void;
+  off?(event: unknown, handler: (...args: unknown[]) => void): void;
   disconnect?(): void;
   destroy?(): void;
   /** Whether provider is synced - some use `synced`, others `isSynced` */
   synced?: boolean;
   isSynced?: boolean;
+}
+
+/**
+ * Base interface for all extensions (node, mark, extension)
+ */
+export interface ExtensionBase {
+  type: 'node' | 'mark' | 'extension';
+  name: string;
+  options: Record<string, unknown>;
+  storage: Record<string, unknown>;
+  config: Record<string, unknown>;
 }
 
 /**

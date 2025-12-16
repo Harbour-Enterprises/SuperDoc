@@ -1,0 +1,110 @@
+import { Node, Attribute } from '@core/index';
+import { StructuredContentBlockView } from './StructuredContentBlockView';
+import type { AttributeValue } from '@core/Attribute.js';
+import type { DOMOutputSpec, ParseRule } from 'prosemirror-model';
+import type { StructuredContentViewProps } from './StructuredContentViewBase';
+
+export const structuredContentClass = 'sd-structured-content-block';
+export const structuredContentInnerClass = 'sd-structured-content-block__content';
+
+/**
+ * Configuration options for StructuredContentBlock
+ * @typedef {Object} StructuredContentBlockOptions
+ * @category Options
+ * @property {string} [structuredContentClass='sd-structured-content-block-tag'] - CSS class for the block
+ * @property {Object} [htmlAttributes] - HTML attributes for structured content blocks
+ */
+
+/**
+ * Attributes for structured content block nodes
+ * @typedef {Object} StructuredContentBlockAttributes
+ * @category Attributes
+ * @property {string} [id] Unique identifier for the structured content block
+ * @property {string} [tag] Content control tag (e.g., 'block_table_sdt')
+ * @property {string} [alias] Display name for the block (falls back to 'Structured content' when omitted)
+ * @property {Object} [sdtPr] @internal Internal structured document tag properties
+ * @example
+ * // Get attributes from a structured content block
+ * const attrs = editor.getAttributes('structuredContentBlock')
+ * console.log(attrs.id, attrs.alias)
+ */
+
+export const StructuredContentBlock = Node.create<{
+  htmlAttributes: Record<string, AttributeValue>;
+}>({
+  name: 'structuredContentBlock',
+
+  group: 'block structuredContent',
+
+  content: 'block*',
+
+  isolating: true,
+
+  atom: false, // false - has editable content.
+
+  draggable: true,
+
+  addOptions() {
+    return {
+      htmlAttributes: {
+        class: structuredContentClass,
+        'aria-label': 'Structured content block node',
+      },
+    };
+  },
+
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseDOM: (elem: Element) => elem.getAttribute('data-id'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
+          if (!attrs.id) return {};
+          return { 'data-id': attrs.id };
+        },
+      },
+
+      tag: {
+        default: null,
+        parseDOM: (elem: Element) => elem.getAttribute('data-tag'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
+          if (!attrs.tag) return {};
+          return { 'data-tag': attrs.tag };
+        },
+      },
+
+      alias: {
+        default: null,
+        parseDOM: (elem: Element) => elem.getAttribute('data-alias'),
+        renderDOM: (attrs: Record<string, AttributeValue>) => {
+          if (!attrs.alias) return {};
+          return { 'data-alias': attrs.alias };
+        },
+      },
+
+      sdtPr: {
+        rendered: false,
+      },
+    };
+  },
+
+  parseDOM(): ParseRule[] {
+    return [{ tag: 'div[data-structured-content-block]' }];
+  },
+
+  renderDOM({ htmlAttributes }: { htmlAttributes: Record<string, AttributeValue> }): DOMOutputSpec {
+    return [
+      'div',
+      Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes, {
+        'data-structured-content-block': '',
+      }),
+      0,
+    ];
+  },
+
+  addNodeView() {
+    return (props: StructuredContentViewProps) => {
+      return new StructuredContentBlockView({ ...props });
+    };
+  },
+});

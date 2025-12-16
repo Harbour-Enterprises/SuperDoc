@@ -147,83 +147,6 @@ const asSafeNumber = (value: unknown): number => {
   return value;
 };
 
-/**
- * Calculates the first line indent for list markers when remeasuring paragraphs.
- *
- * In Word layout, there are two distinct list marker layout patterns:
- *
- * 1. **firstLineIndentMode** (marker inline with text):
- *    - The marker is positioned at `left + firstLine` and consumes horizontal space on the first line
- *    - Text begins after the marker (at `textStartPx`)
- *    - The first line's available width must account for the marker's width
- *    - This pattern is indicated by `firstLineIndentMode === true`
- *
- * 2. **Standard hanging indent** (marker in hanging area):
- *    - The marker is positioned absolutely in the hanging region at `left - hanging`
- *    - The marker does NOT consume horizontal space from the text flow
- *    - Text begins at `left` on ALL lines (first and subsequent)
- *    - The first line's available width is the same as subsequent lines
- *    - This is the default pattern when `firstLineIndentMode` is not set
- *
- * This function determines which pattern is in use and calculates the appropriate
- * first line indent for the remeasurement operation.
- *
- * @param block - The paragraph block being remeasured
- * @param measure - The current paragraph measurement (may contain marker measurements)
- * @returns The first line indent in pixels. Returns 0 for standard hanging indent,
- *   or the marker width + gutter width for firstLineIndentMode.
- *
- * @example
- * ```typescript
- * // Standard hanging indent - marker doesn't consume first line space
- * const block1 = {
- *   attrs: {
- *     wordLayout: {
- *       marker: { markerBoxWidthPx: 20 },
- *       // firstLineIndentMode is NOT set
- *     }
- *   }
- * };
- * const indent1 = calculateFirstLineIndent(block1, measure);
- * // Returns: 0 (marker is in hanging area)
- *
- * // firstLineIndentMode - marker consumes first line space
- * const block2 = {
- *   attrs: {
- *     wordLayout: {
- *       marker: { markerBoxWidthPx: 20 },
- *       firstLineIndentMode: true
- *     }
- *   }
- * };
- * const indent2 = calculateFirstLineIndent(block2, measure);
- * // Returns: markerWidth + gutterWidth (marker is inline)
- * ```
- */
-function calculateFirstLineIndent(block: ParagraphBlock, measure: ParagraphMeasure): number {
-  const wordLayout = block.attrs?.wordLayout as WordLayoutAttrs | undefined;
-
-  // Only apply first line indent in firstLineIndentMode
-  if (!wordLayout?.firstLineIndentMode) {
-    return 0;
-  }
-
-  // Ensure marker exists in both wordLayout and measure
-  if (!wordLayout.marker || !measure.marker) {
-    return 0;
-  }
-
-  // Extract marker width with fallback chain and validation
-  const markerWidthRaw = measure.marker.markerWidth ?? wordLayout.marker.markerBoxWidthPx ?? 0;
-  const markerWidth = Number.isFinite(markerWidthRaw) && markerWidthRaw >= 0 ? markerWidthRaw : 0;
-
-  // Extract gutter width with validation
-  const gutterWidthRaw = measure.marker.gutterWidth ?? 0;
-  const gutterWidth = Number.isFinite(gutterWidthRaw) && gutterWidthRaw >= 0 ? gutterWidthRaw : 0;
-
-  return markerWidth + gutterWidth;
-}
-
 export type ParagraphLayoutContext = {
   block: ParagraphBlock;
   measure: ParagraphMeasure;
@@ -408,7 +331,6 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const negativeRightIndent = indentRight < 0 ? indentRight : 0;
   // Paragraph content width should honor paragraph indents (including negative values).
   const remeasureWidth = Math.max(1, columnWidth - indentLeft - indentRight);
-  const hasNegativeIndent = indentLeft < 0 || indentRight < 0;
   let didRemeasureForColumnWidth = false;
   if (
     typeof remeasureParagraph === 'function' &&

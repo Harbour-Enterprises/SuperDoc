@@ -58,7 +58,6 @@ import type {
   TableBlock,
   TableMeasure,
 } from '@superdoc/contracts';
-import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
 
 // Comment and tracked change mark names (inline to avoid missing declaration files)
@@ -223,15 +222,17 @@ export type PresenceOptions = {
  * Used to access converter-specific properties for header/footer management
  * without resorting to type assertions throughout the codebase.
  */
-interface EditorWithConverter extends Editor {
-  converter: Editor['converter'] & {
-    pageStyles?: { alternateHeaders?: boolean };
-    headerIds?: { default?: string; first?: string; even?: string; odd?: string };
-    footerIds?: { default?: string; first?: string; even?: string; odd?: string };
-    createDefaultHeader?: (variant: string) => string;
-    createDefaultFooter?: (variant: string) => string;
-  };
-}
+type ConverterLike = {
+  pageStyles?: { alternateHeaders?: boolean };
+  headerIds?: { default?: string; first?: string; even?: string; odd?: string };
+  footerIds?: { default?: string; first?: string; even?: string; odd?: string };
+  createDefaultHeader?: (variant: string) => string;
+  createDefaultFooter?: (variant: string) => string;
+};
+
+type EditorWithConverter = {
+  converter?: ConverterLike;
+};
 
 export type LayoutEngineOptions = {
   pageSize?: PageSize;
@@ -1361,7 +1362,6 @@ export class PresentationEditor extends EventEmitter {
       }
     }
     const layoutCaretStart = this.#computeCaretLayoutRectGeometry(start, false);
-    const layoutCaretEnd = this.#computeCaretLayoutRectGeometry(end, false);
     const pageDelta: Record<number, { dx: number; dy: number }> = {};
     if (domCaretStart && layoutCaretStart && domCaretStart.pageIndex === layoutCaretStart.pageIndex) {
       pageDelta[domCaretStart.pageIndex] = {
@@ -2332,7 +2332,8 @@ export class PresentationEditor extends EventEmitter {
     const states = provider.awareness?.getStates();
     const normalized = new Map<number, RemoteCursorState>();
 
-    states?.forEach((aw, clientId) => {
+    states?.forEach((awRaw, clientId) => {
+      const aw = awRaw as AwarenessState;
       // Skip local client
       if (clientId === provider.awareness?.clientID) return;
 
@@ -2663,8 +2664,6 @@ export class PresentationEditor extends EventEmitter {
     // Use existing geometry helper to get caret layout rect
     const caretLayout = this.#computeCaretLayoutRect(cursor.head);
 
-    // Use effective zoom from actual rendered dimensions for consistent scaling
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const doc = this.#visibleHost.ownerDocument ?? document;
     const color = this.#getValidatedColor(cursor);
 
@@ -2878,7 +2877,7 @@ export class PresentationEditor extends EventEmitter {
 
     // Set up drag handler on the painter host (where layout engine renders)
     this.#dragHandlerCleanup = createDragHandler(this.#painterHost, {
-      onDragOver: (event) => {
+      onDragOver: (event: DropEvent) => {
         if (!event.hasFieldAnnotation || event.event.clientX === 0) {
           return;
         }
@@ -5173,7 +5172,7 @@ export class PresentationEditor extends EventEmitter {
       }
     }
 
-    return (pageNumber, pageMargins, page) => {
+    return (pageNumber: number, pageMargins: PageMargins, page: Page | null | undefined) => {
       const sectionIndex = page?.sectionIndex ?? 0;
       const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
       const sectionPageNumber =
@@ -5423,7 +5422,7 @@ export class PresentationEditor extends EventEmitter {
       }
     }
 
-    layout.pages.forEach((page, pageIndex) => {
+    layout.pages.forEach((page: Page, pageIndex: number) => {
       const margins = page.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const actualPageHeight = page.size?.h ?? pageHeight;
 
@@ -6388,8 +6387,8 @@ export class PresentationEditor extends EventEmitter {
 
     // Find table fragments on all pages
     const tableFragments: Array<{ fragment: TableFragment; pageIndex: number }> = [];
-    layout.pages.forEach((page, pageIndex) => {
-      page.fragments.forEach((fragment) => {
+    layout.pages.forEach((page: Page, pageIndex: number) => {
+      page.fragments.forEach((fragment: Fragment) => {
         if (fragment.kind === 'table' && fragment.blockId === tableBlock.id) {
           tableFragments.push({ fragment: fragment as TableFragment, pageIndex });
         }
@@ -6458,7 +6457,7 @@ export class PresentationEditor extends EventEmitter {
         }
 
         // Find column boundary
-        const colBoundary = columnBoundaries.find((cb) => cb.index === col);
+        const colBoundary = columnBoundaries.find((cb: { index: number; width: number }) => cb.index === col);
         if (!colBoundary) {
           continue;
         }
@@ -6467,7 +6466,9 @@ export class PresentationEditor extends EventEmitter {
         let cellWidth = colBoundary.width;
         if (colspan > 1) {
           for (let c = 1; c < colspan; c++) {
-            const nextColBoundary = columnBoundaries.find((cb) => cb.index === col + c);
+            const nextColBoundary = columnBoundaries.find(
+              (cb: { index: number; width: number }) => cb.index === col + c,
+            );
             if (nextColBoundary) {
               cellWidth += nextColBoundary.width;
             }
@@ -6977,10 +6978,6 @@ export class PresentationEditor extends EventEmitter {
    * ```
    */
   #computeDomCaretPageLocal(pos: number): { pageIndex: number; x: number; y: number } | null {
-    const pageEl = this.#viewportHost.querySelector(`.superdoc-page span[data-pm-start][data-pm-end]`)
-      ? (this.#viewportHost.querySelector(`.superdoc-page`) as HTMLElement | null)
-      : null;
-
     // Narrow search to matching page if possible
     const spans = Array.from(this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]')) as HTMLElement[];
     let targetSpan: HTMLElement | null = null;
@@ -7006,11 +7003,12 @@ export class PresentationEditor extends EventEmitter {
         y: (spanRect.top - pageRect.top) / zoom,
       };
     }
+    const text = textNode as Text;
     const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
-    const charIndex = Math.min(pos - pmStart, (textNode as Text).length);
+    const charIndex = Math.min(pos - pmStart, text.length);
     const range = document.createRange();
-    range.setStart(textNode, Math.max(0, charIndex));
-    range.setEnd(textNode, Math.max(0, charIndex));
+    range.setStart(text, Math.max(0, charIndex));
+    range.setEnd(text, Math.max(0, charIndex));
     const rangeRect = range.getBoundingClientRect();
     const lineEl = targetSpan.closest('.superdoc-line') as HTMLElement | null;
     const lineRect = lineEl?.getBoundingClientRect() ?? rangeRect;
@@ -7186,8 +7184,8 @@ export class PresentationEditor extends EventEmitter {
 
       let domCaretX: number | null = null;
       let domCaretY: number | null = null;
-      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
-      for (const spanEl of Array.from(spanEls ?? [])) {
+      const spanEls = Array.from(pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? []);
+      for (const spanEl of spanEls) {
         const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
         const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
         if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
@@ -7249,8 +7247,8 @@ export class PresentationEditor extends EventEmitter {
     // Find span containing this pos and measure actual DOM position
     let domCaretX: number | null = null;
     let domCaretY: number | null = null;
-    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
-    for (const spanEl of Array.from(spanEls ?? [])) {
+    const spanEls = Array.from(pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? []);
+    for (const spanEl of spanEls) {
       const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
       const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
       if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {

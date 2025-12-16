@@ -1,1 +1,0 @@
-export * from './getExtensionConfigField.ts';

@@ -14,6 +14,7 @@ export interface HistoryLinkTableCommandAugmentations {
     tableNode?: unknown;
     valueRows?: unknown[][];
     copyRowStyle?: boolean;
+    dispatch?: boolean;
   }) => boolean;
   insertTable: (config?: { rows?: number; cols?: number; withHeaderRow?: boolean }) => boolean;
   deleteTable: () => boolean;
@@ -37,12 +38,4 @@ export interface HistoryLinkTableCommandAugmentations {
   setCellSelection: (pos: { anchorCell: number; headCell: number }) => boolean;
   setCellBackground: (value: string) => boolean;
   deleteCellAndTableBorders: () => boolean;
-}
-
-declare module '@core/types/ChainedCommands.js' {
-  interface ExtensionCommandMap extends HistoryLinkTableCommandAugmentations {}
-}
-
-declare module '@core/types/ChainedCommands' {
-  interface ExtensionCommandMap extends HistoryLinkTableCommandAugmentations {}
 }
