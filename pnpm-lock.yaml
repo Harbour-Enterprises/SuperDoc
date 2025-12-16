@@ -504,6 +504,9 @@ importers:
         specifier: workspace:*
         version: link:../painters/dom
     devDependencies:
+      '@superdoc/pm-adapter':
+        specifier: workspace:*
+        version: link:../pm-adapter
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.2
@@ -575,12 +578,18 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@superdoc/layout-engine':
+        specifier: workspace:*
+        version: link:../layout-engine
       '@superdoc/locale-utils':
         specifier: workspace:*
         version: link:../../../shared/locale-utils
       '@superdoc/measuring-dom':
         specifier: workspace:*
         version: link:../measuring/dom
+      '@superdoc/painter-dom':
+        specifier: workspace:*
+        version: link:../painters/dom
       '@superdoc/style-engine':
         specifier: workspace:*
         version: link:../style-engine
@@ -797,6 +806,9 @@ importers:
       vitest:
         specifier: 'catalog:'
         version: 3.2.4(@types/debug@4.1.12)(@types/node@22.19.2)(jiti@2.6.1)(jsdom@27.3.0(canvas@3.2.0)(postcss@8.5.6))(tsx@4.21.0)(yaml@2.8.2)
+      y-protocols:
+        specifier: 'catalog:'
+        version: 1.0.6(yjs@13.6.19)
 
   packages/superdoc:
     dependencies:
