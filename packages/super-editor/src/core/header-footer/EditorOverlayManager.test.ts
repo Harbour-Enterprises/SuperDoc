@@ -47,7 +47,7 @@ describe('EditorOverlayManager', () => {
 
     overlay.hideEditingOverlay();
 
-    expect(editorContainer.style.top).toBe('0');
+    expect(editorContainer.style.top).toBe('0px');
     expect(editorContainer.style.transform).toBe('');
   });
 });
