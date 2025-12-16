@@ -112,6 +112,13 @@ export default defineConfig(({ mode }) => {
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
       conditions: ['source'],
     },
+    environments: {
+      ssr: {
+        resolve: {
+          conditions: ['source'],
+        },
+      },
+    },
     css: {
       postcss: './postcss.config.cjs',
     },
