@@ -336,22 +336,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
 
-  try {
-    console.log(
-      '[DomPainter.renderTableCell] cell render input',
-      JSON.stringify({
-        cellId: cell?.id,
-        blockKinds: cellBlocks.map((b: { kind: BlockKind }) => b.kind),
-        measureKinds: blockMeasures.map((m: { kind: BlockKind }) => m.kind),
-        width: cellMeasure?.width,
-        height: cellMeasure?.height,
-        rowHeight,
-      }),
-    );
-  } catch {
-    // ignore logging failures
-  }
-
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     // Content is a child of the cell, positioned relative to it
     // Cell's overflow:hidden handles clipping, no explicit width needed
@@ -395,15 +379,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       const block = cellBlocks[i];
 
       if (blockMeasure.kind === 'image' && block?.kind === 'image') {
-        console.log(
-          '[DomPainter.renderTableCell] rendering image block in cell',
-          JSON.stringify({
-            cellId: cell?.id,
-            blockId: block.id,
-            width: blockMeasure.width,
-            height: blockMeasure.height,
-          }),
-        );
         const imageWrapper = doc.createElement('div');
         imageWrapper.style.position = 'relative';
         imageWrapper.style.width = `${blockMeasure.width}px`;
@@ -429,16 +404,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
 
       if (blockMeasure.kind === 'drawing' && block?.kind === 'drawing') {
-        console.log(
-          '[DomPainter.renderTableCell] rendering drawing block in cell',
-          JSON.stringify({
-            cellId: cell?.id,
-            blockId: block.id,
-            drawingKind: block.drawingKind,
-            width: blockMeasure.width,
-            height: blockMeasure.height,
-          }),
-        );
         const drawingWrapper = doc.createElement('div');
         drawingWrapper.style.position = 'relative';
         drawingWrapper.style.width = `${blockMeasure.width}px`;
@@ -488,26 +453,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
 
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
-        type RunWithKind = { kind?: string };
-        type ImageRunWithSrc = { kind?: string; src?: string };
-
-        try {
-          const runKinds = (block.runs ?? []).map((r: RunWithKind) => r.kind ?? 'text');
-          const imageRuns = (block.runs ?? [])
-            .filter((r: RunWithKind) => r.kind === 'image')
-            .map((r: ImageRunWithSrc) => ({ src: r.src }));
-          console.log(
-            '[DomPainter.renderTableCell] rendering paragraph block in cell',
-            JSON.stringify({
-              cellId: cell?.id,
-              blockId: block.id,
-              runKinds,
-              imageRuns,
-            }),
-          );
-        } catch {
-          // ignore
-        }
         const paragraphMeasure = blockMeasure as ParagraphMeasure;
         const lines = paragraphMeasure.lines;
         const blockLineCount = lines?.length || 0;
