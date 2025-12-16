@@ -67,10 +67,10 @@ describe('hitTestPage with pageGap', () => {
     expect(result?.pageIndex).toBe(2);
   });
 
-  it('returns null when clicking in gap between pages', () => {
-    // Gap between page 0 and 1 is [500, 524)
+  it('snaps to nearest page when clicking in gap between pages', () => {
+    // Gap between page 0 and 1 is [500, 524); should snap to nearest page center
     const result = hitTestPage(twoPageLayout, { x: 100, y: 510 });
-    expect(result).toBeNull();
+    expect(result?.pageIndex).toBe(0);
   });
 
   it('handles zero pageGap correctly', () => {

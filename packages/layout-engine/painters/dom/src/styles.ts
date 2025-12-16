@@ -28,7 +28,7 @@ export const containerStyles: Partial<CSSStyleDeclaration> = {
   alignItems: 'center',
   background: 'transparent',
   padding: '0',
-  gap: '24px',
+  // gap is set dynamically by renderer based on pageGap option (default: 24px)
   overflowY: 'auto',
 };
 
@@ -39,7 +39,7 @@ export const containerStylesHorizontal: Partial<CSSStyleDeclaration> = {
   justifyContent: 'safe center',
   background: 'transparent',
   padding: '0',
-  gap: '20px',
+  // gap is set dynamically by renderer based on pageGap option (default: 20px for horizontal)
   overflowX: 'auto',
   minHeight: '100%',
 };

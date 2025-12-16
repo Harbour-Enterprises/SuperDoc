@@ -3,6 +3,8 @@ import { selectionToRects, getFragmentAtPosition } from '../src/index.ts';
 import type { FlowBlock, Layout, Measure } from '@superdoc/contracts';
 import {
   simpleLayout,
+  simpleBlock,
+  simpleMeasure,
   blocks,
   measures,
   multiLineLayout,
@@ -16,6 +18,7 @@ import {
   tableBlock,
   tableMeasure,
 } from './mock-data';
+import { PageGeometryHelper } from '../src/page-geometry-helper';
 
 describe('selectionToRects', () => {
   it('returns rect for single-line range', () => {
@@ -422,6 +425,55 @@ describe('selectionToRects', () => {
       const expectedMinX = 30 + 54;
       expect(rects[0].x).toBeGreaterThanOrEqual(expectedMinX);
     });
+  });
+
+  it('uses per-page heights and gaps for Y offsets (mixed page sizes)', () => {
+    const layout = {
+      pageSize: { w: 400, h: 400 },
+      pageGap: 30,
+      pages: [
+        {
+          number: 1,
+          size: { w: 400, h: 400 },
+          fragments: [
+            {
+              kind: 'para',
+              blockId: '0-paragraph',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 300,
+              pmStart: 1,
+              pmEnd: 12,
+            },
+          ],
+        },
+        {
+          number: 2,
+          size: { w: 400, h: 600 },
+          fragments: [
+            {
+              kind: 'para',
+              blockId: '0-paragraph',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 300,
+              pmStart: 1,
+              pmEnd: 12,
+            },
+          ],
+        },
+      ],
+    } as Layout;
+
+    const helper = new PageGeometryHelper({ layout, pageGap: layout.pageGap });
+    const rects = selectionToRects(layout, [simpleBlock], [simpleMeasure], 1, 5, helper);
+    expect(rects).toHaveLength(2);
+    // Second page rect should start at pageTop (400 + 30) + fragment.y (0)
+    expect(rects[1].y).toBe(430);
   });
 });
 

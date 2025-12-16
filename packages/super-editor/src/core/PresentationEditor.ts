@@ -28,6 +28,7 @@ import {
   getWordLayoutConfig,
   calculateTextStartIndent,
   extractParagraphIndent,
+  PageGeometryHelper,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -402,6 +403,8 @@ const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 
 const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
 /** Default gap between pages without virtualization (from containerStyles in styles.ts) */
 const DEFAULT_PAGE_GAP = 24;
+/** Default gap for horizontal layout mode */
+const DEFAULT_HORIZONTAL_PAGE_GAP = 20;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -543,6 +546,7 @@ export class PresentationEditor extends EventEmitter {
   #layoutOptions: LayoutEngineOptions;
   #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
+  #pageGeometryHelper: PageGeometryHelper | null = null;
   #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
   #layoutErrorState: 'healthy' | 'degraded' | 'failed' = 'healthy';
@@ -1330,8 +1334,14 @@ export class PresentationEditor extends EventEmitter {
       }
       if (!this.#layoutState.layout) return [];
       const rects =
-        selectionToRects(this.#layoutState.layout, this.#layoutState.blocks, this.#layoutState.measures, start, end) ??
-        [];
+        selectionToRects(
+          this.#layoutState.layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          start,
+          end,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       return rects;
     };
 
@@ -1731,6 +1741,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#pendingDocChange = true;
     this.#scheduleRerender();
   }
@@ -1765,7 +1776,17 @@ export class PresentationEditor extends EventEmitter {
         x: localX,
         y: headerPageIndex * headerPageHeight + (localY - headerPageIndex * headerPageHeight),
       };
-      const hit = clickToPosition(context.layout, context.blocks, context.measures, headerPoint) ?? null;
+      const hit =
+        clickToPosition(
+          context.layout,
+          context.blocks,
+          context.measures,
+          headerPoint,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ) ?? null;
       return hit;
     }
 
@@ -1781,6 +1802,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         clientX,
         clientY,
+        this.#pageGeometryHelper ?? undefined,
       ) ?? null;
     return hit;
   }
@@ -2088,6 +2110,7 @@ export class PresentationEditor extends EventEmitter {
     this.#activeHeaderFooterEditor = null;
 
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#dragHandlerCleanup?.();
     this.#dragHandlerCleanup = null;
     this.#selectionOverlay?.remove();
@@ -2781,7 +2804,7 @@ export class PresentationEditor extends EventEmitter {
 
     // Get selection rectangles using layout-bridge helper
     // Edge case: selectionToRects returns null for unsupported node types or empty documents
-    const rects = selectionToRects(layout, blocks, measures, start, end) ?? [];
+    const rects = selectionToRects(layout, blocks, measures, start, end, this.#pageGeometryHelper ?? undefined) ?? [];
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
@@ -3199,6 +3222,7 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost,
       event.clientX,
       event.clientY,
+      this.#pageGeometryHelper ?? undefined,
     );
 
     // Clamp hit position to valid document bounds to handle stale layout data
@@ -3823,18 +3847,30 @@ export class PresentationEditor extends EventEmitter {
 
     let pageY = 0;
     let pageHit: PageHit | null = null;
+    const geometryHelper = this.#pageGeometryHelper;
 
-    for (let i = 0; i < layout.pages.length; i++) {
-      const page = layout.pages[i];
-      // Use page.size.h if available, otherwise fall back to configured page size
-      const pageHeight = page.size?.h ?? configuredPageSize.h;
-      const gap = this.#layoutOptions.virtualization?.gap ?? DEFAULT_PAGE_GAP;
-
-      if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
-        pageHit = { pageIndex: i, page };
-        break;
+    if (geometryHelper) {
+      const idx = geometryHelper.getPageIndexAtY(normalizedY) ?? geometryHelper.getNearestPageIndex(normalizedY);
+      if (idx != null && layout.pages[idx]) {
+        pageHit = { pageIndex: idx, page: layout.pages[idx] };
+        pageY = geometryHelper.getPageTop(idx);
       }
-      pageY += pageHeight + gap;
+    }
+
+    // Fallback to manual scan if helper unavailable
+    if (!pageHit) {
+      const gap = layout.pageGap ?? this.#getEffectivePageGap();
+      for (let i = 0; i < layout.pages.length; i++) {
+        const page = layout.pages[i];
+        // Use page.size.h if available, otherwise fall back to configured page size
+        const pageHeight = page.size?.h ?? configuredPageSize.h;
+
+        if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
+          pageHit = { pageIndex: i, page };
+          break;
+        }
+        pageY += pageHeight + gap;
+      }
     }
 
     if (!pageHit) {
@@ -4080,6 +4116,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         event.clientX,
         event.clientY,
+        this.#pageGeometryHelper ?? undefined,
       );
 
       // If we can't find a position, keep the last selection
@@ -4539,12 +4576,7 @@ export class PresentationEditor extends EventEmitter {
       ({ layout, measures } = result);
       // Add pageGap to layout for hit testing to account for gaps between rendered pages.
       // Gap depends on virtualization mode and must be non-negative.
-      if (this.#layoutOptions.virtualization?.enabled) {
-        const gap = this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP;
-        layout.pageGap = Math.max(0, gap);
-      } else {
-        layout.pageGap = DEFAULT_PAGE_GAP;
-      }
+      layout.pageGap = this.#getEffectivePageGap();
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -4564,6 +4596,19 @@ export class PresentationEditor extends EventEmitter {
     this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
+
+    // Initialize or update PageGeometryHelper when layout changes
+    if (this.#layoutState.layout) {
+      const pageGap = this.#layoutState.layout.pageGap ?? this.#getEffectivePageGap();
+      if (!this.#pageGeometryHelper) {
+        this.#pageGeometryHelper = new PageGeometryHelper({
+          layout: this.#layoutState.layout,
+          pageGap,
+        });
+      } else {
+        this.#pageGeometryHelper.updateLayout(this.#layoutState.layout, pageGap);
+      }
+    }
 
     // Process per-rId header/footer content for multi-section support
     await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
@@ -4656,6 +4701,7 @@ export class PresentationEditor extends EventEmitter {
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
         ruler: this.#layoutOptions.ruler,
+        pageGap: this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap(),
       });
     }
     return this.#domPainter;
@@ -4846,7 +4892,14 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rects: LayoutRect[] =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        from,
+        to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
     // Apply DOM-based position correction to align selection with actual rendered text
     // (same approach used in getRectsForRange for external consumers)
@@ -4865,7 +4918,9 @@ export class PresentationEditor extends EventEmitter {
 
     try {
       this.#localSelectionLayer.innerHTML = '';
-      this.#renderSelectionRects(correctedRects);
+      if (correctedRects.length > 0) {
+        this.#renderSelectionRects(correctedRects);
+      }
     } catch (error) {
       // DOM manipulation can fail if element is detached or in invalid state
       if (process.env.NODE_ENV === 'development') {
@@ -5979,7 +6034,14 @@ export class PresentationEditor extends EventEmitter {
 
       // Try to get exact position rect for precise scrolling
       const rects =
-        selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, pmPos, pmPos + 1) ?? [];
+        selectionToRects(
+          layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          pmPos,
+          pmPos + 1,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       const rect = rects[0];
 
       // Find the page containing this position by scanning fragments
@@ -6090,6 +6152,20 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Get effective page gap based on layout mode and virtualization settings.
+   * Keeps painter, layout, and geometry in sync.
+   */
+  #getEffectivePageGap(): number {
+    if (this.#layoutOptions.virtualization?.enabled) {
+      return Math.max(0, this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP);
+    }
+    if (this.#layoutOptions.layoutMode === 'horizontal') {
+      return DEFAULT_HORIZONTAL_PAGE_GAP;
+    }
+    return DEFAULT_PAGE_GAP;
+  }
+
   #getBodyPageHeight() {
     return this.#layoutState.layout?.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
   }
@@ -6153,7 +6229,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
 
-    return rects.map((rect, idx) => {
+    const corrected = rects.map((rect, idx) => {
       const delta = pageDelta[rect.pageIndex];
       let adjustedX = delta ? rect.x + delta.dx : rect.x;
       let adjustedY = delta ? rect.y + delta.dy : rect.y;
@@ -6173,6 +6249,8 @@ export class PresentationEditor extends EventEmitter {
       // For last rect, compute width from DOM end position
       if (isLastRect && domEnd && rect.pageIndex === domEnd.pageIndex) {
         const endX = domEnd.x;
+        // Ensure the rect ends exactly at domEnd.x; if start overshoots, clamp start to end
+        adjustedX = Math.min(adjustedX, endX);
         adjustedWidth = Math.max(1, endX - adjustedX);
       }
 
@@ -6183,6 +6261,33 @@ export class PresentationEditor extends EventEmitter {
         width: adjustedWidth,
       };
     });
+
+    // Sanity validation: compare corrected rects against DOM start/end. If deltas are too large, drop rects.
+    const MAX_DELTA_PX = 12; // threshold for mismatch
+    let invalid = false;
+    if (domStart && corrected[0]) {
+      const dx = Math.abs(corrected[0].x - domStart.x);
+      const dy = Math.abs(corrected[0].y - domStart.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+    if (domEnd && corrected[corrected.length - 1]) {
+      const last = corrected[corrected.length - 1];
+      const dx = Math.abs(last.x + last.width - domEnd.x);
+      const dy = Math.abs(last.y - domEnd.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+
+    if (invalid) {
+      console.warn('[SelectionOverlay] Suppressing selection render due to large DOM/Layout mismatch', {
+        domStart,
+        domEnd,
+        rectStart: corrected[0],
+        rectEnd: corrected[corrected.length - 1],
+      });
+      return [];
+    }
+
+    return corrected;
   }
 
   /**
@@ -6573,7 +6678,7 @@ export class PresentationEditor extends EventEmitter {
       return [];
     }
     if (!bodyLayout) return [];
-    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to) ?? [];
+    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to, undefined) ?? [];
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const bodyPageHeight = this.#getBodyPageHeight();
     return rects.map((rect: LayoutRect) => {
@@ -7474,8 +7579,14 @@ export class PresentationEditor extends EventEmitter {
 
     // Try selectionToRects first
     const rects =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, selection.from, selection.to) ??
-      [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        selection.from,
+        selection.to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
     if (rects.length > 0) {
       return rects[0]?.pageIndex ?? 0;
