@@ -110,7 +110,6 @@ watchEffect(() => {
   }
 
   const totalComments = getFloatingComments.value.length;
-  const measuredComments = renderedSizes.value.length;
 
   if (totalComments === 0) {
     return;
