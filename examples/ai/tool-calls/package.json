@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "@vitejs/plugin-vue": "^6.0.2",
-    "@superdoc-dev/ai": "0.1.8-next.5",
-    "superdoc": "1.0.0-beta.73",
+    "@superdoc-dev/ai": "0.1.8-next.6",
+    "superdoc": "demo_ai_tools1",
     "vue": "^3.5.24"
   },
   "devDependencies": {
