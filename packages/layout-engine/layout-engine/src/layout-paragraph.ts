@@ -401,14 +401,34 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   // text measured for a single-column section may need remeasurement when
   // placed in a multi-column section with narrower columns.
   const measurementWidth = lines[0]?.maxWidth;
+  const paraIndent = (block.attrs as { indent?: { left?: number; right?: number } } | undefined)?.indent;
+  const indentLeft = typeof paraIndent?.left === 'number' && Number.isFinite(paraIndent.left) ? paraIndent.left : 0;
+  const indentRight = typeof paraIndent?.right === 'number' && Number.isFinite(paraIndent.right) ? paraIndent.right : 0;
+  const negativeLeftIndent = indentLeft < 0 ? indentLeft : 0;
+  const negativeRightIndent = indentRight < 0 ? indentRight : 0;
+  // Paragraph content width should honor paragraph indents (including negative values).
+  const remeasureWidth = Math.max(1, columnWidth - indentLeft - indentRight);
+  const hasNegativeIndent = indentLeft < 0 || indentRight < 0;
   let didRemeasureForColumnWidth = false;
   if (
     typeof remeasureParagraph === 'function' &&
     typeof measurementWidth === 'number' &&
-    measurementWidth > columnWidth
+    measurementWidth > remeasureWidth
   ) {
-    const firstLineIndent = calculateFirstLineIndent(block, measure);
-    const newMeasure = remeasureParagraph(block, columnWidth, firstLineIndent);
+    // Calculate firstLineIndent for list markers (same logic as float remeasurement)
+    let firstLineIndent = 0;
+    const wordLayout = block.attrs?.wordLayout as
+      | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+      | undefined;
+    if (wordLayout?.marker && measure.marker) {
+      const markerJustification = wordLayout.marker.justification ?? 'left';
+      if (markerJustification === 'left') {
+        const markerWidth = measure.marker.markerWidth ?? 0;
+        const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+        firstLineIndent = markerWidth + gutterWidth;
+      }
+    }
+    const newMeasure = remeasureParagraph(block, remeasureWidth, firstLineIndent);
     lines = normalizeLines(newMeasure);
     didRemeasureForColumnWidth = true;
   }
@@ -515,9 +535,23 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     }
 
     // If we found a narrower width, remeasure the entire paragraph once with that width
-    if (narrowestWidth < columnWidth) {
-      const firstLineIndent = calculateFirstLineIndent(block, measure);
-      const newMeasure = remeasureParagraph(block, narrowestWidth, firstLineIndent);
+    const narrowestRemeasureWidth = Math.max(1, narrowestWidth - indentLeft - indentRight);
+    if (narrowestRemeasureWidth < remeasureWidth) {
+      // Calculate firstLineIndent for left-justified list markers (position: relative, in-flow)
+      let firstLineIndent = 0;
+      const wordLayout = block.attrs?.wordLayout as
+        | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+        | undefined;
+      if (wordLayout?.marker && measure.marker) {
+        const markerJustification = wordLayout.marker.justification ?? 'left';
+        if (markerJustification === 'left') {
+          const markerWidth = measure.marker.markerWidth ?? 0;
+          const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+          firstLineIndent = markerWidth + gutterWidth;
+        }
+      }
+
+      const newMeasure = remeasureParagraph(block, narrowestRemeasureWidth, firstLineIndent);
       lines = normalizeLines(newMeasure);
       didRemeasureForFloats = true;
     }
@@ -644,14 +678,23 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     const slice = sliceLines(lines, fromLine, state.contentBottom - state.cursorY);
     const fragmentHeight = slice.height;
 
+    // Apply negative indent adjustment to fragment position and width (similar to table indent handling).
+    // Negative left indent shifts content left into page margin; negative right indent extends into right margin.
+    // This matches Word's behavior where paragraphs with negative indents extend beyond the content area.
+    // Adjust x position: negative indent shifts left (e.g., -48px moves fragment 48px left)
+    const adjustedX = columnX(state.columnIndex) + offsetX + negativeLeftIndent;
+    // Expand width: negative indents on both sides expand the fragment width
+    // (e.g., -48px left + -72px right = 120px wider)
+    const adjustedWidth = effectiveColumnWidth - negativeLeftIndent - negativeRightIndent;
+
     const fragment: ParaFragment = {
       kind: 'para',
       blockId: block.id,
       fromLine,
       toLine: slice.toLine,
-      x: columnX(state.columnIndex) + offsetX,
+      x: adjustedX,
       y: state.cursorY,
-      width: effectiveColumnWidth,
+      width: adjustedWidth,
       ...computeFragmentPmRange(block, lines, fromLine, slice.toLine),
     };
 

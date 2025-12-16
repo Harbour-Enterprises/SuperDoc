@@ -4882,13 +4882,17 @@ export class PresentationEditor extends EventEmitter {
           kind: 'sectionBreak';
           pageSize?: PageSize;
           columns?: ColumnLayout;
-          margins?: { header?: number; footer?: number };
+          margins?: { header?: number; footer?: number; top?: number; right?: number; bottom?: number; left?: number };
         })
       | undefined;
 
     const pageSize = firstSection?.pageSize ?? defaults.pageSize;
     const margins: PageMargins = {
       ...defaults.margins,
+      ...(firstSection?.margins?.top != null ? { top: firstSection.margins.top } : {}),
+      ...(firstSection?.margins?.right != null ? { right: firstSection.margins.right } : {}),
+      ...(firstSection?.margins?.bottom != null ? { bottom: firstSection.margins.bottom } : {}),
+      ...(firstSection?.margins?.left != null ? { left: firstSection.margins.left } : {}),
       ...(firstSection?.margins?.header != null ? { header: firstSection.margins.header } : {}),
       ...(firstSection?.margins?.footer != null ? { footer: firstSection.margins.footer } : {}),
     };

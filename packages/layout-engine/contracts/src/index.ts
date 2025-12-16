@@ -724,10 +724,18 @@ export type SectionBreakBlock = {
   pageSize?: { w: number; h: number };
   orientation?: 'portrait' | 'landscape';
   margins: {
+    /** Header margin (distance from top of page to header content) */
     header?: number;
+    /** Footer margin (distance from bottom of page to footer content) */
     footer?: number;
+    /** Top page margin (distance from top of page to body content) */
     top?: number;
+    /** Right page margin */
+    right?: number;
+    /** Bottom page margin */
     bottom?: number;
+    /** Left page margin */
+    left?: number;
   };
   numbering?: {
     format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
