@@ -7,7 +7,7 @@ import { DOCX, PDF, HTML } from '@superdoc/common';
 import { getFileObject } from '@superdoc/common';
 import { createPdfPainter } from '@superdoc/painter-pdf';
 import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
-import SuperdocLogo from '../../../../layout-engine/v1-beta-demo/src/assets/superdoc-logo.webp?url';
+import SuperdocLogo from './superdoc-logo.webp?url';
 import { fieldAnnotationHelpers } from '@harbour-enterprises/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
