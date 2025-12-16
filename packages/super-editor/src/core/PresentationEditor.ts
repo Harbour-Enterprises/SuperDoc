@@ -24,6 +24,10 @@ import {
   findParagraphBoundaries,
   createDragHandler,
   hitTestTableFragment,
+  isListItem,
+  getWordLayoutConfig,
+  calculateTextStartIndent,
+  extractParagraphIndent,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -6983,23 +6987,95 @@ export class PresentationEditor extends EventEmitter {
     // Calculate character offset from PM position using layout-aware mapping (accounts for PM gaps)
     const pmOffset = pmPosToCharOffset(block, line, pos);
 
-    // Account for list marker width - this matches selectionToRects behavior
     const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
-    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
-    const paraIndentRight = block.attrs?.indent?.right ?? 0;
-    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    const indent = extractParagraphIndent(block.attrs?.indent);
+    const availableWidth = Math.max(0, fragment.width - (indent.left + indent.right));
     const charX = measureCharacterX(block, line, pmOffset, availableWidth);
-    // Align with painter DOM indent handling: add paragraph indent (left) and first-line offset when applicable
-    // The painter applies indent to ALL non-list lines (both segment-based and regular)
-    const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+
+    // Determine list item status and text indent
     const isFirstLine = index === fragment.fromLine;
-    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
-    let indentAdjust = 0;
-    if (!isListFirstLine) {
-      indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+    const isListItemFlag = isListItem(markerWidth, block);
+    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && isListItemFlag;
+
+    // Get word layout configuration for firstLineIndentMode detection
+    const wordLayout = getWordLayoutConfig(block);
+    const isFirstLineIndentMode = wordLayout?.firstLineIndentMode === true;
+
+    if (isListFirstLine && isFirstLineIndentMode) {
+      // In firstLineIndentMode, text starts at textStartPx (after marker + tab),
+      // not at fragment.x + markerWidth. Use textStartPx directly as the X offset.
+      const textStartPx = calculateTextStartIndent({
+        isFirstLine,
+        isListItem: isListItemFlag,
+        markerWidth,
+        paraIndentLeft: indent.left,
+        firstLineIndent: indent.firstLine,
+        hangingIndent: indent.hanging,
+        wordLayout,
+      });
+      const localX = fragment.x + textStartPx + charX;
+      const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
+      const localY = fragment.y + lineOffset;
+
+      const result = {
+        pageIndex: hit.pageIndex,
+        x: localX,
+        y: localY,
+        height: line.lineHeight,
+      };
+
+      // Check DOM for firstLineIndentMode lists too
+      const pageEl = this.#painterHost?.querySelector(
+        `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+      ) as HTMLElement | null;
+      const pageRect = pageEl?.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      let domCaretX: number | null = null;
+      let domCaretY: number | null = null;
+      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
+      for (const spanEl of spanEls) {
+        const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+        const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+        if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+          const textNode = spanEl.firstChild as Text;
+          const charIndex = Math.min(pos - pmStart, textNode.length);
+          const rangeObj = document.createRange();
+          rangeObj.setStart(textNode, charIndex);
+          rangeObj.setEnd(textNode, charIndex);
+          const rangeRect = rangeObj.getBoundingClientRect();
+          if (pageRect) {
+            domCaretX = (rangeRect.left - pageRect.left) / zoom;
+            domCaretY = (rangeRect.top - pageRect.top) / zoom;
+          }
+          break;
+        }
+      }
+
+      if (includeDomFallback && domCaretX != null && domCaretY != null) {
+        return {
+          pageIndex: hit.pageIndex,
+          x: domCaretX,
+          y: domCaretY,
+          height: line.lineHeight,
+        };
+      }
+
+      return result;
     }
 
-    const localX = fragment.x + markerWidth + indentAdjust + charX;
+    // For standard lists and non-list paragraphs, calculate text indent using shared utility
+    const indentAdjust = calculateTextStartIndent({
+      isFirstLine,
+      isListItem: isListItemFlag,
+      markerWidth,
+      paraIndentLeft: indent.left,
+      firstLineIndent: indent.firstLine,
+      hangingIndent: indent.hanging,
+      wordLayout,
+    });
+
+    const localX = fragment.x + indentAdjust + charX;
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
 

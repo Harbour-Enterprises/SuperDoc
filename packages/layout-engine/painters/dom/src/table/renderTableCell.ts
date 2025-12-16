@@ -12,6 +12,7 @@ import type {
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
+import { toCssFontFamily } from '../../../../../../shared/font-utils/index.js';
 
 /**
  * Default gap between list marker and text content in pixels.
@@ -140,7 +141,7 @@ function renderListMarker(params: MarkerRenderParams): HTMLElement {
   markerEl.classList.add('superdoc-paragraph-marker');
   markerEl.textContent = markerLayout?.markerText ?? '';
   markerEl.style.display = 'inline-block';
-  markerEl.style.fontFamily = markerLayout?.run?.fontFamily ?? '';
+  markerEl.style.fontFamily = toCssFontFamily(markerLayout?.run?.fontFamily) ?? markerLayout?.run?.fontFamily ?? '';
   if (markerLayout?.run?.fontSize != null) {
     markerEl.style.fontSize = `${markerLayout.run.fontSize}px`;
   }
@@ -193,7 +194,21 @@ type TableCellRenderDependencies = {
   /** Whether to apply default border if no borders specified */
   useDefaultBorder?: boolean;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
+  /**
+   * Optional callback function to render drawing content (vectorShapes, shapeGroups).
+   * If provided, this callback is used to render DrawingBlocks with drawingKind of 'vectorShape' or 'shapeGroup'.
+   * The callback receives a DrawingBlock and must return an HTMLElement.
+   * The returned element will have width: 100% and height: 100% styles applied automatically.
+   * If undefined, a placeholder element with diagonal stripes pattern is rendered instead.
+   */
+  renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Rendering context */
   context: FragmentRenderContext;
   /** Function to apply SDT metadata as data attributes */
@@ -255,6 +270,12 @@ export type TableCellRenderResult = {
  *   borders,
  *   useDefaultBorder: false,
  *   renderLine,
+ *   renderDrawingContent: (block) => {
+ *     // Custom drawing renderer for vectorShapes and shapeGroups
+ *     const el = document.createElement('div');
+ *     // Render drawing content...
+ *     return el;
+ *   },
  *   context,
  *   applySdtDataset
  * });
@@ -272,6 +293,7 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     borders,
     useDefaultBorder,
     renderLine,
+    renderDrawingContent,
     context,
     applySdtDataset,
     fromLine,
@@ -313,22 +335,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
-
-  try {
-    console.log(
-      '[DomPainter.renderTableCell] cell render input',
-      JSON.stringify({
-        cellId: cell?.id,
-        blockKinds: cellBlocks.map((b: { kind: BlockKind }) => b.kind),
-        measureKinds: blockMeasures.map((m: { kind: BlockKind }) => m.kind),
-        width: cellMeasure?.width,
-        height: cellMeasure?.height,
-        rowHeight,
-      }),
-    );
-  } catch {
-    // ignore logging failures
-  }
 
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     // Content is a child of the cell, positioned relative to it
@@ -373,15 +379,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       const block = cellBlocks[i];
 
       if (blockMeasure.kind === 'image' && block?.kind === 'image') {
-        console.log(
-          '[DomPainter.renderTableCell] rendering image block in cell',
-          JSON.stringify({
-            cellId: cell?.id,
-            blockId: block.id,
-            width: blockMeasure.width,
-            height: blockMeasure.height,
-          }),
-        );
         const imageWrapper = doc.createElement('div');
         imageWrapper.style.position = 'relative';
         imageWrapper.style.width = `${blockMeasure.width}px`;
@@ -407,16 +404,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
 
       if (blockMeasure.kind === 'drawing' && block?.kind === 'drawing') {
-        console.log(
-          '[DomPainter.renderTableCell] rendering drawing block in cell',
-          JSON.stringify({
-            cellId: cell?.id,
-            blockId: block.id,
-            drawingKind: block.drawingKind,
-            width: blockMeasure.width,
-            height: blockMeasure.height,
-          }),
-        );
         const drawingWrapper = doc.createElement('div');
         drawingWrapper.style.position = 'relative';
         drawingWrapper.style.width = `${blockMeasure.width}px`;
@@ -443,7 +430,14 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
           img.style.height = '100%';
           img.style.objectFit = block.objectFit ?? 'contain';
           drawingInner.appendChild(img);
+        } else if (renderDrawingContent) {
+          // Use the callback for other drawing types (vectorShape, shapeGroup, etc.)
+          const drawingContent = renderDrawingContent(block as DrawingBlock);
+          drawingContent.style.width = '100%';
+          drawingContent.style.height = '100%';
+          drawingInner.appendChild(drawingContent);
         } else {
+          // Fallback placeholder when no rendering callback is provided
           const placeholder = doc.createElement('div');
           placeholder.style.width = '100%';
           placeholder.style.height = '100%';
@@ -459,26 +453,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
       }
 
       if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
-        type RunWithKind = { kind?: string };
-        type ImageRunWithSrc = { kind?: string; src?: string };
-
-        try {
-          const runKinds = (block.runs ?? []).map((r: RunWithKind) => r.kind ?? 'text');
-          const imageRuns = (block.runs ?? [])
-            .filter((r: RunWithKind) => r.kind === 'image')
-            .map((r: ImageRunWithSrc) => ({ src: r.src }));
-          console.log(
-            '[DomPainter.renderTableCell] rendering paragraph block in cell',
-            JSON.stringify({
-              cellId: cell?.id,
-              blockId: block.id,
-              runKinds,
-              imageRuns,
-            }),
-          );
-        } catch {
-          // ignore
-        }
         const paragraphMeasure = blockMeasure as ParagraphMeasure;
         const lines = paragraphMeasure.lines;
         const blockLineCount = lines?.length || 0;
@@ -543,12 +517,19 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
          */
         for (let lineIdx = localStartLine; lineIdx < localEndLine && lineIdx < lines.length; lineIdx++) {
           const line = lines[lineIdx];
+          const isLastLine = lineIdx === lines.length - 1;
 
           /**
            * Render line without extra paragraph padding to enable explicit marker/text offset control.
            * This mirrors the main renderer behavior where list markers clear padding/textIndent.
            */
-          const lineEl = renderLine(block as ParagraphBlock, line, { ...context, section: 'body' });
+          const lineEl = renderLine(
+            block as ParagraphBlock,
+            line,
+            { ...context, section: 'body' },
+            lineIdx,
+            isLastLine,
+          );
           lineEl.style.paddingLeft = '';
           lineEl.style.paddingRight = '';
           lineEl.style.textIndent = '';

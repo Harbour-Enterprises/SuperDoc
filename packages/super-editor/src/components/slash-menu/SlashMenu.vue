@@ -230,6 +230,10 @@ const handleRightClick = async (event) => {
 
   event.preventDefault();
 
+  // Update cursor position to the right-click location before opening context menu
+  // This ensures context menu actions operate on the clicked position, not the previous cursor position
+  moveCursorToMouseEvent(event, props.editor);
+
   try {
     const context = await getEditorContext(props.editor, event);
     currentContext.value = context;

@@ -55,7 +55,7 @@ describe('renderTableCell', () => {
     borders: undefined,
     useDefaultBorder: false,
     context: { sectionIndex: 0, pageIndex: 0, columnIndex: 0 },
-    renderLine: () => doc.createElement('div'),
+    renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
     applySdtDataset: () => {
       // noop for tests
     },
@@ -736,7 +736,7 @@ describe('renderTableCell', () => {
       const lineContainer = paraWrapper.firstElementChild as HTMLElement;
       const markerEl = lineContainer.querySelector('.superdoc-paragraph-marker') as HTMLElement;
 
-      expect(markerEl.style.fontFamily).toBe('Times New Roman');
+      expect(markerEl.style.fontFamily).toBe('Times New Roman, sans-serif');
       expect(markerEl.style.fontSize).toBe('18px');
       expect(markerEl.style.fontWeight).toBe('bold');
       expect(markerEl.style.fontStyle).toBe('italic');
@@ -1014,6 +1014,278 @@ describe('renderTableCell', () => {
 
       // Marker should not be rendered when starting from line > 0
       expect(markerEl).toBeNull();
+    });
+  });
+
+  describe('renderDrawingContent callback', () => {
+    it('should render ShapeGroup drawing blocks via callback', () => {
+      const shapeGroupBlock = {
+        kind: 'drawing' as const,
+        id: 'drawing-1',
+        drawingKind: 'shapeGroup' as const,
+        geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+        shapes: [
+          {
+            shapeType: 'image',
+            attrs: {
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 100,
+              src: 'data:image/png;base64,test',
+            },
+          },
+        ],
+      };
+
+      const drawingMeasure = {
+        kind: 'drawing' as const,
+        width: 200,
+        height: 150,
+      };
+
+      const cellMeasure = {
+        blocks: [drawingMeasure],
+        width: 220,
+        height: 170,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell = {
+        id: 'cell-with-shapegroup',
+        blocks: [shapeGroupBlock],
+        attrs: {},
+      };
+
+      const mockRenderDrawingContent = (block: any): HTMLElement => {
+        const div = doc.createElement('div');
+        div.classList.add('mock-shapegroup');
+        div.setAttribute('data-drawing-id', block.id);
+        div.setAttribute('data-drawing-kind', block.drawingKind);
+        return div;
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        renderDrawingContent: mockRenderDrawingContent,
+      });
+
+      const shapeGroupEl = cellElement.querySelector('.mock-shapegroup') as HTMLElement;
+      expect(shapeGroupEl).toBeTruthy();
+      expect(shapeGroupEl.getAttribute('data-drawing-id')).toBe('drawing-1');
+      expect(shapeGroupEl.getAttribute('data-drawing-kind')).toBe('shapeGroup');
+      expect(shapeGroupEl.style.width).toBe('100%');
+      expect(shapeGroupEl.style.height).toBe('100%');
+    });
+
+    it('should render VectorShape drawing blocks via callback', () => {
+      const vectorShapeBlock = {
+        kind: 'drawing' as const,
+        id: 'drawing-2',
+        drawingKind: 'vectorShape' as const,
+        geometry: { width: 100, height: 100, rotation: 0, flipH: false, flipV: false },
+        shapeKind: 'rect' as const,
+      };
+
+      const drawingMeasure = {
+        kind: 'drawing' as const,
+        width: 100,
+        height: 100,
+      };
+
+      const cellMeasure = {
+        blocks: [drawingMeasure],
+        width: 120,
+        height: 120,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell = {
+        id: 'cell-with-vectorshape',
+        blocks: [vectorShapeBlock],
+        attrs: {},
+      };
+
+      const mockRenderDrawingContent = (block: any): HTMLElement => {
+        const div = doc.createElement('div');
+        div.classList.add('mock-vectorshape');
+        div.setAttribute('data-shape-kind', block.shapeKind);
+        return div;
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        renderDrawingContent: mockRenderDrawingContent,
+      });
+
+      const vectorShapeEl = cellElement.querySelector('.mock-vectorshape') as HTMLElement;
+      expect(vectorShapeEl).toBeTruthy();
+      expect(vectorShapeEl.getAttribute('data-shape-kind')).toBe('rect');
+      expect(vectorShapeEl.style.width).toBe('100%');
+      expect(vectorShapeEl.style.height).toBe('100%');
+    });
+
+    it('should use placeholder fallback when callback is undefined', () => {
+      const shapeGroupBlock = {
+        kind: 'drawing' as const,
+        id: 'drawing-3',
+        drawingKind: 'shapeGroup' as const,
+        geometry: { width: 200, height: 150, rotation: 0, flipH: false, flipV: false },
+        shapes: [],
+      };
+
+      const drawingMeasure = {
+        kind: 'drawing' as const,
+        width: 200,
+        height: 150,
+      };
+
+      const cellMeasure = {
+        blocks: [drawingMeasure],
+        width: 220,
+        height: 170,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell = {
+        id: 'cell-no-callback',
+        blocks: [shapeGroupBlock],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        // renderDrawingContent is undefined
+      });
+
+      // Should render placeholder with diagonal stripes pattern
+      const drawingWrapper = cellElement.querySelector('.superdoc-table-drawing') as HTMLElement;
+      expect(drawingWrapper).toBeTruthy();
+
+      const placeholder = drawingWrapper.firstChild as HTMLElement;
+      expect(placeholder).toBeTruthy();
+      expect(placeholder.style.background).toContain('repeating-linear-gradient');
+      expect(placeholder.style.border).toContain('dashed');
+    });
+
+    it('should pass correct DrawingBlock parameter to callback', () => {
+      const shapeGroupBlock = {
+        kind: 'drawing' as const,
+        id: 'drawing-4',
+        drawingKind: 'shapeGroup' as const,
+        geometry: { width: 300, height: 200, rotation: 45, flipH: true, flipV: false },
+        shapes: [{ shapeType: 'image', attrs: { x: 0, y: 0, width: 100, height: 100, src: 'test.png' } }],
+      };
+
+      const drawingMeasure = {
+        kind: 'drawing' as const,
+        width: 300,
+        height: 200,
+      };
+
+      const cellMeasure = {
+        blocks: [drawingMeasure],
+        width: 320,
+        height: 220,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell = {
+        id: 'cell-verify-params',
+        blocks: [shapeGroupBlock],
+        attrs: {},
+      };
+
+      let capturedBlock: any = null;
+
+      const mockRenderDrawingContent = (block: any): HTMLElement => {
+        capturedBlock = block;
+        return doc.createElement('div');
+      };
+
+      renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        renderDrawingContent: mockRenderDrawingContent,
+      });
+
+      // Verify the callback received the correct block
+      expect(capturedBlock).toBeTruthy();
+      expect(capturedBlock.kind).toBe('drawing');
+      expect(capturedBlock.id).toBe('drawing-4');
+      expect(capturedBlock.drawingKind).toBe('shapeGroup');
+      expect(capturedBlock.geometry.width).toBe(300);
+      expect(capturedBlock.geometry.height).toBe(200);
+      expect(capturedBlock.geometry.rotation).toBe(45);
+      expect(capturedBlock.geometry.flipH).toBe(true);
+      expect(capturedBlock.shapes.length).toBe(1);
+    });
+
+    it('should apply width and height styles to returned element', () => {
+      const vectorShapeBlock = {
+        kind: 'drawing' as const,
+        id: 'drawing-5',
+        drawingKind: 'vectorShape' as const,
+        geometry: { width: 150, height: 100, rotation: 0, flipH: false, flipV: false },
+        shapeKind: 'ellipse' as const,
+      };
+
+      const drawingMeasure = {
+        kind: 'drawing' as const,
+        width: 150,
+        height: 100,
+      };
+
+      const cellMeasure = {
+        blocks: [drawingMeasure],
+        width: 170,
+        height: 120,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell = {
+        id: 'cell-verify-styles',
+        blocks: [vectorShapeBlock],
+        attrs: {},
+      };
+
+      const mockRenderDrawingContent = (block: any): HTMLElement => {
+        const div = doc.createElement('div');
+        div.classList.add('test-drawing-element');
+        // Initially has no width/height styles
+        return div;
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        renderDrawingContent: mockRenderDrawingContent,
+      });
+
+      const drawingEl = cellElement.querySelector('.test-drawing-element') as HTMLElement;
+      expect(drawingEl).toBeTruthy();
+
+      // Verify that width and height styles were applied by renderTableCell
+      expect(drawingEl.style.width).toBe('100%');
+      expect(drawingEl.style.height).toBe('100%');
     });
   });
 });

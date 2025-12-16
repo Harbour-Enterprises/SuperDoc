@@ -346,7 +346,8 @@ const buildMarkerLayout = ({
   markerX,
   textStartX: textStartPx,
   baselineOffsetPx: markerRun.baselineShift ?? 0,
-  gutterWidthPx: markerBoxWidthPx,
+  // Gutter is the small gap between marker and text, not the full marker box width
+  gutterWidthPx: LIST_MARKER_GAP,
   justification: numbering.lvlJc ?? 'left',
   suffix: normalizeSuffix(numbering.suffix) ?? 'tab',
   run: markerRun,

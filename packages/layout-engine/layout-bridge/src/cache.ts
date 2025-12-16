@@ -1,4 +1,13 @@
-import type { FlowBlock, ImageRun, TableBlock, ParagraphBlock } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  ImageRun,
+  TableBlock,
+  ParagraphBlock,
+  ParagraphAttrs,
+  ParagraphBorders,
+  ParagraphBorder,
+  ParagraphFrame,
+} from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
 
 /**
@@ -16,6 +25,57 @@ const BYTES_PER_ENTRY_ESTIMATE = 5_000; // ~5KB per entry
 
 const NORMALIZED_WHITESPACE = /\s+/g;
 const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ');
+
+/**
+ * Creates a deterministic hash string for a paragraph border.
+ * Ensures consistent ordering regardless of JS engine property enumeration.
+ *
+ * @param border - The paragraph border to hash
+ * @returns A deterministic hash string
+ */
+const hashParagraphBorder = (border: ParagraphBorder): string => {
+  const parts: string[] = [];
+  if (border.style !== undefined) parts.push(`s:${border.style}`);
+  if (border.width !== undefined) parts.push(`w:${border.width}`);
+  if (border.color !== undefined) parts.push(`c:${border.color}`);
+  if (border.space !== undefined) parts.push(`sp:${border.space}`);
+  return parts.join(',');
+};
+
+/**
+ * Creates a deterministic hash string for paragraph borders.
+ * Hashes all four sides (top, right, bottom, left) in a consistent order.
+ *
+ * @param borders - The paragraph borders to hash
+ * @returns A deterministic hash string
+ */
+const hashParagraphBorders = (borders: ParagraphBorders): string => {
+  const parts: string[] = [];
+  if (borders.top) parts.push(`t:[${hashParagraphBorder(borders.top)}]`);
+  if (borders.right) parts.push(`r:[${hashParagraphBorder(borders.right)}]`);
+  if (borders.bottom) parts.push(`b:[${hashParagraphBorder(borders.bottom)}]`);
+  if (borders.left) parts.push(`l:[${hashParagraphBorder(borders.left)}]`);
+  return parts.join(';');
+};
+
+/**
+ * Creates a deterministic hash string for a paragraph frame.
+ * Ensures consistent property ordering for reliable cache keys.
+ *
+ * @param frame - The paragraph frame to hash
+ * @returns A deterministic hash string
+ */
+const hashParagraphFrame = (frame: ParagraphFrame): string => {
+  const parts: string[] = [];
+  if (frame.wrap !== undefined) parts.push(`w:${frame.wrap}`);
+  if (frame.x !== undefined) parts.push(`x:${frame.x}`);
+  if (frame.y !== undefined) parts.push(`y:${frame.y}`);
+  if (frame.xAlign !== undefined) parts.push(`xa:${frame.xAlign}`);
+  if (frame.yAlign !== undefined) parts.push(`ya:${frame.yAlign}`);
+  if (frame.hAnchor !== undefined) parts.push(`ha:${frame.hAnchor}`);
+  if (frame.vAnchor !== undefined) parts.push(`va:${frame.vAnchor}`);
+  return parts.join(',');
+};
 
 /**
  * Generates a cache key hash from a block's runs, incorporating content and formatting.
@@ -168,7 +228,95 @@ const hashRuns = (block: FlowBlock): string => {
     }
   }
 
-  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}${numberingKey}`;
+  // Include paragraph-level attributes that affect layout/rendering in hash.
+  // This ensures cache invalidation when paragraph formatting changes (alignment, spacing, etc.)
+  // without text changes. Previously only runs were hashed, causing stale measurements
+  // when toolbar commands like "align center" were used.
+  let paragraphAttrsKey = '';
+  if (block.attrs) {
+    const attrs = block.attrs as ParagraphAttrs;
+
+    // Build a deterministic hash of visual paragraph attributes
+    const parts: string[] = [];
+
+    // Alignment (most common change via toolbar)
+    if (attrs.alignment) parts.push(`al:${attrs.alignment}`);
+
+    // Spacing
+    if (attrs.spacing) {
+      const s = attrs.spacing;
+      if (s.before !== undefined) parts.push(`sb:${s.before}`);
+      if (s.after !== undefined) parts.push(`sa:${s.after}`);
+      if (s.line !== undefined) parts.push(`sl:${s.line}`);
+      if (s.lineRule) parts.push(`sr:${s.lineRule}`);
+    }
+
+    // Indentation
+    if (attrs.indent) {
+      const ind = attrs.indent;
+      if (ind.left !== undefined) parts.push(`il:${ind.left}`);
+      if (ind.right !== undefined) parts.push(`ir:${ind.right}`);
+      if (ind.firstLine !== undefined) parts.push(`if:${ind.firstLine}`);
+      if (ind.hanging !== undefined) parts.push(`ih:${ind.hanging}`);
+    }
+
+    // Borders (use deterministic hash for consistent cache keys)
+    if (attrs.borders) {
+      parts.push(`br:${hashParagraphBorders(attrs.borders)}`);
+    }
+
+    // Shading
+    if (attrs.shading) {
+      const sh = attrs.shading;
+      if (sh.fill) parts.push(`shf:${sh.fill}`);
+      if (sh.color) parts.push(`shc:${sh.color}`);
+    }
+
+    // Tabs
+    if (attrs.tabs && attrs.tabs.length > 0) {
+      const tabsHash = attrs.tabs.map((t) => `${t.val ?? ''}:${t.pos ?? ''}:${t.leader ?? ''}`).join(',');
+      parts.push(`tb:${tabsHash}`);
+    }
+
+    // Direction and RTL
+    if (attrs.direction) parts.push(`dir:${attrs.direction}`);
+    if (attrs.rtl) parts.push('rtl');
+
+    // Pagination properties
+    if (attrs.keepNext) parts.push('kn');
+    if (attrs.keepLines) parts.push('kl');
+
+    // Float alignment
+    if (attrs.floatAlignment) parts.push(`fa:${attrs.floatAlignment}`);
+
+    // Contextual spacing
+    if (attrs.contextualSpacing) parts.push('cs');
+
+    // Suppress first line indent
+    if (attrs.suppressFirstLineIndent) parts.push('sfi');
+
+    // Drop cap
+    if (attrs.dropCap) parts.push(`dc:${attrs.dropCap}`);
+    if (attrs.dropCapDescriptor) {
+      const dcd = attrs.dropCapDescriptor;
+      parts.push(`dcd:${dcd.mode ?? ''}:${dcd.lines ?? ''}`);
+    }
+
+    // Frame (use deterministic hash for consistent cache keys)
+    if (attrs.frame) {
+      parts.push(`fr:${hashParagraphFrame(attrs.frame)}`);
+    }
+
+    // Tab settings
+    if (attrs.tabIntervalTwips !== undefined) parts.push(`ti:${attrs.tabIntervalTwips}`);
+    if (attrs.decimalSeparator) parts.push(`ds:${attrs.decimalSeparator}`);
+
+    if (parts.length > 0) {
+      paragraphAttrsKey = `|pa:${parts.join(':')}`;
+    }
+  }
+
+  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}${numberingKey}${paragraphAttrsKey}`;
 };
 
 /**

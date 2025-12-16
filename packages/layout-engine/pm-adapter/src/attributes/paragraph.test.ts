@@ -2836,4 +2836,326 @@ describe('computeParagraphAttrs - numbering properties fallback from listRenderi
       expect(result?.numberingProperties?.ilvl).toBe(3);
     });
   });
+
+  describe('contextualSpacing attribute extraction', () => {
+    const createStyleContext = () => ({
+      styles: {},
+      defaults: {},
+    });
+
+    describe('fallback chain priority', () => {
+      it('should prioritize normalizedSpacing.contextualSpacing (priority 1)', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              contextualSpacing: true,
+            },
+            paragraphProperties: {
+              contextualSpacing: false, // Should be ignored
+            },
+            contextualSpacing: false, // Should be ignored
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should use paragraphProps.contextualSpacing when normalizedSpacing is absent (priority 2)', () => {
+        const para: PMNode = {
+          attrs: {
+            paragraphProperties: {
+              contextualSpacing: true,
+            },
+            contextualSpacing: false, // Should be ignored
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should use attrs.contextualSpacing when both higher priorities are absent (priority 3)', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should return undefined when contextualSpacing is not set anywhere', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+    });
+
+    describe('OOXML boolean value handling', () => {
+      it('should handle boolean true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle boolean false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: false,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle numeric 1 as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 1,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle numeric 0 as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 0,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "1" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '1',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "0" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '0',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "true" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'true',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "false" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'false',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "on" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'on',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "off" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'off',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle case-insensitive string values', () => {
+        const para1: PMNode = {
+          attrs: {
+            contextualSpacing: 'TRUE',
+          },
+        };
+        const para2: PMNode = {
+          attrs: {
+            contextualSpacing: 'FALSE',
+          },
+        };
+        const para3: PMNode = {
+          attrs: {
+            contextualSpacing: 'On',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        expect(computeParagraphAttrs(para1, styleContext)?.contextualSpacing).toBe(true);
+        expect(computeParagraphAttrs(para2, styleContext)?.contextualSpacing).toBe(false);
+        expect(computeParagraphAttrs(para3, styleContext)?.contextualSpacing).toBe(true);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should treat null as not set', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: null,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+
+      it('should treat undefined as not set', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: undefined,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+
+      it('should handle invalid string values as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'invalid',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle empty string as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+    });
+
+    describe('integration with spacing', () => {
+      it('should work together with spacing.before and spacing.after', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+            spacing: {
+              before: 10,
+              after: 20,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+        expect(result?.spacing?.before).toBeDefined();
+        expect(result?.spacing?.after).toBeDefined();
+      });
+
+      it('should work when contextualSpacing is in spacing object', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 20,
+              contextualSpacing: true,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+        expect(result?.spacing?.before).toBeDefined();
+        expect(result?.spacing?.after).toBeDefined();
+      });
+    });
+  });
 });

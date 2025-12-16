@@ -1,4 +1,5 @@
 import type {
+  DrawingBlock,
   Line,
   ParagraphBlock,
   PartialRowInfo,
@@ -44,7 +45,15 @@ type TableRowRenderDependencies = {
   /** Rendering context */
   context: FragmentRenderContext;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
+  /** Function to render drawing content (images, shapes, shape groups) */
+  renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Function to apply SDT metadata as data attributes */
   applySdtDataset: (el: HTMLElement | null, metadata?: SdtMetadata | null) => void;
   /**
@@ -115,6 +124,7 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     allRowHeights,
     context,
     renderLine,
+    renderDrawingContent,
     applySdtDataset,
     continuesFromPrev,
     continuesOnNext,
@@ -319,6 +329,7 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
       borders: resolvedBorders,
       useDefaultBorder: false,
       renderLine,
+      renderDrawingContent,
       context,
       applySdtDataset,
       fromLine,

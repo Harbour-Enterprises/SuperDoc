@@ -70,6 +70,7 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
+import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -158,6 +159,11 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
       return false;
     }
     const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerText if present (must be a string)
+    if (marker.markerText !== undefined && typeof marker.markerText !== 'string') {
+      return false;
+    }
 
     // Validate marker.markerX if present
     if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
@@ -1877,8 +1883,9 @@ export class DomPainter {
             markerContainer.style.top = '0';
           }
 
-          // Apply marker run styling
-          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          // Apply marker run styling with font fallback chain
+          markerEl.style.fontFamily =
+            toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily;
           markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
           markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
           markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
@@ -2173,8 +2180,8 @@ export class DomPainter {
         markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
         markerEl.style.textAlign = marker.justification ?? 'left';
 
-        // Apply marker run styling
-        markerEl.style.fontFamily = marker.run.fontFamily;
+        // Apply marker run styling with font fallback chain
+        markerEl.style.fontFamily = toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily;
         markerEl.style.fontSize = `${marker.run.fontSize}px`;
         if (marker.run.bold) markerEl.style.fontWeight = 'bold';
         if (marker.run.italic) markerEl.style.fontStyle = 'italic';
@@ -2866,10 +2873,56 @@ export class DomPainter {
       this.applyFragmentFrame(el, frag, context.section);
     };
 
-    // Create a wrapper for renderLine that always skips justification for table cell content.
-    // Word does not justify text inside table cells, even if jc="both" is specified.
-    const renderLineForTableCell = (block: ParagraphBlock, line: Line, ctx: FragmentRenderContext): HTMLElement => {
-      return this.renderLine(block, line, ctx, undefined, undefined, true); // skipJustify = true
+    // Create a wrapper for renderLine that applies Word's justification rules for table cells.
+    // Word DOES justify text inside table cells, but skips justification on the last line
+    // (unless the paragraph ends with a line break, which shifts the "last line" down).
+    const renderLineForTableCell = (
+      block: ParagraphBlock,
+      line: Line,
+      ctx: FragmentRenderContext,
+      lineIndex: number,
+      isLastLine: boolean,
+    ): HTMLElement => {
+      // Check if paragraph ends with a line break
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
+      // Skip justify only on the last line, unless the paragraph ends with a line break
+      const shouldSkipJustify = isLastLine && !paragraphEndsWithLineBreak;
+
+      return this.renderLine(block, line, ctx, undefined, lineIndex, shouldSkipJustify);
+    };
+
+    /**
+     * Wrapper function for rendering drawing content inside table cells.
+     *
+     * This function delegates to the appropriate DomPainter methods based on the drawing kind:
+     * - 'image': Creates a standard image element with src and object-fit
+     * - 'shapeGroup': Creates a group container with positioned child shapes (images and vectors)
+     * - 'vectorShape': Creates an SVG element for the vector shape (without geometry transforms in table cells)
+     *
+     * For unsupported or unrecognized drawing kinds, returns a placeholder element with diagonal stripes.
+     *
+     * @param block - The DrawingBlock to render
+     * @returns HTMLElement representing the rendered drawing content
+     *
+     * @remarks
+     * This wrapper is specifically designed for table cell rendering where:
+     * - Vector shapes are rendered without geometry transforms (to avoid layout conflicts)
+     * - The returned element will have width: 100% and height: 100% applied by the table cell renderer
+     */
+    const renderDrawingContentForTableCell = (block: DrawingBlock): HTMLElement => {
+      if (block.drawingKind === 'image') {
+        return this.createDrawingImageElement(block);
+      }
+      if (block.drawingKind === 'shapeGroup') {
+        return this.createShapeGroupElement(block);
+      }
+      if (block.drawingKind === 'vectorShape') {
+        // For vectorShapes in table cells, render without geometry transforms
+        return this.createVectorShapeElement(block, block.geometry, false);
+      }
+      return this.createDrawingPlaceholder();
     };
 
     return renderTableFragmentElement({
@@ -2878,6 +2931,7 @@ export class DomPainter {
       context,
       blockLookup: this.blockLookup,
       renderLine: renderLineForTableCell,
+      renderDrawingContent: renderDrawingContentForTableCell,
       applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
@@ -3653,11 +3707,10 @@ export class DomPainter {
       el.setAttribute('styleid', styleId);
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
-    // Note: skipJustify only affects word-spacing for justify alignment, not other alignments.
-    // Center and right alignment should always be respected.
-    if (alignment === 'center' || alignment === 'right') {
-      el.style.textAlign = alignment;
-    } else if (alignment === 'justify') {
+    const effectiveAlignment = alignment;
+    if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
+      el.style.textAlign = effectiveAlignment;
+    } else if (effectiveAlignment === 'justify') {
       // Use manual spacing distribution; avoid native justify to prevent double stretching
       el.style.textAlign = 'left';
     } else {
@@ -3681,6 +3734,8 @@ export class DomPainter {
             .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
             .map((r) => r.text)
         : gatherTextSlicesForLine(block, line);
+
+    // Targeted debug removed now that issue is understood.
 
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
@@ -3740,16 +3795,21 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    const shouldJustify = !skipJustify && alignment === 'justify' && !hasExplicitPositioning;
+    // Check if paragraph has justified alignment and line should be justified
+    // TODO: Remove this override when justify bugs are fixed
+    const shouldJustify = false; // block.attrs?.alignment === 'justify' && !hasExplicitPositioning;
     if (shouldJustify) {
       const spaceCount = textSlices.reduce(
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
         0,
       );
-      const slack = Math.max(0, availableWidth - line.width);
-      if (spaceCount > 0 && slack > 0) {
-        const extraPerSpace = slack / spaceCount;
-        el.style.wordSpacing = `${extraPerSpace}px`;
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack !== 0) {
+        // Positive slack = expand spaces to fill line (normal justify)
+        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
+        const spacingPerSpace = slack / spaceCount;
+        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
+        el.style.wordSpacing = `${spacingPerSpace}px`;
       }
     }
 
@@ -4609,12 +4669,50 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.pmStart ?? '',
           textRun.pmEnd ?? '',
           textRun.token ?? '',
+          // Tracked changes - force re-render when added or removed tracked change
+          textRun.trackedChange ? 1 : 0,
         ].join(',');
       })
       .join('|');
 
-    // Combine marker version with runs version
-    return markerVersion ? `${markerVersion}|${runsVersion}` : runsVersion;
+    // Include paragraph-level attributes that affect rendering (alignment, spacing, indent, etc.)
+    // This ensures DOM updates when toolbar commands like "align center" change these properties.
+    const attrs = block.attrs as
+      | {
+          alignment?: string;
+          spacing?: { before?: number; after?: number; line?: number; lineRule?: string };
+          indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+          borders?: Record<string, unknown>;
+          shading?: { fill?: string; color?: string };
+          direction?: string;
+          rtl?: boolean;
+          tabs?: Array<{ val?: string; pos?: number; leader?: string }>;
+        }
+      | undefined;
+
+    const paragraphAttrsVersion = attrs
+      ? [
+          attrs.alignment ?? '',
+          attrs.spacing?.before ?? '',
+          attrs.spacing?.after ?? '',
+          attrs.spacing?.line ?? '',
+          attrs.spacing?.lineRule ?? '',
+          attrs.indent?.left ?? '',
+          attrs.indent?.right ?? '',
+          attrs.indent?.firstLine ?? '',
+          attrs.indent?.hanging ?? '',
+          attrs.borders ? JSON.stringify(attrs.borders) : '',
+          attrs.shading?.fill ?? '',
+          attrs.shading?.color ?? '',
+          attrs.direction ?? '',
+          attrs.rtl ? '1' : '',
+          attrs.tabs?.length ? JSON.stringify(attrs.tabs) : '',
+        ].join(':')
+      : '';
+
+    // Combine marker version, runs version, and paragraph attrs version
+    const parts = [markerVersion, runsVersion, paragraphAttrsVersion].filter(Boolean);
+    return parts.join('|');
   }
 
   if (block.kind === 'list') {

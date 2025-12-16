@@ -303,44 +303,6 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
     }
   }
 
-  try {
-    const blockSummaries = blocks.map((b) => {
-      if (b.kind === 'paragraph') {
-        const runs = (b as ParagraphBlock).runs ?? [];
-        const attrs = (b as ParagraphBlock).attrs ?? {};
-        return {
-          kind: 'paragraph',
-          runKinds: runs.map((r) => (r as { kind?: string }).kind ?? 'text'),
-          runCount: runs.length,
-          runPreview: runs.map((r) => {
-            const kind = (r as { kind?: string }).kind ?? 'text';
-            if (kind === 'image') {
-              const img = r as { src?: string; width?: number; height?: number };
-              return { kind, src: img.src, width: img.width, height: img.height };
-            }
-            return { kind };
-          }),
-          hasNumbering: Boolean((attrs as Record<string, unknown>).numberingProperties),
-          markerText:
-            (attrs as { wordLayout?: { marker?: { markerText?: string } } }).wordLayout?.marker?.markerText,
-        };
-      }
-      return { kind: b.kind };
-    });
-    console.log(
-      '[tableNodeToBlock.parseTableCell] cell contents',
-      JSON.stringify({
-        cellIndex,
-        rowIndex,
-        cellIdPreview: `cell-${rowIndex}-${cellIndex}`,
-        childTypes: cellNode.content.map((c) => c?.type),
-        blocks: blockSummaries,
-      }),
-    );
-  } catch {
-    // best-effort logging; ignore serialization errors
-  }
-
   if (blocks.length === 0) {
     return null;
   }
