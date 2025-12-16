@@ -1,12 +1,19 @@
-import type { ParagraphBorders, ParagraphBorder, Run } from '@superdoc/contracts';
+import type {
+  Run,
+  ParagraphBorders,
+  ParagraphBorder,
+  TableBorders,
+  TableBorderValue,
+  CellBorders,
+  BorderSpec,
+} from '@superdoc/contracts';
 
 /**
- * Creates a deterministic hash string for a paragraph border.
- * Ensures consistent ordering regardless of JS engine property enumeration.
- *
- * @param border - The paragraph border to hash
- * @returns A deterministic hash string
+ * Hash helpers are duplicated from layout-bridge to avoid a circular dependency
+ * (layout-bridge imports DOM_CLASS_NAMES from painter-dom). Keep these helpers
+ * in sync with layout-bridge when formatting changes need cache invalidation.
  */
+
 export const hashParagraphBorder = (border: ParagraphBorder): string => {
   const parts: string[] = [];
   if (border.style !== undefined) parts.push(`s:${border.style}`);
@@ -16,19 +23,61 @@ export const hashParagraphBorder = (border: ParagraphBorder): string => {
   return parts.join(',');
 };
 
-/**
- * Creates a deterministic hash string for paragraph borders.
- * Hashes all four sides (top, right, bottom, left) in a consistent order.
- *
- * @param borders - The paragraph borders to hash
- * @returns A deterministic hash string
- */
 export const hashParagraphBorders = (borders: ParagraphBorders): string => {
   const parts: string[] = [];
   if (borders.top) parts.push(`t:[${hashParagraphBorder(borders.top)}]`);
   if (borders.right) parts.push(`r:[${hashParagraphBorder(borders.right)}]`);
   if (borders.bottom) parts.push(`b:[${hashParagraphBorder(borders.bottom)}]`);
   if (borders.left) parts.push(`l:[${hashParagraphBorder(borders.left)}]`);
+  return parts.join(';');
+};
+
+const isNoneBorder = (value: TableBorderValue): value is { none: true } => {
+  return typeof value === 'object' && value !== null && 'none' in value && (value as { none: true }).none === true;
+};
+
+const isBorderSpec = (value: unknown): value is BorderSpec => {
+  return typeof value === 'object' && value !== null && !('none' in value);
+};
+
+export const hashBorderSpec = (border: BorderSpec): string => {
+  const parts: string[] = [];
+  if (border.style !== undefined) parts.push(`s:${border.style}`);
+  if (border.width !== undefined) parts.push(`w:${border.width}`);
+  if (border.color !== undefined) parts.push(`c:${border.color}`);
+  if (border.space !== undefined) parts.push(`sp:${border.space}`);
+  return parts.join(',');
+};
+
+export const hashTableBorderValue = (borderValue: TableBorderValue | undefined): string => {
+  if (borderValue === undefined) return '';
+  if (borderValue === null) return 'null';
+  if (isNoneBorder(borderValue)) return 'none';
+  if (isBorderSpec(borderValue)) {
+    return hashBorderSpec(borderValue);
+  }
+  return '';
+};
+
+export const hashTableBorders = (borders: TableBorders | undefined): string => {
+  if (!borders) return '';
+  const parts: string[] = [];
+  if (borders.top !== undefined) parts.push(`t:[${hashTableBorderValue(borders.top)}]`);
+  if (borders.right !== undefined) parts.push(`r:[${hashTableBorderValue(borders.right)}]`);
+  if (borders.bottom !== undefined) parts.push(`b:[${hashTableBorderValue(borders.bottom)}]`);
+  if (borders.left !== undefined) parts.push(`l:[${hashTableBorderValue(borders.left)}]`);
+  if (borders.insideH !== undefined) parts.push(`ih:[${hashTableBorderValue(borders.insideH)}]`);
+  if (borders.insideV !== undefined) parts.push(`iv:[${hashTableBorderValue(borders.insideV)}]`);
+  return parts.join(';');
+};
+
+export const hashCellBorders = (borders: CellBorders | undefined): string => {
+  if (!borders) return '';
+  const parts: string[] = [];
+  if (borders.top) parts.push(`t:[${hashBorderSpec(borders.top)}]`);
+  if (borders.right) parts.push(`r:[${hashBorderSpec(borders.right)}]`);
+  if (borders.bottom) parts.push(`b:[${hashBorderSpec(borders.bottom)}]`);
+  if (borders.left) parts.push(`l:[${hashBorderSpec(borders.left)}]`);
   return parts.join(';');
 };
 
