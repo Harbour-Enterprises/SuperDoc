@@ -13,7 +13,7 @@ import {
   computeDisplayPageNumber,
   resolvePageNumberTokens,
   type NumberingContext,
-} from '../../layout-engine/src/index';
+} from '@superdoc/layout-engine/src/index';
 import { remeasureParagraph } from './remeasure';
 import { computeDirtyRegions } from './diff';
 import { MeasureCache } from './cache';

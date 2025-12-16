@@ -19,6 +19,7 @@
   "exports": {
     ".": {
       "types": "./dist/packages/superdoc/src/index.d.ts",
+      "source": "./src/index.js",
       "import": "./dist/superdoc.es.js",
       "require": "./dist/superdoc.cjs"
     },
