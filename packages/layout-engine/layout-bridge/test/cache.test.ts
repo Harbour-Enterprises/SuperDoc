@@ -1316,6 +1316,164 @@ describe('MeasureCache', () => {
         });
       });
     });
+
+    // ============================================================================
+    // Table-Level and Cell-Level Border Caching Tests
+    // These tests verify that table-level borders (outer and inner borders) and
+    // cell-level borders are properly included in cache keys. This ensures that
+    // slash menu commands like "remove borders" trigger cache invalidation and
+    // re-render immediately, rather than requiring a subsequent keystroke.
+    // ============================================================================
+
+    describe('table-level border changes', () => {
+      const tableWithBorders = (id: string, text: string, tableBorders?: Record<string, unknown>): TableBlock => ({
+        kind: 'table',
+        id,
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text, fontFamily: 'Arial', fontSize: 12 }],
+                },
+              },
+            ],
+          },
+        ],
+        attrs: tableBorders ? { borders: tableBorders } : undefined,
+      });
+
+      it('invalidates cache when table borders are removed', () => {
+        const table1 = tableWithBorders('table-borders', 'Hello', {
+          top: { style: 'single', width: 8, color: '000000' },
+          bottom: { style: 'single', width: 8, color: '000000' },
+        });
+        const table2 = tableWithBorders('table-borders', 'Hello', {
+          top: { style: 'none', width: 0, color: 'auto' },
+          bottom: { style: 'none', width: 0, color: 'auto' },
+        });
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when table borders are added', () => {
+        const table1 = tableWithBorders('table-borders-add', 'Hello', undefined);
+        const table2 = tableWithBorders('table-borders-add', 'Hello', {
+          top: { style: 'single', width: 8, color: '000000' },
+        });
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('creates cache hit when table borders are identical', () => {
+        const borders = {
+          top: { style: 'single', width: 8, color: '000000' },
+          bottom: { style: 'single', width: 8, color: '000000' },
+        };
+        const table1 = tableWithBorders('table-borders-same', 'Hello', borders);
+        const table2 = tableWithBorders('table-borders-same', 'Hello', borders);
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+    });
+
+    describe('cell-level border changes', () => {
+      const tableWithCellBorders = (id: string, text: string, cellBorders?: Record<string, unknown>): TableBlock => ({
+        kind: 'table',
+        id,
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text, fontFamily: 'Arial', fontSize: 12 }],
+                },
+                attrs: cellBorders ? { borders: cellBorders } : undefined,
+              },
+            ],
+          },
+        ],
+      });
+
+      it('invalidates cache when cell borders are removed', () => {
+        const table1 = tableWithCellBorders('cell-borders', 'Hello', {
+          top: { style: 'single', width: 8, color: '000000' },
+          bottom: { style: 'single', width: 8, color: '000000' },
+        });
+        const table2 = tableWithCellBorders('cell-borders', 'Hello', {
+          top: { style: 'none', width: 0, color: 'auto' },
+          bottom: { style: 'none', width: 0, color: 'auto' },
+        });
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('invalidates cache when cell borders are added', () => {
+        const table1 = tableWithCellBorders('cell-borders-add', 'Hello', undefined);
+        const table2 = tableWithCellBorders('cell-borders-add', 'Hello', {
+          top: { style: 'single', width: 8, color: '000000' },
+        });
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('creates cache hit when cell borders are identical', () => {
+        const borders = {
+          top: { style: 'single', width: 8, color: '000000' },
+          bottom: { style: 'single', width: 8, color: '000000' },
+        };
+        const table1 = tableWithCellBorders('cell-borders-same', 'Hello', borders);
+        const table2 = tableWithCellBorders('cell-borders-same', 'Hello', borders);
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      });
+
+      it('invalidates cache when cell padding changes', () => {
+        const tableWithPadding = (
+          id: string,
+          padding?: { top?: number; right?: number; bottom?: number; left?: number },
+        ): TableBlock => ({
+          kind: 'table',
+          id,
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                  attrs: padding ? { padding } : undefined,
+                },
+              ],
+            },
+          ],
+        });
+
+        const table1 = tableWithPadding('cell-padding', { top: 10, right: 10, bottom: 10, left: 10 });
+        const table2 = tableWithPadding('cell-padding', { top: 20, right: 20, bottom: 20, left: 20 });
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+    });
   });
 
   // ============================================================================
