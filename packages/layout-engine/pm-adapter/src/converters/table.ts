@@ -261,7 +261,7 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
         context.nextBlockId,
         context.positions,
       );
-      if (drawingBlock) {
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
         blocks.push(drawingBlock);
       }
       continue;
@@ -273,7 +273,7 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
         context.nextBlockId,
         context.positions,
       );
-      if (drawingBlock) {
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
         blocks.push(drawingBlock);
       }
       continue;
@@ -285,7 +285,7 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
         context.nextBlockId,
         context.positions,
       );
-      if (drawingBlock) {
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
         blocks.push(drawingBlock);
       }
       continue;
@@ -297,7 +297,7 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
         context.nextBlockId,
         context.positions,
       );
-      if (drawingBlock) {
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
         blocks.push(drawingBlock);
       }
     }

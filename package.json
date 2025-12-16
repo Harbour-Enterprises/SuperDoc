@@ -15,7 +15,6 @@
     "packages/layout-engine/tests",
     "packages/layout-engine/demo-app",
     "packages/layout-engine/layout-bridge",
-    "packages/layout-engine/v1-beta-demo",
     "packages/preset-geometry",
     "shared/*"
   ],

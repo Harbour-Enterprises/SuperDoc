@@ -40,6 +40,8 @@ import type {
   SolidFillWithAlpha,
   ShapeTextContent,
   DropCapDescriptor,
+  TableAttrs,
+  TableCellAttrs,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -68,6 +70,8 @@ import { generateRulerDefinitionFromPx, createRulerElement, ensureRulerStyles } 
 import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 import {
   hashParagraphBorders,
+  hashTableBorders,
+  hashCellBorders,
   getRunStringProp,
   getRunNumberProp,
   getRunBooleanProp,
@@ -4879,9 +4883,31 @@ const deriveBlockVersion = (block: FlowBlock): string => {
         if (!cell) continue;
         const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
         hash = hashNumber(hash, cellBlocks.length);
-        // Include cell attributes that affect rendering (rowSpan, colSpan)
+        // Include cell attributes that affect rendering (rowSpan, colSpan, borders, etc.)
         hash = hashNumber(hash, cell.rowSpan ?? 1);
         hash = hashNumber(hash, cell.colSpan ?? 1);
+
+        // Include cell-level attributes (borders, padding, background) that affect rendering
+        // This ensures cache invalidation when cell formatting changes (e.g., remove borders).
+        if (cell.attrs) {
+          const cellAttrs = cell.attrs as TableCellAttrs;
+          if (cellAttrs.borders) {
+            hash = hashString(hash, hashCellBorders(cellAttrs.borders));
+          }
+          if (cellAttrs.padding) {
+            const p = cellAttrs.padding;
+            hash = hashNumber(hash, p.top ?? 0);
+            hash = hashNumber(hash, p.right ?? 0);
+            hash = hashNumber(hash, p.bottom ?? 0);
+            hash = hashNumber(hash, p.left ?? 0);
+          }
+          if (cellAttrs.verticalAlign) {
+            hash = hashString(hash, cellAttrs.verticalAlign);
+          }
+          if (cellAttrs.background) {
+            hash = hashString(hash, cellAttrs.background);
+          }
+        }
 
         for (const cellBlock of cellBlocks) {
           hash = hashString(hash, cellBlock?.kind ?? 'unknown');
@@ -4935,6 +4961,21 @@ const deriveBlockVersion = (block: FlowBlock): string => {
             }
           }
         }
+      }
+    }
+
+    // Include table-level attributes (borders, etc.) that affect rendering
+    // This ensures cache invalidation when table formatting changes (e.g., remove borders).
+    if (tableBlock.attrs) {
+      const tblAttrs = tableBlock.attrs as TableAttrs;
+      if (tblAttrs.borders) {
+        hash = hashString(hash, hashTableBorders(tblAttrs.borders));
+      }
+      if (tblAttrs.borderCollapse) {
+        hash = hashString(hash, tblAttrs.borderCollapse);
+      }
+      if (tblAttrs.cellSpacing !== undefined) {
+        hash = hashNumber(hash, tblAttrs.cellSpacing);
       }
     }
 

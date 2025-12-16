@@ -678,15 +678,13 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const provider = this.options.collaborationProvider;
 
     const postSyncInit = () => {
-      if (typeof provider.off === 'function') {
-        provider.off('synced', postSyncInit);
-      }
+      provider.off?.('synced', postSyncInit);
       this.#insertNewFileData();
     };
 
     if (provider.synced) this.#insertNewFileData();
     // If we are not sync'd yet, wait for the event then insert the data
-    else if (typeof provider.on === 'function') provider.on('synced', postSyncInit);
+    else provider.on?.('synced', postSyncInit);
   }
 
   /**
@@ -882,9 +880,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       return;
     }
 
-    const mediaMap = (this.options.ydoc as unknown as { getMap: (name: string) => Map<string, unknown> }).getMap(
-      'media',
-    );
+    const mediaMap = (this.options.ydoc as { getMap: (name: string) => Map<string, unknown> }).getMap('media');
 
     // We are creating a new file and need to set the media
     if (this.options.isNewFile) {
@@ -1925,7 +1921,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     try {
       console.debug('🔗 [super-editor] Ending collaboration');
       this.options.collaborationProvider?.disconnect?.();
-      (this.options.ydoc as unknown as { destroy?: () => void }).destroy?.();
+      (this.options.ydoc as { destroy: () => void }).destroy();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.emit('exception', { error: err, editor: this });
@@ -1982,11 +1978,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
     console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
     if (!this.options.ydoc) return;
 
-    const metaMap = (this.options.ydoc as unknown as { getMap: (name: string) => Map<string, unknown> }).getMap('meta');
+    const metaMap = (this.options.ydoc as { getMap: (name: string) => Map<string, unknown> }).getMap('meta');
     let docVersion = metaMap.get('version') as string | undefined;
     if (!docVersion) docVersion = 'initial';
     console.debug('[checkVersionMigrations] Document version', docVersion);
-    const migrations = getNecessaryMigrations(docVersion as string) || [];
+    const migrations = getNecessaryMigrations(docVersion) || [];
 
     const plugins = this.state.plugins;
     const syncPlugin = plugins.find((plugin) => this.#getPluginKeyName(plugin).startsWith('y-sync'));

@@ -23,7 +23,6 @@
       "@superdoc/layout-engine": ["packages/layout-engine/layout-engine/src"],
       "@superdoc/painter-dom": ["packages/layout-engine/painters/dom/src"],
       "@superdoc/painter-pdf": ["packages/layout-engine/painters/pdf/src"],
-      "@superdoc/v1-beta-demo": ["packages/layout-engine/v1-beta-demo/src"],
       "@superdoc/layout-bridge": ["packages/layout-engine/layout-bridge/src"],
       "@superdoc/style-engine": ["packages/layout-engine/style-engine/src"],
       "@superdoc/url-validation": ["shared/url-validation/index.js"],
@@ -47,7 +46,6 @@
     "packages/layout-engine/layout-engine/src/**/*",
     "packages/layout-engine/painters/dom/src/**/*",
     "packages/layout-engine/painters/pdf/src/**/*",
-    "packages/layout-engine/v1-beta-demo/src/**/*",
     "packages/layout-engine/layout-bridge/src/**/*",
     "packages/layout-engine/style-engine/src/**/*",
     "packages/layout-engine/tests/src/**/*"

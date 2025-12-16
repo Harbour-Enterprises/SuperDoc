@@ -2337,22 +2337,28 @@ export class PresentationEditor extends EventEmitter {
       // Skip local client
       if (clientId === provider.awareness?.clientID) return;
 
+      // Type assertion for awareness state properties
+      const awState = aw as {
+        cursor?: { anchor: unknown; head: unknown };
+        user?: { name?: string; email?: string; color?: string };
+      };
+
       // Skip states without cursor data
-      if (!aw.cursor) return;
+      if (!awState.cursor) return;
 
       try {
         // Convert relative positions to absolute PM positions
         const anchor = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.anchor),
+          Y.createRelativePositionFromJSON(awState.cursor.anchor),
           ystate.binding.mapping,
         );
 
         const head = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.head),
+          Y.createRelativePositionFromJSON(awState.cursor.head),
           ystate.binding.mapping,
         );
 
@@ -2373,9 +2379,9 @@ export class PresentationEditor extends EventEmitter {
         normalized.set(clientId, {
           clientId,
           user: {
-            name: aw.user?.name,
-            email: aw.user?.email,
-            color: aw.user?.color || this.#getFallbackColor(clientId),
+            name: awState.user?.name,
+            email: awState.user?.email,
+            color: awState.user?.color || this.#getFallbackColor(clientId),
           },
           anchor: clampedAnchor,
           head: clampedHead,

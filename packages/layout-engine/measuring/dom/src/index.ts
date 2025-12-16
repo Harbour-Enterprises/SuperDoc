@@ -1295,7 +1295,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           // Only push the line if it has actual text content (segments), not just tab positioning.
           // If the line only has width from tab advances but no text, we should keep it so the
           // long word can use the pending tab alignment.
-          if (currentLine && currentLine.width > 0 && currentLine.segments.length > 0) {
+          if (currentLine && currentLine.width > 0 && currentLine.segments && currentLine.segments.length > 0) {
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
             const { spaceCount: _sc, ...lineBase } = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
@@ -1311,7 +1311,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
           // If currentLine exists with tab positioning but no text segments, we need to handle
           // the first chunk specially to preserve the tab alignment
-          const hasTabOnlyLine = currentLine && currentLine.segments.length === 0 && currentLine.width > 0;
+          const hasTabOnlyLine =
+            currentLine && currentLine.segments && currentLine.segments.length === 0 && currentLine.width > 0;
           const remainingWidthAfterTab = hasTabOnlyLine ? currentLine!.maxWidth - currentLine!.width : lineMaxWidth;
 
           // Use remaining width for chunking if we have a tab-only line, otherwise use full line width
@@ -1328,7 +1329,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             const isFirstChunk = chunkIndex === 0;
 
             // First chunk: if we have a tab-only line, add to it; otherwise create new line
-            if (isFirstChunk && hasTabOnlyLine && currentLine) {
+            if (isFirstChunk && hasTabOnlyLine && currentLine && currentLine.segments) {
               // Add first chunk to the existing line with tab positioning
               currentLine.toRun = runIndex;
               currentLine.toChar = chunkEndChar;

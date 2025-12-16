@@ -5,7 +5,6 @@
   "description": "Layout engine POC - manages layout, pagination, and rendering for SuperDoc",
   "scripts": {
     "build": "npm run build --workspace=@superdoc/contracts --workspace=@superdoc/geometry-utils --workspace=@superdoc/pm-adapter --workspace=@superdoc/measuring-dom --workspace=@superdoc/layout-engine --workspace=@superdoc/painter-dom --workspace=@superdoc/painter-pdf",
-    "test": "npm run test --workspace=@superdoc/contracts --workspace=@superdoc/geometry-utils --workspace=@superdoc/pm-adapter --workspace=@superdoc/measuring-dom --workspace=@superdoc/layout-engine --workspace=@superdoc/painter-dom --workspace=@superdoc/painter-pdf",
-    "dev": "npm run dev --workspace=@superdoc/v1-beta-demo"
+    "test": "npm run test --workspace=@superdoc/contracts --workspace=@superdoc/geometry-utils --workspace=@superdoc/pm-adapter --workspace=@superdoc/measuring-dom --workspace=@superdoc/layout-engine --workspace=@superdoc/painter-dom --workspace=@superdoc/painter-pdf"
   }
 }

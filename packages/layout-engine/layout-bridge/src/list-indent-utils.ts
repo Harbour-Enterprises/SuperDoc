@@ -72,7 +72,8 @@ export function isListItem(markerWidth: number, block: ParagraphBlock | undefine
   }
 
   const wordLayout = getWordLayoutConfig(block);
-  const hasListAttrs = block.attrs?.listItem != null || wordLayout?.marker != null;
+  const hasListAttrs =
+    block.attrs?.listItem != null || block.attrs?.numberingProperties != null || wordLayout?.marker != null;
 
   if (hasListAttrs) {
     return true;
