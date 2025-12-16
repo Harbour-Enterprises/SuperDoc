@@ -7,6 +7,5 @@
     "declaration": true,
     "declarationMap": true
   },
-  "include": ["src/**/*.ts"],
-  "references": [{ "path": "../contracts" }]
+  "include": ["src/**/*.ts"]
 }
