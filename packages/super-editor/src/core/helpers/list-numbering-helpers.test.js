@@ -955,7 +955,6 @@ describe('createSchemaOrderedListNode', () => {
     });
     expect(orderedNode.type.name).toBe('paragraph');
     expect(orderedNode.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 10, ilvl: 0 } });
-    expect(orderedNode.attrs.numberingProperties).toEqual({ numId: 10, ilvl: 0 });
   });
 });
 
@@ -971,13 +970,15 @@ describe('createNewList', () => {
   let createSchemaOrderedListNodeSpy;
 
   const makeStateWithParagraph = () => {
-    const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('hello')])]);
+    const doc = schema.node('doc', null, [
+      schema.node('paragraph', { paragraphProperties: {} }, [schema.text('hello')]),
+    ]);
     const sel = TextSelection.create(doc, 2); // inside text
     return EditorState.create({ doc, selection: sel, schema });
   };
 
   const makeStateWithWrapperNodeSelection = () => {
-    const innerPara = schema.node('paragraph', null, [schema.text('x')]);
+    const innerPara = schema.node('paragraph', { paragraphProperties: {} }, [schema.text('x')]);
     const wrapper = schema.node('wrapperNode', {}, [innerPara]);
     const doc = schema.node('doc', null, [wrapper]);
     // Select the wrapper node itself
@@ -1041,7 +1042,6 @@ describe('createNewList', () => {
       const first = tr.doc.firstChild;
       expect(first).toBeTruthy();
       expect(first.type.name).toBe('paragraph');
-      expect(first.attrs.numberingProperties).toEqual({ numId: 1, ilvl: 0 });
       expect(first.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 1, ilvl: 0 } });
     });
 
@@ -1065,7 +1065,9 @@ describe('createNewList', () => {
 
   describe('Integration-ish sanity (minimal)', () => {
     it('preserves inline content/marks via contentNode JSON round-trip', () => {
-      const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('abc 123')])]);
+      const doc = schema.node('doc', null, [
+        schema.node('paragraph', { paragraphProperties: {} }, [schema.text('abc 123')]),
+      ]);
       const sel = TextSelection.create(doc, 3);
       const state = EditorState.create({ doc, selection: sel, schema });
       const tr = state.tr;
@@ -1075,7 +1077,6 @@ describe('createNewList', () => {
 
       const ol = tr.doc.firstChild;
       expect(ol.type.name).toBe('paragraph');
-      expect(ol.attrs.numberingProperties).toEqual({ numId: 1, ilvl: 0 });
       expect(ol.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 1, ilvl: 0 } });
       expect(ol.textContent).toBe('abc 123');
     });

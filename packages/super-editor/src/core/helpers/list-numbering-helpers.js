@@ -18,7 +18,7 @@ import { findParentNode } from './findParentNode.js';
  * @param {import('../Editor').Editor} param0.editor - The editor instance where the list definition will be added.
  * @returns {Object} The new abstract and num definitions.
  */
-export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor }) => {
+export const generateNewListDefinition = ({ numId, listType, level, start, text, fmt, editor, markerFontFamily }) => {
   // Generate a new numId to add to numbering.xml
   if (typeof listType !== 'string') listType = listType.name;
 
@@ -41,7 +41,9 @@ export const generateNewListDefinition = ({ numId, listType, level, start, text,
 
   // Generate the new abstractNum definition for copy/paste lists
   if (level && start && text && fmt) {
+    // @ts-expect-error - newNumbering is known to have definitions property at runtime
     if (newNumbering.definitions[numId]) {
+      // @ts-expect-error - newNumbering.definitions is known to exist at runtime
       const abstractId = newNumbering.definitions[numId]?.elements[0]?.attributes['w:val'];
       newAbstractId = abstractId;
       const abstract = editor.converter.numbering.abstracts[abstractId];
@@ -79,12 +81,40 @@ export const generateNewListDefinition = ({ numId, listType, level, start, text,
         },
       },
     ];
+    if (markerFontFamily) {
+      // Add font family to level properties
+      const rPrIndex = levelProps.elements.findIndex((el) => el.name === 'w:rPr');
+      let rPr = levelProps.elements[rPrIndex];
+      if (!rPr) {
+        rPr = {
+          type: 'element',
+          name: 'w:rPr',
+          elements: [],
+        };
+        levelProps.elements.push(rPr);
+      }
+      // Remove existing rFonts if present
+      rPr.elements = rPr.elements.filter((el) => el.name !== 'w:rFonts');
+      // Add new rFonts element
+      rPr.elements.push({
+        type: 'element',
+        name: 'w:rFonts',
+        attributes: {
+          'w:ascii': markerFontFamily,
+          'w:hAnsi': markerFontFamily,
+          'w:eastAsia': markerFontFamily,
+          'w:cs': markerFontFamily,
+        },
+      });
+    }
   }
 
+  // @ts-expect-error - newNumbering.abstracts is known to exist at runtime
   if (!skipAddingNewAbstract) newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   // Generate the new numId definition
   const newNumDef = getBasicNumIdTag(numId, newAbstractId);
+  // @ts-expect-error - newNumbering.definitions is known to exist at runtime
   newNumbering.definitions[numId] = newNumDef;
 
   // Update the editor's numbering with the new definition
@@ -141,9 +171,11 @@ export const changeNumIdSameAbstract = (numId, level, listType, editor) => {
       'w:abstractNumId': String(newAbstractId),
     },
   };
+  // @ts-expect-error - newNumbering.abstracts is known to exist at runtime
   newNumbering.abstracts[newAbstractId] = newAbstractDef;
 
   const newNumDef = getBasicNumIdTag(newId, newAbstractId);
+  // @ts-expect-error - newNumbering.definitions is known to exist at runtime
   newNumbering.definitions[newId] = newNumDef;
   // Persist updated numbering so downstream exporters can resolve the ID
   editor.converter.numbering = newNumbering;

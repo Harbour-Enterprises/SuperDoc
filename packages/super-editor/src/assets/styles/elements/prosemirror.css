@@ -4,6 +4,8 @@
  */
 .ProseMirror {
   position: relative;
+  /* We use "all: revert" to isolate the editor content from external stylesheets. This makes the "contenteditable" not editable on Safari devices. So we need to keep this. */
+  -webkit-user-modify: read-write-plaintext-only;
 }
 
 .ProseMirror {
@@ -48,30 +50,6 @@
   margin: 0;
   padding: 0;
   display: inline-block;
-}
-
-.ProseMirror.header-footer-edit {
-  > p,
-  li,
-  span {
-    img,
-    a {
-      opacity: 1;
-    }
-  }
-  .pagination-break-wrapper {
-    color: initial !important;
-    span {
-      color: initial !important;
-    }
-    img,
-    a {
-      opacity: 1;
-    }
-  }
-}
-.pagination-section-header div[contenteditable='false'] {
-  user-select: none;
 }
 
 /**
@@ -143,7 +121,7 @@ img.ProseMirror-separator {
   vertical-align: text-bottom;
 }
 
-.ProseMirror u .sd-editor-tab:not(.pagination-inner .sd-editor-tab) {
+.ProseMirror u .sd-editor-tab {
   white-space: pre;
   border-bottom: 1px solid #000;
   margin-bottom: 1.5px;
@@ -165,7 +143,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
   overflow-x: auto;
   scrollbar-width: thin;
-  overflow: hidden;
+  overflow: visible; /* Allow table to extend beyond margins */
 
   /*
   The border width does not need to be multiplied by two,
@@ -176,7 +154,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 .ProseMirror table {
   border-collapse: collapse;
   border-spacing: 0;
-  table-layout: fixed;
+  table-layout: auto;
   margin: 0;
   /* width: 100%; */
 }
@@ -187,7 +165,7 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
 
 .ProseMirror td,
 .ProseMirror th {
-  min-width: 1em;
+  min-width: 0;
   position: relative;
   vertical-align: top;
   box-sizing: border-box;
@@ -303,6 +281,58 @@ https://github.com/ProseMirror/prosemirror-tables/blob/master/demo/index.html
   white-space: nowrap;
 }
 /* Collaboration cursors - end */
+
+/* Presentation Editor Remote Cursors */
+.presentation-editor__selection-layer--local,
+.presentation-editor__selection-layer--remote {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.presentation-editor__remote-caret {
+  position: absolute;
+  pointer-events: none;
+  /* Smooth transitions for cursor movement */
+  transition:
+    left 0.1s ease-out,
+    top 0.1s ease-out,
+    height 0.1s ease-out;
+}
+
+.presentation-editor__remote-label {
+  position: absolute;
+  font-size: 13px;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-weight: 500;
+  line-height: normal;
+  pointer-events: none;
+  user-select: none;
+  /* Drop shadow for better readability over varied backgrounds */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  /* Ensure labels appear above selections */
+  z-index: 1;
+}
+
+.presentation-editor__remote-selection {
+  position: absolute;
+  border-radius: 2px;
+  pointer-events: none;
+  /* Smooth transitions for selection changes */
+  transition:
+    left 0.1s ease-out,
+    top 0.1s ease-out,
+    width 0.1s ease-out,
+    height 0.1s ease-out,
+    opacity 0.15s ease-out;
+  /* Better color blending with text (multiply mode shows text more clearly through highlights) */
+  mix-blend-mode: multiply;
+}
+/* Presentation Editor Remote Cursors - end */
 
 /* Image placeholder */
 .ProseMirror placeholder {

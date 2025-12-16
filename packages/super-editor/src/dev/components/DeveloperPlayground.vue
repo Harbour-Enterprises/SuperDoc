@@ -5,6 +5,7 @@ import '@superdoc/common/styles/common-styles.css';
 import { ref, shallowRef, computed, onMounted } from 'vue';
 import { NMessageProvider } from 'naive-ui';
 import { SuperEditor } from '@/index.js';
+import { PresentationEditor } from '@/core/PresentationEditor.js';
 import { getFileObject } from '@superdoc/common/helpers/get-file-object';
 import { DOCX } from '@superdoc/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';
@@ -19,6 +20,8 @@ const currentFile = ref(null);
 const pageStyles = ref(null);
 const isDebuggingPagination = ref(false);
 const telemetry = shallowRef(null);
+const urlParams = new URLSearchParams(window.location.search);
+const useLayoutEngine = ref(urlParams.get('layout') === '1');
 
 // Content injection variables
 const contentInput = ref('');
@@ -50,7 +53,9 @@ const onCreate = ({ editor }) => {
   attachAnnotationEventHandlers();
 
   // Set debugging pagination value from editor plugin state
-  isDebuggingPagination.value = PaginationPluginKey.getState(editor.state)?.isDebugging;
+  isDebuggingPagination.value = useLayoutEngine.value
+    ? Boolean(PaginationPluginKey.getState(editor.state)?.isDebugging)
+    : false;
 
   // editor.commands.addFieldAnnotation(0, {
   //   type: 'text',
@@ -80,9 +85,10 @@ const editorOptions = computed(() => {
     onCommentsLoaded,
     suppressSkeletonLoader: true,
     users: [], // For comment @-mentions, only users that have access to the document
-    pagination: true,
+    pagination: useLayoutEngine.value,
     telemetry: telemetry.value,
     annotations: true,
+    editorCtor: useLayoutEngine.value ? PresentationEditor : undefined,
   };
 });
 
@@ -157,6 +163,13 @@ onMounted(async () => {
     superdocId: 'dev-playground',
   });
 });
+
+const toggleLayoutEngine = () => {
+  const nextValue = !useLayoutEngine.value;
+  const url = new URL(window.location.href);
+  url.searchParams.set('layout', nextValue ? '1' : '0');
+  window.location.href = url.toString();
+};
 </script>
 
 <template>
@@ -166,6 +179,12 @@ onMounted(async () => {
         <div class="dev-app__header-side dev-app__header-side--left">
           <div class="dev-app__header-title">
             <h2>Super Editor Dev Area</h2>
+          </div>
+          <div class="dev-app__header-layout-toggle">
+            <span class="badge">Layout Engine: {{ useLayoutEngine ? 'ON' : 'OFF' }}</span>
+            <button class="dev-app__header-export-btn" @click="toggleLayoutEngine">
+              Turn Layout Engine {{ useLayoutEngine ? 'off' : 'on' }} (reloads)
+            </button>
           </div>
           <div class="dev-app__header-upload">
             Upload docx
@@ -204,7 +223,10 @@ onMounted(async () => {
       <div class="dev-app__main">
         <div class="dev-app__view" id="dev-parent">
           <!-- temporary - debugging pagination -->
-          <div style="display: flex; flex-direction: column; margin-right: 10px" v-if="isDebuggingPagination">
+          <div
+            style="display: flex; flex-direction: column; margin-right: 10px"
+            v-if="useLayoutEngine && isDebuggingPagination"
+          >
             <div v-for="i in 100" class="page-spacer" :style="debugPageStyle">page: {{ i }}</div>
           </div>
 
@@ -280,6 +302,22 @@ onMounted(async () => {
 
 .dev-app__header-side--right {
   align-items: flex-end;
+}
+
+.dev-app__header-layout-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 8px;
+  background: #eef0ff;
+  border-radius: 6px;
+  font-weight: 600;
 }
 
 .dev-app__main {

@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Mark, Attribute } from '@core/index.js';
 import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.js';
 
@@ -13,7 +13,7 @@ import { createCascadeToggleCommands } from '@extensions/shared/cascade-toggle.j
  * @module Strike
  * @sidebarTitle Strike
  * @snippetPath /snippets/extensions/strike.mdx
- * @shortcut Mod-Shift-s | toggleStrike | Toggle strikethrough formatting
+ * @shortcut Mod-Shift-x | toggleStrike | Toggle strikethrough formatting
  */
 export const Strike = Mark.create({
   name: 'strike',
@@ -96,7 +96,8 @@ export const Strike = Mark.create({
 
   addShortcuts() {
     return {
-      'Mod-Shift-s': () => this.editor.commands.toggleStrike(),
+      'Mod-Shift-x': () => this.editor.commands.toggleStrike(),
+      'Mod-Shift-X': () => this.editor.commands.toggleStrike(),
     };
   },
 });

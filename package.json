@@ -4,16 +4,32 @@
   "license": "AGPL-3.0",
   "workspaces": [
     "packages/*",
+    "packages/layout-engine/contracts",
+    "packages/layout-engine/pm-adapter",
+    "packages/layout-engine/measuring/dom",
+    "packages/layout-engine/layout-engine",
+    "packages/layout-engine/painters/dom",
+    "packages/layout-engine/painters/pdf",
+    "packages/layout-engine/geometry-utils",
+    "packages/layout-engine/style-engine",
+    "packages/layout-engine/tests",
+    "packages/layout-engine/demo-app",
+    "packages/layout-engine/layout-bridge",
+    "packages/layout-engine/v1-beta-demo",
+    "packages/preset-geometry",
     "shared/*"
   ],
   "scripts": {
+    "postinstall": "node scripts/install-rollup-binary.mjs",
     "test": "vitest run",
     "test:debug": "npm run test:debug --workspace=packages/super-editor",
+    "test:inspect": "NODE_OPTIONS=\"--inspect-brk=9229\" vitest --pool threads --poolOptions.threads.singleThread",
     "test:all": "vitest run",
     "test:editor": "vitest run --root ./packages/super-editor",
     "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
-    "type-check": "tsc --noEmit -p tsconfig.base.json",
+    "type-check": "node ./scripts/type-check-all.mjs",
+    "validate:commands": "node scripts/validate-command-types.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "npm --workspace=superdoc run dev",
     "dev:superdoc": "npm run dev --workspace=packages/superdoc",
@@ -23,16 +39,17 @@
     "build:super-editor": "npm run build --workspace=packages/super-editor",
     "build": "npm run build:super-editor && npm run build:superdoc",
     "clean:packages": "rm -rf ./packages/*/dist",
-    "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && npm install",
+    "reset": "npm run clean:packages && rm -rf ./node_modules && rm -rf ./packages/*/node_modules && rm -rf ./package-lock.json && rm -rf ./e2e-tests/node_modules && rm -rf ./e2e-tests/package-lock.json && rm -rf ./e2e-tests/templates/vue/node_modules && rm -rf ./e2e-tests/templates/vue/package-lock.json && npm install",
     "publish": "node scripts/publish-superdoc.cjs",
-    "format": "prettier --write \"**/*.{js,jsx,vue,css,scss,json,md}\"",
-    "format:check": "prettier --check \"**/*.{js,jsx,vue,css,scss,json,md}\"",
-    "lint": "eslint",
-    "lint:fix": "eslint --fix",
+    "format": "prettier --write \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
+    "format:check": "prettier --check \"**/*.{js,jsx,ts,tsx,vue,css,scss,json}\"",
+    "lint": "eslint --ext .js,.ts,.tsx --ignore-pattern \"**/{test,tests,__tests__}/**\" --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/*.spec.*\" --ignore-pattern \"**/*.vue\" packages shared scripts",
+    "lint:fix": "eslint --fix --ext .js,.ts,.tsx --ignore-pattern \"**/{test,tests,__tests__}/**\" --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/*.spec.*\" --ignore-pattern \"**/*.vue\" packages shared scripts",
     "lint:jsdoc": "eslint packages/super-editor/src/extensions/field-annotation/field-annotation.js --config eslint.config.docs.mjs",
     "lint:jsdoc:fix": "eslint packages/super-editor/src/extensions/field-annotation/field-annotation.js --config eslint.config.docs.mjs --fix",
     "pack": "npm run build:super-editor && npm --prefix ./packages/superdoc run pack",
     "prepare": "husky",
+    "test:layout": "node ./scripts/test-layout.mjs",
     "lint:staged": "lint-staged",
     "watch": "npm run watch:es --workspace=packages/superdoc",
     "check:all": "npm run format && npm run lint:fix && npm --workspace=packages/super-editor run types:build && npm run test",
@@ -40,11 +57,11 @@
     "update-preset-geometry": "ROOT=$(pwd) && cd ../superdoc-devtools/preset-geometry && npm run build && cp ./dist/index.js ./dist/index.d.ts \"$ROOT/packages/preset-geometry/\""
   },
   "lint-staged": {
-    "*.{js,jsx}": [
+    "*.{js,jsx,ts,tsx}": [
       "eslint --fix",
       "prettier --write"
     ],
-    "*.{css,scss,json,md}": [
+    "*.{css,scss,json}": [
       "prettier --write"
     ],
     "*.vue": [
@@ -58,6 +75,8 @@
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.13.1",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
     "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.38.0",
     "eslint-config-prettier": "^9.1.0",
@@ -67,8 +86,13 @@
     "lint-staged": "^16.1.4",
     "prettier": "3.3.3",
     "semantic-release": "^24.2.7",
+    "semantic-release-linear-app": "^0.5.1",
     "typescript": "^5.7.3",
+    "typescript-eslint": "^8.47.0",
     "verdaccio": "^6.1.6",
     "vitest": "^3.0.8"
+  },
+  "optionalDependencies": {
+    "canvas": "^2.11.2"
   }
 }

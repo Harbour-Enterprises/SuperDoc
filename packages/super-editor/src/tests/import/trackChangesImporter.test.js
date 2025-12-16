@@ -74,14 +74,26 @@ describe('TrackChangesImporter', () => {
       {
         name: 'w:del',
         attributes: { 'w:id': '1', 'w:date': '2023-10-01', 'w:author': 'Author' },
-        elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+        elements: [
+          {
+            name: 'w:r',
+            attributes: {},
+            elements: [
+              { name: 'w:delText', attributes: {}, elements: [{ type: 'text', text: 'This is a test text!' }] },
+            ],
+          },
+        ],
       },
     ];
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+
+    const result = handleTrackChangeNode({ docx: {}, nodes, nodeListHandler: defaultNodeListHandler() });
+    console.log('result:', result.nodes[0].content[0]);
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    expect(result.nodes[0].marks[0].type).toBe(TrackDeleteMarkName);
-    expect(result.nodes[0].marks[0].attrs).toEqual({
+    // Find the trackDelete mark (may not be first mark due to fontSize fallback adding textStyle)
+    const trackDeleteMark = result.nodes[0].content[0].marks.find((m) => m.type === TrackDeleteMarkName);
+    expect(trackDeleteMark).toBeDefined();
+    expect(trackDeleteMark.attrs).toEqual({
       id: '1',
       date: '2023-10-01',
       author: 'Author',
@@ -94,14 +106,22 @@ describe('TrackChangesImporter', () => {
       {
         name: 'w:ins',
         attributes: { 'w:id': '1', 'w:date': '2023-10-01', 'w:author': 'Author' },
-        elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+        elements: [
+          {
+            name: 'w:r',
+            attributes: {},
+            elements: [{ name: 'w:t', attributes: {}, elements: [{ text: 'This is a test text!' }] }],
+          },
+        ],
       },
     ];
-    const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler() });
+    const result = handleTrackChangeNode({ docx: {}, nodes, nodeListHandler: defaultNodeListHandler() });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    expect(result.nodes[0].marks[0].type).toBe(TrackInsertMarkName);
-    expect(result.nodes[0].marks[0].attrs).toEqual({
+    // Find the trackInsert mark (may not be first mark due to fontSize fallback adding textStyle)
+    const trackInsertMark = result.nodes[0].content[0].marks.find((m) => m.type === TrackInsertMarkName);
+    expect(trackInsertMark).toBeDefined();
+    expect(trackInsertMark.attrs).toEqual({
       id: '1',
       date: '2023-10-01',
       author: 'Author',
@@ -123,7 +143,7 @@ describe('TrackChangesImporter', () => {
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    const mark = result.nodes[0].marks.find((item) => item.type === TrackInsertMarkName);
+    const mark = result.nodes[0].content[0].marks.find((item) => item.type === TrackInsertMarkName);
     expect(mark).toBeDefined();
     expect(mark.attrs).toEqual({
       id: '3',
@@ -148,8 +168,9 @@ describe('TrackChangesImporter', () => {
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
     expect(result.consumed).toBe(1);
-    const mark = result.nodes[0].marks.find((item) => item.type === TrackDeleteMarkName);
+    const mark = result.nodes[0].content[0].marks.find((item) => item.type === TrackDeleteMarkName);
     expect(mark).toBeDefined();
+    // Check the trackDelete mark attrs (mark may not be at index 0 due to fontSize fallback)
     expect(mark.attrs).toEqual({
       id: '4',
       date: '2024-09-05T11:12:00Z',
@@ -197,7 +218,7 @@ describe('trackChanges live xml test', () => {
     const nodes = parseXmlToJson(inserXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
-    const insertionMark = result.nodes[0].marks.find((mark) => mark.type === TrackInsertMarkName);
+    const insertionMark = result.nodes[0].content[0].marks.find((mark) => mark.type === TrackInsertMarkName);
     expect(insertionMark).toBeDefined();
     expect(insertionMark.attrs).toEqual({
       id: '0',
@@ -211,7 +232,7 @@ describe('trackChanges live xml test', () => {
     const nodes = parseXmlToJson(deleteXml).elements;
     const result = handleTrackChangeNode({ nodes, nodeListHandler: defaultNodeListHandler(), docx: {} });
     expect(result.nodes.length).toBe(1);
-    const deletionMark = result.nodes[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
+    const deletionMark = result.nodes[0].content[0].marks.find((mark) => mark.type === TrackDeleteMarkName);
     expect(deletionMark).toBeDefined();
     expect(deletionMark.attrs).toEqual({
       id: '1',
@@ -230,19 +251,14 @@ describe('trackChanges live xml test', () => {
     expect(result[0].content.length).toBe(1);
     const changeMark = result[0].content[0].marks.find((mark) => mark.type === TrackFormatMarkName);
     expect(changeMark).toBeDefined();
-    expect(changeMark.attrs).toEqual({
-      id: '2',
-      date: '2024-09-04T09:29:00Z',
-      author: 'torcsi@harbourcollaborators.com',
-      before: [],
-      after: [
-        {
-          type: 'bold',
-          attrs: {
-            value: true,
-          },
-        },
-      ],
-    });
+    // Check the essential properties of the trackFormat mark
+    expect(changeMark.attrs.id).toBe('2');
+    expect(changeMark.attrs.date).toBe('2024-09-04T09:29:00Z');
+    expect(changeMark.attrs.author).toBe('torcsi@harbourcollaborators.com');
+    expect(changeMark.attrs.before).toEqual([]);
+    // Check that the bold mark is in the after array (fontSize may also be present due to fallback)
+    const boldAfter = changeMark.attrs.after.find((mark) => mark.type === 'bold');
+    expect(boldAfter).toBeDefined();
+    expect(boldAfter.attrs).toEqual({ value: true });
   });
 });

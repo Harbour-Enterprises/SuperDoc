@@ -9,7 +9,7 @@ import { runNodeHandlerEntity } from './runNodeImporter.js';
 import { textNodeHandlerEntity } from './textNodeImporter.js';
 import { paragraphNodeHandlerEntity } from './paragraphNodeImporter.js';
 import { sdtNodeHandlerEntity } from './sdtNodeImporter.js';
-import { standardNodeHandlerEntity } from './standardNodeImporter.js';
+import { passthroughNodeHandlerEntity } from './passthroughNodeImporter.js';
 import { lineBreakNodeHandlerEntity } from './lineBreakImporter.js';
 import { bookmarkStartNodeHandlerEntity } from './bookmarkStartImporter.js';
 import { bookmarkEndNodeHandlerEntity } from './bookmarkEndImporter.js';
@@ -24,7 +24,11 @@ import { tabNodeEntityHandler } from './tabImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
+import { preProcessPageFieldsOnly } from '../../field-references/preProcessPageFieldsOnly.js';
 import { ensureNumberingCache } from './numberingCache.js';
+import { commentRangeStartHandlerEntity, commentRangeEndHandlerEntity } from './commentRangeImporter.js';
+import bookmarkStartAttrConfigs from '@converter/v3/handlers/w/bookmark-start/attributes/index.js';
+import bookmarkEndAttrConfigs from '@converter/v3/handlers/w/bookmark-end/attributes/index.js';
 
 /**
  * @typedef {import()} XmlNode
@@ -97,6 +101,14 @@ export const createDocumentJson = (docx, converter, editor) => {
     const { processedNodes } = preProcessNodesForFldChar(node.elements ?? [], docx);
     node.elements = processedNodes;
 
+    // Extract body-level sectPr before filtering it out from content
+    const bodySectPr = node.elements?.find((n) => n.name === 'w:sectPr');
+    const bodySectPrElements = bodySectPr?.elements ?? [];
+    if (converter) {
+      converter.importedBodyHasHeaderRef = bodySectPrElements.some((el) => el?.name === 'w:headerReference');
+      converter.importedBodyHasFooterRef = bodySectPrElements.some((el) => el?.name === 'w:footerReference');
+    }
+
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
     const comments = importCommentData({ docx, nodeListHandler, converter, editor });
@@ -120,12 +132,15 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     // Safety: drop any inline-only nodes that accidentally landed at the doc root
     parsedContent = filterOutRootInlineNodes(parsedContent);
+    collapseWhitespaceNextToInlinePassthrough(parsedContent);
 
     const result = {
       type: 'doc',
       content: parsedContent,
       attrs: {
         attributes: json.elements[0].attributes,
+        // Attach body-level sectPr if it exists
+        ...(bodySectPr ? { bodySectPr } : {}),
       },
     };
 
@@ -145,6 +160,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
       numbering: getNumberingDefinitions(docx, converter),
+      themeColors: getThemeColorPalette(docx),
     };
   }
   return null;
@@ -162,6 +178,8 @@ export const defaultNodeListHandler = () => {
     bookmarkStartNodeHandlerEntity,
     bookmarkEndNodeHandlerEntity,
     hyperlinkNodeHandlerEntity,
+    commentRangeStartHandlerEntity,
+    commentRangeEndHandlerEntity,
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
@@ -170,7 +188,7 @@ export const defaultNodeListHandler = () => {
     autoPageHandlerEntity,
     autoTotalPageCountEntity,
     pageReferenceEntity,
-    standardNodeHandlerEntity,
+    passthroughNodeHandlerEntity,
   ];
 
   const handler = createNodeListHandler(entities);
@@ -554,6 +572,11 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
   headers.forEach((header) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(header, docx);
 
+    // Pre-process PAGE and NUMPAGES field codes in headers
+    // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
+    const headerNodes = carbonCopy(referenceFile.elements[0].elements ?? []);
+    const { processedNodes: headerProcessedNodes } = preProcessPageFieldsOnly(headerNodes);
+
     const sectPrHeader = allSectPrElements.find(
       (el) => el.name === 'w:headerReference' && el.attributes['r:id'] === rId,
     );
@@ -561,7 +584,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (converter.headerIds[sectionType]) sectionType = null;
     const nodeListHandler = defaultNodeListHandler();
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: headerProcessedNodes,
       nodeListHandler,
       docx,
       converter,
@@ -577,7 +600,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (!converter.headerIds.ids) converter.headerIds.ids = [];
     converter.headerIds.ids.push(rId);
     converter.headers[rId] = { type: 'doc', content: [...schema] };
-    sectionType && (converter.headerIds[sectionType] = rId);
+    if (sectionType) {
+      converter.headerIds[sectionType] = rId;
+    }
   });
 
   const titlePg = allSectPrElements?.find((el) => el.name === 'w:titlePg');
@@ -585,6 +610,12 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
   footers.forEach((footer) => {
     const { rId, referenceFile, currentFileName } = getHeaderFooterSectionData(footer, docx);
+
+    // Pre-process PAGE and NUMPAGES field codes in footers
+    // Uses the targeted version that preserves other field types (DOCPROPERTY, etc.)
+    const footerNodes = carbonCopy(referenceFile.elements[0].elements ?? []);
+    const { processedNodes: footerProcessedNodes } = preProcessPageFieldsOnly(footerNodes);
+
     const sectPrFooter = allSectPrElements.find(
       (el) => el.name === 'w:footerReference' && el.attributes['r:id'] === rId,
     );
@@ -592,7 +623,7 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
 
     const nodeListHandler = defaultNodeListHandler();
     let schema = nodeListHandler.handler({
-      nodes: referenceFile.elements[0].elements,
+      nodes: footerProcessedNodes,
       nodeListHandler,
       docx,
       converter,
@@ -608,7 +639,9 @@ const importHeadersFooters = (docx, converter, mainEditor) => {
     if (!converter.footerIds.ids) converter.footerIds.ids = [];
     converter.footerIds.ids.push(rId);
     converter.footers[rId] = { type: 'doc', content: [...schema] };
-    converter.footerIds[sectionType] = rId;
+    if (sectionType) {
+      converter.footerIds[sectionType] = rId;
+    }
   });
 };
 
@@ -675,7 +708,149 @@ export function filterOutRootInlineNodes(content = []) {
     'structuredContent',
   ]);
 
-  return content.filter((node) => node && typeof node.type === 'string' && !INLINE_TYPES.has(node.type));
+  const PRESERVABLE_INLINE_XML_NAMES = {
+    bookmarkStart: 'w:bookmarkStart',
+    bookmarkEnd: 'w:bookmarkEnd',
+  };
+
+  const result = [];
+
+  content.forEach((node) => {
+    if (!node || typeof node.type !== 'string') return;
+    const type = node.type;
+    const preservableNodeName = PRESERVABLE_INLINE_XML_NAMES[type];
+
+    if (!INLINE_TYPES.has(type)) {
+      result.push(node);
+    } else if (preservableNodeName) {
+      const originalXml = buildOriginalXml(type, node.attrs, PRESERVABLE_INLINE_XML_NAMES);
+      result.push({
+        type: 'passthroughBlock',
+        attrs: {
+          originalName: preservableNodeName,
+          ...(originalXml ? { originalXml } : {}),
+        },
+      });
+    }
+  });
+
+  return result;
+}
+
+/**
+ * Reconstruct original OOXML for preservable inline nodes using their attribute decoders.
+ *
+ * @param {'bookmarkStart'|'bookmarkEnd'} type
+ * @param {Record<string, any>} attrs
+ * @returns {{name: string, attributes?: Object, elements: []}|null}
+ */
+const buildOriginalXml = (type, attrs, preservableTags) => {
+  const attrConfigsByType = {
+    bookmarkStart: bookmarkStartAttrConfigs,
+    bookmarkEnd: bookmarkEndAttrConfigs,
+  };
+
+  const configs = attrConfigsByType[type];
+  if (!configs) return null;
+  const xmlAttrs = {};
+  configs.forEach((cfg) => {
+    const val = cfg.decode(attrs || {});
+    if (val !== undefined) {
+      xmlAttrs[cfg.xmlName] = val;
+    }
+  });
+  const attributes = Object.keys(xmlAttrs).length ? xmlAttrs : undefined;
+  const name = preservableTags[type];
+  return { name, ...(attributes ? { attributes } : {}), elements: [] };
+};
+
+/**
+ * Inline passthrough nodes render as zero-width spans. If the text before ends
+ * with a space and the text after starts with a space we will see a visible
+ * double space once the passthrough is hidden. Collapse that edge to a single
+ * trailing space on the left and trim the leading whitespace on the right.
+ *
+ * @param {Array} content
+ */
+export function collapseWhitespaceNextToInlinePassthrough(content = []) {
+  if (!Array.isArray(content) || content.length === 0) return;
+
+  const sequence = collectInlineSequence(content);
+  sequence.forEach((entry, index) => {
+    if (entry.kind !== 'passthrough') return;
+    const prev = findNeighborText(sequence, index, -1);
+    const next = findNeighborText(sequence, index, 1);
+    if (!prev || !next) return;
+    if (!prev.node.text.endsWith(' ') || !next.node.text.startsWith(' ')) return;
+
+    prev.node.text = prev.node.text.replace(/ +$/, ' ');
+    next.node.text = next.node.text.replace(/^ +/, '');
+    if (next.node.text.length === 0) {
+      next.parent.splice(next.index, 1);
+    }
+  });
+}
+
+function collectInlineSequence(nodes, result = [], insidePassthrough = false) {
+  if (!Array.isArray(nodes) || nodes.length === 0) return result;
+  nodes.forEach((node, index) => {
+    if (!node) return;
+    const isPassthrough = node.type === 'passthroughInline';
+    if (isPassthrough && !insidePassthrough) {
+      result.push({ kind: 'passthrough', parent: nodes, index });
+    }
+    if (node.type === 'text' && typeof node.text === 'string' && !insidePassthrough) {
+      result.push({ kind: 'text', node, parent: nodes, index });
+    }
+    if (Array.isArray(node.content) && node.content.length) {
+      const nextInside = insidePassthrough || isPassthrough;
+      collectInlineSequence(node.content, result, nextInside);
+    }
+  });
+  return result;
+}
+
+function findNeighborText(sequence, startIndex, direction) {
+  let cursor = startIndex + direction;
+  while (cursor >= 0 && cursor < sequence.length) {
+    const entry = sequence[cursor];
+    if (entry.kind === 'text') {
+      return entry;
+    }
+    cursor += direction;
+  }
+  return null;
+}
+
+/**
+ * Extracts the document theme color palette from a parsed theme XML part.
+ * Returns a map like { accent1: '#4F81BD', hyperlink: '#0000FF', ... }.
+ */
+function getThemeColorPalette(docx) {
+  const themePart = docx?.['word/theme/theme1.xml'];
+  if (!themePart || !Array.isArray(themePart.elements)) return undefined;
+  const themeNode = themePart.elements.find((el) => el.name === 'a:theme');
+  const themeElements = themeNode?.elements?.find((el) => el.name === 'a:themeElements');
+  const clrScheme = themeElements?.elements?.find((el) => el.name === 'a:clrScheme');
+  if (!clrScheme || !Array.isArray(clrScheme.elements)) return undefined;
+
+  const palette = {};
+  clrScheme.elements.forEach((colorNode) => {
+    const rawName = colorNode?.name;
+    if (!rawName) return;
+    const colorName = rawName.replace(/^a:/, '');
+    if (!colorName) return;
+    const valueNode = Array.isArray(colorNode.elements)
+      ? colorNode.elements.find((el) => el.attributes && (el.attributes.val || el.attributes.lastClr))
+      : undefined;
+    const colorValue = valueNode?.attributes?.val || valueNode?.attributes?.lastClr;
+    if (!colorValue) return;
+    const normalized = String(colorValue).trim();
+    if (!normalized) return;
+    palette[colorName] = `#${normalized.toUpperCase()}`;
+  });
+
+  return Object.keys(palette).length ? palette : undefined;
 }
 
 /**

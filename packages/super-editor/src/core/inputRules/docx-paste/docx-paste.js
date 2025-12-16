@@ -1,4 +1,4 @@
-import { DOMParser } from 'prosemirror-model';
+import { DOMParser, Fragment } from 'prosemirror-model';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import {
@@ -9,8 +9,9 @@ import {
   startHelperMap,
   resolveStyles,
 } from '@helpers/pasteListHelpers.js';
-import { normalizeLvlTextChar } from '../../super-converter/v2/importer/listImporter.js';
+import { normalizeLvlTextChar } from '@superdoc/common/list-numbering';
 import { pointsToTwips } from '@converter/helpers';
+import { decodeRPrFromMarks } from '@converter/styles.js';
 
 /**
  * Main handler for pasted DOCX content.
@@ -31,7 +32,7 @@ export const handleDocxPaste = (html, editor, view) => {
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanedHtml;
 
-  const data = tempDiv.querySelectorAll('p, li');
+  const data = tempDiv.querySelectorAll('p, li, ' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `h${n}`).join(', '));
 
   const startMap = {};
 
@@ -46,14 +47,25 @@ export const handleDocxPaste = (html, editor, view) => {
     const styleAttr = item.getAttribute('style') || '';
     const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
     const css = tempDiv.querySelector('style').innerHTML;
-    const normalStyles = extractParagraphStyles(css, 'MsoNormal');
-    const paragraphStyles = extractParagraphStyles(css, item.getAttribute('class'));
-    let styleChain = { ...normalStyles, ...paragraphStyles };
+    const normalStyles = extractParagraphStyles(css, '.MsoNormal');
+    let styleId = item.getAttribute('class');
+    let charStyles = {};
+    if (item.localName.startsWith('h') && !styleId) {
+      styleId = item.localName;
+      const level = styleId.substring(1);
+      charStyles = extractParagraphStyles(css, `.Heading${level}Char`);
+    } else if (styleId) {
+      styleId = `.${styleId}`;
+    }
+    const paragraphStyles = extractParagraphStyles(css, styleId);
+    let styleChain = { ...normalStyles, ...paragraphStyles, ...charStyles };
     const numberingDefinedInline = !paragraphStyles || !paragraphStyles['mso-list'];
 
     if (msoListMatch) {
       const [, abstractId, level, numId] = msoListMatch;
       const numberingStyles = extractListLevelStyles(css, abstractId, level, numId) || {};
+      const markerFontFamily = numberingStyles?.['font-family'] ?? normalStyles?.['font-family'];
+      delete numberingStyles['font-family'];
       if (numberingDefinedInline) {
         styleChain = { ...normalStyles, ...paragraphStyles, ...numberingStyles };
       } else {
@@ -80,6 +92,7 @@ export const handleDocxPaste = (html, editor, view) => {
         start = startMap[numId];
       }
 
+      item.setAttribute('data-marker-font-family', markerFontFamily);
       item.setAttribute('data-num-id', numId);
       item.setAttribute('data-list-level', parseInt(level) - 1);
       item.setAttribute('data-start', start);
@@ -138,6 +151,27 @@ export const handleDocxPaste = (html, editor, view) => {
         }
       });
       item.setAttribute('data-text-styles', JSON.stringify(textStyles));
+
+      for (const child of item.children) {
+        if (child.style) {
+          Object.keys(textStyles).forEach((key) => {
+            const styleValue = textStyles[key];
+            if (styleValue) {
+              child.style[key] = styleValue;
+            }
+          });
+        }
+      }
+    }
+
+    // Marks
+    if (resolvedStyle['font-weight'] === 'bold') {
+      item.style.fontWeight = 'bold';
+      for (const child of item.children) {
+        if (child.style) {
+          child.style.fontWeight = 'bold';
+        }
+      }
     }
 
     // Strip literal prefix inside conditional span
@@ -145,7 +179,8 @@ export const handleDocxPaste = (html, editor, view) => {
   });
 
   transformWordLists(tempDiv, editor);
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  let doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  doc = wrapTextsInRuns(doc);
 
   tempDiv.remove();
 
@@ -154,6 +189,35 @@ export const handleDocxPaste = (html, editor, view) => {
 
   dispatch(view.state.tr.replaceSelectionWith(doc, true));
   return true;
+};
+
+export const wrapTextsInRuns = (doc) => {
+  const runType = doc.type?.schema?.nodes?.run;
+  if (!runType) return doc;
+
+  const wrapNode = (node, parent) => {
+    if (node.isText) {
+      if (parent?.type?.name === 'run') return node;
+      const runProperties = decodeRPrFromMarks(node.marks);
+      return runType.create({ runProperties }, [node]);
+    }
+
+    if (!node.childCount) return node;
+
+    let changed = false;
+    const wrappedChildren = [];
+    node.forEach((child) => {
+      const wrappedChild = wrapNode(child, node);
+      if (wrappedChild !== child) changed = true;
+      wrappedChildren.push(wrappedChild);
+    });
+
+    if (!changed) return node;
+
+    return node.copy(Fragment.fromArray(wrappedChildren));
+  };
+
+  return wrapNode(doc, null);
 };
 
 const transformWordLists = (container, editor) => {
@@ -167,6 +231,7 @@ const transformWordLists = (container, editor) => {
     const numFmt = item.getAttribute('data-num-fmt');
     const start = item.getAttribute('data-start');
     const lvlText = item.getAttribute('data-lvl-text');
+    const markerFontFamily = item.getAttribute('data-marker-font-family');
 
     // MS Word copy-pasted lists always start with num Id 1 and increment from there.
     // Which way not match the target documents numbering.xml lists
@@ -184,6 +249,7 @@ const transformWordLists = (container, editor) => {
       fmt: numFmt,
       text: lvlText,
       editor,
+      markerFontFamily,
     });
 
     if (!lists[id]) lists[id] = { levels: {} };
@@ -223,6 +289,11 @@ const transformWordLists = (container, editor) => {
         const styleValue = textStyles[key];
         if (styleValue) {
           pElement.style[key] = styleValue;
+          for (const child of pElement.children) {
+            if (child.style) {
+              child.style[key] = styleValue;
+            }
+          }
         }
       });
     }

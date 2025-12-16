@@ -1,4 +1,5 @@
 import { translateImageNode } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers.js';
+import { mergeDrawingChildren } from '@converter/v3/handlers/wp/helpers/merge-drawing-children.js';
 
 /**
  * Translates inline image
@@ -10,6 +11,7 @@ import { translateImageNode } from '@converter/v3/handlers/wp/helpers/decode-ima
  * @returns {Object} The XML representation.
  */
 export function translateInlineNode(params) {
+  const { attrs } = params.node;
   const nodeElements = translateImageNode(params);
 
   if (!nodeElements || nodeElements.name === 'w:r') {
@@ -21,9 +23,21 @@ export function translateInlineNode(params) {
     return nodeElements;
   }
 
+  const inlineAttrs = {
+    ...(attrs.originalAttributes || {}),
+    ...(nodeElements.attributes || {}),
+  };
+
+  const generatedElements = nodeElements?.elements || [];
+  const mergedElements = mergeDrawingChildren({
+    order: params.node?.attrs?.drawingChildOrder || [],
+    original: params.node?.attrs?.originalDrawingChildren || [],
+    generated: generatedElements,
+  });
+
   return {
     name: 'wp:inline',
-    attributes: nodeElements.attributes,
-    elements: nodeElements.elements,
+    attributes: inlineAttrs,
+    elements: mergedElements,
   };
 }

@@ -1,16 +1,12 @@
 import { SuperConverter } from './SuperConverter.js';
 import { inchesToTwips, linesToTwips, rgbToHex } from './helpers.js';
-import { generateDocxRandomId } from '@helpers/generateDocxRandomId.js';
 import { DEFAULT_DOCX_DEFS } from './exporter-docx-defs.js';
-import { carbonCopy } from '../utilities/carbonCopy.js';
 import { translateChildNodes } from './v2/exporter/helpers/index.js';
 import { translator as wBrNodeTranslator } from './v3/handlers/w/br/br-translator.js';
 import { translator as wHighlightTranslator } from './v3/handlers/w/highlight/highlight-translator.js';
 import { translator as wTabNodeTranslator } from './v3/handlers/w/tab/tab-translator.js';
 import { translator as wPNodeTranslator } from './v3/handlers/w/p/p-translator.js';
-import { translator as wPPrNodeTranslator } from './v3/handlers/w/pPr/pPr-translator.js';
 import { translator as wRNodeTranslator } from './v3/handlers/w/r/r-translator.js';
-import { translator as wRPrNodeTranslator } from './v3/handlers/w/rpr/rpr-translator.js';
 import { translator as wTcNodeTranslator } from './v3/handlers/w/tc/tc-translator';
 import { translator as wTrNodeTranslator } from './v3/handlers/w/tr/tr-translator.js';
 import { translator as wSdtNodeTranslator } from './v3/handlers/w/sdt/sdt-translator';
@@ -25,12 +21,12 @@ import {
 } from './v3/handlers/w/commentRange/index.js';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
+import { translator as sdAutoPageNumberTranslator } from '@converter/v3/handlers/sd/autoPageNumber';
+import { translator as sdTotalPageNumberTranslator } from '@converter/v3/handlers/sd/totalPageNumber';
 import { translator as pictTranslator } from './v3/handlers/w/pict/pict-translator';
 import { translateVectorShape, translateShapeGroup } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers';
 import { translator as wTextTranslator } from '@converter/v3/handlers/w/t';
-import { combineRunProperties, decodeRPrFromMarks } from '@converter/styles.js';
-
-const RUN_LEVEL_WRAPPERS = new Set(['w:hyperlink', 'w:ins', 'w:del']);
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
 
 const DEFAULT_SECTION_PROPS_TWIPS = Object.freeze({
   pageSize: Object.freeze({ width: '12240', height: '15840' }),
@@ -104,59 +100,6 @@ export const isLineBreakOnlyRun = (node) => {
   if (!runContent.length) return false;
   return runContent.every((child) => child?.type === 'lineBreak' || child?.type === 'hardBreak');
 };
-
-/**
- * Convert SDT child elements into Word run elements.
- * @param {Array<Object>|Object} elements
- * @returns {Array<Object>}
- */
-export function convertSdtContentToRuns(elements) {
-  const normalized = Array.isArray(elements) ? elements : [elements];
-  const runs = [];
-
-  normalized.forEach((element) => {
-    if (!element) return;
-
-    if (element.name === 'w:sdtPr') {
-      return;
-    }
-
-    if (element.name === 'w:r') {
-      runs.push(element);
-      return;
-    }
-
-    if (element.name === 'w:sdt') {
-      // Recursively flatten nested SDTs into the surrounding run sequence, skipping property bags.
-      const sdtContent = (element.elements || []).find((child) => child?.name === 'w:sdtContent');
-      if (sdtContent?.elements) {
-        runs.push(...convertSdtContentToRuns(sdtContent.elements));
-      }
-      return;
-    }
-
-    if (RUN_LEVEL_WRAPPERS.has(element.name)) {
-      const wrapperElements = convertSdtContentToRuns(element.elements || []);
-      if (wrapperElements.length) {
-        runs.push({
-          ...element,
-          elements: wrapperElements,
-        });
-      }
-      return;
-    }
-
-    if (element.name) {
-      runs.push({
-        name: 'w:r',
-        type: 'element',
-        elements: element.elements || [element],
-      });
-    }
-  });
-
-  return runs.filter((run) => Array.isArray(run.elements) && run.elements.length > 0);
-}
 
 /**
  * @typedef {Object} ExportParams
@@ -235,10 +178,12 @@ export function exportSchemaToJson(params) {
     structuredContentBlock: wSdtNodeTranslator,
     documentPartObject: wSdtNodeTranslator,
     documentSection: wSdtNodeTranslator,
-    'page-number': translatePageNumberNode,
-    'total-page-number': translateTotalPageNumberNode,
+    'page-number': sdAutoPageNumberTranslator,
+    'total-page-number': sdTotalPageNumberTranslator,
     pageReference: sdPageReferenceTranslator,
     tableOfContents: sdTableOfContentsTranslator,
+    passthroughBlock: translatePassthroughNode,
+    passthroughInline: translatePassthroughNode,
   };
 
   let handler = router[type];
@@ -255,6 +200,12 @@ export function exportSchemaToJson(params) {
 
   // Call the handler for this node type
   return handler(params);
+}
+
+function translatePassthroughNode(params) {
+  const original = params?.node?.attrs?.originalXml;
+  if (!original) return null;
+  return carbonCopy(original);
 }
 
 /**
@@ -279,16 +230,18 @@ function translateBodyNode(params) {
   sectPr = ensureSectionLayoutDefaults(sectPr, params.converter);
 
   if (params.converter) {
+    const canExportHeaderRef = params.converter.importedBodyHasHeaderRef || params.converter.headerFooterModified;
+    const canExportFooterRef = params.converter.importedBodyHasFooterRef || params.converter.headerFooterModified;
     const hasHeader = sectPr.elements?.some((n) => n.name === 'w:headerReference');
     const hasDefaultHeader = params.converter.headerIds?.default;
-    if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter) {
+    if (!hasHeader && hasDefaultHeader && !params.editor.options.isHeaderOrFooter && canExportHeaderRef) {
       const defaultHeader = generateDefaultHeaderFooter('header', params.converter.headerIds?.default);
       sectPr.elements.push(defaultHeader);
     }
 
     const hasFooter = sectPr.elements?.some((n) => n.name === 'w:footerReference');
     const hasDefaultFooter = params.converter.footerIds?.default;
-    if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter) {
+    if (!hasFooter && hasDefaultFooter && !params.editor.options.isHeaderOrFooter && canExportFooterRef) {
       const defaultFooter = generateDefaultHeaderFooter('footer', params.converter.footerIds?.default);
       sectPr.elements.push(defaultFooter);
     }
@@ -341,85 +294,7 @@ function translateHeadingNode(params) {
   };
 
   // Use existing paragraph translator with the modified node
-  return translateParagraphNode({ ...params, node: paragraphNode });
-}
-
-/**
- * Translate a paragraph node
- *
- * @param {ExportParams} node A prose mirror paragraph node
- * @returns {XmlReadyNode} JSON of the XML-ready paragraph node
- */
-export function translateParagraphNode(params) {
-  const elements = translateChildNodes(params);
-
-  // Replace current paragraph with content of html annotation
-  const htmlAnnotationChild = elements.find((element) => element.name === 'htmlAnnotation');
-  if (htmlAnnotationChild) {
-    return htmlAnnotationChild.elements;
-  }
-
-  // Insert paragraph properties at the beginning of the elements array
-  const pPr = generateParagraphProperties(params);
-  if (pPr) elements.unshift(pPr);
-
-  let attributes = {};
-  if (params.node.attrs?.rsidRDefault) {
-    attributes['w:rsidRDefault'] = params.node.attrs.rsidRDefault;
-  }
-
-  const result = {
-    name: 'w:p',
-    elements,
-    attributes,
-  };
-
-  return result;
-}
-
-/**
- * Generate the w:pPr props for a paragraph node
- *
- * @param {SchemaNode} node
- * @returns {XmlReadyNode} The paragraph properties node
- */
-export function generateParagraphProperties(params) {
-  const { node } = params;
-  const { attrs = {} } = node;
-
-  const paragraphProperties = carbonCopy(attrs.paragraphProperties || {});
-  if (attrs.styleId !== paragraphProperties.styleId) {
-    paragraphProperties.styleId = attrs.styleId;
-  }
-
-  // Check which properties have changed
-  ['borders', 'styleId', 'indent', 'textAlign', 'keepLines', 'keepNext', 'spacing', 'tabStops'].forEach((key) => {
-    let propKey = key === 'textAlign' ? 'justification' : key;
-    if (JSON.stringify(paragraphProperties[propKey]) !== JSON.stringify(attrs[key])) {
-      paragraphProperties[key] = attrs[key];
-    }
-  });
-
-  const framePr = attrs.dropcap;
-  if (framePr) {
-    framePr.dropCap = framePr.type;
-    delete framePr.type;
-  }
-  if (JSON.stringify(paragraphProperties.framePr) !== JSON.stringify(framePr)) {
-    paragraphProperties.framePr = framePr;
-  }
-
-  // Get run properties from marksAttrs
-  const marksProps = decodeRPrFromMarks(attrs.marksAttrs || []);
-  const finalRunProps = combineRunProperties([paragraphProperties.runProperties || {}, marksProps]);
-  paragraphProperties.runProperties = finalRunProps;
-
-  const pPr = wPPrNodeTranslator.decode({ node: { ...node, attrs: { paragraphProperties } } });
-  const sectPr = node.attrs?.paragraphProperties?.sectPr;
-  if (sectPr) {
-    pPr.elements.push(sectPr);
-  }
-  return pPr;
+  return wPNodeTranslator.decode({ ...params, node: paragraphNode });
 }
 
 /**
@@ -442,79 +317,6 @@ function translateDocumentNode(params) {
   };
 
   return [node, params];
-}
-
-/**
- * Helper function to be used for text node translation
- * Also used for transforming text annotations for the final submit
- *
- * @param {String} text Text node's content
- * @param {Object[]} marks The marks to add to the run properties
- * @returns {XmlReadyNode} The translated text node
- */
-
-export function getTextNodeForExport(text, marks, params) {
-  const hasLeadingOrTrailingSpace = /^\s|\s$/.test(text);
-  const space = hasLeadingOrTrailingSpace ? 'preserve' : null;
-  const nodeAttrs = space ? { 'xml:space': space } : null;
-  const textNodes = [];
-
-  const textRunProperties = decodeRPrFromMarks(marks || []);
-  const parentRunProperties = params.extraParams?.runProperties || {};
-  const combinedRunProperties = combineRunProperties([parentRunProperties, textRunProperties]);
-  const rPrNode = wRPrNodeTranslator.decode({ node: { attrs: { runProperties: combinedRunProperties } } });
-
-  textNodes.push({
-    name: 'w:t',
-    elements: [{ text, type: 'text' }],
-    attributes: nodeAttrs,
-  });
-
-  // For custom mark export, we need to add a bookmark start and end tag
-  // And store attributes in the bookmark name
-  if (params) {
-    const { editor } = params;
-    const customMarks = editor.extensionService.extensions.filter((e) => e.isExternal === true);
-
-    marks.forEach((mark) => {
-      const isCustomMark = customMarks.some((customMark) => {
-        const customMarkName = customMark.name;
-        return mark.type === customMarkName;
-      });
-
-      if (!isCustomMark) return;
-
-      let attrsString = '';
-      Object.entries(mark.attrs).forEach(([key, value]) => {
-        if (value) {
-          attrsString += `${key}=${value};`;
-        }
-      });
-
-      if (isCustomMark) {
-        textNodes.unshift({
-          type: 'element',
-          name: 'w:bookmarkStart',
-          attributes: {
-            'w:id': '5000',
-            'w:name': mark.type + ';' + attrsString,
-          },
-        });
-        textNodes.push({
-          type: 'element',
-          name: 'w:bookmarkEnd',
-          attributes: {
-            'w:id': '5000',
-          },
-        });
-      }
-    });
-  }
-
-  return {
-    name: 'w:r',
-    elements: rPrNode ? [rPrNode, ...textNodes] : textNodes,
-  };
 }
 
 /**
@@ -567,79 +369,6 @@ export function processOutputMarks(marks = []) {
       return translateMark(mark);
     }
   });
-}
-
-export function processLinkContentNode(node) {
-  if (!node) return node;
-
-  const contentNode = carbonCopy(node);
-  if (!contentNode) return contentNode;
-
-  const hyperlinkStyle = {
-    name: 'w:rStyle',
-    attributes: { 'w:val': 'Hyperlink' },
-  };
-  const color = {
-    name: 'w:color',
-    attributes: { 'w:val': '467886' },
-  };
-  const underline = {
-    name: 'w:u',
-    attributes: {
-      'w:val': 'none',
-    },
-  };
-
-  if (contentNode.name === 'w:r') {
-    const runProps = contentNode.elements.find((el) => el.name === 'w:rPr');
-
-    if (runProps) {
-      const foundColor = runProps.elements.find((el) => el.name === 'w:color');
-      const foundHyperlinkStyle = runProps.elements.find((el) => el.name === 'w:rStyle');
-      const underlineMark = runProps.elements.find((el) => el.name === 'w:u');
-      if (!foundColor) runProps.elements.unshift(color);
-      if (!foundHyperlinkStyle) runProps.elements.unshift(hyperlinkStyle);
-      if (!underlineMark) runProps.elements.unshift(underline);
-    } else {
-      // we don't add underline by default
-      const runProps = {
-        name: 'w:rPr',
-        elements: [hyperlinkStyle, color],
-      };
-
-      contentNode.elements.unshift(runProps);
-    }
-  }
-
-  return contentNode;
-}
-
-/**
- * Create a new link relationship and add it to the relationships array
- *
- * @param {ExportParams} params
- * @param {string} link The URL of this link
- * @returns {string} The new relationship ID
- */
-export function addNewLinkRelationship(params, link) {
-  const newId = 'rId' + generateDocxRandomId();
-
-  if (!params.relationships || !Array.isArray(params.relationships)) {
-    params.relationships = [];
-  }
-
-  params.relationships.push({
-    type: 'element',
-    name: 'Relationship',
-    attributes: {
-      Id: newId,
-      Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
-      Target: link,
-      TargetMode: 'External',
-    },
-  });
-
-  return newId;
 }
 
 /**
@@ -768,24 +497,6 @@ function translateMark(mark) {
   return markElement;
 }
 
-export function translateHardBreak(params) {
-  const { node = {} } = params;
-  const { attrs = {} } = node;
-  const { pageBreakSource } = attrs;
-  if (pageBreakSource === 'sectPr') return null;
-
-  return {
-    name: 'w:r',
-    elements: [
-      {
-        name: 'w:br',
-        type: 'element',
-        attributes: { 'w:type': 'page' },
-      },
-    ],
-  };
-}
-
 export class DocxExporter {
   constructor(converter) {
     this.converter = converter;
@@ -817,6 +528,42 @@ export class DocxExporter {
       .replace(/'/g, '&apos;');
   }
 
+  /**
+   * Recursively generates XML string representation from a JSON node structure.
+   * Handles special processing for different element types to maintain Word document integrity.
+   *
+   * Processing behavior by element type:
+   * - Text nodes (type='text'): Escapes special XML characters (&, <, >, ", ')
+   * - w:instrText: Joins child text nodes and escapes special characters; preserves field instruction syntax
+   * - w:t, w:delText, wp:posOffset: Removes [[sdspace]] placeholders that were added during import to preserve
+   *   whitespace, then escapes special characters. These placeholders are temporary markers used internally.
+   * - Other elements: Recursively processes child elements
+   *
+   * @param {Object} node - The JSON node to convert to XML
+   * @param {string} node.name - The XML element name (e.g., 'w:t', 'w:p')
+   * @param {Object} [node.attributes] - Key-value pairs of XML attributes
+   * @param {Array} [node.elements] - Array of child nodes to process recursively
+   * @param {string} [node.type] - Node type ('text' for text nodes, 'element' for XML elements)
+   * @param {string} [node.text] - The text content (only present when type='text')
+   * @returns {string[]|string|null} Array of XML string fragments for elements, string for text nodes, or null for invalid nodes
+   * @throws {Error} Logs error to console if text element processing fails, then continues processing
+   *
+   * @example
+   * // Simple text element
+   * const node = {
+   *   name: 'w:t',
+   *   elements: [{ type: 'text', text: 'Hello World' }]
+   * };
+   * // Returns: ['<w:t>', 'Hello World', '</w:t>']
+   *
+   * @example
+   * // Element with placeholder removal
+   * const node = {
+   *   name: 'w:t',
+   *   elements: [{ type: 'text', text: 'Text[[sdspace]]content' }]
+   * };
+   * // Returns: ['<w:t>', 'Textcontent', '</w:t>']
+   */
   #generateXml(node) {
     if (!node) return null;
     let { name } = node;
@@ -846,19 +593,31 @@ export class DocxExporter {
           .join('');
         tags.push(this.#replaceSpecialCharacters(textContent));
       } else if (name === 'w:t' || name === 'w:delText' || name === 'wp:posOffset') {
-        try {
-          // test for valid string
-          let text = String(elements[0].text);
+        // Validate that the first child element has valid text content
+        if (elements.length === 0) {
+          // Empty elements array - will be handled as self-closing tag, which is an error state
+          console.error(`${name} element has no child elements. Expected text node. Element will be self-closing.`);
+        } else if (elements[0] == null || typeof elements[0].text !== 'string') {
+          // Invalid or missing text content - push empty string to maintain XML structure
+          console.error(
+            `${name} element's first child is missing or does not have a valid text property. ` +
+              `Received: ${JSON.stringify(elements[0])}. Pushing empty string to maintain XML structure.`,
+          );
+          tags.push('');
+        } else {
+          // Valid text content - remove [[sdspace]] placeholders that were added during XML import
+          // to preserve whitespace, then escape special XML characters
+          let text = elements[0].text.replace(/\[\[sdspace\]\]/g, '');
           text = this.#replaceSpecialCharacters(text);
           tags.push(text);
-        } catch (error) {
-          console.error('Text element does not contain valid string:', error);
         }
       } else {
         if (elements) {
           for (let child of elements) {
             const newElements = this.#generateXml(child);
-            if (!newElements) continue;
+            if (!newElements) {
+              continue;
+            }
 
             if (typeof newElements === 'string') {
               tags.push(newElements);
@@ -866,10 +625,13 @@ export class DocxExporter {
             }
 
             const removeUndefined = newElements.filter((el) => {
-              return el !== '<undefined>' && el !== '</undefined>';
+              const isUndefined = el === '<undefined>' || el === '</undefined>';
+              return !isUndefined;
             });
 
-            tags.push(...removeUndefined);
+            for (const element of removeUndefined) {
+              tags.push(element);
+            }
           }
         }
       }
@@ -879,82 +641,3 @@ export class DocxExporter {
     return tags;
   }
 }
-
-const translatePageNumberNode = (params) => {
-  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('PAGE', outputMarks);
-};
-
-const translateTotalPageNumberNode = (params) => {
-  const outputMarks = processOutputMarks(params.node.attrs?.marksAsAttrs || []);
-  return getAutoPageJson('NUMPAGES', outputMarks);
-};
-
-const getAutoPageJson = (type, outputMarks = []) => {
-  return [
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'begin',
-          },
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:instrText',
-          attributes: { 'xml:space': 'preserve' },
-          elements: [
-            {
-              type: 'text',
-              text: ` ${type}`,
-            },
-          ],
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'separate',
-          },
-        },
-      ],
-    },
-    {
-      name: 'w:r',
-      elements: [
-        {
-          name: 'w:rPr',
-          elements: outputMarks,
-        },
-        {
-          name: 'w:fldChar',
-          attributes: {
-            'w:fldCharType': 'end',
-          },
-        },
-      ],
-    },
-  ];
-};

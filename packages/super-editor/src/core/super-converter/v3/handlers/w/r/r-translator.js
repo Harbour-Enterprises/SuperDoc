@@ -7,12 +7,7 @@ import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-trans
 import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
 import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import {
-  resolveRunProperties,
-  encodeMarksFromRPr,
-  decodeRPrFromMarks,
-  combineRunProperties,
-} from '@converter/styles.js';
+import { resolveRunProperties, encodeMarksFromRPr } from '@converter/styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -121,14 +116,12 @@ const decode = (params, decodedAttrs = {}) => {
 
   const runAttrs = runNodeForExport.attrs || {};
   const runProperties = runAttrs.runProperties || {};
-  const marksProperties = decodeRPrFromMarks(runNodeForExport.marks || []);
-  const finalRunProperties = combineRunProperties([runProperties, marksProperties]);
 
   // Decode child nodes within the run
   const exportParams = {
     ...params,
     node: runNodeForExport,
-    extraParams: { ...params?.extraParams, runProperties: finalRunProperties },
+    extraParams: { ...params?.extraParams, runProperties: runProperties },
   };
   if (!exportParams.editor) {
     exportParams.editor = { extensionService: { extensions: [] } };
@@ -139,11 +132,22 @@ const decode = (params, decodedAttrs = {}) => {
   // and combine with any direct run properties
   let runPropertiesElement = wRPrTranslator.decode({
     ...params,
-    node: { attrs: { runProperties: finalRunProperties } },
+    node: { attrs: { runProperties: runProperties } },
   });
 
   const runPropsTemplate = runPropertiesElement ? cloneXmlNode(runPropertiesElement) : null;
   const applyBaseRunProps = (runNode) => applyRunPropertiesTemplate(runNode, runPropsTemplate);
+  const replaceRunProps = (runNode) => {
+    // Remove existing rPr if any
+    if (Array.isArray(runNode.elements)) {
+      runNode.elements = runNode.elements.filter((el) => el?.name !== 'w:rPr');
+    } else {
+      runNode.elements = [];
+    }
+    if (runPropsTemplate) {
+      runNode.elements.unshift(cloneXmlNode(runPropsTemplate));
+    }
+  };
 
   const runs = [];
 
@@ -151,7 +155,7 @@ const decode = (params, decodedAttrs = {}) => {
     if (!child) return;
     if (child.name === 'w:r') {
       const clonedRun = cloneXmlNode(child);
-      applyBaseRunProps(clonedRun);
+      replaceRunProps(clonedRun);
       runs.push(clonedRun);
       return;
     }
@@ -169,10 +173,16 @@ const decode = (params, decodedAttrs = {}) => {
       const trackedClone = cloneXmlNode(child);
       if (Array.isArray(trackedClone.elements)) {
         trackedClone.elements.forEach((element) => {
-          if (element?.name === 'w:r') applyBaseRunProps(element);
+          if (element?.name === 'w:r') replaceRunProps(element);
         });
       }
       runs.push(trackedClone);
+      return;
+    }
+
+    if (child.name === 'w:commentRangeStart' || child.name === 'w:commentRangeEnd') {
+      const commentRangeClone = cloneXmlNode(child);
+      runs.push(commentRangeClone);
       return;
     }
 

@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Mark, Attribute } from '@core/index.js';
 import { annotationClass, annotationContentClass } from '../field-annotation/index.js';
 

@@ -61,7 +61,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="linked-style-buttons" v-if="props.editor">
+  <div class="linked-style-buttons" v-if="props.editor" data-editor-ui-surface>
     <div
       v-for="(style, index) in getQuickFormatList(editor)"
       class="style-item"

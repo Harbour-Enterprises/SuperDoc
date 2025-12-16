@@ -1,7 +1,7 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
 import { handleParagraphNode as legacyHandleParagraphNode } from './helpers/legacy-handle-paragraph-node.js';
-import { translateParagraphNode } from '../../../../exporter.js';
+import { translateParagraphNode } from './helpers/translate-paragraph-node.js';
 import validXmlAttributes from './attributes/index.js';
 
 /** @type {import('@translator').XmlNodeName} */
@@ -38,6 +38,7 @@ const decode = (params, decodedAttrs = {}) => {
   if (decodedAttrs && Object.keys(decodedAttrs).length) {
     translated.attributes = { ...(translated.attributes || {}), ...decodedAttrs };
   }
+
   return translated;
 };
 

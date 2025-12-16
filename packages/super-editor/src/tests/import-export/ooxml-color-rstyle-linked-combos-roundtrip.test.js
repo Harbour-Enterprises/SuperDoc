@@ -49,26 +49,10 @@ describe('OOXML color + rStyle + linked combinations round-trip', async () => {
   const exportedRuns = collectFromExport(exported);
 
   it('preserves inline w:color on export; does not emit for style-only', () => {
-    const styleOverrides = new Map([
-      ["Styled red text|  - rStyle='SD_ColorRedChar' (red): ", true],
-      ["Styled theme accent2 text|  - rStyle='SD_ColorAccent2Char' (theme accent2): ", false],
-      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", false],
-      ["Linked Char style applied|  - rStyle='SD_LinkedColorHeadingChar' => magenta: ", true],
-      [
-        "  - pStyle='SD_LinkedColorHeading' (accent1) + inline hex 0000FF on a run: |Inline theme overrides char style color",
-        false,
-      ],
-      ["Styled auto color text|  - rStyle='SD_ColorAutoChar' (auto): ", true],
-    ]);
-
     const n = Math.min(sourceRuns.length, exportedRuns.length);
     for (let i = 0; i < n; i++) {
       expect(Boolean(exportedRuns[i].text)).toBe(true);
-      const prevText = sourceRuns[i - 1]?.text || '';
       let expected = sourceRuns[i].hasColor;
-      if (prevText.includes('w:color theme') && !prevText.includes('inline')) expected = false;
-      const key = `${sourceRuns[i].text}|${prevText}`;
-      if (styleOverrides.has(key)) expected = styleOverrides.get(key);
       expect(exportedRuns[i].hasColor).toBe(expected);
     }
   });

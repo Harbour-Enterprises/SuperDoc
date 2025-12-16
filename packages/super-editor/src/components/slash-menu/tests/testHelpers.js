@@ -97,16 +97,19 @@ export function createMockState(options = {}) {
  */
 export function createMockView(options = {}) {
   const mockState = createMockState(options.state || {});
+  const coordsAtPos = options.coordsAtPos || vi.fn(() => ({ left: 100, top: 200 }));
+  const posAtCoords = options.posAtCoords || vi.fn(() => ({ pos: 12 }));
 
   return {
     state: mockState,
-    coordsAtPos: vi.fn(() => ({ left: 100, top: 200 })),
-    posAtCoords: vi.fn(() => ({ pos: 12 })),
+    coordsAtPos,
+    posAtCoords,
     dispatch: vi.fn(),
     focus: vi.fn(),
     dom: {
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
+      getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0 })),
     },
   };
 }
@@ -129,6 +132,12 @@ export function createMockEditor(options = {}) {
 
   return {
     view: mockView,
+    state: mockView.state,
+    dispatch: mockView.dispatch,
+    focus: mockView.focus,
+    coordsAtPos: options.coordsAtPos || mockView.coordsAtPos,
+    posAtCoords: options.posAtCoords || mockView.posAtCoords,
+    presentationEditor: options.presentationEditor || null,
     options: {
       documentMode: config.documentMode,
       isAiEnabled: config.isAiEnabled,
@@ -390,8 +399,10 @@ export function assertEventListenersSetup(editor, documentSpies) {
   const { docAddEventListener } = documentSpies;
 
   // Check document listeners
+  // Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   expect(docAddEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
-  expect(docAddEventListener).toHaveBeenCalledWith('mousedown', expect.any(Function));
+  expect(docAddEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
 
   // Check editor listeners
   expect(editor.on).toHaveBeenCalledWith('update', expect.any(Function));
@@ -399,7 +410,8 @@ export function assertEventListenersSetup(editor, documentSpies) {
   expect(editor.on).toHaveBeenCalledWith('slashMenu:close', expect.any(Function));
 
   // Check DOM listeners
-  expect(editor.view.dom.addEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
+  const domTarget = editor.presentationEditor?.element || editor.view.dom;
+  expect(domTarget.addEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
 }
 
 /**
@@ -409,16 +421,19 @@ export function assertEventListenersCleanup(editor, documentSpies) {
   const { docRemoveEventListener } = documentSpies;
 
   // Check document listeners cleanup
+  // Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   expect(docRemoveEventListener).toHaveBeenCalledWith('keydown', expect.any(Function));
-  expect(docRemoveEventListener).toHaveBeenCalledWith('mousedown', expect.any(Function));
+  expect(docRemoveEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function));
 
-  // Check editor listeners cleanup
-  expect(editor.off).toHaveBeenCalledWith('slashMenu:open');
-  expect(editor.off).toHaveBeenCalledWith('slashMenu:close');
+  // Check editor listeners cleanup (now with specific handlers to prevent leaks)
+  expect(editor.off).toHaveBeenCalledWith('slashMenu:open', expect.any(Function));
+  expect(editor.off).toHaveBeenCalledWith('slashMenu:close', expect.any(Function));
   expect(editor.off).toHaveBeenCalledWith('update', expect.any(Function));
 
   // Check DOM listeners cleanup
-  expect(editor.view.dom.removeEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
+  const domTarget = editor.presentationEditor?.element || editor.view.dom;
+  expect(domTarget.removeEventListener).toHaveBeenCalledWith('contextmenu', expect.any(Function));
 }
 
 /**
