@@ -1157,6 +1157,165 @@ describe('MeasureCache', () => {
         expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
       });
     });
+
+    // ============================================================================
+    // Table Cell Paragraph Attribute Caching Tests
+    // These tests verify that paragraph-level attributes (alignment, spacing,
+    // line height, indent, etc.) inside table cells are properly included in
+    // cache keys. This fixes toolbar commands (alignment, line height, indent,
+    // color, highlight) not updating immediately for text inside tables.
+    // ============================================================================
+
+    describe('paragraph attribute changes in table cells', () => {
+      const tableWithParagraphAttrs = (
+        id: string,
+        text: string,
+        paragraphAttrs: Record<string, unknown> = {},
+        runAttrs: Record<string, unknown> = {},
+      ): TableBlock => ({
+        kind: 'table',
+        id,
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0',
+                paragraph: {
+                  kind: 'paragraph',
+                  id: 'para-0',
+                  runs: [{ text, fontFamily: 'Arial', fontSize: 12, ...runAttrs }],
+                  attrs: paragraphAttrs,
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      describe('alignment changes', () => {
+        it('invalidates cache when alignment changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-align', 'Hello', { alignment: 'left' });
+          const table2 = tableWithParagraphAttrs('table-align', 'Hello', { alignment: 'center' });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('creates cache hit when alignment is identical in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-align-same', 'Hello', { alignment: 'center' });
+          const table2 = tableWithParagraphAttrs('table-align-same', 'Hello', { alignment: 'center' });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+        });
+      });
+
+      describe('spacing/line height changes', () => {
+        it('invalidates cache when line height changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-line', 'Hello', { spacing: { line: 240 } });
+          const table2 = tableWithParagraphAttrs('table-line', 'Hello', { spacing: { line: 480 } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('invalidates cache when lineRule changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-rule', 'Hello', { spacing: { lineRule: 'auto' } });
+          const table2 = tableWithParagraphAttrs('table-rule', 'Hello', { spacing: { lineRule: 'exact' } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('invalidates cache when spacing.before changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-before', 'Hello', { spacing: { before: 100 } });
+          const table2 = tableWithParagraphAttrs('table-before', 'Hello', { spacing: { before: 200 } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('invalidates cache when spacing.after changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-after', 'Hello', { spacing: { after: 100 } });
+          const table2 = tableWithParagraphAttrs('table-after', 'Hello', { spacing: { after: 200 } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+      });
+
+      describe('indent changes', () => {
+        it('invalidates cache when indent.left changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-indent-l', 'Hello', { indent: { left: 720 } });
+          const table2 = tableWithParagraphAttrs('table-indent-l', 'Hello', { indent: { left: 1440 } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('invalidates cache when indent.firstLine changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-indent-fl', 'Hello', { indent: { firstLine: 0 } });
+          const table2 = tableWithParagraphAttrs('table-indent-fl', 'Hello', { indent: { firstLine: 720 } });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+      });
+
+      describe('highlight changes', () => {
+        it('invalidates cache when highlight changes in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-hl', 'Hello', {}, { highlight: 'yellow' });
+          const table2 = tableWithParagraphAttrs('table-hl', 'Hello', {}, { highlight: 'cyan' });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+
+        it('invalidates cache when highlight is added in table cell', () => {
+          const table1 = tableWithParagraphAttrs('table-hl-add', 'Hello', {}, {});
+          const table2 = tableWithParagraphAttrs('table-hl-add', 'Hello', {}, { highlight: 'yellow' });
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+      });
+
+      describe('combined attribute changes', () => {
+        it('creates cache hit for complex identical table cell paragraphs', () => {
+          const complexAttrs = {
+            alignment: 'justify',
+            spacing: { before: 100, after: 100, line: 276, lineRule: 'auto' },
+            indent: { left: 720, right: 0, firstLine: 360 },
+          };
+
+          const table1 = tableWithParagraphAttrs('table-complex', 'Hello', complexAttrs);
+          const table2 = tableWithParagraphAttrs('table-complex', 'Hello', complexAttrs);
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+        });
+
+        it('invalidates cache when any attribute in complex table cell changes', () => {
+          const attrs1 = {
+            alignment: 'justify',
+            spacing: { before: 100, after: 100 },
+            indent: { left: 720 },
+          };
+          const attrs2 = {
+            alignment: 'center', // Changed
+            spacing: { before: 100, after: 100 },
+            indent: { left: 720 },
+          };
+
+          const table1 = tableWithParagraphAttrs('table-complex-chg', 'Hello', attrs1);
+          const table2 = tableWithParagraphAttrs('table-complex-chg', 'Hello', attrs2);
+
+          cache.set(table1, 800, 600, { totalHeight: 50 });
+          expect(cache.get(table2, 800, 600)).toBeUndefined();
+        });
+      });
+    });
   });
 
   // ============================================================================

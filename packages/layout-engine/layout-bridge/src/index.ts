@@ -147,6 +147,19 @@ export type { FocusWatchdogConfig } from './focus-watchdog';
 export { TypingPerfBenchmark } from './benchmarks';
 export type { BenchmarkResult, BenchmarkScenario } from './benchmarks';
 
+// Paragraph Hash Utilities
+export {
+  hashParagraphBorder,
+  hashParagraphBorders,
+  hashParagraphAttrs,
+  hasStringProp,
+  hasNumberProp,
+  hasBooleanProp,
+  getRunStringProp,
+  getRunNumberProp,
+  getRunBooleanProp,
+} from './paragraph-hash-utils';
+
 // Drag Handler
 export { DragHandler, createDragHandler } from './drag-handler';
 export type {
