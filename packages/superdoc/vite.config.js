@@ -28,7 +28,7 @@ export const getAliases = (_isDev) => {
     // with "@superdoc/" that don't also match one of the known packages.
 
     {
-      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor|locale-utils)(.*)/,
+      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-engine|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor|locale-utils|font-utils)(.*)/,
       replacement: path.resolve(__dirname, './src/$1'),
     },
 
