@@ -27,7 +27,7 @@ import type {
   TrackedChangeKind,
 } from '@superdoc/contracts';
 import type { PageDecorationProvider } from './index.js';
-import { toCssFontFamily } from '@superdoc/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 
 const PX_TO_PT = 72 / 96;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';

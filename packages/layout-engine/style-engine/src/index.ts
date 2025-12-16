@@ -10,7 +10,7 @@
  * - Conversion to pixels happens at measurement boundary only
  */
 
-import { toCssFontFamily } from '@superdoc/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 import type {
   TabStop,
   FieldAnnotationMetadata,
