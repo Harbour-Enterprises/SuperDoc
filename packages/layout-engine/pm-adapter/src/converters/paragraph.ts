@@ -771,20 +771,28 @@ export function paragraphToFlowBlocks(
   }
 
   // Update marker font from first text run if paragraph has numbering
-  // This matches MS Word behavior where markers inherit font from first text run
+  // BUT only when the numbering level doesn't explicitly define marker font properties.
+  // This matches MS Word behavior: explicit <w:rFonts> in numbering.xml takes precedence,
+  // otherwise markers inherit font from first text run.
   if (paragraphAttrs?.numberingProperties && paragraphAttrs?.wordLayout) {
+    const numberingProps = paragraphAttrs.numberingProperties as Record<string, unknown>;
+    const resolvedMarkerRpr = numberingProps.resolvedMarkerRpr as Record<string, unknown> | undefined;
+    // Check if numbering level explicitly defined font properties
+    const hasExplicitMarkerFont = resolvedMarkerRpr?.fontFamily != null;
+    const hasExplicitMarkerSize = resolvedMarkerRpr?.fontSize != null;
+
     const firstRunFont = extractFirstTextRunFont(para);
     if (firstRunFont) {
       const wordLayout = paragraphAttrs.wordLayout as Record<string, unknown>;
       const marker = wordLayout.marker as Record<string, unknown> | undefined;
       if (marker?.run) {
         const markerRun = marker.run as Record<string, unknown>;
-        // Override marker font with first text run's font
+        // Only override with first text run's font if numbering level didn't explicitly define it
         // fontSizePx is already converted to pixels by extractFirstTextRunFont
-        if (firstRunFont.fontSizePx != null && Number.isFinite(firstRunFont.fontSizePx)) {
+        if (!hasExplicitMarkerSize && firstRunFont.fontSizePx != null && Number.isFinite(firstRunFont.fontSizePx)) {
           markerRun.fontSize = firstRunFont.fontSizePx;
         }
-        if (firstRunFont.fontFamily) {
+        if (!hasExplicitMarkerFont && firstRunFont.fontFamily) {
           markerRun.fontFamily = firstRunFont.fontFamily;
         }
       }

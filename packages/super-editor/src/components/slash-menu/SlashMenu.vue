@@ -206,6 +206,12 @@ const handleGlobalKeyDown = (event) => {
   }
 };
 
+/**
+ * Handle clicks outside the menu to close it.
+ * Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+ * call event.preventDefault() which suppresses mousedown events.
+ * @param {PointerEvent|MouseEvent} event
+ */
 const handleGlobalOutsideClick = (event) => {
   if (isOpen.value && menuRef.value && !menuRef.value.contains(event.target)) {
     moveCursorToMouseEvent(event, props.editor);
@@ -223,6 +229,10 @@ const handleRightClick = async (event) => {
   }
 
   event.preventDefault();
+
+  // Update cursor position to the right-click location before opening context menu
+  // This ensures context menu actions operate on the clicked position, not the previous cursor position
+  moveCursorToMouseEvent(event, props.editor);
 
   try {
     const context = await getEditorContext(props.editor, event);
@@ -308,8 +318,10 @@ onMounted(() => {
   if (!props.editor) return;
 
   // Add global event listeners
+  // Use pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   document.addEventListener('keydown', handleGlobalKeyDown);
-  document.addEventListener('mousedown', handleGlobalOutsideClick);
+  document.addEventListener('pointerdown', handleGlobalOutsideClick);
 
   // Close menu if the editor becomes read-only while it's open
   props.editor.on('update', handleEditorUpdate);
@@ -354,7 +366,7 @@ onMounted(() => {
 // Cleanup function for event listeners
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleGlobalKeyDown);
-  document.removeEventListener('mousedown', handleGlobalOutsideClick);
+  document.removeEventListener('pointerdown', handleGlobalOutsideClick);
 
   cleanupCustomItems();
 
@@ -377,7 +389,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition" @mousedown.stop>
+  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition" @pointerdown.stop>
     <!-- Hide the input visually but keep it focused for typing -->
     <input
       ref="searchInput"

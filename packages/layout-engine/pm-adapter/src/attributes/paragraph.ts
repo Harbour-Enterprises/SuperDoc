@@ -281,16 +281,24 @@ const resolveNumberingFromContext = (
 ): Partial<AdapterNumberingProps> | undefined => {
   const definitions = numbering?.definitions as Record<string, unknown> | undefined;
   const abstracts = numbering?.abstracts as Record<string, unknown> | undefined;
-  if (!definitions || !abstracts) return undefined;
+  if (!definitions || !abstracts) {
+    return undefined;
+  }
 
   const numDef = asOoxmlElement(definitions[String(numId)]);
-  if (!numDef) return undefined;
+  if (!numDef) {
+    return undefined;
+  }
 
   const abstractId = getAttribute(findChild(numDef, 'w:abstractNumId'), 'w:val');
-  if (abstractId == null) return undefined;
+  if (abstractId == null) {
+    return undefined;
+  }
 
   const abstract = asOoxmlElement(abstracts[String(abstractId)]);
-  if (!abstract) return undefined;
+  if (!abstract) {
+    return undefined;
+  }
 
   let levelDef = abstract.elements?.find(
     (el) => el?.name === 'w:lvl' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
@@ -305,7 +313,9 @@ const resolveNumberingFromContext = (
   }
   const startOverride = parseNumberAttr(getAttribute(findChild(override, 'w:startOverride'), 'w:val'));
 
-  if (!levelDef) return undefined;
+  if (!levelDef) {
+    return undefined;
+  }
 
   const numFmtEl = findNumFmtElement(levelDef);
   const lvlText = getAttribute(findChild(levelDef, 'w:lvlText'), 'w:val') as string | undefined;
@@ -340,6 +350,22 @@ const isTruthy = (value: unknown): boolean => {
     }
   }
   return false;
+};
+
+/**
+ * Safely extracts a property from an unknown object.
+ * Used to replace unsafe type assertions with proper type guards.
+ *
+ * @param obj - The object to extract from
+ * @param key - The property key to extract
+ * @returns The property value, or undefined if not accessible
+ */
+const safeGetProperty = (obj: unknown, key: string): unknown => {
+  if (!obj || typeof obj !== 'object') {
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  return record[key];
 };
 
 /**
@@ -558,10 +584,21 @@ export const buildNumberingPath = (
 const convertIndentTwipsToPx = (indent?: ParagraphIndent | null): ParagraphIndent | undefined => {
   if (!indent) return undefined;
   const result: ParagraphIndent = {};
-  if (isFiniteNumber(indent.left)) result.left = twipsToPx(Number(indent.left));
-  if (isFiniteNumber(indent.right)) result.right = twipsToPx(Number(indent.right));
-  if (isFiniteNumber(indent.firstLine)) result.firstLine = twipsToPx(Number(indent.firstLine));
-  if (isFiniteNumber(indent.hanging)) result.hanging = twipsToPx(Number(indent.hanging));
+  const toNum = (v: unknown): number | undefined => {
+    if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) return Number(v);
+    if (isFiniteNumber(v)) return Number(v);
+    return undefined;
+  };
+
+  const left = toNum(indent.left);
+  const right = toNum(indent.right);
+  const firstLine = toNum(indent.firstLine);
+  const hanging = toNum(indent.hanging);
+
+  if (left != null) result.left = twipsToPx(left);
+  if (right != null) result.right = twipsToPx(right);
+  if (firstLine != null) result.firstLine = twipsToPx(firstLine);
+  if (hanging != null) result.hanging = twipsToPx(hanging);
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
@@ -1147,8 +1184,30 @@ export const computeParagraphAttrs = (
       (paragraphAttrs.spacing as Record<string, unknown>).afterAutospacing = normalizedSpacing.afterAutospacing;
     }
   }
-  if (normalizedSpacing?.contextualSpacing != null) {
-    paragraphAttrs.contextualSpacing = normalizedSpacing.contextualSpacing;
+  /**
+   * Extract contextualSpacing from multiple sources with fallback chain.
+   *
+   * OOXML stores contextualSpacing (w:contextualSpacing) as a sibling to spacing (w:spacing),
+   * not nested within it. However, our normalization may place it in different locations.
+   *
+   * Fallback priority (highest to lowest):
+   * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
+   * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
+   * 3. attrs.contextualSpacing - Top-level attribute
+   *
+   * OOXML Boolean Handling:
+   * - Supports multiple representations: true, 1, '1', 'true', 'on'
+   * - Uses isTruthy() to handle all valid OOXML boolean forms
+   * - Treats null/undefined as "not set" (no contextualSpacing)
+   */
+  const contextualSpacingValue =
+    normalizedSpacing?.contextualSpacing ??
+    safeGetProperty(paragraphProps, 'contextualSpacing') ??
+    safeGetProperty(attrs, 'contextualSpacing');
+
+  if (contextualSpacingValue != null) {
+    // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')
+    paragraphAttrs.contextualSpacing = isTruthy(contextualSpacingValue);
   }
 
   const hasExplicitIndent = Boolean(normalizedIndent);
@@ -1372,9 +1431,48 @@ export const computeParagraphAttrs = (
   }
 
   // Track B: Compute wordLayout for paragraphs with numberingProperties
+  const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
   const numberingSource =
     attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
-  const rawNumberingProps = toAdapterNumberingProps(numberingSource);
+  let rawNumberingProps = toAdapterNumberingProps(numberingSource);
+
+  /**
+   * Fallback mechanism for table paragraphs with list rendering but no numbering properties.
+   *
+   * **Why this is needed:**
+   * Some document sources (particularly table cells imported from certain formats) provide
+   * listRendering attributes (marker text, path, styling) but lack the traditional OOXML
+   * numberingProperties structure (numId, ilvl). This fallback synthesizes minimal
+   * numbering properties from the listRendering data to ensure list markers render correctly.
+   *
+   * **When this is used:**
+   * - Table paragraphs that have listRendering but no numberingProperties
+   * - Imported documents where numbering context was lost but visual marker info was preserved
+   * - Fallback rendering path when traditional OOXML numbering is unavailable
+   *
+   * **Synthesis logic:**
+   * - `numId`: Set to -1 (sentinel value indicating synthesized/unavailable)
+   * - `ilvl`: Calculated from path length (path.length - 1), defaults to 0
+   * - `path`: Preserved from listRendering (e.g., [1, 2, 3] for nested lists)
+   * - `counterValue`: Extracted from last element of path array
+   * - Other properties (markerText, format, justification, suffix) copied from listRendering
+   */
+  if (!rawNumberingProps && listRendering) {
+    const path = listRendering.path;
+    const counterFromPath = path && path.length ? path[path.length - 1] : undefined;
+    const ilvl = path && path.length > 1 ? path.length - 1 : 0;
+
+    rawNumberingProps = {
+      numId: -1,
+      ilvl,
+      path,
+      counterValue: Number.isFinite(counterFromPath) ? Number(counterFromPath) : undefined,
+      markerText: listRendering.markerText,
+      format: listRendering.numberingType as NumberingFormat | undefined,
+      lvlJc: listRendering.justification,
+      suffix: listRendering.suffix,
+    } as AdapterNumberingProps;
+  }
 
   /**
    * Validates that the paragraph has valid numbering properties.
@@ -1382,11 +1480,10 @@ export const computeParagraphAttrs = (
    * numbering inherited from paragraph styles. We skip word layout processing entirely for numId=0.
    */
   const hasValidNumbering = rawNumberingProps && isValidNumberingId(rawNumberingProps.numId);
-  if (hasValidNumbering) {
+  if (hasValidNumbering && rawNumberingProps) {
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
-    const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
     const numericNumId = typeof numId === 'number' ? numId : undefined;
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
@@ -1435,8 +1532,11 @@ export const computeParagraphAttrs = (
     const resolvedCounterValue = path[path.length - 1] ?? counterValue;
 
     // Enrich numberingProperties with path and counter info
+    // Explicitly include numId and ilvl to satisfy TypeScript since they are required
     const enrichedNumberingProps: AdapterNumberingProps = {
       ...numberingProps,
+      numId: numberingProps.numId,
+      ilvl: numberingProps.ilvl,
       path,
       counterValue: resolvedCounterValue,
     };
@@ -1469,7 +1569,42 @@ export const computeParagraphAttrs = (
       // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+    let wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+
+    // Fallback: some numbering levels only specify a firstLine indent (no left/hanging).
+    // When wordLayout computation returns null, ensure we still provide a textStartPx
+    // so first-line wrapping in columns has the correct width.
+    if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
+          firstLineIndentMode: true,
+          textStartPx: firstLinePx,
+        } as WordParagraphLayoutOutput;
+      }
+    }
+
+    // If computeWordLayout returned an object but did not provide textStartPx and
+    // the numbering indent has a firstLine value, set a minimal textStartPx to
+    // match the resolved first-line indent. This guards against cases where
+    // word-layout computation omits textStart for levels without left/hanging.
+    if (
+      wordLayout &&
+      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
+      enrichedNumberingProps.resolvedLevelIndent
+    ) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          ...wordLayout,
+          firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
+          textStartPx: firstLinePx,
+        };
+      }
+    }
 
     if (wordLayout) {
       if (wordLayout.marker) {
@@ -1484,25 +1619,36 @@ export const computeParagraphAttrs = (
         }
       }
       paragraphAttrs.wordLayout = wordLayout;
+    }
 
-      // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
-      // Per OOXML spec, paragraph indent MERGES with numbering definition:
-      // - Numbering definition provides base values (left, hanging from level)
-      // - Paragraph's explicit indent properties override specific values
-      // - Missing paragraph indent properties inherit from numbering definition
-      // This fixes cases where a paragraph only specifies w:hanging but should
-      // inherit w:left from the numbering level definition.
-      if (enrichedNumberingProps.resolvedLevelIndent) {
-        const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-        const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+    // Always merge resolvedLevelIndent into paragraphAttrs.indent, regardless of wordLayout success.
+    // This ensures sublists get correct indentation even if wordLayout computation fails.
+    // Per OOXML spec, paragraph indent MERGES with numbering definition:
+    // - Numbering definition provides base values (left, hanging from level)
+    // - Paragraph's explicit indent properties override specific values
+    // - Missing paragraph indent properties inherit from numbering definition
+    // This fixes cases where a paragraph only specifies w:hanging but should
+    // inherit w:left from the numbering level definition.
+    if (enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
 
-        // Merge: numbering definition as base, paragraph explicit values override
-        paragraphAttrs.indent = {
-          ...baseIndent,
-          ...(normalizedIndent ?? {}),
-        };
+      // Merge: numbering definition as base, paragraph explicit values override
+      paragraphAttrs.indent = {
+        ...baseIndent,
+        ...(normalizedIndent ?? {}),
+      };
+
+      // In OOXML, hanging and firstLine are mutually exclusive.
+      // If the paragraph explicitly specifies one, the other should be cleared.
+      // This ensures proper marker positioning when paragraph overrides numbering indent.
+      if (normalizedIndent?.firstLine !== undefined) {
+        delete paragraphAttrs.indent.hanging;
+      } else if (normalizedIndent?.hanging !== undefined) {
+        delete paragraphAttrs.indent.firstLine;
       }
     }
+
     // Preserve numberingProperties for downstream consumers (e.g., measurement stage)
     paragraphAttrs.numberingProperties = enrichedNumberingProps as Record<string, unknown>;
   }
@@ -1527,6 +1673,13 @@ export const mergeParagraphAttrs = (base?: ParagraphAttrs, override?: ParagraphA
   }
   if (override.indent) {
     merged.indent = { ...(base.indent ?? {}), ...override.indent };
+    // In OOXML, hanging and firstLine are mutually exclusive.
+    // If override specifies one, clear the other from the merged result.
+    if (override.indent.firstLine !== undefined) {
+      delete merged.indent.hanging;
+    } else if (override.indent.hanging !== undefined) {
+      delete merged.indent.firstLine;
+    }
   }
   if (override.borders) {
     merged.borders = { ...(base.borders ?? {}), ...override.borders };

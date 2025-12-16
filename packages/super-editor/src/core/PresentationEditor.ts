@@ -1,4 +1,6 @@
 import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { CellSelection, TableMap } from 'prosemirror-tables';
+import type { EditorState, Transaction } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -21,6 +23,12 @@ import {
   findWordBoundaries,
   findParagraphBoundaries,
   createDragHandler,
+  hitTestTableFragment,
+  isListItem,
+  getWordLayoutConfig,
+  calculateTextStartIndent,
+  extractParagraphIndent,
+  PageGeometryHelper,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -29,6 +37,8 @@ import type {
   PositionHit,
   MultiSectionHeaderFooterIdentifier,
   DropEvent,
+  TableHitResult,
+  PageHit,
 } from '@superdoc/layout-bridge';
 import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
 import type { LayoutMode, PageDecorationProvider, RulerOptions } from '@superdoc/painter-dom';
@@ -166,6 +176,30 @@ export type RemoteCursorState = {
 };
 
 /**
+ * Cell anchor state for table cell drag selection.
+ *
+ * Lifecycle:
+ * - Created when a drag operation starts inside a table cell (#setCellAnchor)
+ * - Persists throughout the drag to track the anchor cell
+ * - Cleared when drag ends (#clearCellAnchor) or document changes
+ *
+ * Used by the cell selection state machine to determine when to transition
+ * from text selection to cell selection mode during table drag operations.
+ */
+type CellAnchorState = {
+  /** PM position of the table node */
+  tablePos: number;
+  /** PM position at the start of the anchor cell */
+  cellPos: number;
+  /** Row index of the anchor cell (0-based) */
+  cellRowIndex: number;
+  /** Column index of the anchor cell (0-based) */
+  cellColIndex: number;
+  /** Cached reference to table block ID for performance */
+  tableBlockId: string;
+};
+
+/**
  * Configuration options for remote cursor presence rendering.
  * Controls how collaborator cursors and selections appear in the layout.
  */
@@ -190,7 +224,7 @@ export type PresenceOptions = {
  * without resorting to type assertions throughout the codebase.
  */
 interface EditorWithConverter extends Editor {
-  converter?: {
+  converter: Editor['converter'] & {
     pageStyles?: { alternateHeaders?: boolean };
     headerIds?: { default?: string; first?: string; even?: string; odd?: string };
     footerIds?: { default?: string; first?: string; even?: string; odd?: string };
@@ -303,6 +337,9 @@ type HeaderFooterRegion = {
   localY: number;
   width: number;
   height: number;
+  contentHeight?: number;
+  /** Minimum Y coordinate from layout (can be negative if content extends above y=0) */
+  minY?: number;
 };
 
 type HeaderFooterLayoutContext = {
@@ -366,6 +403,8 @@ const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 
 const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
 /** Default gap between pages without virtualization (from containerStyles in styles.ts) */
 const DEFAULT_PAGE_GAP = 24;
+/** Default gap for horizontal layout mode */
+const DEFAULT_HORIZONTAL_PAGE_GAP = 20;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -507,6 +546,7 @@ export class PresentationEditor extends EventEmitter {
   #layoutOptions: LayoutEngineOptions;
   #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
+  #pageGeometryHelper: PageGeometryHelper | null = null;
   #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
   #layoutErrorState: 'healthy' | 'degraded' | 'failed' = 'healthy';
@@ -557,6 +597,13 @@ export class PresentationEditor extends EventEmitter {
   #dragAnchor: number | null = null;
   #isDragging = false;
   #dragExtensionMode: 'char' | 'word' | 'para' = 'char';
+
+  // Cell selection drag state
+  // Tracks cell-specific context when drag starts in a table for multi-cell selection
+  #cellAnchor: CellAnchorState | null = null;
+
+  /** Cell drag mode state machine: 'none' = not in table, 'pending' = in table but haven't crossed cell boundary, 'active' = crossed cell boundary */
+  #cellDragMode: 'none' | 'pending' | 'active' = 'none';
 
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
@@ -834,6 +881,114 @@ export class PresentationEditor extends EventEmitter {
   get commands() {
     const activeEditor = this.getActiveEditor();
     return activeEditor.commands;
+  }
+
+  /**
+   * Get the ProseMirror editor state for the currently active editor (header/footer-aware).
+   *
+   * This property dynamically returns the state from the appropriate editor instance:
+   * - In body mode, returns the main editor's state
+   * - In header/footer mode, returns the active header/footer editor's state
+   *
+   * This enables components like SlashMenu and context menus to access document
+   * state, selection, and schema information in the correct editing context.
+   *
+   * @returns The EditorState for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { selection, doc } = presentationEditor.state;
+   * const selectedText = doc.textBetween(selection.from, selection.to);
+   * ```
+   */
+  get state(): EditorState {
+    return this.getActiveEditor().state;
+  }
+
+  /**
+   * Check if the editor is currently editable (header/footer-aware).
+   *
+   * This property checks the editable state of the currently active editor:
+   * - In body mode, returns whether the main editor is editable
+   * - In header/footer mode, returns whether the header/footer editor is editable
+   *
+   * The editor may be non-editable due to:
+   * - Document mode set to 'viewing'
+   * - Explicit `editable: false` option
+   * - Editor not fully initialized
+   *
+   * @returns true if the active editor accepts input, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (presentationEditor.isEditable) {
+   *   presentationEditor.commands.insertText('Hello');
+   * }
+   * ```
+   */
+  get isEditable(): boolean {
+    return this.getActiveEditor().isEditable;
+  }
+
+  /**
+   * Get the editor options for the currently active editor (header/footer-aware).
+   *
+   * This property returns the options object from the appropriate editor instance,
+   * providing access to configuration like document mode, AI settings, and custom
+   * slash menu configuration.
+   *
+   * @returns The options object for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { documentMode, isAiEnabled } = presentationEditor.options;
+   * ```
+   */
+  get options() {
+    return this.getActiveEditor().options;
+  }
+
+  /**
+   * Dispatch a ProseMirror transaction to the currently active editor (header/footer-aware).
+   *
+   * This method routes transactions to the appropriate editor instance:
+   * - In body mode, dispatches to the main editor
+   * - In header/footer mode, dispatches to the active header/footer editor
+   *
+   * Use this for direct state manipulation when commands are insufficient.
+   * For most use cases, prefer using `commands` or `dispatchInActiveEditor`.
+   *
+   * @param tr - The ProseMirror transaction to dispatch
+   *
+   * @example
+   * ```typescript
+   * const { state } = presentationEditor;
+   * const tr = state.tr.insertText('Hello', state.selection.from);
+   * presentationEditor.dispatch(tr);
+   * ```
+   */
+  dispatch(tr: Transaction): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.dispatch(tr);
+  }
+
+  /**
+   * Focus the editor, routing focus to the appropriate editing surface.
+   *
+   * In PresentationEditor, the actual ProseMirror EditorView is hidden and input
+   * is bridged from the visible layout surface. This method focuses the hidden
+   * editor view to enable keyboard input while the visual focus remains on the
+   * rendered presentation.
+   *
+   * @example
+   * ```typescript
+   * // After closing a modal, restore focus to the editor
+   * presentationEditor.focus();
+   * ```
+   */
+  focus(): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.focus();
   }
 
   /**
@@ -1179,8 +1334,14 @@ export class PresentationEditor extends EventEmitter {
       }
       if (!this.#layoutState.layout) return [];
       const rects =
-        selectionToRects(this.#layoutState.layout, this.#layoutState.blocks, this.#layoutState.measures, start, end) ??
-        [];
+        selectionToRects(
+          this.#layoutState.layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          start,
+          end,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       return rects;
     };
 
@@ -1442,6 +1603,93 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the page styles for the section containing the current caret position.
+   *
+   * In multi-section documents, different sections can have different page sizes,
+   * margins, and orientations. This method returns the styles for the section
+   * where the caret is currently located, enabling section-aware UI components
+   * like rulers to display accurate information.
+   *
+   * @returns Object containing:
+   *   - pageSize: { width, height } in inches
+   *   - pageMargins: { left, right, top, bottom } in inches
+   *   - sectionIndex: The current section index (0-based)
+   *   - orientation: 'portrait' or 'landscape'
+   *
+   * Falls back to document-level defaults if section info is unavailable.
+   *
+   * @example
+   * ```typescript
+   * const sectionStyles = presentation.getCurrentSectionPageStyles();
+   * console.log(`Section ${sectionStyles.sectionIndex}: ${sectionStyles.pageSize.width}" x ${sectionStyles.pageSize.height}"`);
+   * ```
+   */
+  getCurrentSectionPageStyles(): {
+    pageSize: { width: number; height: number };
+    pageMargins: { left: number; right: number; top: number; bottom: number };
+    sectionIndex: number;
+    orientation: 'portrait' | 'landscape';
+  } {
+    const PPI = 96;
+    const layout = this.#layoutState.layout;
+    const pageIndex = this.#getCurrentPageIndex();
+    const page = layout?.pages?.[pageIndex];
+
+    const converterStyles = this.#editor.converter?.pageStyles ?? {};
+    const defaultMargins = converterStyles.pageMargins ?? { left: 1, right: 1, top: 1, bottom: 1 };
+
+    // Validate margin values to prevent NaN
+    const safeMargins = {
+      left: typeof defaultMargins.left === 'number' ? defaultMargins.left : 1,
+      right: typeof defaultMargins.right === 'number' ? defaultMargins.right : 1,
+      top: typeof defaultMargins.top === 'number' ? defaultMargins.top : 1,
+      bottom: typeof defaultMargins.bottom === 'number' ? defaultMargins.bottom : 1,
+    };
+
+    if (!page) {
+      return {
+        pageSize: { width: 8.5, height: 11 },
+        pageMargins: safeMargins,
+        sectionIndex: 0,
+        orientation: 'portrait',
+      };
+    }
+
+    // Validate orientation
+    const pageOrientation =
+      page.orientation === 'landscape' || page.orientation === 'portrait' ? page.orientation : 'portrait';
+
+    // Determine page size based on orientation if not explicitly set.
+    // Don't use converterStyles.pageSize as fallback - it may be from a different section.
+    const standardPortrait = { w: 8.5 * PPI, h: 11 * PPI };
+    const standardLandscape = { w: 11 * PPI, h: 8.5 * PPI };
+    const orientationDefault = pageOrientation === 'landscape' ? standardLandscape : standardPortrait;
+
+    const pageWidthPx = page.size?.w ?? orientationDefault.w;
+    const pageHeightPx = page.size?.h ?? orientationDefault.h;
+
+    const marginLeftPx = page.margins?.left ?? safeMargins.left * PPI;
+    const marginRightPx = page.margins?.right ?? safeMargins.right * PPI;
+    const marginTopPx = page.margins?.top ?? safeMargins.top * PPI;
+    const marginBottomPx = page.margins?.bottom ?? safeMargins.bottom * PPI;
+
+    return {
+      pageSize: {
+        width: pageWidthPx / PPI,
+        height: pageHeightPx / PPI,
+      },
+      pageMargins: {
+        left: marginLeftPx / PPI,
+        right: marginRightPx / PPI,
+        top: marginTopPx / PPI,
+        bottom: marginBottomPx / PPI,
+      },
+      sectionIndex: page.sectionIndex ?? 0,
+      orientation: pageOrientation,
+    };
+  }
+
+  /**
    * Get current remote cursor states (normalized to absolute PM positions).
    * Returns an array of cursor states for all remote collaborators, excluding the local user.
    *
@@ -1493,6 +1741,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#pendingDocChange = true;
     this.#scheduleRerender();
   }
@@ -1527,7 +1776,17 @@ export class PresentationEditor extends EventEmitter {
         x: localX,
         y: headerPageIndex * headerPageHeight + (localY - headerPageIndex * headerPageHeight),
       };
-      const hit = clickToPosition(context.layout, context.blocks, context.measures, headerPoint) ?? null;
+      const hit =
+        clickToPosition(
+          context.layout,
+          context.blocks,
+          context.measures,
+          headerPoint,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ) ?? null;
       return hit;
     }
 
@@ -1543,6 +1802,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         clientX,
         clientY,
+        this.#pageGeometryHelper ?? undefined,
       ) ?? null;
     return hit;
   }
@@ -1820,6 +2080,9 @@ export class PresentationEditor extends EventEmitter {
     this.#remoteCursorElements.clear();
     this.#remoteCursorOverlay = null;
 
+    // Clean up cell selection drag state to prevent memory leaks
+    this.#clearCellAnchor();
+
     // Unregister from static registry
     if (this.#options?.documentId) {
       PresentationEditor.#instances.delete(this.#options.documentId);
@@ -1847,6 +2110,7 @@ export class PresentationEditor extends EventEmitter {
     this.#activeHeaderFooterEditor = null;
 
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#dragHandlerCleanup?.();
     this.#dragHandlerCleanup = null;
     this.#selectionOverlay?.remove();
@@ -1876,6 +2140,9 @@ export class PresentationEditor extends EventEmitter {
       // This ensures cursor position is broadcast with each keystroke
       if (transaction?.docChanged) {
         this.#updateLocalAwarenessCursor();
+        // Clear cell anchor on document changes to prevent stale references
+        // (table structure may have changed, cell positions may be invalid)
+        this.#clearCellAnchor();
       }
     };
     const handleSelection = () => {
@@ -2069,22 +2336,28 @@ export class PresentationEditor extends EventEmitter {
       // Skip local client
       if (clientId === provider.awareness?.clientID) return;
 
+      // Type assertion for awareness state properties
+      const awState = aw as {
+        cursor?: { anchor: unknown; head: unknown };
+        user?: { name?: string; email?: string; color?: string };
+      };
+
       // Skip states without cursor data
-      if (!aw.cursor) return;
+      if (!awState.cursor) return;
 
       try {
         // Convert relative positions to absolute PM positions
         const anchor = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.anchor),
+          Y.createRelativePositionFromJSON(awState.cursor.anchor),
           ystate.binding.mapping,
         );
 
         const head = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.head),
+          Y.createRelativePositionFromJSON(awState.cursor.head),
           ystate.binding.mapping,
         );
 
@@ -2105,9 +2378,9 @@ export class PresentationEditor extends EventEmitter {
         normalized.set(clientId, {
           clientId,
           user: {
-            name: aw.user?.name,
-            email: aw.user?.email,
-            color: aw.user?.color || this.#getFallbackColor(clientId),
+            name: awState.user?.name,
+            email: awState.user?.email,
+            color: awState.user?.color || this.#getFallbackColor(clientId),
           },
           anchor: clampedAnchor,
           head: clampedHead,
@@ -2537,7 +2810,7 @@ export class PresentationEditor extends EventEmitter {
 
     // Get selection rectangles using layout-bridge helper
     // Edge case: selectionToRects returns null for unsupported node types or empty documents
-    const rects = selectionToRects(layout, blocks, measures, start, end) ?? [];
+    const rects = selectionToRects(layout, blocks, measures, start, end, this.#pageGeometryHelper ?? undefined) ?? [];
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
@@ -2955,6 +3228,7 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost,
       event.clientX,
       event.clientY,
+      this.#pageGeometryHelper ?? undefined,
     );
 
     // Clamp hit position to valid document bounds to handle stale layout data
@@ -3142,6 +3416,20 @@ export class PresentationEditor extends EventEmitter {
     // (the second click can return a slightly different position due to mouse movement)
     if (clickDepth === 1) {
       this.#dragAnchor = hit.pos;
+
+      // Check if click is inside a table cell for potential cell selection
+      // Only set up cell anchor on single click (not double/triple for word/para selection)
+      const tableHit = this.#hitTestTable(x, y);
+
+      if (tableHit) {
+        const tablePos = this.#getTablePosFromHit(tableHit);
+        if (tablePos !== null) {
+          this.#setCellAnchor(tableHit, tablePos);
+        }
+      } else {
+        // Clicked outside table - clear any existing cell anchor
+        this.#clearCellAnchor();
+      }
     }
     this.#isDragging = true;
     if (clickDepth >= 3) {
@@ -3262,6 +3550,344 @@ export class PresentationEditor extends EventEmitter {
     this.#lastClickPosition = { x: event.clientX, y: event.clientY };
 
     return this.#clickCount;
+  }
+
+  // ============================================================================
+  // Cell Selection Utilities
+  // ============================================================================
+
+  /**
+   * Gets the ProseMirror position at the start of a table cell from a table hit result.
+   *
+   * This method navigates the ProseMirror document structure to find the exact position where
+   * a table cell begins. The position returned is suitable for use with CellSelection.create().
+   *
+   * Algorithm:
+   * 1. Validate input (tableHit structure and cell indices)
+   * 2. Traverse document to find the table node matching tableHit.block.id
+   * 3. Navigate through table structure (table > row > cell) to target row
+   * 4. Track logical column position accounting for colspan (handles merged cells)
+   * 5. Return position when target column falls within a cell's span
+   *
+   * Merged cell handling:
+   * - Does NOT assume 1:1 mapping between cell index and logical column
+   * - Tracks cumulative logical column position by summing colspan values
+   * - A cell with colspan=3 occupies logical columns [n, n+1, n+2]
+   * - Finds the cell whose logical span contains the target column index
+   *
+   * Error handling:
+   * - Input validation with console warnings for debugging
+   * - Try-catch around document traversal (catches corrupted document errors)
+   * - Bounds checking for row indices
+   * - Null checks at each navigation step
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment containing:
+   *   - block: TableBlock with the table's block ID
+   *   - cellRowIndex: 0-based row index of the target cell
+   *   - cellColIndex: 0-based logical column index of the target cell
+   * @returns The PM position at the start of the cell, or null if:
+   *   - Invalid input (null tableHit, negative indices)
+   *   - Table not found in document
+   *   - Target row out of bounds
+   *   - Target column not found in row
+   *   - Document traversal error
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, returns null on failure
+   */
+  #getCellPosFromTableHit(tableHit: TableHitResult): number | null {
+    // Input validation: Check for valid tableHit structure
+    if (!tableHit || !tableHit.block || typeof tableHit.block.id !== 'string') {
+      console.warn('[getCellPosFromTableHit] Invalid tableHit input:', tableHit);
+      return null;
+    }
+
+    // Validate cell indices are non-negative
+    if (
+      typeof tableHit.cellRowIndex !== 'number' ||
+      typeof tableHit.cellColIndex !== 'number' ||
+      tableHit.cellRowIndex < 0 ||
+      tableHit.cellColIndex < 0
+    ) {
+      console.warn('[getCellPosFromTableHit] Invalid cell indices:', {
+        row: tableHit.cellRowIndex,
+        col: tableHit.cellColIndex,
+      });
+      return null;
+    }
+
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Find the table node in the document by searching for the block ID
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    try {
+      doc.descendants((node, pos) => {
+        if (node.type.name === 'table') {
+          if (currentTableIndex === targetTableIndex) {
+            tablePos = pos;
+            return false; // Stop iteration
+          }
+          currentTableIndex++;
+        }
+        return true;
+      });
+    } catch (error: unknown) {
+      console.error('[getCellPosFromTableHit] Error during document traversal:', error);
+      return null;
+    }
+
+    if (tablePos === null) return null;
+
+    const tableNode = doc.nodeAt(tablePos);
+    if (!tableNode || tableNode.type.name !== 'table') return null;
+
+    // Navigate to the specific cell
+    const targetRowIndex = tableHit.cellRowIndex;
+    const targetColIndex = tableHit.cellColIndex;
+
+    // Bounds check: Validate target row exists in table
+    if (targetRowIndex >= tableNode.childCount) {
+      console.warn('[getCellPosFromTableHit] Target row index out of bounds:', {
+        targetRowIndex,
+        tableChildCount: tableNode.childCount,
+      });
+      return null;
+    }
+
+    // Calculate position by traversing table structure
+    // Table structure: table > tableRow > tableCell
+    let currentPos = tablePos + 1; // +1 to enter the table node
+
+    // Iterate through rows to find the target row
+    for (let r = 0; r < tableNode.childCount && r <= targetRowIndex; r++) {
+      const row = tableNode.child(r);
+      if (r === targetRowIndex) {
+        // Found the target row, now find the cell
+        currentPos += 1; // +1 to enter the row node
+
+        // Track logical column position accounting for colspan
+        let logicalCol = 0;
+        for (let cellIndex = 0; cellIndex < row.childCount; cellIndex++) {
+          const cell = row.child(cellIndex);
+          // Type guard: Validate colspan is a positive number
+          const rawColspan = cell.attrs?.colspan;
+          const colspan =
+            typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+
+          // Check if target column falls within this cell's span
+          if (targetColIndex >= logicalCol && targetColIndex < logicalCol + colspan) {
+            // Found the target cell - return position at cell start
+            return currentPos;
+          }
+
+          // Move past this cell
+          currentPos += cell.nodeSize;
+          logicalCol += colspan;
+        }
+
+        // Target column not found in this row (shouldn't happen in valid tables)
+        console.warn('[getCellPosFromTableHit] Target column not found in row:', {
+          targetColIndex,
+          logicalColReached: logicalCol,
+          rowCellCount: row.childCount,
+        });
+        return null;
+      } else {
+        // Move past this row
+        currentPos += row.nodeSize;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Gets the table position (start of table node) from a table hit result.
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment
+   * @returns The PM position at the start of the table, or null if not found
+   * @private
+   */
+  #getTablePosFromHit(tableHit: TableHitResult): number | null {
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'table') {
+        if (currentTableIndex === targetTableIndex) {
+          tablePos = pos;
+          return false;
+        }
+        currentTableIndex++;
+      }
+      return true;
+    });
+
+    return tablePos;
+  }
+
+  /**
+   * Determines if the current drag should create a CellSelection instead of TextSelection.
+   *
+   * Implements a state machine for table cell selection:
+   * - 'none': Not in a table, use TextSelection
+   * - 'pending': Started drag in a table, but haven't crossed cell boundary yet
+   * - 'active': Crossed cell boundary, use CellSelection
+   *
+   * State transitions:
+   * - none → pending: When drag starts in a table cell (#setCellAnchor)
+   * - pending → active: When drag crosses into a different cell (this method returns true)
+   * - active → none: When drag ends (#clearCellAnchor)
+   * - * → none: When document changes or clicking outside table
+   *
+   * Decision logic:
+   * 1. No cell anchor → false (not in table drag mode)
+   * 2. Current position outside table → return current state (stay in 'active' if already there)
+   * 3. Different table → treat as outside table
+   * 4. Different cell in same table → true (activate cell selection)
+   * 5. Same cell → return current state (stay in 'active' if already there, else false)
+   *
+   * This state machine ensures:
+   * - Text selection works normally within a single cell
+   * - Cell selection activates smoothly when crossing cell boundaries
+   * - Once activated, cell selection persists even if dragging back to anchor cell
+   *
+   * @param currentTableHit - The table hit result for the current pointer position, or null if not in a table
+   * @returns true if we should create a CellSelection, false for TextSelection
+   * @private
+   */
+  #shouldUseCellSelection(currentTableHit: TableHitResult | null): boolean {
+    // No cell anchor means we didn't start in a table
+    if (!this.#cellAnchor) return false;
+
+    // Current position is outside any table - keep last cell selection
+    if (!currentTableHit) return this.#cellDragMode === 'active';
+
+    // Check if we're in the same table
+    if (currentTableHit.block.id !== this.#cellAnchor.tableBlockId) {
+      // Different table - treat as outside table
+      return this.#cellDragMode === 'active';
+    }
+
+    // Check if we've crossed a cell boundary
+    const sameCell =
+      currentTableHit.cellRowIndex === this.#cellAnchor.cellRowIndex &&
+      currentTableHit.cellColIndex === this.#cellAnchor.cellColIndex;
+
+    if (!sameCell) {
+      // We've crossed into a different cell - activate cell selection
+      return true;
+    }
+
+    // Same cell - only use cell selection if we were already in active mode
+    return this.#cellDragMode === 'active';
+  }
+
+  /**
+   * Stores the cell anchor when a drag operation starts inside a table cell.
+   *
+   * @param tableHit - The table hit result for the initial click position
+   * @param tablePos - The PM position of the table node
+   * @private
+   */
+  #setCellAnchor(tableHit: TableHitResult, tablePos: number): void {
+    const cellPos = this.#getCellPosFromTableHit(tableHit);
+    if (cellPos === null) {
+      return;
+    }
+
+    this.#cellAnchor = {
+      tablePos,
+      cellPos,
+      cellRowIndex: tableHit.cellRowIndex,
+      cellColIndex: tableHit.cellColIndex,
+      tableBlockId: tableHit.block.id,
+    };
+    this.#cellDragMode = 'pending';
+  }
+
+  /**
+   * Clears the cell drag state.
+   * Called when drag ends or when clicking outside a table.
+   *
+   * @private
+   */
+  #clearCellAnchor(): void {
+    this.#cellAnchor = null;
+    this.#cellDragMode = 'none';
+  }
+
+  /**
+   * Attempts to perform a table hit test for the given normalized coordinates.
+   *
+   * @param normalizedX - X coordinate in layout space
+   * @param normalizedY - Y coordinate in layout space
+   * @returns TableHitResult if the point is inside a table cell, null otherwise
+   * @private
+   */
+  #hitTestTable(normalizedX: number, normalizedY: number): TableHitResult | null {
+    if (!this.#layoutState.layout) {
+      return null;
+    }
+
+    // Find the page at these coordinates
+    const layout = this.#layoutState.layout;
+    // Get configured page size as fallback (page.size may be undefined for single-section docs)
+    const configuredPageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
+
+    let pageY = 0;
+    let pageHit: PageHit | null = null;
+    const geometryHelper = this.#pageGeometryHelper;
+
+    if (geometryHelper) {
+      const idx = geometryHelper.getPageIndexAtY(normalizedY) ?? geometryHelper.getNearestPageIndex(normalizedY);
+      if (idx != null && layout.pages[idx]) {
+        pageHit = { pageIndex: idx, page: layout.pages[idx] };
+        pageY = geometryHelper.getPageTop(idx);
+      }
+    }
+
+    // Fallback to manual scan if helper unavailable
+    if (!pageHit) {
+      const gap = layout.pageGap ?? this.#getEffectivePageGap();
+      for (let i = 0; i < layout.pages.length; i++) {
+        const page = layout.pages[i];
+        // Use page.size.h if available, otherwise fall back to configured page size
+        const pageHeight = page.size?.h ?? configuredPageSize.h;
+
+        if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
+          pageHit = { pageIndex: i, page };
+          break;
+        }
+        pageY += pageHeight + gap;
+      }
+    }
+
+    if (!pageHit) {
+      return null;
+    }
+
+    // Convert to page-relative coordinates
+    const pageRelativeY = normalizedY - pageY;
+    const point = { x: normalizedX, y: pageRelativeY };
+
+    return hitTestTableFragment(pageHit, this.#layoutState.blocks, this.#layoutState.measures, point);
   }
 
   /**
@@ -3496,11 +4122,63 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         event.clientX,
         event.clientY,
+        this.#pageGeometryHelper ?? undefined,
       );
 
       // If we can't find a position, keep the last selection
       if (!hit) return;
 
+      // Check for cell selection mode (table drag)
+      const currentTableHit = this.#hitTestTable(normalized.x, normalized.y);
+      const shouldUseCellSel = this.#shouldUseCellSelection(currentTableHit);
+
+      if (shouldUseCellSel && this.#cellAnchor) {
+        // Cell selection mode - create CellSelection spanning anchor to current cell
+        const headCellPos = currentTableHit ? this.#getCellPosFromTableHit(currentTableHit) : null;
+
+        if (headCellPos !== null) {
+          // Transition to active mode if we weren't already
+          if (this.#cellDragMode !== 'active') {
+            this.#cellDragMode = 'active';
+          }
+
+          try {
+            const doc = this.#editor.state.doc;
+            const anchorCellPos = this.#cellAnchor.cellPos;
+
+            // Validate positions are within document bounds
+            const clampedAnchor = Math.max(0, Math.min(anchorCellPos, doc.content.size));
+            const clampedHead = Math.max(0, Math.min(headCellPos, doc.content.size));
+
+            const cellSelection = CellSelection.create(doc, clampedAnchor, clampedHead);
+            const tr = this.#editor.state.tr.setSelection(cellSelection);
+            this.#editor.view?.dispatch(tr);
+            this.#scheduleSelectionUpdate();
+          } catch (error) {
+            // CellSelection creation can fail if positions are invalid
+            // Fall back to text selection
+            console.warn('[CELL-SELECTION] Failed to create CellSelection, falling back to TextSelection:', error);
+
+            const anchor = this.#dragAnchor;
+            const head = hit.pos;
+            const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+            try {
+              const tr = this.#editor.state.tr.setSelection(
+                TextSelection.create(this.#editor.state.doc, selAnchor, selHead),
+              );
+              this.#editor.view?.dispatch(tr);
+              this.#scheduleSelectionUpdate();
+            } catch {
+              // Position may be invalid during layout updates - ignore
+            }
+          }
+
+          return; // Skip header/footer hover logic during drag
+        }
+      }
+
+      // Text selection mode (default)
       const anchor = this.#dragAnchor;
       const head = hit.pos;
 
@@ -3568,6 +4246,13 @@ export class PresentationEditor extends EventEmitter {
     // the first click must persist to the second click) and for shift+click
     // to extend selection in the same mode (word/para) after a multi-click
     this.#isDragging = false;
+
+    // Reset cell drag mode but preserve #cellAnchor for potential shift+click extension
+    // If we were in active cell selection mode, the CellSelection is already dispatched
+    // and preserved in the editor state
+    if (this.#cellDragMode !== 'none') {
+      this.#cellDragMode = 'none';
+    }
   };
 
   /**
@@ -3897,12 +4582,7 @@ export class PresentationEditor extends EventEmitter {
       ({ layout, measures } = result);
       // Add pageGap to layout for hit testing to account for gaps between rendered pages.
       // Gap depends on virtualization mode and must be non-negative.
-      if (this.#layoutOptions.virtualization?.enabled) {
-        const gap = this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP;
-        layout.pageGap = Math.max(0, gap);
-      } else {
-        layout.pageGap = DEFAULT_PAGE_GAP;
-      }
+      layout.pageGap = this.#getEffectivePageGap();
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -3923,20 +4603,17 @@ export class PresentationEditor extends EventEmitter {
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
 
-    // Keep the painter and overlay hosts sized to the actual page width so centering
-    // on a wider viewport does not introduce X offsets between content and overlays.
-    const pageWidth = layout.pageSize?.w ?? this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
-    if (this.#painterHost) {
-      this.#painterHost.style.width = `${pageWidth}px`;
-      this.#painterHost.style.marginLeft = '0';
-      this.#painterHost.style.marginRight = '0';
-    }
-    if (this.#selectionOverlay) {
-      this.#selectionOverlay.style.width = `${pageWidth}px`;
-      this.#selectionOverlay.style.left = '0';
-      this.#selectionOverlay.style.right = '';
-      this.#selectionOverlay.style.marginLeft = '0';
-      this.#selectionOverlay.style.marginRight = '0';
+    // Initialize or update PageGeometryHelper when layout changes
+    if (this.#layoutState.layout) {
+      const pageGap = this.#layoutState.layout.pageGap ?? this.#getEffectivePageGap();
+      if (!this.#pageGeometryHelper) {
+        this.#pageGeometryHelper = new PageGeometryHelper({
+          layout: this.#layoutState.layout,
+          pageGap,
+        });
+      } else {
+        this.#pageGeometryHelper.updateLayout(this.#layoutState.layout, pageGap);
+      }
     }
 
     // Process per-rId header/footer content for multi-section support
@@ -4030,6 +4707,7 @@ export class PresentationEditor extends EventEmitter {
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
         ruler: this.#layoutOptions.ruler,
+        pageGap: this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap(),
       });
     }
     return this.#domPainter;
@@ -4164,6 +4842,17 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    // Handle CellSelection - render cell backgrounds for selected table cells
+    if (selection instanceof CellSelection) {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCellSelectionOverlay(selection, layout);
+      } catch (error) {
+        console.warn('[PresentationEditor] Failed to render cell selection overlay:', error);
+      }
+      return;
+    }
+
     const { from, to } = selection;
     if (from === to) {
       let caretLayout = this.#computeCaretLayoutRect(from);
@@ -4209,7 +4898,14 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rects: LayoutRect[] =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        from,
+        to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
     // Apply DOM-based position correction to align selection with actual rendered text
     // (same approach used in getRectsForRange for external consumers)
@@ -4228,7 +4924,9 @@ export class PresentationEditor extends EventEmitter {
 
     try {
       this.#localSelectionLayer.innerHTML = '';
-      this.#renderSelectionRects(correctedRects);
+      if (correctedRects.length > 0) {
+        this.#renderSelectionRects(correctedRects);
+      }
     } catch (error) {
       // DOM manipulation can fail if element is detached or in invalid state
       if (process.env.NODE_ENV === 'development') {
@@ -4248,13 +4946,17 @@ export class PresentationEditor extends EventEmitter {
           kind: 'sectionBreak';
           pageSize?: PageSize;
           columns?: ColumnLayout;
-          margins?: { header?: number; footer?: number };
+          margins?: { header?: number; footer?: number; top?: number; right?: number; bottom?: number; left?: number };
         })
       | undefined;
 
     const pageSize = firstSection?.pageSize ?? defaults.pageSize;
     const margins: PageMargins = {
       ...defaults.margins,
+      ...(firstSection?.margins?.top != null ? { top: firstSection.margins.top } : {}),
+      ...(firstSection?.margins?.right != null ? { right: firstSection.margins.right } : {}),
+      ...(firstSection?.margins?.bottom != null ? { bottom: firstSection.margins.bottom } : {}),
+      ...(firstSection?.margins?.left != null ? { left: firstSection.margins.left } : {}),
       ...(firstSection?.margins?.header != null ? { header: firstSection.margins.header } : {}),
       ...(firstSection?.margins?.footer != null ? { footer: firstSection.margins.footer } : {}),
     };
@@ -4501,8 +5203,14 @@ export class PresentationEditor extends EventEmitter {
             page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
           const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
           const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+          // Normalize fragments to start at y=0 if minY is negative
+          const layoutMinY = rIdLayout.layout.minY ?? 0;
+          const normalizedFragments =
+            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
           return {
-            fragments,
+            fragments: normalizedFragments,
             height: box.height,
             contentHeight: rIdLayout.layout.height ?? box.height,
             offset: box.offset,
@@ -4510,6 +5218,7 @@ export class PresentationEditor extends EventEmitter {
             contentWidth: box.width,
             headerId: sectionRId,
             sectionType: headerFooterType,
+            minY: layoutMinY,
             box: {
               x: box.x,
               y: box.offset,
@@ -4546,8 +5255,13 @@ export class PresentationEditor extends EventEmitter {
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
+
+      // Normalize fragments to start at y=0 if minY is negative
+      const layoutMinY = variant.layout.minY ?? 0;
+      const normalizedFragments = layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
       return {
-        fragments,
+        fragments: normalizedFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -4555,6 +5269,7 @@ export class PresentationEditor extends EventEmitter {
         contentWidth: box.width,
         headerId: finalHeaderId,
         sectionType: headerFooterType,
+        minY: layoutMinY,
         box: {
           x: box.x,
           y: box.offset,
@@ -4744,6 +5459,8 @@ export class PresentationEditor extends EventEmitter {
         localY: footerPayload?.hitRegion?.y ?? footerBox.offset,
         width: footerPayload?.hitRegion?.width ?? footerBox.width,
         height: footerPayload?.hitRegion?.height ?? footerBox.height,
+        contentHeight: footerPayload?.contentHeight,
+        minY: footerPayload?.minY,
       });
     });
   }
@@ -4889,6 +5606,26 @@ export class PresentationEditor extends EventEmitter {
           context: 'enterHeaderFooterMode.ensureEditor',
         });
         return;
+      }
+
+      // For footers, apply positioning adjustments to match static rendering.
+      // Only adjust for negative minY (content with elements above y=0).
+      // Note: Bottom-alignment (footerYOffset) is handled by the shape's own CSS
+      // positioning in ProseMirror, so we don't apply container-level transforms for that.
+      if (region.kind === 'footer') {
+        const editorContainer = editorHost.firstElementChild;
+        if (editorContainer instanceof HTMLElement) {
+          editorContainer.style.overflow = 'visible';
+
+          // Only compensate for negative minY (content extending above y=0)
+          if (region.minY != null && region.minY < 0) {
+            const shiftDown = Math.abs(region.minY);
+            editorContainer.style.transform = `translateY(${shiftDown}px)`;
+          } else {
+            // Clear any leftover transform from previous sessions to avoid misalignment
+            editorContainer.style.transform = '';
+          }
+        }
       }
 
       try {
@@ -5303,7 +6040,14 @@ export class PresentationEditor extends EventEmitter {
 
       // Try to get exact position rect for precise scrolling
       const rects =
-        selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, pmPos, pmPos + 1) ?? [];
+        selectionToRects(
+          layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          pmPos,
+          pmPos + 1,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       const rect = rects[0];
 
       // Find the page containing this position by scanning fragments
@@ -5414,6 +6158,20 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Get effective page gap based on layout mode and virtualization settings.
+   * Keeps painter, layout, and geometry in sync.
+   */
+  #getEffectivePageGap(): number {
+    if (this.#layoutOptions.virtualization?.enabled) {
+      return Math.max(0, this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP);
+    }
+    if (this.#layoutOptions.layoutMode === 'horizontal') {
+      return DEFAULT_HORIZONTAL_PAGE_GAP;
+    }
+    return DEFAULT_PAGE_GAP;
+  }
+
   #getBodyPageHeight() {
     return this.#layoutState.layout?.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
   }
@@ -5477,7 +6235,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
 
-    return rects.map((rect, idx) => {
+    const corrected = rects.map((rect, idx) => {
       const delta = pageDelta[rect.pageIndex];
       let adjustedX = delta ? rect.x + delta.dx : rect.x;
       let adjustedY = delta ? rect.y + delta.dy : rect.y;
@@ -5497,6 +6255,8 @@ export class PresentationEditor extends EventEmitter {
       // For last rect, compute width from DOM end position
       if (isLastRect && domEnd && rect.pageIndex === domEnd.pageIndex) {
         const endX = domEnd.x;
+        // Ensure the rect ends exactly at domEnd.x; if start overshoots, clamp start to end
+        adjustedX = Math.min(adjustedX, endX);
         adjustedWidth = Math.max(1, endX - adjustedX);
       }
 
@@ -5507,6 +6267,269 @@ export class PresentationEditor extends EventEmitter {
         width: adjustedWidth,
       };
     });
+
+    // Sanity validation: compare corrected rects against DOM start/end. If deltas are too large, drop rects.
+    const MAX_DELTA_PX = 12; // threshold for mismatch
+    let invalid = false;
+    if (domStart && corrected[0]) {
+      const dx = Math.abs(corrected[0].x - domStart.x);
+      const dy = Math.abs(corrected[0].y - domStart.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+    if (domEnd && corrected[corrected.length - 1]) {
+      const last = corrected[corrected.length - 1];
+      const dx = Math.abs(last.x + last.width - domEnd.x);
+      const dy = Math.abs(last.y - domEnd.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+
+    if (invalid) {
+      console.warn('[SelectionOverlay] Suppressing selection render due to large DOM/Layout mismatch', {
+        domStart,
+        domEnd,
+        rectStart: corrected[0],
+        rectEnd: corrected[corrected.length - 1],
+      });
+      return [];
+    }
+
+    return corrected;
+  }
+
+  /**
+   * Renders visual highlighting for CellSelection (multiple table cells selected).
+   *
+   * This method creates blue overlay rectangles for each selected cell in a table,
+   * accounting for merged cells (colspan/rowspan), multi-page tables, and accurate
+   * row/column positioning from layout measurements.
+   *
+   * Algorithm:
+   * 1. Locate the table node by walking up the selection hierarchy
+   * 2. Find the corresponding table block in layout state
+   * 3. Collect all table fragments (tables can span multiple pages)
+   * 4. Use TableMap to convert cell positions to row/column indices
+   * 5. For each selected cell:
+   *    - Find the fragment containing this cell's row
+   *    - Look up column boundary information from fragment metadata
+   *    - Calculate cell width (sum widths for colspan > 1)
+   *    - Calculate cell height from row measurements (sum heights for rowspan > 1)
+   *    - Convert page-local coordinates to overlay coordinates
+   *    - Create and append highlight DOM element
+   *
+   * Edge cases handled:
+   * - Tables spanning multiple pages (iterate all fragments)
+   * - Merged cells (colspan and rowspan attributes)
+   * - Missing measure data (fallback to estimated row heights)
+   * - Invalid table structures (TableMap.get wrapped in try-catch)
+   * - Cells outside fragment boundaries (skipped)
+   *
+   * @param selection - The CellSelection from ProseMirror tables plugin
+   * @param layout - The current layout containing table fragments and measurements
+   * @returns void - Renders directly to this.#localSelectionLayer
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, rendering gracefully degrades
+   */
+  #renderCellSelectionOverlay(selection: CellSelection, layout: Layout): void {
+    const localSelectionLayer = this.#localSelectionLayer;
+    if (!localSelectionLayer) {
+      return;
+    }
+
+    // Validate input parameters
+    if (!selection || !layout || !layout.pages) {
+      console.warn('[renderCellSelectionOverlay] Invalid input parameters');
+      return;
+    }
+
+    // Find the table node by walking up from the anchor cell
+    const $anchorCell = selection.$anchorCell;
+    if (!$anchorCell) {
+      console.warn('[renderCellSelectionOverlay] No anchor cell in selection');
+      return;
+    }
+
+    let tableDepth = $anchorCell.depth;
+    while (tableDepth > 0 && $anchorCell.node(tableDepth).type.name !== 'table') {
+      tableDepth--;
+    }
+
+    // Validate we found a table node
+    if (tableDepth === 0 && $anchorCell.node(0).type.name !== 'table') {
+      console.warn('[renderCellSelectionOverlay] Could not find table node in selection hierarchy');
+      return;
+    }
+
+    const tableNode = $anchorCell.node(tableDepth);
+    const tableStart = $anchorCell.start(tableDepth) - 1;
+
+    // Find the corresponding table block in layout state
+    let tableBlock: TableBlock | undefined;
+    if (this.#cellAnchor?.tableBlockId) {
+      tableBlock = this.#layoutState.blocks.find(
+        (block) => block.kind === 'table' && block.id === this.#cellAnchor?.tableBlockId,
+      ) as TableBlock | undefined;
+    }
+    if (!tableBlock) {
+      const expectedBlockId = `${tableStart}-table`;
+      tableBlock = this.#layoutState.blocks.find((block) => block.kind === 'table' && block.id === expectedBlockId) as
+        | TableBlock
+        | undefined;
+    }
+    if (!tableBlock) {
+      const tableBlocks = this.#layoutState.blocks.filter((block) => block.kind === 'table') as TableBlock[];
+      if (tableBlocks.length === 1) {
+        tableBlock = tableBlocks[0];
+      }
+    }
+    if (!tableBlock) {
+      return;
+    }
+
+    // Find table fragments on all pages
+    const tableFragments: Array<{ fragment: TableFragment; pageIndex: number }> = [];
+    layout.pages.forEach((page, pageIndex) => {
+      page.fragments.forEach((fragment) => {
+        if (fragment.kind === 'table' && fragment.blockId === tableBlock.id) {
+          tableFragments.push({ fragment: fragment as TableFragment, pageIndex });
+        }
+      });
+    });
+    if (tableFragments.length === 0) {
+      return;
+    }
+
+    // Use TableMap to get accurate row/column positions for selected cells
+    // Wrap TableMap.get in try-catch as it may throw on invalid table structures
+    let tableMap;
+    try {
+      tableMap = TableMap.get(tableNode);
+    } catch (error: unknown) {
+      console.error('[renderCellSelectionOverlay] TableMap.get failed:', error);
+      return;
+    }
+
+    const selectedCells: Array<{ row: number; col: number; colspan: number; rowspan: number }> = [];
+
+    selection.forEachCell((cellNode, cellPos) => {
+      const cellOffset = cellPos - tableStart - 1;
+      const mapIndex = tableMap.map.indexOf(cellOffset);
+      if (mapIndex === -1) {
+        return;
+      }
+
+      const row = Math.floor(mapIndex / tableMap.width);
+      const col = mapIndex % tableMap.width;
+      // Type guard: Validate colspan and rowspan are positive numbers
+      const rawColspan = cellNode.attrs?.colspan;
+      const rawRowspan = cellNode.attrs?.rowspan;
+      const colspan = typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+      const rowspan = typeof rawRowspan === 'number' && Number.isFinite(rawRowspan) && rawRowspan > 0 ? rawRowspan : 1;
+
+      selectedCells.push({ row, col, colspan, rowspan });
+    });
+
+    // Get row heights from table measure (measures array corresponds to blocks array by index)
+    const tableBlockIndex = this.#layoutState.blocks.indexOf(tableBlock as FlowBlock);
+    const measureAtIndex = tableBlockIndex !== -1 ? this.#layoutState.measures[tableBlockIndex] : undefined;
+    const tableMeasure = measureAtIndex?.kind === 'table' ? (measureAtIndex as TableMeasure) : undefined;
+
+    // Compute row Y positions from measure data
+    const rowPositions: Array<{ y: number; height: number }> = [];
+    if (tableMeasure?.rows) {
+      let currentY = 0;
+      for (const rowMeasure of tableMeasure.rows) {
+        rowPositions.push({ y: currentY, height: rowMeasure.height });
+        currentY += rowMeasure.height;
+      }
+    }
+
+    // Render selection rectangles for each selected cell
+    for (const { fragment, pageIndex } of tableFragments) {
+      const { columnBoundaries } = fragment.metadata ?? {};
+      if (!columnBoundaries) {
+        continue;
+      }
+
+      for (const { row, col, colspan, rowspan } of selectedCells) {
+        // Skip cells outside this fragment's row range
+        if (row < fragment.fromRow || row >= fragment.toRow) {
+          continue;
+        }
+
+        // Find column boundary
+        const colBoundary = columnBoundaries.find((cb) => cb.index === col);
+        if (!colBoundary) {
+          continue;
+        }
+
+        // Calculate cell width (accounting for colspan)
+        let cellWidth = colBoundary.width;
+        if (colspan > 1) {
+          for (let c = 1; c < colspan; c++) {
+            const nextColBoundary = columnBoundaries.find((cb) => cb.index === col + c);
+            if (nextColBoundary) {
+              cellWidth += nextColBoundary.width;
+            }
+          }
+        }
+
+        // Calculate row Y position and height
+        let rowY: number;
+        let rowHeight: number;
+
+        // Bounds check: Ensure row index is within valid range
+        if (row >= 0 && row < rowPositions.length && rowPositions[row]) {
+          // Use measure data - compute Y relative to fragment's first row
+          const fragmentStartY =
+            fragment.fromRow > 0 && fragment.fromRow < rowPositions.length && rowPositions[fragment.fromRow]
+              ? rowPositions[fragment.fromRow].y
+              : 0;
+          rowY = rowPositions[row].y - fragmentStartY;
+          rowHeight = rowPositions[row].height;
+
+          // Account for rowspan with bounds checking
+          if (rowspan > 1) {
+            for (let r = 1; r < rowspan && row + r < rowPositions.length && rowPositions[row + r]; r++) {
+              rowHeight += rowPositions[row + r].height;
+            }
+          }
+        } else {
+          // Fallback: estimate from fragment height
+          const rowCount = fragment.toRow - fragment.fromRow;
+          const estimatedRowHeight = rowCount > 0 ? fragment.height / rowCount : 20;
+          const fragmentRelativeRow = row - fragment.fromRow;
+          rowY = fragmentRelativeRow * estimatedRowHeight;
+          rowHeight = estimatedRowHeight * rowspan;
+        }
+
+        // Compute cell rectangle in page-local coordinates
+        const cellX = fragment.x + colBoundary.x;
+        const cellY = fragment.y + rowY;
+
+        // Convert to overlay coordinates
+        const coords = this.#convertPageLocalToOverlayCoords(pageIndex, cellX, cellY);
+        if (!coords) {
+          continue;
+        }
+
+        // Create and append highlight element
+        const highlight = localSelectionLayer.ownerDocument?.createElement('div');
+        if (!highlight) {
+          continue;
+        }
+
+        highlight.className = 'presentation-editor__cell-selection-rect';
+        highlight.style.position = 'absolute';
+        highlight.style.left = `${coords.x}px`;
+        highlight.style.top = `${coords.y}px`;
+        highlight.style.width = `${Math.max(1, cellWidth)}px`;
+        highlight.style.height = `${Math.max(1, rowHeight)}px`;
+        highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
+        highlight.style.pointerEvents = 'none';
+        localSelectionLayer.appendChild(highlight);
+      }
+    }
   }
 
   #renderSelectionRects(rects: LayoutRect[]) {
@@ -5604,7 +6627,7 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
     caretEl.style.height = `${finalHeight}px`;
-    caretEl.style.backgroundColor = '#3366FF';
+    caretEl.style.backgroundColor = '#000000';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
     this.#localSelectionLayer.appendChild(caretEl);
@@ -5661,7 +6684,7 @@ export class PresentationEditor extends EventEmitter {
       return [];
     }
     if (!bodyLayout) return [];
-    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to) ?? [];
+    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to, undefined) ?? [];
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const bodyPageHeight = this.#getBodyPageHeight();
     return rects.map((rect: LayoutRect) => {
@@ -5984,7 +7007,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
-    const charIndex = Math.min(pos - pmStart, textNode.length);
+    const charIndex = Math.min(pos - pmStart, (textNode as Text).length);
     const range = document.createRange();
     range.setStart(textNode, Math.max(0, charIndex));
     range.setEnd(textNode, Math.max(0, charIndex));
@@ -6117,23 +7140,95 @@ export class PresentationEditor extends EventEmitter {
     // Calculate character offset from PM position using layout-aware mapping (accounts for PM gaps)
     const pmOffset = pmPosToCharOffset(block, line, pos);
 
-    // Account for list marker width - this matches selectionToRects behavior
     const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
-    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
-    const paraIndentRight = block.attrs?.indent?.right ?? 0;
-    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    const indent = extractParagraphIndent(block.attrs?.indent);
+    const availableWidth = Math.max(0, fragment.width - (indent.left + indent.right));
     const charX = measureCharacterX(block, line, pmOffset, availableWidth);
-    // Align with painter DOM indent handling: add paragraph indent (left) and first-line offset when applicable
-    // The painter applies indent to ALL non-list lines (both segment-based and regular)
-    const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+
+    // Determine list item status and text indent
     const isFirstLine = index === fragment.fromLine;
-    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
-    let indentAdjust = 0;
-    if (!isListFirstLine) {
-      indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+    const isListItemFlag = isListItem(markerWidth, block);
+    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && isListItemFlag;
+
+    // Get word layout configuration for firstLineIndentMode detection
+    const wordLayout = getWordLayoutConfig(block);
+    const isFirstLineIndentMode = wordLayout?.firstLineIndentMode === true;
+
+    if (isListFirstLine && isFirstLineIndentMode) {
+      // In firstLineIndentMode, text starts at textStartPx (after marker + tab),
+      // not at fragment.x + markerWidth. Use textStartPx directly as the X offset.
+      const textStartPx = calculateTextStartIndent({
+        isFirstLine,
+        isListItem: isListItemFlag,
+        markerWidth,
+        paraIndentLeft: indent.left,
+        firstLineIndent: indent.firstLine,
+        hangingIndent: indent.hanging,
+        wordLayout,
+      });
+      const localX = fragment.x + textStartPx + charX;
+      const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
+      const localY = fragment.y + lineOffset;
+
+      const result = {
+        pageIndex: hit.pageIndex,
+        x: localX,
+        y: localY,
+        height: line.lineHeight,
+      };
+
+      // Check DOM for firstLineIndentMode lists too
+      const pageEl = this.#painterHost?.querySelector(
+        `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+      ) as HTMLElement | null;
+      const pageRect = pageEl?.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      let domCaretX: number | null = null;
+      let domCaretY: number | null = null;
+      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+      for (const spanEl of Array.from(spanEls ?? [])) {
+        const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+        const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+        if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+          const textNode = spanEl.firstChild as Text;
+          const charIndex = Math.min(pos - pmStart, textNode.length);
+          const rangeObj = document.createRange();
+          rangeObj.setStart(textNode, charIndex);
+          rangeObj.setEnd(textNode, charIndex);
+          const rangeRect = rangeObj.getBoundingClientRect();
+          if (pageRect) {
+            domCaretX = (rangeRect.left - pageRect.left) / zoom;
+            domCaretY = (rangeRect.top - pageRect.top) / zoom;
+          }
+          break;
+        }
+      }
+
+      if (includeDomFallback && domCaretX != null && domCaretY != null) {
+        return {
+          pageIndex: hit.pageIndex,
+          x: domCaretX,
+          y: domCaretY,
+          height: line.lineHeight,
+        };
+      }
+
+      return result;
     }
 
-    const localX = fragment.x + markerWidth + indentAdjust + charX;
+    // For standard lists and non-list paragraphs, calculate text indent using shared utility
+    const indentAdjust = calculateTextStartIndent({
+      isFirstLine,
+      isListItem: isListItemFlag,
+      markerWidth,
+      paraIndentLeft: indent.left,
+      firstLineIndent: indent.firstLine,
+      hangingIndent: indent.hanging,
+      wordLayout,
+    });
+
+    const localX = fragment.x + indentAdjust + charX;
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
 
@@ -6154,8 +7249,8 @@ export class PresentationEditor extends EventEmitter {
     // Find span containing this pos and measure actual DOM position
     let domCaretX: number | null = null;
     let domCaretY: number | null = null;
-    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
-    for (const spanEl of spanEls) {
+    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+    for (const spanEl of Array.from(spanEls ?? [])) {
       const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
       const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
       if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
@@ -6484,11 +7579,41 @@ export class PresentationEditor extends EventEmitter {
     }
     const layout = this.#layoutState.layout;
     const selection = this.#editor.state?.selection;
-    if (!layout || !selection) return 0;
+    if (!layout || !selection) {
+      return 0;
+    }
+
+    // Try selectionToRects first
     const rects =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, selection.from, selection.to) ??
-      [];
-    return rects[0]?.pageIndex ?? 0;
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        selection.from,
+        selection.to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
+
+    if (rects.length > 0) {
+      return rects[0]?.pageIndex ?? 0;
+    }
+
+    // Fallback: scan pages to find which one contains this position via fragments
+    // Note: pmStart/pmEnd are only present on some fragment types (ParaFragment, ImageFragment, DrawingFragment)
+    const pos = selection.from;
+    for (let pageIdx = 0; pageIdx < layout.pages.length; pageIdx++) {
+      const page = layout.pages[pageIdx];
+      for (const fragment of page.fragments) {
+        const frag = fragment as { pmStart?: number; pmEnd?: number };
+        if (frag.pmStart != null && frag.pmEnd != null) {
+          if (pos >= frag.pmStart && pos <= frag.pmEnd) {
+            return pageIdx;
+          }
+        }
+      }
+    }
+
+    return 0;
   }
 
   #findRegionForPage(kind: 'header' | 'footer', pageIndex: number): HeaderFooterRegion | null {

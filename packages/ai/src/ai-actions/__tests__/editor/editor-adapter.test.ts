@@ -4,7 +4,17 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import { EditorAdapter } from '../../editor';
 import type { Editor, FoundMatch, MarkType } from '../../../shared';
 
-const createChain = (commands?: Record<string, unknown>) => {
+interface ChainCommands {
+  setTextSelection?: (args: { from: number; to: number }) => void;
+  setHighlight?: (color: string) => void;
+  enableTrackChanges?: () => void;
+  deleteSelection?: () => void;
+  insertContent?: (content: string) => void;
+  disableTrackChanges?: () => void;
+  insertComment?: (payload: { commentText: string }) => void;
+}
+
+const createChain = (commands?: ChainCommands) => {
   const chainApi = {
     setTextSelection: vi.fn((args) => {
       commands?.setTextSelection?.(args);
@@ -175,7 +185,7 @@ describe('EditorAdapter', () => {
 
     commands.insertContent = vi.fn((content: unknown) => {
       const normalized = Array.isArray(content) ? content : [content];
-      normalized.forEach((node: unknown) => {
+      normalized.forEach((node: any) => {
         const text = node?.text ?? (typeof node === 'string' ? node : '');
         const tr = editorState.tr.insertText(text);
         view.dispatch(tr);

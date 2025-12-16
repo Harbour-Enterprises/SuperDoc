@@ -116,22 +116,30 @@ function extractPageSizeAndOrientation(elements: SectionElement[]): {
 
 /**
  * Extract fallback margins from <w:pgMar> element (for non-normalized values).
+ * Includes both header/footer margins and page margins (top/right/bottom/left).
  */
 function extractFallbackMargins(
   elements: SectionElement[],
   currentHeader: number | undefined,
   currentFooter: number | undefined,
-): { headerPx: number | undefined; footerPx: number | undefined } {
-  if (currentHeader !== undefined && currentFooter !== undefined) {
-    return { headerPx: currentHeader, footerPx: currentFooter };
-  }
-
+): {
+  headerPx: number | undefined;
+  footerPx: number | undefined;
+  topPx: number | undefined;
+  rightPx: number | undefined;
+  bottomPx: number | undefined;
+  leftPx: number | undefined;
+} {
   const pgMar = elements.find((el) => el?.name === 'w:pgMar');
   const a = pgMar?.attributes || {};
 
   return {
     headerPx: currentHeader ?? (a['w:header'] != null ? twipsToPixels(a['w:header']) : undefined),
     footerPx: currentFooter ?? (a['w:footer'] != null ? twipsToPixels(a['w:footer']) : undefined),
+    topPx: a['w:top'] != null ? twipsToPixels(a['w:top']) : undefined,
+    rightPx: a['w:right'] != null ? twipsToPixels(a['w:right']) : undefined,
+    bottomPx: a['w:bottom'] != null ? twipsToPixels(a['w:bottom']) : undefined,
+    leftPx: a['w:left'] != null ? twipsToPixels(a['w:left']) : undefined,
   };
 }
 
@@ -265,6 +273,10 @@ function extractVerticalAlign(elements: SectionElement[]): VerticalAlign | undef
 export function extractSectionData(para: PMNode): {
   headerPx?: number;
   footerPx?: number;
+  topPx?: number;
+  rightPx?: number;
+  bottomPx?: number;
+  leftPx?: number;
   type?: SectionType;
   pageSizePx?: { w: number; h: number };
   orientation?: Orientation;
@@ -302,7 +314,10 @@ export function extractSectionData(para: PMNode): {
   const type = extractSectionType(sectPrElements);
   const { pageSizePx, orientation } = extractPageSizeAndOrientation(sectPrElements);
   const titlePg = sectPrElements.some((el) => el?.name === 'w:titlePg');
-  ({ headerPx, footerPx } = extractFallbackMargins(sectPrElements, headerPx, footerPx));
+  const fallbackMargins = extractFallbackMargins(sectPrElements, headerPx, footerPx);
+  headerPx = fallbackMargins.headerPx;
+  footerPx = fallbackMargins.footerPx;
+  const { topPx, rightPx, bottomPx, leftPx } = fallbackMargins;
   const headerRefs = extractHeaderFooterRefs(sectPrElements, 'w:headerReference');
   const footerRefs = extractHeaderFooterRefs(sectPrElements, 'w:footerReference');
   const numbering = extractPageNumbering(sectPrElements);
@@ -313,6 +328,10 @@ export function extractSectionData(para: PMNode): {
   return {
     headerPx,
     footerPx,
+    topPx,
+    rightPx,
+    bottomPx,
+    leftPx,
     type,
     pageSizePx,
     orientation,

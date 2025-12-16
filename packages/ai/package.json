@@ -1,6 +1,6 @@
 {
   "name": "@superdoc-dev/ai",
-  "version": "0.1.8-next.5",
+  "version": "0.1.8-next.6",
   "description": "AI integration package for SuperDoc",
   "type": "module",
   "main": "./dist/index.js",
@@ -44,7 +44,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "1.0.0-beta.73"
+    "superdoc": "1.0.0-next.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -54,7 +54,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "1.0.0-beta.73",
+    "superdoc": "1.0.0-next.1",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4"

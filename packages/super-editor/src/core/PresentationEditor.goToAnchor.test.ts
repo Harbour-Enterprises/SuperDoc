@@ -212,6 +212,14 @@ vi.mock('@superdoc/layout-bridge', () => ({
     },
   })),
   computeDisplayPageNumber: vi.fn((pages) => pages.map((p) => ({ displayText: String(p.number ?? 1) }))),
+  PageGeometryHelper: vi.fn().mockImplementation(({ layout, pageGap }) => ({
+    updateLayout: vi.fn(),
+    getPageIndexAtY: vi.fn(() => 0),
+    getNearestPageIndex: vi.fn(() => 0),
+    getPageTop: vi.fn(() => 0),
+    getPageGap: vi.fn(() => pageGap ?? 0),
+    getLayout: vi.fn(() => layout),
+  })),
 }));
 
 // Mock painter-dom

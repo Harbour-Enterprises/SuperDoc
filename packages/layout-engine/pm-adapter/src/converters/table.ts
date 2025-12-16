@@ -30,10 +30,14 @@ import type {
   ThemeColorPalette,
   ConverterContext,
   ListCounterContext,
+  TableNodeToBlockOptions,
+  NestedConverters,
 } from '../types.js';
 import { extractTableBorders, extractCellBorders, extractCellPadding } from '../attributes/index.js';
 import { pickNumber, twipsToPx } from '../utilities.js';
 import { hydrateTableStyleAttrs } from './table-styles.js';
+import { collectTrackedChangeFromMarks } from '../marks/index.js';
+import { annotateBlockWithTrackedChange, shouldHideTrackedNode } from '../tracked-changes.js';
 
 type ParagraphConverter = (
   node: PMNode,
@@ -56,12 +60,14 @@ type TableParserDependencies = {
   defaultFont: string;
   defaultSize: number;
   styleContext: StyleContext;
+  listCounterContext?: ListCounterContext;
   trackedChanges?: TrackedChangesConfig;
   bookmarks?: Map<string, number>;
   hyperlinkConfig?: HyperlinkConfig;
   themeColors?: ThemeColorPalette;
-  paragraphToFlowBlocks: ParagraphConverter;
+  paragraphToFlowBlocks?: ParagraphConverter;
   converterContext?: ConverterContext;
+  converters?: NestedConverters;
 };
 
 type ParseTableCellArgs = {
@@ -201,30 +207,100 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
       }
     : context.converterContext;
 
+  const paragraphToFlowBlocks = context.converters?.paragraphToFlowBlocks ?? context.paragraphToFlowBlocks;
+  const listCounterContext = context.listCounterContext;
+
   for (const childNode of cellNode.content) {
     if (childNode.type === 'paragraph') {
-      // Note: The wrapper function in internal.ts has 12 params (no 'converters'),
-      // so converterContext is at position 12, not 13
-      const paragraphBlocks = context.paragraphToFlowBlocks(
+      if (!paragraphToFlowBlocks) continue;
+      const paragraphBlocks = paragraphToFlowBlocks(
         childNode,
         context.nextBlockId,
         context.positions,
         context.defaultFont,
         context.defaultSize,
         context.styleContext,
-        undefined, // listCounterContext
+        listCounterContext,
         context.trackedChanges,
         context.bookmarks,
         context.hyperlinkConfig,
         context.themeColors,
-        cellConverterContext, // converterContext at position 12
+        cellConverterContext,
       );
-      const paragraph = paragraphBlocks.find((b): b is ParagraphBlock => b.kind === 'paragraph');
-      if (paragraph) {
-        blocks.push(paragraph);
+      paragraphBlocks.forEach((block) => {
+        if (block.kind === 'paragraph' || block.kind === 'image' || block.kind === 'drawing') {
+          blocks.push(block);
+        }
+      });
+      continue;
+    }
+
+    if (childNode.type === 'image' && context.converters?.imageNodeToBlock) {
+      const mergedMarks = [...(childNode.marks ?? [])];
+      const trackedMeta = context.trackedChanges ? collectTrackedChangeFromMarks(mergedMarks) : undefined;
+      if (shouldHideTrackedNode(trackedMeta, context.trackedChanges)) {
+        continue;
+      }
+      const imageBlock = context.converters.imageNodeToBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+        trackedMeta,
+        context.trackedChanges,
+      );
+      if (imageBlock && imageBlock.kind === 'image') {
+        annotateBlockWithTrackedChange(imageBlock, trackedMeta, context.trackedChanges);
+        blocks.push(imageBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'vectorShape' && context.converters?.vectorShapeNodeToDrawingBlock) {
+      const drawingBlock = context.converters.vectorShapeNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeGroup' && context.converters?.shapeGroupNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeGroupNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeContainer' && context.converters?.shapeContainerNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeContainerNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeTextbox' && context.converters?.shapeTextboxNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeTextboxNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock && drawingBlock.kind === 'drawing') {
+        blocks.push(drawingBlock);
       }
     }
-    // TODO: Add support for other block types (lists, images) if needed
   }
 
   if (blocks.length === 0) {
@@ -515,9 +591,11 @@ export function tableNodeToBlock(
     converterContext?: ConverterContext,
   ) => FlowBlock[],
   converterContext?: ConverterContext,
+  options?: TableNodeToBlockOptions,
 ): FlowBlock | null {
   if (!Array.isArray(node.content) || node.content.length === 0) return null;
-  if (!paragraphToFlowBlocks) return null;
+  const paragraphConverter = paragraphToFlowBlocks ?? options?.converters?.paragraphToFlowBlocks;
+  if (!paragraphConverter) return null;
 
   const parserDeps: TableParserDependencies = {
     nextBlockId,
@@ -529,8 +607,10 @@ export function tableNodeToBlock(
     bookmarks,
     hyperlinkConfig,
     themeColors,
-    paragraphToFlowBlocks,
+    listCounterContext: options?.listCounterContext,
+    paragraphToFlowBlocks: paragraphConverter,
     converterContext,
+    converters: options?.converters,
   };
 
   const hydratedTableStyle = hydrateTableStyleAttrs(node, converterContext);
@@ -710,6 +790,7 @@ export function handleTableNode(node: PMNode, context: NodeHandlerContext): void
     defaultFont,
     defaultSize,
     styleContext,
+    listCounterContext,
     trackedChangesConfig,
     bookmarks,
     hyperlinkConfig,
@@ -730,6 +811,7 @@ export function handleTableNode(node: PMNode, context: NodeHandlerContext): void
     undefined, // themeColors
     converters?.paragraphToFlowBlocks,
     converterContext,
+    { listCounterContext, converters },
   );
   if (tableBlock) {
     blocks.push(tableBlock);

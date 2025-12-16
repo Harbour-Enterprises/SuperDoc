@@ -10,8 +10,8 @@ const config = {
     },
     {
       name: 'main',
-      prerelease: 'beta',
-      channel: 'beta',
+      channel: 'next',
+      prerelease: 'next',
     },
     // Maintenance branches - channel defaults to branch name
     {
@@ -62,6 +62,9 @@ if (!isPrerelease) {
     },
   ])
 }
+
+// Linear integration - labels issues with version on release
+config.plugins.push(['semantic-release-linear-app', { teamKeys: ['SD'], addComment: true }])
 
 // GitHub plugin comes last
 config.plugins.push('@semantic-release/github')

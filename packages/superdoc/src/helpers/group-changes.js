@@ -1,9 +1,9 @@
 /**
  * Track changes helper
- * Combines replace transaction which is represented by insertion + deletion
+ * Combines replace transactions which are represented by insertion + deletion
  *
- * @param {Array} changes array of tracked changes
- * @returns {Array} grouped track changes array
+ * @param {Array} changes - Array of tracked changes from the editor
+ * @returns {Array} Grouped track changes array with combined replacements
  */
 
 export const groupChanges = (changes) => {

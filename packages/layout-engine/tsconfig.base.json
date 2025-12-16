@@ -12,7 +12,6 @@
       "@superdoc/layout-engine": ["layout-engine/src"],
       "@superdoc/painter-dom": ["painters/dom/src"],
       "@superdoc/painter-pdf": ["painters/pdf/src"],
-      "@superdoc/v1-beta-demo": ["v1-beta-demo/src"],
       "@superdoc/layout-bridge": ["layout-bridge/src"],
       "@superdoc/preset-geometry": ["../preset-geometry/index.js"]
     }

@@ -3,6 +3,83 @@ import { Extension } from '@core/Extension.js';
 import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
 
 /**
+ * Find the nearest ancestor element that creates a containing block for `position: fixed`.
+ * This happens when any ancestor has: transform, filter, backdrop-filter, perspective,
+ * will-change (transform/perspective), or contain (paint/layout/strict/content).
+ *
+ * Per CSS Containing Block specification (https://www.w3.org/TR/css-position-3/#containing-block-for-abspos):
+ * A positioned element with `position: fixed` is normally positioned relative to the viewport.
+ * However, if any ancestor has certain CSS properties, that ancestor becomes the containing
+ * block instead, causing `position: fixed` to behave relative to that ancestor rather than
+ * the viewport.
+ *
+ * @param {HTMLElement} element - Starting element to search from
+ * @returns {HTMLElement|null} The containing block ancestor, or null if fixed is relative to viewport
+ * @throws {Error} Never throws - errors from getComputedStyle are caught and logged
+ */
+export function findContainingBlockAncestor(element) {
+  if (!element) return null;
+
+  let current = element.parentElement;
+  while (current && current !== document.body && current !== document.documentElement) {
+    try {
+      const style = window.getComputedStyle(current);
+
+      // Check for properties that create a containing block for fixed positioning
+      const transform = style.transform;
+      const filter = style.filter;
+      const backdropFilter = style.backdropFilter || style.webkitBackdropFilter;
+      const perspective = style.perspective;
+      const willChange = style.willChange;
+      const contain = style.contain;
+
+      // transform other than 'none'
+      if (transform && transform !== 'none') {
+        return current;
+      }
+
+      // filter other than 'none'
+      if (filter && filter !== 'none') {
+        return current;
+      }
+
+      // backdrop-filter other than 'none'
+      if (backdropFilter && backdropFilter !== 'none') {
+        return current;
+      }
+
+      // perspective other than 'none'
+      if (perspective && perspective !== 'none') {
+        return current;
+      }
+
+      // will-change containing transform or perspective
+      // Parse as comma-separated values to avoid substring matching issues
+      // (e.g., 'will-transform' should not match 'transform')
+      if (willChange && willChange !== 'auto') {
+        const values = willChange.split(',').map((v) => v.trim());
+        if (values.includes('transform') || values.includes('perspective')) {
+          return current;
+        }
+      }
+
+      // contain with paint, layout, strict, or content
+      if (contain && /paint|layout|strict|content/.test(contain)) {
+        return current;
+      }
+    } catch (error) {
+      // Element may be detached from DOM or otherwise invalid
+      console.warn('SlashMenu: Failed to get computed style for element', current, error);
+      // Continue checking parent elements
+    }
+
+    current = current.parentElement;
+  }
+
+  return null;
+}
+
+/**
  * Configuration options for SlashMenu
  * @typedef {Object} SlashMenuOptions
  * @property {boolean} [disabled] - Disable the slash menu entirely (inherited from editor.options.disableContextMenu)
@@ -159,6 +236,31 @@ export const SlashMenu = Extension.create({
                       return ensureStateShape(value); // Return unchanged state on error
                     }
                   }
+                }
+              }
+
+              // Adjust for containing block if any ancestor creates one.
+              // Per CSS specification (https://www.w3.org/TR/css-position-3/#containing-block-for-abspos),
+              // when an ancestor has transform, filter, backdrop-filter, perspective, will-change,
+              // or contain properties, position:fixed becomes relative to that ancestor instead of
+              // the viewport. This requires coordinate adjustment:
+              //
+              // 1. We start with viewport coordinates (left, top from getBoundingClientRect or clientX/Y)
+              // 2. If a containing block exists, position:fixed will be relative to it, not viewport
+              // 3. We subtract the containing block's viewport position to get coordinates relative to it
+              // 4. This ensures the menu appears at the correct visual position regardless of transforms
+              //
+              // Example: If viewport coords are (200, 150) and containing block is at (50, 30),
+              // we need (150, 120) in containing-block-relative coordinates.
+              const menuSurface = editor.presentationEditor?.element ?? editor.view?.dom ?? editor.options?.element;
+              const containingBlock = findContainingBlockAncestor(menuSurface);
+              if (containingBlock) {
+                try {
+                  const cbRect = containingBlock.getBoundingClientRect();
+                  left -= cbRect.left;
+                  top -= cbRect.top;
+                } catch (error) {
+                  console.warn('SlashMenu: Failed to adjust for containing block', error);
                 }
               }
 

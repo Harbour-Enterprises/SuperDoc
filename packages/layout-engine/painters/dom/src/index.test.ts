@@ -856,9 +856,9 @@ describe('DomPainter', () => {
     expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
   });
 
-  it('does not justify text inside table cells (Word quirk)', () => {
-    // Word does not justify text inside table cells, even if jc="both" is specified.
-    // This test verifies that table cell paragraphs have no word-spacing applied.
+  it('does not justify last line in table cell (same as regular paragraph)', () => {
+    // Word justifies text inside table cells, but skips the last line (like regular paragraphs).
+    // Single-line cells are their own "last line", so they should not be justified.
     const tableBlock: TableBlock = {
       kind: 'table',
       id: 'table-block',
@@ -873,7 +873,7 @@ describe('DomPainter', () => {
                   kind: 'paragraph',
                   id: 'cell-para',
                   runs: [{ text: 'Cell text with spaces here', fontFamily: 'Arial', fontSize: 16 }],
-                  attrs: { alignment: 'justify' }, // Justify is specified but should be ignored
+                  attrs: { alignment: 'justify' },
                 },
               ],
             },
@@ -946,8 +946,205 @@ describe('DomPainter', () => {
     // Find the line inside the table cell
     const line = mount.querySelector('.superdoc-line') as HTMLElement;
     expect(line).toBeTruthy();
-    // Table cell text should NOT be justified (word-spacing should be 0 or empty)
+    // Single-line cell = last line, so should NOT be justified
     expect(parseFloat(line.style.wordSpacing || '0')).toBe(0);
+  });
+
+  it('justifies non-last lines in multi-line table cell', () => {
+    // Word justifies text inside table cells, applying word-spacing to all lines except the last.
+    // This test verifies that the first line of a multi-line cell IS justified.
+    const tableBlock: TableBlock = {
+      kind: 'table',
+      id: 'table-block',
+      rows: [
+        {
+          id: 'row-1',
+          cells: [
+            {
+              id: 'cell-1',
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  id: 'cell-para',
+                  runs: [
+                    {
+                      text: 'First line of text in this cell. Second line of text here.',
+                      fontFamily: 'Arial',
+                      fontSize: 16,
+                    },
+                  ],
+                  attrs: { alignment: 'justify' },
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    };
+
+    const tableMeasure: TableMeasure = {
+      kind: 'table',
+      rows: [
+        {
+          height: 50,
+          cells: [
+            {
+              width: 200,
+              height: 50,
+              blocks: [
+                {
+                  kind: 'paragraph',
+                  lines: [
+                    {
+                      fromRun: 0,
+                      fromChar: 0,
+                      toRun: 0,
+                      toChar: 33,
+                      width: 150,
+                      maxWidth: 200,
+                      ascent: 12,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                    {
+                      fromRun: 0,
+                      fromChar: 33,
+                      toRun: 0,
+                      toChar: 59,
+                      width: 140,
+                      maxWidth: 200,
+                      ascent: 12,
+                      descent: 4,
+                      lineHeight: 20,
+                    },
+                  ],
+                  totalHeight: 40,
+                },
+              ],
+            },
+          ],
+        },
+      ],
+      columnWidths: [200],
+      totalWidth: 200,
+      totalHeight: 50,
+    };
+
+    const tableLayout: Layout = {
+      pageSize: { w: 300, h: 300 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'table',
+              blockId: 'table-block',
+              x: 0,
+              y: 0,
+              width: 200,
+              height: 50,
+              fromRow: 0,
+              toRow: 1,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [tableBlock], measures: [tableMeasure] });
+    painter.paint(tableLayout, mount);
+
+    // Find both lines inside the table cell
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should be justified (has word-spacing > 0)
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
+    expect(firstLineWordSpacing).toBeGreaterThan(0);
+
+    // Last line should NOT be justified (word-spacing = 0)
+    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
+    expect(lastLineWordSpacing).toBe(0);
+  });
+
+  it('applies negative word-spacing when line width exceeds available width (compression case)', () => {
+    // When the measurer allows small overflow for justified text (assuming space compression),
+    // the renderer must apply negative word-spacing to actually compress the spaces.
+    const compressBlock: ParagraphBlock = {
+      kind: 'paragraph',
+      id: 'compress-test',
+      runs: [{ text: 'Word one two three four', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: { alignment: 'justify' },
+    };
+
+    // Simulate a line where width > maxWidth (measurer allowed overflow assuming compression)
+    const compressMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 14, // "Word one two t" - not last line
+          width: 210, // Width exceeds maxWidth
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 0,
+          fromChar: 14,
+          toRun: 0,
+          toChar: 24, // rest of text - last line
+          width: 80,
+          maxWidth: 200,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const compressLayout: Layout = {
+      pageSize: { w: 300, h: 300 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'compress-test',
+              x: 0,
+              y: 0,
+              width: 200,
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [compressBlock], measures: [compressMeasure] });
+    painter.paint(compressLayout, mount);
+
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should have NEGATIVE word-spacing (compression)
+    // line.width (210) > maxWidth (200), so slack = -10
+    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
+    // slack = availableWidth (200) - line.width (210) = -10
+    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
+    const expectedSpacing = (200 - 210) / 3;
+    expect(firstLineWordSpacing).toBeCloseTo(expectedSpacing, 1);
+
+    // Last line should NOT be justified
+    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
+    expect(lastLineWordSpacing).toBe(0);
   });
 
   it('emits pm metadata attributes', () => {
@@ -2078,6 +2275,54 @@ describe('DomPainter', () => {
     expect(span.classList.contains('track-insert-dec')).toBe(false);
     expect(span.dataset.trackChangeId).toBeUndefined();
     expect(span.dataset.trackChangeKind).toBeUndefined();
+  });
+
+  it('re-renders tracked changes if current version has no tracked changes but next version does', () => {
+    const blockId = 'tracked-version-block';
+    const trackedAttrs = {
+      trackedChangesMode: 'review' as const,
+      trackedChangesEnabled: true,
+    };
+    const originalBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: blockId,
+      runs: [
+        {
+          text: 'Pending review',
+          fontFamily: 'Arial',
+          fontSize: 16,
+        },
+      ],
+      attrs: trackedAttrs,
+    };
+
+    const updatedBlock: FlowBlock = {
+      ...originalBlock,
+      runs: [
+        {
+          ...originalBlock.runs[0],
+          trackedChange: {
+            kind: 'delete',
+            id: 'tc-new',
+          },
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(blockId, originalBlock.runs[0].text.length);
+
+    const painter = createDomPainter({ blocks: [originalBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    expect(mount.querySelector('[data-track-change-id]')).toBeNull();
+
+    painter.setData?.([updatedBlock], [paragraphMeasure]);
+    painter.paint(paragraphLayout, mount);
+
+    const trackedSpan = mount.querySelector('[data-track-change-id="tc-new"]') as HTMLElement;
+    expect(trackedSpan).toBeTruthy();
+    expect(trackedSpan.classList.contains('track-delete-dec')).toBe(true);
+    expect(trackedSpan.classList.contains('highlighted')).toBe(true);
   });
 
   describe('token resolution tests', () => {
@@ -4043,6 +4288,271 @@ describe('DomPainter', () => {
 
       const img = mount.querySelector('img') as HTMLElement;
       expect(img?.style.verticalAlign).toBe('bottom');
+    });
+
+    describe('data-image-metadata attribute', () => {
+      it('produces metadata with correct aspectRatio for valid dimensions', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 100,
+              height: 50,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 100,
+              ascent: 50,
+              descent: 0,
+              lineHeight: 50,
+            },
+          ],
+          totalHeight: 50,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 100,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeTruthy();
+
+        const metadata = JSON.parse(metadataAttr!);
+        expect(metadata.originalWidth).toBe(100);
+        expect(metadata.originalHeight).toBe(50);
+        expect(metadata.aspectRatio).toBe(2); // 100 / 50 = 2
+        expect(metadata.minWidth).toBe(20);
+        expect(metadata.minHeight).toBe(20);
+        expect(metadata.maxWidth).toBe(1000); // Math.max(100 * 3, 1000) = 1000
+        expect(metadata.maxHeight).toBe(1000); // Math.max(50 * 3, 1000) = 1000
+      });
+
+      it('produces NO metadata attribute when width is zero', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 0,
+              height: 100,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 0,
+              ascent: 100,
+              descent: 0,
+              lineHeight: 100,
+            },
+          ],
+          totalHeight: 100,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 0,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeNull();
+      });
+
+      it('produces NO metadata attribute when height is zero', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 100,
+              height: 0,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 100,
+              ascent: 0,
+              descent: 0,
+              lineHeight: 0,
+            },
+          ],
+          totalHeight: 0,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 100,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeNull();
+      });
+
+      it('calculates maxWidth/maxHeight based on 3x multiplier for large images', () => {
+        const imageBlock: FlowBlock = {
+          kind: 'paragraph',
+          id: 'img-block',
+          runs: [
+            {
+              kind: 'image',
+              src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+              width: 800,
+              height: 600,
+            },
+          ],
+        };
+
+        const imageMeasure: Measure = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 0,
+              width: 800,
+              ascent: 600,
+              descent: 0,
+              lineHeight: 600,
+            },
+          ],
+          totalHeight: 600,
+        };
+
+        const imageLayout: Layout = {
+          pageSize: { w: 1000, h: 1200 },
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                {
+                  kind: 'para',
+                  blockId: 'img-block',
+                  fromLine: 0,
+                  toLine: 1,
+                  x: 0,
+                  y: 0,
+                  width: 800,
+                },
+              ],
+            },
+          ],
+        };
+
+        const painter = createDomPainter({ blocks: [imageBlock], measures: [imageMeasure] });
+        painter.paint(imageLayout, mount);
+
+        const img = mount.querySelector('img');
+        expect(img).toBeTruthy();
+
+        const metadataAttr = img?.getAttribute('data-image-metadata');
+        expect(metadataAttr).toBeTruthy();
+
+        const metadata = JSON.parse(metadataAttr!);
+        expect(metadata.originalWidth).toBe(800);
+        expect(metadata.originalHeight).toBe(600);
+        expect(metadata.aspectRatio).toBeCloseTo(800 / 600, 5);
+        // For large images, 3x multiplier is used (800 * 3 = 2400 > 1000)
+        expect(metadata.maxWidth).toBe(2400);
+        expect(metadata.maxHeight).toBe(1800);
+        expect(metadata.minWidth).toBe(20);
+        expect(metadata.minHeight).toBe(20);
+      });
     });
   });
 });

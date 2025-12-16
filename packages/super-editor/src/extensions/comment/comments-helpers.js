@@ -226,12 +226,14 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
 
     // If the node is a commentRangeStart, record it so we can place a mark once we find the end.
     if (type.name === 'commentRangeStart') {
-      toMark.push({
-        commentId: resolvedCommentId,
-        importedId,
-        internal,
-        start: pos,
-      });
+      if (!matchingImportedComment?.isDone) {
+        toMark.push({
+          commentId: resolvedCommentId,
+          importedId,
+          internal,
+          start: pos,
+        });
+      }
 
       ensureFallbackComment({
         converter,

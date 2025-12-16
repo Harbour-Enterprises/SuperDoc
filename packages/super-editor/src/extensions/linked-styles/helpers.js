@@ -255,7 +255,13 @@ export const generateLinkedStyleString = (linkedStyle, basedOnStyle, node, paren
           if (color) markValue['background-color'] = color;
         }
       } else if (key === 'underline' && node) {
-        const styleValRaw = value?.value ?? value ?? '';
+        // Handle multiple possible formats for underline value:
+        // - { underline: 'single' } from parseMarks/getDefaultStyleDefinition
+        // - { underlineType: 'single' } from encodeMarksFromRPr
+        // - { value: 'single' } legacy format
+        // - 'single' as a direct string
+        const styleValRaw =
+          value?.underline ?? value?.underlineType ?? value?.value ?? (typeof value === 'string' ? value : '');
         const styleVal = styleValRaw.toString().toLowerCase();
         const hasInlineUnderlineOff = node.marks?.some(
           (m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none',

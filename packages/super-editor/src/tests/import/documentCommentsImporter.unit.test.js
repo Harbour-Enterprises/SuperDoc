@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const handlerMock = vi.fn(({ nodes }) => [
-  {
+const handlerMock = vi.fn(({ nodes }) =>
+  nodes.map((node) => ({
     type: 'paragraph',
-    attrs: { 'w14:paraId': nodes?.[0]?.fakeParaId ?? 'PARA-DEFAULT' },
+    attrs: { 'w14:paraId': node.fakeParaId ?? 'PARA-DEFAULT' },
     content: [],
-  },
-]);
+  })),
+);
 
 let uuidCounter = 0;
 
@@ -371,5 +371,79 @@ describe('Google Docs threading (missing commentsExtended.xml)', () => {
     comments.forEach((comment) => {
       expect(comment.parentCommentId).toBeUndefined();
     });
+  });
+
+  it('generates a resolved comment when comment has at least one sub-element marked as done', () => {
+    const docx = buildDocx({
+      comments: [
+        {
+          id: 1,
+          paraId: 'para-1',
+          elements: [
+            {
+              type: 'element',
+              name: 'w:p',
+              fakeParaId: 'para-2',
+              attributes: {
+                'w14:paraId': 'para-2',
+              },
+              elements: [
+                {
+                  type: 'element',
+                  name: 'w:r',
+                  elements: [
+                    {
+                      type: 'element',
+                      name: 'w:t',
+                      attributes: {},
+                      elements: [
+                        {
+                          type: 'text',
+                          text: 'Some text',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: 'element',
+              name: 'w:p',
+              fakeParaId: 'para-1',
+              attributes: {
+                'w14:paraId': 'para-1',
+              },
+              elements: [
+                {
+                  type: 'element',
+                  name: 'w:r',
+                  elements: [
+                    {
+                      type: 'element',
+                      name: 'w:t',
+                      attributes: {},
+                      elements: [
+                        {
+                          type: 'text',
+                          text: 'Some text',
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    docx['word/commentsExtended.xml'] = {
+      elements: [{ elements: [{ name: 'w15:commentEx', attributes: { 'w15:paraId': 'para-1', 'w15:done': '1' } }] }],
+    };
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(1);
+    expect(comments[0].isDone).toBe(true);
   });
 });
