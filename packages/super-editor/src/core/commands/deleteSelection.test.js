@@ -127,7 +127,8 @@ describe('deleteSelection', () => {
     const state = EditorState.create({ schema, doc, selection: sel });
 
     vi.spyOn(document, 'getSelection').mockReturnValue({
-      baseNode: { data: 'a' },
+      toString: () => 'a',
+      isCollapsed: false,
     });
 
     const cmd = deleteSelection();
@@ -136,6 +137,12 @@ describe('deleteSelection', () => {
   });
 
   it('returns true when dispatch is omitted (list content case)', () => {
+    // Ensure DOM selection is empty so the single-char guard does not short-circuit
+    vi.spyOn(document, 'getSelection').mockReturnValue({
+      toString: () => '',
+      isCollapsed: true,
+    });
+
     const doc = schema.node('doc', null, [
       schema.node('bulletList', null, [
         schema.node('listItem', null, [schema.node('paragraph', null, schema.text('foo bar'))]),

@@ -12,7 +12,10 @@ export const deleteSelection =
     // ProseMirror can treat the replacement as a backspace. Skip delete in that case.
     if (typeof document !== 'undefined' && document.getSelection) {
       const currentDomSelection = document.getSelection();
-      if (currentDomSelection?.baseNode?.data?.length === 1) {
+      const selectedLength = currentDomSelection?.toString?.().length;
+      const isCollapsed = currentDomSelection?.isCollapsed;
+      // Only guard when there is a non-collapsed single-character DOM selection
+      if (!isCollapsed && selectedLength === 1) {
         return false;
       }
     }
