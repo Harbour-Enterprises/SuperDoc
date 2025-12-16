@@ -356,9 +356,11 @@ describe('negative indent measurement', () => {
       const expectedFirstLineWidth = maxWidth + Math.abs(negativeLeft);
       expect(measure.lines[0].maxWidth).toBe(expectedFirstLineWidth);
 
-      // If there are multiple lines, body lines should be reduced by hanging
+      // Body lines use the same contentWidth as first line.
+      // The hanging indent affects WHERE body lines start (position), not their available width.
+      // Since indentLeft already accounts for body line position, body lines get full contentWidth.
       if (measure.lines.length > 1) {
-        const expectedBodyLineWidth = maxWidth + Math.abs(negativeLeft) - hanging;
+        const expectedBodyLineWidth = maxWidth + Math.abs(negativeLeft);
         expect(measure.lines[1].maxWidth).toBe(expectedBodyLineWidth);
       }
     });
@@ -392,10 +394,10 @@ describe('negative indent measurement', () => {
       const expectedFirstLineWidth = maxWidth + Math.abs(negativeLeft);
       expect(measure.lines[0].maxWidth).toBe(expectedFirstLineWidth);
 
-      // Body line width (reduced by hanging)
-      const expectedBodyLineWidth = maxWidth + Math.abs(negativeLeft) - hanging;
+      // Body lines use full contentWidth - hanging affects position, not available width
+      const expectedBodyLineWidth = maxWidth + Math.abs(negativeLeft);
       expect(measure.lines[1].maxWidth).toBe(expectedBodyLineWidth);
-      expect(measure.lines[1].maxWidth).toBe(318);
+      expect(measure.lines[1].maxWidth).toBe(336);
     });
 
     it('handles negative indent with firstLine indent', async () => {
@@ -458,20 +460,20 @@ describe('negative indent measurement', () => {
 
       expect(measure.lines.length).toBeGreaterThan(1);
 
-      // When hanging > firstLine, first line gets reduced, body lines get reduced more
+      // When hanging > firstLine, first line offset is clamped to 0.
+      // Body lines use full contentWidth - hanging affects position, not available width.
       const contentWidth = maxWidth + Math.abs(negativeLeft);
       const rawFirstLineOffset = firstLine - hanging; // 10 - 30 = -20
       const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset); // 0
-      const bodyLineOffset = Math.max(0, hanging - firstLine); // 20
 
       const expectedFirstLineWidth = contentWidth - clampedFirstLineOffset;
-      const expectedBodyLineWidth = contentWidth - bodyLineOffset;
+      const expectedBodyLineWidth = contentWidth; // Body lines use full contentWidth
 
       expect(measure.lines[0].maxWidth).toBe(expectedFirstLineWidth);
       expect(measure.lines[0].maxWidth).toBe(448);
 
       expect(measure.lines[1].maxWidth).toBe(expectedBodyLineWidth);
-      expect(measure.lines[1].maxWidth).toBe(428);
+      expect(measure.lines[1].maxWidth).toBe(448);
     });
   });
 
@@ -640,8 +642,8 @@ describe('negative indent measurement', () => {
       // First line (with bullet) gets full expanded width
       expect(measure.lines[0].maxWidth).toBe(maxWidth + Math.abs(negativeLeft));
 
-      // Subsequent lines have hanging indent applied
-      expect(measure.lines[1].maxWidth).toBe(maxWidth + Math.abs(negativeLeft) - hanging);
+      // Body lines also use full contentWidth - hanging affects position, not available width
+      expect(measure.lines[1].maxWidth).toBe(maxWidth + Math.abs(negativeLeft));
     });
   });
 });

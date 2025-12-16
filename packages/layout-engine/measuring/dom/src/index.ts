@@ -494,12 +494,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Do not let hanging expand the available width; clamp negative offset to zero.
   const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset);
   const firstLineOffset = isWordLayoutList ? 0 : clampedFirstLineOffset;
-  // Body lines (line 2+) are reduced by the hanging amount when hanging > firstLine.
-  // This is the inverse of firstLineOffset - when first line isn't reduced, body lines are.
-  const bodyLineOffset = suppressFirstLine ? 0 : Math.max(0, hanging - firstLine);
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  // Width available for body lines after applying hanging indent offset.
-  const bodyContentWidth = Math.max(1, contentWidth - bodyLineOffset);
+  // Body lines use contentWidth (same as first line for most cases).
+  // The hanging indent affects WHERE body lines start (indentLeft), not their available width.
+  // Since indentLeft already accounts for the body line position, no additional offset is needed.
+  const bodyContentWidth = contentWidth;
 
   // Calculate available width for the first line.
   // There are two list marker layout patterns in OOXML:
@@ -521,13 +520,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   let initialAvailableWidth: number;
   const textStartPx = (wordLayout as { textStartPx?: number } | undefined)?.textStartPx;
 
-  const treatAsHanging = isWordLayoutList && indentLeft === 0 && hanging === 0 && typeof textStartPx === 'number';
-  if (typeof textStartPx === 'number' && textStartPx > indentLeft && !treatAsHanging) {
+  if (typeof textStartPx === 'number' && textStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
     // Available width = from textStartPx to right margin.
     initialAvailableWidth = Math.max(1, maxWidth - textStartPx - indentRight);
   } else {
-    // No textStartPx or we intentionally treat as hanging: text starts at the normal indent position.
+    // No textStartPx: text starts at the normal indent position.
     initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   }
 
