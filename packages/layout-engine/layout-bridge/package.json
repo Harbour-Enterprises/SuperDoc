@@ -7,7 +7,7 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "source": "./src/index.js",
+      "source": "./src/index.ts",
       "default": "./dist/index.js"
     }
   },
@@ -27,6 +27,7 @@
     "@superdoc/painter-dom": "workspace:*"
   },
   "devDependencies": {
+    "@superdoc/pm-adapter": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "^8.0.2",
     "typescript": "catalog:",
