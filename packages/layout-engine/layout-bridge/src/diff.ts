@@ -367,6 +367,7 @@ const paragraphBlocksEqual = (a: FlowBlock & { kind: 'paragraph' }, b: FlowBlock
       ('color' in runA ? runA.color : undefined) !== ('color' in runB ? runB.color : undefined) ||
       ('fontSize' in runA ? runA.fontSize : undefined) !== ('fontSize' in runB ? runB.fontSize : undefined) ||
       ('fontFamily' in runA ? runA.fontFamily : undefined) !== ('fontFamily' in runB ? runB.fontFamily : undefined) ||
+      ('highlight' in runA ? runA.highlight : undefined) !== ('highlight' in runB ? runB.highlight : undefined) ||
       getTrackedChangeKey(runA) !== getTrackedChangeKey(runB)
     ) {
       return false;
