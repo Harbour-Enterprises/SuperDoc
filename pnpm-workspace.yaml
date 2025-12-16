@@ -91,4 +91,5 @@ catalog:
 onlyBuiltDependencies:
   - canvas
   - esbuild
+  - unrs-resolver
   - vue-demi
