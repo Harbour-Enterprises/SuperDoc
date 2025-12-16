@@ -374,7 +374,24 @@ export function resolveMeasurementConstraints(options: LayoutOptions): {
   measurementHeight: number;
 } {
   const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
-  const margins = options.margins ?? DEFAULT_MARGINS;
+  // Merge defaults per side, ignoring undefined so we don't override with undefined
+  // and end up with NaN content sizes.
+  /**
+   * Normalizes a margin value, using a fallback for undefined or non-finite values.
+   * Prevents NaN content sizes when margin properties are partially defined.
+   *
+   * @param value - The margin value to normalize (may be undefined)
+   * @param fallback - The default margin value to use if value is invalid
+   * @returns The normalized margin value (guaranteed to be finite)
+   */
+  const normalizeMargin = (value: number | undefined, fallback: number): number =>
+    Number.isFinite(value) ? (value as number) : fallback;
+  const margins = {
+    top: normalizeMargin(options.margins?.top, DEFAULT_MARGINS.top),
+    right: normalizeMargin(options.margins?.right, DEFAULT_MARGINS.right),
+    bottom: normalizeMargin(options.margins?.bottom, DEFAULT_MARGINS.bottom),
+    left: normalizeMargin(options.margins?.left, DEFAULT_MARGINS.left),
+  };
   const contentWidth = pageSize.w - (margins.left + margins.right);
   const contentHeight = pageSize.h - (margins.top + margins.bottom);
 

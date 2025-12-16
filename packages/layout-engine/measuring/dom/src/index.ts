@@ -478,8 +478,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const lines: Line[] = [];
   const indent = block.attrs?.indent;
   const spacing = block.attrs?.spacing;
-  const indentLeft = sanitizePositive(indent?.left);
-  const indentRight = sanitizePositive(indent?.right);
+  // Use sanitizeIndent (not sanitizePositive) to allow negative values.
+  // Negative indents extend text into the page margin area (OOXML spec).
+  const indentLeft = sanitizeIndent(indent?.left);
+  const indentRight = sanitizeIndent(indent?.right);
   const firstLine = indent?.firstLine ?? 0;
   const hanging = indent?.hanging ?? 0;
   const isWordLayoutList = Boolean(wordLayout?.marker);
@@ -487,12 +489,17 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // suppressFirstLineIndent=true for these cases.
   const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
   const rawFirstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
-  // Do not allow hanging to expand first-line width; clamp negative offset to zero.
-  const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset);
   // When wordLayout is present, the hanging region is occupied by the list marker/tab.
   // Do not expand the first-line width; use the same content width as subsequent lines.
+  // Do not let hanging expand the available width; clamp negative offset to zero.
+  const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset);
   const firstLineOffset = isWordLayoutList ? 0 : clampedFirstLineOffset;
+  // Body lines (line 2+) are reduced by the hanging amount when hanging > firstLine.
+  // This is the inverse of firstLineOffset - when first line isn't reduced, body lines are.
+  const bodyLineOffset = suppressFirstLine ? 0 : Math.max(0, hanging - firstLine);
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
+  // Width available for body lines after applying hanging indent offset.
+  const bodyContentWidth = Math.max(1, contentWidth - bodyLineOffset);
 
   // Calculate available width for the first line.
   // There are two list marker layout patterns in OOXML:
@@ -812,8 +819,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Start a fresh (currently empty) line after the break. If no further content
       // is added, this placeholder will become a blank line with the appropriate height.
       const hadPreviousLine = lines.length > 0;
+      // Body lines (line 2+) use bodyContentWidth which accounts for hanging indent.
       const nextLineMaxWidth: number = hadPreviousLine
-        ? getEffectiveWidth(contentWidth)
+        ? getEffectiveWidth(bodyContentWidth)
         : getEffectiveWidth(initialAvailableWidth);
       currentLine = {
         fromRun: runIndex,
@@ -940,7 +948,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         pendingTabAlignment = null;
         lastAppliedTabAlign = null;
 
-        // Start new line with the image
+        // Start new line with the image (body line, so use bodyContentWidth for hanging indent)
         currentLine = {
           fromRun: runIndex,
           fromChar: 0,
@@ -948,7 +956,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1,
           width: imageWidth,
           maxFontSize: imageHeight,
-          maxWidth: getEffectiveWidth(contentWidth),
+          maxWidth: getEffectiveWidth(bodyContentWidth),
           spaceCount: 0,
           segments: [
             {
@@ -1062,7 +1070,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         pendingTabAlignment = null;
         lastAppliedTabAlign = null;
 
-        // Start new line with the annotation
+        // Start new line with the annotation (body line, so use bodyContentWidth for hanging indent)
         currentLine = {
           fromRun: runIndex,
           fromChar: 0,
@@ -1070,7 +1078,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1,
           width: annotationWidth,
           maxFontSize: annotationHeight,
-          maxWidth: getEffectiveWidth(contentWidth),
+          maxWidth: getEffectiveWidth(bodyContentWidth),
           spaceCount: 0,
           segments: [
             {
@@ -1161,6 +1169,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             pendingTabAlignment = null;
             lastAppliedTabAlign = null;
 
+            // Body line, so use bodyContentWidth for hanging indent
             currentLine = {
               fromRun: runIndex,
               fromChar: spacesStartChar,
@@ -1169,7 +1178,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               width: spacesWidth,
               maxFontSize: run.fontSize,
               maxFontInfo: getFontInfoFromRun(run),
-              maxWidth: getEffectiveWidth(contentWidth),
+              maxWidth: getEffectiveWidth(bodyContentWidth),
               segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
               spaceCount: spacesLength,
             };
@@ -1251,6 +1260,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               pendingTabAlignment = null;
               lastAppliedTabAlign = null;
 
+              // Body line, so use bodyContentWidth for hanging indent
               currentLine = {
                 fromRun: runIndex,
                 fromChar: spaceStartChar,
@@ -1259,7 +1269,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
                 width: singleSpaceWidth,
                 maxFontSize: run.fontSize,
                 maxFontInfo: getFontInfoFromRun(run),
-                maxWidth: getEffectiveWidth(contentWidth),
+                maxWidth: getEffectiveWidth(bodyContentWidth),
                 segments: [{ runIndex, fromChar: spaceStartChar, toChar: spaceEndChar, width: singleSpaceWidth }],
                 spaceCount: 1,
               };
@@ -1499,6 +1509,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           tabStopCursor = 0;
           pendingTabAlignment = null;
 
+          // Body line, so use bodyContentWidth for hanging indent
           currentLine = {
             fromRun: runIndex,
             fromChar: wordStartChar,
@@ -1507,7 +1518,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
             maxFontInfo: getFontInfoFromRun(run),
-            maxWidth: getEffectiveWidth(contentWidth),
+            maxWidth: getEffectiveWidth(bodyContentWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
             spaceCount: 0,
           };
@@ -2543,6 +2554,17 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
 
 const sanitizePositive = (value: number | undefined): number =>
   typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0;
+
+/**
+ * Sanitizes indent values, preserving negative numbers.
+ * Unlike sanitizePositive, this allows negative values which represent
+ * text extending into the page margin area (per OOXML specification).
+ *
+ * @param value - The indent value to sanitize (may be undefined, NaN, or Infinity)
+ * @returns The sanitized indent value (0 if invalid, preserves negative if valid)
+ */
+const sanitizeIndent = (value: number | undefined): number =>
+  typeof value === 'number' && Number.isFinite(value) ? value : 0;
 
 const sanitizeDecimalSeparator = (value: unknown): string => {
   if (value === ',') return ',';

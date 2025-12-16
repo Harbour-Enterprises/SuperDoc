@@ -1650,9 +1650,12 @@ export class DomPainter {
         block.attrs?.sdt?.type === 'structuredContent' ||
         block.attrs?.containerSdt?.type === 'documentSection' ||
         block.attrs?.containerSdt?.type === 'structuredContent';
+      // Negative indents extend text into the margin area, requiring overflow:visible
+      const paraIndentForOverflow = block.attrs?.indent;
+      const hasNegativeIndent = (paraIndentForOverflow?.left ?? 0) < 0 || (paraIndentForOverflow?.right ?? 0) < 0;
       const styles = isTocEntry
         ? { ...fragmentStyles, whiteSpace: 'nowrap' }
-        : hasMarker || hasSdtContainer
+        : hasMarker || hasSdtContainer || hasNegativeIndent
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
@@ -1695,8 +1698,11 @@ export class DomPainter {
       }
 
       // Remove fragment-level indent so line-level indent handling doesn't double-apply.
+      // Include margin properties for negative indents (which use margin instead of padding).
       if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
       if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
+      if (fragmentEl.style.marginLeft) fragmentEl.style.removeProperty('margin-left');
+      if (fragmentEl.style.marginRight) fragmentEl.style.removeProperty('margin-right');
       if (fragmentEl.style.textIndent) fragmentEl.style.removeProperty('text-indent');
 
       const paraIndent = block.attrs?.indent;
@@ -1800,20 +1806,37 @@ export class DomPainter {
             // The segment X positions already include the paragraph indent from layout calculation.
             // For first lines with firstLineOffset, adjust the starting position.
             if (isFirstLine && firstLineOffset !== 0) {
-              const adjustedPadding = paraIndentLeft + firstLineOffset;
-              lineEl.style.paddingLeft = `${adjustedPadding}px`;
+              // For negative left indent, fragment position is already adjusted in layout engine.
+              // Only apply padding for the firstLineOffset (relative to the paragraph indent).
+              const effectiveLeftIndent = paraIndentLeft < 0 ? 0 : paraIndentLeft;
+              const adjustedPadding = effectiveLeftIndent + firstLineOffset;
+              if (adjustedPadding > 0) {
+                lineEl.style.paddingLeft = `${adjustedPadding}px`;
+              }
+              // Note: negative adjustedPadding (from hanging indent) is handled by textIndent below
             }
             // Otherwise, don't set paddingLeft - segment positions handle indentation
-          } else if (paraIndentLeft) {
+          } else if (paraIndentLeft && paraIndentLeft > 0) {
+            // Only apply positive left indent as padding.
+            // Negative left indent is handled by fragment positioning in layout engine.
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+          } else if (!isFirstLine && paraIndent?.hanging && paraIndent.hanging > 0) {
+            // Body lines with hanging indent need paddingLeft = hanging.
+            // This applies even when paraIndentLeft is negative (text extending into margin).
+            // First line doesn't get this padding because it "hangs" (starts further left).
+            lineEl.style.paddingLeft = `${paraIndent.hanging}px`;
           }
         }
-        if (paraIndentRight) {
+        if (paraIndentRight && paraIndentRight > 0) {
+          // Only apply positive right indent as padding.
+          // Negative right indent is handled by fragment positioning in layout engine.
           lineEl.style.paddingRight = `${paraIndentRight}px`;
         }
         // Apply first-line/hanging text-indent (skip for list first lines and lines with explicit positioning)
         // When using explicit segment positioning, segments are absolutely positioned and textIndent
         // has no effect, so we skip it to avoid confusion.
+        // Also skip when left indent is negative - fragment positioning already handles that case.
+        const hasNegativeLeftIndent = paraIndentLeft != null && paraIndentLeft < 0;
         if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
           if (!hasExplicitSegmentPositioning) {
             lineEl.style.textIndent = `${firstLineOffset}px`;
@@ -4939,15 +4962,22 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
   }
   const indent = attrs.indent;
   if (indent) {
-    if (indent.left) {
+    // Only apply positive indents as padding.
+    // Negative indents are handled by fragment positioning in the layout engine.
+    if (indent.left && indent.left > 0) {
       element.style.paddingLeft = `${indent.left}px`;
     }
-    if (indent.right) {
+    if (indent.right && indent.right > 0) {
       element.style.paddingRight = `${indent.right}px`;
     }
-    const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
-    if (textIndent) {
-      element.style.textIndent = `${textIndent}px`;
+    // Skip textIndent when left indent is negative - fragment positioning handles the indent,
+    // and per-line paddingLeft handles the hanging indent for body lines.
+    const hasNegativeLeftIndent = indent.left != null && indent.left < 0;
+    if (!hasNegativeLeftIndent) {
+      const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
+      if (textIndent) {
+        element.style.textIndent = `${textIndent}px`;
+      }
     }
   }
   applyParagraphBorderStyles(element, attrs.borders);
