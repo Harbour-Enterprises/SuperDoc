@@ -7,8 +7,7 @@
 
 import type { ParagraphBlock, TableBlock } from '@superdoc/contracts';
 import type { PMNode, NodeHandlerContext } from '../types.js';
-import { resolveNodeSdtMetadata } from './metadata.js';
-import { applySdtMetadataToParagraphBlocks, applySdtMetadataToTableBlock } from './metadata.js';
+import { resolveNodeSdtMetadata, applySdtMetadataToParagraphBlocks, applySdtMetadataToTableBlock } from './metadata.js';
 
 /**
  * Handle structured content block nodes.

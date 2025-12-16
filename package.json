@@ -78,6 +78,8 @@
     "@vitest/coverage-v8": "catalog:",
     "eslint": "catalog:",
     "eslint-config-prettier": "^9.1.0",
+    "eslint-import-resolver-typescript": "^4.4.4",
+    "eslint-plugin-import-x": "^4.16.1",
     "eslint-plugin-jsdoc": "catalog:",
     "husky": "catalog:",
     "jsdom": "catalog:",
