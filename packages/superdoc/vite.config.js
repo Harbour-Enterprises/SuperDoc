@@ -8,6 +8,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import vue from '@vitejs/plugin-vue'
 
 import { version } from './package.json';
+import sourceResolve from '../../vite.sourceResolve';
 
 const visualizerConfig = {
   filename: './dist/bundle-analysis.html',
@@ -27,7 +28,7 @@ export const getAliases = (_isDev) => {
     // with "@superdoc/" that don't also match one of the known packages.
 
     {
-      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor)(.*)/,
+      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor|locale-utils)(.*)/,
       replacement: path.resolve(__dirname, './src/$1'),
     },
 
@@ -36,14 +37,7 @@ export const getAliases = (_isDev) => {
 
     // Super Editor aliases
     { find: '@', replacement: '@superdoc/super-editor' },
-    { find: '@core', replacement: fileURLToPath(new URL('../super-editor/src/core', import.meta.url)) },
-    { find: '@extensions', replacement: fileURLToPath(new URL('../super-editor/src/extensions', import.meta.url)) },
-    { find: '@features', replacement: fileURLToPath(new URL('../super-editor/src/features', import.meta.url)) },
-    { find: '@components', replacement: fileURLToPath(new URL('../super-editor/src/components', import.meta.url)) },
-    { find: '@helpers', replacement: fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)) },
-    { find: '@converter', replacement: fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)) },
-    { find: '@tests', replacement: fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)) },
-    { find: '@translator', replacement: fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)) },
+    ...sourceResolve.alias,
   ];
 
   return aliases;
