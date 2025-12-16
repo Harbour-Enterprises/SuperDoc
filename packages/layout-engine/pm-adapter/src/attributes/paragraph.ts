@@ -353,6 +353,22 @@ const isTruthy = (value: unknown): boolean => {
 };
 
 /**
+ * Safely extracts a property from an unknown object.
+ * Used to replace unsafe type assertions with proper type guards.
+ *
+ * @param obj - The object to extract from
+ * @param key - The property key to extract
+ * @returns The property value, or undefined if not accessible
+ */
+const safeGetProperty = (obj: unknown, key: string): unknown => {
+  if (!obj || typeof obj !== 'object') {
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  return record[key];
+};
+
+/**
  * Check if a value represents an explicit false boolean.
  */
 const isExplicitFalse = (value: unknown): boolean => {
@@ -1157,8 +1173,30 @@ export const computeParagraphAttrs = (
       (paragraphAttrs.spacing as Record<string, unknown>).afterAutospacing = normalizedSpacing.afterAutospacing;
     }
   }
-  if (normalizedSpacing?.contextualSpacing != null) {
-    paragraphAttrs.contextualSpacing = normalizedSpacing.contextualSpacing;
+  /**
+   * Extract contextualSpacing from multiple sources with fallback chain.
+   *
+   * OOXML stores contextualSpacing (w:contextualSpacing) as a sibling to spacing (w:spacing),
+   * not nested within it. However, our normalization may place it in different locations.
+   *
+   * Fallback priority (highest to lowest):
+   * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
+   * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
+   * 3. attrs.contextualSpacing - Top-level attribute
+   *
+   * OOXML Boolean Handling:
+   * - Supports multiple representations: true, 1, '1', 'true', 'on'
+   * - Uses isTruthy() to handle all valid OOXML boolean forms
+   * - Treats null/undefined as "not set" (no contextualSpacing)
+   */
+  const contextualSpacingValue =
+    normalizedSpacing?.contextualSpacing ??
+    safeGetProperty(paragraphProps, 'contextualSpacing') ??
+    safeGetProperty(attrs, 'contextualSpacing');
+
+  if (contextualSpacingValue != null) {
+    // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')
+    paragraphAttrs.contextualSpacing = isTruthy(contextualSpacingValue);
   }
 
   const hasExplicitIndent = Boolean(normalizedIndent);

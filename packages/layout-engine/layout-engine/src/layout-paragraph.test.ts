@@ -538,3 +538,568 @@ describe('layoutParagraphBlock - remeasurement with list markers', () => {
     });
   });
 });
+
+describe('layoutParagraphBlock - contextualSpacing', () => {
+  describe('same-style paragraphs', () => {
+    it('suppresses spacingBefore when same-style paragraphs are adjacent', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Heading1';
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Heading1',
+          contextualSpacing: true,
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // When contextualSpacing is active and styles match:
+      // 1. spacingBefore (30) is zeroed
+      // 2. prevTrailing (20) is undone (cursorY -= 20)
+      // 3. Line height (20) is added
+      // 4. spacingAfter (20) is added at the end
+      // Result: 100 - 20 + 20 + 20 = 120
+      expect(pageState.cursorY).toBe(120);
+    });
+
+    it('undoes previous paragraph trailing spacing when contextualSpacing is active', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = 15;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // When contextualSpacing is active and styles match:
+      // 1. spacingBefore (10) is zeroed
+      // 2. prevTrailing (15) is undone (cursorY -= 15)
+      // 3. Line height (20) is added
+      // 4. spacingAfter (10) is added at the end
+      // Result: 100 - 15 + 20 + 10 = 115
+      expect(pageState.cursorY).toBe(115);
+      expect(pageState.trailingSpacing).toBe(10);
+    });
+
+    it('handles contextualSpacing when trailingSpacing is 0', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = 0;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // When contextualSpacing is active and styles match:
+      // 1. spacingBefore (10) is zeroed
+      // 2. prevTrailing (0) is undone (no change)
+      // 3. Line height (20) is added
+      // 4. spacingAfter (10) is added at the end
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+      expect(pageState.trailingSpacing).toBe(10);
+    });
+
+    it('handles contextualSpacing when trailingSpacing is null', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (pageState.trailingSpacing as any) = null;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // null trailingSpacing is treated as 0
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+    });
+
+    it('handles contextualSpacing when trailingSpacing is undefined', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = undefined;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // undefined trailingSpacing is treated as 0
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+    });
+  });
+
+  describe('different-style paragraphs', () => {
+    it('does not apply contextualSpacing when style IDs differ', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Heading1';
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // Different styles: contextualSpacing should NOT suppress spacing
+      // Normal spacing collapse applies:
+      // 1. prevTrailing (20) remains in trailingSpacing (will be collapsed)
+      // 2. spacingBefore (30) - prevTrailing (20) = 10 additional spacing
+      // 3. Line height (20) is added
+      // 4. spacingAfter (20) is added at the end
+      // Result: 100 + 10 + 20 + 20 = 150
+      expect(pageState.cursorY).toBe(150);
+    });
+
+    it('does not apply contextualSpacing when lastParagraphStyleId is undefined', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = undefined;
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // No lastParagraphStyleId: contextualSpacing should NOT apply
+      // Normal spacing collapse applies
+      // Result: 100 + 10 + 20 + 20 = 150
+      expect(pageState.cursorY).toBe(150);
+    });
+
+    it('does not apply contextualSpacing when current styleId is undefined', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          // styleId is undefined
+          contextualSpacing: true,
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // No current styleId: contextualSpacing should NOT apply
+      // Normal spacing collapse applies
+      // Result: 100 + 10 + 20 + 20 = 150
+      expect(pageState.cursorY).toBe(150);
+    });
+  });
+
+  describe('contextualSpacing disabled', () => {
+    it('does not suppress spacing when contextualSpacing is false', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: false,
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // contextualSpacing is false: normal spacing collapse should apply
+      // Result: 100 + 10 + 20 + 20 = 150
+      expect(pageState.cursorY).toBe(150);
+    });
+
+    it('does not suppress spacing when contextualSpacing is not set', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = 20;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          // contextualSpacing not set
+          spacing: {
+            before: 30,
+            after: 20,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // contextualSpacing not set: normal spacing collapse should apply
+      // Result: 100 + 10 + 20 + 20 = 150
+      expect(pageState.cursorY).toBe(150);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('handles NaN trailingSpacing gracefully', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = NaN;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // NaN should be treated as 0
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+    });
+
+    it('handles Infinity trailingSpacing gracefully', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = Infinity;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // Infinity should be treated as 0
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+    });
+
+    it('handles negative trailingSpacing gracefully', () => {
+      const pageState = makePageState();
+      pageState.lastParagraphStyleId = 'Normal';
+      pageState.trailingSpacing = -10;
+      pageState.cursorY = 100;
+
+      const ensurePage = vi.fn(() => pageState);
+
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'test-block',
+        runs: [{ text: 'Test', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          styleId: 'Normal',
+          contextualSpacing: true,
+          spacing: {
+            before: 10,
+            after: 10,
+          },
+        },
+      };
+
+      const measure = makeMeasure([{ width: 100, lineHeight: 20, maxWidth: 150 }]);
+
+      const ctx: ParagraphLayoutContext = {
+        block,
+        measure,
+        columnWidth: 150,
+        ensurePage,
+        advanceColumn: vi.fn((state) => state),
+        columnX: vi.fn(() => 50),
+        floatManager: makeFloatManager(),
+      };
+
+      layoutParagraphBlock(ctx);
+
+      // Negative should be treated as 0
+      // Result: 100 + 20 + 10 = 130
+      expect(pageState.cursorY).toBe(130);
+    });
+  });
+});
