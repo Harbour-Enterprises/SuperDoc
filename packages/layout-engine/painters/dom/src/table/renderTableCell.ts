@@ -11,7 +11,7 @@ import type {
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
-import { toCssFontFamily } from '../../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils/index.js';
 
 /**
  * Default gap between list marker and text content in pixels.
