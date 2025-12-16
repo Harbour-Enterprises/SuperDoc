@@ -52,6 +52,8 @@ export type PageDecorationPayload = {
   contentWidth?: number;
   headerId?: string;
   sectionType?: string;
+  /** Minimum Y coordinate from layout; negative when content extends above y=0 */
+  minY?: number;
   box?: { x: number; y: number; width: number; height: number };
   hitRegion?: { x: number; y: number; width: number; height: number };
 };

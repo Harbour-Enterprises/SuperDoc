@@ -41,6 +41,11 @@ export type HeaderFooterRegion = {
   width: number;
   /** Height of the region in pixels */
   height: number;
+  /**
+   * Minimum Y coordinate from layout (can be negative if content extends above y=0).
+   * Used to adjust editor host positioning for content with negative offsets.
+   */
+  minY?: number;
 };
 
 /**
