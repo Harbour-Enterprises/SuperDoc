@@ -5,9 +5,11 @@ import type {
   ParagraphBlock,
   ParagraphAttrs,
   ParagraphFrame,
+  TableAttrs,
+  TableCellAttrs,
 } from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
-import { hashParagraphBorders } from './paragraph-hash-utils.js';
+import { hashParagraphBorders, hashTableBorders, hashCellBorders } from './paragraph-hash-utils.js';
 
 /**
  * Maximum cache size (number of entries)
@@ -76,6 +78,29 @@ const hashRuns = (block: FlowBlock): string => {
       }
 
       for (const cell of row.cells) {
+        // Include cell-level attributes that affect rendering (borders, padding, etc.)
+        // This ensures cache invalidation when cell formatting changes (e.g., remove borders).
+        if (cell.attrs) {
+          const cellAttrs = cell.attrs as TableCellAttrs;
+          const cellAttrParts: string[] = [];
+          if (cellAttrs.borders) {
+            cellAttrParts.push(`cb:${hashCellBorders(cellAttrs.borders)}`);
+          }
+          if (cellAttrs.padding) {
+            const p = cellAttrs.padding;
+            cellAttrParts.push(`cp:${p.top ?? 0}:${p.right ?? 0}:${p.bottom ?? 0}:${p.left ?? 0}`);
+          }
+          if (cellAttrs.verticalAlign) {
+            cellAttrParts.push(`va:${cellAttrs.verticalAlign}`);
+          }
+          if (cellAttrs.background) {
+            cellAttrParts.push(`bg:${cellAttrs.background}`);
+          }
+          if (cellAttrParts.length > 0) {
+            cellHashes.push(`ca:${cellAttrParts.join(':')}`);
+          }
+        }
+
         // Support both new multi-block cells and legacy single paragraph cells
         const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
 
@@ -173,8 +198,28 @@ const hashRuns = (block: FlowBlock): string => {
         }
       }
     }
+    // Include table-level attributes that affect rendering (borders, etc.)
+    // This ensures cache invalidation when table formatting changes (e.g., remove borders).
+    let tableAttrsKey = '';
+    if (tableBlock.attrs) {
+      const tblAttrs = tableBlock.attrs as TableAttrs;
+      const tableAttrParts: string[] = [];
+      if (tblAttrs.borders) {
+        tableAttrParts.push(`tb:${hashTableBorders(tblAttrs.borders)}`);
+      }
+      if (tblAttrs.borderCollapse) {
+        tableAttrParts.push(`bc:${tblAttrs.borderCollapse}`);
+      }
+      if (tblAttrs.cellSpacing !== undefined) {
+        tableAttrParts.push(`cs:${tblAttrs.cellSpacing}`);
+      }
+      if (tableAttrParts.length > 0) {
+        tableAttrsKey = `|ta:${tableAttrParts.join(':')}`;
+      }
+    }
+
     const contentHash = cellHashes.join('|');
-    return `${block.id}:table:${contentHash}`;
+    return `${block.id}:table:${contentHash}${tableAttrsKey}`;
   }
 
   if (block.kind !== 'paragraph') return block.id;
