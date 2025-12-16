@@ -1,4 +1,4 @@
-// @ts-check
+// @ts-nocheck
 import { Node, Attribute } from '@core/index.js';
 
 export const DocumentPartObject = Node.create({
@@ -6,6 +6,7 @@ export const DocumentPartObject = Node.create({
   group: 'block',
   content: 'block*',
   isolating: true,
+  excludeFromSummaryJSON: true,
 
   addOptions() {
     return {

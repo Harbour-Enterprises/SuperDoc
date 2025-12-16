@@ -217,7 +217,15 @@ function processRelationships(root, convertedXml, results) {
 
     // Validate internal target files exist
     if (targetMode.toLowerCase() !== 'external' && !looksExternal(target)) {
-      const likelyPath = `word/${target.replace(/^\.?\//, '')}`;
+      // Handle relative paths that go UP from word/ directory (e.g., ../customXml/item1.xml)
+      let likelyPath;
+      if (target.startsWith('../')) {
+        // Resolve relative path: ../customXml/item1.xml -> customXml/item1.xml
+        likelyPath = target.replace(/^\.\.\//, '');
+      } else {
+        likelyPath = `word/${target.replace(/^\.?\//, '')}`;
+      }
+
       if (!(likelyPath in convertedXml)) {
         if (!isImageType(type)) {
           results.push(`Removed relationship ${id} with missing target: ${target}`);

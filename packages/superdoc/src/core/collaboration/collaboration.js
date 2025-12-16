@@ -35,6 +35,7 @@ function awarenessHandler(context, { changes = {}, states }) {
  * Main function to create a provider for collaboration.
  * Currently only hocuspocus is actually supported.
  *
+ * @deprecated Use external provider instead. Pass { ydoc, provider } to modules.collaboration config.
  * @param {Object} param The config object
  * @param {Object} param.config The configuration object
  * @param {Object} param.ydoc The Yjs document
@@ -43,6 +44,9 @@ function awarenessHandler(context, { changes = {}, states }) {
  * @returns {Object} The provider and socket
  */
 function createProvider({ config, user, documentId, socket, superdocInstance }) {
+  console.warn(
+    '[superdoc] Internal provider creation is deprecated. Pass { ydoc, provider } to modules.collaboration instead.',
+  );
   if (!config.providerType) config.providerType = 'superdoc';
 
   const providers = {
@@ -55,7 +59,7 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
 }
 
 /**
- *
+ * @deprecated Use external provider instead. Pass { ydoc, provider } to modules.collaboration config.
  * @param {Object} param The config object
  * @param {Object} param.config The configuration object
  * @param {Object} param.ydoc The Yjs document
@@ -78,7 +82,7 @@ function createSuperDocProvider({ config, user, documentId, superdocInstance }) 
 }
 
 /**
- *
+ * @deprecated Use external provider instead. Pass { ydoc, provider } to modules.collaboration config.
  * @param {Object} param The config object
  * @param {Object} param.config The configuration object
  * @param {Object} param.ydoc The Yjs document
@@ -129,4 +133,34 @@ const onDestroy = (superdocInstance, documentId) => {
   console.warn('🔌 [superdoc] Destroyed', documentId);
 };
 
-export { createProvider };
+/**
+ * Setup awareness handler for external providers.
+ * Wires up awareness 'change' events to emit superdoc 'awareness-update' events.
+ *
+ * @param {Object} provider The external provider (must have awareness property)
+ * @param {Object} superdocInstance The SuperDoc instance
+ * @param {Object} user The user object for local awareness state
+ * @returns {void}
+ */
+function setupAwarenessHandler(provider, superdocInstance, user) {
+  const awareness = provider.awareness;
+  if (!awareness) {
+    console.warn('[superdoc] External provider missing awareness property');
+    return;
+  }
+
+  // Set local user state using standard Yjs awareness API
+  if (user && awareness.setLocalStateField) {
+    awareness.setLocalStateField('user', user);
+  }
+
+  // Listen to standard Yjs awareness 'change' event
+  awareness.on('change', (changes = {}) => {
+    awarenessHandler(superdocInstance, {
+      changes,
+      states: awareness.getStates(),
+    });
+  });
+}
+
+export { createProvider, setupAwarenessHandler };

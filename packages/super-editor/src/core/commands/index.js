@@ -34,18 +34,28 @@ export * from './selectTextblockEnd.js';
 export * from './insertContent.js';
 export * from './insertContentAt.js';
 export * from './undoInputRule.js';
+export * from './setBodyHeaderFooter.js';
+export * from './setSectionHeaderFooterAtSelection.js';
+export * from './insertSectionBreakAtSelection.js';
+
+// Paragraph
+export * from './textIndent.js';
+export * from './lineHeight.js';
+
+// Run
+export * from './backspaceEmptyRunParagraph.js';
+export * from './backspaceSkipEmptyRun.js';
+export * from './backspaceNextToRun.js';
+export * from './deleteSkipEmptyRun.js';
+export * from './deleteNextToRun.js';
+export * from './skipTab.js';
 
 // Lists
-export * from './wrapInList.js';
 export * from './toggleList.js';
-export * from './splitListItem.js';
-export * from './sinkListItem.js';
-export * from './liftListItem.js';
-export * from './deleteListItem.js';
 export * from './increaseListIndent.js';
 export * from './decreaseListIndent.js';
-export * from './backspaceNextToList.js';
-export * from './deleteNextToList.js';
+export * from './changeListLevel.js';
+export * from './removeNumberingProperties.js';
 
 // Selection
 export * from './restoreSelection.js';

@@ -1,15 +1,28 @@
 // @ts-check
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
+const getResolvedParagraphPropertiesMock = vi.hoisted(() => vi.fn((node) => node.attrs.paragraphProperties || {}));
+
+vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
+  getResolvedParagraphProperties: getResolvedParagraphPropertiesMock,
+}));
+
+beforeEach(() => {
+  getResolvedParagraphPropertiesMock.mockReset();
+  getResolvedParagraphPropertiesMock.mockImplementation((node) => node.attrs.paragraphProperties || {});
+});
+
 import {
-  getParagraphContext,
+  findParagraphContext,
   flattenParagraph,
   findNextTabIndex,
   findDecimalBreakPos,
   calculateIndentFallback,
   getTabDecorations,
 } from './tabDecorations.js';
+import { pixelsToTwips } from '@converter/helpers';
 
-describe('getParagraphContext', () => {
+describe('findParagraphContext', () => {
   const mockHelpers = {
     linkedStyles: {
       getStyleById: vi.fn(),
@@ -17,31 +30,33 @@ describe('getParagraphContext', () => {
   };
 
   it('should get tabStops from node attributes', () => {
-    const tabStops = [{ val: 'left', pos: 720 }];
-    const node = { type: { name: 'paragraph' }, attrs: { tabStops }, forEach: () => {} };
+    const tabStops = [{ tab: { tabType: 'left', pos: pixelsToTwips(720) } }];
+    const node = { type: { name: 'paragraph' }, attrs: { paragraphProperties: { tabStops } }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual(tabStops);
+    expect(context.tabStops).toEqual([{ val: 'start', pos: 720, leader: undefined }]);
     expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
-  it('should get tabStops from linked style if not on node', () => {
-    const tabStops = [{ val: 'right', pos: 1440 }];
-    mockHelpers.linkedStyles.getStyleById.mockReturnValue({
-      definition: { styles: { tabStops } },
+  it('retrieves tab stops from resolved paragraph properties', () => {
+    const node = {
+      type: { name: 'paragraph' },
+      attrs: { paragraphProperties: {}, styleId: 'MyStyle' },
+      forEach: () => {},
+    };
+    getResolvedParagraphPropertiesMock.mockReturnValue({
+      tabStops: [{ tab: { tabType: 'center', pos: pixelsToTwips(1440) } }],
     });
-
-    const node = { type: { name: 'paragraph' }, attrs: { styleId: 'MyStyle' }, forEach: () => {} };
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
-    expect(context.tabStops).toEqual(tabStops);
-    expect(mockHelpers.linkedStyles.getStyleById).toHaveBeenCalledWith('MyStyle');
+    expect(context.tabStops).toEqual([{ val: 'center', pos: 1440 }]);
+    expect(mockHelpers.linkedStyles.getStyleById).not.toHaveBeenCalled();
   });
 
   it('should return empty tabStops if not found', () => {
@@ -50,7 +65,7 @@ describe('getParagraphContext', () => {
     const $pos = { node: () => node, start: () => 0, depth: 1 };
     const cache = new Map();
 
-    const context = getParagraphContext($pos, cache, mockHelpers);
+    const context = findParagraphContext($pos, cache, mockHelpers);
 
     expect(context.tabStops).toEqual([]);
   });
@@ -117,32 +132,38 @@ describe('findDecimalBreakPos', () => {
 
 describe('calculateIndentFallback', () => {
   it('should calculate indent correctly', () => {
-    expect(calculateIndentFallback({ left: 10, firstLine: 20 })).toBe(30);
-    expect(calculateIndentFallback({ left: 10, hanging: 20 })).toBe(-10);
-    expect(calculateIndentFallback({ firstLine: 20, hanging: 10 })).toBe(10);
-    expect(calculateIndentFallback({ textIndent: '0.5in' })).toBe(48);
+    expect(calculateIndentFallback({ left: pixelsToTwips(10), firstLine: pixelsToTwips(20) })).toBe(30);
+    expect(calculateIndentFallback({ left: pixelsToTwips(10), hanging: pixelsToTwips(20) })).toBe(-10);
+    expect(calculateIndentFallback({ firstLine: pixelsToTwips(20), hanging: pixelsToTwips(10) })).toBe(10);
   });
 });
 
 describe('getTabDecorations', () => {
   // Helper to create a mock view with DOM measurement capabilities
-  const createMockView = (measurements = {}) => ({
-    coordsAtPos: vi.fn((pos) => {
-      if (measurements[pos]?.coords) {
-        return measurements[pos].coords;
-      }
-      return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
-    }),
-    domAtPos: vi.fn((pos) => {
-      if (measurements[pos]?.dom) {
-        return measurements[pos].dom;
-      }
-      return { node: document.createTextNode(''), offset: 0 };
-    }),
-  });
+  const createMockView = (measurements = {}) => {
+    const getMeasurement = (pos, key) => measurements[pos]?.[key];
+
+    return {
+      coordsAtPos: vi.fn((pos) => {
+        const coords = getMeasurement(pos, 'coords');
+        if (coords) return coords;
+        return { left: pos * 10, top: 0, right: pos * 10, bottom: 20 };
+      }),
+      domAtPos: vi.fn((pos) => {
+        const dom = getMeasurement(pos, 'dom');
+        if (dom) return dom;
+        return { node: document.createTextNode(''), offset: 0 };
+      }),
+      nodeDOM: vi.fn((pos) => {
+        const nodeDom = getMeasurement(pos, 'nodeDOM');
+        if (nodeDom) return nodeDom;
+        return {};
+      }),
+    };
+  };
 
   // Helper to create a mock paragraph node
-  const createParagraphNode = (children = [], attrs = {}) => {
+  const createParagraphNode = (children = [], paragraphProperties = {}) => {
     const firstChild = children[0] || { marks: [], type: { name: 'text' }, text: '' };
     // Ensure firstChild has marks array
     if (!firstChild.marks) {
@@ -151,7 +172,7 @@ describe('getTabDecorations', () => {
 
     return {
       type: { name: 'paragraph' },
-      attrs: { indent: {}, ...attrs },
+      attrs: { paragraphProperties },
       nodeSize: children.reduce((sum, child) => sum + (child.nodeSize || 1), 2),
       firstChild,
       forEach: (callback) => {
@@ -791,6 +812,7 @@ describe('getTabDecorations', () => {
         domAtPos: vi.fn(() => {
           throw new Error('domAtPos error');
         }),
+        nodeDOM: vi.fn(() => ({})),
       };
 
       // Should not crash even with errors

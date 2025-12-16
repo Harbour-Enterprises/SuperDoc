@@ -46,6 +46,7 @@ const handleKeyDown = (event, index, style) => {
       moveToPreviousStyle(index);
       break;
     case 'Enter':
+      event.preventDefault();
       select(style);
       break;
     default:
@@ -60,7 +61,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="linked-style-buttons" v-if="props.editor">
+  <div class="linked-style-buttons" v-if="props.editor" data-editor-ui-surface>
     <div
       v-for="(style, index) in getQuickFormatList(editor)"
       class="style-item"

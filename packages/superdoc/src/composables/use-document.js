@@ -31,24 +31,24 @@ export default function useDocument(params, superdocConfig) {
   const setEditor = (ref) => (editorRef.value = ref);
   const getEditor = () => editorRef.value;
 
+  const presentationEditorRef = shallowRef(null);
+  const setPresentationEditor = (ref) => (presentationEditorRef.value = ref);
+  const getPresentationEditor = () => presentationEditorRef.value;
+
   /**
-   * Initialize the mime type of the document
-   * @param {Object} param0 The config object
-   * @param {String} param0.type The type of document
-   * @param {Object} param0.data The data object
-   * @returns {String} The document type
-   * @throws {Error} If the document type is not specified
+   * Initialize the mime type of the document.
+   * Accepts shorthand ('docx') or full mime type ('application/vnd...').
+   * @param {Object} params - The document parameters
+   * @param {string} [params.type] - The document type (shorthand or mime type)
+   * @param {Object} [params.data] - The document data object
+   * @param {string} [params.data.type] - The mime type from the data object
+   * @returns {string} The resolved mime type
+   * @throws {Error} If no document type can be determined
    */
   function initDocumentType({ type, data }) {
     if (data?.type) return data.type;
-    if (type) {
-      if (type in documentTypes) return documentTypes[type];
-      const mimeTypes = Object.values(documentTypes);
-      if (mimeTypes.includes(type)) return type;
-      return null;
-    }
-
-    throw new Error('Document type not specified for doc:', params);
+    if (type) return documentTypes[type] || type;
+    throw new Error('Document type not specified');
   }
 
   // Comments
@@ -112,6 +112,8 @@ export default function useDocument(params, superdocConfig) {
     // Actions
     setEditor,
     getEditor,
+    setPresentationEditor,
+    getPresentationEditor,
     removeComments,
     restoreComments,
     removeConversation,

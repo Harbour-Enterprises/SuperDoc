@@ -71,7 +71,7 @@ export function handleAnnotationNode(params) {
   }
 
   const { attrs: marksAsAttrs, marks } = parseAnnotationMarks(sdtContent);
-  const allAttrs = { ...attrs, ...marksAsAttrs };
+  const allAttrs = { ...attrs, ...marksAsAttrs, ...(sdtPr && { sdtPr }) }; // Include sdtPr for round-trip passthrough only if it exists
   if (!allAttrs.hash) allAttrs.hash = generateDocxRandomId(4);
 
   // Some w:sdt nodes have attrs.fieldId (coming from GoogleDocs) so we need a secondary check

@@ -1,0 +1,2051 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "OOXML w:b (bold) tester: ST_OnOff variants, rStyle-only cases, rStyle + inline overrides, and a linked style pair (paragraph+character) to verify behavior.",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "A) ST_OnOff values for <w:b> on a run:",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=(w:val omitted): ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=true: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=1: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=on: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=false: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=0: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - w:b w:val=off: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample text",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "B) rStyle-only cases (no inline <w:b>):",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_BoldChar' (should be bold): ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample via SD_BoldChar",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_BoldChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_BoldChar"
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='Strong' (built-in bold): ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample via Strong",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "Strong"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "Strong"
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_PlainChar' (not bold): ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Sample via SD_PlainChar",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_PlainChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_PlainChar"
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "C) rStyle + inline <w:b> combinations (inline overrides style):",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_BoldChar' + <w:b w:val='0'> => expect NOT bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Styled bold, overridden off",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_BoldChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_BoldChar",
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_BoldChar' + <w:b w:val='1'> => expect bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Styled bold, reinforced on",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_BoldChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_BoldChar",
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_PlainChar' + <w:b w:val='on'> => expect bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Plain style, inline turns bold on",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_PlainChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_PlainChar",
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='Strong' + <w:b w:val='off'> => expect NOT bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Strong style, explicit bold off",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "Strong"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "Strong",
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='Strong' + <w:b w:val='true'> => expect bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Strong style, inline bold on",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "Strong"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "Strong",
+              "bold": true
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "D) Linked style (paragraph+character) demonstrations:",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_LinkedHeadingChar' (character side of linked pair) => expect bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Linked Char style applied to run",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_LinkedHeadingChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_LinkedHeadingChar"
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - rStyle='SD_LinkedHeadingChar' + <w:b w:val='0'> => expect NOT bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Linked Char style overridden off",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt",
+                    "styleId": "SD_LinkedHeadingChar"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "styleId": "SD_LinkedHeadingChar",
+              "bold": false
+            }
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - pStyle='SD_LinkedHeading' + inline <w:b w:val='0'>: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Paragraph style makes text bold, but inline turns it off here",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": false
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {
+              "bold": false
+            }
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "styleId": "SD_LinkedHeading"
+        },
+        "styleId": "SD_LinkedHeading",
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "  - pStyle='SD_LinkedHeading' (no inline) => expect bold: ",
+              "attrs": {
+                "type": "element",
+                "attributes": {
+                  "xml:space": "preserve"
+                }
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        },
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "All runs inherit bold from the paragraph style",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {},
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {
+          "styleId": "SD_LinkedHeading"
+        },
+        "styleId": "SD_LinkedHeading",
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Table examples (linked style + inline overrides):",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, sans-serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        }
+      },
+      "marks": []
+    },
+    {
+      "type": "table",
+      "content": [
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "run",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "rStyle='SD_LinkedHeadingChar' (no inline)",
+                          "attrs": {
+                            "type": "element",
+                            "attributes": {}
+                          },
+                          "marks": [
+                            {
+                              "type": "textStyle",
+                              "attrs": {
+                                "fontFamily": "Cambria, sans-serif",
+                                "fontSize": "11pt"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "attrs": {
+                        "runProperties": {}
+                      }
+                    }
+                  ],
+                  "attrs": {
+                    "paragraphProperties": {}
+                  },
+                  "marks": []
+                }
+              ],
+              "attrs": {
+                "tableCellProperties": {
+                  "cellWidth": {
+                    "value": 4680,
+                    "type": "dxa"
+                  }
+                },
+                "borders": {},
+                "widthType": "dxa",
+                "colwidth": [312],
+                "widthUnit": "px",
+                "cellMargins": {}
+              }
+            },
+            {
+              "type": "tableCell",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "run",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Should be bold",
+                          "attrs": {
+                            "type": "element",
+                            "attributes": {}
+                          },
+                          "marks": [
+                            {
+                              "type": "bold",
+                              "attrs": {
+                                "value": true
+                              }
+                            },
+                            {
+                              "type": "textStyle",
+                              "attrs": {
+                                "fontFamily": "Cambria, sans-serif",
+                                "fontSize": "11pt",
+                                "styleId": "SD_LinkedHeadingChar"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "attrs": {
+                        "runProperties": {
+                          "styleId": "SD_LinkedHeadingChar"
+                        }
+                      }
+                    }
+                  ],
+                  "attrs": {
+                    "paragraphProperties": {}
+                  },
+                  "marks": []
+                }
+              ],
+              "attrs": {
+                "tableCellProperties": {
+                  "cellWidth": {
+                    "value": 4680,
+                    "type": "dxa"
+                  }
+                },
+                "borders": {},
+                "widthType": "dxa",
+                "colwidth": [312],
+                "widthUnit": "px",
+                "cellMargins": {}
+              }
+            }
+          ],
+          "attrs": {
+            "tableRowProperties": {}
+          }
+        },
+        {
+          "type": "tableRow",
+          "content": [
+            {
+              "type": "tableCell",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "run",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "rStyle='SD_LinkedHeadingChar' + w:b='0'",
+                          "attrs": {
+                            "type": "element",
+                            "attributes": {}
+                          },
+                          "marks": [
+                            {
+                              "type": "textStyle",
+                              "attrs": {
+                                "fontFamily": "Cambria, sans-serif",
+                                "fontSize": "11pt"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "attrs": {
+                        "runProperties": {}
+                      }
+                    }
+                  ],
+                  "attrs": {
+                    "paragraphProperties": {}
+                  },
+                  "marks": []
+                }
+              ],
+              "attrs": {
+                "tableCellProperties": {
+                  "cellWidth": {
+                    "value": 4680,
+                    "type": "dxa"
+                  }
+                },
+                "borders": {},
+                "widthType": "dxa",
+                "colwidth": [312],
+                "widthUnit": "px",
+                "cellMargins": {}
+              }
+            },
+            {
+              "type": "tableCell",
+              "content": [
+                {
+                  "type": "paragraph",
+                  "content": [
+                    {
+                      "type": "run",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "Should NOT be bold",
+                          "attrs": {
+                            "type": "element",
+                            "attributes": {}
+                          },
+                          "marks": [
+                            {
+                              "type": "bold",
+                              "attrs": {
+                                "value": false
+                              }
+                            },
+                            {
+                              "type": "textStyle",
+                              "attrs": {
+                                "fontFamily": "Cambria, sans-serif",
+                                "fontSize": "11pt",
+                                "styleId": "SD_LinkedHeadingChar"
+                              }
+                            }
+                          ]
+                        }
+                      ],
+                      "attrs": {
+                        "runProperties": {
+                          "styleId": "SD_LinkedHeadingChar",
+                          "bold": false
+                        }
+                      }
+                    }
+                  ],
+                  "attrs": {
+                    "paragraphProperties": {}
+                  },
+                  "marks": []
+                }
+              ],
+              "attrs": {
+                "tableCellProperties": {
+                  "cellWidth": {
+                    "value": 4680,
+                    "type": "dxa"
+                  }
+                },
+                "borders": {},
+                "widthType": "dxa",
+                "colwidth": [312],
+                "widthUnit": "px",
+                "cellMargins": {}
+              }
+            }
+          ],
+          "attrs": {
+            "tableRowProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "tableProperties": {
+          "tableWidth": {
+            "value": 0,
+            "type": "auto"
+          },
+          "tblLook": {
+            "firstColumn": true,
+            "firstRow": true,
+            "lastColumn": false,
+            "lastRow": false,
+            "noHBand": false,
+            "noVBand": true,
+            "val": "04A0"
+          }
+        },
+        "grid": [
+          {
+            "col": 4680
+          },
+          {
+            "col": 4680
+          }
+        ],
+        "tableWidth": {
+          "width": 0,
+          "type": "auto"
+        },
+        "borders": {}
+      }
+    }
+  ],
+  "attrs": {
+    "attributes": {
+      "xmlns:wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+      "xmlns:mo": "http://schemas.microsoft.com/office/mac/office/2008/main",
+      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+      "xmlns:mv": "urn:schemas-microsoft-com:mac:vml",
+      "xmlns:o": "urn:schemas-microsoft-com:office:office",
+      "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "xmlns:m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+      "xmlns:v": "urn:schemas-microsoft-com:vml",
+      "xmlns:wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+      "xmlns:wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
+      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+      "xmlns:wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+      "xmlns:wpi": "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
+      "xmlns:wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "mc:Ignorable": "w14 wp14"
+    }
+  }
+}

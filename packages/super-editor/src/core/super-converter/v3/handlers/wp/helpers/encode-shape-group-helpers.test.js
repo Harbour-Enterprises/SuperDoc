@@ -227,6 +227,8 @@ describe('handleImageNode - Shape Group Support', () => {
       strokeWidth: 1,
       shapeId: '2',
       shapeName: 'Shape 1',
+      textContent: null,
+      textAlign: 'left',
     });
   });
 

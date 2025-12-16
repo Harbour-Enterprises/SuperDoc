@@ -51,7 +51,7 @@ vi.mock('y-websocket', () => {
   };
 
   return {
-    WebsocketProvider: vi.fn((...args) => new MockWebsocketProvider(...args)),
+    WebsocketProvider: MockWebsocketProvider,
   };
 });
 
@@ -77,7 +77,7 @@ vi.mock('@hocuspocus/provider', () => {
   };
 
   return {
-    HocuspocusProvider: vi.fn((options) => new MockHocuspocusProvider(options)),
+    HocuspocusProvider: MockHocuspocusProvider,
   };
 });
 

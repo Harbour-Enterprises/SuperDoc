@@ -26,8 +26,30 @@
  */
 
 /**
+ * @typedef {Object} CollaborationProvider External collaboration provider interface
+ * Accepts any Yjs-compatible provider (HocuspocusProvider, LiveblocksYjsProvider, TiptapCollabProvider, etc.)
+ * @property {Object} [awareness] The Yjs awareness instance (optional, may be null)
+ * @property {(event: string, handler: Function) => void} [on] Event listener
+ * @property {(event: string, handler: Function) => void} [off] Event unsubscriber
+ * @property {() => void} [disconnect] Disconnect from the provider
+ * @property {() => void} [destroy] Destroy the provider
+ * @property {boolean} [synced] Whether the provider has synced
+ * @property {boolean} [isSynced] Alternative sync property (used by some providers)
+ */
+
+/**
+ * @typedef {Object} CollaborationConfig Collaboration module configuration
+ * @property {Object} [ydoc] External Yjs document (provider-agnostic mode)
+ * @property {CollaborationProvider} [provider] External collaboration provider (provider-agnostic mode)
+ * @property {'hocuspocus' | 'superdoc'} [providerType] Internal provider type (deprecated)
+ * @property {string} [url] WebSocket URL for internal provider (deprecated)
+ * @property {string} [token] Authentication token for internal provider (deprecated)
+ * @property {Object} [params] Additional params for internal provider (deprecated)
+ */
+
+/**
  * @typedef {Object} Modules
- * @property {Object} [comments] Comments module configuration
+ * @property {Object | false} [comments] Comments module configuration (false to disable)
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -40,7 +62,7 @@
  * @property {Object} [ai] AI module configuration
  * @property {string} [ai.apiKey] Harbour API key for AI features
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
- * @property {Object} [collaboration] Collaboration module configuration
+ * @property {CollaborationConfig} [collaboration] Collaboration module configuration
  * @property {Object} [toolbar] Toolbar module configuration
  * @property {Object} [slashMenu] Slash menu module configuration
  * @property {Array} [slashMenu.customItems] Array of custom menu sections with items
@@ -95,13 +117,14 @@
  *   currentUser?: User | null,
  *   superdoc?: SuperDoc | null,
  * }) => boolean | undefined} [permissionResolver] Top-level override for permission checks
- * @property {boolean} [pagination] Whether to show pagination in SuperEditors
  * @property {string} [toolbar] Optional DOM element to render the toolbar in
  * @property {Array<string>} [toolbarGroups] Toolbar groups to show
  * @property {Object} [toolbarIcons] Icons to show in the toolbar
  * @property {Object} [toolbarTexts] Texts to override in the toolbar
  * @property {boolean} [isDev] Whether the SuperDoc is in development mode
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
+ * @property {Object} [layoutEngineOptions] Layout engine overrides passed through to PresentationEditor (page size, margins, virtualization, zoom, debug label, etc.)
+ * @property {Object} [layoutEngineOptions.trackedChanges] Optional override for paginated track-changes rendering (e.g., `{ mode: 'final' }` to force final view or `{ enabled: false }` to strip metadata entirely)
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
  * @property {(params: { editor: Editor, transaction: any, duration: number }) => void} [onTransaction] Callback when a transaction is made

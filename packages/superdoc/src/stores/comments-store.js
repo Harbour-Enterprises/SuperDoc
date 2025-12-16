@@ -427,7 +427,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const document = superdocStore.getDocument(documentId);
 
     comments.forEach((comment) => {
-      const htmlContent = getHTmlFromComment(comment.textJson);
+      const htmlContent = getHtmlFromComment(comment.textJson);
 
       if (!htmlContent && !comment.trackedChange) {
         return;
@@ -438,16 +438,18 @@ export const useCommentsStore = defineStore('comments', () => {
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
+        docxCommentJSON: comment.textJson,
         commentId: comment.commentId,
         isInternal: false,
         parentCommentId: comment.parentCommentId,
         creatorName,
+        createdTime: comment.createdTime,
         creatorEmail: comment.creatorEmail,
         importedAuthor: {
           name: importedName,
           email: comment.creatorEmail,
         },
-        commentText: getHTmlFromComment(comment.textJson),
+        commentText: getHtmlFromComment(comment.textJson),
         resolvedTime: comment.isDone ? Date.now() : null,
         resolvedByEmail: comment.isDone ? comment.creatorEmail : null,
         resolvedByName: comment.isDone ? importedName : null,
@@ -514,7 +516,10 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList.value.forEach((comment) => {
       const values = comment.getValues();
       const richText = values.commentText;
-      const schema = convertHtmlToSchema(richText);
+      // If this comment originated from DOCX (Word or Google Docs), prefer the
+      // original DOCX-schema JSON captured at import time. Otherwise, fall back
+      // to rebuilding commentJSON from the rich-text HTML.
+      const schema = values.docxCommentJSON || convertHtmlToSchema(richText);
       processedComments.push({
         ...values,
         commentJSON: schema,
@@ -604,7 +609,7 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const getHTmlFromComment = (commentTextJson) => {
+  const getHtmlFromComment = (commentTextJson) => {
     // If no content, we can't convert and its not a valid comment
     if (!commentTextJson.content?.length) return;
 

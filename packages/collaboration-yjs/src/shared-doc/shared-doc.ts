@@ -65,7 +65,7 @@ export class SharedSuperDoc extends YDoc {
   }
 }
 
-let contentInitializer: () => Promise<void> = () => Promise.resolve();
+const contentInitializer: () => Promise<void> = () => Promise.resolve();
 
 const updateHandler = (update: Uint8Array, _origin: unknown, docInstance: YDoc) => {
   const doc = docInstance as SharedSuperDoc;
