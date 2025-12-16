@@ -82,7 +82,7 @@ export class AIActionsService {
     if (!result.success || !result.results) {
       return result;
     }
-    result.results = this.adapter.findResults(result.results);
+    result.results = this.adapter.findResults(result.results, { highlight: true });
 
     return result;
   }
