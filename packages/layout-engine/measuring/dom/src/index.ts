@@ -583,22 +583,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       totalHeight: metrics.lineHeight,
     };
   }
-  // Targeted debug: log list first-line widths to verify wrapping in columns.
-  const isListLike = Boolean(block.attrs?.numId || wordLayout?.marker);
-  if (isListLike) {
-    console.log(
-      '[measureParagraph][list]',
-      JSON.stringify({
-        blockId: block.id,
-        maxWidth,
-        indentLeft,
-        indentRight,
-        textStartPx: textStartPx ?? null,
-        firstLineOffset: firstLineOffset ?? null,
-        initialAvailableWidth,
-      }),
-    );
-  }
 
   let currentLine: {
     fromRun: number;
