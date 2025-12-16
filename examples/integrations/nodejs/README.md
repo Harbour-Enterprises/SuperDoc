@@ -1,41 +1,38 @@
-# Basic example of using SuperDoc in Node
+# SuperDoc Node.js Example
 
-## Node version
-Please use `Node >= 20`. In earlier versions, Node is missing the `File` object.
-If you must use `Node < 20`, please create or inject the file polyfill (see example).
+A headless Node.js integration for SuperDoc. Use it to programmatically process, modify, and export DOCX files—either as a CLI tool or an HTTP server.
 
-## Quick start
-```
-npm install && npm run dev
-```
+Requires Node >= 20.
 
-This will run a basic express server at `http://localhost:3000` with a single root endpoint.
-
-Point your browser or Postman GET request to:  `http://localhost:3000`. The server will simply return an unchanged .docx template.
-Now, you can add query params `text` or `html` to insert content into this document.
-
-## Basic example
-```
-
-Text only: http://localhost:3000?text=hello world!
-
-HTML only: http://localhost:3000?html=<p>I am a paragraph</p><p></p><p><strong>I AM BOLD!</strong></p>
-```
-
-## Additional docs
-Please see [SuperDoc docs](https://docs.superdoc.dev/guide/components#superdoc) for additinoal editor commands and hooks.
-
-You can get a list of all available editor commands from editor.commands as well. For instnace, commands such as the examples below all will work while using the SuperDoc editor in the backend:
-```
-editor.commands.toggleBold()
-
-editor.commands.toggleOrderedList()
-
-editor.commands.setColor()
-
-editor.commands.setFontSize()
-
-...etc
+## Install
 
 ```
+npm install
+```
 
+## Server mode
+
+```bash
+npm start                    # Starts on port 3000
+npm run dev                  # With nodemon
+node server.js serve 8080    # Custom port
+```
+
+The server exposes a GET endpoint at `/` that returns a processed DOCX file. You can optionally insert content via query params:
+
+```
+http://localhost:3000?text=hello world
+http://localhost:3000?html=<p>I am a paragraph</p>
+```
+
+## CLI mode
+
+```bash
+npm run convert -- input.docx output.docx
+node server.js input.docx output.docx
+node server.js convert input.docx output.docx
+```
+
+## Docs
+
+See the [SuperDoc docs](https://docs.superdoc.dev) for available editor commands and hooks.

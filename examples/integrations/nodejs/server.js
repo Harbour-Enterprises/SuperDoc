@@ -1,81 +1,113 @@
 // import './file-polyfill.js'; Import the file polyfill if using NodeJS < v22.0.0
-import fs from 'fs/promises';
-import express from 'express';
+import { readFile, writeFile } from 'fs/promises';
 import { JSDOM } from 'jsdom';
-import documentBlob from './document.js';
+import express from 'express';
 
 // In Node, we use the Editor class directly from superdoc/super-editor
 import { Editor, getStarterExtensions } from 'superdoc/super-editor';
 
 const DOCX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-// Init your server of choice. For simplicity, we use express here
-const server = express();
-
 /**
- * A basic endpoint that appends content to the document.
- * You can pass in text and html as query parameters, at least one of which is required to edit the document.
- * If no param is passed, the document will be returned as as-is (blank template with header and footer).
+ * Creates an Editor instance from a docx buffer
  */
-server.get('/', async (req, res, next) => {
-  const { text, html } = req.query;
+async function getEditor(buffer) {
+  const { window } = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+  const { document } = window;
 
-  // Load the specified document:
-  // if using stackblitz:
-  let documentData = documentBlob;
-  const arrayBuffer = await documentData.arrayBuffer();
-  documentData = Buffer.from(arrayBuffer);
-
-  // otherwise, you can read from disk:
-  // let documentData = await fs.readFile(`./sample-document.docx`);
-
-  const editor = await getEditor(documentData);
-  
-  // If we have text or html, we will to load the editor and insert the content
-  if (text) editor.commands.insertContent(text);
-  if (html) editor.commands.insertContent(html);
-
-  // Export the docx and create a buffer to return to the user
-  const zipBuffer = await editor.exportDocx();
-  documentData = Buffer.from(zipBuffer);
-
-  // Download the file
-  res
-  .status(200)
-  .type(DOCX_MIME_TYPE)
-  .set('Content-Disposition', 'attachment; filename="exported-superdoc.docx"')
-  .send(documentData);
-
-})
-
-server.listen(3000, '0.0.0.0', () => console.debug(`Server running on port 3000`));
-
-
-/**
- * Loads the editor with the document data
- * @param {Buffer} docxFileBuffer The docx file as a Buffer
- * @returns {Promise<Editor>} The Super Editor instance
- */
-const getEditor = async (docxFileBuffer) => {
-  // For now, this is boilerplate code to mock the window and document
-  const { window: mockWindow } = (new JSDOM('<!DOCTYPE html><html><body></body></html>'));
-  const { document: mockDocument } = mockWindow;
-
-  // Prepare document data for the editor
-  const [content, mediaFiles] = await Editor.loadXmlData(docxFileBuffer);
+  const [content, media, mediaFiles, fonts] = await Editor.loadXmlData(buffer, true);
 
   return new Editor({
-    isHeadless: true,
-
-    // We pass in the mock document and window here
-    mockDocument,
-    mockWindow,
-
-    // Our standard list of extensions
+    mode: 'docx',
     extensions: getStarterExtensions(),
-
-    // Our prepaerd document data
+    fileSource: buffer,
     content,
+    media,
     mediaFiles,
+    fonts,
+    isHeadless: true,
+    mockDocument: document,
+    mockWindow: window,
   });
-};
+}
+
+/**
+ * CLI mode: Process a docx file and save to disk
+ */
+async function runCli(inputPath, outputPath = 'output.docx') {
+  const buffer = await readFile(inputPath);
+  const editor = await getEditor(buffer);
+
+  const exportedBuffer = await editor.exportDocx();
+  await writeFile(outputPath, exportedBuffer);
+
+  console.log(`Document exported to ${outputPath}`);
+  editor.destroy();
+}
+
+/**
+ * Server mode: Start an HTTP server that accepts docx files
+ */
+function runServer(port = 3000) {
+  const server = express();
+
+  server.get('/', async (req, res) => {
+    const { text, html } = req.query;
+
+    // Load sample document from disk
+    const buffer = await readFile('./sample-document.docx');
+    const editor = await getEditor(buffer);
+
+    // Insert content if provided
+    if (text) editor.commands.insertContent(text);
+    if (html) editor.commands.insertContent(html);
+
+    // Export and send response
+    const exportedBuffer = await editor.exportDocx();
+    editor.destroy();
+
+    res
+      .status(200)
+      .type(DOCX_MIME_TYPE)
+      .set('Content-Disposition', 'attachment; filename="exported-superdoc.docx"')
+      .send(Buffer.from(exportedBuffer));
+  });
+
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`Server running on port ${port}`);
+  });
+}
+
+// Parse command line arguments
+const args = process.argv.slice(2);
+const command = args[0];
+
+if (command === 'serve') {
+  // Server mode: node server.js serve [port]
+  const port = parseInt(args[1]) || 3000;
+  runServer(port);
+} else if (command === 'convert' || args.length > 0) {
+  // CLI mode: node server.js convert <input> [output]
+  // or shorthand: node server.js <input> [output]
+  const inputPath = command === 'convert' ? args[1] : args[0];
+  const outputPath = command === 'convert' ? args[2] : args[1];
+
+  if (!inputPath) {
+    console.error('Usage:');
+    console.error('  node server.js serve [port]        Start HTTP server');
+    console.error('  node server.js convert <in> [out]  Convert docx file');
+    console.error('  node server.js <input> [output]    Convert docx file (shorthand)');
+    process.exit(1);
+  }
+
+  runCli(inputPath, outputPath).catch((err) => {
+    console.error('Error:', err.message);
+    process.exit(1);
+  });
+} else {
+  // No args: show usage
+  console.log('Usage:');
+  console.log('  node server.js serve [port]        Start HTTP server');
+  console.log('  node server.js convert <in> [out]  Convert docx file');
+  console.log('  node server.js <input> [output]    Convert docx file (shorthand)');
+}
