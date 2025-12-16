@@ -514,12 +514,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   let initialAvailableWidth: number;
   const textStartPx = (wordLayout as { textStartPx?: number } | undefined)?.textStartPx;
 
-  if (typeof textStartPx === 'number' && textStartPx > indentLeft) {
+  const treatAsHanging = isWordLayoutList && indentLeft === 0 && hanging === 0 && typeof textStartPx === 'number';
+  if (typeof textStartPx === 'number' && textStartPx > indentLeft && !treatAsHanging) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
     // Available width = from textStartPx to right margin.
     initialAvailableWidth = Math.max(1, maxWidth - textStartPx - indentRight);
   } else {
-    // No textStartPx or it's <= indentLeft: text starts at the normal indent position.
+    // No textStartPx or we intentionally treat as hanging: text starts at the normal indent position.
     initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
   }
 
@@ -581,6 +582,22 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       lines,
       totalHeight: metrics.lineHeight,
     };
+  }
+  // Targeted debug: log list first-line widths to verify wrapping in columns.
+  const isListLike = Boolean(block.attrs?.numId || wordLayout?.marker);
+  if (isListLike) {
+    console.log(
+      '[measureParagraph][list]',
+      JSON.stringify({
+        blockId: block.id,
+        maxWidth,
+        indentLeft,
+        indentRight,
+        textStartPx: textStartPx ?? null,
+        firstLineOffset: firstLineOffset ?? null,
+        initialAvailableWidth,
+      }),
+    );
   }
 
   let currentLine: {
@@ -1435,6 +1452,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
         const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+        // Check if paragraph has justified alignment
         const justifyAlignment = block.attrs?.alignment === 'justify';
         const totalWidthWithWord =
           currentLine.width +
