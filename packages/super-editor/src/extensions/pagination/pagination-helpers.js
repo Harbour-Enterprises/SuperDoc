@@ -167,6 +167,8 @@ export const createHeaderFooterEditor = ({
 
   applyStyleIsolationClass(editorContainer);
 
+  const isFooter = type === 'footer';
+
   Object.assign(editorContainer.style, {
     padding: '0',
     margin: '0',
@@ -181,7 +183,7 @@ export const createHeaderFooterEditor = ({
     fontFamily: fontFamilyCss || typeface,
     fontSize: `${fontSizeInPixles}px`,
     lineHeight: `${lineHeight}px`,
-    overflow: 'hidden',
+    overflow: isFooter ? 'visible' : 'hidden',
     pointerEvents: 'auto', // Critical: enables click interaction
     backgroundColor: 'white', // Ensure editor has white background
   });

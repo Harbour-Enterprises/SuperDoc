@@ -336,6 +336,9 @@ type HeaderFooterRegion = {
   localY: number;
   width: number;
   height: number;
+  contentHeight?: number;
+  /** Minimum Y coordinate from layout (can be negative if content extends above y=0) */
+  minY?: number;
 };
 
 type HeaderFooterLayoutContext = {
@@ -5139,8 +5142,14 @@ export class PresentationEditor extends EventEmitter {
             page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
           const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
           const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+          // Normalize fragments to start at y=0 if minY is negative
+          const layoutMinY = rIdLayout.layout.minY ?? 0;
+          const normalizedFragments =
+            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
           return {
-            fragments,
+            fragments: normalizedFragments,
             height: box.height,
             contentHeight: rIdLayout.layout.height ?? box.height,
             offset: box.offset,
@@ -5148,6 +5157,7 @@ export class PresentationEditor extends EventEmitter {
             contentWidth: box.width,
             headerId: sectionRId,
             sectionType: headerFooterType,
+            minY: layoutMinY,
             box: {
               x: box.x,
               y: box.offset,
@@ -5184,8 +5194,13 @@ export class PresentationEditor extends EventEmitter {
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
+
+      // Normalize fragments to start at y=0 if minY is negative
+      const layoutMinY = variant.layout.minY ?? 0;
+      const normalizedFragments = layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
       return {
-        fragments,
+        fragments: normalizedFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -5193,6 +5208,7 @@ export class PresentationEditor extends EventEmitter {
         contentWidth: box.width,
         headerId: finalHeaderId,
         sectionType: headerFooterType,
+        minY: layoutMinY,
         box: {
           x: box.x,
           y: box.offset,
@@ -5382,6 +5398,8 @@ export class PresentationEditor extends EventEmitter {
         localY: footerPayload?.hitRegion?.y ?? footerBox.offset,
         width: footerPayload?.hitRegion?.width ?? footerBox.width,
         height: footerPayload?.hitRegion?.height ?? footerBox.height,
+        contentHeight: footerPayload?.contentHeight,
+        minY: footerPayload?.minY,
       });
     });
   }
@@ -5527,6 +5545,26 @@ export class PresentationEditor extends EventEmitter {
           context: 'enterHeaderFooterMode.ensureEditor',
         });
         return;
+      }
+
+      // For footers, apply positioning adjustments to match static rendering.
+      // Only adjust for negative minY (content with elements above y=0).
+      // Note: Bottom-alignment (footerYOffset) is handled by the shape's own CSS
+      // positioning in ProseMirror, so we don't apply container-level transforms for that.
+      if (region.kind === 'footer') {
+        const editorContainer = editorHost.firstElementChild;
+        if (editorContainer instanceof HTMLElement) {
+          editorContainer.style.overflow = 'visible';
+
+          // Only compensate for negative minY (content extending above y=0)
+          if (region.minY != null && region.minY < 0) {
+            const shiftDown = Math.abs(region.minY);
+            editorContainer.style.transform = `translateY(${shiftDown}px)`;
+          } else {
+            // Clear any leftover transform from previous sessions to avoid misalignment
+            editorContainer.style.transform = '';
+          }
+        }
       }
 
       try {

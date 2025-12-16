@@ -1366,9 +1366,25 @@ export class DomPainter {
     const container = (existing as HTMLElement) ?? this.doc.createElement('div');
     container.className = className;
     container.innerHTML = '';
-    const offset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
+    const baseOffset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
     const marginLeft = data.marginLeft ?? 0;
     const marginRight = page.margins?.right ?? 0;
+
+    // For footers, if content is taller than reserved space, expand container upward
+    // The container bottom stays anchored at footerMargin from page bottom
+    let effectiveHeight = data.height;
+    let effectiveOffset = baseOffset;
+    if (
+      kind === 'footer' &&
+      typeof data.contentHeight === 'number' &&
+      Number.isFinite(data.contentHeight) &&
+      data.contentHeight > 0 &&
+      data.contentHeight > data.height
+    ) {
+      effectiveHeight = data.contentHeight;
+      // Move container up to accommodate taller content while keeping bottom edge in place
+      effectiveOffset = baseOffset - (data.contentHeight - data.height);
+    }
 
     container.style.position = 'absolute';
     container.style.left = `${marginLeft}px`;
@@ -1378,8 +1394,8 @@ export class DomPainter {
       container.style.width = `calc(100% - ${marginLeft + marginRight}px)`;
     }
     container.style.pointerEvents = 'none';
-    container.style.height = `${data.height}px`;
-    container.style.top = `${Math.max(0, offset)}px`;
+    container.style.height = `${effectiveHeight}px`;
+    container.style.top = `${Math.max(0, effectiveOffset)}px`;
     container.style.zIndex = '1';
     // Allow header/footer content to overflow its container bounds.
     // In OOXML, headers and footers can extend past their allocated margin space
@@ -1388,6 +1404,7 @@ export class DomPainter {
 
     // For footers, calculate offset to push content to bottom of container
     // Fragments are absolutely positioned, so we need to adjust their y values
+    // Use effectiveHeight (which accounts for overflow) rather than reserved height
     let footerYOffset = 0;
     if (kind === 'footer' && data.fragments.length > 0) {
       const contentHeight =
@@ -1399,7 +1416,8 @@ export class DomPainter {
               return Math.max(max, f.y + Math.max(0, fragHeight));
             }, 0);
       // Offset to push content to bottom of container
-      footerYOffset = Math.max(0, data.height - contentHeight);
+      // When container has expanded (effectiveHeight >= contentHeight), offset is 0
+      footerYOffset = Math.max(0, effectiveHeight - contentHeight);
     }
 
     const context: FragmentRenderContext = {
