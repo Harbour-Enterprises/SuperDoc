@@ -61,6 +61,9 @@ import type {
   BatchAdapterOptions,
   ThemeColorPalette,
   ConverterContext,
+  TableNodeToBlockOptions,
+  ParagraphToFlowBlocksConverter,
+  TableNodeToBlockConverter,
 } from './types.js';
 import { defaultDecimalSeparatorFor } from '../../../../shared/locale-utils/index.js';
 import { DEFAULT_HYPERLINK_CONFIG } from './constants';
@@ -295,8 +298,9 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       currentParagraphIndex: 0,
     },
     converters: {
-      paragraphToFlowBlocks: paragraphConverter,
-      tableNodeToBlock: tableConverter,
+      // Type assertion needed due to signature mismatch between actual function and type definition
+      paragraphToFlowBlocks: paragraphConverter as unknown as ParagraphToFlowBlocksConverter,
+      tableNodeToBlock: tableConverter as unknown as TableNodeToBlockConverter,
       imageNodeToBlock,
       vectorShapeNodeToDrawingBlock,
       shapeGroupNodeToDrawingBlock,
@@ -487,7 +491,8 @@ function paragraphToFlowBlocks(
           {
             listCounterContext,
             converters: {
-              paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+              // Type assertion needed due to signature mismatch between actual function and type definition
+              paragraphToFlowBlocks: paragraphToFlowBlocksImpl as unknown as ParagraphToFlowBlocksConverter,
               imageNodeToBlock,
               vectorShapeNodeToDrawingBlock,
               shapeGroupNodeToDrawingBlock,
@@ -520,7 +525,9 @@ function tableNodeToBlock(
   bookmarks?: Map<string, number>,
   hyperlinkConfig?: HyperlinkConfig,
   themeColors?: ThemeColorPalette,
+  _paragraphToFlowBlocksParam?: unknown,
   converterContext?: ConverterContext,
+  options?: TableNodeToBlockOptions,
 ): FlowBlock | null {
   return tableNodeToBlockImpl(
     node,
@@ -535,9 +542,10 @@ function tableNodeToBlock(
     themeColors,
     paragraphToFlowBlocks,
     converterContext,
-    {
+    options ?? {
       converters: {
-        paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+        // Type assertion needed due to signature mismatch between actual function and type definition
+        paragraphToFlowBlocks: paragraphToFlowBlocksImpl as unknown as ParagraphToFlowBlocksConverter,
         imageNodeToBlock,
         vectorShapeNodeToDrawingBlock,
         shapeGroupNodeToDrawingBlock,

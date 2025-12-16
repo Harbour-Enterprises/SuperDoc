@@ -1480,7 +1480,7 @@ export const computeParagraphAttrs = (
    * numbering inherited from paragraph styles. We skip word layout processing entirely for numId=0.
    */
   const hasValidNumbering = rawNumberingProps && isValidNumberingId(rawNumberingProps.numId);
-  if (hasValidNumbering) {
+  if (hasValidNumbering && rawNumberingProps) {
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
@@ -1532,8 +1532,11 @@ export const computeParagraphAttrs = (
     const resolvedCounterValue = path[path.length - 1] ?? counterValue;
 
     // Enrich numberingProperties with path and counter info
+    // Explicitly include numId and ilvl to satisfy TypeScript since they are required
     const enrichedNumberingProps: AdapterNumberingProps = {
       ...numberingProps,
+      numId: numberingProps.numId,
+      ilvl: numberingProps.ilvl,
       path,
       counterValue: resolvedCounterValue,
     };
