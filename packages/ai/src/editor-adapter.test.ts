@@ -107,6 +107,8 @@ describe('EditorAdapter', () => {
   let mockAdapter: EditorAdapter;
   let chainApi: ReturnType<typeof createChain>['chainApi'];
   let chainFn: ReturnType<typeof createChain>['chainFn'];
+  let domAtPosSpy: ReturnType<typeof vi.fn>;
+  let scrollIntoViewSpy: ReturnType<typeof vi.fn>;
 
   const updateEditorState = (
     segments: Array<{ text: string; marks?: MarkType[] }>,
@@ -136,12 +138,15 @@ describe('EditorAdapter', () => {
   };
 
   beforeEach(() => {
+    scrollIntoViewSpy = vi.fn();
+    domAtPosSpy = vi.fn().mockReturnValue({ node: { scrollIntoView: scrollIntoViewSpy } });
     mockEditor = {
       state: createEditorState(defaultSegments),
       view: {
         dispatch: vi.fn((tr) => {
           mockEditor.state = mockEditor.state.apply(tr);
         }),
+        domAtPos: domAtPosSpy,
       },
       exportDocx: vi.fn().mockResolvedValue({}),
       options: {
@@ -185,6 +190,16 @@ describe('EditorAdapter', () => {
       expect(results[0].positions).toHaveLength(2);
       expect(results[0].positions![0]).toEqual({ from: 0, to: 6 });
       expect(results[0].positions![1]).toEqual({ from: 10, to: 16 });
+    });
+
+    it('should pass highlight option to the search command', () => {
+      const matches: FoundMatch[] = [{ originalText: 'sample', suggestedText: 'example' }];
+
+      mockEditor.commands.search = vi.fn().mockReturnValue([{ from: 0, to: 6 }]);
+
+      mockAdapter.findResults(matches, { highlight: true });
+
+      expect(mockEditor.commands.search).toHaveBeenCalledWith('sample', { highlight: true });
     });
 
     it('should filter out matches without positions', () => {
@@ -246,6 +261,8 @@ describe('EditorAdapter', () => {
       expect(chainApi.setTextSelection).toHaveBeenCalledWith({ from, to });
       expect(chainApi.setHighlight).toHaveBeenCalledWith('#6CA0DC');
       expect(chainApi.run).toHaveBeenCalled();
+      expect(domAtPosSpy).toHaveBeenCalledWith(from);
+      expect(scrollIntoViewSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should create highlight with custom color', () => {
