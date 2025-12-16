@@ -72,7 +72,14 @@ import {
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
 import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
-import { hashParagraphBorders, getRunStringProp, getRunNumberProp, getRunBooleanProp } from './paragraph-hash-utils.js';
+import {
+  hashParagraphBorders,
+  getRunStringProp,
+  getRunNumberProp,
+  getRunBooleanProp,
+  getRunUnderlineStyle,
+  getRunUnderlineColor,
+} from './paragraph-hash-utils.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -4891,7 +4898,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
               hash = hashString(hash, getRunBooleanProp(run, 'italic') ? '1' : '');
               hash = hashNumber(hash, getRunNumberProp(run, 'fontSize'));
               hash = hashString(hash, getRunStringProp(run, 'fontFamily'));
-              hash = hashString(hash, getRunStringProp(run, 'underline'));
+              hash = hashString(hash, getRunUnderlineStyle(run));
+              hash = hashString(hash, getRunUnderlineColor(run));
               hash = hashString(hash, getRunBooleanProp(run, 'strike') ? '1' : '');
             }
           }

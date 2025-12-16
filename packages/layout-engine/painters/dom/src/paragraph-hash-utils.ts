@@ -106,3 +106,31 @@ export const getRunBooleanProp = (run: Run, prop: string): boolean => {
   }
   return false;
 };
+
+/**
+ * Safely gets the underline style from a run.
+ * Handles the object-shaped underline property { style?, color? }.
+ *
+ * @param run - The run to get the underline style from
+ * @returns The underline style or empty string if not present
+ */
+export const getRunUnderlineStyle = (run: Run): string => {
+  if ('underline' in run && run.underline && typeof run.underline === 'object') {
+    return (run.underline as { style?: string }).style ?? '';
+  }
+  return '';
+};
+
+/**
+ * Safely gets the underline color from a run.
+ * Handles the object-shaped underline property { style?, color? }.
+ *
+ * @param run - The run to get the underline color from
+ * @returns The underline color or empty string if not present
+ */
+export const getRunUnderlineColor = (run: Run): string => {
+  if ('underline' in run && run.underline && typeof run.underline === 'object') {
+    return (run.underline as { color?: string }).color ?? '';
+  }
+  return '';
+};
