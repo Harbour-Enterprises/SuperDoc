@@ -283,7 +283,7 @@ type PainterOptions = {
     enabled?: boolean;
     window?: number;
     overscan?: number;
-    /** Virtualization gap override (if not set, uses pageGap; default: 72px for virtual mode) */
+    /** Virtualization gap override (defaults to 72px; independent of pageGap) */
     gap?: number;
     paddingTop?: number;
   };
@@ -348,6 +348,8 @@ const DEFAULT_TAB_INTERVAL_PX = 48;
  * Used as a fallback when page size information is not available for ruler rendering.
  */
 const DEFAULT_PAGE_HEIGHT_PX = 1056;
+/** Default gap used when virtualization is enabled (kept in sync with PresentationEditor layout defaults). */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
 const COMMENT_INTERNAL_COLOR = '#078383';
 const COMMENT_INACTIVE_ALPHA = '22';
@@ -768,7 +770,7 @@ export class DomPainter {
   private virtualEnabled = false;
   private virtualWindow = 5;
   private virtualOverscan = 0;
-  private virtualGap = 72; // px, approximates prior margin + gap look (default for virtualized mode)
+  private virtualGap = DEFAULT_VIRTUALIZED_PAGE_GAP; // px, default for virtualized mode
   private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
   private topSpacerEl: HTMLElement | null = null;
   private bottomSpacerEl: HTMLElement | null = null;
@@ -802,12 +804,10 @@ export class DomPainter {
       this.virtualEnabled = true;
       this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
       this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
-      // Virtualization gap: use explicit virtualization.gap if provided, otherwise use pageGap, default to 72
-      if (typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap)) {
-        this.virtualGap = Math.max(0, options.virtualization.gap);
-      } else {
-        this.virtualGap = this.pageGap;
-      }
+      // Virtualization gap: use explicit virtualization.gap if provided, otherwise default to virtualized gap (72px)
+      const hasExplicitVirtualGap =
+        typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap);
+      this.virtualGap = hasExplicitVirtualGap ? Math.max(0, options.virtualization.gap) : DEFAULT_VIRTUALIZED_PAGE_GAP;
       if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
         this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
       }
