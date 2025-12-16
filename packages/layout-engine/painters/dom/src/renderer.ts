@@ -3795,8 +3795,9 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    // Check if paragraph has justified alignment ('both' means justify) and line should be justified
-    const shouldJustify = block.attrs?.alignment === 'both' && !hasExplicitPositioning;
+    // Check if paragraph has justified alignment and line should be justified
+    // TODO: Remove this override when justify bugs are fixed
+    const shouldJustify = false; // block.attrs?.alignment === 'justify' && !hasExplicitPositioning;
     if (shouldJustify) {
       const spaceCount = textSlices.reduce(
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
