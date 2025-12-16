@@ -9,9 +9,31 @@ import type {
 } from '@superdoc/contracts';
 import { Engines } from '@superdoc/contracts';
 
+/**
+ * Type definition for paragraph block attributes that include indentation and tab stops.
+ * Extracted for cleaner type safety when accessing block.attrs.
+ */
+type ParagraphBlockAttrs = {
+  indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
+  tabs?: TabStop[];
+  tabIntervalTwips?: number;
+  wordLayout?: { textStartPx?: number };
+  numberingProperties?: unknown;
+};
+
 let canvas: HTMLCanvasElement | null = null;
 let ctx: CanvasRenderingContext2D | null = null;
 
+/**
+ * Retrieves or creates a canvas rendering context for text measurement.
+ *
+ * This function manages a singleton canvas context used across all text measurements.
+ * The canvas context provides the measureText API which is essential for accurate
+ * text width calculations that match browser rendering.
+ *
+ * @returns Canvas 2D rendering context if available in browser environment, null otherwise.
+ *   Returns null in server-side rendering contexts where document is undefined.
+ */
 function getCtx(): CanvasRenderingContext2D | null {
   if (ctx) return ctx;
   if (typeof document === 'undefined') return null;
@@ -20,10 +42,56 @@ function getCtx(): CanvasRenderingContext2D | null {
   return ctx;
 }
 
+/**
+ * Type guard to determine if a run is a TextRun (has text content and formatting).
+ *
+ * In the SuperDoc run model, runs can be various types (text, tab, image, break, etc.).
+ * TextRuns are the only runs that have text content and typography properties
+ * (fontSize, fontFamily, bold, italic). This type guard enables safe access to
+ * these properties by narrowing the Run union type to TextRun.
+ *
+ * Run types that are NOT TextRuns:
+ * - tab: Represents horizontal tab character (no text content)
+ * - lineBreak: Represents soft line break
+ * - break: Represents page/column break
+ * - fieldAnnotation: Represents field metadata
+ * - image/drawing runs with 'src' property
+ *
+ * @param run - The run to check (can be any Run type from the union).
+ * @returns True if the run is a TextRun with text content and formatting properties,
+ *   false for tabs, breaks, images, and other non-text run types.
+ */
 function isTextRun(run: Run): run is TextRun {
-  return run.kind === 'tab' ? false : true;
+  // Explicitly check for non-text run types
+  if (run.kind === 'tab' || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation') {
+    return false;
+  }
+  // Check for image/drawing runs which have 'src' property
+  if ('src' in run) {
+    return false;
+  }
+  // All other runs are text runs
+  return true;
 }
 
+/**
+ * Generates a CSS font string for canvas text measurement from a run's formatting.
+ *
+ * The canvas measureText API requires a CSS font string (e.g., "italic bold 16px Arial")
+ * to accurately measure text width. This function converts SuperDoc run formatting
+ * properties (fontSize, fontFamily, bold, italic) into the CSS font string format.
+ *
+ * CSS font string format: [style] [weight] <size> <family>
+ * - style: "italic" or omitted
+ * - weight: "bold" or omitted
+ * - size: font size in pixels (required)
+ * - family: font family name (required)
+ *
+ * @param run - The run containing formatting properties (fontSize, fontFamily, bold, italic).
+ *   For non-text runs (tabs, breaks), uses default formatting values.
+ * @returns CSS font string suitable for CanvasRenderingContext2D.font property.
+ *   Example outputs: "16px Arial", "italic bold 24px Times New Roman"
+ */
 function fontString(run: Run): string {
   const textRun = isTextRun(run) ? run : null;
   const size = textRun?.fontSize ?? 16;
@@ -138,7 +206,7 @@ const buildTabStopsPx = (indent?: ParagraphIndent, tabs?: TabStop[], tabInterval
     paragraphIndent: paragraphIndentTwips,
   });
 
-  return stops.map((stop) => ({
+  return stops.map((stop: TabStop) => ({
     pos: twipsToPx(stop.pos),
     val: stop.val,
     leader: stop.leader,
@@ -162,6 +230,11 @@ const buildTabStopsPx = (indent?: ParagraphIndent, tabs?: TabStop[], tabInterval
  *
  * The epsilon tolerance (TAB_EPSILON = 0.1px) handles floating-point rounding
  * errors from text measurement and ensures consistent tab stop snapping behavior.
+ *
+ * IMPORTANT: The tabStops array must be sorted in ascending order by position.
+ * This requirement is enforced by buildTabStopsPx which relies on Engines.computeTabStops
+ * to produce correctly ordered tab stops. The algorithm assumes sorted order for
+ * correct tab stop selection and index advancement.
  *
  * @param currentX - Current horizontal cursor position in pixels (where text currently ends).
  *   This is the reference point from which to find the next tab stop.
@@ -201,6 +274,30 @@ const getNextTabStopPx = (
   return { target: currentX + twipsToPx(DEFAULT_TAB_INTERVAL_TWIPS), nextIndex: index };
 };
 
+/**
+ * Measures the pixel width of a slice of text within a run.
+ *
+ * Uses the HTML5 Canvas API to measure text width with the same precision as browser
+ * text rendering. This is essential for accurate line breaking and layout calculations.
+ * The measurement respects all text formatting properties (font family, size, bold, italic)
+ * to produce pixel-accurate widths.
+ *
+ * Measurement approach:
+ * - Primary: Uses canvas.measureText() for browser-accurate text measurement
+ * - Fallback: Uses character count * 60% of font size for server-side rendering
+ *
+ * The fallback heuristic (0.6 * fontSize per character) is approximate and intended
+ * only for non-browser environments where canvas is unavailable. It works reasonably
+ * for Latin text in proportional fonts but will be less accurate for:
+ * - Monospace fonts (should use 1.0 * fontSize)
+ * - Wide characters (CJK scripts, emoji)
+ * - Condensed/extended font variants
+ *
+ * @param run - The run containing text and formatting properties.
+ * @param fromChar - Start character index (inclusive) within the run's text.
+ * @param toChar - End character index (exclusive) within the run's text.
+ * @returns Width of the text slice in pixels (floating-point precision for sub-pixel accuracy).
+ */
 function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): number {
   const context = getCtx();
   const text = runText(run).slice(fromChar, toChar);
@@ -221,6 +318,32 @@ function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): numbe
   return metrics.width;
 }
 
+/**
+ * Calculates the line height for a range of runs based on maximum font size.
+ *
+ * Line height must accommodate the tallest text in the line to prevent visual overlap
+ * between lines. This function scans all runs in the specified range to find the
+ * maximum font size, then applies a 1.2x multiplier to provide adequate spacing for
+ * ascenders and descenders.
+ *
+ * Why 1.2x multiplier:
+ * - Provides 20% extra space above and below the font size
+ * - Accommodates ascenders (h, k, l) and descenders (g, y, p) without crowding
+ * - Standard CSS line-height values range from 1.2 to 1.5
+ * - 1.2 is the minimum recommended for readable body text
+ *
+ * Limitations:
+ * - This is a simplified calculation suitable for fast remeasurement
+ * - Does NOT use actual font metrics (ascent, descent, lineGap)
+ * - Full typography measurement (in measuring/dom) uses precise font metrics
+ * - Mixed font sizes on one line: uses maximum size, may be slightly generous
+ *
+ * @param runs - Array of all runs in the paragraph.
+ * @param fromRun - Starting run index (inclusive) for the line.
+ * @param toRun - Ending run index (inclusive) for the line.
+ * @returns Line height in pixels (fontSize * 1.2 of the largest font in the range).
+ *   For example: 16px font returns 19.2px line height, 24px font returns 28.8px.
+ */
 function lineHeightForRuns(runs: Run[], fromRun: number, toRun: number): number {
   let maxSize = 0;
   for (let i = fromRun; i <= toRun; i += 1) {
@@ -325,6 +448,16 @@ export function remeasureParagraph(
     throw new Error(`remeasureParagraph: maxWidth must be a positive number, got ${maxWidth}`);
   }
 
+  // Input validation: firstLineIndent must be a finite number
+  if (!Number.isFinite(firstLineIndent)) {
+    throw new Error(`remeasureParagraph: firstLineIndent must be a finite number, got ${firstLineIndent}`);
+  }
+
+  // Input validation: block must be defined
+  if (!block) {
+    throw new Error('remeasureParagraph: block must be defined');
+  }
+
   // Input validation: block.runs must be an array
   if (!Array.isArray(block.runs)) {
     throw new Error(`remeasureParagraph: block.runs must be an array, got ${typeof block.runs}`);
@@ -332,34 +465,32 @@ export function remeasureParagraph(
 
   const runs = block.runs ?? [];
   const lines: Line[] = [];
-  const indent = (
-    block.attrs as
-      | {
-          indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
-          tabs?: TabStop[];
-          tabIntervalTwips?: number;
-        }
-      | undefined
-  )?.indent;
+  const attrs = block.attrs as ParagraphBlockAttrs | undefined;
+  const indent = attrs?.indent;
+  const wordLayout = attrs?.wordLayout;
   const indentLeft = Math.max(0, indent?.left ?? 0);
   const indentRight = Math.max(0, indent?.right ?? 0);
   const indentFirstLine = Math.max(0, indent?.firstLine ?? 0);
   const indentHanging = Math.max(0, indent?.hanging ?? 0);
   const rawFirstLineOffset = Math.max(0, firstLineIndent || indentFirstLine - indentHanging);
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  const tabStops = buildTabStopsPx(
-    indent as ParagraphIndent | undefined,
-    (block.attrs as { tabs?: TabStop[] } | undefined)?.tabs,
-    (block.attrs as { tabIntervalTwips?: number } | undefined)?.tabIntervalTwips,
-  );
+  const textStartPx = wordLayout?.textStartPx;
+  // If numbering defines only a firstLine indent with no left/hanging, treat it as a hanging-style layout:
+  // don't shrink available width in columns (matches Word which positions marker + tab but leaves normal text width).
+  const treatAsHanging = textStartPx && indentLeft === 0 && indentHanging === 0;
+  const firstLineWidth =
+    typeof textStartPx === 'number' && textStartPx > indentLeft && !treatAsHanging
+      ? Math.max(1, maxWidth - textStartPx - indentRight)
+      : Math.max(1, contentWidth - rawFirstLineOffset);
+  const tabStops = buildTabStopsPx(indent as ParagraphIndent | undefined, attrs?.tabs, attrs?.tabIntervalTwips);
 
   let currentRun = 0;
   let currentChar = 0;
 
   while (currentRun < runs.length) {
     const isFirstLine = lines.length === 0;
-    // For first line, reduce available width by firstLineIndent (e.g., for in-flow list markers)
-    const effectiveMaxWidth = Math.max(1, isFirstLine ? contentWidth - rawFirstLineOffset : contentWidth);
+    // For first line, reduce available width by textStart/first-line offset (e.g., for in-flow list markers)
+    const effectiveMaxWidth = Math.max(1, isFirstLine ? firstLineWidth : contentWidth);
     const startRun = currentRun;
     const startChar = currentChar;
     let width = 0;
@@ -443,6 +574,5 @@ export function remeasureParagraph(
   }
 
   const totalHeight = lines.reduce((s, l) => s + l.lineHeight, 0);
-  const maxLineWidth = lines.reduce((m, l) => Math.max(m, l.width ?? 0), 0);
   return { kind: 'paragraph', lines, totalHeight };
 }

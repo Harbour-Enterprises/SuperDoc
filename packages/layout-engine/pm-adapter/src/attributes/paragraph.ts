@@ -568,10 +568,21 @@ export const buildNumberingPath = (
 const convertIndentTwipsToPx = (indent?: ParagraphIndent | null): ParagraphIndent | undefined => {
   if (!indent) return undefined;
   const result: ParagraphIndent = {};
-  if (isFiniteNumber(indent.left)) result.left = twipsToPx(Number(indent.left));
-  if (isFiniteNumber(indent.right)) result.right = twipsToPx(Number(indent.right));
-  if (isFiniteNumber(indent.firstLine)) result.firstLine = twipsToPx(Number(indent.firstLine));
-  if (isFiniteNumber(indent.hanging)) result.hanging = twipsToPx(Number(indent.hanging));
+  const toNum = (v: unknown): number | undefined => {
+    if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) return Number(v);
+    if (isFiniteNumber(v)) return Number(v);
+    return undefined;
+  };
+
+  const left = toNum(indent.left);
+  const right = toNum(indent.right);
+  const firstLine = toNum(indent.firstLine);
+  const hanging = toNum(indent.hanging);
+
+  if (left != null) result.left = twipsToPx(left);
+  if (right != null) result.right = twipsToPx(right);
+  if (firstLine != null) result.firstLine = twipsToPx(firstLine);
+  if (hanging != null) result.hanging = twipsToPx(hanging);
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
@@ -1517,7 +1528,42 @@ export const computeParagraphAttrs = (
       // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+    let wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+
+    // Fallback: some numbering levels only specify a firstLine indent (no left/hanging).
+    // When wordLayout computation returns null, ensure we still provide a textStartPx
+    // so first-line wrapping in columns has the correct width.
+    if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
+          firstLineIndentMode: true,
+          textStartPx: firstLinePx,
+        } as WordParagraphLayoutOutput;
+      }
+    }
+
+    // If computeWordLayout returned an object but did not provide textStartPx and
+    // the numbering indent has a firstLine value, set a minimal textStartPx to
+    // match the resolved first-line indent. This guards against cases where
+    // word-layout computation omits textStart for levels without left/hanging.
+    if (
+      wordLayout &&
+      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
+      enrichedNumberingProps.resolvedLevelIndent
+    ) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          ...wordLayout,
+          firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
+          textStartPx: firstLinePx,
+        };
+      }
+    }
 
     if (wordLayout) {
       if (wordLayout.marker) {
