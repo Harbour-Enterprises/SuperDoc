@@ -103,6 +103,14 @@ vi.mock('@superdoc/layout-bridge', () => ({
   findWordBoundaries: vi.fn(),
   findParagraphBoundaries: vi.fn(),
   createDragHandler: vi.fn(),
+  PageGeometryHelper: vi.fn().mockImplementation(({ layout, pageGap }) => ({
+    updateLayout: vi.fn(),
+    getPageIndexAtY: vi.fn(() => 0),
+    getNearestPageIndex: vi.fn(() => 0),
+    getPageTop: vi.fn(() => 0),
+    getPageGap: vi.fn(() => pageGap ?? 0),
+    getLayout: vi.fn(() => layout),
+  })),
 }));
 
 vi.mock('@superdoc/painter-dom', () => ({
