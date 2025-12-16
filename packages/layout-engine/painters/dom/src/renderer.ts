@@ -20,6 +20,7 @@ import type {
   ImageDrawing,
   ParagraphAttrs,
   ParagraphBorder,
+  ParagraphBorders,
   ListItemFragment,
   ListBlock,
   ListMeasure,
@@ -71,6 +72,14 @@ import {
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
 import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import {
+  hashParagraphBorders,
+  getRunStringProp,
+  getRunNumberProp,
+  getRunBooleanProp,
+  getRunUnderlineStyle,
+  getRunUnderlineColor,
+} from './paragraph-hash-utils.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -4631,6 +4640,16 @@ const hasListMarkerProperties = (
  * - Position markers (pmStart, pmEnd)
  * - Special tokens (page numbers, etc.)
  * - List marker properties (numId, ilvl, markerText) - for list indent changes
+ * - Paragraph attributes (alignment, spacing, indent, borders, shading, direction, rtl, tabs)
+ * - Table cell content and paragraph formatting within cells
+ *
+ * For table blocks, a deep hash is computed across all rows and cells, including:
+ * - Cell block content (paragraph runs, text, formatting)
+ * - Paragraph-level attributes in cells (alignment, spacing, line height, indent, borders, shading)
+ * - Run-level formatting (color, highlight, bold, italic, fontSize, fontFamily, underline, strike)
+ *
+ * This ensures toolbar commands that modify paragraph or run formatting within tables
+ * trigger proper DOM updates.
  *
  * @param block - The flow block to generate a version string for
  * @returns A pipe-delimited string representing all visual properties of the block.
@@ -4700,18 +4719,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
     // Include paragraph-level attributes that affect rendering (alignment, spacing, indent, etc.)
     // This ensures DOM updates when toolbar commands like "align center" change these properties.
-    const attrs = block.attrs as
-      | {
-          alignment?: string;
-          spacing?: { before?: number; after?: number; line?: number; lineRule?: string };
-          indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
-          borders?: Record<string, unknown>;
-          shading?: { fill?: string; color?: string };
-          direction?: string;
-          rtl?: boolean;
-          tabs?: Array<{ val?: string; pos?: number; leader?: string }>;
-        }
-      | undefined;
+    const attrs = block.attrs as ParagraphAttrs | undefined;
 
     const paragraphAttrsVersion = attrs
       ? [
@@ -4724,7 +4732,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           attrs.indent?.right ?? '',
           attrs.indent?.firstLine ?? '',
           attrs.indent?.hanging ?? '',
-          attrs.borders ? JSON.stringify(attrs.borders) : '',
+          attrs.borders ? hashParagraphBorders(attrs.borders) : '',
           attrs.shading?.fill ?? '',
           attrs.shading?.color ?? '',
           attrs.direction ?? '',
@@ -4793,7 +4801,14 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    // Robust hash across all rows/cells so deep edits invalidate version
+    /**
+     * Local hash function for strings using FNV-1a algorithm.
+     * Used to create a robust hash across all table rows/cells so deep edits invalidate version.
+     *
+     * @param seed - Initial hash value
+     * @param value - String value to hash
+     * @returns Updated hash value
+     */
     const hashString = (seed: number, value: string): number => {
       let hash = seed >>> 0;
       for (let i = 0; i < value.length; i++) {
@@ -4802,6 +4817,15 @@ const deriveBlockVersion = (block: FlowBlock): string => {
       }
       return hash >>> 0;
     };
+
+    /**
+     * Local hash function for numbers.
+     * Handles undefined/null values safely by treating them as 0.
+     *
+     * @param seed - Initial hash value
+     * @param value - Number value to hash (or undefined/null)
+     * @returns Updated hash value
+     */
     const hashNumber = (seed: number, value: number | undefined | null): number => {
       const n = Number.isFinite(value) ? (value as number) : 0;
       let hash = seed ^ n;
@@ -4831,8 +4855,33 @@ const deriveBlockVersion = (block: FlowBlock): string => {
         for (const cellBlock of cellBlocks) {
           hash = hashString(hash, cellBlock?.kind ?? 'unknown');
           if (cellBlock?.kind === 'paragraph') {
-            const runs = (cellBlock as ParagraphBlock).runs ?? [];
+            const paragraphBlock = cellBlock as ParagraphBlock;
+            const runs = paragraphBlock.runs ?? [];
             hash = hashNumber(hash, runs.length);
+
+            // Include paragraph-level attributes that affect rendering
+            // (alignment, spacing, indent, etc.) - fixes toolbar commands not updating tables
+            const attrs = paragraphBlock.attrs as ParagraphAttrs | undefined;
+
+            if (attrs) {
+              hash = hashString(hash, attrs.alignment ?? '');
+              hash = hashNumber(hash, attrs.spacing?.before ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.after ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.line ?? 0);
+              hash = hashString(hash, attrs.spacing?.lineRule ?? '');
+              hash = hashNumber(hash, attrs.indent?.left ?? 0);
+              hash = hashNumber(hash, attrs.indent?.right ?? 0);
+              hash = hashNumber(hash, attrs.indent?.firstLine ?? 0);
+              hash = hashNumber(hash, attrs.indent?.hanging ?? 0);
+              hash = hashString(hash, attrs.shading?.fill ?? '');
+              hash = hashString(hash, attrs.shading?.color ?? '');
+              hash = hashString(hash, attrs.direction ?? '');
+              hash = hashString(hash, attrs.rtl ? '1' : '');
+              if (attrs.borders) {
+                hash = hashString(hash, hashParagraphBorders(attrs.borders));
+              }
+            }
+
             for (const run of runs) {
               // Only text runs have .text property; ImageRun does not
               if ('text' in run && typeof run.text === 'string') {
@@ -4840,6 +4889,18 @@ const deriveBlockVersion = (block: FlowBlock): string => {
               }
               hash = hashNumber(hash, run.pmStart ?? -1);
               hash = hashNumber(hash, run.pmEnd ?? -1);
+
+              // Include run formatting properties that affect rendering
+              // (color, highlight, bold, italic, etc.) - fixes toolbar commands not updating tables
+              hash = hashString(hash, getRunStringProp(run, 'color'));
+              hash = hashString(hash, getRunStringProp(run, 'highlight'));
+              hash = hashString(hash, getRunBooleanProp(run, 'bold') ? '1' : '');
+              hash = hashString(hash, getRunBooleanProp(run, 'italic') ? '1' : '');
+              hash = hashNumber(hash, getRunNumberProp(run, 'fontSize'));
+              hash = hashString(hash, getRunStringProp(run, 'fontFamily'));
+              hash = hashString(hash, getRunUnderlineStyle(run));
+              hash = hashString(hash, getRunUnderlineColor(run));
+              hash = hashString(hash, getRunBooleanProp(run, 'strike') ? '1' : '');
             }
           }
         }
