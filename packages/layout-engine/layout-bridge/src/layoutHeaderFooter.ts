@@ -1,5 +1,5 @@
 import type { FlowBlock, HeaderFooterLayout, Measure } from '@superdoc/contracts';
-import { layoutHeaderFooter, type HeaderFooterConstraints } from '@superdoc/layout-engine/src/index';
+import { layoutHeaderFooter, type HeaderFooterConstraints } from '@superdoc/layout-engine';
 import { MeasureCache } from './cache';
 import { resolveHeaderFooterTokens, cloneHeaderFooterBlocks } from './resolveHeaderFooterTokens';
 import { FeatureFlags } from './featureFlags';

@@ -543,6 +543,9 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@superdoc/font-utils':
+        specifier: workspace:*
+        version: link:../../../../shared/font-utils
       '@superdoc/geometry-utils':
         specifier: workspace:*
         version: link:../../geometry-utils
@@ -555,6 +558,9 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@superdoc/font-utils':
+        specifier: workspace:*
+        version: link:../../../../shared/font-utils
       '@superdoc/preset-geometry':
         specifier: workspace:*
         version: link:../../../preset-geometry
@@ -612,6 +618,9 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@superdoc/font-utils':
+        specifier: workspace:*
+        version: link:../../../shared/font-utils
     devDependencies:
       typescript:
         specifier: 'catalog:'

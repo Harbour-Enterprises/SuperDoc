@@ -16,6 +16,7 @@
   "dependencies": {
     "@superdoc/contracts": "workspace:*",
     "@superdoc/common": "workspace:*",
+    "@superdoc/font-utils": "workspace:*",
     "@superdoc/geometry-utils": "workspace:*",
     "@superdoc/word-layout": "workspace:*"
   }
