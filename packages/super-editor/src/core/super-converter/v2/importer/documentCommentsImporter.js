@@ -39,7 +39,7 @@ export function importCommentData({ docx, editor, converter }) {
     const date = new Date(createdDate);
     const unixTimestampMs = date.getTime();
 
-    const parsedComment = nodeListHandler.handler({
+    const parsedElements = nodeListHandler.handler({
       nodes: el.elements,
       nodeListHandler,
       docx,
@@ -48,7 +48,7 @@ export function importCommentData({ docx, editor, converter }) {
       path: [el],
     });
 
-    const { attrs } = parsedComment[0];
+    const { attrs } = parsedElements[0];
     const paraId = attrs['w14:paraId'];
 
     return {
@@ -57,7 +57,8 @@ export function importCommentData({ docx, editor, converter }) {
       creatorName: authorName,
       creatorEmail: authorEmail,
       createdTime: unixTimestampMs,
-      textJson: parsedComment[0],
+      textJson: parsedElements[0],
+      elements: parsedElements,
       initials,
       paraId,
       trackedChange,
@@ -105,7 +106,14 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
   const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
 
   return comments.map((comment) => {
-    const extendedDef = commentEx.find((ce) => ce.attributes['w15:paraId'] === comment.paraId);
+    const extendedDef = commentEx.find((ce) => {
+      // Check if any of the comment's elements are included in the extended comment's elements
+      // Comments might have multiple elements, so we need to check if any of them are included in the extended comments
+      const isIncludedInCommentElements = comment.elements?.some(
+        (el) => el.attrs?.['w14:paraId'] === ce.attributes['w15:paraId'],
+      );
+      return isIncludedInCommentElements;
+    });
     if (!extendedDef) return { ...comment, isDone: comment.isDone ?? false };
 
     const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
