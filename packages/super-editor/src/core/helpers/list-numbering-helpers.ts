@@ -72,6 +72,7 @@ export const generateNewListDefinition = ({
   text,
   fmt,
   editor,
+  markerFontFamily,
 }: {
   numId: number;
   listType: ListType;
@@ -80,6 +81,7 @@ export const generateNewListDefinition = ({
   text?: string;
   fmt?: string;
   editor: Editor;
+  markerFontFamily?: string;
 }): { abstract: NumberingElement; definition: NumberingElement } => {
   // Generate a new numId to add to numbering.xml
   const listTypeName = typeof listType === 'string' ? listType : listType?.name;
@@ -147,6 +149,32 @@ export const generateNewListDefinition = ({
           },
         },
       ];
+      if (markerFontFamily) {
+        // Add font family to level properties
+        const rPrIndex = levelProps.elements.findIndex((el: NumberingElement) => el.name === 'w:rPr');
+        let rPr = levelProps.elements[rPrIndex] as NumberingElement | undefined;
+        if (!rPr) {
+          rPr = {
+            type: 'element',
+            name: 'w:rPr',
+            elements: [],
+          };
+          levelProps.elements.push(rPr);
+        }
+        // Remove existing rFonts if present
+        rPr.elements = rPr.elements?.filter((el: NumberingElement) => el.name !== 'w:rFonts');
+        // Add new rFonts element
+        rPr.elements?.push({
+          type: 'element',
+          name: 'w:rFonts',
+          attributes: {
+            'w:ascii': markerFontFamily,
+            'w:hAnsi': markerFontFamily,
+            'w:eastAsia': markerFontFamily,
+            'w:cs': markerFontFamily,
+          },
+        });
+      }
     }
   }
 

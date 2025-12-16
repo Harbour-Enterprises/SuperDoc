@@ -4,8 +4,12 @@ import {
   defaultHeaderFooterIdentifier,
   extractIdentifierFromConverter,
   getHeaderFooterType,
+  getHeaderFooterTypeForSection,
   resolveHeaderFooterForPage,
+  resolveHeaderFooterForPageAndSection,
+  buildMultiSectionIdentifier,
 } from '../src/headerFooterUtils';
+import type { SectionMetadata } from '@superdoc/contracts';
 
 const makeLayout = (): Layout => ({
   pageSize: { w: 600, h: 800 },
@@ -191,6 +195,291 @@ describe('headerFooterUtils', () => {
       expect(getHeaderFooterType(1, identifier, { kind: 'footer' })).toBe('first');
       expect(getHeaderFooterType(2, identifier, { kind: 'footer' })).toBe('default');
       expect(getHeaderFooterType(3, identifier, { kind: 'footer' })).toBe('default');
+    });
+  });
+
+  describe('multi-section first-page variants', () => {
+    const sectionMetadata: SectionMetadata[] = [
+      { sectionIndex: 0, headerRefs: { default: 'h0-default', first: 'h0-first' }, titlePg: true },
+      { sectionIndex: 1, headerRefs: { default: 'h1-default', first: 'h1-first' }, titlePg: true },
+    ];
+    const layout: Layout = {
+      pageSize: { w: 600, h: 800 },
+      pages: [
+        { number: 1, fragments: [], sectionIndex: 0 },
+        { number: 2, fragments: [], sectionIndex: 0 },
+        { number: 3, fragments: [], sectionIndex: 1 },
+        { number: 4, fragments: [], sectionIndex: 1 },
+      ],
+      headerFooter: {
+        default: {
+          height: 36,
+          pages: [{ number: 1, fragments: [] }],
+        },
+        first: {
+          height: 40,
+          pages: [{ number: 1, fragments: [] }],
+        },
+      },
+    };
+
+    it('treats the first page of a later section as a first-page header/footer', () => {
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+      const sectionFirstPageType = getHeaderFooterTypeForSection(3, 1, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(sectionFirstPageType).toBe('first');
+
+      const secondPageType = getHeaderFooterTypeForSection(4, 1, identifier, {
+        kind: 'header',
+        sectionPageNumber: 2,
+      });
+      expect(secondPageType).toBe('default');
+    });
+
+    it('resolves layout info with section-aware first-page detection', () => {
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+      const resolved = resolveHeaderFooterForPageAndSection(layout, 2, identifier, { kind: 'header' });
+
+      expect(resolved?.sectionIndex).toBe(1);
+      expect(resolved?.type).toBe('first');
+      expect(resolved?.contentId).toBe('h1-first');
+    });
+  });
+
+  describe('titlePg behavior (regression test for OOXML compliance)', () => {
+    it('should NOT use first header when titlePg is false, even if first header reference exists', () => {
+      // This tests the OOXML spec: w:headerReference type="first" defines what header to use IF titlePg is enabled,
+      // but the w:titlePg element must be present in sectPr for it to actually be used.
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          titlePg: false, // Explicitly false - first page header should NOT be used
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use default header, NOT first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('default');
+
+      // Verify sectionTitlePg is false
+      expect(identifier.sectionTitlePg.get(0)).toBeUndefined();
+      expect(identifier.titlePg).toBe(false);
+    });
+
+    it('should NOT use first header when titlePg is omitted (undefined)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          // titlePg omitted - should default to false
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use default header, NOT first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('default');
+    });
+
+    it('should use first header only when titlePg is explicitly true', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          titlePg: true, // Explicitly true - first page header SHOULD be used
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      // First page should use first header
+      const firstPageType = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      expect(firstPageType).toBe('first');
+
+      // Second page should use default header
+      const secondPageType = getHeaderFooterTypeForSection(2, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 2,
+      });
+      expect(secondPageType).toBe('default');
+    });
+  });
+
+  describe('buildMultiSectionIdentifier with converterIds parameter', () => {
+    it('should merge converter IDs as fallbacks for null values', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null, first: null },
+          footerRefs: { default: null, even: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first', odd: 'converter-h-odd' },
+        footerIds: { default: 'converter-f-default', even: 'converter-f-even' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Converter IDs should be used as fallbacks for null values in section metadata
+      expect(identifier.headerIds.default).toBe('converter-h-default');
+      expect(identifier.headerIds.first).toBe('converter-h-first');
+      expect(identifier.headerIds.odd).toBe('converter-h-odd');
+      expect(identifier.footerIds.default).toBe('converter-f-default');
+      expect(identifier.footerIds.even).toBe('converter-f-even');
+    });
+
+    it('should NOT override existing section metadata with converter IDs', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default', first: 'section-h-first' },
+          footerRefs: { default: 'section-f-default' },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first', even: 'converter-h-even' },
+        footerIds: { default: 'converter-f-default', odd: 'converter-f-odd' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata should take precedence over converter IDs
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBe('section-h-first');
+      // Converter IDs should only fill in gaps
+      expect(identifier.headerIds.even).toBe('converter-h-even');
+      expect(identifier.footerIds.default).toBe('section-f-default');
+      expect(identifier.footerIds.odd).toBe('converter-f-odd');
+    });
+
+    it('should handle missing converterIds parameter gracefully', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default' },
+          footerRefs: { default: 'section-f-default' },
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, undefined);
+
+      // Should work without converterIds
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBeNull();
+      expect(identifier.footerIds.default).toBe('section-f-default');
+      expect(identifier.footerIds.even).toBeNull();
+    });
+
+    it('should handle partial converterIds (only headerIds)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null },
+          footerRefs: { default: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'converter-h-default', first: 'converter-h-first' },
+        // footerIds omitted
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Header IDs should be merged
+      expect(identifier.headerIds.default).toBe('converter-h-default');
+      expect(identifier.headerIds.first).toBe('converter-h-first');
+      // Footer IDs should remain null (no converter fallback)
+      expect(identifier.footerIds.default).toBeNull();
+      expect(identifier.footerIds.first).toBeNull();
+    });
+
+    it('should handle partial converterIds (only footerIds)', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: null },
+          footerRefs: { default: null },
+        },
+      ];
+
+      const converterIds = {
+        // headerIds omitted
+        footerIds: { default: 'converter-f-default', even: 'converter-f-even' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Header IDs should remain null (no converter fallback)
+      expect(identifier.headerIds.default).toBeNull();
+      expect(identifier.headerIds.first).toBeNull();
+      // Footer IDs should be merged
+      expect(identifier.footerIds.default).toBe('converter-f-default');
+      expect(identifier.footerIds.even).toBe('converter-f-even');
+    });
+
+    it('should handle empty converterIds object', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default' },
+        },
+      ];
+
+      const converterIds = {};
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata should be preserved
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBeNull();
+      expect(identifier.footerIds.default).toBeNull();
+    });
+
+    it('should merge converter IDs with null values in section metadata correctly', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'section-h-default', first: null, even: null, odd: null },
+          footerRefs: { default: null, first: null, even: 'section-f-even', odd: null },
+        },
+      ];
+
+      const converterIds = {
+        headerIds: { default: 'conv-h-def', first: 'conv-h-first', even: 'conv-h-even', odd: 'conv-h-odd' },
+        footerIds: { default: 'conv-f-def', first: 'conv-f-first', even: 'conv-f-even', odd: 'conv-f-odd' },
+      };
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata, undefined, converterIds);
+
+      // Section metadata takes precedence, converter fills nulls
+      expect(identifier.headerIds.default).toBe('section-h-default');
+      expect(identifier.headerIds.first).toBe('conv-h-first');
+      expect(identifier.headerIds.even).toBe('conv-h-even');
+      expect(identifier.headerIds.odd).toBe('conv-h-odd');
+
+      expect(identifier.footerIds.default).toBe('conv-f-def');
+      expect(identifier.footerIds.first).toBe('conv-f-first');
+      expect(identifier.footerIds.even).toBe('section-f-even');
+      expect(identifier.footerIds.odd).toBe('conv-f-odd');
     });
   });
 });

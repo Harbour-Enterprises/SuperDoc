@@ -17,16 +17,212 @@ import { computeFragmentPmRange, normalizeLines, sliceLines, extractBlockPmRange
 import { computeAnchorX } from './floating-objects.js';
 
 const spacingDebugEnabled = false;
-const anchorDebugEnabled = false;
+
+/**
+ * Type definition for Word layout attributes attached to paragraph blocks.
+ * This is a subset of the WordParagraphLayoutOutput from @superdoc/word-layout.
+ */
+type WordLayoutAttrs = {
+  /** List marker layout information */
+  marker?: {
+    /** Width of the marker box in pixels */
+    markerBoxWidthPx?: number;
+  };
+  /**
+   * True when list uses firstLine indent pattern (marker at left+firstLine)
+   * instead of standard hanging pattern (marker at left-hanging).
+   */
+  firstLineIndentMode?: boolean;
+  /** Horizontal position where paragraph text begins in pixels */
+  textStartPx?: number;
+};
+
+/**
+ * Type definition for paragraph spacing attributes.
+ * Represents spacing values in pixels for paragraph layout.
+ */
+type ParagraphSpacingAttrs = {
+  /** Spacing before the paragraph in pixels */
+  before?: number;
+  /** Spacing after the paragraph in pixels */
+  after?: number;
+  /** Legacy property for spacing before */
+  lineSpaceBefore?: number;
+  /** Legacy property for spacing after */
+  lineSpaceAfter?: number;
+};
+
+/**
+ * Type definition for paragraph block attributes accessed during layout.
+ * Provides type-safe access to common paragraph properties.
+ */
+type ParagraphBlockAttrs = {
+  /** Spacing configuration for the paragraph */
+  spacing?: ParagraphSpacingAttrs;
+  /** Style identifier for the paragraph */
+  styleId?: string;
+  /** Whether to suppress spacing between same-style paragraphs */
+  contextualSpacing?: boolean | string | number;
+  /** Word layout output for list paragraphs */
+  wordLayout?: WordLayoutAttrs;
+  /** Frame positioning attributes */
+  frame?: {
+    wrap?: string;
+    x?: number;
+    y?: number;
+    xAlign?: 'left' | 'right' | 'center';
+  };
+  /** Float alignment (left, right, center) */
+  floatAlignment?: unknown;
+};
 
 const spacingDebugLog = (..._args: unknown[]): void => {
   if (!spacingDebugEnabled) return;
 };
 
-const anchorDebugLog = (...args: unknown[]): void => {
-  if (!anchorDebugEnabled) return;
-  console.log('[AnchorDebug]', ...args);
+/**
+ * Type guard to safely access paragraph block attributes.
+ * Validates that the attrs property exists and returns it with proper typing.
+ *
+ * @param block - The paragraph block to extract attributes from
+ * @returns Typed paragraph attributes or undefined if attrs is missing
+ */
+const getParagraphAttrs = (block: ParagraphBlock): ParagraphBlockAttrs | undefined => {
+  if (!block.attrs || typeof block.attrs !== 'object') {
+    return undefined;
+  }
+  return block.attrs as ParagraphBlockAttrs;
 };
+
+/**
+ * Safely extracts a string value from an unknown type.
+ * Used for extracting styleId and similar string properties.
+ *
+ * @param value - The value to extract
+ * @returns The value as a string, or undefined if not a string
+ */
+const asString = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
+
+/**
+ * Safely extracts a boolean value from OOXML boolean representations.
+ * Handles true, 1, '1', 'true', 'on' as truthy values.
+ *
+ * @param value - The value to convert to boolean
+ * @returns Boolean value, or false if value is falsy or invalid
+ */
+const asBoolean = (value: unknown): boolean => {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'on';
+  }
+  return false;
+};
+
+/**
+ * Safely extracts a finite numeric value, returning 0 for invalid values.
+ * Validates that the number is finite (not NaN, Infinity, or -Infinity) and non-negative.
+ *
+ * @param value - The value to extract and validate
+ * @returns A finite non-negative number, or 0 if value is invalid
+ *
+ * @example
+ * ```typescript
+ * asSafeNumber(15)        // 15
+ * asSafeNumber(NaN)       // 0
+ * asSafeNumber(Infinity)  // 0
+ * asSafeNumber(-10)       // 0
+ * asSafeNumber(null)      // 0
+ * ```
+ */
+const asSafeNumber = (value: unknown): number => {
+  if (typeof value !== 'number') {
+    return 0;
+  }
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return value;
+};
+
+/**
+ * Calculates the first line indent for list markers when remeasuring paragraphs.
+ *
+ * In Word layout, there are two distinct list marker layout patterns:
+ *
+ * 1. **firstLineIndentMode** (marker inline with text):
+ *    - The marker is positioned at `left + firstLine` and consumes horizontal space on the first line
+ *    - Text begins after the marker (at `textStartPx`)
+ *    - The first line's available width must account for the marker's width
+ *    - This pattern is indicated by `firstLineIndentMode === true`
+ *
+ * 2. **Standard hanging indent** (marker in hanging area):
+ *    - The marker is positioned absolutely in the hanging region at `left - hanging`
+ *    - The marker does NOT consume horizontal space from the text flow
+ *    - Text begins at `left` on ALL lines (first and subsequent)
+ *    - The first line's available width is the same as subsequent lines
+ *    - This is the default pattern when `firstLineIndentMode` is not set
+ *
+ * This function determines which pattern is in use and calculates the appropriate
+ * first line indent for the remeasurement operation.
+ *
+ * @param block - The paragraph block being remeasured
+ * @param measure - The current paragraph measurement (may contain marker measurements)
+ * @returns The first line indent in pixels. Returns 0 for standard hanging indent,
+ *   or the marker width + gutter width for firstLineIndentMode.
+ *
+ * @example
+ * ```typescript
+ * // Standard hanging indent - marker doesn't consume first line space
+ * const block1 = {
+ *   attrs: {
+ *     wordLayout: {
+ *       marker: { markerBoxWidthPx: 20 },
+ *       // firstLineIndentMode is NOT set
+ *     }
+ *   }
+ * };
+ * const indent1 = calculateFirstLineIndent(block1, measure);
+ * // Returns: 0 (marker is in hanging area)
+ *
+ * // firstLineIndentMode - marker consumes first line space
+ * const block2 = {
+ *   attrs: {
+ *     wordLayout: {
+ *       marker: { markerBoxWidthPx: 20 },
+ *       firstLineIndentMode: true
+ *     }
+ *   }
+ * };
+ * const indent2 = calculateFirstLineIndent(block2, measure);
+ * // Returns: markerWidth + gutterWidth (marker is inline)
+ * ```
+ */
+function calculateFirstLineIndent(block: ParagraphBlock, measure: ParagraphMeasure): number {
+  const wordLayout = block.attrs?.wordLayout as WordLayoutAttrs | undefined;
+
+  // Only apply first line indent in firstLineIndentMode
+  if (!wordLayout?.firstLineIndentMode) {
+    return 0;
+  }
+
+  // Ensure marker exists in both wordLayout and measure
+  if (!wordLayout.marker || !measure.marker) {
+    return 0;
+  }
+
+  // Extract marker width with fallback chain and validation
+  const markerWidthRaw = measure.marker.markerWidth ?? wordLayout.marker.markerBoxWidthPx ?? 0;
+  const markerWidth = Number.isFinite(markerWidthRaw) && markerWidthRaw >= 0 ? markerWidthRaw : 0;
+
+  // Extract gutter width with validation
+  const gutterWidthRaw = measure.marker.gutterWidth ?? 0;
+  const gutterWidth = Number.isFinite(gutterWidthRaw) && gutterWidthRaw >= 0 ? gutterWidthRaw : 0;
+
+  return markerWidth + gutterWidth;
+}
 
 export type ParagraphLayoutContext = {
   block: ParagraphBlock;
@@ -36,7 +232,7 @@ export type ParagraphLayoutContext = {
   advanceColumn: (state: PageState) => PageState;
   columnX: (columnIndex: number) => number;
   floatManager: FloatingObjectManager;
-  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number) => ParagraphMeasure;
+  remeasureParagraph?: (block: ParagraphBlock, maxWidth: number, firstLineIndent?: number) => ParagraphMeasure;
 };
 
 export type AnchoredDrawingEntry = {
@@ -56,40 +252,66 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const { block, measure, columnWidth, ensurePage, advanceColumn, columnX, floatManager } = ctx;
   const remeasureParagraph = ctx.remeasureParagraph;
 
-  const frame = (block.attrs as { frame?: Record<string, unknown> } | undefined)?.frame as
-    | {
-        wrap?: string;
-        x?: number;
-        y?: number;
-        xAlign?: 'left' | 'right' | 'center';
-      }
-    | undefined;
+  const blockAttrs = getParagraphAttrs(block);
+  const frame = blockAttrs?.frame;
 
   if (anchors?.anchoredDrawings?.length) {
     for (const entry of anchors.anchoredDrawings) {
       if (anchors.placedAnchoredIds.has(entry.block.id)) continue;
       const state = ensurePage();
-      const baseAnchorY = state.cursorY;
 
-      // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
-      // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
-      const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
+      // Calculate anchor Y position based on vRelativeFrom and alignV
       const vRelativeFrom = entry.block.anchor?.vRelativeFrom;
-      const paragraphAdjustment = vRelativeFrom === 'paragraph' ? firstLineHeight / 2 : 0;
-      const anchorY = baseAnchorY + paragraphAdjustment;
+      const alignV = entry.block.anchor?.alignV;
+      const offsetV = entry.block.anchor?.offsetV ?? 0;
+      const imageHeight = entry.measure.height;
 
-      anchorDebugLog('Positioning anchored image:', {
-        blockId: entry.block.id,
-        baseAnchorY,
-        paragraphAdjustment,
-        anchorY,
-        offsetV: entry.block.anchor?.offsetV,
-        finalY: anchorY + (entry.block.anchor?.offsetV ?? 0),
-        measureHeight: entry.measure.height,
-        measureWidth: entry.measure.width,
-        pageNumber: state.page.number,
-        vRelativeFrom,
-      });
+      // Calculate the content area boundaries
+      const contentTop = state.topMargin;
+      const contentBottom = state.contentBottom;
+      const contentHeight = Math.max(0, contentBottom - contentTop);
+
+      let anchorY: number;
+
+      if (vRelativeFrom === 'margin') {
+        // Position relative to the content area (margin box)
+        if (alignV === 'top') {
+          anchorY = contentTop + offsetV;
+        } else if (alignV === 'bottom') {
+          anchorY = contentBottom - imageHeight + offsetV;
+        } else if (alignV === 'center') {
+          anchorY = contentTop + (contentHeight - imageHeight) / 2 + offsetV;
+        } else {
+          // No alignV specified, use offset from content top
+          anchorY = contentTop + offsetV;
+        }
+      } else if (vRelativeFrom === 'page') {
+        // Position relative to the physical page (0 = top edge)
+        if (alignV === 'top') {
+          anchorY = offsetV;
+        } else if (alignV === 'bottom') {
+          // Would need page height here, approximate with contentBottom + bottom margin
+          const pageHeight = contentBottom + (anchors.pageMargins.bottom ?? 0);
+          anchorY = pageHeight - imageHeight + offsetV;
+        } else if (alignV === 'center') {
+          const pageHeight = contentBottom + (anchors.pageMargins.bottom ?? 0);
+          anchorY = (pageHeight - imageHeight) / 2 + offsetV;
+        } else {
+          anchorY = offsetV;
+        }
+      } else if (vRelativeFrom === 'paragraph') {
+        // vRelativeFrom === 'paragraph' - position relative to anchor paragraph
+        const baseAnchorY = state.cursorY;
+        // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
+        // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
+        const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
+        const paragraphAdjustment = firstLineHeight / 2;
+        anchorY = baseAnchorY + paragraphAdjustment + offsetV;
+      } else {
+        // vRelativeFrom is undefined/null - use simple offset from current cursor (legacy behavior)
+        const baseAnchorY = state.cursorY;
+        anchorY = baseAnchorY + offsetV;
+      }
 
       floatManager.registerDrawing(entry.block, entry.measure, anchorY, state.columnIndex, state.page.number);
 
@@ -138,7 +360,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           kind: 'image',
           blockId: entry.block.id,
           x: anchorX,
-          y: anchorY + (entry.block.anchor?.offsetV ?? 0),
+          y: anchorY,
           width: entry.measure.width,
           height: entry.measure.height,
           isAnchored: true,
@@ -154,7 +376,7 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           blockId: entry.block.id,
           drawingKind: entry.block.drawingKind,
           x: anchorX,
-          y: anchorY + (entry.block.anchor?.offsetV ?? 0),
+          y: anchorY,
           width: entry.measure.width,
           height: entry.measure.height,
           geometry: entry.measure.geometry,
@@ -173,10 +395,49 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   }
 
   let lines = normalizeLines(measure);
+
+  // Check if paragraph was measured at a wider width than the current column.
+  // This happens when a document has sections with different column counts -
+  // text measured for a single-column section may need remeasurement when
+  // placed in a multi-column section with narrower columns.
+  const measurementWidth = lines[0]?.maxWidth;
+  const paraIndent = (block.attrs as { indent?: { left?: number; right?: number } } | undefined)?.indent;
+  const indentLeft = typeof paraIndent?.left === 'number' && Number.isFinite(paraIndent.left) ? paraIndent.left : 0;
+  const indentRight = typeof paraIndent?.right === 'number' && Number.isFinite(paraIndent.right) ? paraIndent.right : 0;
+  const negativeLeftIndent = indentLeft < 0 ? indentLeft : 0;
+  const negativeRightIndent = indentRight < 0 ? indentRight : 0;
+  // Paragraph content width should honor paragraph indents (including negative values).
+  const remeasureWidth = Math.max(1, columnWidth - indentLeft - indentRight);
+  const hasNegativeIndent = indentLeft < 0 || indentRight < 0;
+  let didRemeasureForColumnWidth = false;
+  if (
+    typeof remeasureParagraph === 'function' &&
+    typeof measurementWidth === 'number' &&
+    measurementWidth > remeasureWidth
+  ) {
+    // Calculate firstLineIndent for list markers (same logic as float remeasurement)
+    let firstLineIndent = 0;
+    const wordLayout = block.attrs?.wordLayout as
+      | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+      | undefined;
+    if (wordLayout?.marker && measure.marker) {
+      const markerJustification = wordLayout.marker.justification ?? 'left';
+      if (markerJustification === 'left') {
+        const markerWidth = measure.marker.markerWidth ?? 0;
+        const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+        firstLineIndent = markerWidth + gutterWidth;
+      }
+    }
+    const newMeasure = remeasureParagraph(block, remeasureWidth, firstLineIndent);
+    lines = normalizeLines(newMeasure);
+    didRemeasureForColumnWidth = true;
+  }
+
   let fromLine = 0;
-  const spacing = (block.attrs?.spacing ?? {}) as Record<string, unknown>;
-  const styleId = (block.attrs as Record<string, unknown>)?.styleId as string | undefined;
-  const contextualSpacing = Boolean((block.attrs as Record<string, unknown>)?.contextualSpacing);
+  const attrs = getParagraphAttrs(block);
+  const spacing = attrs?.spacing ?? {};
+  const styleId = asString(attrs?.styleId);
+  const contextualSpacing = asBoolean(attrs?.contextualSpacing);
   let spacingBefore = Math.max(0, Number(spacing.before ?? spacing.lineSpaceBefore ?? 0));
   const spacingAfter = Math.max(0, Number(spacing.after ?? spacing.lineSpaceAfter ?? 0));
   let appliedSpacingBefore = spacingBefore === 0;
@@ -224,6 +485,9 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
 
     if (measure.marker) {
       fragment.markerWidth = measure.marker.markerWidth;
+      if (measure.marker.markerTextWidth != null) {
+        fragment.markerTextWidth = measure.marker.markerTextWidth;
+      }
     }
 
     state.page.fragments.push(fragment);
@@ -232,18 +496,100 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     return;
   }
 
+  // PHASE 1: Scan all lines to find narrowest available width before remeasuring
+  // This ensures text wraps correctly between left and right anchored images
+  let narrowestWidth = columnWidth;
+  let narrowestOffsetX = 0;
   let didRemeasureForFloats = false;
+
+  if (typeof remeasureParagraph === 'function') {
+    const tempState = ensurePage();
+    let tempY = tempState.cursorY;
+
+    // Apply spacing before to get accurate starting Y position for scanning
+    if (!appliedSpacingBefore && spacingBefore > 0) {
+      const prevTrailing = tempState.trailingSpacing ?? 0;
+      const neededSpacingBefore = Math.max(spacingBefore - prevTrailing, 0);
+      tempY += neededSpacingBefore;
+    }
+
+    // Scan through all lines to find the narrowest width
+    for (let i = 0; i < lines.length; i++) {
+      const lineY = tempY;
+      const lineHeight = lines[i]?.lineHeight || 0;
+
+      const { width: availableWidth, offsetX: computedOffset } = floatManager.computeAvailableWidth(
+        lineY,
+        lineHeight,
+        columnWidth,
+        tempState.columnIndex,
+        tempState.page.number,
+      );
+
+      if (availableWidth < narrowestWidth) {
+        narrowestWidth = availableWidth;
+        narrowestOffsetX = computedOffset;
+      }
+
+      tempY += lineHeight;
+    }
+
+    // If we found a narrower width, remeasure the entire paragraph once with that width
+    const narrowestRemeasureWidth = Math.max(1, narrowestWidth - indentLeft - indentRight);
+    if (narrowestRemeasureWidth < remeasureWidth) {
+      // Calculate firstLineIndent for left-justified list markers (position: relative, in-flow)
+      let firstLineIndent = 0;
+      const wordLayout = block.attrs?.wordLayout as
+        | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
+        | undefined;
+      if (wordLayout?.marker && measure.marker) {
+        const markerJustification = wordLayout.marker.justification ?? 'left';
+        if (markerJustification === 'left') {
+          const markerWidth = measure.marker.markerWidth ?? 0;
+          const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
+          firstLineIndent = markerWidth + gutterWidth;
+        }
+      }
+
+      const newMeasure = remeasureParagraph(block, narrowestRemeasureWidth, firstLineIndent);
+      lines = normalizeLines(newMeasure);
+      didRemeasureForFloats = true;
+    }
+  }
+
+  // PHASE 2: Layout the paragraph with the remeasured lines
   while (fromLine < lines.length) {
     let state = ensurePage();
     if (state.trailingSpacing == null) state.trailingSpacing = 0;
-    if (contextualSpacing) {
-      const prevStyle = state.lastParagraphStyleId;
-      if (styleId && prevStyle && prevStyle === styleId) {
-        spacingBefore = 0;
-      }
-    }
+
+    /**
+     * Contextual Spacing Logic (OOXML w:contextualSpacing)
+     *
+     * When contextualSpacing is enabled on a paragraph, spacing before and after is
+     * suppressed when the paragraph is adjacent to another paragraph with the same style.
+     *
+     * This implements Microsoft Word's contextual spacing behavior:
+     * 1. Check if contextualSpacing is enabled on the current paragraph
+     * 2. Check if both paragraphs have style IDs (required for comparison)
+     * 3. Check if the style IDs match (same style = suppress spacing)
+     *
+     * When all conditions are met:
+     * - spacingBefore is zeroed (prevents adding space before this paragraph)
+     * - Previous paragraph's spacingAfter (trailingSpacing) is undone by subtracting
+     *   it from cursorY, effectively removing the space already added
+     *
+     * Input Validation:
+     * - trailingSpacing is validated to be a finite, non-negative number
+     * - Invalid values (NaN, Infinity, negative, null, undefined) are treated as 0
+     * - This prevents layout corruption from malformed input data
+     */
     if (contextualSpacing && state.lastParagraphStyleId && styleId && state.lastParagraphStyleId === styleId) {
       spacingBefore = 0;
+      const prevTrailing = asSafeNumber(state.trailingSpacing);
+      if (prevTrailing > 0) {
+        state.cursorY -= prevTrailing;
+        state.trailingSpacing = 0;
+      }
     }
 
     if (!appliedSpacingBefore && spacingBefore > 0) {
@@ -321,53 +667,53 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       state = advanceColumn(state);
     }
 
+    // Use the narrowest width and offset if we remeasured
     let effectiveColumnWidth = columnWidth;
     let offsetX = 0;
-    if (!didRemeasureForFloats && typeof remeasureParagraph === 'function') {
-      const firstLineY = state.cursorY;
-      const firstLineHeight = lines[fromLine]?.lineHeight || 0;
-      const { width: adjustedWidth, offsetX: computedOffset } = floatManager.computeAvailableWidth(
-        firstLineY,
-        firstLineHeight,
-        columnWidth,
-        state.columnIndex,
-        state.page.number,
-      );
-      if (adjustedWidth < columnWidth) {
-        const newMeasure = remeasureParagraph(block, adjustedWidth);
-        lines = normalizeLines(newMeasure);
-        didRemeasureForFloats = true;
-        effectiveColumnWidth = adjustedWidth;
-        offsetX = computedOffset;
-      }
+    if (didRemeasureForFloats) {
+      effectiveColumnWidth = narrowestWidth;
+      offsetX = narrowestOffsetX;
     }
 
     const slice = sliceLines(lines, fromLine, state.contentBottom - state.cursorY);
     const fragmentHeight = slice.height;
+
+    // Apply negative indent adjustment to fragment position and width (similar to table indent handling).
+    // Negative left indent shifts content left into page margin; negative right indent extends into right margin.
+    // This matches Word's behavior where paragraphs with negative indents extend beyond the content area.
+    // Adjust x position: negative indent shifts left (e.g., -48px moves fragment 48px left)
+    const adjustedX = columnX(state.columnIndex) + offsetX + negativeLeftIndent;
+    // Expand width: negative indents on both sides expand the fragment width
+    // (e.g., -48px left + -72px right = 120px wider)
+    const adjustedWidth = effectiveColumnWidth - negativeLeftIndent - negativeRightIndent;
 
     const fragment: ParaFragment = {
       kind: 'para',
       blockId: block.id,
       fromLine,
       toLine: slice.toLine,
-      x: columnX(state.columnIndex) + offsetX,
+      x: adjustedX,
       y: state.cursorY,
-      width: effectiveColumnWidth,
+      width: adjustedWidth,
       ...computeFragmentPmRange(block, lines, fromLine, slice.toLine),
     };
 
-    anchorDebugLog('Positioning paragraph fragment:', {
-      blockId: block.id,
-      fragmentY: state.cursorY,
-      fragmentHeight,
-      firstLineHeight: lines[fromLine]?.lineHeight,
-      firstLineAscent: lines[fromLine]?.ascent,
-      firstLineDescent: lines[fromLine]?.descent,
-      pageNumber: state.page.number,
-    });
+    // Store remeasured lines in fragment so renderer can use them.
+    // This is needed because the original measure has different line breaks.
+    if (didRemeasureForColumnWidth) {
+      fragment.lines = lines.slice(fromLine, slice.toLine);
+    }
 
     if (measure.marker && fromLine === 0) {
       fragment.markerWidth = measure.marker.markerWidth;
+      // Preserve actual marker text width for accurate tab calculation in renderer
+      if (measure.marker.markerTextWidth != null) {
+        fragment.markerTextWidth = measure.marker.markerTextWidth;
+      }
+      // Preserve gutter info for word-layout lists (used by renderer for tab sizing)
+      if (measure.kind === 'paragraph' && measure.marker?.gutterWidth != null) {
+        fragment.markerGutter = measure.marker.gutterWidth;
+      }
     }
 
     if (fromLine > 0) fragment.continuesFromPrev = true;

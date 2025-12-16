@@ -1,4 +1,5 @@
 import type {
+  DrawingBlock,
   Fragment,
   Line,
   ParagraphBlock,
@@ -10,6 +11,7 @@ import type {
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import type { FragmentRenderContext, BlockLookup } from '../renderer.js';
 import { renderTableRow } from './renderTableRow.js';
+import { applySdtContainerStyling } from '../utils/sdt-helpers.js';
 
 type ApplyStylesFn = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>) => void;
 
@@ -29,7 +31,15 @@ export type TableRenderDependencies = {
   /** Lookup map for retrieving block data and measurements */
   blockLookup: BlockLookup;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
+  /** Function to render drawing content (images, shapes, shape groups) */
+  renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Function to apply fragment positioning and dimensions */
   applyFragmentFrame: (el: HTMLElement, fragment: Fragment) => void;
   /** Function to apply SDT metadata as data attributes */
@@ -55,6 +65,13 @@ export type TableRenderDependencies = {
  * - Block is wrong kind (not 'table')
  * - Measure is wrong kind (not 'table')
  * - Document object is not available
+ *
+ * **SDT Container Styling:**
+ * If the table block has SDT metadata (`block.attrs?.sdt`), applies appropriate
+ * container styling via `applySdtContainerStyling()`:
+ * - Document sections: Gray border with hover tooltip
+ * - Structured content blocks: Blue border with label
+ * Uses type-safe helper functions to avoid unsafe type assertions.
  *
  * **Metadata Embedding:**
  * Embeds column boundary metadata in the `data-table-boundaries` attribute
@@ -93,7 +110,17 @@ export type TableRenderDependencies = {
  * ```
  */
 export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement => {
-  const { doc, fragment, blockLookup, context, renderLine, applyFragmentFrame, applySdtDataset, applyStyles } = deps;
+  const {
+    doc,
+    fragment,
+    blockLookup,
+    context,
+    renderLine,
+    renderDrawingContent,
+    applyFragmentFrame,
+    applySdtDataset,
+    applyStyles,
+  } = deps;
 
   // Check document first before using it in error handlers
   if (!doc) {
@@ -141,6 +168,9 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
   applyFragmentFrame(container, fragment);
   container.style.height = `${fragment.height}px`;
   applySdtDataset(container, block.attrs?.sdt);
+
+  // Apply SDT container styling (document sections, structured content blocks)
+  applySdtContainerStyling(doc, container, block.attrs?.sdt);
 
   // Add table-specific class for resize overlay targeting
   container.classList.add('superdoc-table-fragment');
@@ -239,12 +269,60 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
   }
 
   // Pre-calculate all row heights for rowspan calculations
-  const allRowHeights: number[] = measure.rows.map((r) => r.height);
+  // IMPORTANT: If this fragment has a partial row, we need to use the partial height
+  // for that row, not the full measured height. This ensures rowspan cells that
+  // extend into the partial row are sized correctly for this fragment.
+  const allRowHeights: number[] = measure.rows.map((r, idx: number) => {
+    if (fragment.partialRow && fragment.partialRow.rowIndex === idx) {
+      // Use partial height for the split row
+      return fragment.partialRow.partialHeight;
+    }
+    return r?.height ?? 0;
+  });
 
   let y = 0;
+
+  // If this is a continuation fragment with repeated headers, render headers first
+  if (fragment.repeatHeaderCount && fragment.repeatHeaderCount > 0) {
+    for (let r = 0; r < fragment.repeatHeaderCount; r += 1) {
+      const rowMeasure = measure.rows[r];
+      if (!rowMeasure) break;
+      renderTableRow({
+        doc,
+        container,
+        rowIndex: r,
+        y,
+        rowMeasure,
+        row: block.rows[r],
+        totalRows: block.rows.length,
+        tableBorders,
+        columnWidths: measure.columnWidths,
+        allRowHeights,
+        context,
+        renderLine,
+        renderDrawingContent,
+        applySdtDataset,
+        // Headers are always rendered as-is (no border suppression)
+        continuesFromPrev: false,
+        continuesOnNext: false,
+      });
+      y += rowMeasure.height;
+    }
+  }
+
+  // Render body rows (fromRow to toRow)
   for (let r = fragment.fromRow; r < fragment.toRow; r += 1) {
     const rowMeasure = measure.rows[r];
     if (!rowMeasure) break;
+
+    const isFirstRenderedBodyRow = r === fragment.fromRow;
+    const isLastRenderedBodyRow = r === fragment.toRow - 1;
+
+    // Check if this row has partial row data (mid-row split)
+    const isPartialRow = fragment.partialRow && fragment.partialRow.rowIndex === r;
+    const partialRowData = isPartialRow ? fragment.partialRow : undefined;
+    const actualRowHeight = partialRowData ? partialRowData.partialHeight : rowMeasure.height;
+
     renderTableRow({
       doc,
       container,
@@ -258,9 +336,16 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
       allRowHeights,
       context,
       renderLine,
+      renderDrawingContent,
       applySdtDataset,
+      // Draw top border if table continues from previous fragment (MS Word behavior)
+      continuesFromPrev: isFirstRenderedBodyRow && fragment.continuesFromPrev === true,
+      // Draw bottom border if table continues on next fragment (MS Word behavior)
+      continuesOnNext: isLastRenderedBodyRow && fragment.continuesOnNext === true,
+      // Pass partial row data for mid-row splits
+      partialRow: partialRowData,
     });
-    y += rowMeasure.height;
+    y += actualRowHeight;
   }
 
   return container;

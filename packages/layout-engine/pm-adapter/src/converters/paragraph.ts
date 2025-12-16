@@ -16,6 +16,8 @@ import type {
   TrackedChangeMeta,
   SdtMetadata,
   ParagraphAttrs,
+  FieldAnnotationRun,
+  FieldAnnotationMetadata,
 } from '@superdoc/contracts';
 import type {
   PMNode,
@@ -112,15 +114,24 @@ export function isInlineImage(node: PMNode): boolean {
   const rawWrapType = wrap?.type;
 
   // If wrap type is explicitly 'Inline', treat as inline
-  if (rawWrapType === 'Inline') return true;
+  if (rawWrapType === 'Inline') {
+    return true;
+  }
 
   // If wrap type is any OTHER value (Tight, Square, None, etc.), treat as block
   // This takes precedence over the legacy `inline` attribute
-  if (rawWrapType && rawWrapType !== 'Inline') return false;
+  if (rawWrapType && rawWrapType !== 'Inline') {
+    return false;
+  }
 
   // Fallback checks for other inline indicators (only when wrap type is not specified)
-  if (attrs.inline === true) return true;
-  if (attrs.display === 'inline') return true;
+  if (attrs.inline === true) {
+    return true;
+  }
+
+  if (attrs.display === 'inline') {
+    return true;
+  }
 
   return false;
 }
@@ -242,6 +253,124 @@ export function imageNodeToRun(node: PMNode, positions: PositionMap, activeSdt?:
 }
 
 /**
+ * Converts a ProseMirror fieldAnnotation node into a FieldAnnotationRun for layout engine rendering.
+ *
+ * Field annotations are inline "pill" elements that display form fields or placeholders.
+ * They render with distinctive styling (border, background, rounded corners) and can
+ * contain different content types (text, image, signature, etc.).
+ *
+ * @param node - FieldAnnotation PM node with attrs containing field configuration
+ * @param positions - Position map for ProseMirror node tracking (pmStart/pmEnd)
+ * @param fieldMetadata - SDT metadata extracted from the fieldAnnotation node
+ * @returns FieldAnnotationRun object with all extracted properties
+ */
+export function fieldAnnotationNodeToRun(
+  node: PMNode,
+  positions: PositionMap,
+  fieldMetadata?: FieldAnnotationMetadata | null,
+): FieldAnnotationRun {
+  const attrs = (node.attrs ?? {}) as Record<string, unknown>;
+
+  // Determine variant (defaults to 'text')
+  const rawVariant = attrs.type ?? fieldMetadata?.variant ?? 'text';
+  const validVariants = ['text', 'image', 'signature', 'checkbox', 'html', 'link'] as const;
+  const variant: FieldAnnotationRun['variant'] = validVariants.includes(rawVariant as (typeof validVariants)[number])
+    ? (rawVariant as FieldAnnotationRun['variant'])
+    : 'text';
+
+  // Determine display label with fallback chain
+  const displayLabel =
+    (typeof attrs.displayLabel === 'string' ? attrs.displayLabel : undefined) ||
+    (typeof attrs.defaultDisplayLabel === 'string' ? attrs.defaultDisplayLabel : undefined) ||
+    (typeof fieldMetadata?.displayLabel === 'string' ? fieldMetadata.displayLabel : undefined) ||
+    (typeof fieldMetadata?.defaultDisplayLabel === 'string' ? fieldMetadata.defaultDisplayLabel : undefined) ||
+    (typeof attrs.alias === 'string' ? attrs.alias : undefined) ||
+    (typeof fieldMetadata?.alias === 'string' ? fieldMetadata.alias : undefined) ||
+    '';
+
+  const run: FieldAnnotationRun = {
+    kind: 'fieldAnnotation',
+    variant,
+    displayLabel,
+  };
+
+  // Field identification
+  const fieldId = typeof attrs.fieldId === 'string' ? attrs.fieldId : fieldMetadata?.fieldId;
+  if (fieldId) run.fieldId = fieldId;
+
+  const fieldType = typeof attrs.fieldType === 'string' ? attrs.fieldType : fieldMetadata?.fieldType;
+  if (fieldType) run.fieldType = fieldType;
+
+  // Styling
+  const fieldColor = typeof attrs.fieldColor === 'string' ? attrs.fieldColor : fieldMetadata?.fieldColor;
+  if (fieldColor) run.fieldColor = fieldColor;
+
+  const borderColor = typeof attrs.borderColor === 'string' ? attrs.borderColor : fieldMetadata?.borderColor;
+  if (borderColor) run.borderColor = borderColor;
+
+  // Highlighted defaults to true if not explicitly false
+  const highlighted = attrs.highlighted ?? fieldMetadata?.highlighted;
+  if (highlighted === false) run.highlighted = false;
+
+  // Hidden/visibility
+  if (attrs.hidden === true || fieldMetadata?.hidden === true) run.hidden = true;
+  const visibility = attrs.visibility ?? fieldMetadata?.visibility;
+  if (visibility === 'hidden') run.visibility = 'hidden';
+
+  // Type-specific content
+  const imageSrc = typeof attrs.imageSrc === 'string' ? attrs.imageSrc : fieldMetadata?.imageSrc;
+  if (imageSrc) run.imageSrc = imageSrc;
+
+  const linkUrl = typeof attrs.linkUrl === 'string' ? attrs.linkUrl : fieldMetadata?.linkUrl;
+  if (linkUrl) run.linkUrl = linkUrl;
+
+  const rawHtml = attrs.rawHtml ?? fieldMetadata?.rawHtml;
+  if (typeof rawHtml === 'string') run.rawHtml = rawHtml;
+
+  // Sizing
+  const size = (attrs.size ?? fieldMetadata?.size) as { width?: number; height?: number } | null | undefined;
+  if (size && (typeof size.width === 'number' || typeof size.height === 'number')) {
+    run.size = {
+      width: typeof size.width === 'number' ? size.width : undefined,
+      height: typeof size.height === 'number' ? size.height : undefined,
+    };
+  }
+
+  // Typography
+  const fontFamily = attrs.fontFamily ?? fieldMetadata?.fontFamily;
+  if (typeof fontFamily === 'string') run.fontFamily = fontFamily;
+
+  const fontSize = attrs.fontSize ?? fieldMetadata?.fontSize;
+  if (typeof fontSize === 'string' || typeof fontSize === 'number') run.fontSize = fontSize;
+
+  const textColor = attrs.textColor ?? fieldMetadata?.textColor;
+  if (typeof textColor === 'string') run.textColor = textColor;
+
+  const textHighlight = attrs.textHighlight ?? fieldMetadata?.textHighlight;
+  if (typeof textHighlight === 'string') run.textHighlight = textHighlight;
+
+  // Text formatting
+  const formatting = fieldMetadata?.formatting;
+  if (attrs.bold === true || formatting?.bold === true) run.bold = true;
+  if (attrs.italic === true || formatting?.italic === true) run.italic = true;
+  if (attrs.underline === true || formatting?.underline === true) run.underline = true;
+
+  // Position tracking
+  const pos = positions.get(node);
+  if (pos) {
+    run.pmStart = pos.start;
+    run.pmEnd = pos.end;
+  }
+
+  // Attach full SDT metadata if available
+  if (fieldMetadata) {
+    run.sdt = fieldMetadata;
+  }
+
+  return run;
+}
+
+/**
  * Helper to check if a run is a text run (not a tab).
  */
 const isTextRun = (run: Run): run is TextRun => (run as { kind?: string }).kind !== 'tab';
@@ -279,6 +408,23 @@ export const dataAttrsCompatible = (a: TextRun, b: TextRun): boolean => {
     }
   }
 
+  return true;
+};
+
+export const commentsCompatible = (a: TextRun, b: TextRun): boolean => {
+  const aComments = a.comments ?? [];
+  const bComments = b.comments ?? [];
+  if (aComments.length === 0 && bComments.length === 0) return true;
+  if (aComments.length !== bComments.length) return false;
+
+  const normalize = (c: (typeof aComments)[number]) =>
+    `${c.commentId ?? ''}::${c.importedId ?? ''}::${c.internal ? '1' : '0'}`;
+  const aKeys = aComments.map(normalize).sort();
+  const bKeys = bComments.map(normalize).sort();
+
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+  }
   return true;
 };
 
@@ -323,7 +469,8 @@ export function mergeAdjacentRuns(runs: Run[]): Run[] {
       current.highlight === next.highlight &&
       (current.letterSpacing ?? 0) === (next.letterSpacing ?? 0) &&
       trackedChangesCompatible(current, next) &&
-      dataAttrsCompatible(current, next);
+      dataAttrsCompatible(current, next) &&
+      commentsCompatible(current, next);
 
     if (canMerge) {
       // Merge next into current
@@ -563,6 +710,7 @@ export function paragraphToFlowBlocks(
         ? (paragraphProps.styleId as string)
         : null;
   const paragraphHydration = converterContext ? hydrateParagraphStyleAttrs(para, converterContext) : null;
+
   let baseRunDefaults: RunDefaults = {};
   try {
     const spacingSource =
@@ -608,6 +756,7 @@ export function paragraphToFlowBlocks(
     converterContext,
     paragraphHydration,
   );
+
   if (paragraphAttrs?.spacing) {
     const spacing = { ...(paragraphAttrs.spacing as Record<string, unknown>) };
     const effectiveFontSize = baseRunDefaults.fontSizePx ?? defaultSize;
@@ -622,20 +771,28 @@ export function paragraphToFlowBlocks(
   }
 
   // Update marker font from first text run if paragraph has numbering
-  // This matches MS Word behavior where markers inherit font from first text run
+  // BUT only when the numbering level doesn't explicitly define marker font properties.
+  // This matches MS Word behavior: explicit <w:rFonts> in numbering.xml takes precedence,
+  // otherwise markers inherit font from first text run.
   if (paragraphAttrs?.numberingProperties && paragraphAttrs?.wordLayout) {
+    const numberingProps = paragraphAttrs.numberingProperties as Record<string, unknown>;
+    const resolvedMarkerRpr = numberingProps.resolvedMarkerRpr as Record<string, unknown> | undefined;
+    // Check if numbering level explicitly defined font properties
+    const hasExplicitMarkerFont = resolvedMarkerRpr?.fontFamily != null;
+    const hasExplicitMarkerSize = resolvedMarkerRpr?.fontSize != null;
+
     const firstRunFont = extractFirstTextRunFont(para);
     if (firstRunFont) {
       const wordLayout = paragraphAttrs.wordLayout as Record<string, unknown>;
       const marker = wordLayout.marker as Record<string, unknown> | undefined;
       if (marker?.run) {
         const markerRun = marker.run as Record<string, unknown>;
-        // Override marker font with first text run's font
+        // Only override with first text run's font if numbering level didn't explicitly define it
         // fontSizePx is already converted to pixels by extractFirstTextRunFont
-        if (firstRunFont.fontSizePx != null && Number.isFinite(firstRunFont.fontSizePx)) {
+        if (!hasExplicitMarkerSize && firstRunFont.fontSizePx != null && Number.isFinite(firstRunFont.fontSizePx)) {
           markerRun.fontSize = firstRunFont.fontSizePx;
         }
-        if (firstRunFont.fontFamily) {
+        if (!hasExplicitMarkerFont && firstRunFont.fontFamily) {
           markerRun.fontFamily = firstRunFont.fontFamily;
         }
       }
@@ -723,12 +880,20 @@ export function paragraphToFlowBlocks(
     activeRunStyleId: string | null = null,
   ) => {
     if (node.type === 'text' && node.text) {
+      // Apply styles in correct priority order:
+      // 1. Create run with defaults (lowest priority) - textNodeToRun with empty marks
+      // 2. Apply linked styles from paragraph/character styles (medium priority)
+      // 3. Apply base run defaults (medium-high priority)
+      // 4. Apply marks ONCE (highest priority) - inline marks override everything
+      //
+      // Pass empty array to textNodeToRun to prevent double mark application.
+      // Marks will be applied AFTER linked styles to ensure proper priority.
       const run = textNodeToRun(
         node,
         positions,
         defaultFont,
         defaultSize,
-        inheritedMarks,
+        [], // Empty marks - will be applied after linked styles
         activeSdt,
         hyperlinkConfig,
         themeColors,
@@ -736,6 +901,8 @@ export function paragraphToFlowBlocks(
       const inlineStyleId = getInlineStyleId(inheritedMarks);
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
+      // Apply marks ONCE here - this ensures they override linked styles
+      applyMarksToRun(run, [...(node.marks ?? []), ...(inheritedMarks ?? [])], hyperlinkConfig, themeColors);
       currentRuns.push(run);
       return;
     }
@@ -755,36 +922,32 @@ export function paragraphToFlowBlocks(
       return;
     }
 
-    // SDT fieldAnnotation: render its inner content if present; otherwise fallback to displayLabel/default
+    // SDT fieldAnnotation: create FieldAnnotationRun for pill-style rendering
     if (node.type === 'fieldAnnotation') {
-      const fieldMetadata = resolveNodeSdtMetadata(node, 'fieldAnnotation');
+      const fieldMetadata = resolveNodeSdtMetadata(node, 'fieldAnnotation') as FieldAnnotationMetadata | null;
+
+      // If there's inner content, extract text to use as displayLabel override
+      let contentText: string | undefined;
       if (Array.isArray(node.content) && node.content.length > 0) {
-        node.content.forEach((child) => visitNode(child, inheritedMarks, fieldMetadata ?? activeSdt, activeRunStyleId));
-      } else {
-        const nodeAttrs =
-          typeof node.attrs === 'object' && node.attrs !== null ? (node.attrs as Record<string, unknown>) : {};
-        const label =
-          (typeof nodeAttrs.displayLabel === 'string' ? nodeAttrs.displayLabel : undefined) ||
-          (typeof nodeAttrs.defaultDisplayLabel === 'string' ? nodeAttrs.defaultDisplayLabel : undefined) ||
-          (typeof nodeAttrs.alias === 'string' ? nodeAttrs.alias : undefined) ||
-          '';
-        if (label && typeof label === 'string') {
-          const run = textNodeToRun(
-            { type: 'text', text: label } as PMNode,
-            positions,
-            defaultFont,
-            defaultSize,
-            inheritedMarks,
-            fieldMetadata ?? activeSdt,
-            hyperlinkConfig,
-            themeColors,
-          );
-          const inlineStyleId = getInlineStyleId(inheritedMarks);
-          applyRunStyles(run, inlineStyleId, activeRunStyleId);
-          applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
-          currentRuns.push(run);
-        }
+        const extractText = (n: PMNode): string => {
+          if (n.type === 'text' && typeof n.text === 'string') return n.text;
+          if (Array.isArray(n.content)) {
+            return n.content.map(extractText).join('');
+          }
+          return '';
+        };
+        contentText = node.content.map(extractText).join('');
       }
+
+      // Create the FieldAnnotationRun (handles displayLabel fallback chain internally)
+      // If we have contentText, temporarily override displayLabel in attrs
+      const nodeForRun =
+        contentText && contentText.length > 0
+          ? { ...node, attrs: { ...(node.attrs ?? {}), displayLabel: contentText } }
+          : node;
+
+      const run = fieldAnnotationNodeToRun(nodeForRun, positions, fieldMetadata);
+      currentRuns.push(run);
       return;
     }
 
@@ -873,7 +1036,7 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'tab') {
-      const tabRun = tabNodeToRun(node, positions, tabOrdinal, para);
+      const tabRun = tabNodeToRun(node, positions, tabOrdinal, para, inheritedMarks);
       tabOrdinal += 1;
       if (tabRun) {
         currentRuns.push(tabRun);
@@ -906,8 +1069,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'image') {
+      const isInline = isInlineImage(node);
+
       // Check if this image should be inline (ImageRun) or block (ImageBlock)
-      if (isInlineImage(node)) {
+      if (isInline) {
         // Inline image: add to current runs WITHOUT flushing paragraph
         const imageRun = imageNodeToRun(node, positions, activeSdt);
         if (imageRun) {
@@ -1002,32 +1167,49 @@ export function paragraphToFlowBlocks(
       return;
     }
 
-    // Hard break (page break from DOCX <w:br w:type="page"/>)
-    // Splits the current paragraph and inserts a pageBreak block that forces
-    // layout to start on a new page
-    if (node.type === 'hardBreak') {
-      flushParagraph();
-      blocks.push({
-        kind: 'pageBreak',
-        id: nextId(),
-        attrs: node.attrs || {},
-      });
-      return;
-    }
-
-    // Line break (soft break or column break from DOCX <w:br w:type="column"/>)
-    if (node.type === 'lineBreak') {
+    // Hard / line breaks
+    if (node.type === 'hardBreak' || node.type === 'lineBreak') {
       const attrs = node.attrs ?? {};
-      if (attrs.lineBreakType === 'column') {
-        // Column break: flush current paragraph and emit column break block
+      const breakType = attrs.pageBreakType ?? attrs.lineBreakType ?? 'line';
+
+      if (breakType === 'page') {
+        flushParagraph();
+        blocks.push({
+          kind: 'pageBreak',
+          id: nextId(),
+          attrs: node.attrs || {},
+        });
+        return;
+      }
+
+      if (breakType === 'column') {
         flushParagraph();
         blocks.push({
           kind: 'columnBreak',
           id: nextId(),
           attrs: node.attrs || {},
         });
+        return;
       }
-      // Non-column line breaks are ignored (soft line breaks within paragraphs)
+      // Inline line break: preserve as a run so measurer can create a new line
+      const lineBreakRun: Run = { kind: 'lineBreak', attrs: {} };
+      const lbAttrs: Record<string, string> = {};
+      if (attrs.lineBreakType) lbAttrs.lineBreakType = String(attrs.lineBreakType);
+      if (attrs.clear) lbAttrs.clear = String(attrs.clear);
+      if (Object.keys(lbAttrs).length > 0) {
+        (lineBreakRun as { attrs: Record<string, string> }).attrs = lbAttrs;
+      } else {
+        delete (lineBreakRun as { attrs?: Record<string, string> }).attrs;
+      }
+      const pos = positions.get(node);
+      if (pos) {
+        (lineBreakRun as { pmStart: number }).pmStart = pos.start;
+        (lineBreakRun as { pmEnd: number }).pmEnd = pos.end;
+      }
+      if (activeSdt) {
+        (lineBreakRun as { sdt?: SdtMetadata }).sdt = activeSdt;
+      }
+      currentRuns.push(lineBreakRun);
       return;
     }
   };

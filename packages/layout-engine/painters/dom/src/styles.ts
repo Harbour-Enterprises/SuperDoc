@@ -28,7 +28,7 @@ export const containerStyles: Partial<CSSStyleDeclaration> = {
   alignItems: 'center',
   background: 'transparent',
   padding: '0',
-  gap: '24px',
+  // gap is set dynamically by renderer based on pageGap option (default: 24px)
   overflowY: 'auto',
 };
 
@@ -39,7 +39,7 @@ export const containerStylesHorizontal: Partial<CSSStyleDeclaration> = {
   justifyContent: 'safe center',
   background: 'transparent',
   padding: '0',
-  gap: '20px',
+  // gap is set dynamically by renderer based on pageGap option (default: 20px for horizontal)
   overflowX: 'auto',
   minHeight: '100%',
 };
@@ -82,6 +82,11 @@ export const lineStyles = (lineHeight: number): Partial<CSSStyleDeclaration> => 
   position: 'relative',
   display: 'block',
   whiteSpace: 'pre',
+  // Allow text to overflow the line container as a safety net.
+  // The primary fix uses accurate font metrics from Canvas API, but this
+  // provides defense-in-depth against any remaining sub-pixel rendering
+  // differences between measurement and display.
+  overflow: 'visible',
 });
 
 const PRINT_STYLES = `
@@ -101,14 +106,25 @@ const PRINT_STYLES = `
 `;
 
 const LINK_AND_TOC_STYLES = `
-/* Reset browser default link styling - allow run colors to show through */
+/* Reset browser default link styling - allow run colors to show through from inline styles
+ *
+ * Note: !important was removed from these rules to allow inline styles to take precedence.
+ * This is necessary because OOXML hyperlink character styles apply colors via inline style
+ * attributes on the run elements. The CSS cascade ensures that inline styles (applied via
+ * element.style.color in applyRunStyles) override these class-based rules naturally.
+ *
+ * Implications:
+ * - OOXML hyperlink character styles will correctly display their assigned colors
+ * - Browser default link colors are still reset by these inherit rules
+ * - Inline color styles from run objects override the inherit value as expected
+ */
 .superdoc-link {
-  color: inherit !important;
-  text-decoration: none !important;
+  color: inherit;
+  text-decoration: none;
 }
 
 .superdoc-link:visited {
-  color: inherit !important;
+  color: inherit;
 }
 
 .superdoc-link:hover {
@@ -132,16 +148,6 @@ const LINK_AND_TOC_STYLES = `
   opacity: 0.8;
 }
 
-/* External link indicator (WCAG 2.4.4 Link Purpose) */
-.superdoc-link[target="_blank"]::after {
-  content: "↗";
-  display: inline-block;
-  margin-left: 0.25em;
-  font-size: 0.85em;
-  text-decoration: none;
-  speak: literal-punctuation; /* Screen readers read the arrow */
-}
-
 /* Print mode: show URLs after links */
 @media print {
   .superdoc-link::after {
@@ -153,11 +159,6 @@ const LINK_AND_TOC_STYLES = `
   /* Don't show URL for anchor-only links */
   .superdoc-link[href^="#"]::after {
     content: "";
-  }
-
-  /* Don't show URL for external link indicator */
-  .superdoc-link[target="_blank"]::after {
-    content: " (" attr(href) ")";
   }
 }
 
@@ -174,13 +175,6 @@ const LINK_AND_TOC_STYLES = `
   .superdoc-link {
     transition: none;
   }
-}
-
-/* RTL layout support */
-.superdoc-layout[dir="rtl"] .superdoc-link[target="_blank"]::after {
-  margin-left: 0;
-  margin-right: 0.25em;
-  content: "↖"; /* Mirror the arrow for RTL */
 }
 
 /* Screen reader only content (WCAG SC 1.3.1) */
@@ -250,9 +244,271 @@ const TRACK_CHANGE_STYLES = `
 }
 `;
 
+/**
+ * SDT Container Styles - Styling for document sections and structured content containers.
+ *
+ * These CSS rules provide visual styling for Structured Document Tag (SDT) containers,
+ * matching the appearance in super-editor. SDTs are Word/OOXML content controls that
+ * wrap regions of the document to provide semantic structure and metadata.
+ *
+ * **Supported SDT Types:**
+ * - Document Section (.superdoc-document-section): Gray bordered regions with hover tooltip
+ * - Structured Content Block (.superdoc-structured-content-block): Blue bordered regions with label
+ * - Structured Content Inline (.superdoc-structured-content-inline): Inline blue border with tooltip
+ *
+ * **Container Continuation:**
+ * When an SDT spans multiple page fragments, visual continuity is maintained via data attributes:
+ * - [data-sdt-container-start="true"]: First fragment gets top borders/radius
+ * - [data-sdt-container-end="true"]: Last fragment gets bottom borders/radius
+ * - Middle fragments: No top border, no border radius (seamless continuation)
+ *
+ * **Accessibility:**
+ * - Labels/tooltips are pointer-events: none to avoid interfering with selection
+ * - Print mode hides all visual SDT styling (borders, backgrounds, labels)
+ *
+ * **Implementation Note:**
+ * These styles are injected once per document via ensureSdtContainerStyles() to avoid
+ * duplication. The DOM painter applies corresponding classes via applySdtContainerStyling().
+ */
+const SDT_CONTAINER_STYLES = `
+/* Document Section - Block-level container with gray border and hover tooltip */
+.superdoc-document-section {
+  background-color: #fafafa;
+  border: 1px solid #ababab;
+  border-radius: 4px;
+  position: relative;
+  box-sizing: border-box;
+}
+
+/* Document section tooltip - positioned above the fragment */
+.superdoc-document-section__tooltip {
+  position: absolute;
+  top: -19px;
+  left: -1px;
+  max-width: 100px;
+  min-width: 0;
+  height: 18px;
+  border: 1px solid #ababab;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  padding: 0 8px;
+  align-items: center;
+  font-size: 10px;
+  display: none;
+  z-index: 100;
+  background-color: #fafafa;
+  pointer-events: none;
+}
+
+.superdoc-document-section__tooltip span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Show tooltip on hover - adjust border radius to connect with tooltip tab */
+.superdoc-document-section:hover {
+  border-radius: 0 4px 4px 4px;
+}
+
+.superdoc-document-section:hover .superdoc-document-section__tooltip {
+  display: flex;
+  align-items: center;
+}
+
+/* Continuation styling: first fragment has top corners, last has bottom corners */
+.superdoc-document-section[data-sdt-container-start="true"] {
+  border-radius: 4px 4px 0 0;
+}
+
+.superdoc-document-section[data-sdt-container-end="true"] {
+  border-radius: 0 0 4px 4px;
+}
+
+.superdoc-document-section[data-sdt-container-start="true"][data-sdt-container-end="true"] {
+  border-radius: 4px;
+}
+
+.superdoc-document-section[data-sdt-container-start="true"]:hover {
+  border-radius: 0 4px 0 0;
+}
+
+/* Middle fragments have no border radius */
+.superdoc-document-section:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
+  border-radius: 0;
+  border-top: none;
+}
+
+/* Structured Content Block - Blue border container */
+.superdoc-structured-content-block {
+  padding: 1px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #629be7;
+  position: relative;
+}
+
+/* Structured content drag handle/label - positioned above */
+.superdoc-structured-content__label {
+  font-size: 10px;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 2px;
+  top: -19px;
+  width: calc(100% - 4px);
+  max-width: 110px;
+  min-width: 0;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid #629be7;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background-color: #629be7dd;
+  box-sizing: border-box;
+  z-index: 10;
+  display: none;
+  pointer-events: none;
+}
+
+.superdoc-structured-content__label span {
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.superdoc-structured-content-block:hover .superdoc-structured-content__label {
+  display: inline-flex;
+}
+
+/* Continuation styling for structured content blocks */
+.superdoc-structured-content-block[data-sdt-container-start="true"] {
+  border-radius: 4px 4px 0 0;
+}
+
+.superdoc-structured-content-block[data-sdt-container-end="true"] {
+  border-radius: 0 0 4px 4px;
+}
+
+.superdoc-structured-content-block[data-sdt-container-start="true"][data-sdt-container-end="true"] {
+  border-radius: 4px;
+}
+
+.superdoc-structured-content-block:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
+  border-radius: 0;
+  border-top: none;
+}
+
+/* Structured Content Inline - Inline wrapper with blue border */
+.superdoc-structured-content-inline {
+  padding: 1px;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 1px solid #629be7;
+  position: relative;
+  display: inline;
+}
+
+/* Hover effect for inline structured content */
+.superdoc-structured-content-inline:hover {
+  background-color: rgba(98, 155, 231, 0.15);
+  border-color: #4a8ad9;
+}
+
+/* Inline structured content label - shown on hover */
+.superdoc-structured-content-inline__label {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 10px;
+  padding: 2px 6px;
+  background-color: #629be7dd;
+  color: white;
+  border-radius: 4px;
+  white-space: nowrap;
+  z-index: 100;
+  display: none;
+  pointer-events: none;
+}
+
+.superdoc-structured-content-inline:hover .superdoc-structured-content-inline__label {
+  display: block;
+}
+
+/* Print mode: hide visual styling for SDT containers */
+@media print {
+  .superdoc-document-section,
+  .superdoc-structured-content-block,
+  .superdoc-structured-content-inline {
+    background: none;
+    border: none;
+    padding: 0;
+  }
+
+  .superdoc-document-section__tooltip,
+  .superdoc-structured-content__label,
+  .superdoc-structured-content-inline__label {
+    display: none !important;
+  }
+}
+`;
+
+const FIELD_ANNOTATION_STYLES = `
+/* Field annotation draggable styles */
+.superdoc-layout .annotation[data-draggable="true"] {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.superdoc-layout .annotation[data-draggable="true"]:hover {
+  opacity: 0.9;
+}
+
+.superdoc-layout .annotation[data-draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* Drag over indicator for drop targets */
+.superdoc-layout.drag-over {
+  outline: 2px dashed #b015b3;
+  outline-offset: -2px;
+}
+
+/* Drop zone indicator */
+.superdoc-layout .superdoc-drop-indicator {
+  position: absolute;
+  width: 2px;
+  background-color: #b015b3;
+  pointer-events: none;
+  z-index: 1000;
+}
+`;
+
+const IMAGE_SELECTION_STYLES = `
+/* Highlight for selected images (block or inline) */
+.superdoc-image-selected {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px rgba(74, 144, 226, 0.35);
+}
+
+/* Ensure inline images can be targeted */
+.superdoc-inline-image.superdoc-image-selected {
+  outline-offset: 2px;
+}
+`;
+
 let printStylesInjected = false;
 let linkStylesInjected = false;
 let trackChangeStylesInjected = false;
+let sdtContainerStylesInjected = false;
+let fieldAnnotationStylesInjected = false;
+let imageSelectionStylesInjected = false;
 
 export const ensurePrintStyles = (doc: Document | null | undefined) => {
   if (printStylesInjected || !doc) return;
@@ -279,4 +535,37 @@ export const ensureTrackChangeStyles = (doc: Document | null | undefined) => {
   styleEl.textContent = TRACK_CHANGE_STYLES;
   doc.head?.appendChild(styleEl);
   trackChangeStylesInjected = true;
+};
+
+export const ensureSdtContainerStyles = (doc: Document | null | undefined) => {
+  if (sdtContainerStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-sdt-container-styles', 'true');
+  styleEl.textContent = SDT_CONTAINER_STYLES;
+  doc.head?.appendChild(styleEl);
+  sdtContainerStylesInjected = true;
+};
+
+export const ensureFieldAnnotationStyles = (doc: Document | null | undefined) => {
+  if (fieldAnnotationStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-field-annotation-styles', 'true');
+  styleEl.textContent = FIELD_ANNOTATION_STYLES;
+  doc.head?.appendChild(styleEl);
+  fieldAnnotationStylesInjected = true;
+};
+
+/**
+ * Injects image selection highlight styles into the document head.
+ * Ensures styles are only injected once per document lifecycle.
+ * @param {Document | null | undefined} doc - The document to inject styles into
+ * @returns {void}
+ */
+export const ensureImageSelectionStyles = (doc: Document | null | undefined) => {
+  if (imageSelectionStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-image-selection-styles', 'true');
+  styleEl.textContent = IMAGE_SELECTION_STYLES;
+  doc.head?.appendChild(styleEl);
+  imageSelectionStylesInjected = true;
 };

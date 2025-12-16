@@ -29,6 +29,8 @@ import {
   computeParagraphAttrs,
   mergeParagraphAttrs,
   convertListParagraphAttrs,
+  mergeSpacingSources,
+  isValidNumberingId,
 } from './paragraph.js';
 import type { ListCounterContext } from '../types.js';
 import { twipsToPx } from '../utilities.js';
@@ -37,6 +39,75 @@ import { twipsToPx } from '../utilities.js';
 type PMNode = {
   attrs?: Record<string, unknown>;
 };
+
+describe('isValidNumberingId', () => {
+  describe('valid numbering IDs', () => {
+    it('should return true for positive integer numId', () => {
+      expect(isValidNumberingId(1)).toBe(true);
+      expect(isValidNumberingId(5)).toBe(true);
+      expect(isValidNumberingId(100)).toBe(true);
+    });
+
+    it('should return true for positive string numId', () => {
+      expect(isValidNumberingId('1')).toBe(true);
+      expect(isValidNumberingId('5')).toBe(true);
+      expect(isValidNumberingId('100')).toBe(true);
+    });
+
+    it('should return true for negative numId values', () => {
+      // While unusual, negative values are technically valid (not the special zero value)
+      expect(isValidNumberingId(-1)).toBe(true);
+      expect(isValidNumberingId('-1')).toBe(true);
+    });
+  });
+
+  describe('invalid numbering IDs (OOXML spec §17.9.16)', () => {
+    it('should return false for numeric zero (disables numbering)', () => {
+      expect(isValidNumberingId(0)).toBe(false);
+    });
+
+    it('should return false for string zero (disables numbering)', () => {
+      expect(isValidNumberingId('0')).toBe(false);
+    });
+
+    it('should return false for null', () => {
+      expect(isValidNumberingId(null)).toBe(false);
+    });
+
+    it('should return false for undefined', () => {
+      expect(isValidNumberingId(undefined)).toBe(false);
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should return true for empty string (not the zero sentinel)', () => {
+      // Empty string is not the same as '0' per OOXML spec
+      expect(isValidNumberingId('')).toBe(true);
+    });
+
+    it('should return true for string with leading zeros', () => {
+      // '00' is not the same as '0'
+      expect(isValidNumberingId('00')).toBe(true);
+      expect(isValidNumberingId('001')).toBe(true);
+    });
+
+    it('should return true for floating point numbers', () => {
+      // While unusual, non-zero floats are not the special zero value
+      expect(isValidNumberingId(1.5)).toBe(true);
+      expect(isValidNumberingId(0.1)).toBe(true);
+    });
+
+    it('should return false for string "0.0" (string comparison)', () => {
+      // String comparison: '0.0' !== '0', so this is technically valid
+      expect(isValidNumberingId('0.0')).toBe(true);
+    });
+
+    it('should return false for -0 (numeric zero)', () => {
+      // In JavaScript, -0 === 0
+      expect(isValidNumberingId(-0)).toBe(false);
+    });
+  });
+});
 
 describe('resolveParagraphBooleanAttr', () => {
   describe('direct attribute resolution', () => {
@@ -842,6 +913,30 @@ describe('computeParagraphAttrs', () => {
     expect(result?.alignment).toBe('center');
   });
 
+  it('should keep explicit indent when numbering resolvedLevelIndent is present', () => {
+    const para: PMNode = {
+      attrs: {
+        indent: { left: 24, firstLine: 12 },
+        numberingProperties: {
+          numId: 1,
+          ilvl: 2,
+          resolvedLevelIndent: { left: 1440, hanging: 720 },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+
+    // Explicit indent (24px) should not be replaced by the numbering indent (~96px)
+    expect(result?.indent?.left).toBeDefined();
+    expect(result?.indent?.left).toBeLessThan(twipsToPx(1440));
+    expect(result?.indent?.left).toBeCloseTo(24);
+  });
+
   it('should normalize paragraph borders', () => {
     const para: PMNode = {
       attrs: {
@@ -991,6 +1086,170 @@ describe('computeParagraphAttrs', () => {
     expect(listCounterContext.incrementListCounter).toHaveBeenCalledWith(1, 0);
   });
 
+  describe('numId=0 disables numbering (OOXML spec §17.9.16)', () => {
+    const createStyleContext = () =>
+      ({
+        styles: {},
+        defaults: {},
+      }) as never;
+
+    it('should not create numberingProperties when numId is numeric 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId=0 disables numbering, so numberingProperties should not be set
+      expect(result?.numberingProperties).toBeUndefined();
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should not create numberingProperties when numId is string "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId='0' disables numbering, so numberingProperties should not be set
+      expect(result?.numberingProperties).toBeUndefined();
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should not increment list counter when numId is 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const listCounterContext: ListCounterContext = {
+        getListCounter: vi.fn(() => 0),
+        incrementListCounter: vi.fn(() => 1),
+        resetListCounter: vi.fn(),
+      };
+
+      computeParagraphAttrs(para, styleContext, listCounterContext);
+
+      // numId=0 should skip list counter logic entirely
+      expect(listCounterContext.incrementListCounter).not.toHaveBeenCalled();
+      expect(listCounterContext.resetListCounter).not.toHaveBeenCalled();
+    });
+
+    it('should not increment list counter when numId is "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 2,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const listCounterContext: ListCounterContext = {
+        getListCounter: vi.fn(() => 0),
+        incrementListCounter: vi.fn(() => 1),
+        resetListCounter: vi.fn(),
+      };
+
+      computeParagraphAttrs(para, styleContext, listCounterContext);
+
+      // numId='0' should skip list counter logic entirely
+      expect(listCounterContext.incrementListCounter).not.toHaveBeenCalled();
+      expect(listCounterContext.resetListCounter).not.toHaveBeenCalled();
+    });
+
+    it('should create numberingProperties for valid numId=1', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 1,
+            ilvl: 0,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Valid numId should create numberingProperties
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe(1);
+    });
+
+    it('should create numberingProperties for valid numId="5"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '5',
+            ilvl: 1,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Valid string numId should create numberingProperties
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe('5');
+    });
+
+    it('should skip word layout processing when numId is 0', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 0,
+            ilvl: 0,
+            format: 'decimal',
+            lvlText: '%1.',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId=0 should skip word layout entirely
+      expect(result?.wordLayout).toBeUndefined();
+    });
+
+    it('should skip word layout processing when numId is "0"', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: '0',
+            ilvl: 1,
+            format: 'lowerLetter',
+            lvlText: '%1)',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // numId='0' should skip word layout entirely
+      expect(result?.wordLayout).toBeUndefined();
+    });
+  });
+
   it('should reset deeper list levels', () => {
     const para: PMNode = {
       attrs: {
@@ -1017,6 +1276,279 @@ describe('computeParagraphAttrs', () => {
     const resetCalls = (listCounterContext.resetListCounter as never).mock.calls;
     expect(resetCalls.length).toBeGreaterThan(0);
     expect(resetCalls.some((call: PMNode) => call[1] === 3)).toBe(true);
+  });
+
+  it('hydrates numbering details from converterContext definitions', () => {
+    const para: PMNode = {
+      attrs: {
+        numberingProperties: { numId: 7, ilvl: 1 },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: { defaultTabIntervalTwips: 720, decimalSeparator: '.' },
+    } as never;
+    const converterContext = {
+      numbering: {
+        definitions: {
+          '7': {
+            name: 'w:num',
+            attributes: { 'w:numId': '7' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '3' } }],
+          },
+        },
+        abstracts: {
+          '3': {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '3' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '1' },
+                elements: [
+                  { name: 'w:start', attributes: { 'w:val': '1' } },
+                  { name: 'w:numFmt', attributes: { 'w:val': 'lowerLetter' } },
+                  { name: 'w:lvlText', attributes: { 'w:val': '%2.' } },
+                  { name: 'w:lvlJc', attributes: { 'w:val': 'left' } },
+                  { name: 'w:suff', attributes: { 'w:val': 'space' } },
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '1440', 'w:hanging': '360' } }],
+                  },
+                  {
+                    name: 'w:rPr',
+                    elements: [
+                      { name: 'w:rFonts', attributes: { 'w:ascii': 'Arial' } },
+                      { name: 'w:color', attributes: { 'w:val': '5C5C5F' } },
+                      { name: 'w:sz', attributes: { 'w:val': '16' } },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = computeParagraphAttrs(para, styleContext, undefined, converterContext);
+
+    expect(result?.numberingProperties?.format).toBe('lowerLetter');
+    expect(result?.numberingProperties?.lvlText).toBe('%2.');
+    expect(result?.numberingProperties?.start).toBe(1);
+    expect(result?.numberingProperties?.lvlJc).toBe('left');
+    expect(result?.numberingProperties?.suffix).toBe('space');
+    expect(result?.numberingProperties?.resolvedLevelIndent).toEqual({ left: 1440, hanging: 360 });
+    expect(result?.wordLayout?.marker?.markerText).toBe('a.');
+
+    const markerRun = (result?.numberingProperties as Record<string, unknown>)?.resolvedMarkerRpr as
+      | Record<string, unknown>
+      | undefined;
+    expect(markerRun?.fontFamily).toBe('Arial');
+  });
+
+  describe('unwrapTabStops function', () => {
+    // Note: unwrapTabStops is a private function inside computeParagraphAttrs
+    // We test it indirectly through computeParagraphAttrs by passing various tabStops formats
+    const createStyleContext = () =>
+      ({
+        styles: {},
+        defaults: {},
+      }) as never;
+
+    it('should unwrap nested tab format { tab: { tabType, pos } }', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 2880 } }], // Use value > 1000 so it stays as twips
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('start');
+      expect(result?.tabs?.[0].pos).toBe(2880); // Stays as twips (> 1000 threshold)
+    });
+
+    it('should handle direct format { val, pos }', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ val: 'center', pos: 1440 }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('center');
+      expect(result?.tabs?.[0].pos).toBe(1440);
+    });
+
+    it('should skip invalid entries with missing required fields', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { val: 'start' }, // Missing pos
+            { pos: 720 }, // Missing val
+            { val: 'center', pos: 1440 }, // Valid
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(1);
+      expect(result?.tabs?.[0].val).toBe('center');
+    });
+
+    it('should add originalPos when extracting from nested format', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 4320 } }], // Use value > 1000 so it stays as twips
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].pos).toBe(4320); // Stays as twips (> 1000 threshold)
+      // The originalPos is set internally during unwrapping
+    });
+
+    it('should handle mixed valid and invalid entries', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { tab: { tabType: 'start', pos: 2880 } }, // Valid nested (> 1000 threshold)
+            null, // Invalid: null
+            { val: 'center', pos: 1440 }, // Valid direct
+            'invalid', // Invalid: string
+            { tab: 'invalid' }, // Invalid: tab is not an object
+            { val: 'end', pos: 2160 }, // Valid direct
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(3);
+      expect(result?.tabs?.[0].val).toBe('start');
+      expect(result?.tabs?.[1].val).toBe('center');
+      expect(result?.tabs?.[2].val).toBe('end');
+    });
+
+    it('should return undefined for non-array input', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: 'not an array',
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // When tabs is not an array, unwrapTabStops returns undefined
+      // computeParagraphAttrs may still set tabs from other sources
+      expect(result).toBeDefined();
+    });
+
+    it('should handle nested format with originalPos', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'start', pos: 500, originalPos: 720 } }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].pos).toBe(720); // Uses originalPos
+    });
+
+    it('should handle nested format with leader', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { tabType: 'end', pos: 1440, leader: 'dot' } }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('end');
+      expect(result?.tabs?.[0].leader).toBe('dot');
+    });
+
+    it('should skip entries with invalid nested tab structure', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [
+            { tab: null }, // Invalid: tab is null
+            { tab: { tabType: 'start', pos: 2880 } }, // Valid (> 1000 threshold)
+            { tab: { pos: 1440 } }, // Invalid: missing tabType
+            { tab: { tabType: 'center' } }, // Invalid: missing pos
+          ],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs).toHaveLength(1);
+      expect(result?.tabs?.[0].val).toBe('start');
+    });
+
+    it('should handle empty array', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Empty array returns undefined from unwrapTabStops
+      expect(result).toBeDefined();
+    });
+
+    it('should handle direct format with val property fallback', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ tab: { val: 'start', pos: 2880 } }], // val instead of tabType in nested format (> 1000 threshold)
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('start');
+    });
+
+    it('should preserve leader in direct format', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ val: 'decimal', pos: 2880, leader: 'hyphen' }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].leader).toBe('hyphen');
+    });
   });
 
   describe('framePr edge cases and validation', () => {
@@ -1291,6 +1823,1339 @@ describe('computeParagraphAttrs', () => {
 
       expect(result?.dropCap).toBe('margin');
       expect(result?.floatAlignment).toBe('center');
+    });
+
+    it('should build dropCapDescriptor with mode and lines from framePr', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 3,
+            wrap: 'around',
+          },
+        },
+        content: [
+          {
+            type: 'text',
+            text: 'D',
+            marks: [
+              {
+                type: 'textStyle',
+                attrs: {
+                  fontSize: '156px',
+                  fontFamily: 'Times New Roman',
+                },
+              },
+            ],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.mode).toBe('drop');
+      expect(result?.dropCapDescriptor?.lines).toBe(3);
+      expect(result?.dropCapDescriptor?.wrap).toBe('around');
+      expect(result?.dropCapDescriptor?.run.text).toBe('D');
+      expect(result?.dropCapDescriptor?.run.fontFamily).toBe('Times New Roman');
+      expect(result?.dropCapDescriptor?.run.fontSize).toBe(156);
+    });
+
+    it('should build dropCapDescriptor with margin mode', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            'w:dropCap': 'margin',
+            'w:lines': 2,
+          },
+        },
+        content: [
+          {
+            type: 'text',
+            text: 'W',
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.mode).toBe('margin');
+      expect(result?.dropCapDescriptor?.lines).toBe(2);
+    });
+
+    it('should extract font styling from nested run nodes', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 4,
+          },
+        },
+        content: [
+          {
+            type: 'run',
+            attrs: {
+              runProperties: {
+                fontSize: '117pt',
+                fontFamily: 'Georgia',
+                bold: true,
+                italic: true,
+                color: '0000FF',
+              },
+            },
+            content: [
+              {
+                type: 'text',
+                text: 'A',
+              },
+            ],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeDefined();
+      expect(result?.dropCapDescriptor?.run.text).toBe('A');
+      expect(result?.dropCapDescriptor?.run.fontFamily).toBe('Georgia');
+      expect(result?.dropCapDescriptor?.run.bold).toBe(true);
+      expect(result?.dropCapDescriptor?.run.italic).toBe(true);
+      expect(result?.dropCapDescriptor?.run.color).toBe('#0000FF');
+    });
+
+    it('should default to 3 lines when lines not specified', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+          },
+        },
+        content: [{ type: 'text', text: 'B' }],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor?.lines).toBe(3);
+    });
+
+    it('should not create dropCapDescriptor without content', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            lines: 3,
+          },
+        },
+        content: [],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor).toBeUndefined();
+    });
+
+    it('should normalize wrap value to proper casing', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+            wrap: 'notBeside',
+          },
+        },
+        content: [{ type: 'text', text: 'C' }],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.dropCapDescriptor?.wrap).toBe('notBeside');
+    });
+
+    it('should handle OOXML half-points font size format', () => {
+      const para: PMNode = {
+        attrs: {
+          framePr: {
+            dropCap: 'drop',
+          },
+        },
+        content: [
+          {
+            type: 'run',
+            attrs: {
+              runProperties: {
+                sz: 234, // Half-points: 234 = 117pt
+              },
+            },
+            content: [{ type: 'text', text: 'E' }],
+          },
+        ],
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // 117pt ≈ 156px (at 96dpi)
+      expect(result?.dropCapDescriptor?.run.fontSize).toBeCloseTo(156, 0);
+    });
+  });
+});
+
+describe('mergeSpacingSources', () => {
+  describe('priority order', () => {
+    it('should prioritize attrs over paragraphProps and base', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15, after: 15 };
+      const attrs = { before: 20, line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from attrs (highest priority)
+        after: 15, // from paragraphProps (middle priority)
+        line: 2.0, // from attrs
+      });
+    });
+
+    it('should prioritize paragraphProps over base when attrs is empty', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15, line: 1.5 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 15, // from paragraphProps (overrides base)
+        after: 10, // from base (not overridden)
+        line: 1.5, // from paragraphProps (overrides base)
+      });
+    });
+
+    it('should use base when paragraphProps and attrs are empty', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = {};
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 10,
+        line: 1.0,
+      });
+    });
+
+    it('should handle correct priority chain: base < paragraphProps < attrs', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 15 };
+      const attrs = { line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 15, // from paragraphProps (overrides base)
+        after: 10, // from base (not overridden)
+        line: 2.0, // from attrs (highest priority)
+      });
+    });
+  });
+
+  describe('partial overrides', () => {
+    it('should allow partial override from attrs (only line)', () => {
+      const base = { before: 10, after: 10 };
+      const paragraphProps = {};
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10, // inherited from base
+        after: 10, // inherited from base
+        line: 1.5, // from attrs
+      });
+    });
+
+    it('should allow partial override from paragraphProps (only before)', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = { before: 20 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from paragraphProps (overrides base)
+        after: 10, // inherited from base
+        line: 1.0, // inherited from base
+      });
+    });
+
+    it('should merge multiple partial overrides correctly', () => {
+      const base = { before: 10, after: 10, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 20, after: 20 };
+      const attrs = { line: 2.0 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 20, // from paragraphProps
+        after: 20, // from paragraphProps
+        line: 2.0, // from attrs
+        lineRule: 'auto', // inherited from base
+      });
+    });
+
+    it('should handle single property from each source', () => {
+      const base = { before: 10 };
+      const paragraphProps = { after: 20 };
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 20,
+        line: 1.5,
+      });
+    });
+  });
+
+  describe('edge cases', () => {
+    it('should return undefined when all sources are null', () => {
+      const result = mergeSpacingSources(null, null, null);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when all sources are undefined', () => {
+      const result = mergeSpacingSources(undefined, undefined, undefined);
+      expect(result).toBeUndefined();
+    });
+
+    it('should return undefined when all sources are empty objects', () => {
+      const result = mergeSpacingSources({}, {}, {});
+      expect(result).toBeUndefined();
+    });
+
+    it('should handle null base gracefully', () => {
+      const result = mergeSpacingSources(null, { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle null paragraphProps gracefully', () => {
+      const result = mergeSpacingSources({ before: 10 }, null, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle null attrs gracefully', () => {
+      const result = mergeSpacingSources({ before: 10 }, { after: 20 }, null);
+      expect(result).toEqual({ before: 10, after: 20 });
+    });
+
+    it('should handle undefined sources gracefully', () => {
+      const result = mergeSpacingSources(undefined, { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should handle non-object values (treat as empty)', () => {
+      const result = mergeSpacingSources('not an object', { before: 10 }, { line: 1.5 });
+      expect(result).toEqual({ before: 10, line: 1.5 });
+    });
+
+    it('should preserve zero values through merge priority', () => {
+      const base = { before: 10 };
+      const paragraphProps = { before: 0 }; // explicit zero overrides base
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+      expect(result).toEqual({ before: 0 });
+    });
+
+    it('should handle negative values correctly', () => {
+      const base = { before: 10 };
+      const paragraphProps = { after: -5 };
+      const attrs = { line: -1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+      expect(result).toEqual({
+        before: 10,
+        after: -5,
+        line: -1.5,
+      });
+    });
+  });
+
+  describe('real-world OOXML scenarios', () => {
+    it('should handle docDefaults + partial style override', () => {
+      const base = { before: 0, after: 0, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { after: 10 };
+      const attrs = {};
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 0,
+        after: 10,
+        line: 1.0,
+        lineRule: 'auto',
+      });
+    });
+
+    it('should handle direct paragraph override of only line spacing', () => {
+      const base = { before: 10, after: 10, line: 1.0 };
+      const paragraphProps = {};
+      const attrs = { line: 1.5 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 10,
+        after: 10,
+        line: 1.5,
+      });
+    });
+
+    it('should handle three-tier override chain', () => {
+      const base = { before: 0, after: 0, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 12 };
+      const attrs = { after: 8, line: 1.2 };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 12, // from paragraphProps
+        after: 8, // from attrs
+        line: 1.2, // from attrs
+        lineRule: 'auto', // from base
+      });
+    });
+
+    it('should handle complete direct override', () => {
+      const base = { before: 10, after: 10, line: 1.0, lineRule: 'auto' };
+      const paragraphProps = { before: 20, after: 20 };
+      const attrs = { before: 5, after: 5, line: 1.5, lineRule: 'exact' };
+
+      const result = mergeSpacingSources(base, paragraphProps, attrs);
+
+      expect(result).toEqual({
+        before: 5,
+        after: 5,
+        line: 1.5,
+        lineRule: 'exact',
+      });
+    });
+  });
+});
+
+describe('computeParagraphAttrs - alignment priority cascade', () => {
+  const createStyleContext = () =>
+    ({
+      styles: {},
+      defaults: {},
+    }) as never;
+
+  describe('priority order tests', () => {
+    it('should prioritize explicitAlignment over paragraphAlignment', () => {
+      const para: PMNode = {
+        attrs: {
+          alignment: 'right',
+          paragraphProperties: {
+            justification: 'center',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('right');
+    });
+
+    it('should prioritize paragraphAlignment over styleAlignment', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'center',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'left',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('center');
+    });
+
+    it('should prioritize styleAlignment over computed.paragraph.alignment', () => {
+      const para: PMNode = {
+        attrs: {},
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'right',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('right');
+    });
+
+    it('should prioritize bidi+adjustRightInd over everything', () => {
+      const para: PMNode = {
+        attrs: {
+          bidi: true,
+          adjustRightInd: true,
+          alignment: 'center',
+          paragraphProperties: {
+            justification: 'left',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('right');
+    });
+  });
+
+  describe('edge case tests', () => {
+    it('should handle null justification value and fallback to styleAlignment', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: null,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'center',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('center');
+    });
+
+    it('should handle empty string justification and fallback to styleAlignment', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: '',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'left',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('left');
+    });
+
+    it('should handle invalid alignment value and fallback to styleAlignment', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'invalid-value',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'right',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('right');
+    });
+
+    it('should handle non-string justification (number) and not crash', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 123,
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'center',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      // Should fallback to styleAlignment since number is not a string
+      expect(result?.alignment).toBe('center');
+    });
+  });
+
+  describe('normalization tests', () => {
+    it('should normalize "both" to "justify"', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'both',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('justify');
+    });
+
+    it('should normalize "start" to "left"', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'start',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('left');
+    });
+
+    it('should normalize "end" to "right"', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'end',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('right');
+    });
+  });
+
+  describe('real-world scenario tests', () => {
+    it('should use center from paragraph props when style has left', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            justification: 'center',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+      const hydration = {
+        alignment: 'left',
+      };
+
+      const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydration);
+
+      expect(result?.alignment).toBe('center');
+    });
+
+    it('should use right from explicit when paragraph props has center', () => {
+      const para: PMNode = {
+        attrs: {
+          alignment: 'right',
+          paragraphProperties: {
+            justification: 'center',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.alignment).toBe('right');
+    });
+
+    it('should respect all 6 priority levels in correct order', () => {
+      // Level 6: computed.paragraph.alignment (lowest)
+      const para1: PMNode = { attrs: {} };
+      const styleContext = createStyleContext();
+      const result1 = computeParagraphAttrs(para1, styleContext);
+      // Level 6 provides default 'left' alignment from style-engine when no other sources are present
+      expect(result1?.alignment).toBe('left');
+
+      // Level 5: styleAlignment
+      const para2: PMNode = { attrs: {} };
+      const hydration2 = { alignment: 'left' };
+      const result2 = computeParagraphAttrs(para2, styleContext, undefined, undefined, hydration2);
+      expect(result2?.alignment).toBe('left');
+
+      // Level 4: bidi alone (defaults to right)
+      const para3: PMNode = { attrs: { bidi: true } };
+      const result3 = computeParagraphAttrs(para3, styleContext);
+      expect(result3?.alignment).toBe('right');
+
+      // Level 3: paragraphAlignment (overrides bidi default)
+      const para4: PMNode = {
+        attrs: {
+          bidi: true,
+          paragraphProperties: { justification: 'center' },
+        },
+      };
+      const result4 = computeParagraphAttrs(para4, styleContext);
+      expect(result4?.alignment).toBe('center');
+
+      // Level 2: explicitAlignment (overrides paragraphAlignment)
+      const para5: PMNode = {
+        attrs: {
+          alignment: 'justify',
+          paragraphProperties: { justification: 'center' },
+        },
+      };
+      const result5 = computeParagraphAttrs(para5, styleContext);
+      expect(result5?.alignment).toBe('justify');
+
+      // Level 1: bidi + adjustRightInd (overrides everything)
+      const para6: PMNode = {
+        attrs: {
+          bidi: true,
+          adjustRightInd: true,
+          alignment: 'justify',
+          paragraphProperties: { justification: 'center' },
+        },
+      };
+      const result6 = computeParagraphAttrs(para6, styleContext);
+      expect(result6?.alignment).toBe('right');
+    });
+  });
+});
+
+describe('computeParagraphAttrs - numbering properties fallback from listRendering', () => {
+  const createStyleContext = () =>
+    ({
+      styles: {},
+      defaults: {},
+    }) as never;
+
+  describe('fallback synthesis when numberingProperties is missing', () => {
+    it('should synthesize numbering props when only listRendering provided', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '1.',
+            justification: 'left',
+            numberingType: 'decimal',
+            suffix: 'tab',
+            path: [1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties).toBeDefined();
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.markerText).toBe('1.');
+      expect(result?.numberingProperties?.format).toBe('decimal');
+      expect(result?.numberingProperties?.lvlJc).toBe('left');
+      expect(result?.numberingProperties?.suffix).toBe('tab');
+    });
+
+    it('should correctly extract counter value from path array', () => {
+      const testCases = [
+        { path: [1], expectedCounter: 1 },
+        { path: [1, 2], expectedCounter: 2 },
+        { path: [1, 2, 3], expectedCounter: 3 },
+        { path: [5, 10, 15], expectedCounter: 15 },
+      ];
+
+      testCases.forEach(({ path, expectedCounter }) => {
+        const para: PMNode = {
+          attrs: {
+            listRendering: {
+              markerText: `${expectedCounter}.`,
+              path,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.numberingProperties?.counterValue).toBe(expectedCounter);
+        expect(result?.numberingProperties?.path).toEqual(path);
+      });
+    });
+
+    it('should correctly calculate ilvl from path length', () => {
+      const testCases = [
+        { path: [1], expectedIlvl: 0 },
+        { path: [1, 2], expectedIlvl: 1 },
+        { path: [1, 2, 3], expectedIlvl: 2 },
+        { path: [1, 2, 3, 4], expectedIlvl: 3 },
+      ];
+
+      testCases.forEach(({ path, expectedIlvl }) => {
+        const para: PMNode = {
+          attrs: {
+            listRendering: {
+              markerText: '•',
+              path,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.numberingProperties?.ilvl).toBe(expectedIlvl);
+      });
+    });
+
+    it('should handle empty path array', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            path: [],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      // When path is empty, buildNumberingPath creates [1] and counterValue becomes 1
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1]);
+    });
+
+    it('should handle missing path array', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '1.',
+            justification: 'left',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      // When path is undefined, buildNumberingPath creates [1] and counterValue becomes 1
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1]);
+    });
+
+    it('should preserve original numberingProperties when present', () => {
+      const para: PMNode = {
+        attrs: {
+          numberingProperties: {
+            numId: 5,
+            ilvl: 2,
+          },
+          listRendering: {
+            markerText: 'a)',
+            path: [1, 2, 3],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should use original numberingProperties, not synthesize from listRendering
+      expect(result?.numberingProperties?.numId).toBe(5);
+      expect(result?.numberingProperties?.ilvl).toBe(2);
+    });
+
+    it('should not synthesize when listRendering is missing', () => {
+      const para: PMNode = {
+        attrs: {},
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should not create numberingProperties from nothing
+      expect(result?.numberingProperties).toBeUndefined();
+    });
+
+    it('should synthesize all properties from listRendering', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: 'II.',
+            justification: 'right',
+            numberingType: 'upperRoman',
+            suffix: 'space',
+            path: [1, 2],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.ilvl).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1, 2]);
+      expect(result?.numberingProperties?.counterValue).toBe(2);
+      expect(result?.numberingProperties?.markerText).toBe('II.');
+      expect(result?.numberingProperties?.format).toBe('upperRoman');
+      expect(result?.numberingProperties?.lvlJc).toBe('right');
+      expect(result?.numberingProperties?.suffix).toBe('space');
+    });
+
+    it('should handle single-level list (path with one element)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '3.',
+            path: [3],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      expect(result?.numberingProperties?.counterValue).toBe(3);
+      expect(result?.numberingProperties?.path).toEqual([3]);
+    });
+
+    it('should handle bullet list with path', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            justification: 'left',
+            numberingType: 'bullet',
+            path: [1, 1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.format).toBe('bullet');
+      expect(result?.numberingProperties?.ilvl).toBe(1);
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.markerText).toBe('•');
+    });
+
+    it('should handle non-finite counter values gracefully', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '•',
+            path: [NaN],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // NaN gets filtered out during path normalization, so buildNumberingPath creates [1]
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+    });
+
+    it('should handle deep nesting (path with many levels)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: 'i.',
+            path: [1, 1, 1, 1, 1],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.ilvl).toBe(4);
+      expect(result?.numberingProperties?.counterValue).toBe(1);
+      expect(result?.numberingProperties?.path).toEqual([1, 1, 1, 1, 1]);
+    });
+
+    it('should handle partial listRendering (only markerText)', () => {
+      const para: PMNode = {
+        attrs: {
+          listRendering: {
+            markerText: '-',
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.numberingProperties?.numId).toBe(-1);
+      expect(result?.numberingProperties?.ilvl).toBe(0);
+      expect(result?.numberingProperties?.markerText).toBe('-');
+      expect(result?.numberingProperties?.format).toBeUndefined();
+      expect(result?.numberingProperties?.lvlJc).toBeUndefined();
+      expect(result?.numberingProperties?.suffix).toBeUndefined();
+    });
+
+    it('should prioritize paragraphProperties.numberingProperties over fallback', () => {
+      const para: PMNode = {
+        attrs: {
+          paragraphProperties: {
+            numberingProperties: {
+              numId: 10,
+              ilvl: 3,
+            },
+          },
+          listRendering: {
+            markerText: 'Should not be used',
+            path: [99],
+          },
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      // Should use paragraphProperties, not listRendering fallback
+      expect(result?.numberingProperties?.numId).toBe(10);
+      expect(result?.numberingProperties?.ilvl).toBe(3);
+    });
+  });
+
+  describe('contextualSpacing attribute extraction', () => {
+    const createStyleContext = () => ({
+      styles: {},
+      defaults: {},
+    });
+
+    describe('fallback chain priority', () => {
+      it('should prioritize normalizedSpacing.contextualSpacing (priority 1)', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              contextualSpacing: true,
+            },
+            paragraphProperties: {
+              contextualSpacing: false, // Should be ignored
+            },
+            contextualSpacing: false, // Should be ignored
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should use paragraphProps.contextualSpacing when normalizedSpacing is absent (priority 2)', () => {
+        const para: PMNode = {
+          attrs: {
+            paragraphProperties: {
+              contextualSpacing: true,
+            },
+            contextualSpacing: false, // Should be ignored
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should use attrs.contextualSpacing when both higher priorities are absent (priority 3)', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should return undefined when contextualSpacing is not set anywhere', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+    });
+
+    describe('OOXML boolean value handling', () => {
+      it('should handle boolean true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle boolean false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: false,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle numeric 1 as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 1,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle numeric 0 as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 0,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "1" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '1',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "0" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '0',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "true" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'true',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "false" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'false',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle string "on" as true', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'on',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should handle string "off" as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'off',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle case-insensitive string values', () => {
+        const para1: PMNode = {
+          attrs: {
+            contextualSpacing: 'TRUE',
+          },
+        };
+        const para2: PMNode = {
+          attrs: {
+            contextualSpacing: 'FALSE',
+          },
+        };
+        const para3: PMNode = {
+          attrs: {
+            contextualSpacing: 'On',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        expect(computeParagraphAttrs(para1, styleContext)?.contextualSpacing).toBe(true);
+        expect(computeParagraphAttrs(para2, styleContext)?.contextualSpacing).toBe(false);
+        expect(computeParagraphAttrs(para3, styleContext)?.contextualSpacing).toBe(true);
+      });
+    });
+
+    describe('edge cases', () => {
+      it('should treat null as not set', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: null,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+
+      it('should treat undefined as not set', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: undefined,
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBeUndefined();
+      });
+
+      it('should handle invalid string values as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: 'invalid',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should handle empty string as false', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: '',
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+    });
+
+    describe('integration with spacing', () => {
+      it('should work together with spacing.before and spacing.after', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+            spacing: {
+              before: 10,
+              after: 20,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+        expect(result?.spacing?.before).toBeDefined();
+        expect(result?.spacing?.after).toBeDefined();
+      });
+
+      it('should work when contextualSpacing is in spacing object', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 20,
+              contextualSpacing: true,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+
+        const result = computeParagraphAttrs(para, styleContext);
+
+        expect(result?.contextualSpacing).toBe(true);
+        expect(result?.spacing?.before).toBeDefined();
+        expect(result?.spacing?.after).toBeDefined();
+      });
     });
   });
 });

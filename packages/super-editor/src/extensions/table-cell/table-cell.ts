@@ -180,7 +180,9 @@ export const TableCell = Node.create<TableCellOptions>({
             .map((side) => {
               const border = borders?.[side];
               if (border && border.val === 'none') return `border-${side}: ${border.val};`;
-              if (border) return `border-${side}: ${Math.ceil(border.size ?? 0)}px solid ${border.color || 'black'};`;
+              let color = border?.color || 'black';
+              if (color === 'auto') color = 'black';
+              if (border) return `border-${side}: ${Math.ceil(border.size ?? 0)}px solid ${color};`;
               return '';
             })
             .join(' ');

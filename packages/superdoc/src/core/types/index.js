@@ -26,8 +26,30 @@
  */
 
 /**
+ * @typedef {Object} CollaborationProvider External collaboration provider interface
+ * Accepts any Yjs-compatible provider (HocuspocusProvider, LiveblocksYjsProvider, TiptapCollabProvider, etc.)
+ * @property {Object} [awareness] The Yjs awareness instance (optional, may be null)
+ * @property {(event: string, handler: Function) => void} [on] Event listener
+ * @property {(event: string, handler: Function) => void} [off] Event unsubscriber
+ * @property {() => void} [disconnect] Disconnect from the provider
+ * @property {() => void} [destroy] Destroy the provider
+ * @property {boolean} [synced] Whether the provider has synced
+ * @property {boolean} [isSynced] Alternative sync property (used by some providers)
+ */
+
+/**
+ * @typedef {Object} CollaborationConfig Collaboration module configuration
+ * @property {Object} [ydoc] External Yjs document (provider-agnostic mode)
+ * @property {CollaborationProvider} [provider] External collaboration provider (provider-agnostic mode)
+ * @property {'hocuspocus' | 'superdoc'} [providerType] Internal provider type (deprecated)
+ * @property {string} [url] WebSocket URL for internal provider (deprecated)
+ * @property {string} [token] Authentication token for internal provider (deprecated)
+ * @property {Object} [params] Additional params for internal provider (deprecated)
+ */
+
+/**
  * @typedef {Object} Modules
- * @property {Object} [comments] Comments module configuration
+ * @property {Object | false} [comments] Comments module configuration (false to disable)
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -40,7 +62,7 @@
  * @property {Object} [ai] AI module configuration
  * @property {string} [ai.apiKey] Harbour API key for AI features
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services
- * @property {Object} [collaboration] Collaboration module configuration
+ * @property {CollaborationConfig} [collaboration] Collaboration module configuration
  * @property {Object} [toolbar] Toolbar module configuration
  * @property {Object} [slashMenu] Slash menu module configuration
  * @property {Array} [slashMenu.customItems] Array of custom menu sections with items

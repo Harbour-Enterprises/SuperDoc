@@ -62,6 +62,18 @@ const getSelectedText = () => {
   return state.doc.textBetween(selection.from, selection.to, ' ');
 };
 
+/**
+ * Retrieves the link href attribute at the current editor selection.
+ * Handles both empty (cursor) and non-empty selections.
+ *
+ * For empty selections (cursor position), this function first checks marks at the cursor,
+ * then examines adjacent nodes. This is necessary because link marks are non-inclusive:
+ * when the cursor is positioned immediately before or after a link, $from.marks() returns
+ * an empty array, but the link mark still exists on the adjacent text node accessible via
+ * nodeAfter or nodeBefore.
+ *
+ * @returns {string} The href attribute of the link mark at the selection, or empty string if none found.
+ */
 const getLinkHrefAtSelection = () => {
   if (!props.editor || !props.editor.state) return '';
   const { state } = props.editor;
@@ -72,14 +84,30 @@ const getLinkHrefAtSelection = () => {
   // Check marks at selection
   const { $from, empty } = selection;
   if (empty) {
+    // First check storedMarks and marks at cursor position
     const marks = state.storedMarks || $from.marks();
-    const link = marks.find((mark) => mark.type === linkMark);
-    if (link) href = link.attrs.href;
+    let link = marks.find((mark) => mark.type === linkMark);
+
+    // If not found, check adjacent nodes (for non-inclusive marks at boundaries)
+    // Link marks are non-inclusive, so $from.marks() returns empty at link boundaries.
+    // The mark exists on the adjacent text node, accessible via nodeAfter/nodeBefore.
+    if (!link) {
+      const nodeAfter = $from.nodeAfter;
+      const nodeBefore = $from.nodeBefore;
+      const marksOnNodeAfter = nodeAfter && Array.isArray(nodeAfter.marks) ? nodeAfter.marks : [];
+      const marksOnNodeBefore = nodeBefore && Array.isArray(nodeBefore.marks) ? nodeBefore.marks : [];
+
+      link =
+        marksOnNodeAfter.find((mark) => mark.type === linkMark) ||
+        marksOnNodeBefore.find((mark) => mark.type === linkMark);
+    }
+
+    if (link && link.attrs && link.attrs.href) href = link.attrs.href;
   } else {
     state.doc.nodesBetween(selection.from, selection.to, (node) => {
       if (node.marks) {
         const link = node.marks.find((mark) => mark.type === linkMark);
-        if (link) href = link.attrs.href;
+        if (link && link.attrs && link.attrs.href) href = link.attrs.href;
       }
     });
   }

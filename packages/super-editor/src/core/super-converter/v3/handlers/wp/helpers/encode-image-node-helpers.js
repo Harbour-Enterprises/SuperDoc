@@ -1,10 +1,24 @@
 import { emuToPixels, rotToDegrees, polygonToObj } from '@converter/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { extractStrokeWidth, extractStrokeColor, extractFillColor } from './vector-shape-helpers';
+import { convertMetafileToSvg, isMetafileExtension, setMetafileDomEnvironment } from './metafile-converter.js';
 
 const DRAWING_XML_TAG = 'w:drawing';
 const SHAPE_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingShape';
 const GROUP_URI = 'http://schemas.microsoft.com/office/word/2010/wordprocessingGroup';
+
+/**
+ * Normalize a relationship target to a relative media path.
+ * Strips leading slashes and collapses duplicated "word/" prefixes so lookups
+ * match the media keys we store (e.g., "word/media/image.png").
+ */
+const normalizeTargetPath = (targetPath = '') => {
+  if (!targetPath) return targetPath;
+  const trimmed = targetPath.replace(/^\/+/, ''); // remove leading slash(es)
+  if (trimmed.startsWith('word/')) return trimmed;
+  if (trimmed.startsWith('media/')) return `word/${trimmed}`;
+  return `word/${trimmed}`;
+};
 
 /**
  * Default dimensions for vector shapes when size is not specified.
@@ -25,23 +39,26 @@ const DEFAULT_SHAPE_HEIGHT = 100;
  * @returns {{ type: string, attrs: Object }|null} An editor node (image, vectorShape, shapeGroup, or contentBlock) or null if parsing fails
  */
 export function handleImageNode(node, params, isAnchor) {
-  const { docx, filename } = params;
-  const { attributes } = node;
+  if (!node) return null;
+  const { docx, filename, converter } = params;
+  const attributes = node?.attributes || {};
+  const { order, originalChildren } = collectPreservedDrawingChildren(node);
+
   const padding = {
-    top: emuToPixels(attributes['distT']),
-    bottom: emuToPixels(attributes['distB']),
-    left: emuToPixels(attributes['distL']),
-    right: emuToPixels(attributes['distR']),
+    top: emuToPixels(attributes?.['distT']),
+    bottom: emuToPixels(attributes?.['distB']),
+    left: emuToPixels(attributes?.['distL']),
+    right: emuToPixels(attributes?.['distR']),
   };
 
-  const extent = node.elements.find((el) => el.name === 'wp:extent');
+  const extent = node?.elements?.find((el) => el.name === 'wp:extent');
   const size = {
     width: emuToPixels(extent?.attributes?.cx),
     height: emuToPixels(extent?.attributes?.cy),
   };
 
   let transformData = {};
-  const effectExtent = node.elements.find((el) => el.name === 'wp:effectExtent');
+  const effectExtent = node?.elements?.find((el) => el.name === 'wp:effectExtent');
   if (effectExtent) {
     const sanitizeEmuValue = (value) => {
       if (value === null || value === undefined) return 0;
@@ -57,13 +74,13 @@ export function handleImageNode(node, params, isAnchor) {
     };
   }
 
-  const positionHTag = node.elements.find((el) => el.name === 'wp:positionH');
-  const positionH = positionHTag?.elements.find((el) => el.name === 'wp:posOffset');
+  const positionHTag = node?.elements?.find((el) => el.name === 'wp:positionH');
+  const positionH = positionHTag?.elements?.find((el) => el.name === 'wp:posOffset');
   const positionHValue = emuToPixels(positionH?.elements[0]?.text);
   const hRelativeFrom = positionHTag?.attributes?.relativeFrom;
-  const alignH = positionHTag?.elements.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
+  const alignH = positionHTag?.elements?.find((el) => el.name === 'wp:align')?.elements?.[0]?.text;
 
-  const positionVTag = node.elements.find((el) => el.name === 'wp:positionV');
+  const positionVTag = node?.elements?.find((el) => el.name === 'wp:positionV');
   const positionV = positionVTag?.elements?.find((el) => el.name === 'wp:posOffset');
   const positionVValue = emuToPixels(positionV?.elements[0]?.text);
   const vRelativeFrom = positionVTag?.attributes?.relativeFrom;
@@ -74,11 +91,14 @@ export function handleImageNode(node, params, isAnchor) {
     top: positionVValue,
   };
 
-  const simplePos = node.elements.find((el) => el.name === 'wp:simplePos');
+  // Capture wp:simplePos node for round-tripping; only use it for positioning when simplePos is enabled.
+  const useSimplePos =
+    attributes['simplePos'] === '1' || attributes['simplePos'] === 1 || attributes['simplePos'] === true;
+  const simplePosNode = node?.elements?.find((el) => el.name === 'wp:simplePos');
 
   // Look for one of <wp:wrapNone>,<wp:wrapSquare>,<wp:wrapThrough>,<wp:wrapTight>,<wp:wrapTopAndBottom>
   const wrapNode = isAnchor
-    ? node.elements.find((el) =>
+    ? node?.elements?.find((el) =>
         ['wp:wrapNone', 'wp:wrapSquare', 'wp:wrapThrough', 'wp:wrapTight', 'wp:wrapTopAndBottom'].includes(el.name),
       )
     : null;
@@ -160,6 +180,9 @@ export function handleImageNode(node, params, isAnchor) {
   const graphic = node.elements.find((el) => el.name === 'a:graphic');
   const graphicData = graphic?.elements.find((el) => el.name === 'a:graphicData');
   const { uri } = graphicData?.attributes || {};
+  if (!graphicData) {
+    return null;
+  }
 
   if (uri === SHAPE_URI) {
     const shapeMarginOffset = {
@@ -180,11 +203,15 @@ export function handleImageNode(node, params, isAnchor) {
   }
 
   const picture = graphicData?.elements.find((el) => el.name === 'pic:pic');
-  if (!picture || !picture.elements) return null;
+  if (!picture || !picture.elements) {
+    return null;
+  }
 
   const blipFill = picture.elements.find((el) => el.name === 'pic:blipFill');
   const blip = blipFill?.elements.find((el) => el.name === 'a:blip');
-  if (!blip) return null;
+  if (!blip) {
+    return null;
+  }
 
   // Check for stretch fill mode
   const stretch = blipFill?.elements.find((el) => el.name === 'a:stretch');
@@ -206,7 +233,9 @@ export function handleImageNode(node, params, isAnchor) {
 
   const { attributes: blipAttributes = {} } = blip;
   const rEmbed = blipAttributes['r:embed'];
-  if (!rEmbed) return null;
+  if (!rEmbed) {
+    return null;
+  }
 
   const currentFile = filename || 'document.xml';
   let rels = docx[`word/_rels/${currentFile}.rels`];
@@ -216,55 +245,95 @@ export function handleImageNode(node, params, isAnchor) {
   const { elements } = relationships || [];
 
   const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
-  if (!rel) return null;
+  if (!rel) {
+    return null;
+  }
 
   const { attributes: relAttributes } = rel;
   const targetPath = relAttributes['Target'];
 
-  let path = `word/${targetPath}`;
+  const path = normalizeTargetPath(targetPath);
+  const extension = path.substring(path.lastIndexOf('.') + 1);
 
-  // Some images may appear out of the word folder
-  if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) path = targetPath.substring(1);
-  const extension = targetPath.substring(targetPath.lastIndexOf('.') + 1);
+  // Convert EMF/WMF metafiles to SVG for display
+  let finalSrc = path;
+  let finalExtension = extension;
+  let wasConverted = false;
+
+  if (isMetafileExtension(extension)) {
+    // Get the media data for this image path from converter.media
+    // converter.media contains base64 data or data URIs depending on environment
+    const mediaData = converter?.media?.[path];
+
+    if (mediaData) {
+      if (converter?.domEnvironment) {
+        setMetafileDomEnvironment(converter.domEnvironment);
+      }
+      // Convert EMF/WMF metafile to SVG. Returns { dataUri, format } on success, null on failure.
+      const conversionResult = convertMetafileToSvg(mediaData, extension, size);
+      if (conversionResult?.dataUri) {
+        finalSrc = conversionResult.dataUri;
+        finalExtension = conversionResult.format || 'svg';
+        wasConverted = true;
+      }
+    }
+  }
+
+  // For converted metafile images (EMF+/WMF+ placeholders), we want them to render
+  // as block-level images, not inline. We use the original wrap type if available,
+  // otherwise default to the original wrap settings.
+  // NOTE: Setting wrap to undefined causes ProseMirror to use the default { type: 'Inline' },
+  // which is not what we want for placeholder images that should maintain their original layout.
+  const wrapValue = wrap;
+
+  const nodeAttrs = {
+    // originalXml: carbonCopy(node),
+    src: finalSrc,
+    alt:
+      isMetafileExtension(extension) && !wasConverted
+        ? 'Unable to render EMF/WMF image'
+        : docPr?.attributes?.name || 'Image',
+    extension: finalExtension,
+    // Store original path and extension for potential round-tripping
+    ...(wasConverted && { originalSrc: path, originalExtension: extension }),
+    id: docPr?.attributes?.id || '',
+    title: docPr?.attributes?.descr || 'Image',
+    inline: true, // Always true; wrap.type controls actual layout behavior
+    padding,
+    marginOffset,
+    size,
+    anchorData,
+    isAnchor,
+    transformData,
+    ...(useSimplePos && {
+      simplePos: {
+        x: simplePosNode.attributes?.x,
+        y: simplePosNode.attributes?.y,
+      },
+    }),
+    wrap: wrapValue,
+    ...(wrap.type === 'Square' && wrap.attrs.wrapText
+      ? {
+          wrapText: wrap.attrs.wrapText,
+        }
+      : {}),
+    wrapTopAndBottom: wrap.type === 'TopAndBottom',
+    shouldStretch,
+    originalPadding: {
+      distT: attributes['distT'],
+      distB: attributes['distB'],
+      distL: attributes['distL'],
+      distR: attributes['distR'],
+    },
+    originalAttributes: node.attributes,
+    rId: relAttributes['Id'],
+    ...(order.length ? { drawingChildOrder: order } : {}),
+    ...(originalChildren.length ? { originalDrawingChildren: originalChildren } : {}),
+  };
 
   return {
     type: 'image',
-    attrs: {
-      src: path,
-      alt: ['emf', 'wmf'].includes(extension) ? 'Unable to render EMF/WMF image' : docPr?.attributes?.name || 'Image',
-      extension,
-      id: docPr?.attributes?.id || '',
-      title: docPr?.attributes?.descr || 'Image',
-      inline: true,
-      padding,
-      marginOffset,
-      size,
-      anchorData,
-      isAnchor,
-      transformData,
-      ...(simplePos && {
-        simplePos: {
-          x: simplePos.attributes.x,
-          y: simplePos.attributes.y,
-        },
-      }),
-      wrap,
-      ...(wrap.type === 'Square' && wrap.attrs.wrapText
-        ? {
-            wrapText: wrap.attrs.wrapText,
-          }
-        : {}),
-      wrapTopAndBottom: wrap.type === 'TopAndBottom',
-      shouldStretch,
-      originalPadding: {
-        distT: attributes['distT'],
-        distB: attributes['distB'],
-        distL: attributes['distL'],
-        distR: attributes['distR'],
-      },
-      originalAttributes: node.attributes,
-      rId: relAttributes['Id'],
-    },
+    attrs: nodeAttrs,
   };
 }
 
@@ -309,6 +378,24 @@ const handleShapeDrawing = (params, node, graphicData, size, padding, marginOffs
   const fallbackType = textBoxContent ? 'textbox' : 'drawing';
   return buildShapePlaceholder(node, size, padding, marginOffset, fallbackType);
 };
+
+function collectPreservedDrawingChildren(node) {
+  const order = [];
+  const original = [];
+  if (!Array.isArray(node?.elements)) {
+    return { order, originalChildren: original };
+  }
+  node.elements.forEach((child, index) => {
+    if (!child) return;
+    const name = child.name ?? null;
+    order.push(name);
+    original.push({
+      index,
+      xml: carbonCopy(child),
+    });
+  });
+  return { order, originalChildren: original };
+}
 
 /**
  * Handles a shape group (wpg:wgp) within a WordprocessingML graphic node.
@@ -519,11 +606,8 @@ const handleShapeGroup = (params, node, graphicData, size, padding, marginOffset
       const rel = elements?.find((el) => el.attributes['Id'] === rEmbed);
       if (!rel) return null;
 
-      const targetPath = rel.attributes?.['Target'];
-      let path = `word/${targetPath}`;
-      if (targetPath.startsWith('/word') || targetPath.startsWith('/media')) {
-        path = targetPath.substring(1);
-      }
+      const targetPath = normalizeTargetPath(rel.attributes?.['Target']);
+      const path = targetPath;
 
       // Extract picture name and ID
       const nvPicPr = pic.elements?.find((el) => el.name === 'pic:nvPicPr');

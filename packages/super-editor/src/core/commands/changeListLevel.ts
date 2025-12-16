@@ -141,8 +141,14 @@ export function updateNumberingProperties(
     ...paragraphNode.attrs,
     paragraphProperties: newProperties,
     numberingProperties: newProperties.numberingProperties,
-    listRendering: null,
   };
+
+  // Only explicitly set listRendering to null when removing list properties.
+  // When adding/updating list properties, let numberingPlugin compute it via appendTransaction.
+  // This prevents cache issues where the first transaction caches with null marker data.
+  if (!newNumberingProperties) {
+    newAttrs.listRendering = null;
+  }
 
   tr.setNodeMarkup(pos, null, newAttrs);
 }

@@ -15,7 +15,7 @@ interface StrikeOptions extends Record<string, unknown> {
  * @module Strike
  * @sidebarTitle Strike
  * @snippetPath /snippets/extensions/strike.mdx
- * @shortcut Mod-Shift-s | toggleStrike | Toggle strikethrough formatting
+ * @shortcut Mod-Shift-x | toggleStrike | Toggle strikethrough formatting
  */
 export const Strike = Mark.create<StrikeOptions>({
   name: 'strike',
@@ -101,7 +101,8 @@ export const Strike = Mark.create<StrikeOptions>({
 
   addShortcuts() {
     return {
-      'Mod-Shift-s': () => this.editor?.commands.toggleStrike() ?? false,
+      'Mod-Shift-x': () => this.editor?.commands.toggleStrike() ?? false,
+      'Mod-Shift-X': () => this.editor?.commands.toggleStrike() ?? false,
     };
   },
 });

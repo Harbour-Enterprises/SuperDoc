@@ -244,6 +244,11 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
 
       extension: { rendered: false },
 
+      // Preserve original EMF/WMF format info when converting to SVG for display.
+      // Used during DOCX export to restore the original metafile format.
+      originalExtension: { rendered: false },
+      originalSrc: { rendered: false },
+
       shouldStretch: {
         default: false,
         rendered: false,
@@ -251,31 +256,15 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
 
       size: {
         default: {},
-        renderDOM: ({
-          size,
-          extension,
-          shouldStretch,
-        }: {
-          size?: ImageAttrs['size'];
-          extension?: string;
-          shouldStretch?: boolean;
-        }) => {
+        renderDOM: ({ size, shouldStretch }: { size?: ImageAttrs['size']; shouldStretch?: boolean }) => {
           let style = '';
-          if (size && typeof size === 'object' && !Array.isArray(size)) {
-            const width = 'width' in size ? size.width : undefined;
-            const height = 'height' in size ? size.height : undefined;
-            if (width && typeof width === 'number') style += `width: ${width}px;`;
-            if (
-              height &&
-              typeof height === 'number' &&
-              typeof extension === 'string' &&
-              ['emf', 'wmf'].includes(extension)
-            )
-              style += `height: ${height}px; border: 1px solid black; position: absolute;`;
-            else if (height && typeof height === 'number' && shouldStretch) {
-              style += `height: ${height}px; object-fit: fill;`;
-            } else if (height) style += 'height: auto;';
-          }
+          const { width, height } = (size ?? {}) as { width?: number; height?: number };
+          if (width) style += `width: ${width}px;`;
+          if (height && shouldStretch) {
+            // When shouldStretch is true (from <a:stretch><a:fillRect/>),
+            // stretch the image to fill both dimensions without preserving aspect ratio
+            style += `height: ${height}px; object-fit: fill;`;
+          } else if (height) style += 'height: auto;';
           return { style };
         },
       },
@@ -297,6 +286,14 @@ export const Image = Node.create<ImageOptions, ImageStorage>({
           if (!style) return {};
           return { style };
         },
+      },
+      drawingChildOrder: {
+        default: null,
+        rendered: false,
+      },
+      originalDrawingChildren: {
+        default: null,
+        rendered: false,
       },
     };
   },

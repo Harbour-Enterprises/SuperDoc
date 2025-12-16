@@ -1,4 +1,6 @@
 import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { CellSelection, TableMap } from 'prosemirror-tables';
+import type { EditorState, Transaction } from 'prosemirror-state';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
@@ -9,14 +11,37 @@ import {
   getFragmentAtPosition,
   computeLinePmRange,
   measureCharacterX,
+  pmPosToCharOffset,
   extractIdentifierFromConverter,
   getHeaderFooterType,
   getBucketForPageNumber,
   getBucketRepresentative,
+  buildMultiSectionIdentifier,
+  getHeaderFooterTypeForSection,
+  layoutHeaderFooterWithCache,
+  computeDisplayPageNumber,
+  findWordBoundaries,
+  findParagraphBoundaries,
+  createDragHandler,
+  hitTestTableFragment,
+  isListItem,
+  getWordLayoutConfig,
+  calculateTextStartIndent,
+  extractParagraphIndent,
+  PageGeometryHelper,
 } from '@superdoc/layout-bridge';
-import type { HeaderFooterIdentifier, HeaderFooterLayoutResult, PositionHit } from '@superdoc/layout-bridge';
-import { createDomPainter } from '@superdoc/painter-dom';
-import type { LayoutMode, PageDecorationProvider } from '@superdoc/painter-dom';
+import type {
+  HeaderFooterIdentifier,
+  HeaderFooterLayoutResult,
+  HeaderFooterType,
+  PositionHit,
+  MultiSectionHeaderFooterIdentifier,
+  DropEvent,
+  TableHitResult,
+  PageHit,
+} from '@superdoc/layout-bridge';
+import { createDomPainter, DOM_CLASS_NAMES } from '@superdoc/painter-dom';
+import type { LayoutMode, PageDecorationProvider, RulerOptions } from '@superdoc/painter-dom';
 import { measureBlock } from '@superdoc/measuring-dom';
 import type {
   ColumnLayout,
@@ -29,17 +54,27 @@ import type {
   TrackedChangesMode,
   ParaFragment,
   Fragment,
+  TableFragment,
+  TableBlock,
+  TableMeasure,
 } from '@superdoc/contracts';
 import { extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
+
+// Comment and tracked change mark names (inline to avoid missing declaration files)
+const CommentMarkName = 'commentMark';
+const TrackInsertMarkName = 'trackInsert';
+const TrackDeleteMarkName = 'trackDelete';
+const TrackFormatMarkName = 'trackFormat';
 // Collaboration cursor imports
-import { relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
+import { absolutePositionToRelativePosition, relativePositionToAbsolutePosition, ySyncPluginKey } from 'y-prosemirror';
 import * as Y from 'yjs';
 import {
   HeaderFooterEditorManager,
   HeaderFooterLayoutAdapter,
   type HeaderFooterDescriptor,
 } from './header-footer/HeaderFooterRegistry.js';
+import { EditorOverlayManager } from './header-footer/EditorOverlayManager.js';
 import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
 
 export type PageSize = {
@@ -82,6 +117,35 @@ type AwarenessState = {
 };
 
 /**
+ * Cursor position data stored in awareness state.
+ * Contains relative Yjs positions for anchor and head.
+ */
+type AwarenessCursorData = {
+  /** Relative Yjs position for selection anchor */
+  anchor: Y.RelativePosition;
+  /** Relative Yjs position for selection head (caret) */
+  head: Y.RelativePosition;
+};
+
+/**
+ * Extended awareness interface that includes the setLocalStateField method.
+ * The base Awareness type from y-protocols has this method but it's not always
+ * included in type definitions, so we extend it here for type safety.
+ */
+interface AwarenessWithSetField {
+  clientID: number;
+  getStates: () => Map<number, AwarenessState>;
+  on: (event: string, handler: () => void) => void;
+  off: (event: string, handler: () => void) => void;
+  /**
+   * Update a specific field in the local awareness state.
+   * @param field - The field name to update (e.g., 'cursor', 'user')
+   * @param value - The value to set for the field
+   */
+  setLocalStateField: (field: string, value: unknown) => void;
+}
+
+/**
  * User metadata for remote collaborators.
  * Exported as a standalone type for external consumers building custom presence UI.
  */
@@ -112,6 +176,30 @@ export type RemoteCursorState = {
 };
 
 /**
+ * Cell anchor state for table cell drag selection.
+ *
+ * Lifecycle:
+ * - Created when a drag operation starts inside a table cell (#setCellAnchor)
+ * - Persists throughout the drag to track the anchor cell
+ * - Cleared when drag ends (#clearCellAnchor) or document changes
+ *
+ * Used by the cell selection state machine to determine when to transition
+ * from text selection to cell selection mode during table drag operations.
+ */
+type CellAnchorState = {
+  /** PM position of the table node */
+  tablePos: number;
+  /** PM position at the start of the anchor cell */
+  cellPos: number;
+  /** Row index of the anchor cell (0-based) */
+  cellRowIndex: number;
+  /** Column index of the anchor cell (0-based) */
+  cellColIndex: number;
+  /** Cached reference to table block ID for performance */
+  tableBlockId: string;
+};
+
+/**
  * Configuration options for remote cursor presence rendering.
  * Controls how collaborator cursors and selections appear in the layout.
  */
@@ -130,6 +218,21 @@ export type PresenceOptions = {
   staleTimeout?: number;
 };
 
+/**
+ * Type-safe interface for Editor instances with SuperConverter attached.
+ * Used to access converter-specific properties for header/footer management
+ * without resorting to type assertions throughout the codebase.
+ */
+interface EditorWithConverter extends Editor {
+  converter?: {
+    pageStyles?: { alternateHeaders?: boolean };
+    headerIds?: { default?: string; first?: string; even?: string; odd?: string };
+    footerIds?: { default?: string; first?: string; even?: string; odd?: string };
+    createDefaultHeader?: (variant: string) => string;
+    createDefaultFooter?: (variant: string) => string;
+  };
+}
+
 export type LayoutEngineOptions = {
   pageSize?: PageSize;
   margins?: PageMargins;
@@ -141,6 +244,12 @@ export type LayoutEngineOptions = {
   trackedChanges?: TrackedChangesOverrides;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
+  /**
+   * Per-page ruler options.
+   * When enabled, renders a horizontal ruler at the top of each page showing
+   * inch marks and optionally margin handles for interactive margin adjustment.
+   */
+  ruler?: RulerOptions;
 };
 
 export type TrackedChangesOverrides = {
@@ -167,12 +276,7 @@ export type PresentationEditorOptions = ConstructorParameters<typeof Editor>[0] 
    * Required for remote cursor rendering.
    */
   collaborationProvider?: {
-    awareness?: {
-      clientID: number;
-      getStates: () => Map<number, AwarenessState>;
-      on: (event: string, handler: () => void) => void;
-      off: (event: string, handler: () => void) => void;
-    };
+    awareness?: AwarenessWithSetField;
     disconnect?: () => void;
   } | null;
   /**
@@ -186,6 +290,8 @@ type LayoutState = {
   blocks: FlowBlock[];
   measures: Measure[];
   layout: Layout | null;
+  bookmarks: Map<string, number>;
+  anchorMap?: Map<string, number>;
 };
 
 type LayoutMetrics = {
@@ -231,6 +337,9 @@ type HeaderFooterRegion = {
   localY: number;
   width: number;
   height: number;
+  contentHeight?: number;
+  /** Minimum Y coordinate from layout (can be negative if content extends above y=0) */
+  minY?: number;
 };
 
 type HeaderFooterLayoutContext = {
@@ -240,8 +349,62 @@ type HeaderFooterLayoutContext = {
   region: HeaderFooterRegion;
 };
 
+/**
+ * Attributes for a field annotation node
+ */
+interface FieldAnnotationAttributes {
+  fieldId: string;
+  fieldType: string;
+  displayLabel: string;
+  type: string;
+  fieldColor?: string;
+}
+
+/**
+ * Information about the source field being dragged
+ */
+interface SourceFieldInfo {
+  fieldId: string;
+  fieldType: string;
+  annotationType: string;
+}
+
+/**
+ * Payload structure for field annotation drag-and-drop data
+ */
+interface FieldAnnotationDragPayload {
+  /** Attributes to apply to the inserted field annotation */
+  attributes?: FieldAnnotationAttributes;
+  /** Source field information for tracking drop origin */
+  sourceField?: SourceFieldInfo;
+}
+
+/**
+ * Type guard to validate field annotation attributes
+ * @param attrs - Unknown value to validate
+ * @returns True if attrs is a valid FieldAnnotationAttributes object
+ */
+function isValidFieldAnnotationAttributes(attrs: unknown): attrs is FieldAnnotationAttributes {
+  if (!attrs || typeof attrs !== 'object') return false;
+  const a = attrs as Record<string, unknown>;
+  return (
+    typeof a.fieldId === 'string' &&
+    typeof a.fieldType === 'string' &&
+    typeof a.displayLabel === 'string' &&
+    typeof a.type === 'string'
+  );
+}
+
+const FIELD_ANNOTATION_DATA_TYPE = 'fieldAnnotation' as const;
+
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter @ 72dpi
 const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 };
+/** Default gap between pages when virtualization is enabled (matches renderer.ts virtualGap) */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
+/** Default gap between pages without virtualization (from containerStyles in styles.ts) */
+const DEFAULT_PAGE_GAP = 24;
+/** Default gap for horizontal layout mode */
+const DEFAULT_HORIZONTAL_PAGE_GAP = 20;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -251,8 +414,13 @@ const MULTI_CLICK_TIME_THRESHOLD_MS = 400;
 const MULTI_CLICK_DISTANCE_THRESHOLD_PX = 5;
 /** Budget for header/footer initialization before warning (milliseconds) */
 const HEADER_FOOTER_INIT_BUDGET_MS = 200;
-/** Debounce delay for scroll events (milliseconds) */
-const SCROLL_DEBOUNCE_MS = 100;
+/**
+ * Debounce delay for scroll events (milliseconds).
+ * Set to 32ms (~31fps) for responsive cursor updates during scrolling while avoiding
+ * excessive re-renders. Reduced from 100ms to improve collaboration cursor responsiveness
+ * when users scroll to view remote collaborators' positions.
+ */
+const SCROLL_DEBOUNCE_MS = 32;
 /** Maximum zoom level before warning */
 const MAX_ZOOM_WARNING_THRESHOLD = 10;
 /** Maximum number of selection rectangles per user (performance guardrail) */
@@ -283,6 +451,26 @@ export type LayoutUpdatePayload = {
   blocks: FlowBlock[];
   measures: Measure[];
   metrics: LayoutMetrics;
+};
+
+/**
+ * Event payload emitted when an image is selected in the editor.
+ */
+export type ImageSelectedEvent = {
+  /** The DOM element representing the selected image */
+  element: HTMLElement;
+  /** The layout-engine block ID for the image (null for inline images) */
+  blockId: string | null;
+  /** The ProseMirror document position where the image node starts */
+  pmStart: number;
+};
+
+/**
+ * Event payload emitted when an image is deselected in the editor.
+ */
+export type ImageDeselectedEvent = {
+  /** The block ID of the previously selected image (may be a synthetic ID like "inline-{position}") */
+  blockId: string;
 };
 
 /**
@@ -356,8 +544,10 @@ export class PresentationEditor extends EventEmitter {
   #selectionOverlay: HTMLElement;
   #hiddenHost: HTMLElement;
   #layoutOptions: LayoutEngineOptions;
-  #layoutState: LayoutState = { blocks: [], measures: [], layout: null };
+  #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
+  #pageGeometryHelper: PageGeometryHelper | null = null;
+  #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
   #layoutErrorState: 'healthy' | 'degraded' | 'failed' = 'healthy';
   #errorBanner: HTMLElement | null = null;
@@ -379,8 +569,12 @@ export class PresentationEditor extends EventEmitter {
   #headerFooterManager: HeaderFooterEditorManager | null = null;
   #headerFooterAdapter: HeaderFooterLayoutAdapter | null = null;
   #headerFooterIdentifier: HeaderFooterIdentifier | null = null;
+  #multiSectionIdentifier: MultiSectionHeaderFooterIdentifier | null = null;
   #headerLayoutResults: HeaderFooterLayoutResult[] | null = null;
   #footerLayoutResults: HeaderFooterLayoutResult[] | null = null;
+  // Per-rId layout results for multi-section support
+  #headerLayoutsByRId: Map<string, HeaderFooterLayoutResult> = new Map();
+  #footerLayoutsByRId: Map<string, HeaderFooterLayoutResult> = new Map();
   #headerDecorationProvider: PageDecorationProvider | undefined;
   #footerDecorationProvider: PageDecorationProvider | undefined;
   #headerFooterManagerCleanups: Array<() => void> = [];
@@ -388,6 +582,7 @@ export class PresentationEditor extends EventEmitter {
   #footerRegions: Map<number, HeaderFooterRegion> = new Map();
   #session: HeaderFooterSession = { mode: 'body' };
   #activeHeaderFooterEditor: Editor | null = null;
+  #overlayManager: EditorOverlayManager | null = null;
   #hoverOverlay: HTMLElement | null = null;
   #hoverTooltip: HTMLElement | null = null;
   #modeBanner: HTMLElement | null = null;
@@ -398,9 +593,23 @@ export class PresentationEditor extends EventEmitter {
   #lastClickPosition: { x: number; y: number } = { x: 0, y: 0 };
   #lastSelectedImageBlockId: string | null = null;
 
+  // Drag selection state
+  #dragAnchor: number | null = null;
+  #isDragging = false;
+  #dragExtensionMode: 'char' | 'word' | 'para' = 'char';
+
+  // Cell selection drag state
+  // Tracks cell-specific context when drag starts in a table for multi-cell selection
+  #cellAnchor: CellAnchorState | null = null;
+
+  /** Cell drag mode state machine: 'none' = not in table, 'pending' = in table but haven't crossed cell boundary, 'active' = crossed cell boundary */
+  #cellDragMode: 'none' | 'pending' | 'active' = 'none';
+
   // Remote cursor/presence state management
   /** Map of clientId -> normalized remote cursor state */
   #remoteCursorState: Map<number, RemoteCursorState> = new Map();
+  /** Map of clientId -> DOM element for cursor (enables DOM reuse to prevent flicker) */
+  #remoteCursorElements: Map<number, HTMLElement> = new Map();
   /** Flag indicating remote cursor state needs re-rendering (RAF batching) */
   #remoteCursorDirty = false;
   /** DOM element for rendering remote cursor overlays */
@@ -411,10 +620,12 @@ export class PresentationEditor extends EventEmitter {
   #awarenessCleanup: (() => void) | null = null;
   /** Cleanup function for scroll listener (virtualization updates) */
   #scrollCleanup: (() => void) | null = null;
-  /** RAF handle for remote cursor updates, cleared on destroy to prevent post-destruction callbacks */
-  #remoteCursorRafHandle: number | null = null;
   /** Timeout handle for scroll debounce (instance-level tracking for proper cleanup) */
   #scrollTimeout: number | undefined = undefined;
+  /** Timestamp of last remote cursor render for throttle-based immediate rendering */
+  #lastRemoteCursorRenderTime = 0;
+  /** Timeout handle for trailing edge of cursor throttle */
+  #remoteCursorThrottleTimeout: number | null = null;
 
   constructor(options: PresentationEditorOptions) {
     super();
@@ -470,6 +681,10 @@ export class PresentationEditor extends EventEmitter {
 
     this.#viewportHost = doc.createElement('div');
     this.#viewportHost.className = 'presentation-editor__viewport';
+    // Hide the viewport from screen readers - it's a visual rendering layer, not semantic content.
+    // The hidden ProseMirror editor (in #hiddenHost) provides the actual accessible document structure.
+    // This prevents screen readers from encountering duplicate or non-semantic visual elements.
+    this.#viewportHost.setAttribute('aria-hidden', 'true');
     this.#viewportHost.style.position = 'relative';
     this.#viewportHost.style.width = '100%';
     // Set min-height to at least one page so the viewport is clickable before layout renders
@@ -604,6 +819,7 @@ export class PresentationEditor extends EventEmitter {
       this.#applyZoom();
       this.#setupEditorListeners();
       this.#setupPointerHandlers();
+      this.#setupDragHandlers();
       this.#setupInputBridge();
       this.#syncTrackedChangesPreferences();
 
@@ -665,6 +881,114 @@ export class PresentationEditor extends EventEmitter {
   get commands() {
     const activeEditor = this.getActiveEditor();
     return activeEditor.commands;
+  }
+
+  /**
+   * Get the ProseMirror editor state for the currently active editor (header/footer-aware).
+   *
+   * This property dynamically returns the state from the appropriate editor instance:
+   * - In body mode, returns the main editor's state
+   * - In header/footer mode, returns the active header/footer editor's state
+   *
+   * This enables components like SlashMenu and context menus to access document
+   * state, selection, and schema information in the correct editing context.
+   *
+   * @returns The EditorState for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { selection, doc } = presentationEditor.state;
+   * const selectedText = doc.textBetween(selection.from, selection.to);
+   * ```
+   */
+  get state(): EditorState {
+    return this.getActiveEditor().state;
+  }
+
+  /**
+   * Check if the editor is currently editable (header/footer-aware).
+   *
+   * This property checks the editable state of the currently active editor:
+   * - In body mode, returns whether the main editor is editable
+   * - In header/footer mode, returns whether the header/footer editor is editable
+   *
+   * The editor may be non-editable due to:
+   * - Document mode set to 'viewing'
+   * - Explicit `editable: false` option
+   * - Editor not fully initialized
+   *
+   * @returns true if the active editor accepts input, false otherwise
+   *
+   * @example
+   * ```typescript
+   * if (presentationEditor.isEditable) {
+   *   presentationEditor.commands.insertText('Hello');
+   * }
+   * ```
+   */
+  get isEditable(): boolean {
+    return this.getActiveEditor().isEditable;
+  }
+
+  /**
+   * Get the editor options for the currently active editor (header/footer-aware).
+   *
+   * This property returns the options object from the appropriate editor instance,
+   * providing access to configuration like document mode, AI settings, and custom
+   * slash menu configuration.
+   *
+   * @returns The options object for the active editor
+   *
+   * @example
+   * ```typescript
+   * const { documentMode, isAiEnabled } = presentationEditor.options;
+   * ```
+   */
+  get options() {
+    return this.getActiveEditor().options;
+  }
+
+  /**
+   * Dispatch a ProseMirror transaction to the currently active editor (header/footer-aware).
+   *
+   * This method routes transactions to the appropriate editor instance:
+   * - In body mode, dispatches to the main editor
+   * - In header/footer mode, dispatches to the active header/footer editor
+   *
+   * Use this for direct state manipulation when commands are insufficient.
+   * For most use cases, prefer using `commands` or `dispatchInActiveEditor`.
+   *
+   * @param tr - The ProseMirror transaction to dispatch
+   *
+   * @example
+   * ```typescript
+   * const { state } = presentationEditor;
+   * const tr = state.tr.insertText('Hello', state.selection.from);
+   * presentationEditor.dispatch(tr);
+   * ```
+   */
+  dispatch(tr: Transaction): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.dispatch(tr);
+  }
+
+  /**
+   * Focus the editor, routing focus to the appropriate editing surface.
+   *
+   * In PresentationEditor, the actual ProseMirror EditorView is hidden and input
+   * is bridged from the visible layout surface. This method focuses the hidden
+   * editor view to enable keyboard input while the visual focus remains on the
+   * rendered presentation.
+   *
+   * @example
+   * ```typescript
+   * // After closing a modal, restore focus to the editor
+   * presentationEditor.focus();
+   * ```
+   */
+  focus(): void {
+    const activeEditor = this.getActiveEditor();
+    activeEditor.view?.focus();
   }
 
   /**
@@ -767,6 +1091,48 @@ export class PresentationEditor extends EventEmitter {
    */
   get overlayElement(): HTMLElement | null {
     return this.#selectionOverlay ?? null;
+  }
+
+  /**
+   * Get the current zoom level.
+   *
+   * The zoom level is a multiplier that controls the visual scale of the document.
+   * This value is applied via CSS transform: scale() on the #viewportHost element,
+   * which ensures consistent scaling between rendered content and overlay elements
+   * (selections, cursors, interactive handles).
+   *
+   * Relationship to Centralized Zoom Architecture:
+   * - PresentationEditor is the SINGLE SOURCE OF TRUTH for zoom state
+   * - Zoom is applied internally via transform: scale() on #viewportHost
+   * - External components (toolbar, UI controls) should use setZoom() to modify zoom
+   * - The zoom value is used throughout the system for coordinate transformations
+   *
+   * Coordinate Space Implications:
+   * - Layout coordinates: Unscaled logical pixels used by the layout engine
+   * - Screen coordinates: Physical pixels affected by CSS transform: scale()
+   * - Conversion: screenCoord = layoutCoord * zoom
+   *
+   * Zoom Scale:
+   * - 1 = 100% (default, no scaling)
+   * - 0.5 = 50% (zoomed out, content appears smaller)
+   * - 2 = 200% (zoomed in, content appears larger)
+   *
+   * @returns The current zoom level multiplier (default: 1 if not configured)
+   *
+   * @example
+   * ```typescript
+   * const zoom = presentation.zoom;
+   * // Convert layout coordinates to screen coordinates
+   * const screenX = layoutX * zoom;
+   * const screenY = layoutY * zoom;
+   *
+   * // Convert screen coordinates back to layout coordinates
+   * const layoutX = screenX / zoom;
+   * const layoutY = screenY / zoom;
+   * ```
+   */
+  get zoom(): number {
+    return this.#layoutOptions.zoom ?? 1;
   }
 
   /**
@@ -953,9 +1319,14 @@ export class PresentationEditor extends EventEmitter {
 
     const start = Math.min(from, to);
     const end = Math.max(from, to);
+    // Use effective zoom from actual rendered dimensions, not internal state.
+    // Zoom may be applied externally (e.g., by SuperDoc toolbar) without
+    // updating PresentationEditor's internal zoom value.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    const overlayRect = this.#selectionOverlay.getBoundingClientRect();
     const relativeRect = relativeTo?.getBoundingClientRect() ?? null;
+    const containerRect = this.#visibleHost.getBoundingClientRect();
+    const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
+    const scrollTop = this.#visibleHost.scrollTop ?? 0;
 
     const layoutRectSource = () => {
       if (this.#session.mode !== 'body') {
@@ -963,25 +1334,72 @@ export class PresentationEditor extends EventEmitter {
       }
       if (!this.#layoutState.layout) return [];
       const rects =
-        selectionToRects(this.#layoutState.layout, this.#layoutState.blocks, this.#layoutState.measures, start, end) ??
-        [];
+        selectionToRects(
+          this.#layoutState.layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          start,
+          end,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       return rects;
     };
 
     const rawRects = layoutRectSource();
     if (!rawRects.length) return [];
 
+    // If we can get a DOM-based caret for the range start, compute a per-page delta to align highlights with painter DOM.
+    let domCaretStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domCaretEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domCaretStart = this.#computeDomCaretPageLocal(start);
+      domCaretEnd = this.#computeDomCaretPageLocal(end);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in getRectsForRange:', error);
+      }
+    }
+    const layoutCaretStart = this.#computeCaretLayoutRectGeometry(start, false);
+    const layoutCaretEnd = this.#computeCaretLayoutRectGeometry(end, false);
+    const pageDelta: Record<number, { dx: number; dy: number }> = {};
+    if (domCaretStart && layoutCaretStart && domCaretStart.pageIndex === layoutCaretStart.pageIndex) {
+      pageDelta[domCaretStart.pageIndex] = {
+        dx: domCaretStart.x - layoutCaretStart.x,
+        dy: domCaretStart.y - layoutCaretStart.y,
+      };
+    }
+
     // Fix Issue #1: Get actual header/footer page height instead of hardcoded 1
     // When in header/footer mode, we need to use the real page height from the layout context
     // to correctly map coordinates for selection highlighting
     const pageHeight = this.#session.mode === 'body' ? this.#getBodyPageHeight() : this.#getHeaderFooterPageHeight();
-    return rawRects
-      .map((rect: LayoutRect) => {
-        const pageLocalY = rect.y - rect.pageIndex * pageHeight;
-        const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+    const finalRects = rawRects
+      .map((rect: LayoutRect, idx: number, allRects: LayoutRect[]) => {
+        const delta = pageDelta[rect.pageIndex];
+        let adjustedX = delta ? rect.x + delta.dx : rect.x;
+        const adjustedY = delta ? rect.y + delta.dy : rect.y;
+
+        // If we have DOM caret positions, override start/end rect edges for tighter alignment
+        const isFirstRect = idx === 0;
+        const isLastRect = idx === allRects.length - 1;
+        if (isFirstRect && domCaretStart && rect.pageIndex === domCaretStart.pageIndex) {
+          adjustedX = domCaretStart.x;
+        }
+        if (isLastRect && domCaretEnd && rect.pageIndex === domCaretEnd.pageIndex) {
+          const endX = domCaretEnd.x;
+          const newWidth = Math.max(1, endX - adjustedX);
+          // Temporarily stash width override by updating rect.width for downstream calculations
+          rect = { ...rect, width: newWidth };
+        }
+
+        const pageLocalY = adjustedY - rect.pageIndex * (pageHeight + pageGap);
+        const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, adjustedX, pageLocalY);
         if (!coords) return null;
-        const absLeft = coords.x + overlayRect.left;
-        const absTop = coords.y + overlayRect.top;
+        // coords are in layout space; convert to viewport coordinates using scroll + zoom
+        const absLeft = coords.x * zoom - scrollLeft + containerRect.left;
+        const absTop = coords.y * zoom - scrollTop + containerRect.top;
         const left = relativeRect ? absLeft - relativeRect.left : absLeft;
         const top = relativeRect ? absTop - relativeRect.top : absTop;
         const width = Math.max(1, rect.width * zoom);
@@ -997,6 +1415,8 @@ export class PresentationEditor extends EventEmitter {
         };
       })
       .filter((rect: RangeRect | null): rect is RangeRect => Boolean(rect));
+
+    return finalRects;
   }
 
   /**
@@ -1109,6 +1529,56 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Collect all comment and tracked change positions from the PM document.
+   *
+   * This is the authoritative source for PM positions - called after every
+   * layout update to ensure positions are always fresh from the current document.
+   *
+   * The returned positions contain PM offsets (start, end) which can be passed
+   * to getCommentBounds() to compute visual layout coordinates.
+   *
+   * @returns Map of threadId -> { threadId, start, end }
+   */
+  #collectCommentPositions(): Record<string, { threadId: string; start: number; end: number }> {
+    const editorState = this.#editor?.state;
+    if (!editorState) return {};
+
+    const doc = editorState.doc;
+    const trackChangeMarks = [TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName];
+
+    // Collect PM positions for all comments and tracked changes
+    const pmPositions: Record<string, { threadId: string; start: number; end: number }> = {};
+
+    doc.descendants((node, pos) => {
+      const marks = node.marks || [];
+
+      for (const mark of marks) {
+        let threadId: string | undefined;
+
+        if (mark.type.name === CommentMarkName) {
+          threadId = mark.attrs.commentId || mark.attrs.importedId;
+        } else if (trackChangeMarks.includes(mark.type.name)) {
+          threadId = mark.attrs.id;
+        }
+
+        if (!threadId) continue;
+
+        const nodeEnd = pos + node.nodeSize;
+
+        if (!pmPositions[threadId]) {
+          pmPositions[threadId] = { threadId, start: pos, end: nodeEnd };
+        } else {
+          // Extend range if this mark spans multiple nodes
+          pmPositions[threadId].start = Math.min(pmPositions[threadId].start, pos);
+          pmPositions[threadId].end = Math.max(pmPositions[threadId].end, nodeEnd);
+        }
+      }
+    });
+
+    return pmPositions;
+  }
+
+  /**
    * Return a snapshot of the latest layout state.
    */
   getLayoutSnapshot(): {
@@ -1130,6 +1600,93 @@ export class PresentationEditor extends EventEmitter {
    */
   getLayoutOptions(): LayoutEngineOptions {
     return { ...this.#layoutOptions };
+  }
+
+  /**
+   * Get the page styles for the section containing the current caret position.
+   *
+   * In multi-section documents, different sections can have different page sizes,
+   * margins, and orientations. This method returns the styles for the section
+   * where the caret is currently located, enabling section-aware UI components
+   * like rulers to display accurate information.
+   *
+   * @returns Object containing:
+   *   - pageSize: { width, height } in inches
+   *   - pageMargins: { left, right, top, bottom } in inches
+   *   - sectionIndex: The current section index (0-based)
+   *   - orientation: 'portrait' or 'landscape'
+   *
+   * Falls back to document-level defaults if section info is unavailable.
+   *
+   * @example
+   * ```typescript
+   * const sectionStyles = presentation.getCurrentSectionPageStyles();
+   * console.log(`Section ${sectionStyles.sectionIndex}: ${sectionStyles.pageSize.width}" x ${sectionStyles.pageSize.height}"`);
+   * ```
+   */
+  getCurrentSectionPageStyles(): {
+    pageSize: { width: number; height: number };
+    pageMargins: { left: number; right: number; top: number; bottom: number };
+    sectionIndex: number;
+    orientation: 'portrait' | 'landscape';
+  } {
+    const PPI = 96;
+    const layout = this.#layoutState.layout;
+    const pageIndex = this.#getCurrentPageIndex();
+    const page = layout?.pages?.[pageIndex];
+
+    const converterStyles = this.#editor.converter?.pageStyles ?? {};
+    const defaultMargins = converterStyles.pageMargins ?? { left: 1, right: 1, top: 1, bottom: 1 };
+
+    // Validate margin values to prevent NaN
+    const safeMargins = {
+      left: typeof defaultMargins.left === 'number' ? defaultMargins.left : 1,
+      right: typeof defaultMargins.right === 'number' ? defaultMargins.right : 1,
+      top: typeof defaultMargins.top === 'number' ? defaultMargins.top : 1,
+      bottom: typeof defaultMargins.bottom === 'number' ? defaultMargins.bottom : 1,
+    };
+
+    if (!page) {
+      return {
+        pageSize: { width: 8.5, height: 11 },
+        pageMargins: safeMargins,
+        sectionIndex: 0,
+        orientation: 'portrait',
+      };
+    }
+
+    // Validate orientation
+    const pageOrientation =
+      page.orientation === 'landscape' || page.orientation === 'portrait' ? page.orientation : 'portrait';
+
+    // Determine page size based on orientation if not explicitly set.
+    // Don't use converterStyles.pageSize as fallback - it may be from a different section.
+    const standardPortrait = { w: 8.5 * PPI, h: 11 * PPI };
+    const standardLandscape = { w: 11 * PPI, h: 8.5 * PPI };
+    const orientationDefault = pageOrientation === 'landscape' ? standardLandscape : standardPortrait;
+
+    const pageWidthPx = page.size?.w ?? orientationDefault.w;
+    const pageHeightPx = page.size?.h ?? orientationDefault.h;
+
+    const marginLeftPx = page.margins?.left ?? safeMargins.left * PPI;
+    const marginRightPx = page.margins?.right ?? safeMargins.right * PPI;
+    const marginTopPx = page.margins?.top ?? safeMargins.top * PPI;
+    const marginBottomPx = page.margins?.bottom ?? safeMargins.bottom * PPI;
+
+    return {
+      pageSize: {
+        width: pageWidthPx / PPI,
+        height: pageHeightPx / PPI,
+      },
+      pageMargins: {
+        left: marginLeftPx / PPI,
+        right: marginRightPx / PPI,
+        top: marginTopPx / PPI,
+        bottom: marginBottomPx / PPI,
+      },
+      sectionIndex: page.sectionIndex ?? 0,
+      orientation: pageOrientation,
+    };
   }
 
   /**
@@ -1184,6 +1741,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#pendingDocChange = true;
     this.#scheduleRerender();
   }
@@ -1218,7 +1776,17 @@ export class PresentationEditor extends EventEmitter {
         x: localX,
         y: headerPageIndex * headerPageHeight + (localY - headerPageIndex * headerPageHeight),
       };
-      const hit = clickToPosition(context.layout, context.blocks, context.measures, headerPoint) ?? null;
+      const hit =
+        clickToPosition(
+          context.layout,
+          context.blocks,
+          context.measures,
+          headerPoint,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ) ?? null;
       return hit;
     }
 
@@ -1234,6 +1802,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         clientX,
         clientY,
+        this.#pageGeometryHelper ?? undefined,
       ) ?? null;
     return hit;
   }
@@ -1288,26 +1857,23 @@ export class PresentationEditor extends EventEmitter {
       }
 
       const rect = rects[0];
-      const overlayRect = this.#selectionOverlay?.getBoundingClientRect();
-      if (!overlayRect) {
-        return null;
-      }
-
-      // Convert from overlay-relative to viewport coordinates
+      const zoom = this.#layoutOptions.zoom ?? 1;
+      const containerRect = this.#visibleHost.getBoundingClientRect();
+      const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
+      const scrollTop = this.#visibleHost.scrollTop ?? 0;
       const pageHeight = this.#getBodyPageHeight();
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
-      if (!coords) {
-        return null;
-      }
+      if (!coords) return null;
 
       return {
-        top: coords.y + overlayRect.top,
-        bottom: coords.y + overlayRect.top + rect.height,
-        left: coords.x + overlayRect.left,
-        right: coords.x + overlayRect.left + rect.width,
-        width: rect.width,
-        height: rect.height,
+        top: coords.y * zoom - scrollTop + containerRect.top,
+        bottom: coords.y * zoom - scrollTop + containerRect.top + rect.height * zoom,
+        left: coords.x * zoom - scrollLeft + containerRect.left,
+        right: coords.x * zoom - scrollLeft + containerRect.left + rect.width * zoom,
+        width: rect.width * zoom,
+        height: rect.height * zoom,
       };
     }
 
@@ -1476,13 +2042,12 @@ export class PresentationEditor extends EventEmitter {
       }, 'Layout RAF');
     }
 
-    // Cancel pending remote cursor RAF to prevent execution after destroy
-    if (this.#remoteCursorRafHandle !== null) {
+    // Cancel pending remote cursor throttle timeout to prevent execution after destroy
+    if (this.#remoteCursorThrottleTimeout !== null) {
       this.#safeCleanup(() => {
-        const win = this.#visibleHost?.ownerDocument?.defaultView ?? window;
-        win.cancelAnimationFrame(this.#remoteCursorRafHandle!);
-        this.#remoteCursorRafHandle = null;
-      }, 'Remote cursor RAF');
+        clearTimeout(this.#remoteCursorThrottleTimeout!);
+        this.#remoteCursorThrottleTimeout = null;
+      }, 'Remote cursor throttle');
     }
 
     this.#editorListeners.forEach(({ event, handler }) => this.#editor?.off(event, handler));
@@ -1491,7 +2056,10 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost?.removeEventListener('pointerdown', this.#handlePointerDown);
     this.#viewportHost?.removeEventListener('dblclick', this.#handleDoubleClick);
     this.#viewportHost?.removeEventListener('pointermove', this.#handlePointerMove);
+    this.#viewportHost?.removeEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost?.removeEventListener('pointerleave', this.#handlePointerLeave);
+    this.#viewportHost?.removeEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost?.removeEventListener('drop', this.#handleDrop);
     this.#visibleHost?.removeEventListener('keydown', this.#handleKeyDown);
     this.#inputBridge?.notifyTargetChanged();
     this.#inputBridge?.destroy();
@@ -1509,7 +2077,11 @@ export class PresentationEditor extends EventEmitter {
     }
 
     this.#remoteCursorState.clear();
+    this.#remoteCursorElements.clear();
     this.#remoteCursorOverlay = null;
+
+    // Clean up cell selection drag state to prevent memory leaks
+    this.#clearCellAnchor();
 
     // Unregister from static registry
     if (this.#options?.documentId) {
@@ -1527,14 +2099,20 @@ export class PresentationEditor extends EventEmitter {
       this.#headerFooterManager = null;
     }, 'Header/footer manager');
     this.#headerFooterIdentifier = null;
+    this.#multiSectionIdentifier = null;
     this.#headerLayoutResults = null;
     this.#footerLayoutResults = null;
+    this.#headerLayoutsByRId.clear();
+    this.#footerLayoutsByRId.clear();
     this.#headerDecorationProvider = undefined;
     this.#footerDecorationProvider = undefined;
     this.#session = { mode: 'body' };
     this.#activeHeaderFooterEditor = null;
 
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
+    this.#dragHandlerCleanup?.();
+    this.#dragHandlerCleanup = null;
     this.#selectionOverlay?.remove();
     this.#painterHost?.remove();
     this.#hiddenHost?.remove();
@@ -1558,9 +2136,20 @@ export class PresentationEditor extends EventEmitter {
         this.#pendingDocChange = true;
         this.#scheduleRerender();
       }
+      // Update local cursor in awareness whenever document changes
+      // This ensures cursor position is broadcast with each keystroke
+      if (transaction?.docChanged) {
+        this.#updateLocalAwarenessCursor();
+        // Clear cell anchor on document changes to prevent stale references
+        // (table structure may have changed, cell positions may be invalid)
+        this.#clearCellAnchor();
+      }
     };
     const handleSelection = () => {
       this.#scheduleSelectionUpdate();
+      // Update local cursor in awareness for collaboration
+      // This bypasses y-prosemirror's focus check which may fail for hidden PM views
+      this.#updateLocalAwarenessCursor();
     };
     this.#editor.on('update', handleUpdate);
     this.#editor.on('selectionUpdate', handleSelection);
@@ -1670,6 +2259,62 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Update local cursor position in awareness.
+   *
+   * CRITICAL FIX: The y-prosemirror cursor plugin only updates awareness when
+   * view.hasFocus() returns true. In PresentationEditor, the hidden PM EditorView
+   * may not have DOM focus (focus is on the visual representation / input bridge).
+   * This causes the cursor plugin to not send cursor updates, making remote users
+   * see a stale cursor position.
+   *
+   * This method bypasses the focus check and manually updates awareness with the
+   * current selection position whenever the PM selection changes.
+   *
+   * @private
+   * @returns {void}
+   * @throws {Error} Position conversion errors are silently caught and ignored.
+   *   These can occur during document restructuring when the PM document structure
+   *   doesn't match the Yjs structure, or when positions are temporarily invalid.
+   */
+  #updateLocalAwarenessCursor(): void {
+    const provider = this.#options.collaborationProvider;
+    if (!provider?.awareness) return;
+
+    // Runtime validation: ensure setLocalStateField method exists
+    if (typeof provider.awareness.setLocalStateField !== 'function') {
+      // Awareness implementation doesn't support setLocalStateField
+      return;
+    }
+
+    const editorState = this.#editor?.state;
+    if (!editorState) return;
+
+    const ystate = ySyncPluginKey.getState(editorState);
+    if (!ystate?.binding?.mapping) return;
+
+    const { selection } = editorState;
+    const { anchor, head } = selection;
+
+    try {
+      // Convert PM positions to Yjs relative positions
+      const relAnchor = absolutePositionToRelativePosition(anchor, ystate.type, ystate.binding.mapping);
+      const relHead = absolutePositionToRelativePosition(head, ystate.type, ystate.binding.mapping);
+
+      if (relAnchor && relHead) {
+        // Update awareness with cursor position
+        // Use 'cursor' as the field name to match y-prosemirror's convention
+        const cursorData: AwarenessCursorData = {
+          anchor: relAnchor,
+          head: relHead,
+        };
+        provider.awareness.setLocalStateField('cursor', cursorData);
+      }
+    } catch {
+      // Silently ignore conversion errors - can happen during document restructuring
+    }
+  }
+
+  /**
    * Normalize awareness states from Yjs relative positions to absolute PM positions.
    * Converts remote cursor data into PresentationEditor-friendly coordinate space.
    * @private
@@ -1678,7 +2323,10 @@ export class PresentationEditor extends EventEmitter {
     const provider = this.#options.collaborationProvider;
     if (!provider?.awareness) return new Map();
 
-    const ystate = ySyncPluginKey.getState(this.#editor.state);
+    const editorState = this.#editor?.state;
+    if (!editorState) return new Map();
+
+    const ystate = ySyncPluginKey.getState(editorState);
     if (!ystate) return new Map(); // No ySync plugin
 
     const states = provider.awareness?.getStates();
@@ -1777,24 +2425,73 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
-   * Schedule a remote cursor update using RAF batching.
-   * Stores RAF handle for proper cleanup on destroy to prevent post-destruction callbacks.
-   * Mirrors the existing #scheduleSelectionUpdate() pattern for consistency.
+   * Schedule a remote cursor update using microtask + throttle-based rendering.
+   *
+   * CRITICAL: Uses queueMicrotask to defer cursor normalization until after all
+   * synchronous code completes. This fixes a race condition where awareness events
+   * fire before the ProseMirror state is updated with Yjs document changes:
+   *
+   * 1. WebSocket message arrives with doc update + awareness update
+   * 2. Yjs doc is updated, sync plugin starts creating PM transaction
+   * 3. Awareness update fires events (PresentationEditor handler called)
+   * 4. If we read PM state NOW, it may not have the new text yet
+   * 5. Cursor position conversion uses stale mapping → wrong position
+   *
+   * By deferring to a microtask, we ensure:
+   * - All synchronous code completes (including PM transaction dispatch)
+   * - PM state reflects the latest Yjs document state
+   * - Cursor positions are calculated correctly
+   *
+   * Throttling is still applied (60fps max) to prevent excessive re-renders.
+   *
    * @private
    */
   #scheduleRemoteCursorUpdate() {
     // Skip scheduling entirely when presence is disabled
-    // This avoids unnecessary RAF scheduling when the feature is toggled off
+    // This avoids unnecessary scheduling when the feature is toggled off
     if (this.#layoutOptions.presence?.enabled === false) return;
 
+    // Already have a pending update scheduled
     if (this.#remoteCursorUpdateScheduled) return;
     this.#remoteCursorUpdateScheduled = true;
 
-    const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#remoteCursorRafHandle = win.requestAnimationFrame(() => {
-      this.#remoteCursorUpdateScheduled = false;
-      this.#remoteCursorRafHandle = null;
-      this.#updateRemoteCursors();
+    // Use microtask to defer until after PM state is synced with Yjs
+    queueMicrotask(() => {
+      if (!this.#remoteCursorUpdateScheduled) return; // Was cancelled
+
+      const now = performance.now();
+      const elapsed = now - this.#lastRemoteCursorRenderTime;
+      /**
+       * Throttle window for remote cursor updates (milliseconds).
+       * Set to 16ms to target ~60fps rendering (one animation frame at 60Hz).
+       * This prevents excessive re-renders during rapid awareness updates while
+       * maintaining smooth visual feedback for collaboration cursors.
+       * Using requestAnimationFrame would be ideal, but microtask deferral is
+       * critical for fixing the race condition with Yjs state synchronization.
+       */
+      const THROTTLE_MS = 16;
+
+      // If enough time has passed, render now
+      if (elapsed >= THROTTLE_MS) {
+        // Clear any pending trailing edge timeout
+        if (this.#remoteCursorThrottleTimeout !== null) {
+          clearTimeout(this.#remoteCursorThrottleTimeout);
+          this.#remoteCursorThrottleTimeout = null;
+        }
+        this.#remoteCursorUpdateScheduled = false;
+        this.#lastRemoteCursorRenderTime = now;
+        this.#updateRemoteCursors();
+        return;
+      }
+
+      // Within throttle window: schedule trailing edge render
+      const remaining = THROTTLE_MS - elapsed;
+      this.#remoteCursorThrottleTimeout = window.setTimeout(() => {
+        this.#remoteCursorUpdateScheduled = false;
+        this.#remoteCursorThrottleTimeout = null;
+        this.#lastRemoteCursorRenderTime = performance.now();
+        this.#updateRemoteCursors();
+      }, remaining) as unknown as number;
     });
   }
 
@@ -1802,6 +2499,9 @@ export class PresentationEditor extends EventEmitter {
    * Schedule a remote cursor re-render without re-normalizing awareness states.
    * Performance optimization: avoids expensive Yjs position conversions on layout changes.
    * Used when layout geometry changes but cursor positions haven't (e.g., zoom, scroll, reflow).
+   *
+   * Note: This method doesn't need microtask deferral because it uses already-computed
+   * PM positions from #remoteCursorState, not awareness relative positions.
    * @private
    */
   #scheduleRemoteCursorReRender() {
@@ -1809,10 +2509,12 @@ export class PresentationEditor extends EventEmitter {
     if (this.#remoteCursorUpdateScheduled) return;
     this.#remoteCursorUpdateScheduled = true;
 
+    // Use RAF for re-renders since they're triggered by layout/scroll events
+    // and should align with the browser's paint cycle
     const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#remoteCursorRafHandle = win.requestAnimationFrame(() => {
+    win.requestAnimationFrame(() => {
       this.#remoteCursorUpdateScheduled = false;
-      this.#remoteCursorRafHandle = null;
+      this.#lastRemoteCursorRenderTime = performance.now();
       this.#renderRemoteCursors();
     });
   }
@@ -1828,6 +2530,7 @@ export class PresentationEditor extends EventEmitter {
     // This ensures already-rendered cursors are wiped when toggling presence off
     if (this.#layoutOptions.presence?.enabled === false) {
       this.#remoteCursorState.clear();
+      this.#remoteCursorElements.clear();
       if (this.#remoteCursorOverlay) {
         this.#remoteCursorOverlay.innerHTML = '';
       }
@@ -1872,14 +2575,14 @@ export class PresentationEditor extends EventEmitter {
    * Extracted rendering logic to support both full updates and geometry-only re-renders.
    * Used by #updateRemoteCursors (after awareness normalization) and #scheduleRemoteCursorReRender
    * (when only layout geometry changes, not cursor positions).
+   *
+   * FLICKER PREVENTION: This method reuses existing DOM elements instead of clearing
+   * and recreating them. Elements are keyed by clientId and only created/removed when
+   * clients join/leave. Position updates use CSS transitions for smooth movement.
+   *
    * @private
    */
   #renderRemoteCursors() {
-    // Clear previous remote cursor rendering
-    if (this.#remoteCursorOverlay) {
-      this.#remoteCursorOverlay.innerHTML = '';
-    }
-
     // Get layout state for geometry calculations
     const layout = this.#layoutState?.layout;
     const blocks = this.#layoutState?.blocks;
@@ -1896,14 +2599,36 @@ export class PresentationEditor extends EventEmitter {
       .sort((a, b) => b.updatedAt - a.updatedAt) // Most recent first
       .slice(0, maxVisible);
 
-    // Render each remote cursor
+    // Track which clientIds are currently visible
+    const visibleClientIds = new Set<number>();
+
+    // Render/update each remote cursor
     sortedCursors.forEach((cursor) => {
+      visibleClientIds.add(cursor.clientId);
+
+      // Clear old selection rectangles for this user before rendering new state.
+      // Selection rects are not tracked in #remoteCursorElements (only carets are),
+      // so we must query and remove them to prevent "stuck" selections when a user's
+      // selection changes position or collapses to a caret.
+      const oldSelections = this.#remoteCursorOverlay?.querySelectorAll(
+        `.presentation-editor__remote-selection[data-client-id="${cursor.clientId}"]`,
+      );
+      oldSelections?.forEach((el) => el.remove());
+
       if (cursor.anchor === cursor.head) {
         // Render caret only
         this.#renderRemoteCaret(cursor);
       } else {
         // Render selection + caret at head
         this.#renderRemoteSelection(cursor);
+      }
+    });
+
+    // Remove DOM elements for clients that are no longer visible
+    this.#remoteCursorElements.forEach((element, clientId) => {
+      if (!visibleClientIds.has(clientId)) {
+        element.remove();
+        this.#remoteCursorElements.delete(clientId);
       }
     });
   }
@@ -1916,8 +2641,11 @@ export class PresentationEditor extends EventEmitter {
    * and virtualization), and renders a colored vertical bar with an optional name label.
    *
    * **Virtualization handling:** If the cursor's position falls on a page that is not currently
-   * mounted in the DOM (due to virtualization), the method silently returns without rendering.
-   * The cursor state remains in memory and will be rendered when the page becomes visible.
+   * mounted in the DOM (due to virtualization), the element is hidden but retained in memory.
+   * It will be shown again when the page becomes visible.
+   *
+   * **Flicker prevention:** Reuses existing DOM elements when possible, updating positions via
+   * CSS transforms with smooth transitions. Elements are only created for new clients.
    *
    * **Performance:** Uses GPU-accelerated CSS transforms and respects the maxVisible limit
    * enforced by the parent #updateRemoteCursors method.
@@ -1928,41 +2656,65 @@ export class PresentationEditor extends EventEmitter {
   #renderRemoteCaret(cursor: RemoteCursorState) {
     // Use existing geometry helper to get caret layout rect
     const caretLayout = this.#computeCaretLayoutRect(cursor.head);
-    if (!caretLayout) return; // Position not in layout
 
-    // Convert to overlay coordinates (handles zoom, scroll, virtualization)
-    const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
-    if (!coords) return; // Page not mounted (virtualized)
-
+    // Use effective zoom from actual rendered dimensions for consistent scaling
     const zoom = this.#layoutOptions.zoom ?? 1;
     const doc = this.#visibleHost.ownerDocument ?? document;
-
-    // Use validated color helper for consistency
     const color = this.#getValidatedColor(cursor);
 
-    // Create caret element
-    const caretEl = doc.createElement('div');
-    caretEl.className = 'presentation-editor__remote-caret';
-    caretEl.style.position = 'absolute';
-    caretEl.style.left = `${coords.x}px`;
-    caretEl.style.top = `${coords.y}px`;
-    caretEl.style.width = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px`;
-    caretEl.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
-    caretEl.style.borderLeft = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px solid ${color}`;
-    caretEl.style.pointerEvents = 'none';
-    caretEl.setAttribute('data-client-id', cursor.clientId.toString());
+    // Check if we already have a DOM element for this client
+    let caretEl = this.#remoteCursorElements.get(cursor.clientId);
+    const isNewElement = !caretEl;
 
-    // Remote cursors are purely visual decorations - hide from accessibility tree
-    caretEl.setAttribute('aria-hidden', 'true');
+    if (isNewElement) {
+      // Create new caret element
+      caretEl = doc.createElement('div');
+      caretEl.className = 'presentation-editor__remote-caret';
+      caretEl.style.position = 'absolute';
+      caretEl.style.width = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px`;
+      caretEl.style.borderLeft = `${PresentationEditor.CURSOR_STYLES.CARET_WIDTH}px solid ${color}`;
+      caretEl.style.pointerEvents = 'none';
+      // GPU-accelerated transitions for smooth movement
+      caretEl.style.transition = 'transform 50ms ease-out, height 50ms ease-out, opacity 100ms ease-out';
+      caretEl.style.willChange = 'transform';
+      caretEl.setAttribute('data-client-id', cursor.clientId.toString());
+      caretEl.setAttribute('aria-hidden', 'true');
 
-    // Render caret at head position to indicate selection direction
-    // (head may be before or after anchor depending on selection direction)
-    // Add label if enabled
-    if (this.#layoutOptions.presence?.showLabels !== false) {
-      this.#renderRemoteCursorLabel(caretEl, cursor);
+      // Add label if enabled
+      if (this.#layoutOptions.presence?.showLabels !== false) {
+        this.#renderRemoteCursorLabel(caretEl, cursor);
+      }
+
+      this.#remoteCursorElements.set(cursor.clientId, caretEl);
+      this.#remoteCursorOverlay?.appendChild(caretEl);
     }
 
-    this.#remoteCursorOverlay?.appendChild(caretEl);
+    // Handle case where position can't be computed or page is virtualized
+    if (!caretLayout) {
+      caretEl!.style.opacity = '0';
+      return;
+    }
+
+    const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
+    if (!coords) {
+      caretEl!.style.opacity = '0';
+      return;
+    }
+
+    // Update position using transform for GPU acceleration
+    caretEl!.style.opacity = '1';
+    caretEl!.style.transform = `translate(${coords.x}px, ${coords.y}px)`;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    caretEl!.style.height = `${Math.max(1, caretLayout.height)}px`;
+
+    // Update color in case it changed
+    caretEl!.style.borderLeftColor = color;
+
+    // Update label background color if it exists
+    const labelEl = caretEl!.querySelector('.presentation-editor__remote-label') as HTMLElement | null;
+    if (labelEl) {
+      labelEl.style.backgroundColor = color;
+    }
   }
 
   /**
@@ -2052,14 +2804,13 @@ export class PresentationEditor extends EventEmitter {
 
     // Get selection rectangles using layout-bridge helper
     // Edge case: selectionToRects returns null for unsupported node types or empty documents
-    const rects = selectionToRects(layout, blocks, measures, start, end) ?? [];
+    const rects = selectionToRects(layout, blocks, measures, start, end, this.#pageGeometryHelper ?? undefined) ?? [];
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
-
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const opacity = this.#layoutOptions.presence?.highlightOpacity ?? 0.35;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     const doc = this.#visibleHost.ownerDocument ?? document;
 
     // Performance guardrail: max rects per user to prevent DOM explosion
@@ -2067,7 +2818,7 @@ export class PresentationEditor extends EventEmitter {
 
     limitedRects.forEach((rect: LayoutRect) => {
       // Calculate page-local Y (rect.y is absolute from top of all pages)
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
 
       // Convert to overlay coordinates (handles zoom, scroll, virtualization)
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
@@ -2079,8 +2830,9 @@ export class PresentationEditor extends EventEmitter {
       selectionEl.style.position = 'absolute';
       selectionEl.style.left = `${coords.x}px`;
       selectionEl.style.top = `${coords.y}px`;
-      selectionEl.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      selectionEl.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      selectionEl.style.width = `${Math.max(1, rect.width)}px`;
+      selectionEl.style.height = `${Math.max(1, rect.height)}px`;
       selectionEl.style.backgroundColor = color;
       selectionEl.style.opacity = opacity.toString();
       selectionEl.style.borderRadius = PresentationEditor.CURSOR_STYLES.SELECTION_BORDER_RADIUS;
@@ -2101,15 +2853,178 @@ export class PresentationEditor extends EventEmitter {
     this.#viewportHost.addEventListener('pointerdown', this.#handlePointerDown);
     this.#viewportHost.addEventListener('dblclick', this.#handleDoubleClick);
     this.#viewportHost.addEventListener('pointermove', this.#handlePointerMove);
+    this.#viewportHost.addEventListener('pointerup', this.#handlePointerUp);
     this.#viewportHost.addEventListener('pointerleave', this.#handlePointerLeave);
+    this.#viewportHost.addEventListener('dragover', this.#handleDragOver);
+    this.#viewportHost.addEventListener('drop', this.#handleDrop);
     this.#visibleHost.addEventListener('keydown', this.#handleKeyDown);
+  }
+
+  /**
+   * Sets up drag and drop handlers for field annotations in the layout engine view.
+   * Uses the DragHandler from layout-bridge to handle drag events and map drop
+   * coordinates to ProseMirror positions.
+   */
+  #setupDragHandlers() {
+    // Clean up any existing handler
+    this.#dragHandlerCleanup?.();
+    this.#dragHandlerCleanup = null;
+
+    // Set up drag handler on the painter host (where layout engine renders)
+    this.#dragHandlerCleanup = createDragHandler(this.#painterHost, {
+      onDragOver: (event) => {
+        if (!event.hasFieldAnnotation || event.event.clientX === 0) {
+          return;
+        }
+
+        const activeEditor = this.getActiveEditor();
+        if (!activeEditor?.isEditable) {
+          return;
+        }
+
+        // Use the layout engine's hit testing to get the PM position
+        const hit = this.hitTest(event.clientX, event.clientY);
+        const doc = activeEditor.state?.doc;
+        if (!hit || !doc) {
+          return;
+        }
+
+        // Clamp position to valid range
+        const pos = Math.min(Math.max(hit.pos, 1), doc.content.size);
+
+        // Skip if cursor hasn't moved
+        const currentSelection = activeEditor.state.selection;
+        if (currentSelection instanceof TextSelection && currentSelection.from === pos && currentSelection.to === pos) {
+          return;
+        }
+
+        // Update the selection to show caret at drop position
+        try {
+          const tr = activeEditor.state.tr.setSelection(TextSelection.create(doc, pos)).setMeta('addToHistory', false);
+          activeEditor.view?.dispatch(tr);
+          this.#scheduleSelectionUpdate();
+        } catch {
+          // Position may be invalid during layout updates - ignore
+        }
+      },
+      onDrop: (event: DropEvent) => {
+        // Prevent other drop handlers from double-processing
+        event.event.preventDefault();
+        event.event.stopPropagation();
+
+        if (event.pmPosition === null) {
+          return;
+        }
+
+        const activeEditor = this.getActiveEditor();
+        const { state, view } = activeEditor;
+        if (!state || !view) {
+          return;
+        }
+
+        // If the source has fieldId (meaning it was dragged from an existing position),
+        // we MOVE the field annotation (delete from old, insert at new)
+        const fieldId = event.data.fieldId;
+        if (fieldId) {
+          const targetPos = event.pmPosition;
+
+          // Find the field annotation in the current document by fieldId
+          // This handles stale position data from DOM attributes after document edits
+          let sourceStart: number | null = null;
+          let sourceEnd: number | null = null;
+          let sourceNode: typeof state.doc extends { nodeAt: (p: number) => infer N } ? N : never = null;
+
+          state.doc.descendants((node, pos) => {
+            if (node.type.name === 'fieldAnnotation' && (node.attrs as { fieldId?: string }).fieldId === fieldId) {
+              sourceStart = pos;
+              sourceEnd = pos + node.nodeSize;
+              sourceNode = node;
+              return false; // Stop traversal
+            }
+            return true;
+          });
+
+          if (sourceStart === null || sourceEnd === null || !sourceNode) {
+            return;
+          }
+
+          // Skip if dropping at the same position (or immediately adjacent)
+          if (targetPos >= sourceStart && targetPos <= sourceEnd) {
+            return;
+          }
+
+          // Create a transaction to move the field annotation
+          const tr = state.tr;
+
+          // First delete the source annotation
+          tr.delete(sourceStart, sourceEnd);
+
+          // Use ProseMirror's mapping to get the correct target position after the delete
+          // This properly handles document structure changes and edge cases
+          const mappedTarget = tr.mapping.map(targetPos);
+
+          // Validate the mapped position is within document bounds
+          if (mappedTarget < 0 || mappedTarget > tr.doc.content.size) {
+            return;
+          }
+
+          // Then insert the same node at the mapped target position
+          tr.insert(mappedTarget, sourceNode);
+          tr.setMeta('uiEvent', 'drop');
+
+          view.dispatch(tr);
+          return;
+        }
+
+        // No source position - this is a new drop from outside, insert directly if attributes look valid
+        const attrs = event.data.attributes;
+        if (attrs && isValidFieldAnnotationAttributes(attrs)) {
+          const inserted = activeEditor.commands?.addFieldAnnotation?.(event.pmPosition, attrs, true);
+          if (inserted) {
+            this.#scheduleSelectionUpdate();
+          }
+          return;
+        }
+
+        // Fallback: emit event for any external handlers
+        activeEditor.emit('fieldAnnotationDropped', {
+          sourceField: event.data,
+          editor: activeEditor,
+          coordinates: { pos: event.pmPosition },
+        });
+      },
+    });
+  }
+
+  /**
+   * Focus the editor after image selection and schedule selection update.
+   * This method encapsulates the common focus and blur logic used when
+   * selecting both inline and block images.
+   * @private
+   * @returns {void}
+   */
+  #focusEditorAfterImageSelection(): void {
+    this.#scheduleSelectionUpdate();
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+    const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
+    if (editorDom) {
+      editorDom.focus();
+      this.#editor.view?.focus();
+    }
   }
 
   #setupInputBridge() {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
     const win = this.#visibleHost.ownerDocument?.defaultView ?? window;
-    this.#inputBridge = new PresentationInputBridge(win as Window, this.#visibleHost, () => this.#getActiveDomTarget());
+    this.#inputBridge = new PresentationInputBridge(
+      win as Window,
+      this.#visibleHost,
+      () => this.#getActiveDomTarget(),
+      () => this.#documentMode !== 'viewing',
+    );
     this.#inputBridge.bind();
   }
 
@@ -2126,9 +3041,18 @@ export class PresentationEditor extends EventEmitter {
     this.#headerFooterManagerCleanups = [];
     this.#headerFooterAdapter?.clear();
     this.#headerFooterManager?.destroy();
+    this.#overlayManager?.destroy();
     this.#session = { mode: 'body' };
     this.#activeHeaderFooterEditor = null;
     this.#inputBridge?.notifyTargetChanged();
+
+    // Initialize EditorOverlayManager for in-place editing
+    this.#overlayManager = new EditorOverlayManager(this.#painterHost, this.#visibleHost, this.#selectionOverlay);
+    // Set callback for when user clicks on dimming overlay to exit edit mode
+    this.#overlayManager.setOnDimmingClick(() => {
+      this.#exitHeaderFooterMode();
+    });
+
     const converter = (this.#editor as Editor & { converter?: unknown }).converter;
     this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
     this.#headerFooterManager = new HeaderFooterEditorManager(this.#editor);
@@ -2162,14 +3086,60 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
-  #handlePointerDown = (event: MouseEvent) => {
+  #handlePointerDown = (event: PointerEvent) => {
     if (event.button !== 0) {
       return;
     }
+
+    // Check if clicking on a draggable field annotation - if so, don't preventDefault
+    // to allow native HTML5 drag-and-drop to work (mousedown must fire for dragstart)
+    const target = event.target as HTMLElement;
+
+    // Handle clicks on links in the layout engine
+    const linkEl = target?.closest?.('a.superdoc-link') as HTMLAnchorElement | null;
+    if (linkEl) {
+      const href = linkEl.getAttribute('href') ?? '';
+      const isAnchorLink = href.startsWith('#') && href.length > 1;
+      const isTocLink = linkEl.closest('.superdoc-toc-entry') !== null;
+
+      if (isAnchorLink && isTocLink) {
+        // TOC entry anchor links: navigate to the anchor
+        event.preventDefault();
+        event.stopPropagation();
+        this.goToAnchor(href);
+        return;
+      }
+
+      // Non-TOC links: dispatch custom event to show the link popover
+      // We dispatch from pointerdown because the DOM may be re-rendered before click fires,
+      // which would cause the click event to land on the wrong element
+      event.preventDefault();
+      event.stopPropagation();
+
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: href,
+          target: linkEl.getAttribute('target'),
+          rel: linkEl.getAttribute('rel'),
+          tooltip: linkEl.getAttribute('title'),
+          element: linkEl,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+      linkEl.dispatchEvent(linkClickEvent);
+      return;
+    }
+    const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
+
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
       // so the user can immediately begin typing
-      event.preventDefault();
+      if (!isDraggableAnnotation) {
+        event.preventDefault();
+      }
 
       // Blur any currently focused element
       if (document.activeElement instanceof HTMLElement) {
@@ -2207,6 +3177,7 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -2215,13 +3186,24 @@ export class PresentationEditor extends EventEmitter {
 
     // Exit header/footer mode if clicking outside the current region
     if (this.#session.mode !== 'body') {
+      // Check if click is inside the active editor host element (more reliable than coordinate hit testing)
+      const activeEditorHost = this.#overlayManager?.getActiveEditorHost?.();
+      const clickedInsideEditorHost =
+        activeEditorHost && (activeEditorHost.contains(event.target as Node) || activeEditorHost === event.target);
+
+      if (clickedInsideEditorHost) {
+        // Clicked within the active editor host - let the editor handle it, don't interfere
+        return;
+      }
+
+      // Fallback: use coordinate-based hit testing
       const headerFooterRegion = this.#hitTestHeaderFooterRegion(x, y);
       if (!headerFooterRegion) {
         // Clicked outside header/footer region - exit mode and continue to position cursor in body
         this.#exitHeaderFooterMode();
         // Fall through to body click handling below
       } else {
-        // Clicked within header/footer region - maintain mode, ignore single click
+        // Clicked within header/footer region but not in editor host - still let editor handle it
         return;
       }
     }
@@ -2232,7 +3214,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const hit = clickToPosition(
+    const rawHit = clickToPosition(
       this.#layoutState.layout,
       this.#layoutState.blocks,
       this.#layoutState.measures,
@@ -2240,8 +3222,18 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost,
       event.clientX,
       event.clientY,
+      this.#pageGeometryHelper ?? undefined,
     );
-    event.preventDefault();
+
+    // Clamp hit position to valid document bounds to handle stale layout data
+    // (e.g., after drag-drop moves content, layout may briefly have old positions)
+    const doc = this.#editor.state?.doc;
+    const hit = rawHit && doc ? { ...rawHit, pos: Math.max(0, Math.min(rawHit.pos, doc.content.size)) } : rawHit;
+
+    // Don't preventDefault for draggable annotations - allows mousedown to fire for native drag
+    if (!isDraggableAnnotation) {
+      event.preventDefault();
+    }
 
     // Even if clickToPosition returns null (clicked outside text content),
     // we still want to focus the editor so the user can start typing
@@ -2284,6 +3276,53 @@ export class PresentationEditor extends EventEmitter {
       hit.pos,
     );
 
+    // Inline image hit detection via DOM target (for inline images rendered inside paragraphs)
+    const targetImg = (event.target as HTMLElement | null)?.closest?.('img');
+    const imgPmStart = targetImg?.dataset?.pmStart ? Number(targetImg.dataset.pmStart) : null;
+    if (!Number.isNaN(imgPmStart) && imgPmStart != null) {
+      const doc = this.#editor.state.doc;
+
+      // Validate position is within document bounds
+      if (imgPmStart < 0 || imgPmStart >= doc.content.size) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PresentationEditor] Invalid position ${imgPmStart} for inline image (document size: ${doc.content.size})`,
+          );
+        }
+        return;
+      }
+
+      // Emit imageDeselected if previous selection was a different image
+      const newSelectionId = `inline-${imgPmStart}`;
+      if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== newSelectionId) {
+        this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
+      }
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(NodeSelection.create(doc, imgPmStart));
+        this.#editor.view?.dispatch(tr);
+
+        const selector = `.superdoc-inline-image[data-pm-start="${imgPmStart}"]`;
+        const targetElement = this.#viewportHost.querySelector(selector);
+        this.emit('imageSelected', {
+          element: targetElement ?? targetImg,
+          blockId: null,
+          pmStart: imgPmStart,
+        } as ImageSelectedEvent);
+        this.#lastSelectedImageBlockId = newSelectionId;
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn(
+            `[PresentationEditor] Failed to create NodeSelection for inline image at position ${imgPmStart}:`,
+            error,
+          );
+        }
+      }
+
+      this.#focusEditorAfterImageSelection();
+      return;
+    }
+
     // If clicked on an atomic fragment (image or drawing), create NodeSelection
     if (fragmentHit && (fragmentHit.fragment.kind === 'image' || fragmentHit.fragment.kind === 'drawing')) {
       const doc = this.#editor.state.doc;
@@ -2294,7 +3333,7 @@ export class PresentationEditor extends EventEmitter {
 
         // Emit imageDeselected if previous selection was a different image
         if (this.#lastSelectedImageBlockId && this.#lastSelectedImageBlockId !== fragmentHit.fragment.blockId) {
-          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
+          this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
         }
 
         // Emit imageSelected event for overlay to detect
@@ -2307,7 +3346,7 @@ export class PresentationEditor extends EventEmitter {
               element: targetElement,
               blockId: fragmentHit.fragment.blockId,
               pmStart: fragmentHit.fragment.pmStart,
-            });
+            } as ImageSelectedEvent);
             this.#lastSelectedImageBlockId = fragmentHit.fragment.blockId;
           }
         }
@@ -2317,8 +3356,40 @@ export class PresentationEditor extends EventEmitter {
         }
       }
 
-      // Focus editor and schedule selection update
-      this.#scheduleSelectionUpdate();
+      this.#focusEditorAfterImageSelection();
+      return;
+    }
+
+    // If clicking away from an image, emit imageDeselected
+    if (this.#lastSelectedImageBlockId) {
+      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId } as ImageDeselectedEvent);
+      this.#lastSelectedImageBlockId = null;
+    }
+
+    // Handle shift+click to extend selection
+    if (event.shiftKey && this.#editor.state.selection.$anchor) {
+      const anchor = this.#editor.state.selection.anchor;
+      const head = hit.pos;
+
+      // Use current extension mode (from previous double/triple click) or default to character mode
+      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, selAnchor, selHead));
+        this.#editor.view?.dispatch(tr);
+        this.#scheduleSelectionUpdate();
+      } catch (error) {
+        console.warn('[SELECTION] Failed to extend selection on shift+click:', {
+          error,
+          anchor,
+          head,
+          selAnchor,
+          selHead,
+          mode: this.#dragExtensionMode,
+        });
+      }
+
+      // Focus editor
       if (document.activeElement instanceof HTMLElement) {
         document.activeElement.blur();
       }
@@ -2327,34 +3398,67 @@ export class PresentationEditor extends EventEmitter {
         editorDom.focus();
         this.#editor.view?.focus();
       }
-      return;
-    }
 
-    // If clicking away from an image, emit imageDeselected
-    if (this.#lastSelectedImageBlockId) {
-      this.emit('imageDeselected', { blockId: this.#lastSelectedImageBlockId });
-      this.#lastSelectedImageBlockId = null;
+      return; // Don't start drag on shift+click
     }
 
     const clickDepth = this.#registerPointerClick(event);
+
+    // Set up drag selection state
+    // Only update dragAnchor on single click; preserve it for double/triple clicks
+    // so word/paragraph selection uses the consistent first-click position
+    // (the second click can return a slightly different position due to mouse movement)
+    if (clickDepth === 1) {
+      this.#dragAnchor = hit.pos;
+
+      // Check if click is inside a table cell for potential cell selection
+      // Only set up cell anchor on single click (not double/triple for word/para selection)
+      const tableHit = this.#hitTestTable(x, y);
+
+      if (tableHit) {
+        const tablePos = this.#getTablePosFromHit(tableHit);
+        if (tablePos !== null) {
+          this.#setCellAnchor(tableHit, tablePos);
+        }
+      } else {
+        // Clicked outside table - clear any existing cell anchor
+        this.#clearCellAnchor();
+      }
+    }
+    this.#isDragging = true;
+    if (clickDepth >= 3) {
+      this.#dragExtensionMode = 'para';
+    } else if (clickDepth === 2) {
+      this.#dragExtensionMode = 'word';
+    } else {
+      this.#dragExtensionMode = 'char';
+    }
+
+    // Capture pointer for reliable drag tracking even outside viewport
+    // Guard for test environments where setPointerCapture may not exist
+    if (typeof this.#viewportHost.setPointerCapture === 'function') {
+      this.#viewportHost.setPointerCapture(event.pointerId);
+    }
+
     let handledByDepth = false;
     if (this.#session.mode === 'body') {
+      // For double/triple clicks, use the stored dragAnchor from the first click
+      // to avoid position drift from slight mouse movement between clicks
+      const selectionPos = clickDepth >= 2 && this.#dragAnchor !== null ? this.#dragAnchor : hit.pos;
+
       if (clickDepth >= 3) {
-        handledByDepth = this.#selectParagraphAt(hit.pos);
+        handledByDepth = this.#selectParagraphAt(selectionPos);
       } else if (clickDepth === 2) {
-        handledByDepth = this.#selectWordAt(hit.pos);
+        handledByDepth = this.#selectWordAt(selectionPos);
       }
     }
 
     if (!handledByDepth) {
-      const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
       try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
         this.#editor.view?.dispatch(tr);
-      } catch (error) {
-        // Error dispatching selection - this can happen if the position is invalid
-        if (process.env.NODE_ENV === 'development') {
-          console.warn('[PresentationEditor] Failed to dispatch selection at position:', hit.pos, error);
-        }
+      } catch {
+        // Position may be invalid during layout updates (e.g., after drag-drop) - ignore
       }
     }
 
@@ -2423,10 +3527,12 @@ export class PresentationEditor extends EventEmitter {
     const MAX_CLICK_COUNT = 3;
 
     const time = event.timeStamp ?? performance.now();
-    const withinTime = time - this.#lastClickTime <= MULTI_CLICK_TIME_THRESHOLD_MS;
+    const timeDelta = time - this.#lastClickTime;
+    const withinTime = timeDelta <= MULTI_CLICK_TIME_THRESHOLD_MS;
+    const distanceX = Math.abs(event.clientX - this.#lastClickPosition.x);
+    const distanceY = Math.abs(event.clientY - this.#lastClickPosition.y);
     const withinDistance =
-      Math.abs(event.clientX - this.#lastClickPosition.x) <= MULTI_CLICK_DISTANCE_THRESHOLD_PX &&
-      Math.abs(event.clientY - this.#lastClickPosition.y) <= MULTI_CLICK_DISTANCE_THRESHOLD_PX;
+      distanceX <= MULTI_CLICK_DISTANCE_THRESHOLD_PX && distanceY <= MULTI_CLICK_DISTANCE_THRESHOLD_PX;
 
     if (withinTime && withinDistance) {
       this.#clickCount = Math.min(this.#clickCount + 1, MAX_CLICK_COUNT);
@@ -2438,6 +3544,344 @@ export class PresentationEditor extends EventEmitter {
     this.#lastClickPosition = { x: event.clientX, y: event.clientY };
 
     return this.#clickCount;
+  }
+
+  // ============================================================================
+  // Cell Selection Utilities
+  // ============================================================================
+
+  /**
+   * Gets the ProseMirror position at the start of a table cell from a table hit result.
+   *
+   * This method navigates the ProseMirror document structure to find the exact position where
+   * a table cell begins. The position returned is suitable for use with CellSelection.create().
+   *
+   * Algorithm:
+   * 1. Validate input (tableHit structure and cell indices)
+   * 2. Traverse document to find the table node matching tableHit.block.id
+   * 3. Navigate through table structure (table > row > cell) to target row
+   * 4. Track logical column position accounting for colspan (handles merged cells)
+   * 5. Return position when target column falls within a cell's span
+   *
+   * Merged cell handling:
+   * - Does NOT assume 1:1 mapping between cell index and logical column
+   * - Tracks cumulative logical column position by summing colspan values
+   * - A cell with colspan=3 occupies logical columns [n, n+1, n+2]
+   * - Finds the cell whose logical span contains the target column index
+   *
+   * Error handling:
+   * - Input validation with console warnings for debugging
+   * - Try-catch around document traversal (catches corrupted document errors)
+   * - Bounds checking for row indices
+   * - Null checks at each navigation step
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment containing:
+   *   - block: TableBlock with the table's block ID
+   *   - cellRowIndex: 0-based row index of the target cell
+   *   - cellColIndex: 0-based logical column index of the target cell
+   * @returns The PM position at the start of the cell, or null if:
+   *   - Invalid input (null tableHit, negative indices)
+   *   - Table not found in document
+   *   - Target row out of bounds
+   *   - Target column not found in row
+   *   - Document traversal error
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, returns null on failure
+   */
+  #getCellPosFromTableHit(tableHit: TableHitResult): number | null {
+    // Input validation: Check for valid tableHit structure
+    if (!tableHit || !tableHit.block || typeof tableHit.block.id !== 'string') {
+      console.warn('[getCellPosFromTableHit] Invalid tableHit input:', tableHit);
+      return null;
+    }
+
+    // Validate cell indices are non-negative
+    if (
+      typeof tableHit.cellRowIndex !== 'number' ||
+      typeof tableHit.cellColIndex !== 'number' ||
+      tableHit.cellRowIndex < 0 ||
+      tableHit.cellColIndex < 0
+    ) {
+      console.warn('[getCellPosFromTableHit] Invalid cell indices:', {
+        row: tableHit.cellRowIndex,
+        col: tableHit.cellColIndex,
+      });
+      return null;
+    }
+
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Find the table node in the document by searching for the block ID
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    try {
+      doc.descendants((node, pos) => {
+        if (node.type.name === 'table') {
+          if (currentTableIndex === targetTableIndex) {
+            tablePos = pos;
+            return false; // Stop iteration
+          }
+          currentTableIndex++;
+        }
+        return true;
+      });
+    } catch (error: unknown) {
+      console.error('[getCellPosFromTableHit] Error during document traversal:', error);
+      return null;
+    }
+
+    if (tablePos === null) return null;
+
+    const tableNode = doc.nodeAt(tablePos);
+    if (!tableNode || tableNode.type.name !== 'table') return null;
+
+    // Navigate to the specific cell
+    const targetRowIndex = tableHit.cellRowIndex;
+    const targetColIndex = tableHit.cellColIndex;
+
+    // Bounds check: Validate target row exists in table
+    if (targetRowIndex >= tableNode.childCount) {
+      console.warn('[getCellPosFromTableHit] Target row index out of bounds:', {
+        targetRowIndex,
+        tableChildCount: tableNode.childCount,
+      });
+      return null;
+    }
+
+    // Calculate position by traversing table structure
+    // Table structure: table > tableRow > tableCell
+    let currentPos = tablePos + 1; // +1 to enter the table node
+
+    // Iterate through rows to find the target row
+    for (let r = 0; r < tableNode.childCount && r <= targetRowIndex; r++) {
+      const row = tableNode.child(r);
+      if (r === targetRowIndex) {
+        // Found the target row, now find the cell
+        currentPos += 1; // +1 to enter the row node
+
+        // Track logical column position accounting for colspan
+        let logicalCol = 0;
+        for (let cellIndex = 0; cellIndex < row.childCount; cellIndex++) {
+          const cell = row.child(cellIndex);
+          // Type guard: Validate colspan is a positive number
+          const rawColspan = cell.attrs?.colspan;
+          const colspan =
+            typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+
+          // Check if target column falls within this cell's span
+          if (targetColIndex >= logicalCol && targetColIndex < logicalCol + colspan) {
+            // Found the target cell - return position at cell start
+            return currentPos;
+          }
+
+          // Move past this cell
+          currentPos += cell.nodeSize;
+          logicalCol += colspan;
+        }
+
+        // Target column not found in this row (shouldn't happen in valid tables)
+        console.warn('[getCellPosFromTableHit] Target column not found in row:', {
+          targetColIndex,
+          logicalColReached: logicalCol,
+          rowCellCount: row.childCount,
+        });
+        return null;
+      } else {
+        // Move past this row
+        currentPos += row.nodeSize;
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Gets the table position (start of table node) from a table hit result.
+   *
+   * @param tableHit - The table hit result from hitTestTableFragment
+   * @returns The PM position at the start of the table, or null if not found
+   * @private
+   */
+  #getTablePosFromHit(tableHit: TableHitResult): number | null {
+    const doc = this.#editor.state?.doc;
+    if (!doc) return null;
+
+    // Get table blocks only and find the index of the target table
+    const tableBlocks = this.#layoutState.blocks.filter((b) => b.kind === 'table');
+    const targetTableIndex = tableBlocks.findIndex((b) => b.id === tableHit.block.id);
+    if (targetTableIndex === -1) return null;
+
+    let tablePos: number | null = null;
+    let currentTableIndex = 0;
+
+    doc.descendants((node, pos) => {
+      if (node.type.name === 'table') {
+        if (currentTableIndex === targetTableIndex) {
+          tablePos = pos;
+          return false;
+        }
+        currentTableIndex++;
+      }
+      return true;
+    });
+
+    return tablePos;
+  }
+
+  /**
+   * Determines if the current drag should create a CellSelection instead of TextSelection.
+   *
+   * Implements a state machine for table cell selection:
+   * - 'none': Not in a table, use TextSelection
+   * - 'pending': Started drag in a table, but haven't crossed cell boundary yet
+   * - 'active': Crossed cell boundary, use CellSelection
+   *
+   * State transitions:
+   * - none → pending: When drag starts in a table cell (#setCellAnchor)
+   * - pending → active: When drag crosses into a different cell (this method returns true)
+   * - active → none: When drag ends (#clearCellAnchor)
+   * - * → none: When document changes or clicking outside table
+   *
+   * Decision logic:
+   * 1. No cell anchor → false (not in table drag mode)
+   * 2. Current position outside table → return current state (stay in 'active' if already there)
+   * 3. Different table → treat as outside table
+   * 4. Different cell in same table → true (activate cell selection)
+   * 5. Same cell → return current state (stay in 'active' if already there, else false)
+   *
+   * This state machine ensures:
+   * - Text selection works normally within a single cell
+   * - Cell selection activates smoothly when crossing cell boundaries
+   * - Once activated, cell selection persists even if dragging back to anchor cell
+   *
+   * @param currentTableHit - The table hit result for the current pointer position, or null if not in a table
+   * @returns true if we should create a CellSelection, false for TextSelection
+   * @private
+   */
+  #shouldUseCellSelection(currentTableHit: TableHitResult | null): boolean {
+    // No cell anchor means we didn't start in a table
+    if (!this.#cellAnchor) return false;
+
+    // Current position is outside any table - keep last cell selection
+    if (!currentTableHit) return this.#cellDragMode === 'active';
+
+    // Check if we're in the same table
+    if (currentTableHit.block.id !== this.#cellAnchor.tableBlockId) {
+      // Different table - treat as outside table
+      return this.#cellDragMode === 'active';
+    }
+
+    // Check if we've crossed a cell boundary
+    const sameCell =
+      currentTableHit.cellRowIndex === this.#cellAnchor.cellRowIndex &&
+      currentTableHit.cellColIndex === this.#cellAnchor.cellColIndex;
+
+    if (!sameCell) {
+      // We've crossed into a different cell - activate cell selection
+      return true;
+    }
+
+    // Same cell - only use cell selection if we were already in active mode
+    return this.#cellDragMode === 'active';
+  }
+
+  /**
+   * Stores the cell anchor when a drag operation starts inside a table cell.
+   *
+   * @param tableHit - The table hit result for the initial click position
+   * @param tablePos - The PM position of the table node
+   * @private
+   */
+  #setCellAnchor(tableHit: TableHitResult, tablePos: number): void {
+    const cellPos = this.#getCellPosFromTableHit(tableHit);
+    if (cellPos === null) {
+      return;
+    }
+
+    this.#cellAnchor = {
+      tablePos,
+      cellPos,
+      cellRowIndex: tableHit.cellRowIndex,
+      cellColIndex: tableHit.cellColIndex,
+      tableBlockId: tableHit.block.id,
+    };
+    this.#cellDragMode = 'pending';
+  }
+
+  /**
+   * Clears the cell drag state.
+   * Called when drag ends or when clicking outside a table.
+   *
+   * @private
+   */
+  #clearCellAnchor(): void {
+    this.#cellAnchor = null;
+    this.#cellDragMode = 'none';
+  }
+
+  /**
+   * Attempts to perform a table hit test for the given normalized coordinates.
+   *
+   * @param normalizedX - X coordinate in layout space
+   * @param normalizedY - Y coordinate in layout space
+   * @returns TableHitResult if the point is inside a table cell, null otherwise
+   * @private
+   */
+  #hitTestTable(normalizedX: number, normalizedY: number): TableHitResult | null {
+    if (!this.#layoutState.layout) {
+      return null;
+    }
+
+    // Find the page at these coordinates
+    const layout = this.#layoutState.layout;
+    // Get configured page size as fallback (page.size may be undefined for single-section docs)
+    const configuredPageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
+
+    let pageY = 0;
+    let pageHit: PageHit | null = null;
+    const geometryHelper = this.#pageGeometryHelper;
+
+    if (geometryHelper) {
+      const idx = geometryHelper.getPageIndexAtY(normalizedY) ?? geometryHelper.getNearestPageIndex(normalizedY);
+      if (idx != null && layout.pages[idx]) {
+        pageHit = { pageIndex: idx, page: layout.pages[idx] };
+        pageY = geometryHelper.getPageTop(idx);
+      }
+    }
+
+    // Fallback to manual scan if helper unavailable
+    if (!pageHit) {
+      const gap = layout.pageGap ?? this.#getEffectivePageGap();
+      for (let i = 0; i < layout.pages.length; i++) {
+        const page = layout.pages[i];
+        // Use page.size.h if available, otherwise fall back to configured page size
+        const pageHeight = page.size?.h ?? configuredPageSize.h;
+
+        if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
+          pageHit = { pageIndex: i, page };
+          break;
+        }
+        pageY += pageHeight + gap;
+      }
+    }
+
+    if (!pageHit) {
+      return null;
+    }
+
+    // Convert to page-relative coordinates
+    const pageRelativeY = normalizedY - pageY;
+    const point = { x: normalizedX, y: pageRelativeY };
+
+    return hitTestTableFragment(pageHit, this.#layoutState.blocks, this.#layoutState.measures, point);
   }
 
   /**
@@ -2463,6 +3907,12 @@ export class PresentationEditor extends EventEmitter {
     if (!state?.doc) {
       return false;
     }
+
+    // Validate position bounds before resolving
+    if (pos < 0 || pos > state.doc.content.size) {
+      return false;
+    }
+
     const $pos = state.doc.resolve(pos);
 
     // Find the nearest textblock ancestor (may not be the immediate parent)
@@ -2489,6 +3939,7 @@ export class PresentationEditor extends EventEmitter {
 
     const parentStart = textblockPos.start();
     const parentEnd = textblockPos.end();
+
     let startPos = pos;
     while (startPos > parentStart) {
       const prevChar = state.doc.textBetween(startPos - 1, startPos, '\u0000', '\u0000');
@@ -2582,6 +4033,54 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Calculates extended selection boundaries based on the current extension mode.
+   *
+   * This helper method consolidates the logic for extending selections to word or paragraph
+   * boundaries, used by both shift+click and drag selection handlers. It preserves selection
+   * directionality by placing the head on the side where the user is clicking/dragging.
+   *
+   * @param anchor - The anchor position of the selection (fixed point)
+   * @param head - The head position of the selection (moving point)
+   * @param mode - The extension mode: 'char' (no extension), 'word', or 'para'
+   * @returns Object with selAnchor and selHead positions after applying extension
+   * @private
+   */
+  #calculateExtendedSelection(
+    anchor: number,
+    head: number,
+    mode: 'char' | 'word' | 'para',
+  ): { selAnchor: number; selHead: number } {
+    if (mode === 'word') {
+      const anchorBounds = findWordBoundaries(this.#layoutState.blocks, anchor);
+      const headBounds = findWordBoundaries(this.#layoutState.blocks, head);
+      if (anchorBounds && headBounds) {
+        if (head >= anchor) {
+          // Dragging/extending forward: anchor at start of anchor word, head at end of head word
+          return { selAnchor: anchorBounds.from, selHead: headBounds.to };
+        } else {
+          // Dragging/extending backward: anchor at end of anchor word, head at start of head word
+          return { selAnchor: anchorBounds.to, selHead: headBounds.from };
+        }
+      }
+    } else if (mode === 'para') {
+      const anchorBounds = findParagraphBoundaries(this.#layoutState.blocks, anchor);
+      const headBounds = findParagraphBoundaries(this.#layoutState.blocks, head);
+      if (anchorBounds && headBounds) {
+        if (head >= anchor) {
+          // Dragging/extending forward: anchor at start of anchor para, head at end of head para
+          return { selAnchor: anchorBounds.from, selHead: headBounds.to };
+        } else {
+          // Dragging/extending backward: anchor at end of anchor para, head at start of head para
+          return { selAnchor: anchorBounds.to, selHead: headBounds.from };
+        }
+      }
+    }
+
+    // Fallback to character mode (no extension) if boundaries not found or mode is 'char'
+    return { selAnchor: anchor, selHead: head };
+  }
+
+  /**
    * Determines if a character is considered part of a word for selection purposes.
    *
    * Uses Unicode property escapes to match:
@@ -2606,6 +4105,98 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#layoutState.layout) return;
     const normalized = this.#normalizeClientPoint(event.clientX, event.clientY);
     if (!normalized) return;
+
+    // Handle drag selection when button is held
+    if (this.#isDragging && this.#dragAnchor !== null && event.buttons & 1) {
+      const hit = clickToPosition(
+        this.#layoutState.layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        { x: normalized.x, y: normalized.y },
+        this.#viewportHost,
+        event.clientX,
+        event.clientY,
+        this.#pageGeometryHelper ?? undefined,
+      );
+
+      // If we can't find a position, keep the last selection
+      if (!hit) return;
+
+      // Check for cell selection mode (table drag)
+      const currentTableHit = this.#hitTestTable(normalized.x, normalized.y);
+      const shouldUseCellSel = this.#shouldUseCellSelection(currentTableHit);
+
+      if (shouldUseCellSel && this.#cellAnchor) {
+        // Cell selection mode - create CellSelection spanning anchor to current cell
+        const headCellPos = currentTableHit ? this.#getCellPosFromTableHit(currentTableHit) : null;
+
+        if (headCellPos !== null) {
+          // Transition to active mode if we weren't already
+          if (this.#cellDragMode !== 'active') {
+            this.#cellDragMode = 'active';
+          }
+
+          try {
+            const doc = this.#editor.state.doc;
+            const anchorCellPos = this.#cellAnchor.cellPos;
+
+            // Validate positions are within document bounds
+            const clampedAnchor = Math.max(0, Math.min(anchorCellPos, doc.content.size));
+            const clampedHead = Math.max(0, Math.min(headCellPos, doc.content.size));
+
+            const cellSelection = CellSelection.create(doc, clampedAnchor, clampedHead);
+            const tr = this.#editor.state.tr.setSelection(cellSelection);
+            this.#editor.view?.dispatch(tr);
+            this.#scheduleSelectionUpdate();
+          } catch (error) {
+            // CellSelection creation can fail if positions are invalid
+            // Fall back to text selection
+            console.warn('[CELL-SELECTION] Failed to create CellSelection, falling back to TextSelection:', error);
+
+            const anchor = this.#dragAnchor;
+            const head = hit.pos;
+            const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+            try {
+              const tr = this.#editor.state.tr.setSelection(
+                TextSelection.create(this.#editor.state.doc, selAnchor, selHead),
+              );
+              this.#editor.view?.dispatch(tr);
+              this.#scheduleSelectionUpdate();
+            } catch {
+              // Position may be invalid during layout updates - ignore
+            }
+          }
+
+          return; // Skip header/footer hover logic during drag
+        }
+      }
+
+      // Text selection mode (default)
+      const anchor = this.#dragAnchor;
+      const head = hit.pos;
+
+      // Apply extension mode to expand selection boundaries, preserving direction
+      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+
+      try {
+        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, selAnchor, selHead));
+        this.#editor.view?.dispatch(tr);
+        this.#scheduleSelectionUpdate();
+      } catch (error) {
+        console.warn('[SELECTION] Failed to extend selection during drag:', {
+          error,
+          anchor,
+          head,
+          selAnchor,
+          selHead,
+          mode: this.#dragExtensionMode,
+        });
+      }
+
+      return; // Skip header/footer hover logic during drag
+    }
+
     if (this.#session.mode !== 'body') {
       this.#clearHoverRegion();
       return;
@@ -2631,11 +4222,191 @@ export class PresentationEditor extends EventEmitter {
     this.#clearHoverRegion();
   };
 
+  #handlePointerUp = (event: PointerEvent) => {
+    if (!this.#isDragging) return;
+
+    // Release pointer capture if we have it
+    // Guard for test environments where pointer capture methods may not exist
+    if (
+      typeof this.#viewportHost.hasPointerCapture === 'function' &&
+      typeof this.#viewportHost.releasePointerCapture === 'function' &&
+      this.#viewportHost.hasPointerCapture(event.pointerId)
+    ) {
+      this.#viewportHost.releasePointerCapture(event.pointerId);
+    }
+
+    // Clear drag state - but preserve #dragAnchor and #dragExtensionMode
+    // because they're needed for double-click word selection (the anchor from
+    // the first click must persist to the second click) and for shift+click
+    // to extend selection in the same mode (word/para) after a multi-click
+    this.#isDragging = false;
+
+    // Reset cell drag mode but preserve #cellAnchor for potential shift+click extension
+    // If we were in active cell selection mode, the CellSelection is already dispatched
+    // and preserved in the editor state
+    if (this.#cellDragMode !== 'none') {
+      this.#cellDragMode = 'none';
+    }
+  };
+
+  /**
+   * Handles dragover events for field annotation drag-and-drop operations.
+   * Updates the cursor position during drag to provide visual feedback.
+   *
+   * @param event - The dragover event from the browser
+   *
+   * Side effects:
+   * - Prevents default browser drag behavior
+   * - Sets dropEffect to 'copy' to indicate the drag operation type
+   * - Updates the editor's text selection to follow the drag cursor
+   * - Triggers selection overlay updates via #scheduleSelectionUpdate
+   *
+   * Early returns:
+   * - If the editor is not editable
+   * - If no field annotation data is present in the drag
+   * - If hit testing fails or document is unavailable
+   * - If the cursor position hasn't changed
+   */
+  #handleDragOver = (event: DragEvent) => {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) {
+      return;
+    }
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'copy';
+    }
+
+    const dt = event.dataTransfer;
+    const hasFieldAnnotation =
+      dt?.types?.includes(FIELD_ANNOTATION_DATA_TYPE) || Boolean(dt?.getData?.(FIELD_ANNOTATION_DATA_TYPE));
+    if (!hasFieldAnnotation) {
+      return;
+    }
+
+    const hit = this.hitTest(event.clientX, event.clientY);
+    const doc = activeEditor.state?.doc;
+    if (!hit || !doc) {
+      return;
+    }
+
+    const pos = Math.min(Math.max(hit.pos, 1), doc.content.size);
+    const currentSelection = activeEditor.state.selection;
+    const isSameCursor =
+      currentSelection instanceof TextSelection && currentSelection.from === pos && currentSelection.to === pos;
+
+    if (isSameCursor) {
+      return;
+    }
+
+    try {
+      const tr = activeEditor.state.tr.setSelection(TextSelection.create(doc, pos)).setMeta('addToHistory', false);
+      activeEditor.view?.dispatch(tr);
+      this.#scheduleSelectionUpdate();
+    } catch (error) {
+      // Position may be invalid during layout updates - expected during re-layout
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('[PresentationEditor] Drag position update skipped:', error);
+      }
+    }
+  };
+
+  /**
+   * Handles drop events for field annotation drag-and-drop operations.
+   * Inserts a field annotation at the drop position and emits events for tracking.
+   *
+   * @param event - The drop event from the browser
+   *
+   * Side effects:
+   * - Prevents default browser drop behavior and stops event propagation
+   * - Inserts a field annotation node at the drop position
+   * - Moves the cursor to just after the inserted node
+   * - Emits 'fieldAnnotationDropped' event with drop metadata
+   * - Focuses the editor view
+   * - Triggers selection overlay updates via #scheduleSelectionUpdate
+   *
+   * Early returns:
+   * - If the editor is not editable
+   * - If no field annotation data is present in the drop
+   * - If JSON parsing of the payload fails
+   * - If hit testing and fallback position both fail
+   * - If the parsed attributes fail validation
+   *
+   * Fallback behavior:
+   * - If hit testing fails (e.g., during a reflow), falls back to current selection position
+   * - If selection is unavailable, falls back to end of document
+   */
+  #handleDrop = (event: DragEvent) => {
+    const activeEditor = this.getActiveEditor();
+    if (!activeEditor?.isEditable) {
+      return;
+    }
+
+    // Internal layout-engine drags use a custom MIME type and are handled by #setupDragHandlers.
+    if (event.dataTransfer?.types?.includes('application/x-field-annotation')) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    const fieldAnnotationData = event.dataTransfer?.getData(FIELD_ANNOTATION_DATA_TYPE);
+    if (!fieldAnnotationData) {
+      return;
+    }
+
+    const hit = this.hitTest(event.clientX, event.clientY);
+    // If layout hit testing fails (e.g., during a reflow), fall back to the current selection.
+    const selection = activeEditor.state?.selection;
+    const fallbackPos = selection?.from ?? activeEditor.state?.doc?.content.size ?? null;
+    const pos = hit?.pos ?? fallbackPos;
+    if (pos == null) {
+      return;
+    }
+
+    let parsedData: FieldAnnotationDragPayload | null = null;
+    try {
+      parsedData = JSON.parse(fieldAnnotationData) as FieldAnnotationDragPayload;
+    } catch {
+      return;
+    }
+
+    const { attributes, sourceField } = parsedData ?? {};
+
+    activeEditor.emit?.('fieldAnnotationDropped', {
+      sourceField,
+      editor: activeEditor,
+      coordinates: hit,
+      pos,
+    });
+
+    // Validate attributes before attempting insertion
+    if (attributes && isValidFieldAnnotationAttributes(attributes)) {
+      activeEditor.commands?.addFieldAnnotation?.(pos, attributes, true);
+
+      // Move the caret to just after the inserted node so subsequent drops append instead of replacing.
+      const posAfter = Math.min(pos + 1, activeEditor.state?.doc?.content.size ?? pos + 1);
+      const tr = activeEditor.state?.tr.setSelection(TextSelection.create(activeEditor.state.doc, posAfter));
+      if (tr) {
+        activeEditor.view?.dispatch(tr);
+      }
+
+      this.#scheduleSelectionUpdate();
+    }
+
+    const editorDom = activeEditor.view?.dom as HTMLElement | undefined;
+    if (editorDom) {
+      editorDom.focus();
+      activeEditor.view?.focus();
+    }
+  };
+
   #handleDoubleClick = (event: MouseEvent) => {
     if (event.button !== 0) return;
     if (!this.#layoutState.layout) return;
 
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Use effective zoom from actual rendered dimensions for accurate coordinate conversion
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
@@ -2646,6 +4417,16 @@ export class PresentationEditor extends EventEmitter {
     if (region) {
       event.preventDefault();
       event.stopPropagation();
+
+      // Check if header/footer exists, create if not
+      const descriptor = this.#resolveDescriptorForRegion(region);
+      if (!descriptor && this.#headerFooterManager) {
+        // No header/footer exists - create a default one
+        this.#createDefaultHeaderFooter(region);
+        // Refresh the manager to pick up the new descriptor
+        this.#headerFooterManager.refresh();
+      }
+
       this.#activateHeaderFooterRegion(region);
     } else if (this.#session.mode !== 'body') {
       this.#exitHeaderFooterMode();
@@ -2727,6 +4508,7 @@ export class PresentationEditor extends EventEmitter {
 
     const sectionMetadata: SectionMetadata[] = [];
     let blocks: FlowBlock[] | undefined;
+    let bookmarks: Map<string, number> = new Map();
     try {
       const converter = (this.#editor as Editor & { converter?: Record<string, unknown> }).converter;
       const converterContext = converter
@@ -2747,6 +4529,7 @@ export class PresentationEditor extends EventEmitter {
         converterContext,
       });
       blocks = result.blocks;
+      bookmarks = result.bookmarks ?? new Map();
     } catch (error) {
       this.#handleLayoutError('render', this.#decorateError(error, 'toFlowBlocks'));
       return;
@@ -2791,6 +4574,9 @@ export class PresentationEditor extends EventEmitter {
       }
 
       ({ layout, measures } = result);
+      // Add pageGap to layout for hit testing to account for gaps between rendered pages.
+      // Gap depends on virtualization mode and must be non-negative.
+      layout.pageGap = this.#getEffectivePageGap();
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -2799,9 +4585,34 @@ export class PresentationEditor extends EventEmitter {
     }
 
     this.#sectionMetadata = sectionMetadata;
-    this.#layoutState = { blocks, measures, layout };
+    // Build multi-section identifier from section metadata for section-aware header/footer selection
+    // Pass converter's headerIds/footerIds as fallbacks for dynamically created headers/footers
+    const converter = (this.#editor as EditorWithConverter).converter;
+    this.#multiSectionIdentifier = buildMultiSectionIdentifier(sectionMetadata, converter?.pageStyles, {
+      headerIds: converter?.headerIds,
+      footerIds: converter?.footerIds,
+    });
+    const anchorMap = this.#computeAnchorMap(bookmarks, layout);
+    this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
+
+    // Initialize or update PageGeometryHelper when layout changes
+    if (this.#layoutState.layout) {
+      const pageGap = this.#layoutState.layout.pageGap ?? this.#getEffectivePageGap();
+      if (!this.#pageGeometryHelper) {
+        this.#pageGeometryHelper = new PageGeometryHelper({
+          layout: this.#layoutState.layout,
+          pageGap,
+        });
+      } else {
+        this.#pageGeometryHelper.updateLayout(this.#layoutState.layout, pageGap);
+      }
+    }
+
+    // Process per-rId header/footer content for multi-section support
+    await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
+
     this.#updateDecorationProviders(layout);
 
     const painter = this.#ensurePainter(blocks, measures);
@@ -2818,6 +4629,11 @@ export class PresentationEditor extends EventEmitter {
         headerMeasures.push(...headerResult.measures);
       }
     }
+    // Also include per-rId header blocks for multi-section support
+    for (const rIdResult of this.#headerLayoutsByRId.values()) {
+      headerBlocks.push(...rIdResult.blocks);
+      headerMeasures.push(...rIdResult.measures);
+    }
 
     const footerBlocks: FlowBlock[] = [];
     const footerMeasures: Measure[] = [];
@@ -2826,6 +4642,11 @@ export class PresentationEditor extends EventEmitter {
         footerBlocks.push(...footerResult.blocks);
         footerMeasures.push(...footerResult.measures);
       }
+    }
+    // Also include per-rId footer blocks for multi-section support
+    for (const rIdResult of this.#footerLayoutsByRId.values()) {
+      footerBlocks.push(...rIdResult.blocks);
+      footerMeasures.push(...rIdResult.measures);
     }
 
     // Pass all blocks (main document + headers + footers) to the painter
@@ -2848,6 +4669,14 @@ export class PresentationEditor extends EventEmitter {
     const payload = { layout, blocks, measures, metrics };
     this.emit('layoutUpdated', payload);
     this.emit('paginationUpdate', payload);
+
+    // Emit fresh comment positions after layout completes.
+    // This ensures positions are always in sync with the current document and layout.
+    const commentPositions = this.#collectCommentPositions();
+    const positionKeys = Object.keys(commentPositions);
+    if (positionKeys.length > 0) {
+      this.emit('commentPositions', { positions: commentPositions });
+    }
     if (this.#telemetryEmitter && metrics) {
       this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });
     }
@@ -2871,13 +4700,47 @@ export class PresentationEditor extends EventEmitter {
         pageStyles: this.#layoutOptions.pageStyles,
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
+        ruler: this.#layoutOptions.ruler,
+        pageGap: this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap(),
       });
     }
     return this.#domPainter;
   }
 
+  /**
+   * Schedules a cursor/selection update in the next animation frame.
+   *
+   * Implements guards to prevent race conditions during layout recalculation:
+   * - Skips scheduling if already scheduled (prevents duplicate updates)
+   * - Skips if layout is being recalculated (#isRerendering || #pendingDocChange)
+   *   to avoid rendering cursor before layout is ready
+   *
+   * The cursor will be updated at the end of #rerender() after layout completes.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Race condition guard: #isRerendering and #pendingDocChange flags prevent
+   *   scheduling cursor updates while layout is recalculating, avoiding stale position data.
+   * - Deduplication: #selectionUpdateScheduled flag prevents multiple redundant RAF callbacks
+   *   from being queued when selection changes rapidly.
+   *
+   * Side effects:
+   * - Sets #selectionUpdateScheduled flag to true
+   * - Schedules a requestAnimationFrame callback that calls #updateSelection()
+   * - The RAF callback automatically resets #selectionUpdateScheduled to false
+   *
+   * @private
+   */
   #scheduleSelectionUpdate() {
     if (this.#selectionUpdateScheduled) {
+      return;
+    }
+    // If layout is being recalculated, skip scheduling cursor update now.
+    // The cursor will be updated at the end of #rerender() after layout completes.
+    // This prevents race conditions where cursor rendering happens before layout is ready.
+    if (this.#isRerendering || this.#pendingDocChange) {
       return;
     }
     this.#selectionUpdateScheduled = true;
@@ -2888,56 +4751,182 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Updates the visual cursor/selection overlay to match the current editor selection.
+   *
+   * Handles several edge cases:
+   * - Defers cursor clearing until new position is successfully computed
+   * - Falls back to adjacent positions (from-1, from+1) when exact position lookup fails
+   * - Preserves existing cursor visibility when position cannot be computed
+   * - Skips rendering in header/footer mode and viewing mode
+   *
+   * This method is called after layout completes to ensure cursor positioning
+   * is based on stable layout data.
+   *
+   * @returns {void}
+   *
+   * @remarks
+   * Edge cases handled:
+   * - Position lookup failure: When #computeCaretLayoutRect(from) returns null (e.g., cursor
+   *   on node boundary between paragraph and run), falls back to adjacent positions.
+   * - Fallback positions (from-1, from+1): Adjacent positions typically resolve to nearest
+   *   text content with valid layout fragments. The fallback logic tries from-1 first
+   *   (safer for most text editing), then from+1 if within document bounds.
+   * - Bounds validation: Explicitly checks from > 0 before trying from-1, and validates
+   *   from+1 <= docSize before trying from+1, preventing invalid position access.
+   * - Cursor preservation: If all position lookups fail, keeps existing cursor visible
+   *   rather than clearing it, preventing jarring visual disappearance during edge cases.
+   * - Invalid document state: If editor state or doc is missing, safely returns early
+   *   after clearing cursor (defensive programming for race conditions during init/destroy).
+   *
+   * Side effects:
+   * - Mutates #localSelectionLayer.innerHTML (clears or sets cursor/selection HTML)
+   * - Calls #renderCaretOverlay() or #renderSelectionRects() which mutate DOM
+   * - DOM manipulation is wrapped in try/catch to prevent errors from breaking editor state
+   *
+   * Why fallback positions work:
+   * ProseMirror positions can land on structural node boundaries (e.g., between <p> and <run>)
+   * that don't correspond to renderable layout fragments. Adjacent positions ±1 typically
+   * land inside text content with valid layout data. The from-1 fallback is tried first
+   * because it's safer for most text editing scenarios (e.g., after backspace at start of line).
+   *
+   * @private
+   */
   #updateSelection() {
+    // In header/footer mode, the ProseMirror editor handles its own caret
+    if (this.#session.mode !== 'body') {
+      return;
+    }
+
     // Only clear local layer, preserve remote cursor layer
     if (!this.#localSelectionLayer) {
       return;
     }
-    const layout = this.#layoutState.layout;
-    const selection = this.getActiveEditor().state?.selection;
 
-    // Clear old carets/selections - this is critical to prevent accumulation
-    this.#localSelectionLayer.innerHTML = '';
-
-    if (!selection) {
+    // In viewing mode, don't render caret or selection highlights
+    if (this.#documentMode === 'viewing') {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        // Log but don't throw to prevent breaking editor
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer in viewing mode:', error);
+        }
+      }
       return;
     }
+    const layout = this.#layoutState.layout;
+    const editorState = this.getActiveEditor().state;
+    const selection = editorState?.selection;
 
-    if (this.#session.mode !== 'body') {
-      if (!layout) {
-        return;
-      }
-      if (selection.from === selection.to) {
-        const caretLayout = this.#computeHeaderFooterCaretRect(selection.from);
-        if (!caretLayout) {
-          return;
+    if (!selection) {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+      } catch (error) {
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to clear selection layer (no selection):', error);
         }
-        this.#renderCaretOverlay(caretLayout);
-        return;
       }
-      const rects = this.#computeHeaderFooterSelectionRects(selection.from, selection.to);
-      this.#renderSelectionRects(rects);
       return;
     }
 
     if (!layout) {
+      // No layout yet - keep existing cursor visible until layout is ready
+      return;
+    }
+
+    // Handle CellSelection - render cell backgrounds for selected table cells
+    if (selection instanceof CellSelection) {
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCellSelectionOverlay(selection, layout);
+      } catch (error) {
+        console.warn('[PresentationEditor] Failed to render cell selection overlay:', error);
+      }
       return;
     }
 
     const { from, to } = selection;
     if (from === to) {
-      const caretLayout = this.#computeCaretLayoutRect(from);
-      if (!caretLayout) {
+      let caretLayout = this.#computeCaretLayoutRect(from);
+
+      // If exact position fails, try adjacent positions as fallback.
+      // This works around edge cases where ProseMirror positions can land on node boundaries
+      // (e.g., between paragraph and run nodes) that don't have corresponding layout fragments.
+      // Adjacent positions typically resolve to the nearest text content with valid layout data.
+
+      // Validate document state before attempting fallback positions
+      const doc = editorState?.doc;
+      if (!doc) {
+        // Document state is invalid - cannot safely compute positions
         return;
       }
-      this.#renderCaretOverlay(caretLayout);
+
+      const docSize = doc.content?.size ?? 0;
+
+      // Explicit bounds checking for fallback positions
+      if (!caretLayout && from > 0) {
+        caretLayout = this.#computeCaretLayoutRect(from - 1);
+      }
+      // Only try from + 1 if within document bounds
+      if (!caretLayout && from + 1 <= docSize) {
+        caretLayout = this.#computeCaretLayoutRect(from + 1);
+      }
+
+      if (!caretLayout) {
+        // Keep existing cursor visible rather than clearing it
+        return;
+      }
+      // Only clear old cursor after successfully computing new position
+      try {
+        this.#localSelectionLayer.innerHTML = '';
+        this.#renderCaretOverlay(caretLayout);
+      } catch (error) {
+        // DOM manipulation can fail if element is detached or in invalid state
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Failed to render caret overlay:', error);
+        }
+      }
       return;
     }
 
     const rects: LayoutRect[] =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        from,
+        to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
-    this.#renderSelectionRects(rects);
+    // Apply DOM-based position correction to align selection with actual rendered text
+    // (same approach used in getRectsForRange for external consumers)
+    let domStart: { pageIndex: number; x: number; y: number } | null = null;
+    let domEnd: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      domStart = this.#computeDomCaretPageLocal(from);
+      domEnd = this.#computeDomCaretPageLocal(to);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to uncorrected rects
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #renderLocalSelection:', error);
+      }
+    }
+    const correctedRects = this.#applyDomCorrectionToRects(rects, domStart, domEnd);
+
+    try {
+      this.#localSelectionLayer.innerHTML = '';
+      if (correctedRects.length > 0) {
+        this.#renderSelectionRects(correctedRects);
+      }
+    } catch (error) {
+      // DOM manipulation can fail if element is detached or in invalid state
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] Failed to render selection rects:', error);
+      }
+    }
   }
 
   #resolveLayoutOptions(blocks: FlowBlock[] | undefined, sectionMetadata: SectionMetadata[]) {
@@ -2951,13 +4940,17 @@ export class PresentationEditor extends EventEmitter {
           kind: 'sectionBreak';
           pageSize?: PageSize;
           columns?: ColumnLayout;
-          margins?: { header?: number; footer?: number };
+          margins?: { header?: number; footer?: number; top?: number; right?: number; bottom?: number; left?: number };
         })
       | undefined;
 
     const pageSize = firstSection?.pageSize ?? defaults.pageSize;
     const margins: PageMargins = {
       ...defaults.margins,
+      ...(firstSection?.margins?.top != null ? { top: firstSection.margins.top } : {}),
+      ...(firstSection?.margins?.right != null ? { right: firstSection.margins.right } : {}),
+      ...(firstSection?.margins?.bottom != null ? { bottom: firstSection.margins.bottom } : {}),
+      ...(firstSection?.margins?.left != null ? { left: firstSection.margins.left } : {}),
       ...(firstSection?.margins?.header != null ? { header: firstSection.margins.header } : {}),
       ...(firstSection?.margins?.footer != null ? { footer: firstSection.margins.footer } : {}),
     };
@@ -2983,7 +4976,10 @@ export class PresentationEditor extends EventEmitter {
     }
     const headerBlocks = this.#headerFooterAdapter.getBatch('header');
     const footerBlocks = this.#headerFooterAdapter.getBatch('footer');
-    if (!headerBlocks && !footerBlocks) {
+    // Also get all blocks by rId for multi-section support
+    const headerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('header');
+    const footerBlocksByRId = this.#headerFooterAdapter.getBlocksByRId('footer');
+    if (!headerBlocks && !footerBlocks && !headerBlocksByRId && !footerBlocksByRId) {
       return null;
     }
     const constraints = this.#computeHeaderFooterConstraints();
@@ -2993,6 +4989,8 @@ export class PresentationEditor extends EventEmitter {
     return {
       headerBlocks,
       footerBlocks,
+      headerBlocksByRId,
+      footerBlocksByRId,
       constraints,
     };
   }
@@ -3002,19 +5000,144 @@ export class PresentationEditor extends EventEmitter {
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
     const marginLeft = margins.left ?? DEFAULT_MARGINS.left!;
     const marginRight = margins.right ?? DEFAULT_MARGINS.right!;
-    const width = pageSize.w - (marginLeft + marginRight);
-    if (!Number.isFinite(width) || width <= 0) {
+    const bodyContentWidth = pageSize.w - (marginLeft + marginRight);
+    if (!Number.isFinite(bodyContentWidth) || bodyContentWidth <= 0) {
       return null;
     }
-    const { headerSpace, footerSpace } = extractHeaderFooterSpace(margins);
-    const height = Math.max(headerSpace, footerSpace, 1);
+
+    // Use body content width for header/footer measurement.
+    // Headers/footers should respect the same left/right margins as the body.
+    // Note: Tables that need to span beyond margins should use negative indents
+    // or be handled via table-specific overflow logic, not by expanding the
+    // measurement width for all content.
+    const measurementWidth = bodyContentWidth;
+
+    // Compute available space for header/footer content.
+    // In OOXML, margins.header is the distance from page top to header top,
+    // and margins.top is the distance from page top to body content.
+    // The actual header content space is: top margin - header margin.
+    // Similarly for footer: bottom margin - footer margin.
+    const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
+    const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+    const headerMargin = margins.header ?? 0;
+    const footerMargin = margins.footer ?? 0;
+
+    // Available header space is from headerMargin to topMargin
+    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
+    // Available footer space is from footerMargin to bottomMargin
+    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+
+    // Use the larger of the two as the constraint height, with a minimum of 1
+    const height = Math.max(headerContentSpace, footerContentSpace, 1);
     return {
-      width,
+      width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
       margins: { left: marginLeft, right: marginRight },
     };
+  }
+
+  /**
+   * Lays out per-rId header/footer content for multi-section documents.
+   *
+   * This method processes header/footer content for each unique rId, enabling
+   * different sections to have different header/footer content. The layouts
+   * are stored in #headerLayoutsByRId and #footerLayoutsByRId for use by
+   * the decoration provider.
+   */
+  async #layoutPerRIdHeaderFooters(
+    headerFooterInput: {
+      headerBlocks?: unknown;
+      footerBlocks?: unknown;
+      headerBlocksByRId: Map<string, FlowBlock[]> | undefined;
+      footerBlocksByRId: Map<string, FlowBlock[]> | undefined;
+      constraints: { width: number; height: number; pageWidth: number; margins: { left: number; right: number } };
+    } | null,
+    layout: Layout,
+    sectionMetadata: SectionMetadata[],
+  ): Promise<void> {
+    this.#headerLayoutsByRId.clear();
+    this.#footerLayoutsByRId.clear();
+
+    if (!headerFooterInput) return;
+
+    const { headerBlocksByRId, footerBlocksByRId, constraints } = headerFooterInput;
+
+    // Build section-aware display page numbers using computeDisplayPageNumber
+    // This handles format (roman, decimal, letter) and restart numbering per section
+    const displayPages = computeDisplayPageNumber(layout.pages, sectionMetadata);
+    const totalPages = layout.pages.length;
+
+    // Build page resolver that uses section-aware display text
+    const pageResolver = (pageNumber: number): { displayText: string; totalPages: number } => {
+      const pageIndex = pageNumber - 1;
+      const displayInfo = displayPages[pageIndex];
+      return {
+        displayText: displayInfo?.displayText ?? String(pageNumber),
+        totalPages,
+      };
+    };
+
+    // Process header blocks by rId
+    if (headerBlocksByRId) {
+      for (const [rId, blocks] of headerBlocksByRId) {
+        if (!blocks || blocks.length === 0) continue;
+
+        try {
+          const batchResult = await layoutHeaderFooterWithCache(
+            { default: blocks }, // Treat each rId as a 'default' variant
+            constraints,
+            (block: FlowBlock, c: { maxWidth: number; maxHeight: number }) => measureBlock(block, c),
+            undefined, // Use shared cache
+            undefined, // No legacy totalPages
+            pageResolver,
+          );
+
+          if (batchResult.default) {
+            this.#headerLayoutsByRId.set(rId, {
+              kind: 'header',
+              type: 'default',
+              layout: batchResult.default.layout,
+              blocks: batchResult.default.blocks,
+              measures: batchResult.default.measures,
+            });
+          }
+        } catch (error) {
+          console.warn(`[PresentationEditor] Failed to layout header rId=${rId}:`, error);
+        }
+      }
+    }
+
+    // Process footer blocks by rId
+    if (footerBlocksByRId) {
+      for (const [rId, blocks] of footerBlocksByRId) {
+        if (!blocks || blocks.length === 0) continue;
+
+        try {
+          const batchResult = await layoutHeaderFooterWithCache(
+            { default: blocks }, // Treat each rId as a 'default' variant
+            constraints,
+            (block: FlowBlock, c: { maxWidth: number; maxHeight: number }) => measureBlock(block, c),
+            undefined, // Use shared cache
+            undefined, // No legacy totalPages
+            pageResolver,
+          );
+
+          if (batchResult.default) {
+            this.#footerLayoutsByRId.set(rId, {
+              kind: 'footer',
+              type: 'default',
+              layout: batchResult.default.layout,
+              blocks: batchResult.default.blocks,
+              measures: batchResult.default.measures,
+            });
+          }
+        } catch (error) {
+          console.warn(`[PresentationEditor] Failed to layout footer rId=${rId}:`, error);
+        }
+      }
+    }
   }
 
   #updateDecorationProviders(layout: Layout) {
@@ -3025,22 +5148,97 @@ export class PresentationEditor extends EventEmitter {
 
   #createDecorationProvider(kind: 'header' | 'footer', layout: Layout): PageDecorationProvider | undefined {
     const results = kind === 'header' ? this.#headerLayoutResults : this.#footerLayoutResults;
-    if (!results || results.length === 0) {
+    const layoutsByRId = kind === 'header' ? this.#headerLayoutsByRId : this.#footerLayoutsByRId;
+
+    if ((!results || results.length === 0) && layoutsByRId.size === 0) {
       return undefined;
     }
-    const identifier =
+
+    const multiSectionId = this.#multiSectionIdentifier;
+    const legacyIdentifier =
       this.#headerFooterIdentifier ??
       extractIdentifierFromConverter((this.#editor as Editor & { converter?: unknown }).converter);
+
+    const sectionFirstPageNumbers = new Map<number, number>();
+    for (const p of layout.pages) {
+      const idx = p.sectionIndex ?? 0;
+      if (!sectionFirstPageNumbers.has(idx)) {
+        sectionFirstPageNumbers.set(idx, p.number);
+      }
+    }
+
     return (pageNumber, pageMargins, page) => {
-      const headerFooterType = getHeaderFooterType(pageNumber, identifier, { kind });
+      const sectionIndex = page?.sectionIndex ?? 0;
+      const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
+      const sectionPageNumber =
+        typeof firstPageInSection === 'number' ? pageNumber - firstPageInSection + 1 : pageNumber;
+      const headerFooterType = multiSectionId
+        ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
+        : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
+
+      const sectionRId =
+        page?.sectionRefs && kind === 'header'
+          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
+          : page?.sectionRefs && kind === 'footer'
+            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
+            : undefined;
+
       if (!headerFooterType) {
         return null;
       }
+
+      // PRIORITY 1: Try per-rId layout if we have a section-specific rId
+      if (sectionRId && layoutsByRId.has(sectionRId)) {
+        const rIdLayout = layoutsByRId.get(sectionRId)!;
+        const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
+        if (slotPage) {
+          const fragments = slotPage.fragments ?? [];
+          const pageHeight =
+            page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+          const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+          const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+          // Normalize fragments to start at y=0 if minY is negative
+          const layoutMinY = rIdLayout.layout.minY ?? 0;
+          const normalizedFragments =
+            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
+          return {
+            fragments: normalizedFragments,
+            height: box.height,
+            contentHeight: rIdLayout.layout.height ?? box.height,
+            offset: box.offset,
+            marginLeft: box.x,
+            contentWidth: box.width,
+            headerId: sectionRId,
+            sectionType: headerFooterType,
+            minY: layoutMinY,
+            box: {
+              x: box.x,
+              y: box.offset,
+              width: box.width,
+              height: box.height,
+            },
+            hitRegion: {
+              x: box.x,
+              y: box.offset,
+              width: box.width,
+              height: box.height,
+            },
+          };
+        }
+      }
+
+      // PRIORITY 2: Fall back to variant-based layout (legacy behavior)
+      if (!results || results.length === 0) {
+        return null;
+      }
+
       const variant = results.find((entry) => entry.type === headerFooterType);
       if (!variant || !variant.layout?.pages?.length) {
         return null;
       }
-      // Find the best page slot for this page number (exact match, then bucket representative)
+
       const slotPage = this.#findHeaderFooterPageForPageNumber(variant.layout.pages, pageNumber);
       if (!slotPage) {
         return null;
@@ -3049,16 +5247,15 @@ export class PresentationEditor extends EventEmitter {
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
-      const headerId =
-        page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
-          : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
-            : undefined;
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
-      const finalHeaderId = headerId ?? fallbackId ?? undefined;
+      const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
+
+      // Normalize fragments to start at y=0 if minY is negative
+      const layoutMinY = variant.layout.minY ?? 0;
+      const normalizedFragments = layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
       return {
-        fragments,
+        fragments: normalizedFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -3066,6 +5263,7 @@ export class PresentationEditor extends EventEmitter {
         contentWidth: box.width,
         headerId: finalHeaderId,
         sectionType: headerFooterType,
+        minY: layoutMinY,
         box: {
           x: box.x,
           y: box.offset,
@@ -3154,42 +5352,110 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  /**
+   * Computes the expected header/footer section type for a page based on document configuration.
+   *
+   * Unlike getHeaderFooterType/getHeaderFooterTypeForSection, this returns the appropriate
+   * variant even when no header/footer IDs are configured. This is needed to determine
+   * what variant to create when the user double-clicks an empty header/footer region.
+   *
+   * @param kind - Whether this is for a header or footer
+   * @param page - The page to compute the section type for
+   * @param sectionFirstPageNumbers - Map of section index to first page number in that section
+   * @returns The expected section type ('default', 'first', 'even', or 'odd')
+   */
+  #computeExpectedSectionType(
+    kind: 'header' | 'footer',
+    page: Page,
+    sectionFirstPageNumbers: Map<number, number>,
+  ): HeaderFooterType {
+    const sectionIndex = page.sectionIndex ?? 0;
+    const firstPageInSection = sectionFirstPageNumbers.get(sectionIndex);
+    const sectionPageNumber =
+      typeof firstPageInSection === 'number' ? page.number - firstPageInSection + 1 : page.number;
+
+    // Get titlePg and alternateHeaders settings from identifiers
+    const multiSectionId = this.#multiSectionIdentifier;
+    const legacyIdentifier = this.#headerFooterIdentifier;
+
+    let titlePgEnabled = false;
+    let alternateHeaders = false;
+
+    if (multiSectionId) {
+      titlePgEnabled = multiSectionId.sectionTitlePg?.get(sectionIndex) ?? multiSectionId.titlePg;
+      alternateHeaders = multiSectionId.alternateHeaders;
+    } else if (legacyIdentifier) {
+      titlePgEnabled = legacyIdentifier.titlePg;
+      alternateHeaders = legacyIdentifier.alternateHeaders;
+    }
+
+    // First page of section with titlePg enabled
+    if (sectionPageNumber === 1 && titlePgEnabled) {
+      return 'first';
+    }
+
+    // Alternate headers (even/odd)
+    if (alternateHeaders) {
+      return page.number % 2 === 0 ? 'even' : 'odd';
+    }
+
+    return 'default';
+  }
+
   #rebuildHeaderFooterRegions(layout: Layout) {
     this.#headerRegions.clear();
     this.#footerRegions.clear();
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
     if (pageHeight <= 0) return;
 
-    layout.pages.forEach((page, pageIndex) => {
-      const headerPayload = this.#headerDecorationProvider?.(page.number, page.margins, page);
-      if (headerPayload?.hitRegion) {
-        this.#headerRegions.set(pageIndex, {
-          kind: 'header',
-          headerId: headerPayload.headerId,
-          sectionType: headerPayload.sectionType,
-          pageIndex,
-          pageNumber: page.number,
-          localX: headerPayload.hitRegion.x ?? 0,
-          localY: headerPayload.hitRegion.y ?? 0,
-          width: headerPayload.hitRegion.width ?? headerPayload.box?.width ?? 0,
-          height: headerPayload.hitRegion.height ?? headerPayload.box?.height ?? 0,
-        });
+    // Build section first page numbers map (same logic as in #createDecorationProvider)
+    const sectionFirstPageNumbers = new Map<number, number>();
+    for (const p of layout.pages) {
+      const idx = p.sectionIndex ?? 0;
+      if (!sectionFirstPageNumbers.has(idx)) {
+        sectionFirstPageNumbers.set(idx, p.number);
       }
+    }
 
-      const footerPayload = this.#footerDecorationProvider?.(page.number, page.margins, page);
-      if (footerPayload?.hitRegion) {
-        this.#footerRegions.set(pageIndex, {
-          kind: 'footer',
-          headerId: footerPayload.headerId,
-          sectionType: footerPayload.sectionType,
-          pageIndex,
-          pageNumber: page.number,
-          localX: footerPayload.hitRegion.x ?? 0,
-          localY: footerPayload.hitRegion.y ?? 0,
-          width: footerPayload.hitRegion.width ?? footerPayload.box?.width ?? 0,
-          height: footerPayload.hitRegion.height ?? footerPayload.box?.height ?? 0,
-        });
-      }
+    layout.pages.forEach((page, pageIndex) => {
+      const margins = page.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+      const actualPageHeight = page.size?.h ?? pageHeight;
+
+      // Try to get payload from decoration provider (may be null if no content exists)
+      const headerPayload = this.#headerDecorationProvider?.(page.number, margins, page);
+
+      // Always create a hit region for headers - use payload's hitRegion or compute fallback
+      const headerBox = this.#computeDecorationBox('header', margins, actualPageHeight);
+      this.#headerRegions.set(pageIndex, {
+        kind: 'header',
+        headerId: headerPayload?.headerId,
+        sectionType:
+          headerPayload?.sectionType ?? this.#computeExpectedSectionType('header', page, sectionFirstPageNumbers),
+        pageIndex,
+        pageNumber: page.number,
+        localX: headerPayload?.hitRegion?.x ?? headerBox.x,
+        localY: headerPayload?.hitRegion?.y ?? headerBox.offset,
+        width: headerPayload?.hitRegion?.width ?? headerBox.width,
+        height: headerPayload?.hitRegion?.height ?? headerBox.height,
+      });
+
+      // Same for footer - always create a hit region
+      const footerPayload = this.#footerDecorationProvider?.(page.number, margins, page);
+      const footerBox = this.#computeDecorationBox('footer', margins, actualPageHeight);
+      this.#footerRegions.set(pageIndex, {
+        kind: 'footer',
+        headerId: footerPayload?.headerId,
+        sectionType:
+          footerPayload?.sectionType ?? this.#computeExpectedSectionType('footer', page, sectionFirstPageNumbers),
+        pageIndex,
+        pageNumber: page.number,
+        localX: footerPayload?.hitRegion?.x ?? footerBox.x,
+        localY: footerPayload?.hitRegion?.y ?? footerBox.offset,
+        width: footerPayload?.hitRegion?.width ?? footerBox.width,
+        height: footerPayload?.hitRegion?.height ?? footerBox.height,
+        contentHeight: footerPayload?.contentHeight,
+        minY: footerPayload?.minY,
+      });
     });
   }
 
@@ -3197,9 +5463,10 @@ export class PresentationEditor extends EventEmitter {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
     const pageHeight = layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = layout.pageGap ?? 0;
     if (pageHeight <= 0) return null;
-    const pageIndex = Math.max(0, Math.floor(y / pageHeight));
-    const pageLocalY = y - pageIndex * pageHeight;
+    const pageIndex = Math.max(0, Math.floor(y / (pageHeight + pageGap)));
+    const pageLocalY = y - pageIndex * (pageHeight + pageGap);
 
     const headerRegion = this.#headerRegions.get(pageIndex);
     if (headerRegion && this.#pointInRegion(headerRegion, x, pageLocalY)) {
@@ -3228,55 +5495,239 @@ export class PresentationEditor extends EventEmitter {
   }
 
   async #enterHeaderFooterMode(region: HeaderFooterRegion) {
-    if (!this.#headerFooterManager) {
-      // Clear hover on early exit to prevent stale hover state
+    try {
+      if (!this.#headerFooterManager || !this.#overlayManager) {
+        // Clear hover on early exit to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+
+      const descriptor = this.#resolveDescriptorForRegion(region);
+      if (!descriptor) {
+        console.warn('[PresentationEditor] No descriptor found for region:', region);
+        // Clear hover on validation failure to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+      if (!descriptor.id) {
+        console.warn('[PresentationEditor] Descriptor missing id:', descriptor);
+        // Clear hover on validation failure to prevent stale hover state
+        this.#clearHoverRegion();
+        return;
+      }
+
+      // Virtualized pages may not be mounted - scroll into view if needed
+      let pageElement = this.#getPageElement(region.pageIndex);
+      if (!pageElement) {
+        try {
+          this.#scrollPageIntoView(region.pageIndex);
+          const mounted = await this.#waitForPageMount(region.pageIndex, { timeout: 2000 });
+          if (!mounted) {
+            console.error('[PresentationEditor] Failed to mount page for header/footer editing');
+            this.#clearHoverRegion();
+            this.emit('error', {
+              error: new Error('Failed to mount page for editing'),
+              context: 'enterHeaderFooterMode',
+            });
+            return;
+          }
+          pageElement = this.#getPageElement(region.pageIndex);
+        } catch (scrollError) {
+          console.error('[PresentationEditor] Error mounting page:', scrollError);
+          this.#clearHoverRegion();
+          this.emit('error', {
+            error: scrollError,
+            context: 'enterHeaderFooterMode.pageMount',
+          });
+          return;
+        }
+      }
+
+      if (!pageElement) {
+        console.error('[PresentationEditor] Page element not found after mount attempt');
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error('Page element not found after mount'),
+          context: 'enterHeaderFooterMode',
+        });
+        return;
+      }
+
+      const { success, editorHost, reason } = this.#overlayManager.showEditingOverlay(
+        pageElement,
+        region,
+        this.#layoutOptions.zoom ?? 1,
+      );
+      if (!success || !editorHost) {
+        console.error('[PresentationEditor] Failed to create editor host:', reason);
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error(`Failed to create editor host: ${reason}`),
+          context: 'enterHeaderFooterMode.showOverlay',
+        });
+        return;
+      }
+
+      const layout = this.#layoutState.layout;
+      let editor;
+      try {
+        editor = await this.#headerFooterManager.ensureEditor(descriptor, {
+          editorHost,
+          availableWidth: region.width,
+          availableHeight: region.height,
+          currentPageNumber: region.pageNumber,
+          totalPageCount: layout?.pages?.length ?? 1,
+        });
+      } catch (editorError) {
+        console.error('[PresentationEditor] Error creating editor:', editorError);
+        // Clean up overlay on error
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: editorError,
+          context: 'enterHeaderFooterMode.ensureEditor',
+        });
+        return;
+      }
+
+      if (!editor) {
+        console.warn('[PresentationEditor] Failed to ensure editor for descriptor:', descriptor);
+        // Clean up overlay if editor creation failed
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: new Error('Failed to create editor instance'),
+          context: 'enterHeaderFooterMode.ensureEditor',
+        });
+        return;
+      }
+
+      // For footers, apply positioning adjustments to match static rendering.
+      // Only adjust for negative minY (content with elements above y=0).
+      // Note: Bottom-alignment (footerYOffset) is handled by the shape's own CSS
+      // positioning in ProseMirror, so we don't apply container-level transforms for that.
+      if (region.kind === 'footer') {
+        const editorContainer = editorHost.firstElementChild;
+        if (editorContainer instanceof HTMLElement) {
+          editorContainer.style.overflow = 'visible';
+
+          // Only compensate for negative minY (content extending above y=0)
+          if (region.minY != null && region.minY < 0) {
+            const shiftDown = Math.abs(region.minY);
+            editorContainer.style.transform = `translateY(${shiftDown}px)`;
+          } else {
+            // Clear any leftover transform from previous sessions to avoid misalignment
+            editorContainer.style.transform = '';
+          }
+        }
+      }
+
+      try {
+        editor.setEditable(true);
+        editor.setOptions({ documentMode: 'editing' });
+
+        // Move caret to end of content (better UX than starting at position 0)
+        try {
+          const doc = editor.state?.doc;
+          if (doc) {
+            const endPos = doc.content.size - 1; // Position at end of content
+            const pos = Math.max(1, endPos);
+            editor.commands?.setTextSelection?.({ from: pos, to: pos });
+          }
+        } catch (cursorError) {
+          // Non-critical error, log but continue
+          console.warn('[PresentationEditor] Could not set cursor to end:', cursorError);
+        }
+      } catch (editableError) {
+        console.error('[PresentationEditor] Error setting editor editable:', editableError);
+        // Clean up on error
+        this.#overlayManager.hideEditingOverlay();
+        this.#clearHoverRegion();
+        this.emit('error', {
+          error: editableError,
+          context: 'enterHeaderFooterMode.setEditable',
+        });
+        return;
+      }
+
+      // Hide layout selection overlay so only the ProseMirror caret is visible
+      this.#overlayManager.hideSelectionOverlay();
+
+      this.#activeHeaderFooterEditor = editor;
+
+      this.#session = {
+        mode: region.kind,
+        kind: region.kind,
+        headerId: descriptor.id,
+        sectionType: descriptor.variant ?? region.sectionType ?? null,
+        pageIndex: region.pageIndex,
+        pageNumber: region.pageNumber,
+      };
+
       this.#clearHoverRegion();
-      return;
+
+      try {
+        editor.view?.focus();
+      } catch (focusError) {
+        // Non-critical error, log but continue
+        console.warn('[PresentationEditor] Could not focus editor:', focusError);
+      }
+
+      this.#emitHeaderFooterModeChanged();
+      this.#emitHeaderFooterEditingContext(editor);
+      this.#inputBridge?.notifyTargetChanged();
+    } catch (error) {
+      // Catch any unexpected errors and clean up
+      console.error('[PresentationEditor] Unexpected error in enterHeaderFooterMode:', error);
+
+      // Attempt cleanup
+      try {
+        this.#overlayManager?.hideEditingOverlay();
+        this.#overlayManager?.showSelectionOverlay();
+        this.#clearHoverRegion();
+        this.#activeHeaderFooterEditor = null;
+        this.#session = { mode: 'body' };
+      } catch (cleanupError) {
+        console.error('[PresentationEditor] Error during cleanup:', cleanupError);
+      }
+
+      // Emit error event
+      this.emit('error', {
+        error,
+        context: 'enterHeaderFooterMode',
+      });
     }
-    const descriptor = this.#resolveDescriptorForRegion(region);
-    if (!descriptor) {
-      console.warn('[PresentationEditor] No descriptor found for region:', region);
-      // Clear hover on validation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    if (!descriptor.id) {
-      console.warn('[PresentationEditor] Descriptor missing id:', descriptor);
-      // Clear hover on validation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    const editor = await this.#headerFooterManager.ensureEditor(descriptor);
-    if (!editor) {
-      console.warn('[PresentationEditor] Failed to ensure editor for descriptor:', descriptor);
-      // Clear hover on editor creation failure to prevent stale hover state
-      this.#clearHoverRegion();
-      return;
-    }
-    this.#activeHeaderFooterEditor = editor;
-    this.#session = {
-      mode: region.kind,
-      kind: region.kind,
-      headerId: descriptor.id,
-      sectionType: descriptor.variant ?? region.sectionType ?? null,
-      pageIndex: region.pageIndex,
-      pageNumber: region.pageNumber,
-    };
-    // Clear hover region after successful activation
-    this.#clearHoverRegion();
-    this.#emitHeaderFooterModeChanged();
-    this.#emitHeaderFooterEditingContext(editor);
-    this.#inputBridge?.notifyTargetChanged();
-    editor.view?.focus();
   }
 
   #exitHeaderFooterMode() {
     if (this.#session.mode === 'body') return;
-    this.#session = { mode: 'body' };
+
+    // Capture headerId before clearing session - needed for cache invalidation
+    const editedHeaderId = this.#session.headerId;
+
+    if (this.#activeHeaderFooterEditor) {
+      this.#activeHeaderFooterEditor.setEditable(false);
+      this.#activeHeaderFooterEditor.setOptions({ documentMode: 'viewing' });
+    }
+
+    this.#overlayManager?.hideEditingOverlay();
+    this.#overlayManager?.showSelectionOverlay();
+
     this.#activeHeaderFooterEditor = null;
+    this.#session = { mode: 'body' };
+
     this.#emitHeaderFooterModeChanged();
     this.#emitHeaderFooterEditingContext(this.#editor);
     this.#inputBridge?.notifyTargetChanged();
+
+    // Invalidate layout cache and trigger re-render to show updated header/footer content
+    if (editedHeaderId) {
+      this.#headerFooterAdapter?.invalidate(editedHeaderId);
+    }
+    this.#headerFooterManager?.refresh();
+    this.#pendingDocChange = true;
+    this.#scheduleRerender();
+
     this.#editor.view?.focus();
   }
 
@@ -3315,15 +5766,14 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #updateAwarenessSession() {
-    const provider = (
-      this.#editor.options as {
-        collaborationProvider?: { awareness?: { setLocalStateField?: (field: string, value: unknown) => void } };
-      }
-    )?.collaborationProvider;
+    const provider = this.#options.collaborationProvider;
     const awareness = provider?.awareness;
-    if (!awareness?.setLocalStateField) {
+
+    // Runtime validation: ensure setLocalStateField method exists
+    if (!awareness || typeof awareness.setLocalStateField !== 'function') {
       return;
     }
+
     if (this.#session.mode === 'body') {
       awareness.setLocalStateField('layoutSession', null);
       return;
@@ -3387,6 +5837,335 @@ export class PresentationEditor extends EventEmitter {
     return descriptors[0];
   }
 
+  /**
+   * Creates a default header or footer when none exists.
+   *
+   * This method is called when a user double-clicks a header/footer region
+   * but no content exists yet. It uses the converter API to create an empty
+   * header/footer document.
+   *
+   * @param region - The header/footer region containing kind ('header' | 'footer')
+   *   and sectionType ('default' | 'first' | 'even' | 'odd') information
+   *
+   * Side effects:
+   * - Calls converter.createDefaultHeader() or converter.createDefaultFooter() to
+   *   create a new header/footer document in the underlying document model
+   * - Updates this.#headerFooterIdentifier with the new header/footer IDs from
+   *   the converter after creation
+   *
+   * Behavior when converter is unavailable:
+   * - Returns early without creating any header/footer if converter is not attached
+   * - Returns early if the appropriate create method is not available on the converter
+   */
+  #createDefaultHeaderFooter(region: HeaderFooterRegion): void {
+    const converter = (this.#editor as EditorWithConverter).converter;
+
+    if (!converter) {
+      return;
+    }
+
+    const variant = region.sectionType ?? 'default';
+
+    if (region.kind === 'header' && typeof converter.createDefaultHeader === 'function') {
+      converter.createDefaultHeader(variant);
+    } else if (region.kind === 'footer' && typeof converter.createDefaultFooter === 'function') {
+      converter.createDefaultFooter(variant);
+    }
+
+    // Update legacy identifier for getHeaderFooterType() fallback path
+    this.#headerFooterIdentifier = extractIdentifierFromConverter(converter);
+  }
+
+  /**
+   * Gets the DOM element for a specific page index.
+   *
+   * @param pageIndex - Zero-based page index
+   * @returns The page element or null if not mounted
+   */
+  #getPageElement(pageIndex: number): HTMLElement | null {
+    if (!this.#painterHost) return null;
+    // Page elements have data-page-index attribute
+    const pageElements = this.#painterHost.querySelectorAll('[data-page-index]');
+    for (let i = 0; i < pageElements.length; i++) {
+      const el = pageElements[i] as HTMLElement;
+      const dataPageIndex = el.getAttribute('data-page-index');
+      if (dataPageIndex && parseInt(dataPageIndex, 10) === pageIndex) {
+        return el;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Scrolls a page into view, triggering virtualization to mount it if needed.
+   *
+   * @param pageIndex - Zero-based page index to scroll to
+   */
+  #scrollPageIntoView(pageIndex: number): void {
+    const layout = this.#layoutState.layout;
+    if (!layout) return;
+
+    const pageHeight = layout.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const virtualGap = this.#layoutOptions.virtualization?.gap ?? 0;
+
+    // Calculate approximate y position for the page
+    const yPosition = pageIndex * (pageHeight + virtualGap);
+
+    // Scroll viewport to the calculated position
+    if (this.#visibleHost) {
+      this.#visibleHost.scrollTop = yPosition;
+    }
+  }
+
+  /**
+   * Build an anchor map (bookmark name -> page index) using fragment PM ranges.
+   * Mirrors layout-engine's buildAnchorMap to avoid an extra dependency here.
+   */
+  #computeAnchorMap(bookmarks: Map<string, number>, layout: Layout): Map<string, number> {
+    const anchorMap = new Map<string, number>();
+
+    // Precompute block PM ranges for fallbacks
+    const blockPmRanges = new Map<
+      string,
+      { pmStart: number | null; pmEnd: number | null; hasFragmentPositions: boolean }
+    >();
+
+    const computeBlockRange = (blockId: string): { pmStart: number | null; pmEnd: number | null } => {
+      if (blockPmRanges.has(blockId)) {
+        const cached = blockPmRanges.get(blockId)!;
+        return { pmStart: cached.pmStart, pmEnd: cached.pmEnd };
+      }
+      const block = this.#layoutState.blocks.find((b) => b.id === blockId);
+      if (!block || block.kind !== 'paragraph') {
+        blockPmRanges.set(blockId, { pmStart: null, pmEnd: null, hasFragmentPositions: false });
+        return { pmStart: null, pmEnd: null };
+      }
+      let pmStart: number | null = null;
+      let pmEnd: number | null = null;
+      for (const run of block.runs) {
+        if (run.pmStart != null) {
+          pmStart = pmStart == null ? run.pmStart : Math.min(pmStart, run.pmStart);
+        }
+        if (run.pmEnd != null) {
+          pmEnd = pmEnd == null ? run.pmEnd : Math.max(pmEnd, run.pmEnd);
+        }
+      }
+      blockPmRanges.set(blockId, { pmStart, pmEnd, hasFragmentPositions: false });
+      return { pmStart, pmEnd };
+    };
+
+    bookmarks.forEach((pmPosition, bookmarkName) => {
+      for (const page of layout.pages) {
+        for (const fragment of page.fragments) {
+          if (fragment.kind !== 'para') continue;
+          let fragStart = fragment.pmStart;
+          let fragEnd = fragment.pmEnd;
+          if (fragStart == null || fragEnd == null) {
+            const range = computeBlockRange(fragment.blockId);
+            if (range.pmStart != null && range.pmEnd != null) {
+              fragStart = range.pmStart;
+              fragEnd = range.pmEnd;
+            }
+          } else {
+            // Remember that this block had fragment positions
+            const cached = blockPmRanges.get(fragment.blockId);
+            blockPmRanges.set(fragment.blockId, {
+              pmStart: cached?.pmStart ?? fragStart,
+              pmEnd: cached?.pmEnd ?? fragEnd,
+              hasFragmentPositions: true,
+            });
+          }
+          if (fragStart == null || fragEnd == null) continue;
+          if (pmPosition >= fragStart && pmPosition < fragEnd) {
+            anchorMap.set(bookmarkName, page.number);
+            return;
+          }
+        }
+      }
+    });
+
+    return anchorMap;
+  }
+
+  /**
+   * Timeout duration for anchor navigation when waiting for page mount (in milliseconds).
+   * This allows sufficient time for virtualized pages to render before giving up.
+   */
+  private static readonly ANCHOR_NAV_TIMEOUT_MS = 2000;
+
+  /**
+   * Navigate to a bookmark/anchor in the current document (e.g., TOC links).
+   *
+   * This method performs asynchronous navigation to support virtualized page rendering:
+   * 1. Normalizes the anchor by removing leading '#' if present
+   * 2. Looks up the bookmark in the document's bookmark registry
+   * 3. Determines which page contains the target position
+   * 4. Scrolls the page into view (may be virtualized)
+   * 5. Waits up to 2000ms for the page to mount in the DOM
+   * 6. Moves the editor caret to the bookmark position
+   *
+   * @param anchor - Bookmark name or fragment identifier (with or without leading '#')
+   * @returns Promise resolving to true if navigation succeeded, false otherwise
+   *
+   * @remarks
+   * Navigation fails and returns false if:
+   * - The anchor parameter is empty or becomes empty after normalization
+   * - No layout has been computed yet
+   * - The bookmark does not exist in the document
+   * - The bookmark's page cannot be determined
+   * - The page fails to mount within the timeout period (2000ms)
+   *
+   * Note: This method does not throw errors. All failures are logged and result in
+   * a false return value. An 'error' event is emitted for unhandled exceptions.
+   *
+   * @throws Never throws directly - errors are caught, logged, and emitted as events
+   */
+  async goToAnchor(anchor: string): Promise<boolean> {
+    try {
+      if (!anchor) return false;
+      const layout = this.#layoutState.layout;
+      if (!layout) return false;
+
+      const normalized = anchor.startsWith('#') ? anchor.slice(1) : anchor;
+      if (!normalized) return false;
+
+      const pmPos = this.#layoutState.bookmarks.get(normalized);
+      if (pmPos == null) return false;
+
+      // Try to get exact position rect for precise scrolling
+      const rects =
+        selectionToRects(
+          layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          pmPos,
+          pmPos + 1,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
+      const rect = rects[0];
+
+      // Find the page containing this position by scanning fragments
+      // Bookmarks often fall in gaps between fragments (e.g., at page/section breaks),
+      // so we also track the first fragment starting after the position as a fallback
+      let pageIndex: number | null = rect?.pageIndex ?? null;
+
+      if (pageIndex == null) {
+        let nextFragmentPage: number | null = null;
+        let nextFragmentStart: number | null = null;
+
+        for (const page of layout.pages) {
+          for (const fragment of page.fragments) {
+            if (fragment.kind !== 'para') continue;
+            const fragStart = fragment.pmStart;
+            const fragEnd = fragment.pmEnd;
+            if (fragStart == null || fragEnd == null) continue;
+
+            // Exact match: position is within this fragment
+            if (pmPos >= fragStart && pmPos < fragEnd) {
+              pageIndex = page.number - 1;
+              break;
+            }
+
+            // Track the first fragment that starts after our position
+            if (fragStart > pmPos && (nextFragmentStart === null || fragStart < nextFragmentStart)) {
+              nextFragmentPage = page.number - 1;
+              nextFragmentStart = fragStart;
+            }
+          }
+          if (pageIndex != null) break;
+        }
+
+        // Use the page of the next fragment if bookmark is in a gap
+        if (pageIndex == null && nextFragmentPage != null) {
+          pageIndex = nextFragmentPage;
+        }
+      }
+
+      if (pageIndex == null) return false;
+
+      // Scroll to the target page and wait for it to mount (virtualization)
+      this.#scrollPageIntoView(pageIndex);
+      await this.#waitForPageMount(pageIndex, { timeout: PresentationEditor.ANCHOR_NAV_TIMEOUT_MS });
+
+      // Scroll the page element into view
+      const pageEl = this.#painterHost?.querySelector(`[data-page-index="${pageIndex}"]`) as HTMLElement | null;
+      if (pageEl) {
+        pageEl.scrollIntoView({ behavior: 'instant', block: 'start' });
+      }
+
+      // Move caret to the bookmark position
+      const activeEditor = this.getActiveEditor();
+      if (activeEditor?.commands?.setTextSelection) {
+        activeEditor.commands.setTextSelection({ from: pmPos, to: pmPos });
+      } else {
+        // Navigation succeeded visually (page scrolled), but caret positioning is unavailable
+        // This is not an error - log a warning for debugging
+        console.warn(
+          '[PresentationEditor] goToAnchor: Navigation succeeded but could not move caret (editor commands unavailable)',
+        );
+      }
+
+      return true;
+    } catch (error) {
+      console.error('[PresentationEditor] goToAnchor failed:', error);
+      this.emit('error', {
+        error,
+        context: 'goToAnchor',
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Waits for a page to be mounted in the DOM after scrolling.
+   *
+   * Polls for the page element using requestAnimationFrame until it appears
+   * or the timeout is exceeded.
+   *
+   * @param pageIndex - Zero-based page index to wait for
+   * @param options - Configuration options
+   * @param options.timeout - Maximum time to wait in milliseconds (default: 2000)
+   * @returns Promise that resolves to true if page was mounted, false if timeout
+   */
+  async #waitForPageMount(pageIndex: number, options: { timeout?: number } = {}): Promise<boolean> {
+    const timeout = options.timeout ?? 2000;
+    const startTime = performance.now();
+
+    return new Promise((resolve) => {
+      const checkPage = () => {
+        const pageElement = this.#getPageElement(pageIndex);
+        if (pageElement) {
+          resolve(true);
+          return;
+        }
+
+        const elapsed = performance.now() - startTime;
+        if (elapsed >= timeout) {
+          resolve(false);
+          return;
+        }
+
+        requestAnimationFrame(checkPage);
+      };
+
+      checkPage();
+    });
+  }
+
+  /**
+   * Get effective page gap based on layout mode and virtualization settings.
+   * Keeps painter, layout, and geometry in sync.
+   */
+  #getEffectivePageGap(): number {
+    if (this.#layoutOptions.virtualization?.enabled) {
+      return Math.max(0, this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP);
+    }
+    if (this.#layoutOptions.layoutMode === 'horizontal') {
+      return DEFAULT_HORIZONTAL_PAGE_GAP;
+    }
+    return DEFAULT_PAGE_GAP;
+  }
+
   #getBodyPageHeight() {
     return this.#layoutState.layout?.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
   }
@@ -3407,15 +6186,355 @@ export class PresentationEditor extends EventEmitter {
     return context.layout.pageSize?.h ?? context.region.height ?? 1;
   }
 
+  /**
+   * Applies DOM-based position correction to layout-computed selection rectangles.
+   *
+   * This method ensures selection highlights align with actual rendered text positions
+   * by correcting for CSS effects (padding, text-indent, word-spacing) that the painter
+   * applies but the layout engine doesn't account for. Without this correction, selection
+   * highlights would be misaligned with the visible text.
+   *
+   * Algorithm:
+   * 1. Calculate per-page delta between DOM and layout positions at selection start
+   * 2. Apply horizontal and vertical deltas to all rectangles on the same page
+   * 3. For the first rectangle, override with exact DOM start position
+   * 4. For the last rectangle, compute width from DOM end position
+   *
+   * The correction is page-aware because multi-page selections may have different
+   * rendering contexts on each page (e.g., different header/footer heights, column layouts).
+   *
+   * @param rects - Layout-computed selection rectangles to correct
+   * @param domStart - DOM-measured start position {pageIndex, x, y} or null if unavailable
+   * @param domEnd - DOM-measured end position {pageIndex, x, y} or null if unavailable
+   * @returns Corrected selection rectangles with DOM-aligned positions
+   *
+   * @throws Never throws - gracefully handles null DOM positions by returning uncorrected rects
+   */
+  #applyDomCorrectionToRects(
+    rects: LayoutRect[],
+    domStart: { pageIndex: number; x: number; y: number } | null,
+    domEnd: { pageIndex: number; x: number; y: number } | null,
+  ): LayoutRect[] {
+    if (rects.length === 0) return rects;
+
+    // Compute per-page delta from DOM vs layout at the start position
+    const pageDelta: Record<number, { dx: number; dy: number }> = {};
+    if (domStart && rects[0] && domStart.pageIndex === rects[0].pageIndex) {
+      const pageHeight = this.#getBodyPageHeight();
+      const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+      const layoutY = rects[0].y - rects[0].pageIndex * (pageHeight + pageGap);
+      pageDelta[domStart.pageIndex] = {
+        dx: domStart.x - rects[0].x,
+        dy: domStart.y - layoutY,
+      };
+    }
+
+    const corrected = rects.map((rect, idx) => {
+      const delta = pageDelta[rect.pageIndex];
+      let adjustedX = delta ? rect.x + delta.dx : rect.x;
+      let adjustedY = delta ? rect.y + delta.dy : rect.y;
+      let adjustedWidth = rect.width;
+
+      // For first rect, use DOM start position directly
+      const isFirstRect = idx === 0;
+      const isLastRect = idx === rects.length - 1;
+
+      if (isFirstRect && domStart && rect.pageIndex === domStart.pageIndex) {
+        const pageHeight = this.#getBodyPageHeight();
+        const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+        adjustedX = domStart.x;
+        adjustedY = domStart.y + rect.pageIndex * (pageHeight + pageGap);
+      }
+
+      // For last rect, compute width from DOM end position
+      if (isLastRect && domEnd && rect.pageIndex === domEnd.pageIndex) {
+        const endX = domEnd.x;
+        // Ensure the rect ends exactly at domEnd.x; if start overshoots, clamp start to end
+        adjustedX = Math.min(adjustedX, endX);
+        adjustedWidth = Math.max(1, endX - adjustedX);
+      }
+
+      return {
+        ...rect,
+        x: adjustedX,
+        y: adjustedY,
+        width: adjustedWidth,
+      };
+    });
+
+    // Sanity validation: compare corrected rects against DOM start/end. If deltas are too large, drop rects.
+    const MAX_DELTA_PX = 12; // threshold for mismatch
+    let invalid = false;
+    if (domStart && corrected[0]) {
+      const dx = Math.abs(corrected[0].x - domStart.x);
+      const dy = Math.abs(corrected[0].y - domStart.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+    if (domEnd && corrected[corrected.length - 1]) {
+      const last = corrected[corrected.length - 1];
+      const dx = Math.abs(last.x + last.width - domEnd.x);
+      const dy = Math.abs(last.y - domEnd.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+
+    if (invalid) {
+      console.warn('[SelectionOverlay] Suppressing selection render due to large DOM/Layout mismatch', {
+        domStart,
+        domEnd,
+        rectStart: corrected[0],
+        rectEnd: corrected[corrected.length - 1],
+      });
+      return [];
+    }
+
+    return corrected;
+  }
+
+  /**
+   * Renders visual highlighting for CellSelection (multiple table cells selected).
+   *
+   * This method creates blue overlay rectangles for each selected cell in a table,
+   * accounting for merged cells (colspan/rowspan), multi-page tables, and accurate
+   * row/column positioning from layout measurements.
+   *
+   * Algorithm:
+   * 1. Locate the table node by walking up the selection hierarchy
+   * 2. Find the corresponding table block in layout state
+   * 3. Collect all table fragments (tables can span multiple pages)
+   * 4. Use TableMap to convert cell positions to row/column indices
+   * 5. For each selected cell:
+   *    - Find the fragment containing this cell's row
+   *    - Look up column boundary information from fragment metadata
+   *    - Calculate cell width (sum widths for colspan > 1)
+   *    - Calculate cell height from row measurements (sum heights for rowspan > 1)
+   *    - Convert page-local coordinates to overlay coordinates
+   *    - Create and append highlight DOM element
+   *
+   * Edge cases handled:
+   * - Tables spanning multiple pages (iterate all fragments)
+   * - Merged cells (colspan and rowspan attributes)
+   * - Missing measure data (fallback to estimated row heights)
+   * - Invalid table structures (TableMap.get wrapped in try-catch)
+   * - Cells outside fragment boundaries (skipped)
+   *
+   * @param selection - The CellSelection from ProseMirror tables plugin
+   * @param layout - The current layout containing table fragments and measurements
+   * @returns void - Renders directly to this.#localSelectionLayer
+   * @private
+   *
+   * @throws Never throws - all errors are caught and logged, rendering gracefully degrades
+   */
+  #renderCellSelectionOverlay(selection: CellSelection, layout: Layout): void {
+    const localSelectionLayer = this.#localSelectionLayer;
+    if (!localSelectionLayer) {
+      return;
+    }
+
+    // Validate input parameters
+    if (!selection || !layout || !layout.pages) {
+      console.warn('[renderCellSelectionOverlay] Invalid input parameters');
+      return;
+    }
+
+    // Find the table node by walking up from the anchor cell
+    const $anchorCell = selection.$anchorCell;
+    if (!$anchorCell) {
+      console.warn('[renderCellSelectionOverlay] No anchor cell in selection');
+      return;
+    }
+
+    let tableDepth = $anchorCell.depth;
+    while (tableDepth > 0 && $anchorCell.node(tableDepth).type.name !== 'table') {
+      tableDepth--;
+    }
+
+    // Validate we found a table node
+    if (tableDepth === 0 && $anchorCell.node(0).type.name !== 'table') {
+      console.warn('[renderCellSelectionOverlay] Could not find table node in selection hierarchy');
+      return;
+    }
+
+    const tableNode = $anchorCell.node(tableDepth);
+    const tableStart = $anchorCell.start(tableDepth) - 1;
+
+    // Find the corresponding table block in layout state
+    let tableBlock: TableBlock | undefined;
+    if (this.#cellAnchor?.tableBlockId) {
+      tableBlock = this.#layoutState.blocks.find(
+        (block) => block.kind === 'table' && block.id === this.#cellAnchor?.tableBlockId,
+      ) as TableBlock | undefined;
+    }
+    if (!tableBlock) {
+      const expectedBlockId = `${tableStart}-table`;
+      tableBlock = this.#layoutState.blocks.find((block) => block.kind === 'table' && block.id === expectedBlockId) as
+        | TableBlock
+        | undefined;
+    }
+    if (!tableBlock) {
+      const tableBlocks = this.#layoutState.blocks.filter((block) => block.kind === 'table') as TableBlock[];
+      if (tableBlocks.length === 1) {
+        tableBlock = tableBlocks[0];
+      }
+    }
+    if (!tableBlock) {
+      return;
+    }
+
+    // Find table fragments on all pages
+    const tableFragments: Array<{ fragment: TableFragment; pageIndex: number }> = [];
+    layout.pages.forEach((page, pageIndex) => {
+      page.fragments.forEach((fragment) => {
+        if (fragment.kind === 'table' && fragment.blockId === tableBlock.id) {
+          tableFragments.push({ fragment: fragment as TableFragment, pageIndex });
+        }
+      });
+    });
+    if (tableFragments.length === 0) {
+      return;
+    }
+
+    // Use TableMap to get accurate row/column positions for selected cells
+    // Wrap TableMap.get in try-catch as it may throw on invalid table structures
+    let tableMap;
+    try {
+      tableMap = TableMap.get(tableNode);
+    } catch (error: unknown) {
+      console.error('[renderCellSelectionOverlay] TableMap.get failed:', error);
+      return;
+    }
+
+    const selectedCells: Array<{ row: number; col: number; colspan: number; rowspan: number }> = [];
+
+    selection.forEachCell((cellNode, cellPos) => {
+      const cellOffset = cellPos - tableStart - 1;
+      const mapIndex = tableMap.map.indexOf(cellOffset);
+      if (mapIndex === -1) {
+        return;
+      }
+
+      const row = Math.floor(mapIndex / tableMap.width);
+      const col = mapIndex % tableMap.width;
+      // Type guard: Validate colspan and rowspan are positive numbers
+      const rawColspan = cellNode.attrs?.colspan;
+      const rawRowspan = cellNode.attrs?.rowspan;
+      const colspan = typeof rawColspan === 'number' && Number.isFinite(rawColspan) && rawColspan > 0 ? rawColspan : 1;
+      const rowspan = typeof rawRowspan === 'number' && Number.isFinite(rawRowspan) && rawRowspan > 0 ? rawRowspan : 1;
+
+      selectedCells.push({ row, col, colspan, rowspan });
+    });
+
+    // Get row heights from table measure (measures array corresponds to blocks array by index)
+    const tableBlockIndex = this.#layoutState.blocks.indexOf(tableBlock as FlowBlock);
+    const measureAtIndex = tableBlockIndex !== -1 ? this.#layoutState.measures[tableBlockIndex] : undefined;
+    const tableMeasure = measureAtIndex?.kind === 'table' ? (measureAtIndex as TableMeasure) : undefined;
+
+    // Compute row Y positions from measure data
+    const rowPositions: Array<{ y: number; height: number }> = [];
+    if (tableMeasure?.rows) {
+      let currentY = 0;
+      for (const rowMeasure of tableMeasure.rows) {
+        rowPositions.push({ y: currentY, height: rowMeasure.height });
+        currentY += rowMeasure.height;
+      }
+    }
+
+    // Render selection rectangles for each selected cell
+    for (const { fragment, pageIndex } of tableFragments) {
+      const { columnBoundaries } = fragment.metadata ?? {};
+      if (!columnBoundaries) {
+        continue;
+      }
+
+      for (const { row, col, colspan, rowspan } of selectedCells) {
+        // Skip cells outside this fragment's row range
+        if (row < fragment.fromRow || row >= fragment.toRow) {
+          continue;
+        }
+
+        // Find column boundary
+        const colBoundary = columnBoundaries.find((cb) => cb.index === col);
+        if (!colBoundary) {
+          continue;
+        }
+
+        // Calculate cell width (accounting for colspan)
+        let cellWidth = colBoundary.width;
+        if (colspan > 1) {
+          for (let c = 1; c < colspan; c++) {
+            const nextColBoundary = columnBoundaries.find((cb) => cb.index === col + c);
+            if (nextColBoundary) {
+              cellWidth += nextColBoundary.width;
+            }
+          }
+        }
+
+        // Calculate row Y position and height
+        let rowY: number;
+        let rowHeight: number;
+
+        // Bounds check: Ensure row index is within valid range
+        if (row >= 0 && row < rowPositions.length && rowPositions[row]) {
+          // Use measure data - compute Y relative to fragment's first row
+          const fragmentStartY =
+            fragment.fromRow > 0 && fragment.fromRow < rowPositions.length && rowPositions[fragment.fromRow]
+              ? rowPositions[fragment.fromRow].y
+              : 0;
+          rowY = rowPositions[row].y - fragmentStartY;
+          rowHeight = rowPositions[row].height;
+
+          // Account for rowspan with bounds checking
+          if (rowspan > 1) {
+            for (let r = 1; r < rowspan && row + r < rowPositions.length && rowPositions[row + r]; r++) {
+              rowHeight += rowPositions[row + r].height;
+            }
+          }
+        } else {
+          // Fallback: estimate from fragment height
+          const rowCount = fragment.toRow - fragment.fromRow;
+          const estimatedRowHeight = rowCount > 0 ? fragment.height / rowCount : 20;
+          const fragmentRelativeRow = row - fragment.fromRow;
+          rowY = fragmentRelativeRow * estimatedRowHeight;
+          rowHeight = estimatedRowHeight * rowspan;
+        }
+
+        // Compute cell rectangle in page-local coordinates
+        const cellX = fragment.x + colBoundary.x;
+        const cellY = fragment.y + rowY;
+
+        // Convert to overlay coordinates
+        const coords = this.#convertPageLocalToOverlayCoords(pageIndex, cellX, cellY);
+        if (!coords) {
+          continue;
+        }
+
+        // Create and append highlight element
+        const highlight = localSelectionLayer.ownerDocument?.createElement('div');
+        if (!highlight) {
+          continue;
+        }
+
+        highlight.className = 'presentation-editor__cell-selection-rect';
+        highlight.style.position = 'absolute';
+        highlight.style.left = `${coords.x}px`;
+        highlight.style.top = `${coords.y}px`;
+        highlight.style.width = `${Math.max(1, cellWidth)}px`;
+        highlight.style.height = `${Math.max(1, rowHeight)}px`;
+        highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
+        highlight.style.pointerEvents = 'none';
+        localSelectionLayer.appendChild(highlight);
+      }
+    }
+  }
+
   #renderSelectionRects(rects: LayoutRect[]) {
     const localSelectionLayer = this.#localSelectionLayer;
     if (!localSelectionLayer) {
       return;
     }
     const pageHeight = this.#getBodyPageHeight();
-    const zoom = this.#layoutOptions.zoom ?? 1;
-    rects.forEach((rect, _index) => {
-      const pageLocalY = rect.y - rect.pageIndex * pageHeight;
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+    rects.forEach((rect) => {
+      const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
       const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
       if (!coords) {
         return;
@@ -3428,8 +6547,9 @@ export class PresentationEditor extends EventEmitter {
       highlight.style.position = 'absolute';
       highlight.style.left = `${coords.x}px`;
       highlight.style.top = `${coords.y}px`;
-      highlight.style.width = `${Math.max(1, rect.width * zoom)}px`;
-      highlight.style.height = `${Math.max(1, rect.height * zoom)}px`;
+      // Width and height are in layout space - the transform on #viewportHost handles scaling
+      highlight.style.width = `${Math.max(1, rect.width)}px`;
+      highlight.style.height = `${Math.max(1, rect.height)}px`;
       highlight.style.backgroundColor = 'rgba(51, 132, 255, 0.35)';
       highlight.style.borderRadius = '2px';
       highlight.style.pointerEvents = 'none';
@@ -3439,7 +6559,6 @@ export class PresentationEditor extends EventEmitter {
 
   #renderHoverRegion(region: HeaderFooterRegion) {
     if (!this.#hoverOverlay || !this.#hoverTooltip) return;
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(region.pageIndex, region.localX, region.localY);
     if (!coords) {
       this.#clearHoverRegion();
@@ -3448,10 +6567,11 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.display = 'block';
     this.#hoverOverlay.style.left = `${coords.x}px`;
     this.#hoverOverlay.style.top = `${coords.y}px`;
-    this.#hoverOverlay.style.width = `${region.width * zoom}px`;
-    this.#hoverOverlay.style.height = `${region.height * zoom}px`;
+    // Width and height are in layout space - the transform on #viewportHost handles scaling
+    this.#hoverOverlay.style.width = `${region.width}px`;
+    this.#hoverOverlay.style.height = `${region.height}px`;
 
-    const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'Header' : 'Footer'} (${region.sectionType ?? 'default'})`;
+    const tooltipText = `Double-click to edit ${region.kind === 'header' ? 'header' : 'footer'}`;
     this.#hoverTooltip.textContent = tooltipText;
     this.#hoverTooltip.style.display = 'block';
     this.#hoverTooltip.style.left = `${coords.x}px`;
@@ -3460,7 +6580,8 @@ export class PresentationEditor extends EventEmitter {
     // This prevents clipping for headers at the top of the page
     const tooltipHeight = 24; // Approximate tooltip height
     const spaceAbove = coords.y;
-    const regionHeight = region.height * zoom;
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const regionHeight = region.height;
     const tooltipY =
       spaceAbove < tooltipHeight + 4
         ? coords.y + regionHeight + 4 // Position below if near top (with 4px spacing)
@@ -3482,11 +6603,14 @@ export class PresentationEditor extends EventEmitter {
     if (!this.#localSelectionLayer) {
       return;
     }
-    const zoom = this.#layoutOptions.zoom ?? 1;
     const coords = this.#convertPageLocalToOverlayCoords(caretLayout.pageIndex, caretLayout.x, caretLayout.y);
     if (!coords) {
       return;
     }
+
+    // Height is in layout space - the transform on #viewportHost handles scaling
+    const finalHeight = Math.max(1, caretLayout.height);
+
     const caretEl = this.#localSelectionLayer.ownerDocument?.createElement('div');
     if (!caretEl) {
       return;
@@ -3496,8 +6620,8 @@ export class PresentationEditor extends EventEmitter {
     caretEl.style.left = `${coords.x}px`;
     caretEl.style.top = `${coords.y}px`;
     caretEl.style.width = '2px';
-    caretEl.style.height = `${Math.max(1, caretLayout.height * zoom)}px`;
-    caretEl.style.backgroundColor = '#3366FF';
+    caretEl.style.height = `${finalHeight}px`;
+    caretEl.style.backgroundColor = '#000000';
     caretEl.style.borderRadius = '1px';
     caretEl.style.pointerEvents = 'none';
     this.#localSelectionLayer.appendChild(caretEl);
@@ -3554,7 +6678,7 @@ export class PresentationEditor extends EventEmitter {
       return [];
     }
     if (!bodyLayout) return [];
-    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to) ?? [];
+    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to, undefined) ?? [];
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const bodyPageHeight = this.#getBodyPageHeight();
     return rects.map((rect: LayoutRect) => {
@@ -3567,34 +6691,6 @@ export class PresentationEditor extends EventEmitter {
         height: rect.height,
       };
     });
-  }
-
-  #computeHeaderFooterCaretRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
-    const context = this.#getHeaderFooterContext();
-    if (!context) return null;
-    const hit = getFragmentAtPosition(context.layout, context.blocks, context.measures, pos);
-    if (!hit) return null;
-    const block = hit.block;
-    const measure = hit.measure;
-    if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph' || hit.fragment.kind !== 'para')
-      return null;
-    const lineInfo = this.#findLineContainingPos(block, measure, hit.fragment.fromLine, hit.fragment.toLine, pos);
-    if (!lineInfo) return null;
-    const { line, index } = lineInfo;
-    const range = computeLinePmRange(block, line);
-    if (range.pmStart == null) return null;
-    const charsInLine = Math.max(0, line.toChar - line.fromChar);
-    const offsetChars = Math.max(0, Math.min(charsInLine, pos - range.pmStart));
-    const localX = hit.fragment.x + measureCharacterX(block, line, offsetChars);
-    const lineOffset = this.#lineHeightBeforeIndex(measure.lines, hit.fragment.fromLine, index);
-    const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
-    const headerLocalY = hit.pageIndex * headerPageHeight + (hit.fragment.y + lineOffset);
-    return {
-      pageIndex: context.region.pageIndex,
-      x: context.region.localX + localX,
-      y: context.region.localY + headerLocalY,
-      height: line.lineHeight,
-    };
   }
 
   #syncTrackedChangesPreferences(): boolean {
@@ -3700,8 +6796,16 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #applyZoom() {
+    // Apply zoom via transform: scale() on #viewportHost.
+    // This is the SINGLE source of zoom - the toolbar no longer applies CSS zoom on .layers.
+    //
+    // By applying transform on #viewportHost (which contains BOTH #painterHost AND #selectionOverlay),
+    // both the rendered content and selection overlays scale together automatically.
+    // This eliminates coordinate system mismatches that occurred when zoom was applied
+    // externally on a parent element that didn't contain the selection overlay.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    this.#painterHost.style.transform = `scale(${zoom})`;
+    this.#viewportHost.style.transformOrigin = 'top left';
+    this.#viewportHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
   }
 
   #createLayoutMetrics(
@@ -3721,19 +6825,193 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
-  #convertPageLocalToOverlayCoords(pageIndex: number, pageLocalX: number, pageLocalY: number) {
+  /**
+   * Convert page-local coordinates to overlay-space coordinates.
+   *
+   * Transforms coordinates from page-local space (x, y relative to a specific page)
+   * to overlay-space coordinates (absolute position within the stacked page layout).
+   * The returned coordinates are in layout space (unscaled logical pixels), not screen
+   * space - the CSS transform: scale() on #viewportHost handles zoom scaling.
+   *
+   * Pages are rendered vertically stacked at y = pageIndex * pageHeight, so the
+   * conversion involves:
+   * 1. X coordinate passes through unchanged (pages are horizontally aligned)
+   * 2. Y coordinate is offset by (pageIndex * pageHeight) to account for stacking
+   *
+   * @param pageIndex - Zero-based page index (must be finite and non-negative)
+   * @param pageLocalX - X coordinate relative to page origin (must be finite)
+   * @param pageLocalY - Y coordinate relative to page origin (must be finite)
+   * @returns Overlay coordinates {x, y} in layout space, or null if inputs are invalid
+   *
+   * @example
+   * ```typescript
+   * // Position at (50, 100) on page 2
+   * const coords = this.#convertPageLocalToOverlayCoords(2, 50, 100);
+   * // Returns: { x: 50, y: 2 * 792 + 100 } = { x: 50, y: 1684 }
+   * ```
+   *
+   * @private
+   */
+
+  #getPageOffsetX(pageIndex: number): number | null {
+    if (!this.#painterHost || !this.#viewportHost) {
+      return null;
+    }
+
+    // Pages are horizontally centered inside the painter host. When the viewport is wider
+    // than the page, the left offset must be included in overlay coordinates or selections
+    // will appear shifted to the left of the rendered content.
     const pageEl = this.#painterHost.querySelector(
       `.superdoc-page[data-page-index="${pageIndex}"]`,
     ) as HTMLElement | null;
-    if (!pageEl) {
+    if (!pageEl) return null;
+
+    const pageRect = pageEl.getBoundingClientRect();
+    const viewportRect = this.#viewportHost.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // getBoundingClientRect includes the applied zoom transform; divide by zoom to return
+    // layout-space units that match the rest of the overlay math.
+    const offsetX = (pageRect.left - viewportRect.left) / zoom;
+
+    return offsetX;
+  }
+
+  #convertPageLocalToOverlayCoords(
+    pageIndex: number,
+    pageLocalX: number,
+    pageLocalY: number,
+  ): { x: number; y: number } | null {
+    // Validate pageIndex: must be finite and non-negative
+    if (!Number.isFinite(pageIndex) || pageIndex < 0) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageIndex ${pageIndex}. ` +
+          'Expected a finite non-negative number.',
+      );
       return null;
     }
-    const pageRect = pageEl.getBoundingClientRect();
-    const overlayRect = this.#selectionOverlay.getBoundingClientRect();
+
+    // Validate pageLocalX: must be finite
+    if (!Number.isFinite(pageLocalX)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalX ${pageLocalX}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Validate pageLocalY: must be finite
+    if (!Number.isFinite(pageLocalY)) {
+      console.warn(
+        `[PresentationEditor] #convertPageLocalToOverlayCoords: Invalid pageLocalY ${pageLocalY}. ` +
+          'Expected a finite number.',
+      );
+      return null;
+    }
+
+    // Since zoom is now applied via transform: scale() on #viewportHost (which contains
+    // BOTH #painterHost and #selectionOverlay), both are in the same coordinate system.
+    // We position overlay elements in layout-space coordinates, and the transform handles scaling.
+    //
+    // Pages are rendered vertically stacked at y = pageIndex * (pageHeight + pageGap).
+    // The page-local coordinates are already in layout space - just add the page stacking offset.
+    const pageHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+    const pageGap = this.#layoutState.layout?.pageGap ?? 0;
+    const pageOffsetX = this.#getPageOffsetX(pageIndex) ?? 0;
+
+    const coords = {
+      x: pageOffsetX + pageLocalX,
+      y: pageIndex * (pageHeight + pageGap) + pageLocalY,
+    };
+
+    return coords;
+  }
+
+  /**
+   * Computes DOM-based caret position in page-local coordinates.
+   *
+   * This method queries the actual DOM to find the pixel-perfect caret position
+   * for a given ProseMirror position. It's used as the source of truth for caret
+   * rendering, as DOM measurements reflect the actual painted text (including CSS
+   * effects like word-spacing, text-indent, and padding).
+   *
+   * Algorithm:
+   * 1. Find all spans with data-pm-start and data-pm-end attributes
+   * 2. Locate the span containing the target PM position
+   * 3. Find the closest .superdoc-page ancestor to determine page context
+   * 4. Create a DOM Range at the character index within the text node
+   * 5. Measure the Range's bounding rect relative to the page
+   * 6. Return page-local coordinates (adjusted for zoom)
+   *
+   * Fallback Behavior:
+   * - If text node unavailable: Use span's bounding rect
+   * - If no matching span found: Return null
+   * - If page element not found: Return null
+   *
+   * Error Handling:
+   * DOM operations can throw exceptions (invalid ranges, detached nodes, etc.).
+   * Callers should wrap this method in try-catch to prevent crashes.
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @returns Object with {pageIndex, x, y} in page-local coordinates, or null if DOM unavailable
+   *
+   * @throws May throw DOM exceptions (InvalidStateError, IndexSizeError) if DOM is in invalid state
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const caretPos = this.#computeDomCaretPageLocal(42);
+   *   if (caretPos) {
+   *     // Render caret at caretPos.x, caretPos.y on page caretPos.pageIndex
+   *   }
+   * } catch (error) {
+   *   console.warn('DOM caret computation failed:', error);
+   *   // Fall back to geometry-based calculation
+   * }
+   * ```
+   */
+  #computeDomCaretPageLocal(pos: number): { pageIndex: number; x: number; y: number } | null {
+    const pageEl = this.#viewportHost.querySelector(`.superdoc-page span[data-pm-start][data-pm-end]`)
+      ? (this.#viewportHost.querySelector(`.superdoc-page`) as HTMLElement | null)
+      : null;
+
+    // Narrow search to matching page if possible
+    const spans = Array.from(this.#viewportHost.querySelectorAll('span[data-pm-start][data-pm-end]')) as HTMLElement[];
+    let targetSpan: HTMLElement | null = null;
+    for (const span of spans) {
+      const pmStart = Number(span.dataset.pmStart ?? 'NaN');
+      const pmEnd = Number(span.dataset.pmEnd ?? 'NaN');
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+      targetSpan = span;
+      break;
+    }
+    if (!targetSpan) return null;
+    const page = targetSpan.closest('.superdoc-page') as HTMLElement | null;
+    if (!page) return null;
+    const pageRect = page.getBoundingClientRect();
     const zoom = this.#layoutOptions.zoom ?? 1;
+    const textNode = targetSpan.firstChild;
+    if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+      const spanRect = targetSpan.getBoundingClientRect();
+      return {
+        pageIndex: Number(page.dataset.pageIndex ?? '0'),
+        x: (spanRect.left - pageRect.left) / zoom,
+        y: (spanRect.top - pageRect.top) / zoom,
+      };
+    }
+    const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
+    const charIndex = Math.min(pos - pmStart, textNode.length);
+    const range = document.createRange();
+    range.setStart(textNode, Math.max(0, charIndex));
+    range.setEnd(textNode, Math.max(0, charIndex));
+    const rangeRect = range.getBoundingClientRect();
+    const lineEl = targetSpan.closest('.superdoc-line') as HTMLElement | null;
+    const lineRect = lineEl?.getBoundingClientRect() ?? rangeRect;
     return {
-      x: pageRect.left - overlayRect.left + pageLocalX * zoom,
-      y: pageRect.top - overlayRect.top + pageLocalY * zoom,
+      pageIndex: Number(page.dataset.pageIndex ?? '0'),
+      x: (rangeRect.left - pageRect.left) / zoom,
+      y: (lineRect.top - pageRect.top) / zoom,
     };
   }
 
@@ -3742,22 +7020,103 @@ export class PresentationEditor extends EventEmitter {
       return null;
     }
     const rect = this.#viewportHost.getBoundingClientRect();
+    // Zoom is now controlled centrally via this.#layoutOptions.zoom
     const zoom = this.#layoutOptions.zoom ?? 1;
     const scrollLeft = this.#visibleHost.scrollLeft ?? 0;
     const scrollTop = this.#visibleHost.scrollTop ?? 0;
+    // Convert from screen coordinates to layout coordinates by dividing by zoom
+    const baseX = (clientX - rect.left + scrollLeft) / zoom;
+    const baseY = (clientY - rect.top + scrollTop) / zoom;
+
+    // Adjust X by the actual page offset if the pointer is over a page. This keeps
+    // geometry-based hit testing aligned with the centered page content.
+    let adjustedX = baseX;
+    const doc = this.#visibleHost.ownerDocument ?? document;
+    const hitChain = typeof doc.elementsFromPoint === 'function' ? doc.elementsFromPoint(clientX, clientY) : [];
+    const pageEl = Array.isArray(hitChain)
+      ? (hitChain.find((el) => (el as HTMLElement)?.classList?.contains('superdoc-page')) as HTMLElement | null)
+      : null;
+    if (pageEl) {
+      const pageIndex = Number(pageEl.dataset.pageIndex ?? 'NaN');
+      if (Number.isFinite(pageIndex)) {
+        const pageOffsetX = this.#getPageOffsetX(pageIndex);
+        if (pageOffsetX != null) {
+          adjustedX = baseX - pageOffsetX;
+        }
+      }
+    }
+
     return {
-      x: (clientX - rect.left + scrollLeft) / zoom,
-      y: (clientY - rect.top + scrollTop) / zoom,
+      x: adjustedX,
+      y: baseY,
     };
   }
 
-  #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+  /**
+   * Computes caret layout rectangle using geometry-based calculations.
+   *
+   * This method calculates the caret position and height from layout engine data
+   * (fragments, blocks, measures) without querying the DOM. It's used as a fallback
+   * when DOM-based measurements are unavailable or as a primary source in non-interactive
+   * scenarios (e.g., headless rendering, PDF export).
+   *
+   * The geometry-based calculation accounts for:
+   * - List markers (offset caret by marker width)
+   * - Paragraph indents (left, right, first-line, hanging)
+   * - Justified text alignment (extra space distributed across spaces)
+   * - Multi-column layouts
+   * - Table cell content
+   *
+   * Algorithm:
+   * 1. Find the fragment containing the PM position
+   * 2. Handle table fragments separately (delegate to #computeTableCaretLayoutRect)
+   * 3. For paragraph fragments:
+   *    a. Find the line containing the position
+   *    b. Convert PM position to character offset
+   *    c. Measure X coordinate using Canvas-based text measurement
+   *    d. Apply marker width and indent adjustments
+   *    e. Calculate Y offset from line heights
+   *    f. Return page-local coordinates with line height
+   *
+   * @param pos - ProseMirror position to compute caret for
+   * @param includeDomFallback - Whether to compare with DOM measurements for debugging (default: true).
+   *   When true, logs geometry vs DOM deltas for analysis. Has no effect on return value.
+   * @returns Object with {pageIndex, x, y, height} in page-local coordinates, or null if position not found
+   *
+   * @example
+   * ```typescript
+   * const caretGeometry = this.#computeCaretLayoutRectGeometry(42, false);
+   * if (caretGeometry) {
+   *   // Render caret at caretGeometry.x, caretGeometry.y with height caretGeometry.height
+   * }
+   * ```
+   */
+  #computeCaretLayoutRectGeometry(
+    pos: number,
+    includeDomFallback = true,
+  ): { pageIndex: number; x: number; y: number; height: number } | null {
     const layout = this.#layoutState.layout;
     if (!layout) return null;
+
+    // Geometry-based calculation from layout engine
     const hit = getFragmentAtPosition(layout, this.#layoutState.blocks, this.#layoutState.measures, pos);
-    if (!hit) return null;
+    if (!hit) {
+      return null;
+    }
     const block = hit.block;
     const measure = hit.measure;
+
+    // Handle table fragments
+    if (hit.fragment.kind === 'table' && block?.kind === 'table' && measure?.kind === 'table') {
+      return this.#computeTableCaretLayoutRect(
+        pos,
+        hit.fragment as TableFragment,
+        block as TableBlock,
+        measure as TableMeasure,
+        hit.pageIndex,
+      );
+    }
+
     if (!block || block.kind !== 'paragraph' || measure?.kind !== 'paragraph') return null;
     if (hit.fragment.kind !== 'para') {
       return null;
@@ -3765,22 +7124,419 @@ export class PresentationEditor extends EventEmitter {
     const fragment: ParaFragment = hit.fragment;
 
     const lineInfo = this.#findLineContainingPos(block, measure, fragment.fromLine, fragment.toLine, pos);
-    if (!lineInfo) return null;
+    if (!lineInfo) {
+      return null;
+    }
     const { line, index } = lineInfo;
     const range = computeLinePmRange(block, line);
-    if (range.pmStart == null) return null;
+    if (range.pmStart == null || range.pmEnd == null) return null;
 
-    const charsInLine = Math.max(0, line.toChar - line.fromChar);
-    const offsetChars = Math.max(0, Math.min(charsInLine, pos - range.pmStart));
-    const localX = fragment.x + measureCharacterX(block, line, offsetChars);
+    // Calculate character offset from PM position using layout-aware mapping (accounts for PM gaps)
+    const pmOffset = pmPosToCharOffset(block, line, pos);
+
+    const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
+    const indent = extractParagraphIndent(block.attrs?.indent);
+    const availableWidth = Math.max(0, fragment.width - (indent.left + indent.right));
+    const charX = measureCharacterX(block, line, pmOffset, availableWidth);
+
+    // Determine list item status and text indent
+    const isFirstLine = index === fragment.fromLine;
+    const isListItemFlag = isListItem(markerWidth, block);
+    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && isListItemFlag;
+
+    // Get word layout configuration for firstLineIndentMode detection
+    const wordLayout = getWordLayoutConfig(block);
+    const isFirstLineIndentMode = wordLayout?.firstLineIndentMode === true;
+
+    if (isListFirstLine && isFirstLineIndentMode) {
+      // In firstLineIndentMode, text starts at textStartPx (after marker + tab),
+      // not at fragment.x + markerWidth. Use textStartPx directly as the X offset.
+      const textStartPx = calculateTextStartIndent({
+        isFirstLine,
+        isListItem: isListItemFlag,
+        markerWidth,
+        paraIndentLeft: indent.left,
+        firstLineIndent: indent.firstLine,
+        hangingIndent: indent.hanging,
+        wordLayout,
+      });
+      const localX = fragment.x + textStartPx + charX;
+      const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
+      const localY = fragment.y + lineOffset;
+
+      const result = {
+        pageIndex: hit.pageIndex,
+        x: localX,
+        y: localY,
+        height: line.lineHeight,
+      };
+
+      // Check DOM for firstLineIndentMode lists too
+      const pageEl = this.#painterHost?.querySelector(
+        `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+      ) as HTMLElement | null;
+      const pageRect = pageEl?.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      let domCaretX: number | null = null;
+      let domCaretY: number | null = null;
+      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
+      for (const spanEl of spanEls) {
+        const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+        const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+        if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+          const textNode = spanEl.firstChild as Text;
+          const charIndex = Math.min(pos - pmStart, textNode.length);
+          const rangeObj = document.createRange();
+          rangeObj.setStart(textNode, charIndex);
+          rangeObj.setEnd(textNode, charIndex);
+          const rangeRect = rangeObj.getBoundingClientRect();
+          if (pageRect) {
+            domCaretX = (rangeRect.left - pageRect.left) / zoom;
+            domCaretY = (rangeRect.top - pageRect.top) / zoom;
+          }
+          break;
+        }
+      }
+
+      if (includeDomFallback && domCaretX != null && domCaretY != null) {
+        return {
+          pageIndex: hit.pageIndex,
+          x: domCaretX,
+          y: domCaretY,
+          height: line.lineHeight,
+        };
+      }
+
+      return result;
+    }
+
+    // For standard lists and non-list paragraphs, calculate text indent using shared utility
+    const indentAdjust = calculateTextStartIndent({
+      isFirstLine,
+      isListItem: isListItemFlag,
+      markerWidth,
+      paraIndentLeft: indent.left,
+      firstLineIndent: indent.firstLine,
+      hangingIndent: indent.hanging,
+      wordLayout,
+    });
+
+    const localX = fragment.x + indentAdjust + charX;
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
-    return {
+
+    const result = {
       pageIndex: hit.pageIndex,
       x: localX,
       y: localY,
       height: line.lineHeight,
     };
+
+    // DEBUG: Log layout engine caret calculation + compare to DOM
+    const pageEl = this.#painterHost?.querySelector(
+      `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+    ) as HTMLElement | null;
+    const pageRect = pageEl?.getBoundingClientRect();
+    const zoom = this.#layoutOptions.zoom ?? 1;
+
+    // Find span containing this pos and measure actual DOM position
+    let domCaretX: number | null = null;
+    let domCaretY: number | null = null;
+    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
+    for (const spanEl of spanEls) {
+      const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+      const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+      if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+        const textNode = spanEl.firstChild as Text;
+        const charIndex = Math.min(pos - pmStart, textNode.length);
+        const rangeObj = document.createRange();
+        rangeObj.setStart(textNode, charIndex);
+        rangeObj.setEnd(textNode, charIndex);
+        const rangeRect = rangeObj.getBoundingClientRect();
+        if (pageRect) {
+          domCaretX = (rangeRect.left - pageRect.left) / zoom;
+          domCaretY = (rangeRect.top - pageRect.top) / zoom;
+        }
+        break;
+      }
+    }
+
+    // If we found a DOM caret position, prefer it to avoid residual drift
+    if (includeDomFallback && domCaretX != null && domCaretY != null) {
+      return {
+        pageIndex: hit.pageIndex,
+        x: domCaretX,
+        y: domCaretY,
+        height: line.lineHeight,
+      };
+    }
+
+    return result;
+  }
+
+  /**
+   * Compute caret position, preferring DOM when available, falling back to geometry.
+   */
+  #computeCaretLayoutRect(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    const geometry = this.#computeCaretLayoutRectGeometry(pos, true);
+    let dom: { pageIndex: number; x: number; y: number } | null = null;
+    try {
+      dom = this.#computeDomCaretPageLocal(pos);
+    } catch (error) {
+      // DOM operations can throw exceptions - fall back to geometry-only positioning
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('[PresentationEditor] DOM caret computation failed in #computeCaretLayoutRect:', error);
+      }
+    }
+    if (dom && geometry) {
+      return {
+        pageIndex: dom.pageIndex,
+        x: dom.x,
+        y: dom.y,
+        height: geometry.height,
+      };
+    }
+    return geometry;
+  }
+
+  /**
+   * DEPRECATED: Computes caret position using DOM-based positioning.
+   *
+   * This method is NO LONGER USED as of the fix for overlay positioning with external transforms.
+   * It uses getBoundingClientRect() which returns viewport coordinates affected by external
+   * transforms, causing caret drift when SuperDoc is embedded in containers with CSS transforms.
+   *
+   * Kept for reference only. Use layout engine geometry instead (see #computeCaretLayoutRect).
+   *
+   * @deprecated Use layout engine geometry directly - this method is incompatible with external transforms
+   * @private
+   */
+  // eslint-disable-next-line no-unused-private-class-members
+  #computeCaretLayoutRectFromDOM(pos: number): { pageIndex: number; x: number; y: number; height: number } | null {
+    // Optimization: Try to find the specific page containing this position
+    // This narrows the DOM query scope significantly for large documents
+    let targetPageEl: HTMLElement | null = null;
+    if (this.#layoutState.layout && this.#layoutState.blocks && this.#layoutState.measures) {
+      const fragmentHit = getFragmentAtPosition(
+        this.#layoutState.layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        pos,
+      );
+      if (fragmentHit) {
+        const pageEl = this.#viewportHost.querySelector(
+          `.superdoc-page[data-page-index="${fragmentHit.pageIndex}"]`,
+        ) as HTMLElement | null;
+        if (pageEl) {
+          targetPageEl = pageEl;
+        }
+      }
+    }
+
+    // Query spans - prefer narrowed scope if we found the page, fallback to viewport-wide query
+    // Exclude inline SDT wrapper elements - they have PM positions for selection highlighting but their
+    // child spans should be the targets for accurate character-level caret positioning
+    const spanEls = Array.from(
+      targetPageEl
+        ? targetPageEl.querySelectorAll(`span[data-pm-start][data-pm-end]:not(.${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER})`)
+        : this.#viewportHost.querySelectorAll(
+            `span[data-pm-start][data-pm-end]:not(.${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER})`,
+          ),
+    );
+
+    for (const spanEl of spanEls) {
+      const pmStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');
+      const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+
+      // Found the span containing this position
+      // Get the page element to compute page-local coordinates
+      const pageEl = spanEl.closest('.superdoc-page') as HTMLElement | null;
+      if (!pageEl) continue;
+
+      const pageIndex = Number(pageEl.dataset.pageIndex ?? '0');
+      const pageRect = pageEl.getBoundingClientRect();
+
+      // Get zoom to convert from viewport space (scaled) to layout space (logical pixels)
+      // The #viewportHost has transform: scale(zoom), so getBoundingClientRect() returns
+      // viewport coordinates. We need to divide differences by zoom to get layout coordinates.
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      // Use Range API to get exact character position within the span
+      const textNode = spanEl.firstChild;
+      if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+        // No text node - return span start position
+        const spanRect = spanEl.getBoundingClientRect();
+
+        // Compute relative offset in viewport space, then convert to layout space
+        // Both pageRect and spanRect are in the same transformed hierarchy, so we can subtract
+        // them, but the result is in viewport pixels and must be divided by zoom to get layout pixels
+        return {
+          pageIndex,
+          x: (spanRect.left - pageRect.left) / zoom,
+          y: (spanRect.top - pageRect.top) / zoom,
+          height: spanRect.height / zoom,
+        };
+      }
+
+      // Use Range to find exact character position
+      const text = textNode.textContent ?? '';
+      const charOffset = Math.max(0, Math.min(text.length, pos - pmStart));
+
+      const range = document.createRange();
+      try {
+        range.setStart(textNode, charOffset);
+        range.setEnd(textNode, charOffset);
+      } catch (error) {
+        // Range creation failed - this can happen if charOffset exceeds text length
+        if (process.env.NODE_ENV === 'development') {
+          console.warn('[PresentationEditor] Range.setStart/setEnd failed:', {
+            error: error instanceof Error ? error.message : String(error),
+            charOffset,
+            textLength: text.length,
+            pos,
+            pmStart,
+            pmEnd,
+          });
+        }
+
+        // Fall back to span position
+        const spanRect = spanEl.getBoundingClientRect();
+
+        return {
+          pageIndex,
+          x: (spanRect.left - pageRect.left) / zoom,
+          y: (spanRect.top - pageRect.top) / zoom,
+          height: spanRect.height / zoom,
+        };
+      }
+
+      const rangeRect = range.getBoundingClientRect();
+
+      // Get span height for caret (matches font/text size, not full line height)
+      const spanRect = spanEl.getBoundingClientRect();
+
+      // Center the caret vertically within the line if line is taller than text
+      const lineEl = spanEl.closest('.superdoc-line');
+      const lineRect = lineEl ? (lineEl as HTMLElement).getBoundingClientRect() : spanRect;
+
+      // Use span height for caret, but position it vertically centered in the line
+      const caretHeight = spanRect.height;
+      const verticalOffset = (lineRect.height - caretHeight) / 2;
+      const caretY = lineRect.top + verticalOffset;
+
+      // Return page-local coordinates in layout space
+      // We compute differences in viewport space (both rects are scaled by transform),
+      // then divide by zoom to convert to layout space
+      return {
+        pageIndex,
+        x: (rangeRect.left - pageRect.left) / zoom,
+        y: (caretY - pageRect.top) / zoom,
+        height: caretHeight / zoom,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * DEPRECATED: Computes caret position within a table cell using DOM-based positioning.
+   *
+   * This method is NO LONGER USED as the parent #computeCaretLayoutRect now uses layout
+   * engine geometry exclusively to avoid issues with external transforms.
+   *
+   * Kept for reference only.
+   *
+   * @deprecated Use layout engine geometry - this method is incompatible with external transforms
+   * @private
+   */
+
+  #computeTableCaretLayoutRect(
+    pos: number,
+    _fragment: TableFragment,
+    _tableBlock: TableBlock,
+    _tableMeasure: TableMeasure,
+    pageIndex: number,
+  ): { pageIndex: number; x: number; y: number; height: number } | null {
+    // Use DOM-based positioning for accuracy (matching how click mapping works)
+    // Find the line element with data-pm-start/end that contains this position
+    const lineEls = Array.from(this.#viewportHost.querySelectorAll('.superdoc-line'));
+
+    // Early return if DOM not yet rendered
+    if (lineEls.length === 0) return null;
+
+    for (const lineEl of lineEls) {
+      const pmStart = Number((lineEl as HTMLElement).dataset.pmStart ?? 'NaN');
+      const pmEnd = Number((lineEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+      if (!Number.isFinite(pmStart) || !Number.isFinite(pmEnd)) continue;
+      if (pos < pmStart || pos > pmEnd) continue;
+
+      // Found the line containing this position
+      // Now find the span containing the position
+      const spanEls = Array.from(lineEl.querySelectorAll('span[data-pm-start]'));
+
+      for (const spanEl of spanEls) {
+        const spanStart = Number((spanEl as HTMLElement).dataset.pmStart ?? 'NaN');
+        const spanEnd = Number((spanEl as HTMLElement).dataset.pmEnd ?? 'NaN');
+
+        if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) continue;
+        if (pos < spanStart || pos > spanEnd) continue;
+
+        // Found the span - use Range API to get exact character position
+        const textNode = spanEl.firstChild;
+        if (!textNode || textNode.nodeType !== Node.TEXT_NODE) {
+          // No text node - return span start position
+          const spanRect = spanEl.getBoundingClientRect();
+          const viewportRect = this.#viewportHost.getBoundingClientRect();
+          const zoom = this.#layoutOptions.zoom ?? 1;
+
+          return {
+            pageIndex,
+            x: (spanRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+            y: (spanRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+            height: spanRect.height / zoom,
+          };
+        }
+
+        // Use Range to find exact character position
+        const text = textNode.textContent ?? '';
+        const charOffset = Math.max(0, Math.min(text.length, pos - spanStart));
+
+        const range = document.createRange();
+        range.setStart(textNode, charOffset);
+        range.setEnd(textNode, charOffset);
+
+        const rangeRect = range.getBoundingClientRect();
+        const viewportRect = this.#viewportHost.getBoundingClientRect();
+        const zoom = this.#layoutOptions.zoom ?? 1;
+        const lineRect = lineEl.getBoundingClientRect();
+
+        return {
+          pageIndex,
+          x: (rangeRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+          y: (lineRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+          height: lineRect.height / zoom,
+        };
+      }
+
+      // Position is in line but no matching span - return line start
+      const lineRect = (lineEl as HTMLElement).getBoundingClientRect();
+      const viewportRect = this.#viewportHost.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      return {
+        pageIndex,
+        x: (lineRect.left - viewportRect.left + this.#visibleHost.scrollLeft) / zoom,
+        y: (lineRect.top - viewportRect.top + this.#visibleHost.scrollTop) / zoom,
+        height: lineRect.height / zoom,
+      };
+    }
+
+    return null;
   }
 
   #findLineContainingPos(
@@ -3817,11 +7573,41 @@ export class PresentationEditor extends EventEmitter {
     }
     const layout = this.#layoutState.layout;
     const selection = this.#editor.state?.selection;
-    if (!layout || !selection) return 0;
+    if (!layout || !selection) {
+      return 0;
+    }
+
+    // Try selectionToRects first
     const rects =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, selection.from, selection.to) ??
-      [];
-    return rects[0]?.pageIndex ?? 0;
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        selection.from,
+        selection.to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
+
+    if (rects.length > 0) {
+      return rects[0]?.pageIndex ?? 0;
+    }
+
+    // Fallback: scan pages to find which one contains this position via fragments
+    // Note: pmStart/pmEnd are only present on some fragment types (ParaFragment, ImageFragment, DrawingFragment)
+    const pos = selection.from;
+    for (let pageIdx = 0; pageIdx < layout.pages.length; pageIdx++) {
+      const page = layout.pages[pageIdx];
+      for (const fragment of page.fragments) {
+        const frag = fragment as { pmStart?: number; pmEnd?: number };
+        if (frag.pmStart != null && frag.pmEnd != null) {
+          if (pos >= frag.pmStart && pos <= frag.pmEnd) {
+            return pageIdx;
+          }
+        }
+      }
+    }
+
+    return 0;
   }
 
   #findRegionForPage(kind: 'header' | 'footer', pageIndex: number): HeaderFooterRegion | null {
@@ -3915,7 +7701,6 @@ export class PresentationEditor extends EventEmitter {
   #createHiddenHost(doc: Document): HTMLElement {
     const host = doc.createElement('div');
     host.className = 'presentation-editor__hidden-host';
-    host.setAttribute('aria-hidden', 'true');
     host.style.position = 'absolute';
     host.style.left = '-9999px';
     host.style.top = '0';
@@ -3926,6 +7711,10 @@ export class PresentationEditor extends EventEmitter {
     host.style.opacity = '0';
     host.style.zIndex = '-1';
     host.style.userSelect = 'none';
+    // DO NOT set aria-hidden="true" on this element.
+    // This hidden host contains the actual ProseMirror editor which must remain accessible
+    // to screen readers and keyboard navigation. The viewport (#viewportHost) is aria-hidden
+    // because it's purely visual, but this editor provides the semantic document structure.
     return host;
   }
 }
@@ -3934,22 +7723,41 @@ class PresentationInputBridge {
   #windowRoot: Window;
   #layoutSurfaces: Set<EventTarget>;
   #getTargetDom: () => HTMLElement | null;
+  /** Callback that returns whether the editor is in an editable mode (editing/suggesting vs viewing) */
+  #isEditable: () => boolean;
   #onTargetChanged?: (target: HTMLElement | null) => void;
   #listeners: Array<{ type: string; handler: EventListener; target: EventTarget; useCapture: boolean }>;
   #currentTarget: HTMLElement | null = null;
   #destroyed = false;
   #useWindowFallback: boolean;
 
+  /**
+   * Creates a new PresentationInputBridge that forwards user input events from the visible layout
+   * surface to the hidden editor DOM. This enables input handling when the actual editor is not
+   * directly visible to the user.
+   *
+   * @param windowRoot - The window object containing the layout surface and editor target
+   * @param layoutSurface - The visible HTML element that receives user input events (e.g., keyboard, mouse)
+   * @param getTargetDom - Callback that returns the hidden editor's DOM element where events should be forwarded
+   * @param isEditable - Callback that returns whether the editor is in an editable mode (editing/suggesting).
+   *                     When this returns false (e.g., in viewing mode), keyboard, text, and composition
+   *                     events will not be forwarded to prevent document modification.
+   * @param onTargetChanged - Optional callback invoked when the target editor DOM element changes
+   * @param options - Optional configuration including:
+   *                  - useWindowFallback: Whether to attach window-level event listeners as fallback
+   */
   constructor(
     windowRoot: Window,
     layoutSurface: HTMLElement,
     getTargetDom: () => HTMLElement | null,
+    isEditable: () => boolean,
     onTargetChanged?: (target: HTMLElement | null) => void,
     options?: { useWindowFallback?: boolean },
   ) {
     this.#windowRoot = windowRoot;
     this.#layoutSurfaces = new Set<EventTarget>([layoutSurface]);
     this.#getTargetDom = getTargetDom;
+    this.#isEditable = isEditable;
     this.#onTargetChanged = onTargetChanged;
     this.#listeners = [];
     this.#useWindowFallback = options?.useWindowFallback ?? false;
@@ -4056,6 +7864,9 @@ class PresentationInputBridge {
    * @param event - The keyboard event from the layout surface
    */
   #forwardKeyboardEvent(event: KeyboardEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4092,6 +7903,9 @@ class PresentationInputBridge {
    * @param event - The input event from the layout surface
    */
   #forwardTextEvent(event: InputEvent | TextEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4132,6 +7946,9 @@ class PresentationInputBridge {
    * @param event - The composition event from the layout surface
    */
   #forwardCompositionEvent(event: CompositionEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }
@@ -4158,6 +7975,9 @@ class PresentationInputBridge {
    * @param event - The context menu event from the layout surface
    */
   #forwardContextMenu(event: MouseEvent) {
+    if (!this.#isEditable()) {
+      return;
+    }
     if (this.#shouldSkipSurface(event)) {
       return;
     }

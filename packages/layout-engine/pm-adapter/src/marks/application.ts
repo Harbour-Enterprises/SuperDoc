@@ -8,7 +8,7 @@
  * - Tracked changes (insert, delete, format)
  */
 
-import type { TextRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
+import type { TextRun, TabRun, RunMark, TrackedChangeMeta, TrackedChangeKind } from '@superdoc/contracts';
 import type { UnderlineStyle, PMMark, HyperlinkConfig, ThemeColorPalette } from '../types.js';
 import { normalizeColor, isFiniteNumber, ptToPx } from '../utilities.js';
 import { buildFlowRunLink, migrateLegacyLink } from './links.js';
@@ -58,6 +58,12 @@ const MAX_RUN_MARK_ARRAY_LENGTH = 100;
  * Protects against stack overflow from deeply nested structures.
  */
 const MAX_RUN_MARK_DEPTH = 5;
+
+type CommentAnnotation = {
+  commentId: string;
+  importedId?: string;
+  internal?: boolean;
+};
 
 /**
  * Validates JSON object depth to prevent deeply nested structures.
@@ -200,6 +206,27 @@ const MAX_DATA_ATTR_VALUE_LENGTH = 1000;
  * Prevents memory exhaustion from extremely long attribute names.
  */
 const MAX_DATA_ATTR_NAME_LENGTH = 100;
+
+const pushCommentAnnotation = (run: TextRun, attrs: Record<string, unknown> | undefined): void => {
+  const commentId = typeof attrs?.commentId === 'string' ? attrs.commentId : undefined;
+  const importedId = typeof attrs?.importedId === 'string' ? attrs.importedId : undefined;
+  const internal = attrs?.internal === true;
+
+  if (!commentId && !importedId) return;
+
+  const annotations: CommentAnnotation[] = run.comments ? [...run.comments] : [];
+  const key = `${commentId ?? ''}::${importedId ?? ''}`;
+  const exists = annotations.some((c) => `${c.commentId ?? ''}::${c.importedId ?? ''}` === key);
+  if (!exists) {
+    annotations.push({
+      commentId: commentId ?? (importedId as string),
+      importedId,
+      internal,
+    });
+  }
+
+  run.comments = annotations;
+};
 
 /**
  * Extracts data-* attributes from a mark's attrs and normalizes values to strings.
@@ -450,15 +477,22 @@ export const collectTrackedChangeFromMarks = (marks?: PMMark[]): TrackedChangeMe
 
 /**
  * Normalizes underline style value from PM mark attributes.
- * Returns a valid UnderlineStyle or 'single' as default for invalid/missing values.
+ * Returns a valid UnderlineStyle, or undefined only for explicit 'none'.
+ * Missing/undefined values default to 'single' (presence of underline mark implies underline).
  *
  * @param value - Unknown value from mark attributes that should be an underline style
- * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), defaulting to 'single'
+ * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), or undefined if explicitly 'none'
  */
 export const normalizeUnderlineStyle = (value: unknown): UnderlineStyle | undefined => {
+  // Return undefined only for explicitly "none" - this means "no underline"
+  if (value === 'none') {
+    return undefined;
+  }
   if (value === 'double' || value === 'dotted' || value === 'dashed' || value === 'wavy') {
     return value;
   }
+  // Default to 'single' for missing values or other underline types (e.g., 'single', 'words', 'thick', etc.)
+  // The presence of an underline mark implies underline should be applied
   return 'single';
 };
 
@@ -482,7 +516,7 @@ const normalizeBooleanMarkValue = (value: unknown): boolean | undefined => {
   }
   if (typeof value === 'string') {
     const normalized = value.trim().toLowerCase();
-    if (normalized === '0' || normalized === 'false' || normalized === 'off') {
+    if (normalized === '0' || normalized === 'false' || normalized === 'off' || normalized === 'none') {
       return false;
     }
     if (normalized === '1' || normalized === 'true' || normalized === 'on') {
@@ -635,12 +669,20 @@ export const applyTextStyleMark = (
   const fontSizePx = normalizeFontSizePx(attrs.fontSize);
   if (fontSizePx !== undefined && fontSizePx >= 1 && fontSizePx <= 1000) {
     run.fontSize = fontSizePx;
+  } else if (attrs.fontSize !== undefined) {
+    // invalid or out-of-range size ignored
   }
   if (isFiniteNumber(attrs.letterSpacing)) {
     const spacing = Number(attrs.letterSpacing);
     // Apply reasonable bounds (-100 to 100px) to prevent extreme values
     if (spacing >= -100 && spacing <= 100) {
       run.letterSpacing = spacing;
+    }
+  }
+  if (typeof attrs.textTransform === 'string') {
+    const transform = attrs.textTransform as string;
+    if (transform === 'uppercase' || transform === 'lowercase' || transform === 'capitalize' || transform === 'none') {
+      run.textTransform = transform;
     }
   }
 };
@@ -664,11 +706,14 @@ const DEFAULT_HYPERLINK_CONFIG: HyperlinkConfig = {
  * @throws Does not throw; errors in mark processing are logged but do not interrupt processing
  */
 export const applyMarksToRun = (
-  run: TextRun,
+  run: TextRun | TabRun,
   marks: PMMark[],
   hyperlinkConfig: HyperlinkConfig = DEFAULT_HYPERLINK_CONFIG,
   themeColors?: ThemeColorPalette,
 ): void => {
+  // Type guard to distinguish TabRun from TextRun
+  const isTabRun = run.kind === 'tab';
+
   marks.forEach((mark) => {
     const forwardedDataAttrs = extractDataAttributes(mark.attrs as Record<string, unknown> | undefined);
     try {
@@ -676,9 +721,12 @@ export const applyMarksToRun = (
         case TRACK_INSERT_MARK:
         case TRACK_DELETE_MARK:
         case TRACK_FORMAT_MARK: {
-          const tracked = buildTrackedChangeMetaFromMark(mark);
-          if (tracked) {
-            run.trackedChange = selectTrackedChangeMeta(run.trackedChange, tracked);
+          // Tracked change marks only apply to TextRun
+          if (!isTabRun) {
+            const tracked = buildTrackedChangeMetaFromMark(mark);
+            if (tracked) {
+              run.trackedChange = selectTrackedChangeMeta(run.trackedChange, tracked);
+            }
           }
           break;
         }
@@ -701,8 +749,19 @@ export const applyMarksToRun = (
           break;
         }
         case 'textStyle':
-          applyTextStyleMark(run, mark.attrs ?? {}, themeColors);
+          // TextStyle mark only applies to TextRun (has fontFamily, fontSize, etc.)
+          if (!isTabRun) {
+            applyTextStyleMark(run, mark.attrs ?? {}, themeColors);
+          }
           break;
+        case 'commentMark':
+        case 'comment': {
+          // Comment marks only apply to TextRun
+          if (!isTabRun) {
+            pushCommentAnnotation(run, mark.attrs ?? {});
+          }
+          break;
+        }
         case 'underline': {
           const style = normalizeUnderlineStyle(mark.attrs?.underlineType);
           if (style) {
@@ -727,34 +786,37 @@ export const applyMarksToRun = (
           run.highlight = resolveColorFromAttributes(mark.attrs ?? {}, themeColors);
           break;
         case 'link': {
-          const attrs = (mark.attrs ?? {}) as Record<string, unknown>;
-          if (hyperlinkConfig.enableRichHyperlinks) {
-            try {
-              const link = buildFlowRunLink(attrs);
-              if (link) {
-                run.link = link as unknown as TextRun['link'];
+          // Link mark only applies to TextRun
+          if (!isTabRun) {
+            const attrs = (mark.attrs ?? {}) as Record<string, unknown>;
+            if (hyperlinkConfig.enableRichHyperlinks) {
+              try {
+                const link = buildFlowRunLink(attrs);
+                if (link) {
+                  run.link = link as unknown as TextRun['link'];
+                }
+              } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('[PM-Adapter] Failed to build rich hyperlink:', error);
+                }
+                // Fall through to legacy link handling or skip
               }
-            } catch (error) {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('[PM-Adapter] Failed to build rich hyperlink:', error);
+            } else if (typeof attrs.href === 'string' && attrs.href.trim()) {
+              try {
+                const sanitized = sanitizeHref(attrs.href);
+                if (sanitized && sanitized.href) {
+                  const legacyLink = {
+                    href: sanitized.href,
+                    title: typeof attrs.title === 'string' ? attrs.title : undefined,
+                  };
+                  run.link = migrateLegacyLink(legacyLink) as unknown as TextRun['link'];
+                }
+              } catch (error) {
+                if (process.env.NODE_ENV === 'development') {
+                  console.warn('[PM-Adapter] Failed to sanitize link href:', error);
+                }
+                // Skip this link if sanitization fails
               }
-              // Fall through to legacy link handling or skip
-            }
-          } else if (typeof attrs.href === 'string' && attrs.href.trim()) {
-            try {
-              const sanitized = sanitizeHref(attrs.href);
-              if (sanitized && sanitized.href) {
-                const legacyLink = {
-                  href: sanitized.href,
-                  title: typeof attrs.title === 'string' ? attrs.title : undefined,
-                };
-                run.link = migrateLegacyLink(legacyLink) as unknown as TextRun['link'];
-              }
-            } catch (error) {
-              if (process.env.NODE_ENV === 'development') {
-                console.warn('[PM-Adapter] Failed to sanitize link href:', error);
-              }
-              // Skip this link if sanitization fails
             }
           }
           break;
@@ -769,7 +831,8 @@ export const applyMarksToRun = (
       // Continue processing other marks
     }
 
-    if (forwardedDataAttrs) {
+    // dataAttrs only applies to TextRun
+    if (forwardedDataAttrs && !isTabRun) {
       run.dataAttrs = { ...(run.dataAttrs ?? {}), ...forwardedDataAttrs };
     }
   });

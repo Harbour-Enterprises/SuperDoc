@@ -94,11 +94,12 @@ export const normalizeOoxmlTabs = (tabs: unknown): TabStop[] | undefined => {
     const rawEntry = entry as Record<string, unknown>;
 
     // Handle super-editor's nested format: { tab: { tabType, pos, leader } }
-    const source =
-      rawEntry.tab && typeof rawEntry.tab === 'object' ? (rawEntry.tab as Record<string, unknown>) : rawEntry;
+    const isNestedTab = Boolean(rawEntry.tab && typeof rawEntry.tab === 'object');
+    const source = isNestedTab ? (rawEntry.tab as Record<string, unknown>) : rawEntry;
 
     // Resolve position: prefer originalPos (twips), fallback to pos/position/offset
-    const posTwips = resolveTabPosition(source);
+    // Nested OOXML-style tabs (super-editor) already use twips; skip px heuristic for them.
+    const posTwips = resolveTabPosition(source, isNestedTab);
     if (posTwips == null) continue;
 
     // Support 'tabType' from super-editor in addition to 'val'/'align'/'type'
@@ -131,9 +132,13 @@ export const normalizeOoxmlTabs = (tabs: unknown): TabStop[] | undefined => {
  * - Values <= 1000 are assumed to be pixels and converted (SuperConverter format)
  *
  * @param source - Tab stop object with position properties
+ * @param treatPosAsTwips - When true, treats pos/position/offset values as twips and skips
+ *                          the px→twips heuristic conversion. Used for nested OOXML-style
+ *                          tab formats (e.g., { tab: { tabType, pos } }) where pos is
+ *                          already in twips. Defaults to false for backward compatibility.
  * @returns Position in twips, or undefined if no valid position found
  */
-const resolveTabPosition = (source: Record<string, unknown>): number | undefined => {
+const resolveTabPosition = (source: Record<string, unknown>, treatPosAsTwips = false): number | undefined => {
   // Prefer originalPos (exact OOXML twips)
   const originalPos = pickNumber(source.originalPos);
   if (originalPos != null) {
@@ -144,6 +149,11 @@ const resolveTabPosition = (source: Record<string, unknown>): number | undefined
   const posValue = pickNumber(source.pos ?? source.position ?? source.offset);
   if (posValue == null) {
     return undefined;
+  }
+
+  // Nested OOXML tabs are already in twips; avoid px heuristic.
+  if (treatPosAsTwips) {
+    return posValue;
   }
 
   // Heuristic: if pos > 1000, it's likely twips; otherwise px

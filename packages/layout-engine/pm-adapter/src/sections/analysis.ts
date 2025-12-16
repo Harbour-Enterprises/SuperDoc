@@ -111,7 +111,14 @@ export function buildSectionRangesFromParagraphs(
       sectPr,
       margins:
         sectionData.headerPx != null || sectionData.footerPx != null
-          ? { header: sectionData.headerPx ?? 0, footer: sectionData.footerPx ?? 0 }
+          ? {
+              header: sectionData.headerPx ?? 0,
+              footer: sectionData.footerPx ?? 0,
+              top: sectionData.topPx,
+              right: sectionData.rightPx,
+              bottom: sectionData.bottomPx,
+              left: sectionData.leftPx,
+            }
           : null,
       pageSize: sectionData.pageSizePx ?? null,
       orientation: sectionData.orientation ?? null,
@@ -121,8 +128,8 @@ export function buildSectionRangesFromParagraphs(
       headerRefs: sectionData.headerRefs,
       footerRefs: sectionData.footerRefs,
       numbering: sectionData.numbering,
+      vAlign: sectionData.vAlign,
     };
-    // Range diagnostics removed to reduce debug noise
     ranges.push(range);
 
     currentStart = item.index + 1;
@@ -146,6 +153,7 @@ export function publishSectionMetadata(sectionRanges: SectionRange[], options?: 
       headerRefs: section.headerRefs,
       footerRefs: section.footerRefs,
       numbering: section.numbering,
+      titlePg: section.titlePg,
     });
   });
 }
@@ -186,7 +194,14 @@ export function createFinalSectionFromBodySectPr(
     sectPr: bodySectPr,
     margins:
       bodySectionData.headerPx != null || bodySectionData.footerPx != null
-        ? { header: bodySectionData.headerPx ?? 0, footer: bodySectionData.footerPx ?? 0 }
+        ? {
+            header: bodySectionData.headerPx ?? 0,
+            footer: bodySectionData.footerPx ?? 0,
+            top: bodySectionData.topPx,
+            right: bodySectionData.rightPx,
+            bottom: bodySectionData.bottomPx,
+            left: bodySectionData.leftPx,
+          }
         : null,
     pageSize: bodySectionData.pageSizePx ?? null,
     orientation: bodySectionData.orientation ?? null,
@@ -195,6 +210,7 @@ export function createFinalSectionFromBodySectPr(
     titlePg: bodySectionData.titlePg ?? false,
     headerRefs: bodySectionData.headerRefs,
     footerRefs: bodySectionData.footerRefs,
+    vAlign: bodySectionData.vAlign,
   };
 }
 

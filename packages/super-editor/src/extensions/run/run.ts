@@ -1,5 +1,9 @@
 import { Attribute, type AttributeValue, OxmlNode } from '@core/index.js';
-import { splitRun } from './commands/index.js';
+import { splitRunToParagraph, splitRunAtCursor } from './commands/index.js';
+import { cleanupEmptyRunsPlugin } from './cleanupEmptyRunsPlugin.js';
+import { wrapTextInRunsPlugin } from './wrapTextInRunsPlugin.js';
+import { splitRunsAfterMarkPlugin } from './splitRunsAfterMarkPlugin.js';
+import { calculateInlineRunPropertiesPlugin } from './calculateInlineRunPropertiesPlugin.js';
 
 /**
  * Run node emulates OOXML w:r (run) boundaries while remaining transparent to layout.
@@ -49,7 +53,8 @@ export const Run = OxmlNode.create({
 
   addCommands(): Record<string, (...args: unknown[]) => unknown> {
     return {
-      splitRun,
+      splitRunToParagraph,
+      splitRunAtCursor,
     };
   },
 
@@ -63,5 +68,13 @@ export const Run = OxmlNode.create({
       (htmlAttributes as Record<string, AttributeValue>) || {},
     );
     return ['span', base, 0];
+  },
+  addPmPlugins() {
+    return [
+      wrapTextInRunsPlugin(),
+      splitRunsAfterMarkPlugin,
+      calculateInlineRunPropertiesPlugin(this.editor),
+      cleanupEmptyRunsPlugin,
+    ];
   },
 });

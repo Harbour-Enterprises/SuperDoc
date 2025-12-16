@@ -16,6 +16,10 @@ vi.mock('@extensions/paragraph/resolvedPropertiesCache.js', () => ({
   getResolvedParagraphProperties: vi.fn((node) => node.attrs.paragraphProperties || {}),
 }));
 
+vi.mock('./removeNumberingProperties.js', () => ({
+  isVisuallyEmptyParagraph: vi.fn(() => false),
+}));
+
 import { toggleList } from './toggleList.js';
 import { updateNumberingProperties } from './changeListLevel.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
@@ -57,7 +61,17 @@ describe('toggleList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     editor = { converter: {} };
-    tr = { docChanged: false };
+    tr = {
+      docChanged: false,
+      mapping: {
+        map: vi.fn((pos) => pos),
+      },
+      doc: {
+        content: { size: 1000 },
+        resolve: vi.fn(() => ({})),
+      },
+      setSelection: vi.fn(),
+    };
     dispatch = vi.fn();
   });
 

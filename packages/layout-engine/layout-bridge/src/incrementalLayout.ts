@@ -1,4 +1,11 @@
-import type { FlowBlock, Layout, Measure, HeaderFooterLayout, SectionMetadata } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  Layout,
+  Measure,
+  HeaderFooterLayout,
+  SectionMetadata,
+  ParagraphBlock,
+} from '@superdoc/contracts';
 import {
   layoutDocument,
   type LayoutOptions,
@@ -85,6 +92,7 @@ export async function incrementalLayout(
       continue;
     }
     const cached = measureCache.get(block, measurementWidth, measurementHeight);
+
     if (cached) {
       measures.push(cached);
       cacheHits++;
@@ -100,10 +108,163 @@ export async function incrementalLayout(
     `[Perf] 4.1 Measure all blocks: ${(measureEnd - measureStart).toFixed(2)}ms (${cacheMisses} measured, ${cacheHits} cached)`,
   );
 
+  // Pre-layout headers to get their actual content heights BEFORE body layout.
+  // This prevents header content from overlapping with body content when headers
+  // exceed their allocated margin space.
+  /**
+   * Actual measured header content heights per variant type extracted from pre-layout.
+   * Keys correspond to header variant types: 'default', 'first', 'even', 'odd'.
+   * Values are the actual content heights in pixels, guaranteed to be finite and non-negative.
+   * Undefined if headers are not present.
+   */
+  let headerContentHeights: Partial<Record<'default' | 'first' | 'even' | 'odd', number>> | undefined;
+
+  if (headerFooter?.constraints && headerFooter.headerBlocks) {
+    const hfPreStart = performance.now();
+    const measureFn = headerFooter.measure ?? measureBlock;
+
+    // Invalidate header/footer cache if content or constraints changed
+    invalidateHeaderFooterCache(
+      headerMeasureCache,
+      headerFooterCacheState,
+      headerFooter.headerBlocks,
+      headerFooter.footerBlocks,
+      headerFooter.constraints,
+      options.sectionMetadata,
+    );
+
+    /**
+     * Placeholder page count used during header pre-layout for height measurement.
+     * The actual page count is not yet known at this stage, but it doesn't affect
+     * header height calculations. A value of 1 is sufficient as a placeholder.
+     */
+    const HEADER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT = 1;
+
+    // Layout headers to get their heights (without page tokens for now - heights won't change)
+    const preHeaderLayouts = await layoutHeaderFooterWithCache(
+      headerFooter.headerBlocks,
+      headerFooter.constraints,
+      measureFn,
+      headerMeasureCache,
+      HEADER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT,
+      undefined, // No page resolver needed for height calculation
+    );
+
+    /**
+     * Type guard to check if a key is a valid header variant type.
+     * Ensures type safety when extracting header heights from the pre-layout results.
+     *
+     * @param key - The key to validate
+     * @returns True if the key is one of the valid header variant types
+     */
+    type HeaderVariantType = 'default' | 'first' | 'even' | 'odd';
+    const isValidHeaderType = (key: string): key is HeaderVariantType => {
+      return ['default', 'first', 'even', 'odd'].includes(key);
+    };
+
+    // Extract actual content heights from each variant
+    headerContentHeights = {};
+    for (const [type, value] of Object.entries(preHeaderLayouts)) {
+      if (!isValidHeaderType(type)) continue;
+      if (value?.layout && typeof value.layout.height === 'number') {
+        // Validate that height is finite and non-negative
+        const height = value.layout.height;
+        if (Number.isFinite(height) && height >= 0) {
+          headerContentHeights[type] = height;
+        }
+      }
+    }
+
+    const hfPreEnd = performance.now();
+    perfLog(`[Perf] 4.1.5 Pre-layout headers for height: ${(hfPreEnd - hfPreStart).toFixed(2)}ms`);
+  }
+
+  // Pre-layout footers to get their actual content heights BEFORE body layout.
+  // This prevents footer content from overlapping with body content when footers
+  // exceed their allocated margin space.
+  /**
+   * Actual measured footer content heights per variant type extracted from pre-layout.
+   * Keys correspond to footer variant types: 'default', 'first', 'even', 'odd'.
+   * Values are the actual content heights in pixels, guaranteed to be finite and non-negative.
+   * Undefined if footer pre-layout fails or footers are not present.
+   */
+  let footerContentHeights: Partial<Record<'default' | 'first' | 'even' | 'odd', number>> | undefined;
+
+  if (headerFooter?.constraints && headerFooter.footerBlocks) {
+    const footerPreStart = performance.now();
+    const measureFn = headerFooter.measure ?? measureBlock;
+
+    // Cache invalidation already happened during header pre-layout (if headers exist)
+    // or needs to happen now if only footers are present
+    if (!headerFooter.headerBlocks) {
+      invalidateHeaderFooterCache(
+        headerMeasureCache,
+        headerFooterCacheState,
+        headerFooter.headerBlocks,
+        headerFooter.footerBlocks,
+        headerFooter.constraints,
+        options.sectionMetadata,
+      );
+    }
+
+    /**
+     * Placeholder page count used during footer pre-layout for height measurement.
+     * The actual page count is not yet known at this stage, but it doesn't affect
+     * footer height calculations. A value of 1 is sufficient as a placeholder.
+     */
+    const FOOTER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT = 1;
+
+    try {
+      // Layout footers to get their heights (without page tokens for now - heights won't change)
+      const preFooterLayouts = await layoutHeaderFooterWithCache(
+        headerFooter.footerBlocks,
+        headerFooter.constraints,
+        measureFn,
+        headerMeasureCache,
+        FOOTER_PRELAYOUT_PLACEHOLDER_PAGE_COUNT,
+        undefined, // No page resolver needed for height calculation
+      );
+
+      /**
+       * Type guard to check if a key is a valid footer variant type.
+       * Ensures type safety when extracting footer heights from the pre-layout results.
+       *
+       * @param key - The key to validate
+       * @returns True if the key is one of the valid footer variant types
+       */
+      type FooterVariantType = 'default' | 'first' | 'even' | 'odd';
+      const isValidFooterType = (key: string): key is FooterVariantType => {
+        return ['default', 'first', 'even', 'odd'].includes(key);
+      };
+
+      // Extract actual content heights from each variant
+      footerContentHeights = {};
+      for (const [type, value] of Object.entries(preFooterLayouts)) {
+        if (!isValidFooterType(type)) continue;
+        if (value?.layout && typeof value.layout.height === 'number') {
+          // Validate that height is finite and non-negative
+          const height = value.layout.height;
+          if (Number.isFinite(height) && height >= 0) {
+            footerContentHeights[type] = height;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('[Layout] Footer pre-layout failed:', error);
+      footerContentHeights = undefined;
+    }
+
+    const footerPreEnd = performance.now();
+    perfLog(`[Perf] 4.1.6 Pre-layout footers for height: ${(footerPreEnd - footerPreStart).toFixed(2)}ms`);
+  }
+
   const layoutStart = performance.now();
   let layout = layoutDocument(nextBlocks, measures, {
     ...options,
-    remeasureParagraph: (block, maxWidth) => remeasureParagraph(block, maxWidth),
+    headerContentHeights, // Pass header heights to prevent overlap
+    footerContentHeights, // Pass footer heights to prevent overlap
+    remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+      remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
   });
   const layoutEnd = performance.now();
   perfLog(`[Perf] 4.2 Layout document (pagination): ${(layoutEnd - layoutStart).toFixed(2)}ms`);
@@ -144,7 +305,7 @@ export async function incrementalLayout(
       perfLog(`[Perf] 4.3.${iteration + 1} Page tokens resolved: ${tokenResult.affectedBlockIds.size} blocks affected`);
 
       // Log affected blocks
-      const blockSamples = Array.from(tokenResult.affectedBlockIds).slice(0, 5);
+      const blockSamples = Array.from(tokenResult.affectedBlockIds).slice(0, 5) as string[];
       PageTokenLogger.logAffectedBlocks(iteration, tokenResult.affectedBlockIds, blockSamples);
 
       totalAffectedBlocks += tokenResult.affectedBlockIds.size;
@@ -177,7 +338,10 @@ export async function incrementalLayout(
       const relayoutStart = performance.now();
       layout = layoutDocument(currentBlocks, currentMeasures, {
         ...options,
-        remeasureParagraph: (block, maxWidth) => remeasureParagraph(block, maxWidth),
+        headerContentHeights, // Pass header heights to prevent overlap
+        footerContentHeights, // Pass footer heights to prevent overlap
+        remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+          remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
       });
       const relayoutEnd = performance.now();
       const relayoutTime = relayoutEnd - relayoutStart;
@@ -251,7 +415,6 @@ export async function incrementalLayout(
       ? (pageNumber: number): { displayText: string; totalPages: number } => {
           const pageIndex = pageNumber - 1;
           const displayInfo = numberingCtx.displayPages[pageIndex];
-
           return {
             displayText: displayInfo?.displayText ?? String(pageNumber),
             totalPages: numberingCtx.totalPages,
@@ -303,16 +466,33 @@ export async function incrementalLayout(
 const DEFAULT_PAGE_SIZE = { w: 612, h: 792 };
 const DEFAULT_MARGINS = { top: 72, right: 72, bottom: 72, left: 72 };
 
+/**
+ * Normalizes a margin value, using a fallback for undefined or non-finite values.
+ * Prevents NaN content sizes when margin properties are partially defined.
+ *
+ * @param value - The margin value to normalize (may be undefined)
+ * @param fallback - The default margin value to use if value is invalid
+ * @returns The normalized margin value (guaranteed to be finite)
+ */
+export const normalizeMargin = (value: number | undefined, fallback: number): number =>
+  Number.isFinite(value) ? (value as number) : fallback;
+
 export function resolveMeasurementConstraints(options: LayoutOptions): {
   measurementWidth: number;
   measurementHeight: number;
 } {
   const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
-  const margins = options.margins ?? DEFAULT_MARGINS;
+  const margins = {
+    top: normalizeMargin(options.margins?.top, DEFAULT_MARGINS.top),
+    right: normalizeMargin(options.margins?.right, DEFAULT_MARGINS.right),
+    bottom: normalizeMargin(options.margins?.bottom, DEFAULT_MARGINS.bottom),
+    left: normalizeMargin(options.margins?.left, DEFAULT_MARGINS.left),
+  };
   const contentWidth = pageSize.w - (margins.left + margins.right);
   const contentHeight = pageSize.h - (margins.top + margins.bottom);
 
   const columns = options.columns;
+
   if (columns && columns.count > 1) {
     const gap = Math.max(0, columns.gap ?? 0);
     const totalGap = gap * (columns.count - 1);

@@ -130,26 +130,50 @@ export type FlowRunLink = {
   history?: boolean;
 };
 
-export type TextRun = {
+/**
+ * Common formatting marks that can be applied to any run type.
+ * Used by TextRun, TabRun, and other run types that support inline formatting.
+ */
+export type RunMarks = {
+  /** Bold text styling. */
+  bold?: boolean;
+  /** Italic text styling. */
+  italic?: boolean;
+  /** Additional letter spacing in pixels (positive for expanded, negative for condensed). */
+  letterSpacing?: number;
+  /** Text color as hex string (e.g., "#FF0000"). */
+  color?: string;
+  /** Underline decoration with optional style and color. */
+  underline?: {
+    /** Underline style (defaults to 'single'). */
+    style?: 'single' | 'double' | 'dotted' | 'dashed' | 'wavy';
+    /** Underline color as hex string (defaults to text color). */
+    color?: string;
+  };
+  /** Strikethrough text decoration. */
+  strike?: boolean;
+  /** Highlight (background) color as hex string. */
+  highlight?: string;
+  /** Text transformation (case modification). */
+  textTransform?: 'uppercase' | 'lowercase' | 'capitalize' | 'none';
+};
+
+export type TextRun = RunMarks & {
   kind?: 'text';
   text: string;
   fontFamily: string;
   fontSize: number;
+  /** Comment annotations applied to this run (supports overlapping comments). */
+  comments?: Array<{
+    commentId: string;
+    importedId?: string;
+    internal?: boolean;
+  }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
    */
   dataAttrs?: Record<string, string>;
   sdt?: SdtMetadata;
-  bold?: boolean;
-  italic?: boolean;
-  letterSpacing?: number;
-  color?: string;
-  underline?: {
-    style?: 'single' | 'double' | 'dotted' | 'dashed' | 'wavy';
-    color?: string;
-  };
-  strike?: boolean;
-  highlight?: string;
   link?: FlowRunLink;
   /** Token annotations for dynamic content (page numbers, etc.). */
   token?: 'pageNumber' | 'totalPageCount' | 'pageReference';
@@ -166,7 +190,7 @@ export type TextRun = {
   trackedChange?: TrackedChangeMeta;
 };
 
-export type TabRun = {
+export type TabRun = RunMarks & {
   kind: 'tab';
   text: '\t';
   /** Width in pixels (assigned by measurer/resolver). */
@@ -176,6 +200,20 @@ export type TabRun = {
   leader?: LeaderType | null;
   decimalChar?: string;
   indent?: ParagraphIndent;
+  pmStart?: number;
+  pmEnd?: number;
+};
+
+export type LineBreakRun = {
+  kind: 'lineBreak';
+  /**
+   * Optional attributes carried through from the source document.
+   * Mirrors OOXML <w:br> attributes (type/clear) to preserve fidelity.
+   */
+  attrs?: {
+    lineBreakType?: string;
+    clear?: string;
+  };
   pmStart?: number;
   pmEnd?: number;
 };
@@ -242,7 +280,93 @@ export type ImageRun = {
   dataAttrs?: Record<string, string>;
 };
 
-export type Run = TextRun | TabRun | ImageRun;
+export type BreakRun = {
+  kind: 'break';
+  /** Optional break type (e.g., 'line', 'page', 'column') */
+  breakType?: 'line' | 'page' | 'column' | string;
+  pmStart?: number;
+  pmEnd?: number;
+  sdt?: SdtMetadata;
+};
+
+/**
+ * Inline field annotation run for interactive form fields displayed as styled "pills".
+ * Renders as a bordered, rounded inline element with displayLabel or type-specific content.
+ *
+ * Corresponds to super-editor's FieldAnnotation node which renders via FieldAnnotationView.
+ *
+ * @example
+ * // A paragraph with text and field annotation:
+ * {
+ *   kind: 'paragraph',
+ *   runs: [
+ *     { kind: 'text', text: 'Enter name: ', ... },
+ *     { kind: 'fieldAnnotation', variant: 'text', displayLabel: 'Full Name', fieldColor: '#980043', ... },
+ *   ]
+ * }
+ */
+export type FieldAnnotationRun = {
+  kind: 'fieldAnnotation';
+  /** The variant/type of field annotation. */
+  variant: 'text' | 'image' | 'signature' | 'checkbox' | 'html' | 'link';
+  /** Display text shown inside the pill (fallback for all types). */
+  displayLabel: string;
+  /** Unique field identifier. */
+  fieldId?: string;
+  /** Field type identifier (e.g., 'TEXTINPUT', 'SIGNATURE'). */
+  fieldType?: string;
+  /** Background color as hex string (e.g., "#980043"). Applied with alpha. */
+  fieldColor?: string;
+  /** Border color as hex string (e.g., "#b015b3"). */
+  borderColor?: string;
+  /** Whether to show the pill styling (border, background). Defaults to true. */
+  highlighted?: boolean;
+  /** Whether the field is hidden (display: none). */
+  hidden?: boolean;
+  /** CSS visibility value. */
+  visibility?: 'visible' | 'hidden';
+
+  // Type-specific content
+  /** Image source URL for image/signature variants. */
+  imageSrc?: string | null;
+  /** Link URL for link variant. */
+  linkUrl?: string | null;
+  /** Raw HTML content for html variant. */
+  rawHtml?: string | null;
+
+  // Sizing
+  /** Explicit size for the annotation (used for images). */
+  size?: {
+    width?: number;
+    height?: number;
+  } | null;
+
+  // Typography (applied to the displayLabel text)
+  /** Font family for the label text. */
+  fontFamily?: string | null;
+  /** Font size in points or pixels (e.g., "12pt", 14). */
+  fontSize?: string | number | null;
+  /** Text color as hex string. */
+  textColor?: string | null;
+  /** Text highlight/background color (overrides fieldColor). */
+  textHighlight?: string | null;
+  /** Bold text styling. */
+  bold?: boolean;
+  /** Italic text styling. */
+  italic?: boolean;
+  /** Underline text styling. */
+  underline?: boolean;
+
+  /** Absolute ProseMirror position (inclusive) of this run. */
+  pmStart?: number;
+  /** Absolute ProseMirror position (exclusive) after this run. */
+  pmEnd?: number;
+
+  /** Full SDT metadata if available. */
+  sdt?: SdtMetadata;
+};
+
+export type Run = TextRun | TabRun | ImageRun | LineBreakRun | BreakRun | FieldAnnotationRun;
 
 export type ParagraphBlock = {
   kind: 'paragraph';
@@ -302,7 +426,7 @@ export type CellBorders = {
 export type TableCellAttrs = {
   borders?: CellBorders;
   padding?: BoxSpacing;
-  verticalAlign?: 'top' | 'middle' | 'bottom';
+  verticalAlign?: 'top' | 'middle' | 'center' | 'bottom';
   background?: string;
   tableCellProperties?: Record<string, unknown>;
 };
@@ -329,6 +453,10 @@ export type TableCell = {
 
 export type TableRowAttrs = {
   tableRowProperties?: Record<string, unknown>;
+  rowHeight?: {
+    value: number;
+    rule?: 'auto' | 'atLeast' | 'exact' | string;
+  };
 };
 
 export type TableRow = {
@@ -344,6 +472,10 @@ export type TableBlock = {
   attrs?: TableAttrs;
   /** Column widths in pixels from OOXML w:tblGrid. */
   columnWidths?: number[];
+  /** Anchor positioning for floating tables (from w:tblpPr). */
+  anchor?: TableAnchor;
+  /** Text wrapping for floating tables (from w:tblpPr distances). */
+  wrap?: TableWrap;
 };
 
 export type BoxSpacing = {
@@ -579,6 +711,12 @@ export type ImageDrawing = DrawingBlockBase &
 
 export type DrawingBlock = VectorShapeDrawing | ShapeGroupDrawing | ImageDrawing;
 
+/**
+ * Vertical alignment of content within a section/page.
+ * Maps to OOXML w:vAlign values in sectPr.
+ */
+export type SectionVerticalAlign = 'top' | 'center' | 'bottom' | 'both';
+
 export type SectionBreakBlock = {
   kind: 'sectionBreak';
   id: BlockId;
@@ -586,10 +724,18 @@ export type SectionBreakBlock = {
   pageSize?: { w: number; h: number };
   orientation?: 'portrait' | 'landscape';
   margins: {
+    /** Header margin (distance from top of page to header content) */
     header?: number;
+    /** Footer margin (distance from bottom of page to footer content) */
     footer?: number;
+    /** Top page margin (distance from top of page to body content) */
     top?: number;
+    /** Right page margin */
+    right?: number;
+    /** Bottom page margin */
     bottom?: number;
+    /** Left page margin */
+    left?: number;
   };
   numbering?: {
     format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
@@ -612,6 +758,14 @@ export type SectionBreakBlock = {
     gap: number;
     equalWidth?: boolean;
   };
+  /**
+   * Vertical alignment of content within the section's pages.
+   * - 'top': Content starts at top margin (default behavior)
+   * - 'center': Content is vertically centered between margins
+   * - 'bottom': Content is aligned to bottom margin
+   * - 'both': Content is vertically justified (distributed)
+   */
+  vAlign?: SectionVerticalAlign;
   attrs?: {
     source?: string;
     requirePageBoundary?: boolean;
@@ -636,6 +790,8 @@ export type SectionMetadata = {
   headerRefs?: Partial<Record<SectionRefType, string>>;
   footerRefs?: Partial<Record<SectionRefType, string>>;
   numbering?: SectionNumbering;
+  /** Whether first page has a different header/footer (w:titlePg in OOXML) */
+  titlePg?: boolean;
 };
 
 export type PageBreakBlock = {
@@ -672,6 +828,45 @@ export type ImageWrap = {
   distRight?: number;
   polygon?: number[][];
   behindDoc?: boolean;
+};
+
+/**
+ * Positioning for anchored/floating tables (offsets in CSS px).
+ * Corresponds to OOXML w:tblpPr attributes.
+ */
+export type TableAnchor = {
+  isAnchored?: boolean;
+  /** Horizontal anchor reference: column, page, or margin. Maps from w:horzAnchor. */
+  hRelativeFrom?: 'column' | 'page' | 'margin';
+  /** Vertical anchor reference: paragraph (text), page, or margin. Maps from w:vertAnchor. */
+  vRelativeFrom?: 'paragraph' | 'page' | 'margin';
+  /** Horizontal alignment relative to anchor. Maps from w:tblpXSpec. */
+  alignH?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  /** Vertical alignment relative to anchor. Maps from w:tblpYSpec. */
+  alignV?: 'top' | 'center' | 'bottom' | 'inside' | 'outside' | 'inline';
+  /** Absolute horizontal offset in px. Maps from w:tblpX (twips converted to px). */
+  offsetH?: number;
+  /** Absolute vertical offset in px. Maps from w:tblpY (twips converted to px). */
+  offsetV?: number;
+};
+
+/**
+ * Text wrapping for floating tables (distances in px).
+ * Tables only support Square or None wrapping (not Tight/Through like images).
+ */
+export type TableWrap = {
+  /** Wrap type: Square for text wrapping, None for absolute positioning. */
+  type: 'Square' | 'None';
+  /** Which side(s) text flows on. */
+  wrapText?: 'bothSides' | 'left' | 'right' | 'largest';
+  /** Distance from text above table (px). Maps from w:topFromText. */
+  distTop?: number;
+  /** Distance from text below table (px). Maps from w:bottomFromText. */
+  distBottom?: number;
+  /** Distance from text to left of table (px). Maps from w:leftFromText. */
+  distLeft?: number;
+  /** Distance from text to right of table (px). Maps from w:rightFromText. */
+  distRight?: number;
 };
 
 /** Exclusion zone for text wrapping around anchored images. */
@@ -737,14 +932,178 @@ export type ParagraphShading = {
   themeTint?: string;
 };
 
+/**
+ * Run styling for drop cap letter.
+ * Contains the text and font properties of the drop cap character(s).
+ */
+export type DropCapRun = {
+  /** The drop cap text (usually a single capital letter). */
+  text: string;
+  /** Font family for the drop cap. */
+  fontFamily: string;
+  /** Font size in pixels (typically much larger than body text, e.g., 117pt). */
+  fontSize: number;
+  /** Bold styling. */
+  bold?: boolean;
+  /** Italic styling. */
+  italic?: boolean;
+  /** Text color. */
+  color?: string;
+  /** Vertical position offset in pixels (from w:position, e.g., -10). */
+  position?: number;
+};
+
+/**
+ * Structured drop cap descriptor for layout engine.
+ *
+ * Drop caps are enlarged initial letters that span multiple lines of text.
+ * OOXML encodes drop caps via w:framePr with @w:dropCap attribute on a separate
+ * paragraph containing just the drop cap letter, followed by the text paragraph.
+ *
+ * Layout engine merges these into a single paragraph with this descriptor
+ * to enable proper measurement and rendering.
+ */
+export type DropCapDescriptor = {
+  /**
+   * Drop cap mode:
+   * - 'drop': Letter drops into the text area (most common)
+   * - 'margin': Letter sits in the left margin
+   */
+  mode: 'drop' | 'margin';
+  /**
+   * Number of lines the drop cap spans (from w:lines attribute, typically 2-5).
+   * Determines the height of the drop cap box.
+   */
+  lines: number;
+  /**
+   * The drop cap run containing text and styling.
+   */
+  run: DropCapRun;
+  /**
+   * Text wrapping mode (from w:wrap attribute on framePr).
+   * - 'around': Text wraps around the drop cap (default)
+   * - 'notBeside': Text does not wrap beside drop cap
+   * - 'none': No special wrapping
+   * - 'tight': Tight wrapping
+   */
+  wrap?: 'around' | 'notBeside' | 'none' | 'tight';
+  /**
+   * Measured width of the drop cap in pixels (populated during measurement).
+   */
+  measuredWidth?: number;
+  /**
+   * Measured height of the drop cap in pixels (populated during measurement).
+   */
+  measuredHeight?: number;
+};
+
+/**
+ * Word layout configuration for list items created via input rules.
+ *
+ * This type represents the structure of wordLayout data produced by @superdoc/word-layout
+ * for paragraphs with list markers. It contains metadata about marker positioning and
+ * text alignment that differs from standard hanging-indent lists.
+ *
+ * Two distinct list rendering modes exist:
+ * 1. **Standard hanging indent**: Marker sits in hanging indent area, text starts at paraIndentLeft
+ * 2. **First-line indent mode**: Marker is at paraIndentLeft + firstLine, text starts at textStartPx
+ *
+ * This type enables type-safe access to word-layout-specific properties without unsafe casts.
+ *
+ * @example
+ * ```typescript
+ * // Standard hanging indent list (marker in hanging indent area)
+ * const standardListConfig: WordLayoutConfig = {
+ *   marker: {
+ *     markerText: "1.",
+ *     justification: "right",
+ *     gutterWidthPx: 18
+ *   }
+ * };
+ * // Text starts at paraIndentLeft, marker is placed in hanging indent area
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // First-line indent mode list (input-rule created, e.g., typing "1. ")
+ * const firstLineIndentConfig: WordLayoutConfig = {
+ *   firstLineIndentMode: true,
+ *   textStartPx: 56,  // Pre-calculated: paraIndentLeft + firstLine + markerWidth + tabWidth
+ *   marker: {
+ *     markerText: "1.",
+ *     markerX: 36,      // Position where marker renders
+ *     textStartX: 56    // Where text starts after marker
+ *   }
+ * };
+ * // Text starts at textStartPx (56px), marker is at markerX (36px)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Checking for first-line indent mode in layout code
+ * const wordLayout = block.attrs?.wordLayout;
+ * if (wordLayout?.firstLineIndentMode) {
+ *   const textStart = wordLayout.textStartPx ?? 0;
+ *   // Use textStart for positioning text on first line
+ * } else {
+ *   // Use standard hanging indent calculations
+ * }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Non-list paragraph (no word layout config)
+ * const regularParagraph = {
+ *   kind: 'paragraph',
+ *   attrs: {
+ *     indent: { left: 36, firstLine: 18 }
+ *     // No wordLayout property
+ *   }
+ * };
+ * // Text positioning uses standard paragraph indent logic
+ * ```
+ */
+export type WordLayoutConfig = {
+  /**
+   * Whether this list uses first-line indent mode (true for input-rule-created lists).
+   * When true, text positioning uses textStartPx instead of standard hanging indent calculations.
+   */
+  firstLineIndentMode?: boolean;
+  /**
+   * Absolute X position in pixels where text content starts on the first line.
+   * Includes marker width, tab width, and any additional spacing.
+   * Only meaningful when firstLineIndentMode is true.
+   */
+  textStartPx?: number;
+  /**
+   * Marker metadata for word-layout lists.
+   * Present when the paragraph is part of a list structure.
+   */
+  marker?: unknown;
+  /**
+   * Additional word-layout properties may be present but are not yet typed.
+   */
+  [key: string]: unknown;
+};
+
 export type ParagraphAttrs = {
   styleId?: string;
   alignment?: 'left' | 'center' | 'right' | 'justify';
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
-  /** Drop cap flag from w:framePr/@w:dropCap. */
+  /** Word quirk: justified paragraphs ignore first-line indent. Set by pm-adapter. */
+  suppressFirstLineIndent?: boolean;
+  /**
+   * Legacy drop cap flag from w:framePr/@w:dropCap.
+   * @deprecated Use dropCapDescriptor for full drop cap support.
+   */
   dropCap?: string | number | boolean;
+  /**
+   * Structured drop cap descriptor with full metadata.
+   * When present, layout engine will render the drop cap with proper geometry.
+   */
+  dropCapDescriptor?: DropCapDescriptor;
   frame?: ParagraphFrame;
   numberingProperties?: Record<string, unknown>;
   borders?: ParagraphBorders;
@@ -762,8 +1121,12 @@ export type ParagraphAttrs = {
   tocInstruction?: string;
   /** Floating alignment for positioned paragraphs (from w:framePr/@w:xAlign). */
   floatAlignment?: 'left' | 'right' | 'center';
-  /** Word paragraph layout output from @superdoc/word-layout. */
-  wordLayout?: unknown;
+  /**
+   * Word paragraph layout output from @superdoc/word-layout.
+   * Contains metadata about list marker positioning and text alignment for word-layout lists.
+   * Use WordLayoutConfig type for type-safe access to known properties.
+   */
+  wordLayout?: WordLayoutConfig;
   sdt?: SdtMetadata;
   /** Container SDT for blocks with both primary and container metadata. */
   containerSdt?: SdtMetadata;
@@ -831,6 +1194,8 @@ export type Line = {
   ascent: number;
   descent: number;
   lineHeight: number;
+  /** Maximum available width for this line (used during measurement). */
+  maxWidth?: number;
   segments?: LineSegment[];
   leaders?: LeaderDecoration[];
   bars?: BarDecoration[];
@@ -860,8 +1225,43 @@ export type ParagraphMeasure = {
   totalHeight: number;
   marker?: {
     markerWidth: number;
+    /**
+     * The actual rendered text width of the marker glyphs in pixels (e.g., "1." text width).
+     * This represents the precise width of the marker text content, as opposed to markerWidth
+     * which includes padding and represents the full marker box width.
+     *
+     * Used by the renderer for tab positioning calculations to match Word's behavior, where
+     * tabs extend from the end of the actual marker text (not the marker box edge) to the
+     * next tab stop. This ensures proper alignment between the marker and paragraph content.
+     *
+     * When undefined or null, the renderer falls back to using markerWidth for compatibility.
+     *
+     * @see markerWidth - The full marker box width including padding
+     * @see ParagraphFragment.markerTextWidth - The corresponding property in layout fragments
+     */
     markerTextWidth: number;
     indentLeft: number;
+    /**
+     * The gutter (spacing) width between the marker text and the paragraph content, in pixels.
+     * Used by the renderer for calculating tab stops in word-layout lists.
+     * When present, this value comes from Word's gutterWidthPx and is used to match Word's
+     * list marker tab alignment behavior.
+     */
+    gutterWidth?: number;
+  };
+  /**
+   * Measured drop cap information, populated when the paragraph has a drop cap.
+   * Used by the renderer to position the drop cap element.
+   */
+  dropCap?: {
+    /** Measured width of the drop cap box (including padding). */
+    width: number;
+    /** Measured height of the drop cap (based on lines * lineHeight). */
+    height: number;
+    /** Number of lines the drop cap spans. */
+    lines: number;
+    /** Drop cap mode: 'drop' inside text area, 'margin' in the margin. */
+    mode: 'drop' | 'margin';
   };
 };
 
@@ -959,6 +1359,17 @@ export type Page = {
     headerRefs?: { default?: string; first?: string; even?: string; odd?: string };
     footerRefs?: { default?: string; first?: string; even?: string; odd?: string };
   };
+  /**
+   * Vertical alignment of content within this page.
+   * Used for post-layout adjustment of fragment Y positions.
+   */
+  vAlign?: SectionVerticalAlign;
+  /**
+   * Index of the section this page belongs to.
+   * Used for section-aware page numbering and header/footer selection.
+   * Sections are 0-indexed, matching the sectionIndex in SectionMetadata.
+   */
+  sectionIndex?: number;
 };
 
 /** A paragraph fragment positioned on a page. */
@@ -972,7 +1383,28 @@ export type ParaFragment = {
   width: number;
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
+  /** The marker box width in pixels (includes padding). Used for visual sizing. */
   markerWidth?: number;
+  /**
+   * The actual rendered text width of the marker glyphs in pixels (e.g., "1." text width).
+   * Used for tab width calculation to match Word's behavior where the tab extends from
+   * the end of the actual marker text to the next tab stop, not from the box edge.
+   */
+  markerTextWidth?: number;
+  /**
+   * The gutter width for word-layout list markers, in pixels.
+   * This value is propagated from ParagraphMeasure.marker.gutterWidth and is used by the
+   * renderer to calculate tab stop widths for right-justified or centered markers.
+   * Only present for word-layout lists with marker.gutterWidth defined.
+   */
+  markerGutter?: number;
+  /**
+   * Remeasured lines for this fragment when the paragraph was re-wrapped at a different width.
+   * When present, the renderer should use these lines instead of looking up lines from
+   * the original measure using fromLine/toLine indices. This occurs when a paragraph
+   * measured at one column width is placed in a narrower column (e.g., multi-column layouts).
+   */
+  lines?: Line[];
   pmStart?: number;
   pmEnd?: number;
 };
@@ -1007,6 +1439,16 @@ export type ImageFragmentMetadata = {
   minHeight: number;
 };
 
+export type PartialRowInfo = {
+  rowIndex: number; // Which row is partially split
+  fromLineByCell: number[]; // Per-cell line start (inclusive) - 0 for first part
+  toLineByCell: number[]; // Per-cell line cutoff (exclusive) - -1 means render to end
+  isFirstPart: boolean; // True if this is the first part of a split row
+  isLastPart: boolean; // True if this is the last part of a split row
+  /** Height of this partial row portion in pixels */
+  partialHeight: number;
+};
+
 export type TableFragment = {
   kind: 'table';
   blockId: BlockId;
@@ -1018,6 +1460,8 @@ export type TableFragment = {
   height: number;
   continuesFromPrev?: boolean;
   continuesOnNext?: boolean;
+  repeatHeaderCount?: number;
+  partialRow?: PartialRowInfo;
   metadata?: TableFragmentMetadata;
 };
 
@@ -1089,6 +1533,12 @@ export type Layout = {
   pages: Page[];
   columns?: ColumnLayout;
   headerFooter?: Partial<Record<HeaderFooterType, HeaderFooterLayout>>;
+  /**
+   * Gap between pages in pixels. Used by hit testing to correctly calculate
+   * which page a click lands on when pages are rendered with spacing between them.
+   * Defaults to 0 if not specified (pages assumed to be stacked with no gap).
+   */
+  pageGap?: number;
 };
 
 export interface PainterDOM {

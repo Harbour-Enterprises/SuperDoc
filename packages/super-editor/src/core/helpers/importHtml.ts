@@ -1,6 +1,7 @@
 import { DOMParser, Node as PmNode } from 'prosemirror-model';
 import { stripHtmlStyles } from './htmlSanitizer.js';
 import { htmlHandler } from '../InputRule.js';
+import { wrapTextsInRuns } from '../inputRules/docx-paste/docx-paste.js';
 import type { Editor } from '../Editor.js';
 
 /**
@@ -32,5 +33,7 @@ export function createDocFromHTML(
     parsedContent = content;
   }
 
-  return DOMParser.fromSchema(editor.schema).parse(parsedContent);
+  let doc = DOMParser.fromSchema(editor.schema).parse(parsedContent);
+  doc = wrapTextsInRuns(doc);
+  return doc;
 }

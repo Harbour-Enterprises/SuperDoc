@@ -11,6 +11,7 @@ import {
   paragraphToFlowBlocks,
   mergeAdjacentRuns,
   dataAttrsCompatible,
+  commentsCompatible,
   isInlineImage,
   imageNodeToRun,
 } from './paragraph.js';
@@ -751,13 +752,22 @@ describe('paragraph converters', () => {
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
         expect(blocks).toHaveLength(1);
+        // textNodeToRun receives empty marks - marks are applied separately after linked styles
+        // This ensures marks override linked styles (correct priority order)
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           { type: 'text', text: 'Bold text' },
           positions,
           'Arial',
           16,
-          [{ type: 'bold' }],
+          [], // Empty marks - marks applied separately after linked styles
           undefined,
+          expect.any(Object),
+          undefined,
+        );
+        // Marks including bold are applied via applyMarksToRun after linked styles
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.arrayContaining([{ type: 'bold' }]),
           expect.any(Object),
           undefined,
         );
@@ -783,15 +793,22 @@ describe('paragraph converters', () => {
 
         paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        // Marks are merged as [...innerMarks, ...inheritedMarks]
-        // So italic (from inner run) comes first, then bold (from outer run)
+        // textNodeToRun receives empty marks - marks are applied separately after linked styles
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           { type: 'text', text: 'Bold italic' },
           positions,
           'Arial',
           16,
-          [{ type: 'italic' }, { type: 'bold' }],
+          [], // Empty marks - marks applied separately after linked styles
           undefined,
+          { enableRichHyperlinks: false },
+          undefined,
+        );
+        // Marks are merged as [...nodeMarks, ...inheritedMarks] and applied via applyMarksToRun
+        // So italic (from inner run) comes first, then bold (from outer run)
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          expect.arrayContaining([{ type: 'italic' }, { type: 'bold' }]),
           { enableRichHyperlinks: false },
           undefined,
         );
@@ -818,7 +835,7 @@ describe('paragraph converters', () => {
 
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenCalledWith(tabNode, positions, 0, para);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenCalledWith(tabNode, positions, 0, para, []);
         const paraBlock = blocks[0] as ParagraphBlock;
         expect(paraBlock.runs).toContain(mockTabRun);
       });
@@ -831,9 +848,9 @@ describe('paragraph converters', () => {
 
         paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
 
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(1, expect.any(Object), positions, 0, para);
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(2, expect.any(Object), positions, 1, para);
-        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(3, expect.any(Object), positions, 2, para);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(1, expect.any(Object), positions, 0, para, []);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(2, expect.any(Object), positions, 1, para, []);
+        expect(vi.mocked(tabNodeToRun)).toHaveBeenNthCalledWith(3, expect.any(Object), positions, 2, para, []);
       });
 
       it('should skip tab when tabNodeToRun returns null', () => {
@@ -994,8 +1011,8 @@ describe('paragraph converters', () => {
         );
       });
 
-      it('should render fieldAnnotation inner content when present', () => {
-        paragraphToFlowBlocks(
+      it('should render fieldAnnotation as FieldAnnotationRun with inner content as displayLabel', () => {
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1012,20 +1029,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Field value' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Field value',
+        });
       });
 
       it('should use displayLabel when fieldAnnotation has no content', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1043,20 +1059,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Display Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Display Text',
+        });
       });
 
       it('should fallback to defaultDisplayLabel when displayLabel not present', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1074,20 +1089,19 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Default Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Default Text',
+        });
       });
 
       it('should use alias as final fallback for fieldAnnotation', () => {
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1105,24 +1119,27 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          { type: 'text', text: 'Alias Text' },
-          positions,
-          'Arial',
-          16,
-          [],
-          undefined,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          variant: 'text',
+          displayLabel: 'Alias Text',
+        });
       });
 
       it('should propagate SDT metadata from fieldAnnotation', () => {
-        const fieldMetadata = { kind: 'field' as const };
+        const fieldMetadata = {
+          type: 'fieldAnnotation' as const,
+          fieldId: 'test-field-123',
+          variant: 'text' as const,
+        };
 
         vi.mocked(resolveNodeSdtMetadata).mockReturnValue(fieldMetadata);
 
-        paragraphToFlowBlocks(
+        const blocks = paragraphToFlowBlocks(
           {
             type: 'paragraph',
             content: [
@@ -1139,16 +1156,15 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
-        expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
-          expect.any(Object),
-          positions,
-          'Arial',
-          16,
-          [],
-          fieldMetadata,
-          expect.any(Object),
-          undefined,
-        );
+        expect(blocks).toHaveLength(1);
+        const para = blocks[0] as { kind: string; runs: unknown[] };
+        expect(para.kind).toBe('paragraph');
+        expect(para.runs).toHaveLength(1);
+        expect(para.runs[0]).toMatchObject({
+          kind: 'fieldAnnotation',
+          displayLabel: 'Field',
+          sdt: fieldMetadata,
+        });
       });
     });
 
@@ -1697,7 +1713,7 @@ describe('paragraph converters', () => {
       it('should handle hardBreak node (page break)', () => {
         const hardBreakNode: PMNode = {
           type: 'hardBreak',
-          attrs: { customAttr: 'value' },
+          attrs: { pageBreakType: 'page', customAttr: 'value' },
         };
         const para: PMNode = {
           type: 'paragraph',
@@ -1708,7 +1724,7 @@ describe('paragraph converters', () => {
 
         expect(blocks).toHaveLength(3);
         expect(blocks[1].kind).toBe('pageBreak');
-        expect(blocks[1].attrs).toEqual({ customAttr: 'value' });
+        expect(blocks[1].attrs).toEqual({ pageBreakType: 'page', customAttr: 'value' });
       });
 
       it('should handle lineBreak with column break type', () => {
@@ -1740,6 +1756,9 @@ describe('paragraph converters', () => {
 
         expect(blocks).toHaveLength(1);
         expect(blocks[0].kind).toBe('paragraph');
+        const paraBlock = blocks[0] as ParagraphBlock;
+        expect(paraBlock.runs).toHaveLength(2);
+        expect((paraBlock.runs[1] as Run).kind).toBe('lineBreak');
       });
     });
 
@@ -1831,7 +1850,7 @@ describe('paragraph converters', () => {
       });
 
       it('should preserve non-paragraph blocks during tracked changes processing', () => {
-        const hardBreakNode: PMNode = { type: 'hardBreak', attrs: {} };
+        const hardBreakNode: PMNode = { type: 'hardBreak', attrs: { pageBreakType: 'page' } };
         const para: PMNode = {
           type: 'paragraph',
           content: [hardBreakNode],
@@ -1897,9 +1916,11 @@ describe('paragraph converters', () => {
 
     describe('Edge cases', () => {
       it('should create empty paragraph when all content is block nodes', () => {
+        // hardBreak without pageBreakType defaults to line break (inline)
+        // so we use pageBreakType: 'page' to make it a block node
         const para: PMNode = {
           type: 'paragraph',
-          content: [{ type: 'hardBreak', attrs: {} }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         };
 
         const blocks = paragraphToFlowBlocks(para, nextBlockId, positions, 'Arial', 16, styleContext);
@@ -1915,7 +1936,7 @@ describe('paragraph converters', () => {
           type: 'paragraph',
           content: [
             { type: 'text', text: 'Before' },
-            { type: 'hardBreak', attrs: {} },
+            { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
             { type: 'text', text: 'After' },
           ],
         };
@@ -1932,7 +1953,7 @@ describe('paragraph converters', () => {
           type: 'paragraph',
           content: [
             { type: 'text', text: 'Part1' },
-            { type: 'hardBreak', attrs: {} },
+            { type: 'hardBreak', attrs: { pageBreakType: 'page' } },
             { type: 'text', text: 'Part2' },
           ],
         };
@@ -2288,6 +2309,42 @@ describe('paragraph converters', () => {
       };
 
       expect(dataAttrsCompatible(runA, runB)).toBe(false);
+    });
+  });
+
+  describe('commentsCompatible', () => {
+    it('returns true when both runs have identical comment annotations', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+
+      expect(commentsCompatible(runA, runB)).toBe(true);
+    });
+
+    it('returns false when comment annotations differ', () => {
+      const runA: TextRun = {
+        text: 'hello',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c1', importedId: 'imp-1', internal: true }],
+      };
+      const runB: TextRun = {
+        text: 'world',
+        fontFamily: 'Arial',
+        fontSize: 16,
+        comments: [{ commentId: 'c2', importedId: 'imp-2', internal: false }],
+      };
+
+      expect(commentsCompatible(runA, runB)).toBe(false);
     });
   });
 

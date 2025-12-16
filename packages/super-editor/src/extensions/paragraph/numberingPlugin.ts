@@ -167,24 +167,17 @@ export function createNumberingPlugin(editor: Editor): Plugin {
         const safeJustification: string = typeof justification === 'string' ? justification : '';
         const safeNumberingType: string = String(listNumberingType ?? '');
 
-        if (
-          JSON.stringify(node.attrs.listRendering) !==
-          JSON.stringify({
-            markerText,
-            suffix: safeSuffix,
-            justification: safeJustification,
-            path,
-            numberingType: safeNumberingType,
-          })
-        ) {
+        const newListRendering = {
+          markerText,
+          suffix: safeSuffix,
+          justification: safeJustification,
+          path,
+          numberingType: safeNumberingType,
+        };
+
+        if (JSON.stringify(node.attrs.listRendering) !== JSON.stringify(newListRendering)) {
           // Updating rendering attrs for node view usage
-          tr.setNodeAttribute(pos, 'listRendering', {
-            markerText,
-            suffix: safeSuffix,
-            justification: safeJustification,
-            path,
-            numberingType: safeNumberingType,
-          });
+          tr.setNodeAttribute(pos, 'listRendering', newListRendering);
         }
 
         return false; // no need to descend into a paragraph

@@ -11,13 +11,16 @@ import type {
   Run,
   TextRun,
   ImageRun,
+  FieldAnnotationRun,
   Line,
+  LineSegment,
   ParagraphBlock,
   ParagraphMeasure,
   ImageBlock,
   ImageDrawing,
   ParagraphAttrs,
   ParagraphBorder,
+  ParagraphBorders,
   ListItemFragment,
   ListBlock,
   ListMeasure,
@@ -37,6 +40,7 @@ import type {
   GradientFill,
   SolidFillWithAlpha,
   ShapeTextContent,
+  DropCapDescriptor,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -51,10 +55,31 @@ import {
   ensurePrintStyles,
   ensureLinkStyles,
   ensureTrackChangeStyles,
+  ensureSdtContainerStyles,
+  ensureFieldAnnotationStyles,
+  ensureImageSelectionStyles,
   type PageStyles,
 } from './styles.js';
+import { DOM_CLASS_NAMES } from './constants.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
+import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
+import { applySdtContainerStyling } from './utils/sdt-helpers.js';
+import {
+  generateRulerDefinitionFromPx,
+  createRulerElement,
+  ensureRulerStyles,
+  RULER_CLASS_NAMES,
+} from './ruler/index.js';
+import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import {
+  hashParagraphBorders,
+  getRunStringProp,
+  getRunNumberProp,
+  getRunBooleanProp,
+  getRunUnderlineStyle,
+  getRunUnderlineColor,
+} from './paragraph-hash-utils.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -64,7 +89,12 @@ type WordLayoutMarker = {
   markerText?: string;
   justification?: 'left' | 'right' | 'center';
   gutterWidthPx?: number;
+  markerBoxWidthPx?: number;
   suffix?: 'tab' | 'space' | 'nothing';
+  /** Pre-calculated X position where the marker should be placed (used in firstLineIndentMode). */
+  markerX?: number;
+  /** Pre-calculated X position where paragraph text should begin after the marker (used in firstLineIndentMode). */
+  textStartX?: number;
   run: {
     fontFamily: string;
     fontSize: number;
@@ -77,11 +107,120 @@ type WordLayoutMarker = {
 
 /**
  * Minimal type for wordLayout property used in this renderer.
- * Full type is WordParagraphLayoutOutput from @superdoc/word-layout.
+ *
+ * This is a subset of the full WordParagraphLayoutOutput type from @superdoc/word-layout.
+ * We extract only the fields needed for rendering to avoid a direct dependency on the
+ * word-layout package from the renderer. This allows the renderer to work with any object
+ * that provides these properties, maintaining loose coupling between packages.
+ *
+ * The wordLayout property is attached to ParagraphBlock.attrs during block processing
+ * and contains layout metadata needed for proper list marker and indent rendering.
+ *
+ * @property marker - Optional list marker layout containing text, styling, and positioning info
+ * @property indentLeftPx - Left indent in pixels (used for marker positioning calculations)
+ * @property firstLineIndentMode - When true, indicates the paragraph uses firstLine indent
+ *   pattern (marker at left+firstLine) instead of standard hanging indent (marker at left-hanging).
+ *   This flag changes how markers are positioned and how tab spacing is calculated.
+ * @property textStartPx - X position where paragraph text should begin (used for tab width calculation)
+ * @property tabsPx - Array of explicit tab stop positions in pixels
  */
 type MinimalWordLayout = {
   marker?: WordLayoutMarker;
+  indentLeftPx?: number;
+  /** True for firstLine indent pattern (marker at left+firstLine vs left-hanging). */
+  firstLineIndentMode?: boolean;
+  /** X position where paragraph text should begin. */
+  textStartPx?: number;
+  /** Array of explicit tab stop positions in pixels. */
+  tabsPx?: number[];
 };
+
+/**
+ * Type guard to check if a value is a valid MinimalWordLayout object.
+ *
+ * This guard validates that the object has the expected structure for MinimalWordLayout
+ * without unsafe type assertions. It checks for the presence of valid properties and
+ * ensures type safety when accessing wordLayout from block attributes.
+ *
+ * @param value - The value to check (typically from block.attrs?.wordLayout)
+ * @returns True if the value is a valid MinimalWordLayout object, false otherwise
+ *
+ * @example
+ * ```typescript
+ * const wordLayout = block.attrs?.wordLayout;
+ * if (isMinimalWordLayout(wordLayout)) {
+ *   // TypeScript now knows wordLayout is MinimalWordLayout
+ *   const marker = wordLayout.marker;
+ *   const isFirstLineMode = wordLayout.firstLineIndentMode === true;
+ * }
+ * ```
+ */
+function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const obj = value as Record<string, unknown>;
+
+  // Check marker property if present
+  if (obj.marker !== undefined) {
+    if (typeof obj.marker !== 'object' || obj.marker === null) {
+      return false;
+    }
+    const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerText if present (must be a string)
+    if (marker.markerText !== undefined && typeof marker.markerText !== 'string') {
+      return false;
+    }
+
+    // Validate marker.markerX if present
+    if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
+      return false;
+    }
+
+    // Validate marker.textStartX if present
+    if (marker.textStartX !== undefined && typeof marker.textStartX !== 'number') {
+      return false;
+    }
+  }
+
+  // Check indentLeftPx property if present
+  if (obj.indentLeftPx !== undefined) {
+    if (typeof obj.indentLeftPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check firstLineIndentMode property if present
+  if (obj.firstLineIndentMode !== undefined) {
+    if (typeof obj.firstLineIndentMode !== 'boolean') {
+      return false;
+    }
+  }
+
+  // Check textStartPx property if present
+  if (obj.textStartPx !== undefined) {
+    if (typeof obj.textStartPx !== 'number') {
+      return false;
+    }
+  }
+
+  // Check tabsPx property if present and validate all array elements are numbers
+  if (obj.tabsPx !== undefined) {
+    if (!Array.isArray(obj.tabsPx)) {
+      return false;
+    }
+    // Validate that all elements are numbers
+    for (const tab of obj.tabsPx) {
+      if (typeof tab !== 'number') {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
 
 /**
  * Layout mode for document rendering.
@@ -121,18 +260,35 @@ export type PageDecorationProvider = (
   page?: Page,
 ) => PageDecorationPayload | null;
 
+/**
+ * Ruler configuration options for per-page rulers.
+ */
+export type RulerOptions = {
+  /** Whether to show rulers on pages (default: false) */
+  enabled?: boolean;
+  /** Whether rulers are interactive with drag handles (default: false for per-page) */
+  interactive?: boolean;
+  /** Callback when margin handle drag ends (only used if interactive) */
+  onMarginChange?: (side: 'left' | 'right', marginInches: number) => void;
+};
+
 type PainterOptions = {
   pageStyles?: PageStyles;
   layoutMode?: LayoutMode;
+  /** Gap between pages in pixels (default: 24px for vertical, 20px for horizontal) */
+  pageGap?: number;
   headerProvider?: PageDecorationProvider;
   footerProvider?: PageDecorationProvider;
   virtualization?: {
     enabled?: boolean;
     window?: number;
     overscan?: number;
+    /** Virtualization gap override (defaults to 72px; independent of pageGap) */
     gap?: number;
     paddingTop?: number;
   };
+  /** Per-page ruler options */
+  ruler?: RulerOptions;
 };
 
 type BlockLookupEntry = {
@@ -181,6 +337,22 @@ export type FragmentRenderContext = {
 };
 
 const LIST_MARKER_GAP = 8;
+/**
+ * Default tab interval in pixels (0.5 inch at 96 DPI).
+ * Used when calculating tab stops for list markers that extend past the implicit tab stop.
+ * This matches Microsoft Word's default tab interval behavior.
+ */
+const DEFAULT_TAB_INTERVAL_PX = 48;
+/**
+ * Default page height in pixels (11 inches at 96 DPI).
+ * Used as a fallback when page size information is not available for ruler rendering.
+ */
+const DEFAULT_PAGE_HEIGHT_PX = 1056;
+/** Default gap used when virtualization is enabled (kept in sync with PresentationEditor layout defaults). */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
+const COMMENT_EXTERNAL_COLOR = '#B1124B';
+const COMMENT_INTERNAL_COLOR = '#078383';
+const COMMENT_INACTIVE_ALPHA = '22';
 
 type LinkRenderData = {
   href?: string;
@@ -215,6 +387,24 @@ const MAX_DATA_URL_LENGTH = 10 * 1024 * 1024; // 10MB
  * Prevents XSS and malformed data URL attacks.
  */
 const VALID_IMAGE_DATA_URL = /^data:image\/(png|jpeg|jpg|gif|svg\+xml|webp|bmp|ico|tiff?);base64,/i;
+
+/**
+ * Maximum resize multiplier for image metadata.
+ * Images can be resized up to 3x their original dimensions.
+ */
+const MAX_RESIZE_MULTIPLIER = 3;
+
+/**
+ * Fallback maximum dimension for image resizing when original size is small.
+ * Ensures images can be resized to at least 1000px even if original is smaller.
+ */
+const FALLBACK_MAX_DIMENSION = 1000;
+
+/**
+ * Minimum image dimension in pixels.
+ * Ensures images remain visible and interactive during resizing.
+ */
+const MIN_IMAGE_DIMENSION = 20;
 
 /**
  * Pattern to detect ambiguous link text that doesn't convey destination (WCAG 2.4.4).
@@ -574,11 +764,13 @@ export class DomPainter {
    * @private
    */
   private pendingTooltips = new WeakMap<HTMLElement, string>();
+  // Page gap for normal (non-virtualized) rendering
+  private pageGap = 24; // px, default for vertical mode
   // Virtualization state (vertical mode only)
   private virtualEnabled = false;
   private virtualWindow = 5;
   private virtualOverscan = 0;
-  private virtualGap = 72; // px, approximates prior margin + gap look
+  private virtualGap = DEFAULT_VIRTUALIZED_PAGE_GAP; // px, default for virtualized mode
   private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
   private topSpacerEl: HTMLElement | null = null;
   private bottomSpacerEl: HTMLElement | null = null;
@@ -599,14 +791,23 @@ export class DomPainter {
     this.blockLookup = this.buildBlockLookup(blocks, measures);
     this.headerProvider = options.headerProvider;
     this.footerProvider = options.footerProvider;
+
+    // Initialize page gap (defaults: 24px vertical, 20px horizontal)
+    const defaultGap = this.layoutMode === 'horizontal' ? 20 : 24;
+    this.pageGap =
+      typeof options.pageGap === 'number' && Number.isFinite(options.pageGap)
+        ? Math.max(0, options.pageGap)
+        : defaultGap;
+
     // Initialize virtualization config (feature-flagged)
     if (this.layoutMode === 'vertical' && options.virtualization?.enabled) {
       this.virtualEnabled = true;
       this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
       this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
-      if (typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap)) {
-        this.virtualGap = Math.max(0, options.virtualization.gap);
-      }
+      // Virtualization gap: use explicit virtualization.gap if provided, otherwise default to virtualized gap (72px)
+      const hasExplicitVirtualGap =
+        typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap);
+      this.virtualGap = hasExplicitVirtualGap ? Math.max(0, options.virtualization.gap) : DEFAULT_VIRTUALIZED_PAGE_GAP;
       if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
         this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
       }
@@ -723,6 +924,12 @@ export class DomPainter {
     ensurePrintStyles(doc);
     ensureLinkStyles(doc);
     ensureTrackChangeStyles(doc);
+    ensureFieldAnnotationStyles(doc);
+    ensureSdtContainerStyles(doc);
+    ensureImageSelectionStyles(doc);
+    if (this.options.ruler?.enabled) {
+      ensureRulerStyles(doc);
+    }
     mount.classList.add(CLASS_NAMES.container);
 
     if (this.mount && this.mount !== mount) {
@@ -735,6 +942,8 @@ export class DomPainter {
     const mode = this.layoutMode;
     if (mode === 'horizontal') {
       applyStyles(mount, containerStylesHorizontal);
+      // Use configured page gap for horizontal rendering
+      mount.style.gap = `${this.pageGap}px`;
       this.renderHorizontal(layout, mount);
       this.currentLayout = layout;
       this.pageStates = [];
@@ -762,6 +971,8 @@ export class DomPainter {
       return;
     }
 
+    // Use configured page gap for normal vertical rendering
+    mount.style.gap = `${this.pageGap}px`;
     if (!this.currentLayout || this.pageStates.length === 0) {
       this.fullRender(layout);
     } else {
@@ -1055,17 +1266,104 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.page);
     applyStyles(el, pageStyles(width, height, this.getEffectivePageStyles()));
+
+    // Render per-page ruler if enabled
+    if (this.options.ruler?.enabled) {
+      const rulerEl = this.renderPageRuler(width, page);
+      if (rulerEl) {
+        el.appendChild(rulerEl);
+      }
+    }
+
     const contextBase: FragmentRenderContext = {
       pageNumber: page.number,
       totalPages: this.totalPages,
       section: 'body',
       pageNumberText: page.numberText,
     };
+
     page.fragments.forEach((fragment) => {
       el.appendChild(this.renderFragment(fragment, contextBase));
     });
     this.renderDecorationsForPage(el, page);
     return el;
+  }
+
+  /**
+   * Render a ruler element for a page.
+   *
+   * Creates a horizontal ruler with tick marks and optional interactive margin handles.
+   * The ruler is positioned at the top of the page and displays inch measurements.
+   *
+   * @param pageWidthPx - Page width in pixels
+   * @param page - Page data containing margins and optional size information
+   * @returns Ruler element, or null if this.doc is unavailable or page margins are missing
+   *
+   * Side effects:
+   * - Creates DOM elements and applies inline styles
+   * - May invoke the onMarginChange callback if interactive mode is enabled
+   *
+   * Fallback behavior:
+   * - Uses DEFAULT_PAGE_HEIGHT_PX (1056px = 11 inches) if page.size.h is not available
+   * - Defaults margins to 0 if not explicitly provided
+   */
+  private renderPageRuler(pageWidthPx: number, page: Page): HTMLElement | null {
+    if (!this.doc) {
+      console.warn('[renderPageRuler] Cannot render ruler: document is not available.');
+      return null;
+    }
+
+    if (!page.margins) {
+      console.warn(`[renderPageRuler] Cannot render ruler for page ${page.number}: margins not available.`);
+      return null;
+    }
+
+    const margins = page.margins;
+    const leftMargin = margins.left ?? 0;
+    const rightMargin = margins.right ?? 0;
+
+    try {
+      const rulerDefinition = generateRulerDefinitionFromPx({
+        pageWidthPx,
+        pageHeightPx: page.size?.h ?? DEFAULT_PAGE_HEIGHT_PX,
+        leftMarginPx: leftMargin,
+        rightMarginPx: rightMargin,
+      });
+
+      const interactive = this.options.ruler?.interactive ?? false;
+      const onMarginChange = this.options.ruler?.onMarginChange;
+
+      const rulerEl = createRulerElement({
+        definition: rulerDefinition,
+        doc: this.doc,
+        interactive,
+        onDragEnd:
+          interactive && onMarginChange
+            ? (side, x) => {
+                // Convert pixel position to inches for callback
+                try {
+                  const ppi = 96;
+                  const marginInches = side === 'left' ? x / ppi : (pageWidthPx - x) / ppi;
+                  onMarginChange(side, marginInches);
+                } catch (error) {
+                  console.error('[renderPageRuler] Error in onMarginChange callback:', error);
+                }
+              }
+            : undefined,
+      });
+
+      // Position ruler at top of page (above content area)
+      rulerEl.style.position = 'absolute';
+      rulerEl.style.top = '0';
+      rulerEl.style.left = '0';
+      rulerEl.style.zIndex = '20';
+      rulerEl.dataset.pageNumber = String(page.number);
+
+      return rulerEl;
+    } catch (error) {
+      console.error(`[renderPageRuler] Failed to create ruler for page ${page.number}:`, error);
+      return null;
+    }
   }
 
   private renderDecorationsForPage(pageEl: HTMLElement, page: Page): void {
@@ -1088,9 +1386,26 @@ export class DomPainter {
     const container = (existing as HTMLElement) ?? this.doc.createElement('div');
     container.className = className;
     container.innerHTML = '';
-    const offset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
+    const baseOffset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
     const marginLeft = data.marginLeft ?? 0;
     const marginRight = page.margins?.right ?? 0;
+
+    // For footers, if content is taller than reserved space, expand container upward
+    // The container bottom stays anchored at footerMargin from page bottom
+    let effectiveHeight = data.height;
+    let effectiveOffset = baseOffset;
+    if (
+      kind === 'footer' &&
+      typeof data.contentHeight === 'number' &&
+      Number.isFinite(data.contentHeight) &&
+      data.contentHeight > 0 &&
+      data.contentHeight > data.height
+    ) {
+      effectiveHeight = data.contentHeight;
+      // Move container up to accommodate taller content while keeping bottom edge in place
+      effectiveOffset = baseOffset - (data.contentHeight - data.height);
+    }
+
     container.style.position = 'absolute';
     container.style.left = `${marginLeft}px`;
     if (typeof data.contentWidth === 'number') {
@@ -1099,12 +1414,17 @@ export class DomPainter {
       container.style.width = `calc(100% - ${marginLeft + marginRight}px)`;
     }
     container.style.pointerEvents = 'none';
-    container.style.height = `${data.height}px`;
-    container.style.top = `${Math.max(0, offset)}px`;
+    container.style.height = `${effectiveHeight}px`;
+    container.style.top = `${Math.max(0, effectiveOffset)}px`;
     container.style.zIndex = '1';
+    // Allow header/footer content to overflow its container bounds.
+    // In OOXML, headers and footers can extend past their allocated margin space
+    // into the body region, similar to how body content can have negative indents.
+    container.style.overflow = 'visible';
 
     // For footers, calculate offset to push content to bottom of container
     // Fragments are absolutely positioned, so we need to adjust their y values
+    // Use effectiveHeight (which accounts for overflow) rather than reserved height
     let footerYOffset = 0;
     if (kind === 'footer' && data.fragments.length > 0) {
       const contentHeight =
@@ -1116,7 +1436,8 @@ export class DomPainter {
               return Math.max(max, f.y + Math.max(0, fragHeight));
             }, 0);
       // Offset to push content to bottom of container
-      footerYOffset = Math.max(0, data.height - contentHeight);
+      // When container has expanded (effectiveHeight >= contentHeight), offset is 0
+      footerYOffset = Math.max(0, effectiveHeight - contentHeight);
     }
 
     const context: FragmentRenderContext = {
@@ -1249,7 +1570,7 @@ export class DomPainter {
           current.signature = fragmentSignature(fragment, this.blockLookup);
         }
 
-        this.updateFragmentElement(current.element, fragment);
+        this.updateFragmentElement(current.element, fragment, contextBase.section);
         current.fragment = fragment;
         current.key = key;
         current.context = contextBase;
@@ -1329,10 +1650,10 @@ export class DomPainter {
       return this.renderListItemFragment(fragment, context);
     }
     if (fragment.kind === 'image') {
-      return this.renderImageFragment(fragment);
+      return this.renderImageFragment(fragment, context);
     }
     if (fragment.kind === 'drawing') {
-      return this.renderDrawingFragment(fragment);
+      return this.renderDrawingFragment(fragment, context);
     }
     if (fragment.kind === 'table') {
       return this.renderTableFragment(fragment, context);
@@ -1361,7 +1682,7 @@ export class DomPainter {
 
       const block = lookup.block as ParagraphBlock;
       const measure = lookup.measure as ParagraphMeasure;
-      const wordLayout = block.attrs?.wordLayout as MinimalWordLayout | undefined;
+      const wordLayout = isMinimalWordLayout(block.attrs?.wordLayout) ? block.attrs.wordLayout : undefined;
 
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment);
@@ -1370,13 +1691,22 @@ export class DomPainter {
       const isTocEntry = block.attrs?.isTocEntry;
       // For fragments with markers, allow overflow to show markers positioned at negative left
       const hasMarker = !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
+      // SDT containers need overflow visible for tooltips/labels positioned above
+      const hasSdtContainer =
+        block.attrs?.sdt?.type === 'documentSection' ||
+        block.attrs?.sdt?.type === 'structuredContent' ||
+        block.attrs?.containerSdt?.type === 'documentSection' ||
+        block.attrs?.containerSdt?.type === 'structuredContent';
+      // Negative indents extend text into the margin area, requiring overflow:visible
+      const paraIndentForOverflow = block.attrs?.indent;
+      const hasNegativeIndent = (paraIndentForOverflow?.left ?? 0) < 0 || (paraIndentForOverflow?.right ?? 0) < 0;
       const styles = isTocEntry
         ? { ...fragmentStyles, whiteSpace: 'nowrap' }
-        : hasMarker
+        : hasMarker || hasSdtContainer || hasNegativeIndent
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
 
       // Add TOC-specific styling class
       if (isTocEntry) {
@@ -1390,7 +1720,9 @@ export class DomPainter {
         fragmentEl.dataset.continuesOnNext = 'true';
       }
 
-      const lines = measure.lines.slice(fragment.fromLine, fragment.toLine);
+      // Use fragment.lines if available (set when paragraph was remeasured for narrower column).
+      // Otherwise, fall back to slicing from the original measure.
+      const lines = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
 
       applyParagraphBlockStyles(fragmentEl, block.attrs);
       if (block.attrs?.styleId) {
@@ -1400,22 +1732,230 @@ export class DomPainter {
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
 
+      // Apply SDT container styling (document sections, structured content blocks)
+      // TODO: Track actual container boundaries across fragments when same sdt.id spans multiple fragments
+      applySdtContainerStyling(this.doc, fragmentEl, block.attrs?.sdt, block.attrs?.containerSdt);
+
+      // Render drop cap if present (only on the first fragment, not continuation)
+      const dropCapDescriptor = block.attrs?.dropCapDescriptor;
+      const dropCapMeasure = measure.dropCap;
+      if (dropCapDescriptor && dropCapMeasure && !fragment.continuesFromPrev) {
+        const dropCapEl = this.renderDropCap(dropCapDescriptor, dropCapMeasure);
+        fragmentEl.appendChild(dropCapEl);
+      }
+
+      // Remove fragment-level indent so line-level indent handling doesn't double-apply.
+      // Include margin properties for negative indents (which use margin instead of padding).
+      if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
+      if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
+      if (fragmentEl.style.marginLeft) fragmentEl.style.removeProperty('margin-left');
+      if (fragmentEl.style.marginRight) fragmentEl.style.removeProperty('margin-right');
+      if (fragmentEl.style.textIndent) fragmentEl.style.removeProperty('text-indent');
+
+      const paraIndent = block.attrs?.indent;
+      const paraIndentLeft = paraIndent?.left ?? 0;
+      const paraIndentRight = paraIndent?.right ?? 0;
+      // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
+      // suppressFirstLineIndent=true for these cases.
+      const suppressFirstLineIndent = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
+      const firstLineOffset = suppressFirstLineIndent ? 0 : (paraIndent?.firstLine ?? 0) - (paraIndent?.hanging ?? 0);
+
+      // Check if the paragraph ends with a lineBreak run.
+      // In Word, justified text stretches all lines EXCEPT the true last line of a paragraph.
+      // However, if the paragraph ends with a <w:br/> (lineBreak), the visible text before
+      // the break should still be justified because the "last line" is the empty line after the break.
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
       lines.forEach((line, index) => {
-        const lineEl = this.renderLine(block, line, context);
-        if (index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
+        /**
+         * Calculate available width for text justification.
+         *
+         * Uses line.maxWidth (from measurement phase) as the canonical source because it
+         * correctly accounts for line-specific width constraints like firstLine indent
+         * offsets, drop cap width reduction, and exclusion zones from wrapped images.
+         *
+         * Bug fix: Previously calculated from fragment.width minus indents, which caused
+         * lines with firstLine indent to be justified to the wrong width. For example,
+         * a line measured at 624.8px was justified to 672.8px, causing right margin overflow.
+         */
+        const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        const availableWidthOverride = line.maxWidth ?? fallbackAvailableWidth;
+
+        // Determine if this is the true last line of the paragraph that should skip justification.
+        // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
+        //
+        // IMPORTANT: List paragraphs (paragraphs with fragment.markerWidth and wordLayout.marker)
+        // SHOULD be justified per MS Word specification when alignment is 'justify'. Do NOT add
+        // an isListParagraph check here - the last line rule applies equally to list and non-list
+        // paragraphs (both skip justification on the final line unless it ends with lineBreak).
+        const isLastLineOfFragment = index === lines.length - 1;
+        const isLastLineOfParagraph = isLastLineOfFragment && !fragment.continuesOnNext;
+        const shouldSkipJustifyForLastLine = isLastLineOfParagraph && !paragraphEndsWithLineBreak;
+
+        const lineEl = this.renderLine(
+          block,
+          line,
+          context,
+          availableWidthOverride,
+          fragment.fromLine + index,
+          shouldSkipJustifyForLastLine,
+        );
+
+        // List first lines handle indentation via marker positioning and tab stops,
+        // not CSS padding/text-indent. This matches Word's rendering model.
+        const isListFirstLine =
+          index === 0 && !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
+
+        /**
+         * Determines if this line contains segments with explicit X positioning (typically from tabs).
+         * When segments have explicit X positions, they are rendered with absolute positioning,
+         * which means CSS textIndent has no effect on their placement.
+         */
+        const hasExplicitSegmentPositioning = line.segments?.some((seg) => seg.x !== undefined);
+
+        /**
+         * Identifies first lines that require special indent handling.
+         * This includes both hanging indents (negative firstLineOffset) and positive firstLine indents.
+         * When combined with explicit segment positioning, we must adjust paddingLeft instead of
+         * using textIndent, since absolutely positioned segments are not affected by textIndent.
+         */
+        const isFirstLine = index === 0 && !fragment.continuesFromPrev;
+
+        // Apply paragraph indent via padding (skip for list first lines)
+        if (!isListFirstLine) {
+          /**
+           * Special handling for first lines with explicit segment positioning.
+           *
+           * Normally we implement first-line/hanging indents with:
+           * - paddingLeft = leftIndent
+           * - textIndent = firstLine - hanging (positive for firstLine, negative for hanging)
+           *
+           * However, when tabs are present, segments have explicit X positions calculated
+           * during layout that are relative to the content area start. Since these segments
+           * use absolute positioning, CSS textIndent doesn't affect them.
+           *
+           * Therefore, we must incorporate the firstLineOffset into paddingLeft to match
+           * where the absolutely positioned segments expect to start.
+           *
+           * Examples:
+           * - leftIndent=360, hanging=360 (firstLineOffset=-360)
+           *   Normal: paddingLeft=360px, textIndent=-360px → first line content at 0px
+           *   With tabs: paddingLeft=0px, no textIndent → segments positioned correctly
+           *
+           * - leftIndent=360, firstLine=720 (firstLineOffset=+720)
+           *   Normal: paddingLeft=360px, textIndent=720px → first line content at 1080px
+           *   With tabs: paddingLeft=1080px, no textIndent → segments positioned correctly
+           */
+          if (hasExplicitSegmentPositioning) {
+            // When segments have explicit X positions (from tabs), they are absolutely positioned.
+            // Absolutely positioned elements ignore padding, so we must NOT set paddingLeft.
+            // The segment X positions already include the paragraph indent from layout calculation.
+            // For first lines with firstLineOffset, adjust the starting position.
+            if (isFirstLine && firstLineOffset !== 0) {
+              // For negative left indent, fragment position is already adjusted in layout engine.
+              // Only apply padding for the firstLineOffset (relative to the paragraph indent).
+              const effectiveLeftIndent = paraIndentLeft < 0 ? 0 : paraIndentLeft;
+              const adjustedPadding = effectiveLeftIndent + firstLineOffset;
+              if (adjustedPadding > 0) {
+                lineEl.style.paddingLeft = `${adjustedPadding}px`;
+              }
+              // Note: negative adjustedPadding (from hanging indent) is handled by textIndent below
+            }
+            // Otherwise, don't set paddingLeft - segment positions handle indentation
+          } else if (paraIndentLeft && paraIndentLeft > 0) {
+            // Only apply positive left indent as padding.
+            // Negative left indent is handled by fragment positioning in layout engine.
+            lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+          } else if (!isFirstLine && paraIndent?.hanging && paraIndent.hanging > 0) {
+            // Body lines with hanging indent need paddingLeft = hanging.
+            // This applies even when paraIndentLeft is negative (text extending into margin).
+            // First line doesn't get this padding because it "hangs" (starts further left).
+            lineEl.style.paddingLeft = `${paraIndent.hanging}px`;
+          }
+        }
+        if (paraIndentRight && paraIndentRight > 0) {
+          // Only apply positive right indent as padding.
+          // Negative right indent is handled by fragment positioning in layout engine.
+          lineEl.style.paddingRight = `${paraIndentRight}px`;
+        }
+        // Apply first-line/hanging text-indent (skip for list first lines and lines with explicit positioning)
+        // When using explicit segment positioning, segments are absolutely positioned and textIndent
+        // has no effect, so we skip it to avoid confusion.
+        // Also skip when left indent is negative - fragment positioning already handles that case.
+        const hasNegativeLeftIndent = paraIndentLeft != null && paraIndentLeft < 0;
+        if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
+          if (!hasExplicitSegmentPositioning) {
+            lineEl.style.textIndent = `${firstLineOffset}px`;
+          }
+        } else if (firstLineOffset && !isListFirstLine) {
+          lineEl.style.textIndent = '0px';
+        }
+
+        if (isListFirstLine && wordLayout?.marker && fragment.markerWidth) {
+          // Position marker based on indent pattern:
+          // - FirstLine mode: use pre-calculated markerX from word-layout (essential because
+          //   paraIndent may have style overrides that zero out firstLine)
+          // - Standard hanging: calculate from paraIndent (works because hanging isn't overridden)
+          const isFirstLineIndentMode = wordLayout.firstLineIndentMode === true;
+
+          let markerStartPos: number;
+          if (
+            isFirstLineIndentMode &&
+            wordLayout.marker.markerX !== undefined &&
+            Number.isFinite(wordLayout.marker.markerX)
+          ) {
+            // FirstLine mode: use pre-calculated marker position from word-layout
+            markerStartPos = wordLayout.marker.markerX;
+          } else {
+            // OOXML marker position: left - hanging + firstLine
+            // - hanging: outdents the first line (marker moves left)
+            // - firstLine: indents the first line (marker moves right)
+            const hanging = paraIndent?.hanging ?? 0;
+            const firstLine = paraIndent?.firstLine ?? 0;
+            markerStartPos = paraIndentLeft - hanging + firstLine;
+          }
+
+          // Validate markerStartPos to handle NaN/Infinity values gracefully
+          const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
+          lineEl.style.paddingLeft = `${validMarkerStartPos}px`;
+
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
 
           const markerEl = this.doc!.createElement('span');
           markerEl.classList.add('superdoc-paragraph-marker');
           markerEl.textContent = wordLayout.marker.markerText ?? '';
-          markerEl.style.width = `${fragment.markerWidth}px`;
-          markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
-          markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
           markerEl.style.pointerEvents = 'none';
 
-          // Apply marker run styling
-          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          // Left-justified markers stay inline to share flow with the tab spacer.
+          // Other justifications use absolute positioning.
+          const markerJustification = wordLayout.marker.justification ?? 'left';
+
+          // For left-justified markers, don't set a fixed width - let the text flow naturally
+          // and the tab will fill to the next tab stop. For other justifications, use the
+          // box width for alignment purposes.
+          if (markerJustification !== 'left') {
+            markerEl.style.width = `${fragment.markerWidth}px`;
+            markerEl.style.textAlign = wordLayout.marker.justification ?? 'right';
+            markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
+          }
+          if (markerJustification === 'left') {
+            markerContainer.style.position = 'relative';
+          } else {
+            // For right/center-justified markers, position relative to the first-line start.
+            // First-line starts at: left - hanging + firstLine (same as markerStartPos).
+            // The marker's right edge aligns near this position.
+            // Using validMarkerStartPos ensures consistent alignment with left-justified markers.
+            const markerLeftX = validMarkerStartPos - fragment.markerWidth;
+            markerContainer.style.position = 'absolute';
+            markerContainer.style.left = `${markerLeftX}px`;
+            markerContainer.style.top = '0';
+          }
+
+          // Apply marker run styling with font fallback chain
+          markerEl.style.fontFamily =
+            toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily;
           markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
           markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
           markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
@@ -1432,17 +1972,127 @@ export class DomPainter {
             const tabEl = this.doc!.createElement('span');
             tabEl.className = 'superdoc-tab';
             tabEl.innerHTML = '&nbsp;';
-            const gutterWidth =
-              typeof wordLayout.marker.gutterWidthPx === 'number' &&
-              isFinite(wordLayout.marker.gutterWidthPx) &&
-              wordLayout.marker.gutterWidthPx > 0
-                ? wordLayout.marker.gutterWidthPx
-                : LIST_MARKER_GAP;
+
+            /**
+             * Calculate the tab width to align the paragraph text after the list marker.
+             *
+             * For left-justified markers:
+             * - Word places an implicit tab stop at indentLeft (where continuation lines align).
+             * - The tab width is calculated to reach this implicit stop from the current position.
+             * - If the marker extends past the implicit stop, we advance to the next default tab
+             *   interval (48px = 0.5 inch at 96 DPI), matching Word's behavior.
+             *
+             * For right-justified or centered markers:
+             * - Use the gutter width from the layout measurement (fragment.markerGutter or
+             *   wordLayout.marker.gutterWidthPx).
+             * - This gutter value is pre-calculated during measurement to match Word's spacing.
+             * - Falls back to LIST_MARKER_GAP if gutter is not available.
+             *
+             * This ensures list marker alignment matches Word and super-editor rendering exactly.
+             */
+            let tabWidth: number;
+            const markerBoxWidth = fragment.markerWidth;
+            // Use actual marker text width for position calculation (not box width)
+            // This matches Word's behavior where tabs extend from the end of the marker text
+            // Validate that markerTextWidth is a valid positive number before using it
+            const markerTextWidth =
+              fragment.markerTextWidth != null && isFinite(fragment.markerTextWidth) && fragment.markerTextWidth >= 0
+                ? fragment.markerTextWidth
+                : markerBoxWidth;
+
+            if ((wordLayout.marker.justification ?? 'left') === 'left') {
+              const currentPos = validMarkerStartPos + markerTextWidth;
+
+              if (isFirstLineIndentMode) {
+                // FirstLine pattern: find the appropriate tab stop for text alignment.
+                // Priority:
+                // 1. First explicit tab stop past currentPos
+                // 2. marker.textStartX (pre-calculated, consistent with marker.markerX)
+                // 3. textStartPx from word-layout
+                // 4. Minimum gap (LIST_MARKER_GAP) to ensure some separation
+
+                // Check for explicit tab stops past current position
+                const explicitTabs = wordLayout.tabsPx;
+                let targetTabStop: number | undefined;
+
+                if (Array.isArray(explicitTabs) && explicitTabs.length > 0) {
+                  // Find the first tab stop that's past the current position
+                  for (const tab of explicitTabs) {
+                    if (typeof tab === 'number' && tab > currentPos) {
+                      targetTabStop = tab;
+                      break;
+                    }
+                  }
+                }
+
+                // Get text start position - prefer marker.textStartX as it's consistent with markerX
+                const textStartTarget =
+                  wordLayout.marker.textStartX !== undefined && Number.isFinite(wordLayout.marker.textStartX)
+                    ? wordLayout.marker.textStartX
+                    : wordLayout.textStartPx;
+
+                if (targetTabStop !== undefined) {
+                  // Use explicit tab stop
+                  tabWidth = targetTabStop - currentPos;
+                } else if (
+                  textStartTarget !== undefined &&
+                  Number.isFinite(textStartTarget) &&
+                  textStartTarget > currentPos
+                ) {
+                  // Use pre-calculated text start position
+                  tabWidth = textStartTarget - currentPos;
+                } else {
+                  // Fallback: use minimum gap
+                  tabWidth = LIST_MARKER_GAP;
+                }
+
+                // Ensure minimum gap for readability
+                if (tabWidth < LIST_MARKER_GAP) {
+                  tabWidth = LIST_MARKER_GAP;
+                }
+              } else {
+                // Standard hanging mode: tab fills from marker end to text start position.
+                // In OOXML:
+                //   - markerStartPos = left - hanging + firstLine
+                //   - currentPos = markerStartPos + markerTextWidth
+                //   - textStart = left + firstLine (where first-line text begins)
+                //   - tabWidth = textStart - currentPos = hanging - markerTextWidth
+                // This positions text correctly at `left + firstLine` regardless of marker width.
+                const firstLine = paraIndent?.firstLine ?? 0;
+                const textStart = paraIndentLeft + firstLine;
+                tabWidth = textStart - currentPos;
+
+                // If marker extends past implicit tab stop (negative/zero tabWidth),
+                // advance to next default 48px tab interval, matching Word behavior.
+                if (tabWidth <= 0) {
+                  tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+                } else if (tabWidth < LIST_MARKER_GAP) {
+                  tabWidth = LIST_MARKER_GAP;
+                }
+              }
+            } else {
+              // For non-left justified markers (right/center), use the pre-calculated gutter width
+              // from layout measurement, which matches Word's spacing exactly.
+              const gutterWidth = fragment.markerGutter ?? wordLayout.marker.gutterWidthPx;
+              if (gutterWidth !== undefined && Number.isFinite(gutterWidth) && gutterWidth > 0) {
+                tabWidth = gutterWidth;
+              } else {
+                // Fallback: calculate from positions
+                const firstLine = paraIndent?.firstLine ?? 0;
+                const textStart = paraIndentLeft + firstLine;
+                tabWidth = textStart - validMarkerStartPos;
+              }
+              if (tabWidth < LIST_MARKER_GAP) {
+                tabWidth = LIST_MARKER_GAP;
+              }
+            }
+
             tabEl.style.display = 'inline-block';
-            tabEl.style.width = `${gutterWidth}px`;
-            markerContainer.appendChild(tabEl);
+            tabEl.style.width = `${tabWidth}px`;
+            lineEl.prepend(tabEl);
           } else if (suffix === 'space') {
-            markerContainer.appendChild(this.doc!.createTextNode('\u00A0'));
+            // Insert a non-breaking space in the inline flow to separate marker and text.
+            lineEl.prepend(this.doc!.createTextNode('\u00A0'));
           }
           lineEl.prepend(markerContainer);
         }
@@ -1484,6 +2134,66 @@ export class DomPainter {
     return el;
   }
 
+  /**
+   * Renders a drop cap element as a floated span at the start of a paragraph.
+   *
+   * Drop caps are large initial letters that span multiple lines of text.
+   * This method creates a floated element with the drop cap letter styled
+   * according to the descriptor's run properties.
+   *
+   * @param descriptor - The drop cap descriptor with text and styling info
+   * @param measure - The measured dimensions of the drop cap
+   * @returns HTMLElement containing the rendered drop cap
+   */
+  private renderDropCap(descriptor: DropCapDescriptor, measure: ParagraphMeasure['dropCap']): HTMLElement {
+    const doc = this.doc!;
+    const { run, mode } = descriptor;
+
+    const dropCapEl = doc.createElement('span');
+    dropCapEl.classList.add('superdoc-drop-cap');
+    dropCapEl.textContent = run.text;
+
+    // Apply styling from the run
+    dropCapEl.style.fontFamily = run.fontFamily;
+    dropCapEl.style.fontSize = `${run.fontSize}px`;
+    if (run.bold) {
+      dropCapEl.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      dropCapEl.style.fontStyle = 'italic';
+    }
+    if (run.color) {
+      dropCapEl.style.color = run.color;
+    }
+
+    // Position the drop cap based on mode
+    if (mode === 'drop') {
+      // Float left so text wraps around it
+      dropCapEl.style.float = 'left';
+      dropCapEl.style.marginRight = '4px'; // Small gap between drop cap and text
+      dropCapEl.style.lineHeight = '1'; // Prevent extra line height from affecting layout
+    } else if (mode === 'margin') {
+      // Position in the margin (left of the text area)
+      dropCapEl.style.position = 'absolute';
+      dropCapEl.style.left = '0';
+      dropCapEl.style.lineHeight = '1';
+    }
+
+    // Apply vertical position offset if specified
+    if (run.position && run.position !== 0) {
+      dropCapEl.style.position = dropCapEl.style.position || 'relative';
+      dropCapEl.style.top = `${run.position}px`;
+    }
+
+    // Set dimensions from measurement
+    if (measure) {
+      dropCapEl.style.width = `${measure.width}px`;
+      dropCapEl.style.height = `${measure.height}px`;
+    }
+
+    return dropCapEl;
+  }
+
   private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
@@ -1515,6 +2225,9 @@ export class DomPainter {
       const paragraphMetadata = item.paragraph.attrs?.sdt;
       this.applySdtDataset(fragmentEl, paragraphMetadata);
 
+      // Apply SDT container styling (document sections, structured content blocks)
+      applySdtContainerStyling(this.doc, fragmentEl, paragraphMetadata, item.paragraph.attrs?.containerSdt);
+
       if (fragment.continuesFromPrev) {
         fragmentEl.dataset.continuesFromPrev = 'true';
       }
@@ -1537,8 +2250,8 @@ export class DomPainter {
         markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
         markerEl.style.textAlign = marker.justification ?? 'left';
 
-        // Apply marker run styling
-        markerEl.style.fontFamily = marker.run.fontFamily;
+        // Apply marker run styling with font fallback chain
+        markerEl.style.fontFamily = toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily;
         markerEl.style.fontSize = `${marker.run.fontSize}px`;
         if (marker.run.bold) markerEl.style.fontWeight = 'bold';
         if (marker.run.italic) markerEl.style.fontStyle = 'italic';
@@ -1565,8 +2278,15 @@ export class DomPainter {
       // Track B: preserve indent for wordLayout-based lists to show hierarchy
       const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
       applyParagraphBlockStyles(contentEl, contentAttrs);
-      lines.forEach((line) => {
-        const lineEl = this.renderLine(item.paragraph, line, context);
+      // Force list content to left alignment AFTER applyParagraphBlockStyles (which may set justify)
+      contentEl.style.textAlign = 'left';
+      // Override alignment to left for list content rendering
+      const paraForList: ParagraphBlock = {
+        ...item.paragraph,
+        attrs: { ...(item.paragraph.attrs || {}), alignment: 'left' },
+      };
+      lines.forEach((line, idx) => {
+        const lineEl = this.renderLine(paraForList, line, context, fragment.width, fragment.fromLine + idx, true);
         contentEl.appendChild(lineEl);
       });
       fragmentEl.appendChild(contentEl);
@@ -1578,7 +2298,7 @@ export class DomPainter {
     }
   }
 
-  private renderImageFragment(fragment: ImageFragment): HTMLElement {
+  private renderImageFragment(fragment: ImageFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'image' || lookup.measure.kind !== 'image') {
@@ -1594,7 +2314,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-image-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       this.applySdtDataset(fragmentEl, block.attrs?.sdt);
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
@@ -1642,7 +2362,7 @@ export class DomPainter {
     }
   }
 
-  private renderDrawingFragment(fragment: DrawingFragment): HTMLElement {
+  private renderDrawingFragment(fragment: DrawingFragment, context: FragmentRenderContext): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'drawing' || lookup.measure.kind !== 'drawing') {
@@ -1658,7 +2378,7 @@ export class DomPainter {
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment, 'superdoc-drawing-fragment');
       applyStyles(fragmentEl, fragmentStyles);
-      this.applyFragmentFrame(fragmentEl, fragment);
+      this.applyFragmentFrame(fragmentEl, fragment, context.section);
       fragmentEl.style.height = `${fragment.height}px`;
       fragmentEl.style.position = 'absolute';
       fragmentEl.style.overflow = 'hidden';
@@ -2217,13 +2937,72 @@ export class DomPainter {
       throw new Error('DomPainter: document is not available');
     }
 
+    // Wrap applyFragmentFrame to capture section from context
+    // This ensures table cell fragments receive proper section context for PM position validation
+    const applyFragmentFrameWithSection = (el: HTMLElement, frag: Fragment): void => {
+      this.applyFragmentFrame(el, frag, context.section);
+    };
+
+    // Create a wrapper for renderLine that applies Word's justification rules for table cells.
+    // Word DOES justify text inside table cells, but skips justification on the last line
+    // (unless the paragraph ends with a line break, which shifts the "last line" down).
+    const renderLineForTableCell = (
+      block: ParagraphBlock,
+      line: Line,
+      ctx: FragmentRenderContext,
+      lineIndex: number,
+      isLastLine: boolean,
+    ): HTMLElement => {
+      // Check if paragraph ends with a line break
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
+      // Skip justify only on the last line, unless the paragraph ends with a line break
+      const shouldSkipJustify = isLastLine && !paragraphEndsWithLineBreak;
+
+      return this.renderLine(block, line, ctx, undefined, lineIndex, shouldSkipJustify);
+    };
+
+    /**
+     * Wrapper function for rendering drawing content inside table cells.
+     *
+     * This function delegates to the appropriate DomPainter methods based on the drawing kind:
+     * - 'image': Creates a standard image element with src and object-fit
+     * - 'shapeGroup': Creates a group container with positioned child shapes (images and vectors)
+     * - 'vectorShape': Creates an SVG element for the vector shape (without geometry transforms in table cells)
+     *
+     * For unsupported or unrecognized drawing kinds, returns a placeholder element with diagonal stripes.
+     *
+     * @param block - The DrawingBlock to render
+     * @returns HTMLElement representing the rendered drawing content
+     *
+     * @remarks
+     * This wrapper is specifically designed for table cell rendering where:
+     * - Vector shapes are rendered without geometry transforms (to avoid layout conflicts)
+     * - The returned element will have width: 100% and height: 100% applied by the table cell renderer
+     */
+    const renderDrawingContentForTableCell = (block: DrawingBlock): HTMLElement => {
+      if (block.drawingKind === 'image') {
+        return this.createDrawingImageElement(block);
+      }
+      if (block.drawingKind === 'shapeGroup') {
+        return this.createShapeGroupElement(block);
+      }
+      if (block.drawingKind === 'vectorShape') {
+        // For vectorShapes in table cells, render without geometry transforms
+        return this.createVectorShapeElement(block, block.geometry, false);
+      }
+      return this.createDrawingPlaceholder();
+    };
+
     return renderTableFragmentElement({
       doc: this.doc,
       fragment,
       context,
       blockLookup: this.blockLookup,
-      renderLine: this.renderLine.bind(this),
-      applyFragmentFrame: this.applyFragmentFrame.bind(this),
+      renderLine: renderLineForTableCell,
+      renderDrawingContent: renderDrawingContentForTableCell,
+      applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
     });
@@ -2234,7 +3013,7 @@ export class DomPainter {
    * @returns Sanitized link data or null if invalid/missing
    */
   private extractLinkData(run: Run): LinkRenderData | null {
-    if (run.kind === 'tab') {
+    if (run.kind === 'tab' || run.kind === 'image' || run.kind === 'lineBreak') {
       return null;
     }
     const link = (run as TextRun).link as FlowRunLink | undefined;
@@ -2431,6 +3210,29 @@ export class DomPainter {
 
     // Ensure link is keyboard accessible (should be default for <a>, but verify)
     elem.setAttribute('tabindex', '0');
+
+    // Add click handler to prevent navigation and dispatch custom event for link editing
+    elem.addEventListener('click', (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      // Dispatch custom event with link metadata for the editor to handle
+      const linkClickEvent = new CustomEvent('superdoc-link-click', {
+        bubbles: true,
+        composed: true,
+        detail: {
+          href: linkData.href,
+          target: linkData.target,
+          rel: linkData.rel,
+          tooltip: linkData.tooltip,
+          element: elem,
+          clientX: event.clientX,
+          clientY: event.clientY,
+        },
+      });
+
+      elem.dispatchEvent(linkClickEvent);
+    });
   }
 
   /**
@@ -2443,6 +3245,27 @@ export class DomPainter {
     return run.kind === 'image';
   }
 
+  /**
+   * Type guard to check if a run is a line break run.
+   */
+  private isLineBreakRun(run: Run): run is import('@superdoc/contracts').LineBreakRun {
+    return run.kind === 'lineBreak';
+  }
+
+  /**
+   * Type guard to check if a run is a break run.
+   */
+  private isBreakRun(run: Run): run is import('@superdoc/contracts').BreakRun {
+    return run.kind === 'break';
+  }
+
+  /**
+   * Type guard to check if a run is a field annotation run.
+   */
+  private isFieldAnnotationRun(run: Run): run is FieldAnnotationRun {
+    return run.kind === 'fieldAnnotation';
+  }
+
   private renderRun(
     run: Run,
     context: FragmentRenderContext,
@@ -2453,8 +3276,25 @@ export class DomPainter {
       return this.renderImageRun(run);
     }
 
+    // Handle FieldAnnotationRun - inline pill-styled form fields
+    if (this.isFieldAnnotationRun(run)) {
+      return this.renderFieldAnnotationRun(run);
+    }
+
+    // Handle LineBreakRun - line breaks are handled by the measurer creating new lines,
+    // so we don't render anything for them in the DOM. They exist in the run array for
+    // proper PM position tracking but don't need visual representation.
+    if (this.isLineBreakRun(run)) {
+      return null;
+    }
+
+    // Handle BreakRun - similar to LineBreakRun, breaks are handled by the measurer
+    if (this.isBreakRun(run)) {
+      return null;
+    }
+
     // Handle TextRun
-    if (!run.text || !this.doc) {
+    if (!('text' in run) || !run.text || !this.doc) {
       return null;
     }
 
@@ -2488,9 +3328,25 @@ export class DomPainter {
 
     // Pass isLink flag to skip applying inline color/decoration styles for links
     applyRunStyles(elem as HTMLElement, run, isActiveLink);
+    const commentColor = getCommentHighlight(run as TextRun);
+    if (commentColor && !(run as TextRun).highlight) {
+      (elem as HTMLElement).style.backgroundColor = commentColor;
+    }
+    const commentAnnotations = (run as TextRun).comments;
+    if (commentAnnotations?.length) {
+      elem.dataset.commentIds = commentAnnotations.map((c) => c.commentId).join(',');
+      if (commentAnnotations.some((c) => c.internal)) {
+        elem.dataset.commentInternal = 'true';
+      }
+      elem.classList.add('superdoc-comment-highlight');
+    }
     // Ensure text renders above tab leaders (leaders are z-index: 0)
     elem.style.zIndex = '1';
     applyRunDataAttributes(elem as HTMLElement, (run as TextRun).dataAttrs);
+
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'paragraph text run');
+
     if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
     if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
     if (trackedConfig) {
@@ -2510,14 +3366,25 @@ export class DomPainter {
    * - Only allows safe image MIME types (png, jpeg, gif, etc.) with base64 encoding
    * - Non-data URLs are sanitized through sanitizeUrl to prevent XSS
    *
+   * METADATA ATTRIBUTE:
+   * - Adds `data-image-metadata` attribute to enable interactive resizing via ImageResizeOverlay
+   * - Metadata includes: originalWidth, originalHeight, aspectRatio, min/max dimensions
+   * - Only added when run.width > 0 && run.height > 0 to prevent invalid metadata
+   * - Max dimensions: 3x original size or 1000px (whichever is larger)
+   * - Min dimensions: 20px to ensure visibility and interactivity
+   *
    * @param run - The ImageRun to render containing image source, dimensions, and spacing
    * @returns HTMLElement (img) or null if src is missing or invalid
    *
    * @example
    * ```typescript
-   * // Valid data URL
+   * // Valid data URL with metadata
    * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 100, height: 100 })
-   * // Returns: <img> element
+   * // Returns: <img> element with data-image-metadata attribute
+   *
+   * // Invalid dimensions - no metadata
+   * renderImageRun({ kind: 'image', src: 'data:image/png;base64,iVBORw...', width: 0, height: 0 })
+   * // Returns: <img> element WITHOUT data-image-metadata attribute
    *
    * // Invalid MIME type
    * renderImageRun({ kind: 'image', src: 'data:text/html;base64,PHNjcmlwdD4...', width: 100, height: 100 })
@@ -2525,7 +3392,7 @@ export class DomPainter {
    *
    * // HTTP URL
    * renderImageRun({ kind: 'image', src: 'https://example.com/image.png', width: 100, height: 100 })
-   * // Returns: <img> element (after sanitization)
+   * // Returns: <img> element (after sanitization) with data-image-metadata attribute
    * ```
    */
   private renderImageRun(run: ImageRun): HTMLElement | null {
@@ -2535,6 +3402,7 @@ export class DomPainter {
 
     // Create img element
     const img = this.doc.createElement('img');
+    img.classList.add('superdoc-inline-image');
 
     // Set source - validate data URLs with strict format and size checks
     // Note: data: URLs are blocked by sanitizeUrl for hyperlinks (XSS risk),
@@ -2564,6 +3432,26 @@ export class DomPainter {
     // Set dimensions
     img.width = run.width;
     img.height = run.height;
+
+    // Add metadata for interactive image resizing (inline images)
+    // Only add metadata if dimensions are valid (positive, non-zero values)
+    if (run.width > 0 && run.height > 0) {
+      // This enables the ImageResizeOverlay to work with inline images
+      const aspectRatio = run.width / run.height;
+      const inlineImageMetadata = {
+        originalWidth: run.width,
+        originalHeight: run.height,
+        // Max dimensions: MAX_RESIZE_MULTIPLIER x original size or FALLBACK_MAX_DIMENSION, whichever is larger
+        // This provides generous constraints while preventing excessive scaling
+        maxWidth: Math.max(run.width * MAX_RESIZE_MULTIPLIER, FALLBACK_MAX_DIMENSION),
+        maxHeight: Math.max(run.height * MAX_RESIZE_MULTIPLIER, FALLBACK_MAX_DIMENSION),
+        aspectRatio,
+        // Min dimensions: MIN_IMAGE_DIMENSION to ensure images remain visible and interactive
+        minWidth: MIN_IMAGE_DIMENSION,
+        minHeight: MIN_IMAGE_DIMENSION,
+      };
+      img.setAttribute('data-image-metadata', JSON.stringify(inlineImageMetadata));
+    }
 
     // Set alt text (required for accessibility)
     img.alt = run.alt ?? '';
@@ -2596,6 +3484,9 @@ export class DomPainter {
     // Apply z-index to render above tab leaders
     img.style.zIndex = '1';
 
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'inline image run');
+
     // Apply PM position tracking for cursor placement
     if (run.pmStart != null) {
       img.dataset.pmStart = String(run.pmStart);
@@ -2615,7 +3506,265 @@ export class DomPainter {
     return img;
   }
 
-  private renderLine(block: ParagraphBlock, line: Line, context: FragmentRenderContext): HTMLElement {
+  /**
+   * Renders a FieldAnnotationRun as an inline "pill" element matching super-editor's visual appearance.
+   *
+   * Field annotations are styled inline elements that display form fields with:
+   * - Outer span with border, border-radius, padding, and background color
+   * - Inner span containing the displayLabel or type-specific content (image, link, etc.)
+   *
+   * @param run - The FieldAnnotationRun to render containing field configuration and styling
+   * @returns HTMLElement (span) or null if document is not available
+   *
+   * @example
+   * ```typescript
+   * // Text variant
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'text', displayLabel: 'Full Name', fieldColor: '#980043' })
+   * // Returns: <span class="annotation" style="border: 2px solid #b015b3; ..."><span class="annotation-content">Full Name</span></span>
+   *
+   * // Image variant with imageSrc
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'image', displayLabel: 'Photo', imageSrc: 'data:image/png;...' })
+   * // Returns: <span class="annotation"><span class="annotation-content"><img src="..." /></span></span>
+   *
+   * // Link variant
+   * renderFieldAnnotationRun({ kind: 'fieldAnnotation', variant: 'link', displayLabel: 'Website', linkUrl: 'https://example.com' })
+   * // Returns: <span class="annotation"><span class="annotation-content"><a href="...">https://example.com</a></span></span>
+   * ```
+   */
+  private renderFieldAnnotationRun(run: FieldAnnotationRun): HTMLElement | null {
+    if (!this.doc) {
+      return null;
+    }
+
+    // Handle hidden fields
+    if (run.hidden) {
+      const hidden = this.doc.createElement('span');
+      hidden.style.display = 'none';
+      if (run.pmStart != null) hidden.dataset.pmStart = String(run.pmStart);
+      if (run.pmEnd != null) hidden.dataset.pmEnd = String(run.pmEnd);
+      return hidden;
+    }
+
+    // Default styling values (matching super-editor's FieldAnnotationView)
+    const defaultBorderColor = '#b015b3';
+    const defaultFieldColor = '#980043';
+
+    // Create outer annotation wrapper
+    const annotation = this.doc.createElement('span');
+    annotation.classList.add('annotation');
+    annotation.setAttribute('aria-label', 'Field annotation');
+
+    // Apply pill styling (unless highlighted is explicitly false)
+    const showHighlight = run.highlighted !== false;
+    if (showHighlight) {
+      const borderColor = run.borderColor || defaultBorderColor;
+      annotation.style.border = `2px solid ${borderColor}`;
+      annotation.style.borderRadius = '2px';
+      annotation.style.padding = '1px 2px';
+      annotation.style.boxSizing = 'border-box';
+
+      // Apply background color with alpha
+      const fieldColor = run.fieldColor || defaultFieldColor;
+      // Add alpha to make it semi-transparent (matching super-editor's behavior)
+      const bgColor = fieldColor.length === 7 ? `${fieldColor}33` : fieldColor;
+      // textHighlight takes precedence over fieldColor
+      if (run.textHighlight) {
+        annotation.style.backgroundColor = run.textHighlight;
+      } else {
+        annotation.style.backgroundColor = bgColor;
+      }
+    }
+
+    // Apply visibility
+    if (run.visibility === 'hidden') {
+      annotation.style.visibility = 'hidden';
+    }
+
+    // Apply explicit size if present
+    if (run.size) {
+      if (run.size.width) {
+        annotation.style.width = `${run.size.width}px`;
+        annotation.style.display = 'inline-block';
+        annotation.style.overflow = 'hidden';
+      }
+      if (run.size.height) {
+        annotation.style.height = `${run.size.height}px`;
+      }
+    }
+
+    // Apply typography to the annotation element
+    if (run.fontFamily) {
+      annotation.style.fontFamily = run.fontFamily;
+    }
+    if (run.fontSize) {
+      const fontSize = typeof run.fontSize === 'number' ? `${run.fontSize}pt` : run.fontSize;
+      annotation.style.fontSize = fontSize;
+    }
+    if (run.textColor) {
+      annotation.style.color = run.textColor;
+    }
+    if (run.bold) {
+      annotation.style.fontWeight = 'bold';
+    }
+    if (run.italic) {
+      annotation.style.fontStyle = 'italic';
+    }
+    if (run.underline) {
+      annotation.style.textDecoration = 'underline';
+    }
+
+    // Apply z-index for proper layering
+    annotation.style.zIndex = '1';
+
+    // Create inner content wrapper
+    const content = this.doc.createElement('span');
+    content.classList.add('annotation-content');
+    content.style.pointerEvents = 'none';
+    content.setAttribute('contenteditable', 'false');
+
+    // Render type-specific content
+    switch (run.variant) {
+      case 'image':
+      case 'signature': {
+        if (run.imageSrc) {
+          const img = this.doc.createElement('img');
+          // SECURITY: Validate data URLs
+          const isDataUrl = run.imageSrc.startsWith('data:');
+          if (isDataUrl) {
+            if (run.imageSrc.length <= MAX_DATA_URL_LENGTH && VALID_IMAGE_DATA_URL.test(run.imageSrc)) {
+              img.src = run.imageSrc;
+            } else {
+              // Invalid data URL - fall back to displayLabel
+              content.textContent = run.displayLabel;
+              break;
+            }
+          } else {
+            const sanitized = sanitizeHref(run.imageSrc);
+            if (sanitized) {
+              img.src = sanitized.href;
+            } else {
+              content.textContent = run.displayLabel;
+              break;
+            }
+          }
+          img.alt = run.displayLabel;
+          img.style.height = 'auto';
+          img.style.maxWidth = '100%';
+          img.style.pointerEvents = 'none';
+          img.style.verticalAlign = 'middle';
+          if (run.variant === 'signature') {
+            img.style.maxHeight = '28px';
+          }
+          content.appendChild(img);
+          annotation.style.display = 'inline-block';
+          content.style.display = 'inline-block';
+        } else {
+          content.textContent = run.displayLabel || (run.variant === 'signature' ? 'Signature' : '');
+        }
+        break;
+      }
+
+      case 'link': {
+        if (run.linkUrl) {
+          const link = this.doc.createElement('a');
+          const sanitized = sanitizeHref(run.linkUrl);
+          if (sanitized) {
+            link.href = sanitized.href;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = run.linkUrl;
+            link.style.textDecoration = 'none';
+            content.style.pointerEvents = 'all';
+            content.appendChild(link);
+          } else {
+            content.textContent = run.displayLabel;
+          }
+        } else {
+          content.textContent = run.displayLabel;
+        }
+        break;
+      }
+
+      case 'html': {
+        if (run.rawHtml && typeof run.rawHtml === 'string') {
+          // Note: For security, HTML content should be sanitized before rendering
+          // In headless/layout mode, we just render the displayLabel for safety
+          content.textContent = run.displayLabel;
+          annotation.style.display = 'inline-block';
+          content.style.display = 'inline-block';
+        } else {
+          content.textContent = run.displayLabel;
+        }
+        break;
+      }
+
+      case 'text':
+      case 'checkbox':
+      default: {
+        content.textContent = run.displayLabel;
+        break;
+      }
+    }
+
+    annotation.appendChild(content);
+
+    // Apply data attributes for field tracking
+    annotation.dataset.type = run.variant;
+    if (run.fieldId) {
+      annotation.dataset.fieldId = run.fieldId;
+    }
+    if (run.fieldType) {
+      annotation.dataset.fieldType = run.fieldType;
+    }
+
+    // Make field annotation draggable (matching super-editor behavior)
+    annotation.draggable = true;
+    annotation.dataset.draggable = 'true';
+
+    // Store additional data for drag operations
+    if (run.displayLabel) {
+      annotation.dataset.displayLabel = run.displayLabel;
+    }
+    if (run.variant) {
+      annotation.dataset.variant = run.variant;
+    }
+
+    // Assert PM positions are present for cursor fallback
+    assertPmPositions(run, 'field annotation run');
+
+    // Apply PM position tracking
+    if (run.pmStart != null) {
+      annotation.dataset.pmStart = String(run.pmStart);
+    }
+    if (run.pmEnd != null) {
+      annotation.dataset.pmEnd = String(run.pmEnd);
+    }
+
+    // Apply SDT metadata
+    this.applySdtDataset(annotation, run.sdt);
+
+    return annotation;
+  }
+
+  /**
+   * Renders a single line of a paragraph block.
+   *
+   * @param block - The paragraph block containing the line
+   * @param line - The line measurement data
+   * @param context - Rendering context with fragment information
+   * @param availableWidthOverride - Optional override for available width used in justification calculations
+   * @param lineIndex - Optional zero-based index of the line within the fragment
+   * @param skipJustify - When true, prevents justification even if alignment is 'justify'
+   * @returns The rendered line element
+   */
+  private renderLine(
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    availableWidthOverride?: number,
+    lineIndex?: number,
+    skipJustify?: boolean,
+  ): HTMLElement {
     if (!this.doc) {
       throw new Error('DomPainter: document is not available');
     }
@@ -2627,6 +3776,16 @@ export class DomPainter {
     if (styleId) {
       el.setAttribute('styleid', styleId);
     }
+    const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
+    const effectiveAlignment = alignment;
+    if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
+      el.style.textAlign = effectiveAlignment;
+    } else if (effectiveAlignment === 'justify') {
+      // Use manual spacing distribution; avoid native justify to prevent double stretching
+      el.style.textAlign = 'left';
+    } else {
+      el.style.textAlign = 'left';
+    }
 
     const lineRange = computeLinePmRange(block, line);
 
@@ -2637,10 +3796,18 @@ export class DomPainter {
       el.dataset.pmEnd = String(lineRange.pmEnd);
     }
 
-    const runs = sliceRunsForLine(block, line);
+    const runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
+    const textSlices =
+      runsForLine.length > 0
+        ? runsForLine
+            .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
+            .map((r) => r.text)
+        : gatherTextSlicesForLine(block, line);
 
-    if (runs.length === 0) {
+    // Targeted debug removed now that issue is understood.
+
+    if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
       span.innerHTML = '&nbsp;';
       el.appendChild(span);
@@ -2696,16 +3863,146 @@ export class DomPainter {
 
     // Check if any segments have explicit X positioning (from tab stops)
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+    const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
+
+    // Check if paragraph has justified alignment and line should be justified
+    // TODO: Remove this override when justify bugs are fixed
+    const shouldJustify = false; // block.attrs?.alignment === 'justify' && !hasExplicitPositioning;
+    if (shouldJustify) {
+      const spaceCount = textSlices.reduce(
+        (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
+        0,
+      );
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack !== 0) {
+        // Positive slack = expand spaces to fill line (normal justify)
+        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
+        const spacingPerSpace = slack / spaceCount;
+        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
+        el.style.wordSpacing = `${spacingPerSpace}px`;
+      }
+    }
 
     if (hasExplicitPositioning && line.segments) {
       // Use segment-based rendering with absolute positioning for tab-aligned text
       // When rendering segments, we need to track cumulative X position
-      // for segments that don't have explicit X coordinates
-      let cumulativeX = 0;
+      // for segments that don't have explicit X coordinates.
+      //
+      // The segment x positions from layout are relative to the content area (left margin = 0).
+      // We need to add the paragraph indent to ALL positions (both explicit and calculated).
+      const paraIndent = (block.attrs as ParagraphAttrs | undefined)?.indent;
+      const indentLeft = paraIndent?.left ?? 0;
+      const firstLine = paraIndent?.firstLine ?? 0;
+      const hanging = paraIndent?.hanging ?? 0;
+      const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
+      const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
+      const indentOffset = indentLeft + firstLineOffsetForCumX;
+      let cumulativeX = 0; // Start at 0, we'll add indentOffset when positioning
+      const segmentsByRun = new Map<number, LineSegment[]>();
+      line.segments.forEach((segment) => {
+        const list = segmentsByRun.get(segment.runIndex);
+        if (list) {
+          list.push(segment);
+        } else {
+          segmentsByRun.set(segment.runIndex, [segment]);
+        }
+      });
 
-      line.segments.forEach((segment, _segIdx) => {
-        const baseRun = runs[segment.runIndex];
-        if (!baseRun || baseRun.kind === 'tab') return;
+      /**
+       * Finds the X position where the immediate next segment starts after a given run index.
+       * Only returns the X if the very next run has a segment with explicit positioning.
+       * This handles tab-aligned text where right/center alignment causes the text to start
+       * before the tab stop target.
+       *
+       * WHY ONLY THE IMMEDIATE NEXT RUN:
+       * When rendering a tab, we need to know where the content IMMEDIATELY after this tab begins
+       * to correctly size the tab element. We don't look beyond the immediate next run because:
+       * 1. Each tab is independent and should only consider its directly adjacent content
+       * 2. Looking further ahead would incorrectly span multiple tabs or unrelated runs
+       * 3. If there's another tab between this tab and some content, that intermediate tab is
+       *    responsible for its own layout - we shouldn't reach across it
+       *
+       * For example, given: "Text[TAB1]Content[TAB2]MoreContent"
+       * - When sizing TAB1, we only check "Content" (immediate next run)
+       * - We don't check "MoreContent" because TAB2 is in between
+       * - TAB2 will independently check "MoreContent" when it's rendered
+       *
+       * @param fromRunIndex - The run index to search after
+       * @returns The X position of the immediate next segment, or undefined if not found or not immediate
+       */
+      const findImmediateNextSegmentX = (fromRunIndex: number): number | undefined => {
+        // Only check the immediate next run - don't skip over other tabs
+        const nextRunIdx = fromRunIndex + 1;
+        if (nextRunIdx <= line.toRun) {
+          const nextSegments = segmentsByRun.get(nextRunIdx);
+          if (nextSegments && nextSegments.length > 0) {
+            const firstSegment = nextSegments[0];
+            // Return the segment's explicit X if it has one (from tab alignment)
+            return firstSegment.x;
+          }
+        }
+        return undefined;
+      };
+
+      for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
+        const baseRun = block.runs[runIndex];
+        if (!baseRun) continue;
+
+        if (baseRun.kind === 'tab') {
+          // Find where the immediate next content begins (if it's right after this tab)
+          const immediateNextX = findImmediateNextSegmentX(runIndex);
+          const tabStartX = cumulativeX;
+
+          // The tab should span from where previous content ended to where next content begins.
+          // If the immediate next segment has an explicit X (from tab alignment), use that.
+          // Otherwise, use the tab's measured width to calculate the end position.
+          const tabEndX = immediateNextX !== undefined ? immediateNextX : tabStartX + (baseRun.width ?? 0);
+          const actualTabWidth = tabEndX - tabStartX;
+
+          const tabEl = this.doc!.createElement('span');
+          tabEl.style.position = 'absolute';
+          tabEl.style.left = `${tabStartX + indentOffset}px`;
+          tabEl.style.top = '0px';
+          tabEl.style.width = `${actualTabWidth}px`;
+          tabEl.style.height = `${line.lineHeight}px`;
+          tabEl.style.display = 'inline-block';
+          tabEl.style.pointerEvents = 'none';
+          tabEl.style.zIndex = '1';
+
+          // Apply underline styling to tab if present (common in signature lines)
+          // TabRun can have RunMarks properties like underline, bold, etc.
+          //
+          // Signature line use case: In documents with signature lines, tabs are often used
+          // to create underlined blank spaces where signatures should go. The underline mark
+          // is inherited from a parent node (e.g., a paragraph with underline formatting) and
+          // applied to the tab, creating a visible underline even though the tab itself has
+          // no visible text content.
+          if (baseRun.underline) {
+            const underlineStyle = baseRun.underline.style ?? 'single';
+            // We must use an explicit color instead of currentColor because tab content is
+            // invisible (no text). If we used currentColor, the underline would inherit the
+            // text color, which might be transparent or the same as the background, making
+            // the underline invisible. Using an explicit color (defaulting to black) ensures
+            // the underline is always visible for signature lines.
+            const underlineColor = baseRun.underline.color ?? '#000000';
+            const borderStyle = underlineStyle === 'double' ? 'double' : 'solid';
+            tabEl.style.borderBottom = `1px ${borderStyle} ${underlineColor}`;
+          } else {
+            tabEl.style.visibility = 'hidden';
+          }
+
+          if (styleId) {
+            tabEl.setAttribute('styleid', styleId);
+          }
+          if (baseRun.pmStart != null) tabEl.dataset.pmStart = String(baseRun.pmStart);
+          if (baseRun.pmEnd != null) tabEl.dataset.pmEnd = String(baseRun.pmEnd);
+          el.appendChild(tabEl);
+
+          // Update cumulativeX to where the next content begins
+          // This ensures proper positioning for subsequent elements
+          cumulativeX = tabEndX;
+          continue;
+        }
 
         // Handle ImageRun - render as-is (no slicing needed, atomic unit)
         if (this.isImageRun(baseRun)) {
@@ -2714,61 +4011,224 @@ export class DomPainter {
             if (styleId) {
               elem.setAttribute('styleid', styleId);
             }
-            // Images don't need explicit X positioning in tab-aligned content
-            // They flow naturally at their position in the run sequence
+            // Position image using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
+            const runSegments = segmentsByRun.get(runIndex);
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
+            const segWidth =
+              (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : elem.offsetWidth) ?? 0;
+            elem.style.position = 'absolute';
+            elem.style.left = `${segX}px`;
             el.appendChild(elem);
+            cumulativeX = baseSegX + segWidth;
           }
+          continue;
+        }
+
+        // Handle LineBreakRun - line breaks are handled by line creation, skip here
+        if (this.isLineBreakRun(baseRun)) {
+          continue;
+        }
+
+        // Handle BreakRun - breaks are handled by line creation, skip here
+        if (this.isBreakRun(baseRun)) {
+          continue;
+        }
+
+        // Handle FieldAnnotationRun - render as-is (no slicing needed, atomic unit like images)
+        if (this.isFieldAnnotationRun(baseRun)) {
+          const elem = this.renderRun(baseRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Position using explicit segment X when available; fallback to cumulative flow
+            // Add indentOffset to position content at the correct paragraph indent.
+            const runSegments = segmentsByRun.get(runIndex);
+            const baseSegX = runSegments && runSegments[0]?.x !== undefined ? runSegments[0].x : cumulativeX;
+            const segX = baseSegX + indentOffset;
+            const segWidth = (runSegments && runSegments[0]?.width !== undefined ? runSegments[0].width : 0) ?? 0;
+            elem.style.position = 'absolute';
+            elem.style.left = `${segX}px`;
+            el.appendChild(elem);
+            cumulativeX = baseSegX + segWidth;
+          }
+          continue;
+        }
+
+        const runSegments = segmentsByRun.get(runIndex);
+        if (!runSegments || runSegments.length === 0) {
+          continue;
+        }
+
+        // At this point, baseRun must be TextRun (has .text property)
+        if (!('text' in baseRun)) {
+          continue;
+        }
+
+        const baseText = baseRun.text ?? '';
+        const runPmStart = baseRun.pmStart ?? null;
+        const fallbackPmEnd =
+          runPmStart != null && baseRun.pmEnd == null ? runPmStart + baseText.length : (baseRun.pmEnd ?? null);
+
+        runSegments.forEach((segment) => {
+          const segmentText = baseText.slice(segment.fromChar, segment.toChar);
+          if (!segmentText) return;
+
+          const pmSliceStart = runPmStart != null ? runPmStart + segment.fromChar : undefined;
+          const pmSliceEnd = runPmStart != null ? runPmStart + segment.toChar : (fallbackPmEnd ?? undefined);
+          const segmentRun: TextRun = {
+            ...(baseRun as TextRun),
+            text: segmentText,
+            pmStart: pmSliceStart,
+            pmEnd: pmSliceEnd,
+          };
+
+          const elem = this.renderRun(segmentRun, context, trackedConfig);
+          if (elem) {
+            if (styleId) {
+              elem.setAttribute('styleid', styleId);
+            }
+            // Determine X position for this segment
+            // Layout positions are relative to content area start (0).
+            // Add indentOffset to position content at the correct paragraph indent.
+            const baseX = segment.x !== undefined ? segment.x : cumulativeX;
+            const xPos = baseX + indentOffset;
+
+            elem.style.position = 'absolute';
+            elem.style.left = `${xPos}px`;
+            el.appendChild(elem);
+
+            // Update cumulative X for next segment by measuring this element's width
+            // This applies to ALL segments (both with and without explicit X)
+            // Use baseX (without indent) to keep cumulativeX relative to content area,
+            // matching how segment.x values are calculated in layout.
+            let width = segment.width ?? 0;
+            if (width <= 0 && this.doc) {
+              const measureEl = elem.cloneNode(true) as HTMLElement;
+              measureEl.style.position = 'absolute';
+              measureEl.style.visibility = 'hidden';
+              measureEl.style.left = '-9999px';
+              this.doc.body.appendChild(measureEl);
+              width = measureEl.offsetWidth;
+              this.doc.body.removeChild(measureEl);
+            }
+            cumulativeX = baseX + width;
+          }
+        });
+      }
+    } else {
+      // Use run-based rendering for normal text flow
+      // Track current inline SDT wrapper to group adjacent runs with the same SDT id
+      let currentInlineSdtWrapper: HTMLElement | null = null;
+      let currentInlineSdtId: string | null = null;
+
+      const closeCurrentWrapper = () => {
+        if (currentInlineSdtWrapper) {
+          el.appendChild(currentInlineSdtWrapper);
+          currentInlineSdtWrapper = null;
+          currentInlineSdtId = null;
+        }
+      };
+
+      runsForLine.forEach((run) => {
+        // Check if this run has inline structuredContent SDT
+        const runSdt = (run as TextRun).sdt;
+        const isInlineSdt = runSdt?.type === 'structuredContent' && runSdt?.scope === 'inline';
+        const runSdtId = isInlineSdt && runSdt?.id ? String(runSdt.id) : null;
+
+        // If SDT context changed, close the current wrapper
+        if (runSdtId !== currentInlineSdtId) {
+          closeCurrentWrapper();
+        }
+
+        // Special handling for TabRuns (e.g., signature lines with underlines)
+        if (run.kind === 'tab') {
+          const tabEl = this.doc!.createElement('span');
+          tabEl.classList.add('superdoc-tab');
+
+          // Calculate tab width - use measured width or estimate based on typical tab stop
+          const tabWidth = run.width ?? 48; // Default tab width if not measured
+
+          tabEl.style.display = 'inline-block';
+          tabEl.style.width = `${tabWidth}px`;
+          tabEl.style.height = `${line.lineHeight}px`;
+          tabEl.style.verticalAlign = 'bottom';
+
+          // Apply underline styling if present (common for signature lines)
+          //
+          // Signature line use case: In documents with signature lines, tabs are often used
+          // to create underlined blank spaces where signatures should go. The underline mark
+          // is inherited from a parent node (e.g., a paragraph with underline formatting) and
+          // applied to the tab, creating a visible underline even though the tab itself has
+          // no visible text content.
+          if (run.underline) {
+            const underlineStyle = run.underline.style ?? 'single';
+            // We must use an explicit color instead of currentColor because tab content is
+            // invisible (no text). If we used currentColor, the underline would inherit the
+            // text color, which might be transparent or the same as the background, making
+            // the underline invisible. Using an explicit color (defaulting to black) ensures
+            // the underline is always visible for signature lines.
+            const underlineColor = run.underline.color ?? '#000000';
+            const borderStyle = underlineStyle === 'double' ? 'double' : 'solid';
+            tabEl.style.borderBottom = `1px ${borderStyle} ${underlineColor}`;
+          }
+
+          if (styleId) {
+            tabEl.setAttribute('styleid', styleId);
+          }
+          if (run.pmStart != null) tabEl.dataset.pmStart = String(run.pmStart);
+          if (run.pmEnd != null) tabEl.dataset.pmEnd = String(run.pmEnd);
+
+          el.appendChild(tabEl);
           return;
         }
 
-        // Extract the text for this segment from the text run
-        const segmentText = baseRun.text.slice(segment.fromChar, segment.toChar);
-        const segmentRun: TextRun = { ...(baseRun as TextRun), text: segmentText };
-
-        const elem = this.renderRun(segmentRun, context, trackedConfig);
-        if (elem) {
-          if (styleId) {
-            elem.setAttribute('styleid', styleId);
-          }
-          // Determine X position for this segment
-          let xPos: number;
-          if (segment.x !== undefined) {
-            // Segment has explicit X position
-            xPos = segment.x;
-          } else {
-            // No explicit X, use cumulative position
-            xPos = cumulativeX;
-          }
-
-          elem.style.position = 'absolute';
-          elem.style.left = `${xPos}px`;
-          el.appendChild(elem);
-
-          // Update cumulative X for next segment by measuring this element's width
-          // This applies to ALL segments (both with and without explicit X)
-          if (this.doc) {
-            const measureEl = elem.cloneNode(true) as HTMLElement;
-            measureEl.style.position = 'absolute';
-            measureEl.style.visibility = 'hidden';
-            measureEl.style.left = '-9999px';
-            this.doc.body.appendChild(measureEl);
-            const width = measureEl.offsetWidth;
-            this.doc.body.removeChild(measureEl);
-            cumulativeX = xPos + width;
-          }
-        }
-      });
-    } else {
-      // Use run-based rendering for normal text flow
-      runs.forEach((run) => {
         const elem = this.renderRun(run, context, trackedConfig);
         if (elem) {
           if (styleId) {
             elem.setAttribute('styleid', styleId);
           }
-          el.appendChild(elem);
+
+          // If this run has inline SDT, add to or create wrapper
+          if (isInlineSdt && runSdtId && this.doc) {
+            if (!currentInlineSdtWrapper) {
+              // Create new wrapper for this SDT group
+              currentInlineSdtWrapper = this.doc.createElement('span');
+              currentInlineSdtWrapper.className = DOM_CLASS_NAMES.INLINE_SDT_WRAPPER;
+              currentInlineSdtId = runSdtId;
+              // Apply SDT metadata to wrapper
+              this.applySdtDataset(currentInlineSdtWrapper, runSdt);
+              // Add label element for hover display
+              const alias = (runSdt as { alias?: string })?.alias || 'Inline content';
+              const labelEl = this.doc.createElement('span');
+              labelEl.className = `${DOM_CLASS_NAMES.INLINE_SDT_WRAPPER}__label`;
+              labelEl.textContent = alias;
+              currentInlineSdtWrapper.appendChild(labelEl);
+            }
+            // Update PM positions on wrapper to span all contained runs
+            const wrapperPmStart = currentInlineSdtWrapper.dataset.pmStart;
+            const wrapperPmEnd = currentInlineSdtWrapper.dataset.pmEnd;
+            if (run.pmStart != null) {
+              if (!wrapperPmStart || run.pmStart < parseInt(wrapperPmStart, 10)) {
+                currentInlineSdtWrapper.dataset.pmStart = String(run.pmStart);
+              }
+            }
+            if (run.pmEnd != null) {
+              if (!wrapperPmEnd || run.pmEnd > parseInt(wrapperPmEnd, 10)) {
+                currentInlineSdtWrapper.dataset.pmEnd = String(run.pmEnd);
+              }
+            }
+            currentInlineSdtWrapper.appendChild(elem);
+          } else {
+            el.appendChild(elem);
+          }
         }
       });
+
+      // Close any remaining wrapper at end of line
+      closeCurrentWrapper();
     }
 
     // Post-process: Apply tooltip accessibility for any links with pending tooltips
@@ -2829,8 +4289,18 @@ export class DomPainter {
     }
   }
 
-  private updateFragmentElement(el: HTMLElement, fragment: Fragment): void {
-    this.applyFragmentFrame(el, fragment);
+  /**
+   * Updates an existing fragment element's position and dimensions in place.
+   * Used during incremental updates to efficiently reposition fragments without full re-render.
+   *
+   * @param el - The HTMLElement representing the fragment to update
+   * @param fragment - The fragment data containing updated position and dimensions
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Affects PM position validation - only body sections validate PM positions.
+   *                  If undefined, defaults to 'body' section behavior.
+   */
+  private updateFragmentElement(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
+    this.applyFragmentFrame(el, fragment, section);
     if (fragment.kind === 'image') {
       el.style.height = `${fragment.height}px`;
     }
@@ -2839,13 +4309,32 @@ export class DomPainter {
     }
   }
 
-  private applyFragmentFrame(el: HTMLElement, fragment: Fragment): void {
+  /**
+   * Applies fragment positioning, dimensions, and metadata to an HTML element.
+   * Sets CSS positioning, block ID, and PM position data attributes for paragraph fragments.
+   *
+   * @param el - The HTMLElement to apply fragment properties to
+   * @param fragment - The fragment data containing position, dimensions, and PM position information
+   * @param section - The document section ('body', 'header', 'footer') containing this fragment.
+   *                  Controls PM position validation behavior:
+   *                  - 'body' or undefined: PM positions are validated and required for paragraph fragments
+   *                  - 'header' or 'footer': PM position validation is skipped (these sections have separate PM coordinate spaces)
+   *                  When undefined, defaults to 'body' section behavior (validation enabled).
+   */
+  private applyFragmentFrame(el: HTMLElement, fragment: Fragment, section?: 'body' | 'header' | 'footer'): void {
     el.style.left = `${fragment.x}px`;
     el.style.top = `${fragment.y}px`;
     el.style.width = `${fragment.width}px`;
     el.dataset.blockId = fragment.blockId;
 
     if (fragment.kind === 'para') {
+      // Assert PM positions are present for paragraph fragments
+      // Only validate for body sections - header/footer fragments have their own PM coordinate space
+      // Note: undefined section defaults to body section behavior (validation enabled)
+      if (section === 'body' || section === undefined) {
+        assertFragmentPmPositions(fragment, 'paragraph fragment');
+      }
+
       if (fragment.pmStart != null) {
         el.dataset.pmStart = String(fragment.pmStart);
       } else {
@@ -3053,7 +4542,17 @@ const fragmentKey = (fragment: Fragment): string => {
   if (fragment.kind === 'drawing') {
     return `drawing:${fragment.blockId}:${fragment.x}:${fragment.y}`;
   }
-  return `${fragment.kind}:${fragment.blockId}`;
+  if (fragment.kind === 'table') {
+    // Include row range and partial row info to uniquely identify table fragments
+    // This is critical for mid-row splitting where multiple fragments can exist for the same table
+    const partialKey = fragment.partialRow
+      ? `:${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}`
+      : '';
+    return `table:${fragment.blockId}:${fragment.fromRow}:${fragment.toRow}${partialKey}`;
+  }
+  // Exhaustive check - all fragment kinds should be handled above
+  const _exhaustiveCheck: never = fragment;
+  return _exhaustiveCheck;
 };
 
 const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
@@ -3067,6 +4566,7 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
       fragment.pmEnd ?? '',
       fragment.continuesFromPrev ? 1 : 0,
       fragment.continuesOnNext ? 1 : 0,
+      fragment.markerWidth ?? '', // Include markerWidth to trigger re-render when list status changes
     ].join('|');
   }
   if (fragment.kind === 'list-item') {
@@ -3096,7 +4596,72 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
       fragment.zIndex ?? '',
     ].join('|');
   }
+  if (fragment.kind === 'table') {
+    // Include all properties that affect table fragment rendering
+    const partialSig = fragment.partialRow
+      ? `${fragment.partialRow.fromLineByCell.join(',')}-${fragment.partialRow.toLineByCell.join(',')}-${fragment.partialRow.partialHeight}`
+      : '';
+    return [
+      base,
+      fragment.fromRow,
+      fragment.toRow,
+      fragment.width,
+      fragment.height,
+      fragment.continuesFromPrev ? 1 : 0,
+      fragment.continuesOnNext ? 1 : 0,
+      fragment.repeatHeaderCount ?? 0,
+      partialSig,
+    ].join('|');
+  }
   return base;
+};
+
+/**
+ * Type guard to validate list marker attributes structure.
+ *
+ * @param attrs - The paragraph attributes to validate
+ * @returns True if the attrs contain valid list marker properties
+ */
+const hasListMarkerProperties = (
+  attrs: unknown,
+): attrs is {
+  numberingProperties: { numId?: number | string; ilvl?: number };
+  wordLayout?: { marker?: { markerText?: string } };
+} => {
+  if (!attrs || typeof attrs !== 'object') return false;
+  const obj = attrs as Record<string, unknown>;
+
+  if (!obj.numberingProperties || typeof obj.numberingProperties !== 'object') return false;
+  const numProps = obj.numberingProperties as Record<string, unknown>;
+
+  // Validate numId is number or string if present
+  if ('numId' in numProps) {
+    const numId = numProps.numId;
+    if (typeof numId !== 'number' && typeof numId !== 'string') return false;
+  }
+
+  // Validate ilvl is number if present
+  if ('ilvl' in numProps) {
+    const ilvl = numProps.ilvl;
+    if (typeof ilvl !== 'number') return false;
+  }
+
+  // Validate wordLayout structure if present
+  if ('wordLayout' in obj && obj.wordLayout !== undefined) {
+    if (typeof obj.wordLayout !== 'object' || obj.wordLayout === null) return false;
+    const wordLayout = obj.wordLayout as Record<string, unknown>;
+
+    if ('marker' in wordLayout && wordLayout.marker !== undefined) {
+      if (typeof wordLayout.marker !== 'object' || wordLayout.marker === null) return false;
+      const marker = wordLayout.marker as Record<string, unknown>;
+
+      if ('markerText' in marker && marker.markerText !== undefined) {
+        if (typeof marker.markerText !== 'string') return false;
+      }
+    }
+  }
+
+  return true;
 };
 
 /**
@@ -3112,6 +4677,17 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
  * - Spacing (letterSpacing)
  * - Position markers (pmStart, pmEnd)
  * - Special tokens (page numbers, etc.)
+ * - List marker properties (numId, ilvl, markerText) - for list indent changes
+ * - Paragraph attributes (alignment, spacing, indent, borders, shading, direction, rtl, tabs)
+ * - Table cell content and paragraph formatting within cells
+ *
+ * For table blocks, a deep hash is computed across all rows and cells, including:
+ * - Cell block content (paragraph runs, text, formatting)
+ * - Paragraph-level attributes in cells (alignment, spacing, line height, indent, borders, shading)
+ * - Run-level formatting (color, highlight, bold, italic, fontSize, fontFamily, underline, strike)
+ *
+ * This ensures toolbar commands that modify paragraph or run formatting within tables
+ * trigger proper DOM updates.
  *
  * @param block - The flow block to generate a version string for
  * @returns A pipe-delimited string representing all visual properties of the block.
@@ -3119,7 +4695,12 @@ const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
  */
 const deriveBlockVersion = (block: FlowBlock): string => {
   if (block.kind === 'paragraph') {
-    return block.runs
+    // Include list marker info in version to detect indent/marker changes
+    const markerVersion = hasListMarkerProperties(block.attrs)
+      ? `marker:${block.attrs.numberingProperties.numId ?? ''}:${block.attrs.numberingProperties.ilvl ?? 0}:${block.attrs.wordLayout?.marker?.markerText ?? ''}`
+      : '';
+
+    const runsVersion = block.runs
       .map((run) => {
         // Handle ImageRun
         if (run.kind === 'image') {
@@ -3140,26 +4721,67 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           ].join(',');
         }
 
-        // Handle TextRun and TabRun
+        // Handle LineBreakRun
+        if (run.kind === 'lineBreak') {
+          return ['linebreak', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TabRun
+        if (run.kind === 'tab') {
+          return [run.text ?? '', 'tab', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+        }
+
+        // Handle TextRun (kind is 'text' or undefined)
+        const textRun = run as TextRun;
         return [
-          run.text ?? '',
-          run.kind !== 'tab' ? run.fontFamily : '',
-          run.kind !== 'tab' ? run.fontSize : '',
-          run.kind !== 'tab' && run.bold ? 1 : 0,
-          run.kind !== 'tab' && run.italic ? 1 : 0,
-          run.kind !== 'tab' ? (run.color ?? '') : '',
+          textRun.text ?? '',
+          textRun.fontFamily,
+          textRun.fontSize,
+          textRun.bold ? 1 : 0,
+          textRun.italic ? 1 : 0,
+          textRun.color ?? '',
           // Text decorations - ensures DOM updates when decoration properties change.
-          run.kind !== 'tab' ? (run.underline?.style ?? '') : '',
-          run.kind !== 'tab' ? (run.underline?.color ?? '') : '',
-          run.kind !== 'tab' && run.strike ? 1 : 0,
-          run.kind !== 'tab' ? (run.highlight ?? '') : '',
-          run.kind !== 'tab' && run.letterSpacing != null ? run.letterSpacing : '',
-          run.pmStart ?? '',
-          run.pmEnd ?? '',
-          run.kind !== 'tab' ? (run.token ?? '') : '',
+          textRun.underline?.style ?? '',
+          textRun.underline?.color ?? '',
+          textRun.strike ? 1 : 0,
+          textRun.highlight ?? '',
+          textRun.letterSpacing != null ? textRun.letterSpacing : '',
+          textRun.pmStart ?? '',
+          textRun.pmEnd ?? '',
+          textRun.token ?? '',
+          // Tracked changes - force re-render when added or removed tracked change
+          textRun.trackedChange ? 1 : 0,
         ].join(',');
       })
       .join('|');
+
+    // Include paragraph-level attributes that affect rendering (alignment, spacing, indent, etc.)
+    // This ensures DOM updates when toolbar commands like "align center" change these properties.
+    const attrs = block.attrs as ParagraphAttrs | undefined;
+
+    const paragraphAttrsVersion = attrs
+      ? [
+          attrs.alignment ?? '',
+          attrs.spacing?.before ?? '',
+          attrs.spacing?.after ?? '',
+          attrs.spacing?.line ?? '',
+          attrs.spacing?.lineRule ?? '',
+          attrs.indent?.left ?? '',
+          attrs.indent?.right ?? '',
+          attrs.indent?.firstLine ?? '',
+          attrs.indent?.hanging ?? '',
+          attrs.borders ? hashParagraphBorders(attrs.borders) : '',
+          attrs.shading?.fill ?? '',
+          attrs.shading?.color ?? '',
+          attrs.direction ?? '',
+          attrs.rtl ? '1' : '',
+          attrs.tabs?.length ? JSON.stringify(attrs.tabs) : '',
+        ].join(':')
+      : '';
+
+    // Combine marker version, runs version, and paragraph attrs version
+    const parts = [markerVersion, runsVersion, paragraphAttrsVersion].filter(Boolean);
+    return parts.join('|');
   }
 
   if (block.kind === 'list') {
@@ -3217,20 +4839,137 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    // Include column widths in version to trigger re-render when table is resized
-    return [
-      block.id,
-      tableBlock.columnWidths ? JSON.stringify(tableBlock.columnWidths) : '',
-      tableBlock.rows.length,
-    ].join('|');
+    /**
+     * Local hash function for strings using FNV-1a algorithm.
+     * Used to create a robust hash across all table rows/cells so deep edits invalidate version.
+     *
+     * @param seed - Initial hash value
+     * @param value - String value to hash
+     * @returns Updated hash value
+     */
+    const hashString = (seed: number, value: string): number => {
+      let hash = seed >>> 0;
+      for (let i = 0; i < value.length; i++) {
+        hash ^= value.charCodeAt(i);
+        hash = Math.imul(hash, 16777619); // FNV-style mix
+      }
+      return hash >>> 0;
+    };
+
+    /**
+     * Local hash function for numbers.
+     * Handles undefined/null values safely by treating them as 0.
+     *
+     * @param seed - Initial hash value
+     * @param value - Number value to hash (or undefined/null)
+     * @returns Updated hash value
+     */
+    const hashNumber = (seed: number, value: number | undefined | null): number => {
+      const n = Number.isFinite(value) ? (value as number) : 0;
+      let hash = seed ^ n;
+      hash = Math.imul(hash, 16777619);
+      hash ^= hash >>> 13;
+      return hash >>> 0;
+    };
+
+    let hash = 2166136261;
+    hash = hashString(hash, block.id);
+    hash = hashNumber(hash, tableBlock.rows.length);
+    hash = (tableBlock.columnWidths ?? []).reduce((acc, width) => hashNumber(acc, Math.round(width * 1000)), hash);
+
+    // Defensive guards: ensure rows array exists and iterate safely
+    const rows = tableBlock.rows ?? [];
+    for (const row of rows) {
+      if (!row || !Array.isArray(row.cells)) continue;
+      hash = hashNumber(hash, row.cells.length);
+      for (const cell of row.cells) {
+        if (!cell) continue;
+        const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+        hash = hashNumber(hash, cellBlocks.length);
+        // Include cell attributes that affect rendering (rowSpan, colSpan)
+        hash = hashNumber(hash, cell.rowSpan ?? 1);
+        hash = hashNumber(hash, cell.colSpan ?? 1);
+
+        for (const cellBlock of cellBlocks) {
+          hash = hashString(hash, cellBlock?.kind ?? 'unknown');
+          if (cellBlock?.kind === 'paragraph') {
+            const paragraphBlock = cellBlock as ParagraphBlock;
+            const runs = paragraphBlock.runs ?? [];
+            hash = hashNumber(hash, runs.length);
+
+            // Include paragraph-level attributes that affect rendering
+            // (alignment, spacing, indent, etc.) - fixes toolbar commands not updating tables
+            const attrs = paragraphBlock.attrs as ParagraphAttrs | undefined;
+
+            if (attrs) {
+              hash = hashString(hash, attrs.alignment ?? '');
+              hash = hashNumber(hash, attrs.spacing?.before ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.after ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.line ?? 0);
+              hash = hashString(hash, attrs.spacing?.lineRule ?? '');
+              hash = hashNumber(hash, attrs.indent?.left ?? 0);
+              hash = hashNumber(hash, attrs.indent?.right ?? 0);
+              hash = hashNumber(hash, attrs.indent?.firstLine ?? 0);
+              hash = hashNumber(hash, attrs.indent?.hanging ?? 0);
+              hash = hashString(hash, attrs.shading?.fill ?? '');
+              hash = hashString(hash, attrs.shading?.color ?? '');
+              hash = hashString(hash, attrs.direction ?? '');
+              hash = hashString(hash, attrs.rtl ? '1' : '');
+              if (attrs.borders) {
+                hash = hashString(hash, hashParagraphBorders(attrs.borders));
+              }
+            }
+
+            for (const run of runs) {
+              // Only text runs have .text property; ImageRun does not
+              if ('text' in run && typeof run.text === 'string') {
+                hash = hashString(hash, run.text);
+              }
+              hash = hashNumber(hash, run.pmStart ?? -1);
+              hash = hashNumber(hash, run.pmEnd ?? -1);
+
+              // Include run formatting properties that affect rendering
+              // (color, highlight, bold, italic, etc.) - fixes toolbar commands not updating tables
+              hash = hashString(hash, getRunStringProp(run, 'color'));
+              hash = hashString(hash, getRunStringProp(run, 'highlight'));
+              hash = hashString(hash, getRunBooleanProp(run, 'bold') ? '1' : '');
+              hash = hashString(hash, getRunBooleanProp(run, 'italic') ? '1' : '');
+              hash = hashNumber(hash, getRunNumberProp(run, 'fontSize'));
+              hash = hashString(hash, getRunStringProp(run, 'fontFamily'));
+              hash = hashString(hash, getRunUnderlineStyle(run));
+              hash = hashString(hash, getRunUnderlineColor(run));
+              hash = hashString(hash, getRunBooleanProp(run, 'strike') ? '1' : '');
+            }
+          }
+        }
+      }
+    }
+
+    return [block.id, tableBlock.rows.length, hash.toString(16)].join('|');
   }
 
   return block.id;
 };
 
-const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void => {
-  if (run.kind === 'tab' || run.kind === 'image') {
-    // Tab and image runs don't have text styling properties
+/**
+ * Applies run styling properties to a DOM element.
+ *
+ * @param element - The HTML element to style
+ * @param run - The run object containing styling information
+ * @param _isLink - Whether this run is part of a hyperlink. Note: This parameter
+ *                  is kept for API compatibility but no longer affects behavior -
+ *                  inline colors are now applied to all runs (including links) to
+ *                  ensure OOXML hyperlink character styles appear correctly.
+ */
+const applyRunStyles = (element: HTMLElement, run: Run, _isLink = false): void => {
+  if (
+    run.kind === 'tab' ||
+    run.kind === 'image' ||
+    run.kind === 'lineBreak' ||
+    run.kind === 'break' ||
+    run.kind === 'fieldAnnotation'
+  ) {
+    // Tab, image, lineBreak, break, and fieldAnnotation runs don't have text styling properties
     return;
   }
 
@@ -3239,16 +4978,17 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (run.bold) element.style.fontWeight = 'bold';
   if (run.italic) element.style.fontStyle = 'italic';
 
-  // For links, skip applying color and text-decoration to allow CSS to handle styling
-  if (!isLink) {
-    if (run.color) element.style.color = run.color;
-  }
+  // Apply inline color even for links so OOXML hyperlink styles appear when CSS is absent
+  if (run.color) element.style.color = run.color;
 
   if (run.letterSpacing != null) {
     element.style.letterSpacing = `${run.letterSpacing}px`;
   }
   if (run.highlight) {
     element.style.backgroundColor = run.highlight;
+  }
+  if (run.textTransform) {
+    element.style.textTransform = run.textTransform;
   }
 
   // Apply text decorations from the run. Even for links, inline decorations should reflect
@@ -3268,6 +5008,14 @@ const applyRunStyles = (element: HTMLElement, run: Run, isLink = false): void =>
   if (decorations.length > 0) {
     element.style.textDecorationLine = decorations.join(' ');
   }
+};
+
+const getCommentHighlight = (run: TextRun): string | undefined => {
+  const comments = run.comments;
+  if (!comments || comments.length === 0) return undefined;
+  const primary = comments[0];
+  const base = primary.internal ? COMMENT_INTERNAL_COLOR : COMMENT_EXTERNAL_COLOR;
+  return `${base}${COMMENT_INACTIVE_ALPHA}`;
 };
 
 /**
@@ -3313,15 +5061,22 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
   }
   const indent = attrs.indent;
   if (indent) {
-    if (indent.left) {
+    // Only apply positive indents as padding.
+    // Negative indents are handled by fragment positioning in the layout engine.
+    if (indent.left && indent.left > 0) {
       element.style.paddingLeft = `${indent.left}px`;
     }
-    if (indent.right) {
+    if (indent.right && indent.right > 0) {
       element.style.paddingRight = `${indent.right}px`;
     }
-    const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
-    if (textIndent) {
-      element.style.textIndent = `${textIndent}px`;
+    // Skip textIndent when left indent is negative - fragment positioning handles the indent,
+    // and per-line paddingLeft handles the hanging indent for body lines.
+    const hasNegativeLeftIndent = indent.left != null && indent.left < 0;
+    if (!hasNegativeLeftIndent) {
+      const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
+      if (textIndent) {
+        element.style.textIndent = `${textIndent}px`;
+      }
     }
   }
   applyParagraphBorderStyles(element, attrs.borders);
@@ -3379,6 +5134,31 @@ const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAt
 };
 
 /**
+ * Extracts text content from all runs within a line for justification calculations.
+ *
+ * @param block - The paragraph block containing the runs
+ * @param line - The line definition with run and character boundaries
+ * @returns Array of text slices from the line, used to count spaces for justification
+ */
+const gatherTextSlicesForLine = (block: ParagraphBlock, line: Line): string[] => {
+  const slices: string[] = [];
+  const startRun = line.fromRun ?? 0;
+  const endRun = line.toRun ?? startRun;
+  for (let runIndex = startRun; runIndex <= endRun; runIndex += 1) {
+    const run = block.runs[runIndex];
+    if (!run || (run.kind !== 'text' && run.kind !== undefined) || !('text' in run) || !run.text) continue;
+    const isFirst = runIndex === startRun;
+    const isLast = runIndex === endRun;
+    const start = isFirst ? (line.fromChar ?? 0) : 0;
+    const end = isLast ? (line.toChar ?? run.text.length) : run.text.length;
+    if (start >= end) continue;
+    const slice = run.text.slice(start, end);
+    if (slice) slices.push(slice);
+  }
+  return slices;
+};
+
+/**
  * Extracts and slices text runs that belong to a specific line within a paragraph block.
  * Handles partial runs at line boundaries by creating sliced copies with correct character ranges.
  *
@@ -3412,6 +5192,36 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
       continue;
     }
 
+    // LineBreakRun handling - line breaks don't have text content and are handled
+    // by the measurer creating new lines. Include them for PM position tracking.
+    if (run.kind === 'lineBreak') {
+      result.push(run);
+      continue;
+    }
+
+    // BreakRun handling - similar to LineBreakRun
+    if (run.kind === 'break') {
+      result.push(run);
+      continue;
+    }
+
+    // TabRun handling - tabs don't need slicing
+    if (run.kind === 'tab') {
+      result.push(run);
+      continue;
+    }
+
+    // FieldAnnotationRun handling - field annotations are atomic units like images
+    if (run.kind === 'fieldAnnotation') {
+      result.push(run);
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
+      continue;
+    }
+
     const text = run.text ?? '';
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
@@ -3427,21 +5237,16 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
 
       const pmSliceStart = runPmStart != null ? runPmStart + start : undefined;
       const pmSliceEnd = runPmStart != null ? runPmStart + end : (fallbackPmEnd ?? undefined);
-      if (run.kind === 'tab') {
-        // Only include the tab run if the slice contains the tab character
-        if (slice.includes('\t')) {
-          result.push(run);
-        }
-      } else {
-        // TextRun: return a sliced TextRun preserving styles
-        const sliced: TextRun = {
-          ...(run as TextRun),
-          text: slice,
-          pmStart: pmSliceStart,
-          pmEnd: pmSliceEnd,
-        };
-        result.push(sliced);
-      }
+
+      // TextRun: return a sliced TextRun preserving styles
+      const sliced: TextRun = {
+        ...(run as TextRun),
+        text: slice,
+        pmStart: pmSliceStart,
+        pmEnd: pmSliceEnd,
+        comments: (run as TextRun).comments ? [...(run as TextRun).comments!] : undefined,
+      };
+      result.push(sliced);
     } else {
       result.push(run);
     }
@@ -3481,12 +5286,84 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
       continue;
     }
 
+    // LineBreakRun handling - similar to image runs, treated as atomic units
+    if (run.kind === 'lineBreak') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // BreakRun handling - similar to image and lineBreak runs, treated as atomic units
+    if (run.kind === 'break') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // TabRun handling - tabs are atomic units
+    if (run.kind === 'tab') {
+      const runPmStart = run.pmStart ?? null;
+      const runPmEnd = run.pmEnd ?? null;
+
+      if (runPmStart == null || runPmEnd == null) {
+        continue;
+      }
+
+      if (pmStart == null) {
+        pmStart = runPmStart;
+      }
+      pmEnd = runPmEnd;
+
+      // Early exit if this is the last run
+      if (runIndex === line.toRun) {
+        break;
+      }
+      continue;
+    }
+
+    // At this point, run must be TextRun (has .text property)
+    if (!('text' in run)) {
+      continue;
+    }
+
     const text = run.text ?? '';
     const runLength = text.length;
     const runPmStart = run.pmStart ?? null;
-    const fallbackPmEnd = runPmStart != null && run.pmEnd == null ? runPmStart + runLength : (run.pmEnd ?? null);
 
-    if (runPmStart == null || fallbackPmEnd == null) {
+    // FIX: Always calculate effectivePmEnd from text length, not from potentially stale pmEnd.
+    // The run's pmEnd can become stale after PM transactions modify text content (especially in tables),
+    // causing content truncation when Math.min caps the range.
+    const effectivePmEnd = runPmStart != null ? runPmStart + runLength : null;
+
+    if (runPmStart == null || effectivePmEnd == null) {
       continue;
     }
 
@@ -3496,7 +5373,8 @@ const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
     const endOffset = isLastRun ? line.toChar : runLength;
 
     const sliceStart = runPmStart + startOffset;
-    const sliceEnd = Math.min(runPmStart + endOffset, fallbackPmEnd);
+    // FIX: Removed Math.min cap that was causing truncation with stale pmEnd values.
+    const sliceEnd = runPmStart + endOffset;
 
     if (pmStart == null) {
       pmStart = sliceStart;
@@ -3528,6 +5406,18 @@ const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   }
   if (run.kind === 'image') {
     // Image runs don't have text content
+    return '';
+  }
+  if (run.kind === 'lineBreak') {
+    // Line break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (run.kind === 'break') {
+    // Break runs don't render text - the measurer creates new lines for them
+    return '';
+  }
+  if (!('text' in run)) {
+    // Safety check - if run doesn't have text property, return empty string
     return '';
   }
   if (!runToken) {

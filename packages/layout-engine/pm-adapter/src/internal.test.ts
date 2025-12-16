@@ -95,6 +95,7 @@ import {
   handleShapeGroupNode,
   handleShapeContainerNode,
   handleShapeTextboxNode,
+  paragraphToFlowBlocks,
   hydrateImageBlocks,
 } from './converters/index.js';
 import {
@@ -808,11 +809,11 @@ describe('internal', () => {
         expect(handleParagraphNode).toHaveBeenCalledWith(
           expect.any(Object),
           expect.objectContaining({
-            converters: {
+            converters: expect.objectContaining({
               paragraphToFlowBlocks: expect.any(Function),
               tableNodeToBlock: expect.any(Function),
               imageNodeToBlock: expect.any(Function),
-            },
+            }),
           }),
         );
       });
@@ -1065,11 +1066,48 @@ describe('internal', () => {
       const call = vi.mocked(handleParagraphNode).mock.calls[0];
       const context = call![1];
 
-      expect(context.converters).toEqual({
-        paragraphToFlowBlocks: expect.any(Function),
-        tableNodeToBlock: expect.any(Function),
-        imageNodeToBlock: expect.any(Function),
-      });
+      expect(context.converters).toEqual(
+        expect.objectContaining({
+          paragraphToFlowBlocks: expect.any(Function),
+          tableNodeToBlock: expect.any(Function),
+          imageNodeToBlock: expect.any(Function),
+        }),
+      );
+    });
+
+    it('passes converterContext through paragraph converter', () => {
+      const doc: PMNode = {
+        type: 'doc',
+        content: [{ type: 'paragraph', content: [] }],
+      };
+
+      toFlowBlocks(doc);
+      const call = vi.mocked(handleParagraphNode).mock.calls[0];
+      const context = call![1];
+      const paragraphConverter = context.converters!.paragraphToFlowBlocks;
+
+      const paraNode: PMNode = { type: 'paragraph', content: [] };
+      const converterCtx = { docx: { foo: 'bar' } } as never;
+      const themeColors = { primary: '#123456' } as never;
+
+      paragraphConverter(
+        paraNode,
+        context.nextBlockId,
+        context.positions,
+        context.defaultFont,
+        context.defaultSize,
+        context.styleContext,
+        undefined,
+        context.trackedChangesConfig,
+        context.bookmarks,
+        context.hyperlinkConfig,
+        themeColors,
+        converterCtx,
+      );
+
+      const lastCall = vi.mocked(paragraphToFlowBlocks).mock.calls.at(-1);
+      expect(lastCall?.[10]).toBe(themeColors);
+      expect(lastCall?.[12]).toBe(converterCtx);
     });
   });
 });

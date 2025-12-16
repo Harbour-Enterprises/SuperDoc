@@ -327,10 +327,16 @@ export const generateLinkedStyleString = (
           }
         }
       } else if (key === 'underline' && node) {
+        // Handle multiple possible formats for underline value:
+        // - { underline: 'single' } from parseMarks/getDefaultStyleDefinition
+        // - { underlineType: 'single' } from encodeMarksFromRPr
+        // - { value: 'single' } legacy format
+        // - 'single' as a direct string
+        const valueObj = value as { underline?: unknown; underlineType?: unknown; value?: unknown } | string | null;
         const styleValRaw =
-          (typeof value === 'object' && value !== null && 'value' in value
-            ? (value as { value?: unknown }).value
-            : value) ?? '';
+          (typeof valueObj === 'object' && valueObj !== null
+            ? (valueObj.underline ?? valueObj.underlineType ?? valueObj.value)
+            : valueObj) ?? '';
         const styleVal = String(styleValRaw).toLowerCase();
         const hasInlineUnderlineOff = node.marks?.some(
           (m) => m.type?.name === 'underline' && m.attrs?.underlineType === 'none',

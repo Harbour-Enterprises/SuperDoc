@@ -30,6 +30,22 @@ type StructuredContentInsertAttrs = StructuredContentAttrs & {
 };
 
 /**
+ * Find the first text node within a structured content node, even when wrapped.
+ * Some plugins wrap text in inline nodes (e.g., run), so we need to search descendants.
+ */
+const findFirstTextNode = (node: PmNode): PmNode | null => {
+  let firstTextNode: PmNode | null = null;
+  node.descendants((child: PmNode) => {
+    if (child.isText) {
+      firstTextNode = child;
+      return false;
+    }
+    return true;
+  });
+  return firstTextNode;
+};
+
+/**
  * Options for inserting inline structured content
  */
 interface StructuredContentInlineInsert {
@@ -65,6 +81,8 @@ interface StructuredContentUpdate {
   json?: ProseMirrorJSON;
   /** Update attributes only (preserves content) */
   attrs?: StructuredContentAttrs;
+  /** When true, preserves marks from the first text node (only applies with text option) */
+  keepTextNodeStyles?: boolean;
 }
 
 /**
@@ -254,7 +272,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        * @example
-       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe' });
+       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe', keepTextNodeStyles: true });
        * editor.commands.updateStructuredContentById('123', {
        *  json: { type: 'text', text: 'Jane Doe' },
        * });
@@ -282,7 +300,11 @@ export const StructuredContentCommands = Extension.create({
             let content: Fragment | PmNode | null = null;
 
             if (options.text) {
-              content = schema.text(options.text);
+              // If keepTextNodeStyles is true, use the marks from the first text node
+              // Useful for preserving text styles when updating structured content
+              const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
+              const textMarks = firstTextNode ? firstTextNode.marks : [];
+              content = schema.text(options.text, textMarks);
             }
 
             if (options.html) {
@@ -300,6 +322,14 @@ export const StructuredContentCommands = Extension.create({
             }
 
             const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
+
+            try {
+              const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
+              nodeForValidation.check();
+            } catch (error) {
+              console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
+              return false;
+            }
 
             tr.replaceWith(posFrom, posTo, updatedNode);
           }
@@ -404,7 +434,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {StructuredContentUpdate} options
        * @example
        * // Update all fields in the customer-info group
-       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe' });
+       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe', keepTextNodeStyles: true });
        *
        * // Update block content in a group
        * editor.commands.updateStructuredContentByGroup('terms-section', {
@@ -423,15 +453,21 @@ export const StructuredContentCommands = Extension.create({
           const { schema } = editor;
 
           if (dispatch) {
-            structuredContentTags.forEach((structuredContent) => {
+            // First pass: prepare and validate all updates before making any changes
+            // This ensures all-or-nothing behavior - either all nodes update or none do
+            const updates = [];
+
+            for (const structuredContent of structuredContentTags) {
               const { pos, node } = structuredContent;
-              const posFrom = tr.mapping.map(pos);
-              const posTo = tr.mapping.map(pos + node.nodeSize);
 
               let content: Fragment | PmNode | null = null;
 
               if (options.text) {
-                content = schema.text(options.text);
+                // If keepTextNodeStyles is true, use the marks from the first text node
+                // Useful for preserving text styles when updating structured content
+                const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
+                const textMarks = firstTextNode ? firstTextNode.marks : [];
+                content = schema.text(options.text, textMarks);
               }
 
               if (options.html) {
@@ -450,11 +486,28 @@ export const StructuredContentCommands = Extension.create({
 
               const updatedNode = node.type.create({ ...node.attrs, ...options.attrs }, content, node.marks);
 
+              // Validate the node before adding to updates
+              try {
+                const nodeForValidation = editor.validateJSON(updatedNode.toJSON());
+                nodeForValidation.check();
+              } catch (error) {
+                console.error('Invalid content.', 'Passed value:', content, 'Error:', error);
+                return false;
+              }
+
+              updates.push({ pos, node, updatedNode });
+            }
+
+            // Second pass: apply all updates to the transaction
+            // Use mapping to track position changes as document is modified
+            for (const { pos, node, updatedNode } of updates) {
+              const posFrom = tr.mapping.map(pos);
+              const posTo = tr.mapping.map(pos + node.nodeSize);
               const currentNode = tr.doc.nodeAt(posFrom);
               if (currentNode && node.eq(currentNode)) {
                 tr.replaceWith(posFrom, posTo, updatedNode);
               }
-            });
+            }
           }
 
           return true;

@@ -1,5 +1,6 @@
 import type { EditorView } from 'prosemirror-view';
-import { DOMParser } from 'prosemirror-model';
+import { DOMParser, Fragment } from 'prosemirror-model';
+import type { Node as PmNode } from 'prosemirror-model';
 import type { Editor } from '../../Editor.js';
 import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
@@ -12,7 +13,8 @@ import {
   resolveStyles,
 } from '@helpers/pasteListHelpers.js';
 import { normalizeLvlTextChar } from '@superdoc/common/list-numbering';
-import { ptToTwips } from '@converter/helpers';
+import { pointsToTwips } from '@converter/helpers';
+import { decodeRPrFromMarks } from '@converter/styles.js';
 
 interface StartMap {
   [key: string]: string | number;
@@ -36,7 +38,7 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
   const tempDiv = document.createElement('div');
   tempDiv.innerHTML = cleanedHtml;
 
-  const data = tempDiv.querySelectorAll('p, li');
+  const data = tempDiv.querySelectorAll('p, li, ' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `h${n}`).join(', '));
 
   const startMap: StartMap = {};
 
@@ -53,14 +55,25 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
     const msoListMatch = styleAttr.match(/mso-list:\s*l(\d+)\s+level(\d+)\s+lfo(\d+)/);
     const styleElement = tempDiv.querySelector('style');
     const css = styleElement?.innerHTML || '';
-    const normalStyles = extractParagraphStyles(css, 'MsoNormal');
-    const paragraphStyles = extractParagraphStyles(css, element.getAttribute('class'));
-    let styleChain = { ...normalStyles, ...paragraphStyles };
+    const normalStyles = extractParagraphStyles(css, '.MsoNormal');
+    let styleId: string | null = element.getAttribute('class');
+    let charStyles: Record<string, string> | null = {};
+    if (element.localName.startsWith('h') && !styleId) {
+      styleId = element.localName;
+      const level = styleId.substring(1);
+      charStyles = extractParagraphStyles(css, `.Heading${level}Char`);
+    } else if (styleId) {
+      styleId = `.${styleId}`;
+    }
+    const paragraphStyles = extractParagraphStyles(css, styleId);
+    let styleChain = { ...normalStyles, ...paragraphStyles, ...charStyles };
     const numberingDefinedInline = !paragraphStyles || !paragraphStyles['mso-list'];
 
     if (msoListMatch) {
       const [, abstractId, level, numId] = msoListMatch;
       const numberingStyles = extractListLevelStyles(css, abstractId, level, numId) || {};
+      const markerFontFamily = numberingStyles?.['font-family'] ?? normalStyles?.['font-family'];
+      delete numberingStyles['font-family'];
       if (numberingDefinedInline) {
         styleChain = { ...normalStyles, ...paragraphStyles, ...numberingStyles };
       } else {
@@ -94,6 +107,7 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
         start = startMap[numId];
       }
 
+      element.setAttribute('data-marker-font-family', markerFontFamily || '');
       element.setAttribute('data-num-id', numId);
       element.setAttribute('data-list-level', String(parseInt(level, 10) - 1));
       element.setAttribute('data-start', String(start));
@@ -105,8 +119,8 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
     const resolvedStyle = resolveStyles(styleChain, element.getAttribute('style'));
 
     //   Indentation
-    const left = ptToTwips(parseInt(resolvedStyle['margin-left'] ?? '0', 10));
-    const hangingFirstLine = ptToTwips(parseInt(resolvedStyle['text-indent'] ?? '0', 10));
+    const left = pointsToTwips(parseInt(resolvedStyle['margin-left'] ?? '0', 10));
+    const hangingFirstLine = pointsToTwips(parseInt(resolvedStyle['text-indent'] ?? '0', 10));
     let hanging: number | undefined;
     let firstLine: number | undefined;
     if (hangingFirstLine < 0) {
@@ -124,8 +138,8 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
     }
 
     //  Spacing
-    const after = ptToTwips(parseInt(resolvedStyle['margin-bottom'] ?? '0', 10));
-    const before = ptToTwips(parseInt(resolvedStyle['margin-top'] ?? '0', 10));
+    const after = pointsToTwips(parseInt(resolvedStyle['margin-bottom'] ?? '0', 10));
+    const before = pointsToTwips(parseInt(resolvedStyle['margin-top'] ?? '0', 10));
     if (after || before) {
       const spacing: Record<string, number> = {};
       if (after != null) spacing.after = after;
@@ -153,6 +167,27 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
         }
       });
       element.setAttribute('data-text-styles', JSON.stringify(textStyles));
+
+      for (const child of Array.from(element.children)) {
+        if ((child as HTMLElement).style) {
+          Object.keys(textStyles).forEach((key) => {
+            const styleValue = textStyles[key];
+            if (styleValue) {
+              ((child as HTMLElement).style as unknown as Record<string, string>)[key] = styleValue;
+            }
+          });
+        }
+      }
+    }
+
+    // Marks
+    if (resolvedStyle['font-weight'] === 'bold') {
+      element.style.fontWeight = 'bold';
+      for (const child of Array.from(element.children)) {
+        if ((child as HTMLElement).style) {
+          (child as HTMLElement).style.fontWeight = 'bold';
+        }
+      }
     }
 
     // Strip literal prefix inside conditional span
@@ -160,7 +195,8 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
   });
 
   transformWordLists(tempDiv, editor);
-  const doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  let doc = DOMParser.fromSchema(editor.schema).parse(tempDiv);
+  doc = wrapTextsInRuns(doc);
 
   tempDiv.remove();
 
@@ -169,6 +205,35 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
 
   dispatch(view.state.tr.replaceSelectionWith(doc, true));
   return true;
+};
+
+export const wrapTextsInRuns = (doc: PmNode): PmNode => {
+  const runType = doc.type?.schema?.nodes?.run;
+  if (!runType) return doc;
+
+  const wrapNode = (node: PmNode, parent: PmNode | null): PmNode => {
+    if (node.isText) {
+      if (parent?.type?.name === 'run') return node;
+      const runProperties = decodeRPrFromMarks(node.marks);
+      return runType.create({ runProperties }, [node]);
+    }
+
+    if (!node.childCount) return node;
+
+    let changed = false;
+    const wrappedChildren: PmNode[] = [];
+    node.forEach((child) => {
+      const wrappedChild = wrapNode(child, node);
+      if (wrappedChild !== child) changed = true;
+      wrappedChildren.push(wrappedChild);
+    });
+
+    if (!changed) return node;
+
+    return node.copy(Fragment.fromArray(wrappedChildren));
+  };
+
+  return wrapNode(doc, null);
 };
 
 interface ListLevels {
@@ -199,6 +264,7 @@ const transformWordLists = (container: HTMLElement, editor: Editor): void => {
     const numFmt = element.getAttribute('data-num-fmt');
     const start = element.getAttribute('data-start');
     const lvlText = element.getAttribute('data-lvl-text');
+    const markerFontFamily = element.getAttribute('data-marker-font-family') || undefined;
 
     // MS Word copy-pasted lists always start with num Id 1 and increment from there.
     // Which way not match the target documents numbering.xml lists
@@ -217,6 +283,7 @@ const transformWordLists = (container: HTMLElement, editor: Editor): void => {
       fmt: numFmt || '',
       text: lvlText || '',
       editor,
+      markerFontFamily,
     });
 
     if (!lists[id]) lists[id] = { levels: {} };
@@ -256,6 +323,11 @@ const transformWordLists = (container: HTMLElement, editor: Editor): void => {
         const styleValue = textStyles[key];
         if (styleValue) {
           (pElement.style as unknown as Record<string, string>)[key] = styleValue;
+          for (const child of Array.from(pElement.children)) {
+            if ((child as HTMLElement).style) {
+              ((child as HTMLElement).style as unknown as Record<string, string>)[key] = styleValue;
+            }
+          }
         }
       });
     }

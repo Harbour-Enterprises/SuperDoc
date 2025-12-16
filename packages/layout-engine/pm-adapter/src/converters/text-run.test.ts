@@ -520,6 +520,82 @@ describe('tabNodeToRun', () => {
       expect(result.leader).toBe(leader);
     });
   });
+
+  describe('mark application', () => {
+    it('calls applyMarksToRun with node marks', () => {
+      const applyMarksToRunMock = vi.mocked(marksModule.applyMarksToRun);
+      applyMarksToRunMock.mockClear();
+
+      const tabNode: PMNode = {
+        type: 'tab',
+        marks: [{ type: 'underline', attrs: { underlineType: 'single' } }],
+      };
+      const paragraphNode: PMNode = { type: 'paragraph' };
+      const positions: PositionMap = new WeakMap();
+      positions.set(tabNode, { start: 0, end: 1 });
+
+      tabNodeToRun(tabNode, positions, 0, paragraphNode);
+
+      expect(applyMarksToRunMock).toHaveBeenCalledTimes(1);
+      expect(applyMarksToRunMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'tab' }), [
+        { type: 'underline', attrs: { underlineType: 'single' } },
+      ]);
+    });
+
+    it('calls applyMarksToRun with inherited marks', () => {
+      const applyMarksToRunMock = vi.mocked(marksModule.applyMarksToRun);
+      applyMarksToRunMock.mockClear();
+
+      const tabNode: PMNode = { type: 'tab' };
+      const paragraphNode: PMNode = { type: 'paragraph' };
+      const positions: PositionMap = new WeakMap();
+      positions.set(tabNode, { start: 0, end: 1 });
+      const inheritedMarks: PMMark[] = [{ type: 'underline', attrs: { underlineType: 'single' } }];
+
+      tabNodeToRun(tabNode, positions, 0, paragraphNode, inheritedMarks);
+
+      expect(applyMarksToRunMock).toHaveBeenCalledTimes(1);
+      expect(applyMarksToRunMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'tab' }), [
+        { type: 'underline', attrs: { underlineType: 'single' } },
+      ]);
+    });
+
+    it('combines node marks and inherited marks', () => {
+      const applyMarksToRunMock = vi.mocked(marksModule.applyMarksToRun);
+      applyMarksToRunMock.mockClear();
+
+      const tabNode: PMNode = {
+        type: 'tab',
+        marks: [{ type: 'bold' }],
+      };
+      const paragraphNode: PMNode = { type: 'paragraph' };
+      const positions: PositionMap = new WeakMap();
+      positions.set(tabNode, { start: 0, end: 1 });
+      const inheritedMarks: PMMark[] = [{ type: 'underline', attrs: { underlineType: 'single' } }];
+
+      tabNodeToRun(tabNode, positions, 0, paragraphNode, inheritedMarks);
+
+      expect(applyMarksToRunMock).toHaveBeenCalledTimes(1);
+      expect(applyMarksToRunMock).toHaveBeenCalledWith(expect.objectContaining({ kind: 'tab' }), [
+        { type: 'bold' },
+        { type: 'underline', attrs: { underlineType: 'single' } },
+      ]);
+    });
+
+    it('does not call applyMarksToRun when no marks present', () => {
+      const applyMarksToRunMock = vi.mocked(marksModule.applyMarksToRun);
+      applyMarksToRunMock.mockClear();
+
+      const tabNode: PMNode = { type: 'tab' };
+      const paragraphNode: PMNode = { type: 'paragraph' };
+      const positions: PositionMap = new WeakMap();
+      positions.set(tabNode, { start: 0, end: 1 });
+
+      tabNodeToRun(tabNode, positions, 0, paragraphNode);
+
+      expect(applyMarksToRunMock).not.toHaveBeenCalled();
+    });
+  });
 });
 
 // ============================================================================

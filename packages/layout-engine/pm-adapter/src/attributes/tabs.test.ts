@@ -319,6 +319,12 @@ describe('super-editor format (nested tab object)', () => {
     expect(result).toEqual([{ val: 'start', pos: 4320 }]);
   });
 
+  it('should treat nested tab pos as twips even when value is small', () => {
+    const tabs = [{ tab: { tabType: 'left', pos: 360 } }];
+    const result = normalizeOoxmlTabs(tabs);
+    expect(result).toEqual([{ val: 'start', pos: 360 }]);
+  });
+
   it('should normalize right-aligned tab from super-editor format', () => {
     const tabs = [{ tab: { tabType: 'right', pos: 8640 } }];
     const result = normalizeOoxmlTabs(tabs);

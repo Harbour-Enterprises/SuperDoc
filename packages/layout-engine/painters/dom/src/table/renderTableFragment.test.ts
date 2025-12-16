@@ -114,7 +114,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -157,7 +157,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -191,7 +191,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -221,7 +221,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -256,7 +256,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -289,7 +289,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -316,7 +316,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -347,7 +347,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -397,7 +397,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -429,7 +429,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -473,7 +473,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -507,7 +507,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -551,7 +551,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -680,7 +680,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -835,7 +835,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -950,7 +950,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },
@@ -1128,7 +1128,7 @@ describe('renderTableFragment', () => {
         fragment,
         context,
         blockLookup,
-        renderLine: () => doc.createElement('div'),
+        renderLine: (_block, _line, _ctx, _lineIndex, _isLastLine) => doc.createElement('div'),
         applyFragmentFrame: () => {
           // Intentionally empty for test mock
         },

@@ -556,9 +556,12 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+I');
 
       // Ensure the text is italic
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe(
-        'italic',
-      );
+      await sleep(500);
+      expect(
+        await superEditor.getByText('Hello').evaluate((el) => {
+          return window.getComputedStyle(el).fontStyle;
+        }),
+      ).toBe('italic');
     });
 
     test('should add underline mark to selected text with mod + u', async ({ page }) => {
@@ -589,7 +592,7 @@ test.describe('toolbar', () => {
       await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
-    test('should add strikethrough mark to selected text with mod + s', async ({ page }) => {
+    test('should add strikethrough mark to selected text with mod + x', async ({ page }) => {
       await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
@@ -609,7 +612,7 @@ test.describe('toolbar', () => {
       });
 
       // Apply the strikethrough mark
-      await page.keyboard.press('ControlOrMeta+Shift+S');
+      await page.keyboard.press('ControlOrMeta+Shift+X');
 
       // Ensure the text is strikethrough (computed style)
       const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });

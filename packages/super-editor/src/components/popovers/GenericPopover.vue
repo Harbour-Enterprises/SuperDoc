@@ -32,10 +32,12 @@ watch(
   () => props.visible,
   (val) => {
     if (val) {
-      document.addEventListener('mousedown', handleClickOutside);
+      // Use pointerdown instead of mousedown because PresentationEditor
+      // calls preventDefault() on pointerdown which prevents mousedown from firing
+      document.addEventListener('pointerdown', handleClickOutside);
       document.addEventListener('keydown', handleEscape);
     } else {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('pointerdown', handleClickOutside);
       document.removeEventListener('keydown', handleEscape);
     }
   },
@@ -43,12 +45,12 @@ watch(
 
 onMounted(() => {
   if (props.visible) {
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('pointerdown', handleClickOutside);
     document.addEventListener('keydown', handleEscape);
   }
 });
 onBeforeUnmount(() => {
-  document.removeEventListener('mousedown', handleClickOutside);
+  document.removeEventListener('pointerdown', handleClickOutside);
   document.removeEventListener('keydown', handleEscape);
 });
 
@@ -60,7 +62,7 @@ const derivedStyles = computed(() => ({
 </script>
 
 <template>
-  <div v-if="visible" class="generic-popover" :style="derivedStyles" ref="popover" @mousedown.stop @click.stop>
+  <div v-if="visible" class="generic-popover" :style="derivedStyles" ref="popover" @pointerdown.stop @click.stop>
     <slot />
   </div>
 </template>

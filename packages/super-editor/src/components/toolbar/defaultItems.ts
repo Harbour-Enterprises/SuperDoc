@@ -524,7 +524,7 @@ export const makeDefaultItems = ({
       },
     },
     {
-      label: toolbarTexts.transparentBorders,
+      label: toolbarTexts.removeBorders,
       command: 'deleteCellAndTableBorders',
       icon: toolbarIcons.deleteBorders,
       bottomBorder: true,

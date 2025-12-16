@@ -11,6 +11,7 @@ import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@superdoc/common/collaboration/awareness';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initSuperdocYdoc, initCollaborationComments, makeDocumentsCollaborative } from './collaboration/helpers.js';
+import { setupAwarenessHandler } from './collaboration/collaboration.js';
 import { normalizeDocumentEntry } from './helpers/file.js';
 import { isAllowed } from './collaboration/permissions.js';
 
@@ -366,6 +367,40 @@ export class SuperDoc extends EventEmitter {
     // Flag this superdoc as collaborative
     this.isCollaborative = true;
 
+    // Check for external ydoc/provider (provider-agnostic mode)
+    const { ydoc: externalYdoc, provider: externalProvider } = collaborationModuleConfig;
+
+    if (externalYdoc && externalProvider) {
+      // Use external provider - wire up awareness for SuperDoc events
+      this.ydoc = externalYdoc;
+      this.provider = externalProvider;
+      setupAwarenessHandler(externalProvider, this, this.config.user);
+
+      // If no documents provided, create a default blank document
+      if (!this.config.documents || this.config.documents.length === 0) {
+        this.config.documents = [
+          {
+            id: uuidv4(),
+            type: DOCX,
+            name: 'document.docx',
+          },
+        ];
+      }
+
+      // Assign to all documents
+      this.config.documents.forEach((doc) => {
+        doc.ydoc = externalYdoc;
+        doc.provider = externalProvider;
+        doc.role = this.config.role;
+      });
+
+      // Initialize comments sync, if enabled
+      initCollaborationComments(this);
+
+      return this.config.documents;
+    }
+
+    // Fallback: internal provider creation (legacy mode)
     // Start a socket for all documents and general metaMap for this SuperDoc
     if (collaborationModuleConfig.providerType === 'hocuspocus') {
       this.config.socket = new HocuspocusProviderWebsocket({
@@ -502,6 +537,7 @@ export class SuperDoc extends EventEmitter {
   toggleRuler() {
     this.config.rulers = !this.config.rulers;
     this.superdocStore.documents.forEach((doc) => {
+      // In Pinia store, refs are auto-unwrapped, so rulers is a plain boolean
       doc.rulers = this.config.rulers;
     });
   }
@@ -551,6 +587,12 @@ export class SuperDoc extends EventEmitter {
     this.toolbarElement = this.config.modules?.toolbar?.selector || this.config.toolbar;
     this.toolbar = null;
 
+    // Build excludeItems list - hide ruler button if rulers not configured
+    const excludeItems = [...(moduleConfig.excludeItems || [])];
+    if (!this.config.rulers) {
+      excludeItems.push('ruler');
+    }
+
     const config = {
       selector: this.toolbarElement || null,
       isDev: this.isDev || false,
@@ -566,6 +608,7 @@ export class SuperDoc extends EventEmitter {
       aiApiKey: this.config.modules?.ai?.apiKey,
       aiEndpoint: this.config.modules?.ai?.endpoint,
       ...moduleConfig,
+      excludeItems, // Override moduleConfig.excludeItems with our computed list
     };
 
     this.toolbar = new SuperToolbar(config);
@@ -583,7 +626,6 @@ export class SuperDoc extends EventEmitter {
    */
   addCommentsList(element) {
     if (!this.config?.modules?.comments || this.config.role === 'viewer') return;
-    this.#log('🦋 [superdoc] Adding comments list to:', element);
     if (element) this.config.modules.comments.element = element;
     this.commentsList = new SuperComments(this.config.modules?.comments, this);
     if (this.config.onCommentsListChange) this.config.onCommentsListChange({ isRendered: true });
@@ -654,7 +696,9 @@ export class SuperDoc extends EventEmitter {
       suggesting: () => this.#setModeSuggesting(),
     };
 
-    if (types[type]) types[type]();
+    if (types[type]) {
+      types[type]();
+    }
   }
 
   /**
@@ -740,8 +784,8 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Disable tracked changes for viewing mode (show final document)
-    this.setTrackedChangesPreferences({ mode: 'final', enabled: false });
+    // Disable tracked changes for viewing mode (show original document without change markers)
+    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
 
     this.superdocStore.documents.forEach((doc) => {
       doc.removeComments();

@@ -7,9 +7,12 @@
 
 import type {
   BoxSpacing,
+  DrawingBlock,
   DrawingContentSnapshot,
   ParagraphIndent,
   ShapeGroupChild,
+  ShapeGroupDrawing,
+  ShapeGroupImageChild,
   ShapeGroupTransform,
   FlowBlock,
   ImageRun,
@@ -903,7 +906,13 @@ export function inferExtensionFromPath(value?: string | null): string | undefine
 /**
  * Hydrates image blocks by converting file path references to base64 data URLs.
  *
- * For each image block, attempts to resolve the image source by checking multiple
+ * This function processes multiple types of blocks containing images:
+ * - **ImageBlocks**: Top-level image blocks with `kind: 'image'`
+ * - **ParagraphBlocks**: Paragraphs containing ImageRuns (inline images)
+ * - **DrawingBlocks**: Drawing blocks with `drawingKind === 'shapeGroup'` that contain image children
+ * - **TableBlocks**: Tables containing cells with any of the above block types
+ *
+ * For each image, attempts to resolve the image source by checking multiple
  * candidate paths against the provided media files map. Uses path normalization
  * and extension inference to maximize match success rate.
  *
@@ -918,7 +927,7 @@ export function inferExtensionFromPath(value?: string | null): string | undefine
  * - Extension from the src path
  * - Default to 'jpeg' if neither available
  *
- * **Image blocks are left unchanged if:**
+ * **Images are left unchanged if:**
  * - No media files are provided
  * - The src already starts with 'data:' (already a data URL)
  * - No matching media file is found in any candidate path
@@ -929,12 +938,30 @@ export function inferExtensionFromPath(value?: string | null): string | undefine
  *
  * @example
  * ```typescript
+ * // Hydrating a top-level ImageBlock
  * const blocks = [
  *   { kind: 'image', src: 'word/media/image1.jpg', attrs: { rId: 'rId5' } }
  * ];
  * const mediaFiles = { 'word/media/image1.jpg': 'iVBORw0KGgoAAAANS...' };
  * const hydrated = hydrateImageBlocks(blocks, mediaFiles);
  * // Result: [{ kind: 'image', src: 'data:image/jpg;base64,iVBORw0KGgoAAAANS...' }]
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Hydrating a DrawingBlock with shapeGroup containing image children
+ * const blocks = [
+ *   {
+ *     kind: 'drawing',
+ *     drawingKind: 'shapeGroup',
+ *     shapes: [
+ *       { shapeType: 'image', attrs: { src: 'word/media/img.png', x: 0, y: 0 } }
+ *     ]
+ *   }
+ * ];
+ * const mediaFiles = { 'word/media/img.png': 'base64data...' };
+ * const hydrated = hydrateImageBlocks(blocks, mediaFiles);
+ * // Image child's src is hydrated to data URL
  * ```
  *
  * @example
@@ -1048,46 +1075,142 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
   };
 
   return blocks.map((block) => {
-    // Handle ImageBlocks (top-level images)
-    if (block.kind === 'image') {
-      if (!block.src || block.src.startsWith('data:')) {
-        return block;
+    const hydrateBlock = (blk: FlowBlock): FlowBlock => {
+      // Handle ImageBlocks (top-level images)
+      if (blk.kind === 'image') {
+        if (!blk.src || blk.src.startsWith('data:')) {
+          return blk;
+        }
+
+        const attrs = (blk.attrs ?? {}) as Record<string, unknown>;
+        const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
+        const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
+        const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+
+        const resolvedSrc = resolveImageSrc(blk.src, relId, attrSrc, extension);
+        if (resolvedSrc) {
+          return { ...blk, src: resolvedSrc };
+        }
+        return blk;
       }
 
-      const attrs = (block.attrs ?? {}) as Record<string, unknown>;
-      const relId = typeof attrs.rId === 'string' ? attrs.rId : undefined;
-      const attrSrc = typeof attrs.src === 'string' ? attrs.src : undefined;
-      const extension = typeof attrs.extension === 'string' ? attrs.extension.toLowerCase() : undefined;
+      // Handle ParagraphBlocks (may contain ImageRuns)
+      if (blk.kind === 'paragraph') {
+        const paragraphBlock = blk as ParagraphBlock;
+        if (!paragraphBlock.runs || paragraphBlock.runs.length === 0) {
+          return blk;
+        }
 
-      const resolvedSrc = resolveImageSrc(block.src, relId, attrSrc, extension);
-      if (resolvedSrc) {
-        return { ...block, src: resolvedSrc };
-      }
-      return block;
-    }
-
-    // Handle ParagraphBlocks (may contain ImageRuns)
-    if (block.kind === 'paragraph') {
-      const paragraphBlock = block as ParagraphBlock;
-      if (!paragraphBlock.runs || paragraphBlock.runs.length === 0) {
-        return block;
+        const hydratedRuns = hydrateRuns(paragraphBlock.runs);
+        if (hydratedRuns !== paragraphBlock.runs) {
+          return { ...paragraphBlock, runs: hydratedRuns };
+        }
+        return blk;
       }
 
-      const hydratedRuns = hydrateRuns(paragraphBlock.runs);
-      if (hydratedRuns !== paragraphBlock.runs) {
-        return { ...paragraphBlock, runs: hydratedRuns };
-      }
-      return block;
-    }
+      if (blk.kind === 'table') {
+        let rowsChanged = false;
+        const newRows = blk.rows.map((row) => {
+          let cellsChanged = false;
+          const newCells = row.cells.map((cell) => {
+            let cellChanged = false;
+            const hydratedBlocks = (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : [])).map((cb) =>
+              hydrateBlock(cb as unknown as FlowBlock),
+            );
 
-    return block;
+            if (cell.blocks && hydratedBlocks !== cell.blocks) {
+              cellChanged = true;
+            }
+
+            // Backward compatibility: hydrate legacy cell.paragraph
+            let hydratedParagraph = cell.paragraph;
+            if (!cell.blocks && cell.paragraph && cell.paragraph.kind === 'paragraph') {
+              const hydratedPara = hydrateBlock(cell.paragraph) as ParagraphBlock;
+              if (hydratedPara !== cell.paragraph) {
+                hydratedParagraph = hydratedPara;
+                cellChanged = true;
+              }
+            }
+
+            if (cellChanged) {
+              return {
+                ...cell,
+                blocks: hydratedBlocks.length > 0 ? hydratedBlocks : cell.blocks,
+                paragraph: hydratedParagraph,
+              };
+            }
+            return cell;
+          });
+
+          if (newCells.some((c, idx) => c !== row.cells[idx])) {
+            cellsChanged = true;
+          }
+
+          if (cellsChanged) {
+            rowsChanged = true;
+            return { ...row, cells: newCells };
+          }
+          return row;
+        });
+
+        if (rowsChanged) {
+          return { ...blk, rows: newRows };
+        }
+        return blk;
+      }
+
+      // Handle DrawingBlocks with shapeGroup kind (contain image children)
+      if (blk.kind === 'drawing') {
+        const drawingBlock = blk as DrawingBlock;
+        if (drawingBlock.drawingKind !== 'shapeGroup') {
+          return blk;
+        }
+
+        const shapeGroupBlock = drawingBlock as ShapeGroupDrawing;
+        if (!shapeGroupBlock.shapes || shapeGroupBlock.shapes.length === 0) {
+          return blk;
+        }
+
+        let shapesChanged = false;
+        const hydratedShapes = shapeGroupBlock.shapes.map((shape) => {
+          // Only process image children
+          if (shape.shapeType !== 'image') {
+            return shape;
+          }
+
+          const imageChild = shape as ShapeGroupImageChild;
+          const src = imageChild.attrs?.src;
+          if (!src || src.startsWith('data:')) {
+            return shape;
+          }
+
+          const resolvedSrc = resolveImageSrc(src);
+          if (resolvedSrc) {
+            shapesChanged = true;
+            return {
+              ...imageChild,
+              attrs: { ...imageChild.attrs, src: resolvedSrc },
+            };
+          }
+          return shape;
+        });
+
+        if (shapesChanged) {
+          return { ...shapeGroupBlock, shapes: hydratedShapes };
+        }
+        return blk;
+      }
+
+      return blk;
+    };
+
+    return hydrateBlock(block);
   });
 }
 
 // ============================================================================
 // Shallow Object Comparison
 // ============================================================================
-
 /**
  * Performs a shallow equality comparison between two objects.
  *

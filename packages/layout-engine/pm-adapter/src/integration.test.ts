@@ -241,12 +241,15 @@ describe('PM → FlowBlock → Measure integration', () => {
 
     const measure = expectParagraphMeasure(await measureBlock(blocks[0], 400));
 
-    // Typography metrics should reflect the font size
-    expect(measure.lines[0].ascent).toBe(20 * 0.8);
-    expect(measure.lines[0].descent).toBe(20 * 0.2);
-    const expectedLineHeight = 20; // measuring-dom clamps to Word's 12pt grid (~20px) before multipliers
-    expect(measure.lines[0].lineHeight).toBe(expectedLineHeight);
-    expect(measure.totalHeight).toBe(expectedLineHeight);
+    // Typography metrics should be reasonable for 20px font size
+    // Note: Exact values depend on font rendering (canvas vs fallback), so we check ranges
+    expect(measure.lines[0].ascent).toBeGreaterThan(14); // ~70-90% of font size
+    expect(measure.lines[0].ascent).toBeLessThan(20);
+    expect(measure.lines[0].descent).toBeGreaterThan(2); // ~10-25% of font size
+    expect(measure.lines[0].descent).toBeLessThan(6);
+    // Line height should be at least the font size
+    expect(measure.lines[0].lineHeight).toBeGreaterThanOrEqual(20);
+    expect(measure.totalHeight).toBeGreaterThanOrEqual(20);
   });
 
   it('propagates tab stops and decimal separators through measurement', async () => {
@@ -554,7 +557,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -586,7 +589,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -594,7 +597,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -630,7 +633,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -678,7 +681,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',
@@ -711,7 +714,7 @@ describe('page break integration tests', () => {
         },
         {
           type: 'paragraph',
-          content: [{ type: 'hardBreak' }],
+          content: [{ type: 'hardBreak', attrs: { pageBreakType: 'page' } }],
         },
         {
           type: 'paragraph',

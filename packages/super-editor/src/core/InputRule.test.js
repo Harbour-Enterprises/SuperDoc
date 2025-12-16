@@ -6,9 +6,13 @@ const handleDocxPasteMock = vi.hoisted(() => vi.fn(() => true));
 const handleGoogleDocsHtmlMock = vi.hoisted(() => vi.fn(() => true));
 const flattenListsInHtmlMock = vi.hoisted(() => vi.fn((html) => html));
 
-vi.mock('./inputRules/docx-paste/docx-paste.js', () => ({
-  handleDocxPaste: handleDocxPasteMock,
-}));
+vi.mock('./inputRules/docx-paste/docx-paste.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    handleDocxPaste: handleDocxPasteMock,
+  };
+});
 
 vi.mock('./inputRules/google-docs-paste/google-docs-paste.js', () => ({
   handleGoogleDocsHtml: handleGoogleDocsHtmlMock,
@@ -94,12 +98,17 @@ describe('InputRule helpers', () => {
     expect(view.state.doc.firstChild.textContent).toBe('NewExisting');
   });
 
-  it('splits multiple paragraphs into line breaks when pasting inside a paragraph', () => {
+  it('preserves paragraph structure when pasting multiple paragraphs', () => {
     const { editor, view } = createEditorContext(doc(p('Base')));
 
     handleHtmlPaste('<p>First</p><p>Second</p>', editor);
 
-    expect(view.state.doc.firstChild.textContent).toBe('First\nSecondBase');
+    // Multi-paragraph paste should preserve paragraph structure
+    // Cursor at start of "Base" → "First" paragraph, "Second" paragraph, then "Base" continues
+    expect(view.state.doc.childCount).toBe(3);
+    expect(view.state.doc.child(0).textContent).toBe('First');
+    expect(view.state.doc.child(1).textContent).toBe('Second');
+    expect(view.state.doc.child(2).textContent).toBe('Base');
   });
 
   it('detects Word generated HTML', () => {

@@ -18,7 +18,6 @@
   },
   "devDependencies": {
     "tsx": "^4.20.6",
-    "canvas": "^3.0.0",
     "jsdom": "^25.0.0"
   }
 }

@@ -215,6 +215,21 @@ describe('handleImageNode', () => {
     expect(result.attrs.size).toEqual({ width: 5, height: 6 }); // emuToPixels mocked
   });
 
+  it('captures unhandled drawing children for passthrough preservation', () => {
+    const node = makeNode();
+    node.elements.push({
+      name: 'wp14:sizeRelH',
+      attributes: { relativeFrom: 'margin' },
+    });
+
+    const result = handleImageNode(node, makeParams(), false);
+
+    expect(result.attrs.drawingChildOrder).toContain('wp14:sizeRelH');
+    expect(result.attrs.originalDrawingChildren.map((c) => c.xml.name)).toEqual(
+      expect.arrayContaining(['wp14:sizeRelH', 'a:graphic', 'wp:docPr']),
+    );
+  });
+
   it('normalizes targetPath starting with /word', () => {
     const node = makeNode();
     const params = makeParams('/word/media/pic.jpg');
@@ -227,8 +242,44 @@ describe('handleImageNode', () => {
     const node = makeNode();
     const params = makeParams('/media/pic.gif');
     const result = handleImageNode(node, params, false);
-    expect(result.attrs.src).toBe('media/pic.gif');
+    // Paths starting with /media are prefixed with word/ to match media storage keys
+    expect(result.attrs.src).toBe('word/media/pic.gif');
     expect(result.attrs.extension).toBe('gif');
+  });
+
+  it('handles absolute targets and missing dist attributes without crashing', () => {
+    const minimalNode = {
+      attributes: {},
+      elements: [
+        { name: 'wp:extent', attributes: { cx: '2000', cy: '4000' } },
+        {
+          name: 'a:graphic',
+          elements: [
+            {
+              name: 'a:graphicData',
+              attributes: { uri: 'pic' },
+              elements: [
+                {
+                  name: 'pic:pic',
+                  elements: [
+                    {
+                      name: 'pic:blipFill',
+                      elements: [{ name: 'a:blip', attributes: { 'r:embed': 'rId1' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { name: 'wp:docPr', attributes: { id: '7', name: 'Absolute', descr: 'Abs image' } },
+      ],
+    };
+
+    const result = handleImageNode(minimalNode, makeParams('/word/media/mId1.jpg'), false);
+    expect(result).not.toBeNull();
+    expect(result?.attrs?.src).toBe('word/media/mId1.jpg');
+    expect(result?.attrs?.padding?.top).toBe(0);
   });
 
   it('returns alt text for EMF/WMF', () => {
@@ -239,9 +290,9 @@ describe('handleImageNode', () => {
     expect(result.attrs.extension).toBe('emf');
   });
 
-  it('includes simplePos, wrapSquare, anchorData', () => {
+  it('includes simplePos when simplePos="1", wrapSquare, anchorData', () => {
     const node = makeNode({
-      attributes: { distT: '111', distB: '222', distL: '333', distR: '444' },
+      attributes: { distT: '111', distB: '222', distL: '333', distR: '444', simplePos: '1' },
     });
 
     node.elements.push({ name: 'wp:simplePos', attributes: { x: '1', y: '2' } });
@@ -274,6 +325,103 @@ describe('handleImageNode', () => {
       alignV: 'bottom',
     });
     expect(result.attrs.marginOffset).toEqual({ horizontal: 1, top: 2 });
+  });
+
+  describe('simplePos attribute handling', () => {
+    it('ignores wp:simplePos element when simplePos="0" attribute is set', () => {
+      const node = makeNode({
+        attributes: { distT: '111', distB: '222', distL: '333', distR: '444', simplePos: '0' },
+      });
+
+      // Add wp:simplePos element with legacy/placeholder coordinates
+      node.elements.push({ name: 'wp:simplePos', attributes: { x: '3589020', y: '1859280' } });
+      node.elements.push({ name: 'wp:wrapSquare', attributes: { wrapText: 'bothSides' } });
+      node.elements.push({
+        name: 'wp:positionH',
+        attributes: { relativeFrom: 'margin' },
+        elements: [{ name: 'wp:align', elements: [{ text: 'left' }] }],
+      });
+      node.elements.push({
+        name: 'wp:positionV',
+        attributes: { relativeFrom: 'margin' },
+        elements: [{ name: 'wp:align', elements: [{ text: 'top' }] }],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      // simplePos should NOT be included when simplePos="0"
+      expect(result.attrs.simplePos).toBeUndefined();
+      // But anchorData should still be present from positionH/positionV
+      expect(result.attrs.anchorData).toEqual({
+        hRelativeFrom: 'margin',
+        vRelativeFrom: 'margin',
+        alignH: 'left',
+        alignV: 'top',
+      });
+    });
+
+    it('ignores wp:simplePos element when simplePos attribute is missing', () => {
+      const node = makeNode({
+        attributes: { distT: '111', distB: '222', distL: '333', distR: '444' },
+        // No simplePos attribute
+      });
+
+      // Add wp:simplePos element - should be ignored since attribute is not "1"
+      node.elements.push({ name: 'wp:simplePos', attributes: { x: '999999', y: '888888' } });
+      node.elements.push({
+        name: 'wp:positionH',
+        attributes: { relativeFrom: 'page' },
+        elements: [{ name: 'wp:posOffset', elements: [{ text: '5000' }] }],
+      });
+      node.elements.push({
+        name: 'wp:positionV',
+        attributes: { relativeFrom: 'paragraph' },
+        elements: [{ name: 'wp:posOffset', elements: [{ text: '6000' }] }],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      // simplePos should NOT be included
+      expect(result.attrs.simplePos).toBeUndefined();
+      // marginOffset should come from positionH/positionV
+      expect(result.attrs.marginOffset).toEqual({ horizontal: 5, top: 6 });
+    });
+
+    it('uses wp:simplePos element when simplePos="1" attribute is set', () => {
+      const node = makeNode({
+        attributes: { distT: '111', distB: '222', distL: '333', distR: '444', simplePos: '1' },
+      });
+
+      node.elements.push({ name: 'wp:simplePos', attributes: { x: '12345', y: '67890' } });
+      // positionH/positionV should be ignored when simplePos="1"
+      node.elements.push({
+        name: 'wp:positionH',
+        attributes: { relativeFrom: 'page' },
+        elements: [{ name: 'wp:posOffset', elements: [{ text: '999' }] }],
+      });
+      node.elements.push({
+        name: 'wp:positionV',
+        attributes: { relativeFrom: 'paragraph' },
+        elements: [{ name: 'wp:posOffset', elements: [{ text: '888' }] }],
+      });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      // simplePos SHOULD be included when simplePos="1"
+      expect(result.attrs.simplePos).toEqual({ x: '12345', y: '67890' });
+    });
+
+    it('uses wp:simplePos element when simplePos=1 (numeric)', () => {
+      const node = makeNode({
+        attributes: { distT: '111', distB: '222', distL: '333', distR: '444', simplePos: 1 },
+      });
+
+      node.elements.push({ name: 'wp:simplePos', attributes: { x: '11111', y: '22222' } });
+
+      const result = handleImageNode(node, makeParams(), true);
+
+      expect(result.attrs.simplePos).toEqual({ x: '11111', y: '22222' });
+    });
   });
 
   it('delegates to handleShapeDrawing when uri matches shape', () => {

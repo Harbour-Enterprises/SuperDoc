@@ -1,11 +1,23 @@
 /**
  * Resolve the DOM element representing the visible editing surface for either flow or presentation editors.
+ *
+ * This function handles three scenarios:
+ * 1. Editor IS a PresentationEditor - returns the visible layout surface (element property)
+ * 2. Flow Editor with attached PresentationEditor - returns the presentation's visible surface
+ * 3. Plain flow Editor - returns the ProseMirror view's DOM element
  */
 import type { Editor } from '../Editor.js';
 
 export function getEditorSurfaceElement(editor: Editor | null | undefined): HTMLElement | null {
   if (!editor) return null;
 
+  // Check if editor IS a PresentationEditor by looking for PresentationEditor-specific method (hitTest)
+  // and the element property. This distinguishes from flow Editor which delegates hitTest to presentationEditor.
+  if (typeof editor.hitTest === 'function' && editor.element instanceof HTMLElement) {
+    return editor.element;
+  }
+
+  // For flow Editor: check for attached PresentationEditor, then fall back to view.dom or options.element
   return editor.presentationEditor?.element ?? editor.view?.dom ?? editor.options?.element ?? null;
 }
 

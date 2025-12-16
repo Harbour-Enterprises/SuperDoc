@@ -1,4 +1,5 @@
 import { OxmlNode, Attribute, type AttributeValue } from '@core/index.js';
+import { TextSelection } from 'prosemirror-state';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { splitBlock } from '@core/commands/splitBlock.js';
 import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
@@ -11,6 +12,7 @@ import { ParagraphNodeView } from './ParagraphNodeView.js';
 import { createNumberingPlugin } from './numberingPlugin.js';
 import { createDropcapPlugin } from './dropcapPlugin.js';
 import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
+import { parseAttrs } from './helpers/parseAttrs.js';
 import type { Node as PmNode } from 'prosemirror-model';
 import type { Decoration } from 'prosemirror-view';
 import type { Editor } from '@core/Editor.js';
@@ -124,60 +126,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
     return [
       {
         tag: 'p',
-        getAttrs: (node: Element) => {
-          const numberingProperties: { numId?: number; ilvl?: number } = {};
-          let indent: Record<string, number> | undefined;
-          let spacing: Record<string, number> | undefined;
-          const { styleid: styleId, ...extraAttrs } = Array.from(node.attributes).reduce(
-            (acc: Record<string, string>, attr: Attr) => {
-              if (attr.name === 'data-num-id') {
-                numberingProperties.numId = parseInt(attr.value, 10);
-              } else if (attr.name === 'data-level') {
-                numberingProperties.ilvl = parseInt(attr.value, 10);
-              } else if (attr.name === 'data-indent') {
-                try {
-                  const parsed = JSON.parse(attr.value) as Record<string, number>;
-                  indent = {};
-                  Object.entries(parsed || {}).forEach(([key, val]) => {
-                    indent![key] = Number(val);
-                  });
-                } catch {
-                  // ignore invalid indent value
-                }
-              } else if (attr.name === 'data-spacing') {
-                try {
-                  const parsed = JSON.parse(attr.value) as Record<string, number>;
-                  spacing = {};
-                  Object.entries(parsed || {}).forEach(([key, val]) => {
-                    spacing![key] = Number(val);
-                  });
-                } catch {
-                  // ignore invalid spacing value
-                }
-              } else {
-                acc[attr.name] = attr.value;
-              }
-              return acc;
-            },
-            {} as Record<string, string>,
-          );
-
-          if (Object.keys(numberingProperties).length > 0) {
-            return {
-              paragraphProperties: {
-                numberingProperties,
-                indent,
-                spacing,
-                styleId: styleId || null,
-              },
-              extraAttrs,
-            };
-          }
-
-          return {
-            extraAttrs,
-          };
-        },
+        getAttrs: parseAttrs,
       },
       {
         tag: 'div',
@@ -195,7 +144,16 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
       },
       ...(this.options?.headingLevels ?? []).map((level) => ({
         tag: `h${level}`,
-        attrs: { level, paragraphProperties: { styleId: `Heading${level}` } },
+        getAttrs: (node) => {
+          const attrs = parseAttrs(node);
+          return {
+            ...attrs,
+            paragraphProperties: {
+              ...attrs.paragraphProperties,
+              styleId: `Heading${level}`,
+            },
+          };
+        },
       })),
     ];
   },
@@ -212,7 +170,9 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
   },
 
   addNodeView(): unknown {
-    if (!this.editor || shouldSkipNodeView(this.editor)) return null;
+    // Skip custom node view when the editor isn't using the docx pipeline (e.g. SuperInput rich text)
+    if (!this.editor || this.editor.options?.mode !== 'docx' || !this.editor.converter) return null;
+    if (shouldSkipNodeView(this.editor)) return null;
     return ({
       node,
       editor,
@@ -294,7 +254,7 @@ export const Paragraph = OxmlNode.create<ParagraphOptions>({
 
             // Not inside a list item, proceed with creating new list
             const { tr } = state;
-            tr.delete(range.from, range.to);
+            tr.delete(range.from, range.to).setSelection(TextSelection.create(tr.doc, range.from));
 
             ListHelpers.createNewList({
               listType: type,

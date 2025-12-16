@@ -526,6 +526,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     if (this.options.role === 'viewer') cleanedMode = 'viewing';
     if (this.options.role === 'suggester' && cleanedMode === 'editing') cleanedMode = 'suggesting';
+
     // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
       this.commands.toggleTrackChangesShowOriginal();
@@ -596,40 +597,42 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Get position from client-space coordinates. Falls back to PresentationEditor hit testing in layout mode.
+   * Get position from client-space coordinates.
+   * In layout/presentation mode, uses PresentationEditor hit testing for accurate coordinate mapping.
+   * Falls back to ProseMirror view for standard editing mode.
    */
   posAtCoords(coords: Parameters<PmEditorView['posAtCoords']>[0]): ReturnType<PmEditorView['posAtCoords']> {
+    // In presentation/layout mode, use the layout engine's hit testing
+    // which properly converts visible surface coordinates to document positions
+    if (typeof this.presentationEditor?.hitTest === 'function') {
+      // Extract coordinates from various possible coordinate formats
+      const coordsObj = coords as {
+        clientX?: number;
+        clientY?: number;
+        left?: number;
+        top?: number;
+        x?: number;
+        y?: number;
+      };
+      const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
+      const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
+      if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
+        if (hit) {
+          return {
+            pos: hit.pos,
+            inside: hit.pos,
+          };
+        }
+      }
+    }
+
+    // Fall back to ProseMirror view for standard editing mode
     if (this.view) {
       return this.view.posAtCoords(coords);
     }
-    if (typeof this.presentationEditor?.hitTest !== 'function') {
-      return null;
-    }
 
-    // Extract coordinates from various possible coordinate formats
-    const coordsObj = coords as {
-      clientX?: number;
-      clientY?: number;
-      left?: number;
-      top?: number;
-      x?: number;
-      y?: number;
-    };
-    const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
-    const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
-    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-      return null;
-    }
-
-    const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
-    if (!hit) {
-      return null;
-    }
-
-    return {
-      pos: hit.pos,
-      inside: hit.pos,
-    };
+    return null;
   }
 
   #registerCopyHandler(): void {
@@ -749,10 +752,29 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Set whether the editor is editable
+   * Set whether the editor is editable.
+   *
+   * When setting to non-editable, this method:
+   * - Forces ProseMirror to re-evaluate the editable prop from the Editable plugin
+   * - Blurs the editor to remove the cursor
+   *
+   * @param editable - Whether the editor should accept user input (default: true)
+   * @param emitUpdate - Whether to emit an update event after changing editability (default: true)
    */
   setEditable(editable: boolean = true, emitUpdate: boolean = true): void {
     this.setOptions({ editable });
+
+    // Force ProseMirror to re-evaluate the editable prop from the Editable plugin.
+    // ProseMirror only updates the editable state when setProps is called,
+    // even if the underlying editor.options.editable value has changed.
+    if (this.view) {
+      this.view.setProps({});
+
+      // When setting to non-editable, blur the editor to remove cursor
+      if (!editable && this.view.dom) {
+        this.view.dom.blur();
+      }
+    }
 
     if (emitUpdate) {
       this.emit('update', { editor: this, transaction: this.state.tr });
@@ -842,6 +864,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
         telemetry: this.options.telemetry,
         fileSource: this.options.fileSource,
         documentId: this.options.documentId,
+        mockWindow: this.options.mockWindow ?? null,
+        mockDocument: this.options.mockDocument ?? null,
       });
     }
   }
@@ -1029,24 +1053,14 @@ export class Editor extends EventEmitter<EditorEventMap> {
   /**
    * Validates a ProseMirror JSON document against the current schema.
    */
-  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode {
+  validateJSON(doc: ProseMirrorJSON | ProseMirrorJSON[]): PmNode | PmNode[] {
     if (!this.schema) {
       throw new Error('Schema is not initialized.');
     }
 
-    const topNodeName = this.schema.topNodeType?.name || 'doc';
-    const normalizedDoc = Array.isArray(doc) // array of nodes -> wrap into doc.content
-      ? { type: topNodeName, content: doc }
-      : doc && typeof doc === 'object' && doc.type
-        ? doc.type === topNodeName || doc.type === 'doc'
-          ? doc
-          : { type: topNodeName, content: [doc as ProseMirrorJSON] }
-        : (() => {
-            throw new Error('Invalid document shape: expected a node object or an array of node objects.');
-          })();
-
     try {
-      return this.schema.nodeFromJSON(normalizedDoc as ProseMirrorJSON);
+      if (Array.isArray(doc)) return doc.map((d) => this.schema!.nodeFromJSON(d));
+      return this.schema.nodeFromJSON(doc as ProseMirrorJSON);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       const validationError = new Error(`Invalid document for current schema: ${detail}`);
@@ -1810,7 +1824,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
       const customSettings = hasCustomSettings
         ? this.converter.schemaToXml(this.converter.convertedXml['word/settings.xml']?.elements?.[0])
         : null;
+
       const rels = this.converter.schemaToXml(this.converter.convertedXml['word/_rels/document.xml.rels'].elements[0]);
+
       const media = this.converter.addedMedia;
 
       const updatedHeadersFooters: Record<string, string> = {};

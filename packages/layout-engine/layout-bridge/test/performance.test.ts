@@ -1,15 +1,27 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll } from 'vitest';
-import { Canvas } from 'canvas';
+import { resolveCanvas } from '../../measuring/dom/src/canvas-resolver.js';
 import { installNodeCanvasPolyfill } from '../../measuring/dom/src/setup.ts';
 import { runBenchmarkSuite } from '../src/benchmarks/index';
 
+const { Canvas, usingStub } = resolveCanvas();
+
 beforeAll(() => {
+  if (usingStub) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[superdoc] Skipping layout-bridge benchmarks because mock canvas is active; install native deps or use Node 20 for real metrics.',
+    );
+    return;
+  }
+
   installNodeCanvasPolyfill({
     document,
     Canvas,
   });
 });
+
+const describeIfRealCanvas = usingStub ? describe.skip : describe;
 
 const LATENCY_TARGETS = {
   p50: 80, // Relaxed for CI environments which are slower than local machines
@@ -18,7 +30,7 @@ const LATENCY_TARGETS = {
 };
 const MIN_HIT_RATE = 0.95;
 
-describe('incremental pipeline benchmarks', () => {
+describeIfRealCanvas('incremental pipeline benchmarks', () => {
   it('meets latency and cache targets across document sizes', async () => {
     const scenarios = [
       { targetPages: 1, iterations: 4 },

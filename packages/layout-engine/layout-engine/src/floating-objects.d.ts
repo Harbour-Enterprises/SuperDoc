@@ -7,16 +7,16 @@
  * - Managing exclusion zones per page/column
  *
  * Architecture:
- * - Layout Pass 1: Registers all anchored images before laying out paragraphs
- * - Layout Pass 2: Queries exclusions during paragraph layout to reduce line widths
- * - Supports rectangular wrapping (Square/TopAndBottom) in Phase 4A
- * - Polygon wrapping (Tight/Through) deferred to Phase 4B
+ * - Registration pass: Registers all anchored images before laying out paragraphs
+ * - Layout pass: Queries exclusions during paragraph layout to reduce line widths
+ * - Supports rectangular wrapping (Square/TopAndBottom)
+ * - Polygon wrapping (Tight/Through) not yet implemented
  */
 import type { ImageBlock, ImageMeasure, ExclusionZone, DrawingBlock, DrawingMeasure } from '@superdoc/contracts';
 export type FloatingObjectManager = {
   /**
    * Register an anchored drawing as an exclusion zone.
-   * Should be called during Layout Pass 1 before laying out paragraphs.
+   * Should be called before laying out paragraphs.
    */
   registerDrawing(
     drawingBlock: ImageBlock | DrawingBlock,

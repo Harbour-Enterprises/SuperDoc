@@ -209,6 +209,19 @@ const onEditorReady = ({ editor, presentationEditor }) => {
   presentationEditor.onTelemetry((telemetryPayload) => {
     proxy.$superdoc.captureLayoutPipelineEvent(telemetryPayload);
   });
+
+  // Listen for fresh comment positions from the layout engine.
+  // PresentationEditor emits this after every layout with PM positions collected
+  // from the current document, ensuring positions are never stale.
+  presentationEditor.on('commentPositions', ({ positions }) => {
+    const commentsConfig = proxy.$superdoc.config.modules?.comments;
+    if (!commentsConfig || commentsConfig === false) return;
+    if (!positions || Object.keys(positions).length === 0) return;
+
+    // Map PM positions to visual layout coordinates
+    const mappedPositions = presentationEditor.getCommentBounds(positions, layers.value);
+    handleEditorLocationsUpdate(mappedPositions);
+  });
 };
 
 const onEditorDestroy = () => {
@@ -236,7 +249,24 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   }
 
   const { documentId } = editor.options;
-  const { $from, $to } = transaction.selection;
+  const txnSelection = transaction?.selection;
+  const stateSelection = editor.state?.selection ?? editor.view?.state?.selection;
+  const selectionWithPositions =
+    (txnSelection?.$from && txnSelection?.$to && txnSelection) || stateSelection || txnSelection;
+
+  if (!selectionWithPositions) return;
+
+  const { $from, $to } = selectionWithPositions;
+  if (!$from || !$to) return;
+
+  const docSize =
+    editor.state?.doc?.content?.size ?? editor.view?.state?.doc?.content?.size ?? Number.POSITIVE_INFINITY;
+
+  if ($from.pos > docSize || $to.pos > docSize) {
+    updateSelection({ x: null, y: null, x2: null, y2: null, source: 'super-editor' });
+    return;
+  }
+
   if ($from.pos === $to.pos) updateSelection({ x: null, y: null, x2: null, y2: null, source: 'super-editor' });
 
   if (!layers.value) return;
@@ -245,8 +275,18 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
   if (!presentation) {
     // Fallback to legacy coordinate calculation if PresentationEditor not yet initialized
     const { view } = editor;
-    const fromCoords = view.coordsAtPos($from.pos);
-    const toCoords = view.coordsAtPos($to.pos);
+    const safeCoordsAtPos = (pos) => {
+      try {
+        return view.coordsAtPos(pos);
+      } catch (err) {
+        console.warn('[superdoc] Ignoring selection coords error', err);
+        return null;
+      }
+    };
+
+    const fromCoords = safeCoordsAtPos($from.pos);
+    const toCoords = safeCoordsAtPos($to.pos);
+    if (!fromCoords || !toCoords) return;
 
     const layerBounds = layers.value.getBoundingClientRect();
     const HEADER_HEIGHT = 96;
@@ -259,13 +299,13 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
       bottom,
     };
 
-    const selection = useSelection({
+    const selectionResult = useSelection({
       selectionBounds,
       page: 1,
       documentId,
       source: 'super-editor',
     });
-    handleSelectionChange(selection);
+    handleSelectionChange(selectionResult);
     return;
   }
 
@@ -279,19 +319,29 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
       y: bounds.bottom,
       source: 'super-editor',
     });
-    const selection = useSelection({
+    const selectionResult = useSelection({
       selectionBounds: { ...bounds },
       page: pageIndex + 1,
       documentId,
       source: 'super-editor',
     });
-    handleSelectionChange(selection);
+    handleSelectionChange(selectionResult);
     return;
   }
 
   const { view } = editor;
-  const fromCoords = view.coordsAtPos($from.pos);
-  const toCoords = view.coordsAtPos($to.pos);
+  const safeCoordsAtPos = (pos) => {
+    try {
+      return view.coordsAtPos(pos);
+    } catch (err) {
+      console.warn('[superdoc] Ignoring selection coords error', err);
+      return null;
+    }
+  };
+
+  const fromCoords = safeCoordsAtPos($from.pos);
+  const toCoords = safeCoordsAtPos($to.pos);
+  if (!fromCoords || !toCoords) return;
 
   const layerBounds = layers.value.getBoundingClientRect();
   const HEADER_HEIGHT = 96;
@@ -305,14 +355,13 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
     bottom,
   };
 
-  const selection = useSelection({
+  const selectionResult = useSelection({
     selectionBounds,
     page: 1,
     documentId,
     source: 'super-editor',
   });
-
-  handleSelectionChange(selection);
+  handleSelectionChange(selectionResult);
 };
 
 function getSelectionBoundingBox() {
@@ -369,6 +418,7 @@ const editorOptions = (doc) => {
     markdown: doc.markdown,
     documentMode: proxy.$superdoc.config.documentMode,
     rulers: doc.rulers,
+    rulerContainer: proxy.$superdoc.config.rulerContainer,
     isInternal: proxy.$superdoc.config.isInternal,
     annotations: proxy.$superdoc.config.annotations,
     isCommentsEnabled: Boolean(commentsModuleConfig.value),
@@ -420,19 +470,28 @@ const editorOptions = (doc) => {
 
 /**
  * Trigger a comment-positions location update
- * This is called when the editor has updated the comment locations
+ * This is called when the PM plugin emits comment locations.
+ *
+ * Note: When using the layout engine, PresentationEditor emits authoritative
+ * positions via the 'commentPositions' event after each layout. This handler
+ * primarily serves as a fallback for non-layout-engine mode.
  *
  * @returns {void}
  */
 const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
+
   const presentation = PresentationEditor.getInstance(doc.id);
   if (!presentation) {
-    // PresentationEditor not yet initialized; pass through raw positions
+    // Non-layout-engine mode: pass through raw positions
     handleEditorLocationsUpdate(allCommentPositions, activeThreadId);
     return;
   }
+
+  // Layout engine mode: map PM positions to visual layout coordinates.
+  // Note: PresentationEditor's 'commentPositions' event provides fresh positions
+  // after every layout, so this is mainly for the initial load before layout completes.
   const mappedPositions = presentation.getCommentBounds(allCommentPositions, layers.value);
   handleEditorLocationsUpdate(mappedPositions, activeThreadId);
 };
@@ -807,7 +866,7 @@ watch(getFloatingComments, () => {
               :file-source="doc.data"
               :state="doc.state"
               :document-id="doc.id"
-              :options="editorOptions(doc)"
+              :options="{ ...editorOptions(doc), rulers: doc.rulers }"
               @editor-ready="onEditorReady"
               @pageMarginsChange="handleSuperEditorPageMarginsChange(doc, $event)"
             />

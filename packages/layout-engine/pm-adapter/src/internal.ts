@@ -10,7 +10,7 @@
  * - Normalize whitespace and handle empty paragraphs
  */
 
-import type { FlowBlock } from '@superdoc/contracts';
+import type { FlowBlock, ParagraphBlock } from '@superdoc/contracts';
 import type { StyleContext } from '@superdoc/style-engine';
 import { isValidTrackedMode } from './tracked-changes.js';
 import { analyzeSectionRanges, createSectionBreakBlock, publishSectionMetadata } from './sections/index.js';
@@ -122,6 +122,7 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
   const idPrefix = normalizePrefix(options?.blockIdPrefix);
 
   const doc = pmDoc as PMNode;
+
   const docAttrs = (typeof doc.attrs === 'object' && doc.attrs !== null ? doc.attrs : {}) as Record<string, unknown>;
   const docDecimalSeparator = pickDecimalSeparator(doc.attrs?.decimalSeparator);
   const docLang = pickLang(docAttrs.lang ?? docAttrs.language ?? docAttrs.locale);
@@ -217,6 +218,8 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
     trackedChanges?: TrackedChangesConfig,
     bookmarks?: Map<string, number>,
     hyperlinkConfig?: HyperlinkConfig,
+    themeColorsParam?: ThemeColorPalette,
+    converterCtx?: ConverterContext,
   ): FlowBlock[] =>
     paragraphToFlowBlocks(
       para,
@@ -229,8 +232,8 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       trackedChanges,
       bookmarks,
       hyperlinkConfig,
-      themeColors,
-      converterContext,
+      themeColorsParam ?? themeColors,
+      converterCtx ?? converterContext,
     );
 
   const tableConverter = (
@@ -257,7 +260,19 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       bookmarks,
       hyperlinkConfig,
       themeColorsParam ?? themeColors,
+      paragraphConverter,
       converterCtx ?? converterContext,
+      {
+        listCounterContext: { getListCounter, incrementListCounter, resetListCounter },
+        converters: {
+          paragraphToFlowBlocks: paragraphConverter,
+          imageNodeToBlock,
+          vectorShapeNodeToDrawingBlock,
+          shapeGroupNodeToDrawingBlock,
+          shapeContainerNodeToDrawingBlock,
+          shapeTextboxNodeToDrawingBlock,
+        },
+      },
     );
 
   // Build handler context for node processing
@@ -283,6 +298,10 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       paragraphToFlowBlocks: paragraphConverter,
       tableNodeToBlock: tableConverter,
       imageNodeToBlock,
+      vectorShapeNodeToDrawingBlock,
+      shapeGroupNodeToDrawingBlock,
+      shapeContainerNodeToDrawingBlock,
+      shapeTextboxNodeToDrawingBlock,
     },
   };
 
@@ -310,7 +329,11 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
 
   instrumentation?.log?.({ totalBlocks: blocks.length, blockCounts, bookmarks: bookmarks.size });
   const hydratedBlocks = hydrateImageBlocks(blocks, options?.mediaFiles);
-  return { blocks: hydratedBlocks, bookmarks };
+
+  // Post-process: Merge drop-cap paragraphs with their following text paragraphs
+  const mergedBlocks = mergeDropCapParagraphs(hydratedBlocks);
+
+  return { blocks: mergedBlocks, bookmarks };
 }
 
 export function toFlowBlocksMap(documents: PMDocumentMap, options?: BatchAdapterOptions): Record<string, FlowBlock[]> {
@@ -330,6 +353,67 @@ export function toFlowBlocksMap(documents: PMDocumentMap, options?: BatchAdapter
     const { blocks } = toFlowBlocks(doc, perDocOptions);
     result[key] = blocks;
   });
+
+  return result;
+}
+
+/**
+ * Merge drop-cap paragraphs with their following text paragraphs.
+ *
+ * In DOCX, drop caps are encoded as separate paragraphs containing just the
+ * drop cap letter(s) with w:framePr/@w:dropCap. This function:
+ * 1. Identifies paragraphs with dropCapDescriptor (the drop-cap letter paragraph)
+ * 2. Merges them with the following paragraph (the text paragraph)
+ * 3. Transfers the dropCapDescriptor to the merged paragraph
+ * 4. Removes the original drop-cap-only paragraph
+ *
+ * @param blocks - Array of flow blocks to process
+ * @returns New array with drop-cap paragraphs merged
+ */
+function mergeDropCapParagraphs(blocks: FlowBlock[]): FlowBlock[] {
+  const result: FlowBlock[] = [];
+  let i = 0;
+
+  while (i < blocks.length) {
+    const block = blocks[i];
+
+    // Check if this is a drop-cap paragraph (has dropCapDescriptor)
+    if (block.kind === 'paragraph' && block.attrs?.dropCapDescriptor && i + 1 < blocks.length) {
+      const dropCapBlock = block as ParagraphBlock;
+      const nextBlock = blocks[i + 1];
+
+      // Check if next block is a paragraph we can merge with
+      if (nextBlock.kind === 'paragraph') {
+        const textBlock = nextBlock as ParagraphBlock;
+
+        // Create merged paragraph:
+        // - Use the text block's ID and most attributes
+        // - Prepend the drop-cap letter to the runs (not the runs themselves,
+        //   as the letter is already in the dropCapDescriptor.run)
+        // - Transfer the dropCapDescriptor from the drop-cap block
+        const mergedBlock: ParagraphBlock = {
+          kind: 'paragraph',
+          id: textBlock.id,
+          runs: textBlock.runs,
+          attrs: {
+            ...textBlock.attrs,
+            dropCapDescriptor: dropCapBlock.attrs?.dropCapDescriptor,
+            // Clear the legacy dropCap flag on the merged block
+            dropCap: undefined,
+          },
+        };
+
+        result.push(mergedBlock);
+        // Skip both the drop-cap block and the text block
+        i += 2;
+        continue;
+      }
+    }
+
+    // Not a drop-cap or no following paragraph - keep as-is
+    result.push(block);
+    i += 1;
+  }
 
   return result;
 }
@@ -400,6 +484,17 @@ function paragraphToFlowBlocks(
           themeColors,
           paragraphToFlowBlocks,
           converterCtx ?? converterContext,
+          {
+            listCounterContext,
+            converters: {
+              paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+              imageNodeToBlock,
+              vectorShapeNodeToDrawingBlock,
+              shapeGroupNodeToDrawingBlock,
+              shapeContainerNodeToDrawingBlock,
+              shapeTextboxNodeToDrawingBlock,
+            },
+          },
         ),
     },
     converterContext,
@@ -440,5 +535,15 @@ function tableNodeToBlock(
     themeColors,
     paragraphToFlowBlocks,
     converterContext,
+    {
+      converters: {
+        paragraphToFlowBlocks: paragraphToFlowBlocksImpl,
+        imageNodeToBlock,
+        vectorShapeNodeToDrawingBlock,
+        shapeGroupNodeToDrawingBlock,
+        shapeContainerNodeToDrawingBlock,
+        shapeTextboxNodeToDrawingBlock,
+      },
+    },
   );
 }

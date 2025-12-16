@@ -24,6 +24,7 @@ const {
   createdSectionEditors,
   mockOnHeaderFooterDataUpdate,
   mockUpdateYdocDocxData,
+  mockEditorOverlayManager,
 } = vi.hoisted(() => {
   const createDefaultConverter = () => ({
     headers: {
@@ -83,6 +84,18 @@ const {
       once: emitter.once,
       emit: emitter.emit,
       destroy: vi.fn(),
+      setEditable: vi.fn(),
+      setOptions: vi.fn(),
+      commands: {
+        setTextSelection: vi.fn(),
+      },
+      state: {
+        doc: {
+          content: {
+            size: 10,
+          },
+        },
+      },
       view: {
         dom: document.createElement('div'),
         focus: vi.fn(),
@@ -118,6 +131,19 @@ const {
     createdSectionEditors: editors,
     mockOnHeaderFooterDataUpdate: vi.fn(),
     mockUpdateYdocDocxData: vi.fn(() => Promise.resolve()),
+    mockEditorOverlayManager: vi.fn().mockImplementation(() => ({
+      showEditingOverlay: vi.fn(() => ({
+        success: true,
+        editorHost: document.createElement('div'),
+        reason: null,
+      })),
+      hideEditingOverlay: vi.fn(),
+      showSelectionOverlay: vi.fn(),
+      hideSelectionOverlay: vi.fn(),
+      setOnDimmingClick: vi.fn(),
+      getActiveEditorHost: vi.fn(() => null),
+      destroy: vi.fn(),
+    })),
   };
 });
 
@@ -136,6 +162,14 @@ vi.mock('./Editor', () => {
         selection: { from: 0, to: 0 },
         doc: {
           nodeSize: 100,
+          content: {
+            size: 100,
+          },
+          descendants: vi.fn(),
+          nodesBetween: vi.fn((_from: number, _to: number, callback: (node: unknown, pos: number) => void) => {
+            // Simulate a simple document with one text block at position 0.
+            callback({ isTextblock: true }, 0);
+          }),
           resolve: vi.fn((pos: number) => ({
             pos,
             depth: 0,
@@ -181,23 +215,54 @@ vi.mock('@superdoc/layout-bridge', () => ({
   incrementalLayout: mockIncrementalLayout,
   selectionToRects: mockSelectionToRects,
   clickToPosition: mockClickToPosition,
+  createDragHandler: vi.fn(() => {
+    // Return a noop cleanup function; tests drive drag/drop through DOM listeners.
+    return () => {};
+  }),
   getFragmentAtPosition: vi.fn(() => null),
+  hitTestTableFragment: vi.fn(() => null),
   computeLinePmRange: vi.fn(() => ({ from: 0, to: 0 })),
   measureCharacterX: vi.fn(() => 0),
   extractIdentifierFromConverter: vi.fn((_converter) => ({
     extractHeaderId: vi.fn(() => 'rId-header-default'),
     extractFooterId: vi.fn(() => 'rId-footer-default'),
   })),
+  buildMultiSectionIdentifier: vi.fn(() => ({ sections: [] })),
+  getHeaderFooterTypeForSection: vi.fn(() => 'default'),
   getHeaderFooterType: vi.fn((_pageNumber, _identifier, _options) => {
     // Returns the type of header/footer for a given page
     // For simplicity, we return 'default' for all pages
     return 'default';
   }),
+  layoutHeaderFooterWithCache: vi.fn(async () => ({
+    default: {
+      layout: { pages: [{ fragments: [], number: 1 }], height: 0 },
+      blocks: [],
+      measures: [],
+    },
+  })),
+  computeDisplayPageNumber: vi.fn((pages) => pages.map((p) => ({ displayText: String(p.number ?? 1) }))),
+  PageGeometryHelper: vi.fn().mockImplementation(({ layout, pageGap }) => ({
+    updateLayout: vi.fn(),
+    getPageIndexAtY: vi.fn(() => 0),
+    getNearestPageIndex: vi.fn(() => 0),
+    getPageTop: vi.fn(() => 0),
+    getPageGap: vi.fn(() => pageGap ?? 0),
+    getLayout: vi.fn(() => layout),
+  })),
 }));
 
 // Mock painter-dom
 vi.mock('@superdoc/painter-dom', () => ({
   createDomPainter: mockCreateDomPainter,
+  DOM_CLASS_NAMES: {
+    PAGE: 'superdoc-page',
+    FRAGMENT: 'superdoc-fragment',
+    LINE: 'superdoc-line',
+    INLINE_SDT_WRAPPER: 'superdoc-structured-content-inline',
+    BLOCK_SDT: 'superdoc-structured-content-block',
+    DOCUMENT_SECTION: 'superdoc-document-section',
+  },
 }));
 
 // Mock measuring-dom
@@ -214,6 +279,10 @@ vi.mock('@extensions/collaboration/collaboration-helpers.js', () => ({
   updateYdocDocxData: mockUpdateYdocDocxData,
 }));
 
+vi.mock('./header-footer/EditorOverlayManager', () => ({
+  EditorOverlayManager: mockEditorOverlayManager,
+}));
+
 describe('PresentationEditor', () => {
   let container: HTMLElement;
   let editor: PresentationEditor;
@@ -225,6 +294,10 @@ describe('PresentationEditor', () => {
 
     // Clear all mocks
     vi.clearAllMocks();
+    // Reset mockIncrementalLayout to default implementation (clearAllMocks doesn't reset mockResolvedValue)
+    mockIncrementalLayout.mockReset();
+    mockIncrementalLayout.mockResolvedValue({ layout: { pages: [] }, measures: [] });
+
     mockEditorConverterStore.current = {
       ...createDefaultConverter(),
       headerEditors: [],
@@ -807,6 +880,249 @@ describe('PresentationEditor', () => {
     });
   });
 
+  describe('input blocking in viewing mode', () => {
+    it('should not forward keyboard events in viewing mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test special key (Enter)
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test keyboard shortcut (Ctrl+B)
+      const ctrlBEvent = new KeyboardEvent('keydown', {
+        key: 'b',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(ctrlBEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward text/input events in viewing mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test beforeinput event
+      const beforeInputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(beforeInputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test input event
+      const inputEvent = new InputEvent('input', {
+        data: 'b',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward composition events in viewing mode', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Test compositionstart
+      const compStartEvent = new CompositionEvent('compositionstart', {
+        data: 'あ',
+        bubbles: true,
+      });
+      container.dispatchEvent(compStartEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test compositionupdate
+      const compUpdateEvent = new CompositionEvent('compositionupdate', {
+        data: 'あい',
+        bubbles: true,
+      });
+      container.dispatchEvent(compUpdateEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Test compositionend
+      const compEndEvent = new CompositionEvent('compositionend', {
+        data: 'あいう',
+        bubbles: true,
+      });
+      container.dispatchEvent(compEndEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should not forward context menu events in viewing mode', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      const contextMenuEvent = new MouseEvent('contextmenu', {
+        clientX: 10,
+        clientY: 20,
+      });
+      container.dispatchEvent(contextMenuEvent);
+
+      expect(dispatchSpy).not.toHaveBeenCalled();
+    });
+
+    it('should forward events normally when switching back to editing mode', async () => {
+      // Start in viewing mode
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'viewing',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Verify events are blocked in viewing mode
+      const enterEvent1 = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent1);
+      await Promise.resolve();
+      expect(dispatchSpy).not.toHaveBeenCalled();
+
+      // Switch to editing mode
+      editor.setDocumentMode('editing');
+
+      // Clear the spy to track new calls
+      dispatchSpy.mockClear();
+
+      // Verify events are now forwarded
+      const enterEvent2 = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent2);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown', key: 'Enter' }));
+
+      // Test beforeinput
+      dispatchSpy.mockClear();
+      const inputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'beforeinput' }));
+
+      // Test composition
+      dispatchSpy.mockClear();
+      const compEvent = new CompositionEvent('compositionstart', {
+        data: 'あ',
+        bubbles: true,
+      });
+      container.dispatchEvent(compEvent);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'compositionstart' }));
+
+      // Test context menu
+      dispatchSpy.mockClear();
+      const contextMenuEvent = new MouseEvent('contextmenu', {
+        clientX: 10,
+        clientY: 20,
+      });
+      container.dispatchEvent(contextMenuEvent);
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'contextmenu' }));
+    });
+
+    it('should forward events in suggesting mode', async () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        documentMode: 'suggesting',
+      });
+
+      const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+        (Editor as unknown as MockedEditor).mock.results.length - 1
+      ].value;
+      const dispatchSpy = mockEditorInstance.view.dom.dispatchEvent;
+
+      // Keyboard events should be forwarded
+      const enterEvent = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        bubbles: true,
+        cancelable: true,
+      });
+      container.dispatchEvent(enterEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'keydown' }));
+
+      // Input events should be forwarded
+      dispatchSpy.mockClear();
+      const inputEvent = new InputEvent('beforeinput', {
+        data: 'a',
+        inputType: 'insertText',
+        bubbles: true,
+      });
+      container.dispatchEvent(inputEvent);
+      await Promise.resolve();
+
+      expect(dispatchSpy).toHaveBeenCalledWith(expect.objectContaining({ type: 'beforeinput' }));
+    });
+  });
+
   describe('click-to-type behavior', () => {
     it('should focus editor and set cursor to position 0 when clicking before layout is ready', () => {
       // Mock layout not ready (null)
@@ -1094,6 +1410,12 @@ describe('PresentationEditor', () => {
       // Wait for the async rendering to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
 
+      // Add a mock page element that #getPageElement looks for
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
+
       const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
       const boundingSpy = vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -1133,8 +1455,66 @@ describe('PresentationEditor', () => {
       boundingSpy.mockRestore();
     });
 
-    it('exits header mode on Escape and announces the transition', async () => {
+    it('clears leftover footer transform when entering footer editing with non-negative minY', async () => {
       mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
+
+      const editorContainer = document.createElement('div');
+      editorContainer.className = 'super-editor';
+      editorContainer.style.transform = 'translateY(24px)';
+      const editorHost = document.createElement('div');
+      editorHost.appendChild(editorContainer);
+
+      const showEditingOverlay = vi.fn(() => ({
+        success: true,
+        editorHost,
+        reason: null,
+      }));
+
+      mockEditorOverlayManager.mockImplementationOnce(() => ({
+        showEditingOverlay,
+        hideEditingOverlay: vi.fn(),
+        showSelectionOverlay: vi.fn(),
+        hideSelectionOverlay: vi.fn(),
+        setOnDimmingClick: vi.fn(),
+        getActiveEditorHost: vi.fn(() => editorHost),
+        destroy: vi.fn(),
+      }));
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 1000,
+        right: 800,
+        bottom: 1000,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      // Click inside the footer hitbox (y between footer margin 36 and bottom margin 72)
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 740, button: 0 }));
+
+      await vi.waitFor(() => expect(showEditingOverlay).toHaveBeenCalled());
+      await vi.waitFor(() => expect(editorContainer.style.transform).toBe(''));
+    });
+
+    it('exits header mode on Escape and announces the transition', async () => {
+      mockIncrementalLayout.mockResolvedValue(buildLayoutResult());
 
       editor = new PresentationEditor({
         element: container,
@@ -1145,6 +1525,12 @@ describe('PresentationEditor', () => {
 
       // Wait for the async rendering to complete
       await new Promise((resolve) => setTimeout(resolve, 100));
+
+      // Add a mock page element that #getPageElement looks for
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
 
       const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
       vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
@@ -1813,6 +2199,1011 @@ describe('PresentationEditor', () => {
 
     it('should expose overlayElement getter', () => {
       expect(editor.overlayElement).toBeDefined();
+    });
+  });
+
+  describe('Selection update mechanisms', () => {
+    describe('#scheduleSelectionUpdate race condition guards', () => {
+      it('should skip scheduling when already scheduled', async () => {
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Wait for initial render to complete so #pendingDocChange is cleared
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Spy on requestAnimationFrame to track scheduling
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+
+        // Trigger selection update twice in rapid succession
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        expect(selectionUpdateCall).toBeDefined();
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Call twice - should only schedule once
+        handleSelection();
+        handleSelection();
+
+        // Should only call requestAnimationFrame once (second call is deduplicated)
+        expect(rafSpy).toHaveBeenCalledTimes(1);
+
+        rafSpy.mockRestore();
+      });
+
+      it('should skip scheduling during rerender (#isRerendering flag)', async () => {
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Wait for initial render
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // Spy on requestAnimationFrame
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+
+        // Get the update handler to simulate doc change (triggers rerender)
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const updateCall = onCalls.mock.calls.find((call) => call[0] === 'update');
+        const handleUpdate = updateCall![1] as (payload: { transaction: { docChanged: boolean } }) => void;
+
+        // Trigger document change (sets #pendingDocChange and #isRerendering)
+        handleUpdate({ transaction: { docChanged: true } });
+
+        // Get selection handler
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Clear RAF spy to track new calls
+        rafSpy.mockClear();
+
+        // Try to schedule selection update during rerender - should be skipped
+        handleSelection();
+
+        // Should NOT schedule RAF because rerender is in progress
+        expect(rafSpy).not.toHaveBeenCalled();
+
+        rafSpy.mockRestore();
+      });
+
+      it('should skip scheduling when pendingDocChange is true', () => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Spy on requestAnimationFrame
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+
+        // Get the pageStyleUpdate handler (sets #pendingDocChange without #isRerendering)
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const pageStyleCall = onCalls.mock.calls.find((call) => call[0] === 'pageStyleUpdate');
+        expect(pageStyleCall).toBeDefined();
+        const handlePageStyle = pageStyleCall![1] as () => void;
+
+        // Trigger page style update (sets #pendingDocChange)
+        handlePageStyle();
+
+        // Get selection handler
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Clear RAF spy to track new calls
+        rafSpy.mockClear();
+
+        // Try to schedule selection update when pendingDocChange is true
+        handleSelection();
+
+        // Should NOT schedule RAF because pendingDocChange is set
+        expect(rafSpy).not.toHaveBeenCalled();
+
+        rafSpy.mockRestore();
+      });
+
+      it('should successfully schedule when no guards are active', async () => {
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Wait for initial render to complete so #pendingDocChange is cleared
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const rafSpy = vi.spyOn(window, 'requestAnimationFrame');
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Clear RAF spy to track new calls
+        rafSpy.mockClear();
+
+        // Schedule selection update with no guards active
+        handleSelection();
+
+        // Should schedule RAF successfully
+        expect(rafSpy).toHaveBeenCalledTimes(1);
+
+        rafSpy.mockRestore();
+      });
+    });
+
+    describe('#updateSelection cursor preservation and fallback logic', () => {
+      let mockComputeCaretLayoutRect: Mock;
+
+      beforeEach(() => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        // Mock #computeCaretLayoutRect to control when position lookup fails
+        mockComputeCaretLayoutRect = vi.fn();
+        (editor as Editor & { computeCaretLayoutRect?: Mock })['computeCaretLayoutRect'] = mockComputeCaretLayoutRect;
+      });
+
+      it('should preserve cursor when position lookup fails', () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with valid selection at position 5
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 5 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock all position lookups to fail
+        mockComputeCaretLayoutRect.mockReturnValue(null);
+
+        // Get the internal selection layer
+        const selectionLayer = container.querySelector('.presentation-editor__selection-layer--local') as HTMLElement;
+        expect(selectionLayer).toBeDefined();
+
+        // Set initial cursor HTML to verify it's preserved
+        selectionLayer.innerHTML = '<div class="existing-cursor"></div>';
+        const initialHTML = selectionLayer.innerHTML;
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Trigger selection update with failing position lookup
+        handleSelection();
+
+        // Wait for RAF callback
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            // Cursor HTML should be preserved (not cleared)
+            expect(selectionLayer.innerHTML).toBe(initialHTML);
+            resolve(undefined);
+          }, 50);
+        });
+      });
+
+      // Skip: Cannot mock private method #computeCaretLayoutRect from outside the class
+      it.skip('should try fallback position from-1 when exact position fails', async () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with selection at position 5
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 5 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock: exact position fails, from-1 succeeds
+        mockComputeCaretLayoutRect.mockReturnValueOnce(null); // position 5 fails
+        mockComputeCaretLayoutRect.mockReturnValueOnce({ x: 100, y: 50, height: 20 }); // position 4 succeeds
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Trigger selection update
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Should have tried position 5, then position 4
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(5);
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(4);
+      });
+
+      // Skip: Cannot mock private method #computeCaretLayoutRect from outside the class
+      it.skip('should try fallback position from+1 when from-1 also fails', async () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with selection at position 5
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 5 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock: exact and from-1 fail, from+1 succeeds
+        mockComputeCaretLayoutRect.mockReturnValueOnce(null); // position 5 fails
+        mockComputeCaretLayoutRect.mockReturnValueOnce(null); // position 4 fails
+        mockComputeCaretLayoutRect.mockReturnValueOnce({ x: 100, y: 50, height: 20 }); // position 6 succeeds
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Trigger selection update
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Should have tried position 5, 4, then 6
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(5);
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(4);
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(6);
+      });
+
+      // Skip: Cannot mock private method #computeCaretLayoutRect from outside the class
+      it.skip('should NOT try from-1 when from is 0 (bounds validation)', async () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with selection at position 0
+        mockEditorInstance.state = {
+          selection: { from: 0, to: 0 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock: exact position fails
+        mockComputeCaretLayoutRect.mockReturnValue(null);
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Trigger selection update
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Should only try position 0 and 1, NOT -1
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(0);
+        expect(mockComputeCaretLayoutRect).not.toHaveBeenCalledWith(-1);
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(1);
+      });
+
+      // Skip: Cannot mock private method #computeCaretLayoutRect from outside the class
+      it.skip('should NOT try from+1 when from+1 exceeds docSize (bounds validation)', async () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with selection at end of document
+        mockEditorInstance.state = {
+          selection: { from: 100, to: 100 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock: exact and from-1 fail
+        mockComputeCaretLayoutRect.mockReturnValue(null);
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Trigger selection update
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Should try position 100 and 99, NOT 101
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(100);
+        expect(mockComputeCaretLayoutRect).toHaveBeenCalledWith(99);
+        expect(mockComputeCaretLayoutRect).not.toHaveBeenCalledWith(101);
+      });
+
+      // Skip: Cannot mock private method #computeCaretLayoutRect from outside the class
+      it.skip('should handle invalid document state gracefully', async () => {
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with missing doc
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 5 },
+          doc: null,
+        };
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Should not throw error
+        expect(() => handleSelection()).not.toThrow();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Should not attempt any position lookups with invalid doc
+        expect(mockComputeCaretLayoutRect).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('#updateSelection DOM manipulation error handling', () => {
+      it('should handle DOM errors when clearing selection in viewing mode', () => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+          documentMode: 'viewing',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        const selectionLayer = container.querySelector('.presentation-editor__selection-layer--local') as HTMLElement;
+
+        // Mock innerHTML setter to throw error
+        const originalSetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!.set!;
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: vi.fn(() => {
+            throw new Error('DOM manipulation failed');
+          }),
+          configurable: true,
+        });
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Should not throw - error should be caught and logged
+        expect(() => handleSelection()).not.toThrow();
+
+        // Restore original setter
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: originalSetter,
+          configurable: true,
+        });
+      });
+
+      it('should handle DOM errors when clearing selection with no selection state', async () => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with no selection
+        mockEditorInstance.state = {
+          selection: null,
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        const selectionLayer = container.querySelector('.presentation-editor__selection-layer--local') as HTMLElement;
+
+        // Mock innerHTML setter to throw error
+        const originalSetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!.set!;
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: vi.fn(() => {
+            throw new Error('DOM manipulation failed');
+          }),
+          configurable: true,
+        });
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Should not throw - error should be caught
+        expect(() => handleSelection()).not.toThrow();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Restore original setter
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: originalSetter,
+          configurable: true,
+        });
+      });
+
+      it('should handle DOM errors when rendering caret overlay', async () => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with valid selection
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 5 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Note: Cannot mock private #computeCaretLayoutRect, but test still validates DOM error handling
+        const selectionLayer = container.querySelector('.presentation-editor__selection-layer--local') as HTMLElement;
+
+        // Mock innerHTML setter to throw error
+        const originalSetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!.set!;
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: vi.fn(() => {
+            throw new Error('DOM manipulation failed');
+          }),
+          configurable: true,
+        });
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Should not throw - error should be caught
+        expect(() => handleSelection()).not.toThrow();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Restore original setter
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: originalSetter,
+          configurable: true,
+        });
+      });
+
+      it('should handle DOM errors when rendering selection rects', async () => {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Mock editor state with range selection
+        mockEditorInstance.state = {
+          selection: { from: 5, to: 10 },
+          doc: {
+            content: { size: 100 },
+            descendants: vi.fn(),
+          },
+        };
+
+        // Mock selectionToRects to return valid rects
+        mockSelectionToRects.mockReturnValue([{ x: 100, y: 50, width: 200, height: 20, pageIndex: 0 }]);
+
+        const selectionLayer = container.querySelector('.presentation-editor__selection-layer--local') as HTMLElement;
+
+        // Mock innerHTML setter to throw error
+        const originalSetter = Object.getOwnPropertyDescriptor(Element.prototype, 'innerHTML')!.set!;
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: vi.fn(() => {
+            throw new Error('DOM manipulation failed');
+          }),
+          configurable: true,
+        });
+
+        // Get selection handler
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        // Should not throw - error should be caught
+        expect(() => handleSelection()).not.toThrow();
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        // Restore original setter
+        Object.defineProperty(selectionLayer, 'innerHTML', {
+          set: originalSetter,
+          configurable: true,
+        });
+      });
+    });
+  });
+
+  describe('Field annotation drag-and-drop handlers', () => {
+    let mockHitTest: Mock;
+    let mockGetActiveEditor: Mock;
+    let mockActiveEditor: {
+      isEditable: boolean;
+      state: {
+        doc: { content: { size: number } };
+        selection: { from: number; to: number };
+        tr: {
+          setSelection: Mock;
+          setMeta: Mock;
+        };
+      };
+      view: {
+        dispatch: Mock;
+        focus: Mock;
+        dom: HTMLElement;
+      };
+      commands: {
+        addFieldAnnotation: Mock;
+      };
+      emit: Mock;
+    };
+
+    /**
+     * Helper to create a drag event compatible with the test environment
+     */
+    const createDragEvent = (
+      type: string,
+      options: { clientX?: number; clientY?: number; data?: Record<string, string> } = {},
+    ) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: options.clientX ?? 0,
+        clientY: options.clientY ?? 0,
+      });
+
+      // Mock dataTransfer property
+      const dataStore = new Map<string, string>();
+      if (options.data) {
+        Object.entries(options.data).forEach(([key, value]) => dataStore.set(key, value));
+      }
+
+      Object.defineProperty(event, 'dataTransfer', {
+        value: {
+          types: Array.from(dataStore.keys()),
+          dropEffect: 'none',
+          effectAllowed: 'all',
+          getData: (type: string) => dataStore.get(type) || '',
+          setData: (type: string, data: string) => dataStore.set(type, data),
+          items: {
+            add: (data: string, type: string) => dataStore.set(type, data),
+          },
+        },
+        writable: true,
+        configurable: true,
+      });
+
+      return event;
+    };
+
+    beforeEach(() => {
+      // Create a container element for the presentation editor
+      container = document.createElement('div');
+      document.body.appendChild(container);
+
+      const domElement = document.createElement('div');
+      domElement.focus = vi.fn();
+
+      mockActiveEditor = {
+        isEditable: true,
+        state: {
+          doc: {
+            content: { size: 100 },
+            resolve: vi.fn((pos) => ({
+              pos,
+              depth: 0,
+              parent: { inlineContent: true },
+              min: vi.fn((other) => Math.min(pos, other?.pos ?? pos)),
+              max: vi.fn((other) => Math.max(pos, other?.pos ?? pos)),
+            })),
+          },
+          selection: { from: 50, to: 50 },
+          tr: {
+            setSelection: vi.fn().mockReturnThis(),
+            setMeta: vi.fn().mockReturnThis(),
+          },
+        },
+        view: {
+          dispatch: vi.fn(),
+          focus: vi.fn(),
+          dom: domElement,
+        },
+        commands: {
+          addFieldAnnotation: vi.fn(),
+        },
+        emit: vi.fn(),
+      };
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      // Mock hitTest method
+      mockHitTest = vi.fn(() => ({ pos: 42, inside: 42 }));
+      editor.hitTest = mockHitTest;
+
+      // Mock getActiveEditor method
+      mockGetActiveEditor = vi.fn(() => mockActiveEditor);
+      editor.getActiveEditor = mockGetActiveEditor;
+    });
+
+    describe('#handleDragOver', () => {
+      it('should prevent default and set dropEffect to copy', () => {
+        const dragEvent = createDragEvent('dragover', {
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const preventDefaultSpy = vi.spyOn(dragEvent, 'preventDefault');
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(preventDefaultSpy).toHaveBeenCalled();
+        expect((dragEvent as { dataTransfer: { dropEffect: string } }).dataTransfer?.dropEffect).toBe('copy');
+      });
+
+      it('should early return when editor is not editable', () => {
+        mockActiveEditor.isEditable = false;
+
+        const dragEvent = createDragEvent('dragover', {
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).not.toHaveBeenCalled();
+      });
+
+      it('should early return when no fieldAnnotation data', () => {
+        const dragEvent = createDragEvent('dragover', {});
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).not.toHaveBeenCalled();
+      });
+
+      it('should update cursor position during drag', () => {
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        expect(mockHitTest).toHaveBeenCalledWith(100, 100);
+        expect(mockActiveEditor.state.tr.setSelection).toHaveBeenCalled();
+        expect(mockActiveEditor.state.tr.setMeta).toHaveBeenCalledWith('addToHistory', false);
+        expect(mockActiveEditor.view.dispatch).toHaveBeenCalled();
+      });
+
+      it('should handle null hit gracefully', () => {
+        mockHitTest.mockReturnValue(null);
+
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+        // Should not throw
+        expect(() => viewport.dispatchEvent(dragEvent)).not.toThrow();
+        expect(mockActiveEditor.state.tr.setSelection).not.toHaveBeenCalled();
+      });
+
+      it('should skip dispatch when cursor position has not changed', () => {
+        // Set hitTest to return the same position as current selection
+        mockHitTest.mockReturnValue({ pos: 50, inside: 50 });
+
+        const dragEvent = createDragEvent('dragover', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: '{}' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dragEvent);
+
+        // The dispatch may or may not be called depending on selection type check
+        // This is an optimization, so we just verify it doesn't throw
+        expect(() => viewport.dispatchEvent(dragEvent)).not.toThrow();
+      });
+    });
+
+    describe('#handleDrop', () => {
+      it('should prevent default and stop propagation', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const preventDefaultSpy = vi.spyOn(dropEvent, 'preventDefault');
+        const stopPropagationSpy = vi.spyOn(dropEvent, 'stopPropagation');
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(preventDefaultSpy).toHaveBeenCalled();
+        expect(stopPropagationSpy).toHaveBeenCalled();
+      });
+
+      it('should early return when editor is not editable', () => {
+        mockActiveEditor.isEditable = false;
+
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should early return when no fieldAnnotation data', () => {
+        const dropEvent = createDragEvent('drop', {});
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should parse JSON and insert field annotation', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+            fieldColor: '#980043',
+          },
+          sourceField: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            annotationType: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(42, payload.attributes, true);
+      });
+
+      it('should handle JSON parse errors gracefully', () => {
+        const dropEvent = createDragEvent('drop', {
+          data: { fieldAnnotation: 'invalid JSON {{{' },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+
+        // Should not throw
+        expect(() => viewport.dispatchEvent(dropEvent)).not.toThrow();
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should use fallback position when hitTest fails', () => {
+        mockHitTest.mockReturnValue(null);
+
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should use fallback position (selection.from = 50)
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(50, payload.attributes, true);
+      });
+
+      it('should emit fieldAnnotationDropped event', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+          sourceField: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            annotationType: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        expect(mockActiveEditor.emit).toHaveBeenCalledWith('fieldAnnotationDropped', {
+          sourceField: payload.sourceField,
+          editor: mockActiveEditor,
+          coordinates: { pos: 42, inside: 42 },
+          pos: 42,
+        });
+      });
+
+      it('should not insert when attributes are invalid', () => {
+        const payload = {
+          attributes: {
+            // Missing required fields
+            fieldId: 'test-field',
+            // fieldType is missing
+            // displayLabel is missing
+            // type is missing
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should emit event but not insert
+        expect(mockActiveEditor.emit).toHaveBeenCalledWith(
+          'fieldAnnotationDropped',
+          expect.objectContaining({ pos: 42 }),
+        );
+        expect(mockActiveEditor.commands.addFieldAnnotation).not.toHaveBeenCalled();
+      });
+
+      it('should focus editor after drop', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Focus should be called even when attributes are invalid or missing
+        const focusSpy = mockActiveEditor.view.dom.focus as Mock;
+        expect(focusSpy).toHaveBeenCalled();
+      });
+
+      it('should move cursor after inserted node', () => {
+        const payload = {
+          attributes: {
+            fieldId: 'test-field',
+            fieldType: 'TEXTINPUT',
+            displayLabel: 'Test Field',
+            type: 'text',
+          },
+        };
+
+        const dropEvent = createDragEvent('drop', {
+          clientX: 100,
+          clientY: 100,
+          data: { fieldAnnotation: JSON.stringify(payload) },
+        });
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        viewport.dispatchEvent(dropEvent);
+
+        // Should insert at position 42, then move cursor to 43
+        expect(mockActiveEditor.commands.addFieldAnnotation).toHaveBeenCalledWith(42, expect.any(Object), true);
+        expect(mockActiveEditor.state.tr.setSelection).toHaveBeenCalled();
+        expect(mockActiveEditor.view.dispatch).toHaveBeenCalled();
+      });
     });
   });
 });

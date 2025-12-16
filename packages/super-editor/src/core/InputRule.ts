@@ -8,7 +8,7 @@ import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
-import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+import { handleDocxPaste, wrapTextsInRuns } from './inputRules/docx-paste/docx-paste.js';
 import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { handleGoogleDocsHtml } from './inputRules/google-docs-paste/google-docs-paste.js';
 import type { Editor } from './Editor.js';
@@ -297,7 +297,8 @@ export const inputRulesPlugin = ({ editor, rules }: InputRulesPluginConfig): Plu
           return false;
         }
 
-        return handleClipboardPaste({ editor, view }, html);
+        const result = handleClipboardPaste({ editor, view }, html);
+        return result;
       },
     },
 
@@ -317,6 +318,22 @@ function isGoogleDocsHtml(html: string): boolean {
 }
 
 /**
+ * Finds the first paragraph ancestor of a resolved position.
+ *
+ * @param {ResolvedPos} $from The resolved position to search from.
+ * @returns {{ node: Node | null, depth: number }} The paragraph node and its depth, or null if not found.
+ */
+function findParagraphAncestor($from) {
+  for (let d = $from.depth; d >= 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === 'paragraph') {
+      return { node, depth: d };
+    }
+  }
+  return { node: null, depth: -1 };
+}
+
+/**
  * Handle HTML paste events.
  *
  * @param html The HTML string to be pasted.
@@ -324,17 +341,28 @@ function isGoogleDocsHtml(html: string): boolean {
  * @param source HTML content source
  * @returns Returns true if the paste was handled.
  */
-export function handleHtmlPaste(html: string, editor: Editor, _source?: string): boolean {
-  const cleanedHtml: DocumentFragment = htmlHandler(html, editor);
-  const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+export function handleHtmlPaste(html: string, editor: Editor, source?: string): boolean {
+  let cleanedHtml: DocumentFragment;
+  if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
+  else cleanedHtml = htmlHandler(html, editor);
+
+  let doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+
+  doc = wrapTextsInRuns(doc);
 
   const { dispatch, state } = editor.view;
-  if (!dispatch) return false;
+  if (!dispatch) {
+    return false;
+  }
 
   // Check if we're pasting into an existing paragraph
+  // Need to check ancestors since cursor might be inside a run node within a paragraph
   const { $from } = state.selection;
-  const isInParagraph = $from.parent.type.name === 'paragraph';
-  const isParagraphEmpty = $from.parent.content.size === 0;
+
+  // Find if any ancestor is a paragraph
+  const { node: paragraphNode } = findParagraphAncestor($from);
+
+  const isInParagraph = paragraphNode !== null;
 
   // Check if the pasted content is a single paragraph
   const isSingleParagraph = doc.childCount === 1 && doc.firstChild?.type.name === 'paragraph';
@@ -345,31 +373,14 @@ export function handleHtmlPaste(html: string, editor: Editor, _source?: string):
     // Use replaceSelection instead of replaceSelectionWith for fragments
     const tr = state.tr.replaceSelection(new Slice(paragraphContent, 0, 0));
     dispatch(tr);
-  } else if (isInParagraph && state.doc.textContent && !isParagraphEmpty) {
-    // We're in a paragraph but pasting multiple nodes, extract content from all paragraph nodes
-    const allContent: PmNode[] = [];
-    doc.content.forEach((node, _offset, index) => {
-      if (node.type.name === 'paragraph') {
-        // Add the paragraph content
-        node.content.forEach((childNode) => {
-          allContent.push(childNode);
-        });
+  } else if (isInParagraph) {
+    // For multi-paragraph paste, use replaceSelection with a proper Slice
+    // This preserves the paragraph structure instead of flattening with \n
+    // Create a slice from the doc's content (the paragraphs)
+    const slice = new Slice(doc.content, 0, 0);
 
-        // Add a line break between paragraphs (except for the last one)
-        if (index < doc.content.childCount - 1) {
-          allContent.push(editor.schema.text('\n'));
-        }
-      }
-    });
-
-    if (allContent.length > 0) {
-      const fragment = Fragment.from(allContent);
-      const tr = state.tr.replaceSelection(new Slice(fragment, 0, 0));
-      dispatch(tr);
-    } else {
-      // Fallback to original behavior if no paragraph content found
-      dispatch(state.tr.replaceSelectionWith(doc, true));
-    }
+    const tr = state.tr.replaceSelection(slice);
+    dispatch(tr);
   } else {
     // Use the original behavior for other cases
     dispatch(state.tr.replaceSelectionWith(doc, true));

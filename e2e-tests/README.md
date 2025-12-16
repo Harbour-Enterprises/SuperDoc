@@ -67,6 +67,12 @@ Alternatively, you can run each step individually:
 2. `npm run build` - this will build the Docker image where the tests are executed
 3. `npm run test:local` - this executes the tests on docker
 
+### Layout-engine-only visuals
+
+- Run locally (uses your current OS snapshots): `npm run test:layout`
+- Update layout-engine snapshots locally: `npm run update-screenshots:layout`
+- Update layout-engine snapshots in Docker: `npm run update-screenshots:layout:docker`
+
 > **Note:** If tests fail after making code changes, use `npm run rebuild` instead of just `npm run build` to ensure Docker doesn't use cached layers with old code.
 
 ## 📷 Visual diffing

@@ -158,7 +158,7 @@ export function createBorderPropertyHandler(xmlName, sdName = null) {
         'color',
         (v) => {
           if (v === 'auto') {
-            return null;
+            return 'auto';
           } else if (v) {
             return `#${v}`;
           } else {

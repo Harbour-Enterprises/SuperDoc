@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/playwright:v1.56.0-jammy
+FROM mcr.microsoft.com/playwright:v1.57.0-jammy
 WORKDIR /app
 
 # Install a minimal set of fonts so UI typography matches local dev closer

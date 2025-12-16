@@ -419,13 +419,12 @@ const getChangesByIdToResolve = (state: EditorState, id: string) => {
       }
 
       const [left, right] = direction < 0 ? [neighbor, currentChange] : [currentChange, neighbor];
-
-      if (!areDirectlyConnected(left, right)) {
-        break;
-      }
-
       const sharesId = neighbor.mark.attrs.id === matchingId;
       const complementary = isComplementaryPair(currentChange.mark.type.name, neighbor.mark.type.name);
+
+      if (!sharesId && !areDirectlyConnected(left, right)) {
+        break;
+      }
 
       if (!sharesId && !complementary) {
         break;

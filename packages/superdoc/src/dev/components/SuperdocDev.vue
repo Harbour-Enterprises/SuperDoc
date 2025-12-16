@@ -136,7 +136,8 @@ const init = async () => {
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
     pagination: useLayoutEngine.value,
-    rulers: false,
+    rulers: true,
+    rulerContainer: '#ruler-container',
     annotations: true,
     isInternal,
     telemetry: false,
@@ -608,7 +609,10 @@ const closeExportMenu = () => {
         </div>
       </div>
 
-      <div id="toolbar" class="sd-toolbar"></div>
+      <div class="dev-app__toolbar-ruler-container">
+        <div id="toolbar" class="sd-toolbar"></div>
+        <div id="ruler-container" class="sd-ruler"></div>
+      </div>
 
       <div class="dev-app__main">
         <div class="dev-app__view">
@@ -624,11 +628,33 @@ const closeExportMenu = () => {
 </template>
 
 <style>
+.dev-app__toolbar-ruler-container {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
 .sd-toolbar {
   width: 100%;
   background: white;
   position: relative;
   z-index: 1;
+}
+
+.sd-ruler {
+  display: flex;
+  justify-content: center;
+  background: #f5f5f5;
+  border-top: 1px solid #e0e0e0;
+  padding: 0;
+  min-height: 25px;
+}
+
+/* Hide the ruler container when no ruler is rendered inside it */
+.sd-ruler:not(:has(.ruler)) {
+  display: none;
 }
 
 .comments-panel {
@@ -969,6 +995,8 @@ const closeExportMenu = () => {
   display: flex;
   justify-content: center;
   overflow: auto;
+  /* Test: creates a containing block for position:fixed elements (like context menu) */
+  backdrop-filter: blur(0.5px);
 }
 
 .dev-app__view {

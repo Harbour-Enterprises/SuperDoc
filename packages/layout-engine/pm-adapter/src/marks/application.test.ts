@@ -503,10 +503,19 @@ describe('mark application', () => {
       expect(normalizeUnderlineStyle('wavy')).toBe('wavy');
     });
 
-    it('returns "single" as default for unknown values', () => {
-      expect(normalizeUnderlineStyle('unknown')).toBe('single');
+    it('returns undefined for explicit "none" value', () => {
+      expect(normalizeUnderlineStyle('none')).toBeUndefined();
+    });
+
+    it('returns "single" for undefined/null (default)', () => {
       expect(normalizeUnderlineStyle(null)).toBe('single');
       expect(normalizeUnderlineStyle(undefined)).toBe('single');
+    });
+
+    it('returns "single" for unknown underline types', () => {
+      expect(normalizeUnderlineStyle('words')).toBe('single');
+      expect(normalizeUnderlineStyle('thick')).toBe('single');
+      expect(normalizeUnderlineStyle('unknown')).toBe('single');
       expect(normalizeUnderlineStyle(123)).toBe('single');
     });
   });
@@ -657,6 +666,135 @@ describe('mark application', () => {
       expect(run.fontSize).toBe(14);
       expect(run.letterSpacing).toBe(1.5);
     });
+
+    describe('textTransform extraction', () => {
+      it('applies uppercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('applies lowercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'lowercase' });
+
+        expect(run.textTransform).toBe('lowercase');
+      });
+
+      it('applies capitalize textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'capitalize' });
+
+        expect(run.textTransform).toBe('capitalize');
+      });
+
+      it('applies none textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'none' });
+
+        expect(run.textTransform).toBe('none');
+      });
+
+      it('filters out invalid textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'invalid' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores non-string textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 123 });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores null textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: null });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores undefined textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: undefined });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores empty string textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: '' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects UPPERCASE)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'UPPERCASE' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects Capitalize)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'Capitalize' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects values with whitespace', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ' uppercase ' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects boolean values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: true });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects object values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: { value: 'uppercase' } });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects array values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ['uppercase'] });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('works together with other style properties', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, {
+          color: 'FF0000',
+          fontFamily: 'Courier',
+          fontSize: 16,
+          textTransform: 'uppercase',
+        });
+
+        expect(run.color).toBe('#FF0000');
+        expect(run.fontFamily).toBe('Courier');
+        expect(run.fontSize).toBe(16);
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('overwrites existing textTransform value', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, textTransform: 'lowercase' };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+    });
   });
 
   describe('applyMarksToRun', () => {
@@ -707,6 +845,24 @@ describe('mark application', () => {
       applyMarksToRun(run, [{ type: 'highlight', attrs: { color: 'FFFF00' } }]);
 
       expect(run.highlight).toBe('#FFFF00');
+    });
+
+    it('applies comment mark metadata', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'commentMark', attrs: { commentId: 'c-1', internal: true } }]);
+
+      expect(run.comments).toEqual([{ commentId: 'c-1', internal: true }]);
+    });
+
+    it('dedupes comment annotations by id/importedId', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        { type: 'comment', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+        { type: 'commentMark', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+      ]);
+
+      expect(run.comments).toHaveLength(1);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', importedId: 'imp-1', internal: false });
     });
 
     it('applies underline mark with default style', () => {

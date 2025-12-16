@@ -5,7 +5,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { tableNodeToBlock, handleTableNode } from './table.js';
 import type { PMNode, BlockIdGenerator, PositionMap, StyleContext } from '../types.js';
-import type { FlowBlock, ParagraphBlock, TableBlock } from '@superdoc/contracts';
+import type { FlowBlock, ParagraphBlock, TableBlock, ImageBlock } from '@superdoc/contracts';
+import { twipsToPx } from '../utilities.js';
 
 describe('table converter', () => {
   const mockStyleContext: StyleContext = {
@@ -209,6 +210,98 @@ describe('table converter', () => {
       expect(result.rows).toHaveLength(1);
     });
 
+    it('forwards listCounterContext into paragraph conversion', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'List item' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const listCounterContext = {
+        getListCounter: vi.fn(),
+        incrementListCounter: vi.fn(),
+        resetListCounter: vi.fn(),
+      };
+
+      const paragraphSpy = vi.fn((para, ...args) => {
+        const [, , , , , passedListContext] = args;
+        expect(passedListContext).toBe(listCounterContext);
+        return mockParagraphConverter(para);
+      });
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        paragraphSpy,
+        undefined,
+        { listCounterContext },
+      ) as TableBlock;
+
+      expect(result.rows[0].cells[0].blocks?.[0].kind).toBe('paragraph');
+      expect(paragraphSpy).toHaveBeenCalled();
+    });
+
+    it('converts images inside table cells when image converter is provided', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'image', attrs: { src: 'image.png' } }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const imageBlock: ImageBlock = { kind: 'image', id: 'image-1', src: 'image.png' };
+      const imageConverter = vi.fn().mockReturnValue(imageBlock);
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+        undefined,
+        {
+          converters: {
+            imageNodeToBlock: imageConverter,
+            paragraphToFlowBlocks: mockParagraphConverter,
+          },
+        },
+      ) as TableBlock;
+
+      expect(imageConverter).toHaveBeenCalled();
+      expect(result.rows[0].cells[0].blocks?.[0]).toBe(imageBlock);
+    });
+
     it('handles tableHeader cell type', () => {
       const node: PMNode = {
         type: 'table',
@@ -241,6 +334,209 @@ describe('table converter', () => {
 
       expect(result).toBeDefined();
       expect(result.rows).toHaveLength(1);
+    });
+
+    it('converts rowHeight from twips to px for small values', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 277, rule: 'exact' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('exact');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(277));
+      // Verify conversion happened: 277 twips ≈ 18.5px (not 277px)
+      // Magic number 30 chosen as upper bound to confirm twips-to-px conversion occurred
+      expect(row.attrs?.rowHeight?.value).toBeLessThan(30);
+    });
+
+    it('converts rowHeight from twips to px for auto rule', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 360, rule: 'auto' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('auto');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(360));
+    });
+
+    it('handles missing rowHeight (should be undefined)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                // No rowHeight property
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight).toBeUndefined();
+    });
+
+    it('handles zero rowHeight value (preserves zero)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 0, rule: 'exact' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      // Zero is a valid value and should be preserved (0 twips = 0 px)
+      expect(row.attrs?.rowHeight?.value).toBe(0);
+      expect(row.attrs?.rowHeight?.rule).toBe('exact');
+    });
+
+    it('handles invalid/unknown rule values (defaults to atLeast)', () => {
+      const node: PMNode = {
+        type: 'table',
+        content: [
+          {
+            type: 'tableRow',
+            attrs: {
+              tableRowProperties: {
+                rowHeight: { value: 500, rule: 'invalidRule' },
+              },
+            },
+            content: [
+              {
+                type: 'tableCell',
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Row' }] }],
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = tableNodeToBlock(
+        node,
+        mockBlockIdGenerator,
+        mockPositionMap,
+        'Arial',
+        16,
+        mockStyleContext,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        mockParagraphConverter,
+      ) as TableBlock;
+
+      const row = result.rows[0];
+      expect(row.attrs?.rowHeight?.rule).toBe('atLeast');
+      expect(row.attrs?.rowHeight?.value).toBeCloseTo(twipsToPx(500));
     });
 
     it('handles rowspan and colspan attributes', () => {
@@ -357,9 +653,14 @@ describe('table converter', () => {
     });
 
     it('includes cell vertical alignment', () => {
-      const alignments = ['top', 'middle', 'bottom'] as const;
+      // 'middle' is normalized to 'center' in the implementation
+      const alignments = [
+        { input: 'top', expected: 'top' },
+        { input: 'middle', expected: 'center' },
+        { input: 'bottom', expected: 'bottom' },
+      ] as const;
 
-      alignments.forEach((align) => {
+      alignments.forEach(({ input, expected }) => {
         const node: PMNode = {
           type: 'table',
           content: [
@@ -368,7 +669,7 @@ describe('table converter', () => {
               content: [
                 {
                   type: 'tableCell',
-                  attrs: { verticalAlign: align },
+                  attrs: { verticalAlign: input },
                   content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Cell' }] }],
                 },
               ],
@@ -390,7 +691,7 @@ describe('table converter', () => {
           mockParagraphConverter,
         ) as TableBlock;
 
-        expect(result.rows[0].cells[0].attrs?.verticalAlign).toBe(align);
+        expect(result.rows[0].cells[0].attrs?.verticalAlign).toBe(expected);
       });
     });
 

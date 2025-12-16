@@ -20,7 +20,7 @@ export const handleEnter = (editor: Editor): boolean => {
   if (!firstCommand) return false;
 
   return firstCommand(({ commands }) => [
-    () => commands.splitRun(),
+    () => commands.splitRunToParagraph(),
     () => commands.newlineInCode(),
     () => commands.createParagraphNear(),
     () => commands.liftEmptyBlock(),
@@ -40,6 +40,9 @@ export const handleBackspace = (editor: Editor): boolean => {
       tr.setMeta('inputType', 'deleteContentBackward');
       return false;
     },
+    () => commands.backspaceEmptyRunParagraph(),
+    () => commands.backspaceSkipEmptyRun(),
+    () => commands.backspaceNextToRun(),
     () => commands.deleteSelection(),
     () => commands.removeNumberingProperties(),
     () => commands.joinBackward(),
@@ -54,6 +57,8 @@ export const handleDelete = (editor: Editor): boolean => {
   if (!firstCommand) return false;
 
   return firstCommand(({ commands }) => [
+    () => commands.deleteSkipEmptyRun(),
+    () => commands.deleteNextToRun(),
     () => commands.deleteSelection(),
     () => commands.joinForward(),
     () => commands.selectNodeForward(),
@@ -82,6 +87,8 @@ export const Keymap = Extension.create({
       'Mod-Delete': () => handleDelete(editor),
       'Mod-a': () => editor.commands.selectAll(),
       Tab: () => editor.commands.insertTabNode(),
+      ArrowLeft: () => editor.commands.skipTab(-1),
+      ArrowRight: () => editor.commands.skipTab(1),
     };
 
     const pcBaseKeymap = {

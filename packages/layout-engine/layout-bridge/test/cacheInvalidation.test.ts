@@ -84,29 +84,27 @@ describe('Cache Invalidation', () => {
       it('should compute hash based on section properties', () => {
         const sections: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'lowerRoman', start: 1 },
-            type: 'nextPage',
           },
         ];
 
         const hash = computeSectionMetadataHash(sections);
-        expect(hash).toContain('sec1');
-        expect(hash).toContain('lowerRoman');
-        expect(hash).toContain('type:nextPage');
+        expect(hash).toContain('section:1');
+        expect(hash).toContain('num:lowerRoman:1');
       });
 
       it('should produce different hashes for different metadata', () => {
         const sections1: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'decimal', start: 1 },
           },
         ];
 
         const sections2: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'lowerRoman', start: 1 },
           },
         ];
@@ -305,7 +303,7 @@ describe('Cache Invalidation', () => {
       it('should return false on first check', () => {
         const sections: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'decimal', start: 1 },
           },
         ];
@@ -317,14 +315,14 @@ describe('Cache Invalidation', () => {
       it('should return true when metadata has changed', () => {
         const sections1: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'decimal', start: 1 },
           },
         ];
 
         const sections2: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'lowerRoman', start: 1 },
           },
         ];
@@ -353,7 +351,7 @@ describe('Cache Invalidation', () => {
 
         const sections: SectionMetadata[] = [
           {
-            id: 'sec1',
+            sectionIndex: 1,
             numbering: { format: 'decimal', start: 1 },
           },
         ];
@@ -461,14 +459,14 @@ describe('Cache Invalidation', () => {
 
       const sections1: SectionMetadata[] = [
         {
-          id: 'sec1',
+          sectionIndex: 1,
           numbering: { format: 'decimal', start: 1 },
         },
       ];
 
       const sections2: SectionMetadata[] = [
         {
-          id: 'sec1',
+          sectionIndex: 1,
           numbering: { format: 'lowerRoman', start: 1 },
         },
       ];

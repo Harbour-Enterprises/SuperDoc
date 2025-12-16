@@ -337,9 +337,8 @@ export const CommentsPlugin = Extension.create({
             shouldUpdate = false;
 
             const decorations: Decoration[] = [];
-            const allCommentPositions: CommentPositionMap = onlyActiveThreadChanged
-              ? prevAllCommentPositions
-              : ({} as CommentPositionMap);
+            // Always rebuild positions fresh from the current document to avoid stale PM offsets
+            const allCommentPositions: CommentPositionMap = {} as CommentPositionMap;
             doc.descendants((node: PmNode, pos: number) => {
               const { marks = [] } = node;
               const commentMarks = marks.filter((mark) => mark.type.name === CommentMarkName);

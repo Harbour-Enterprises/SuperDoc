@@ -437,26 +437,17 @@ export class SuperToolbar extends EventEmitter {
 
       this.emit('superdoc-command', { item, argument });
 
+      // NOTE: Zoom is now handled by PresentationEditor via transform: scale() on #viewportHost.
+      // We do NOT apply CSS zoom on .layers anymore because:
+      // 1. It causes coordinate system mismatches between zoomed content and overlays
+      // 2. PresentationEditor.setGlobalZoom() is called when activeZoom changes (via SuperDoc.vue watcher)
+      // 3. Centralizing zoom in PresentationEditor ensures both content and selection overlays scale together
+
       interface SuperdocInstance {
         element?: HTMLElement;
         superdocStore?: {
           activeZoom?: number;
         };
-      }
-
-      const layers = (this.superdoc as SuperdocInstance)?.element?.querySelector('.layers');
-      if (!layers || !(layers instanceof HTMLElement)) return;
-
-      const isMobileDevice = typeof screen.orientation !== 'undefined';
-      // 768px breakpoint doesn't consider iPad in portrait orientation
-      const isSmallScreen = window.matchMedia('(max-width: 834px)').matches;
-
-      // Zoom property doesn't work correctly when testing on mobile devices
-      if (isMobileDevice && isSmallScreen) {
-        layers.style.transformOrigin = '0 0';
-        layers.style.transform = `scale(${parseInt(argument as string, 10) / 100})`;
-      } else {
-        layers.style.zoom = String(parseInt(argument as string, 10) / 100);
       }
 
       const superdocStore = (this.superdoc as SuperdocInstance)?.superdocStore;
@@ -551,6 +542,7 @@ export class SuperToolbar extends EventEmitter {
         toggleRuler?: () => void;
       }
       (this.superdoc as SuperdocWithRuler)?.toggleRuler?.();
+      this.updateToolbarState();
     },
 
     /**
@@ -979,6 +971,10 @@ export class SuperToolbar extends EventEmitter {
     }
 
     const { state } = this.activeEditor;
+    if (!state) {
+      this.#deactivateAll();
+      return;
+    }
     const selection = state.selection;
     const selectionTrackedChanges = this.#enrichTrackedChanges(
       collectTrackedChanges({ state, from: selection.from, to: selection.to }),
@@ -1116,6 +1112,15 @@ export class SuperToolbar extends EventEmitter {
           item.activate();
         } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
           item.activate();
+        }
+      }
+
+      // Activate ruler button when rulers are visible
+      if (item.name.value === 'ruler') {
+        if (this.superdoc?.config?.rulers) {
+          item.activate();
+        } else {
+          item.deactivate();
         }
       }
     });

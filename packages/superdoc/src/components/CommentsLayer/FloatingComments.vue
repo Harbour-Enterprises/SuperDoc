@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { ref, computed, watchEffect, nextTick, watch, onMounted } from 'vue';
+import { ref, computed, watchEffect, nextTick, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import CommentDialog from '@superdoc/components/CommentsLayer/CommentDialog.vue';
@@ -27,31 +27,15 @@ const renderedSizes = ref([]);
 const firstGroupRendered = ref(false);
 const verticalOffset = ref(0);
 const commentsRenderKey = ref(0);
+const measurementTimeoutId = ref(null);
 
 const getCommentPosition = computed(() => (comment) => {
   if (!floatingCommentsContainer.value) return { top: '0px' };
-
-  const editorBounds = floatingCommentsContainer.value.getBoundingClientRect();
-  const scrollY = window.scrollY;
   if (typeof comment.top !== 'number' || isNaN(comment.top)) {
     return { display: 'none' };
   }
   return { top: `${comment.top}px` };
 });
-
-const findScrollParent = (element) => {
-  if (!element) return window;
-
-  let parent = element.parentNode;
-  while (parent && parent !== document) {
-    const style = getComputedStyle(parent);
-    if (/(auto|scroll|overlay)/.test(style.overflow + style.overflowY + style.overflowX)) {
-      return parent;
-    }
-    parent = parent.parentNode;
-  }
-  return window;
-};
 
 const handleDialog = (dialog) => {
   if (!dialog) return;
@@ -62,57 +46,76 @@ const handleDialog = (dialog) => {
     const id = commentId;
     if (renderedSizes.value.some((item) => item.id == id)) return;
 
-    const editorBounds = props.parent.getBoundingClientRect();
-
     const comment = getFloatingComments.value.find((c) => c.commentId === id || c.importedId == id);
     const positionKey = id || comment?.importedId;
-    let position = editorCommentPositions.value[positionKey]?.bounds || {};
+    const positionEntry = editorCommentPositions.value[positionKey];
+    const position = positionEntry?.bounds || {};
 
     // If this is a PDF, set the position based on selection bounds
     if (props.currentDocument.type === 'application/pdf') {
       Object.entries(comment.selection?.selectionBounds).forEach(([key, value]) => {
         position[key] = Number(value);
       });
-      position.top += editorBounds.top;
     }
 
     if (!position) return;
 
-    const scrollParent = findScrollParent(props.parent);
-    const scrollY = scrollParent === window ? window.scrollY : scrollParent.scrollTop;
-
     const bounds = elementRef.value?.getBoundingClientRect();
+    const top = Number(position.top);
+    if (!Number.isFinite(top)) return;
     const placement = {
       id,
-      top: position.top - editorBounds.top,
+      top,
       height: bounds.height,
       commentRef: comment,
       elementRef,
+      pageIndex: positionEntry?.pageIndex ?? 0,
     };
     renderedSizes.value.push(placement);
   });
 };
 
 const processLocations = async () => {
-  let currentBottom = 0;
-  renderedSizes.value
-    .sort((a, b) => a.top - b.top)
-    .forEach((comment) => {
-      if (comment.top <= currentBottom + 15) {
-        comment.top = currentBottom + 15;
-      }
-      currentBottom = comment.top + comment.height;
-    });
+  const groupedByPage = renderedSizes.value.reduce((acc, comment) => {
+    const key = comment.pageIndex ?? 0;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(comment);
+    return acc;
+  }, {});
+
+  Object.values(groupedByPage).forEach((comments) => {
+    comments
+      .sort((a, b) => a.top - b.top)
+      .forEach((comment, idx, arr) => {
+        if (idx === 0) return;
+        const prev = arr[idx - 1];
+        const minTop = prev.top + prev.height + 15;
+        if (comment.top < minTop) {
+          comment.top = minTop;
+        }
+      });
+  });
 
   await nextTick();
   firstGroupRendered.value = true;
 };
 
 // Ensures floating comments update after all are measured
+// Falls back to rendering what we have after a timeout if some comments fail to get positions
 watchEffect(() => {
-  if (renderedSizes.value.length === getFloatingComments.value.length) {
-    nextTick(processLocations);
+  // Clear any pending timeout
+  if (measurementTimeoutId.value) {
+    clearTimeout(measurementTimeoutId.value);
+    measurementTimeoutId.value = null;
   }
+
+  const totalComments = getFloatingComments.value.length;
+
+  if (totalComments === 0) {
+    return;
+  }
+
+  nextTick(processLocations);
 });
 
 const resetLayout = async () => {
@@ -145,6 +148,14 @@ watch(activeComment, (newVal, oldVal) => {
       });
     }, 200);
   });
+});
+
+onBeforeUnmount(() => {
+  // Clean up pending timeout to prevent memory leak
+  if (measurementTimeoutId.value) {
+    clearTimeout(measurementTimeoutId.value);
+    measurementTimeoutId.value = null;
+  }
 });
 </script>
 

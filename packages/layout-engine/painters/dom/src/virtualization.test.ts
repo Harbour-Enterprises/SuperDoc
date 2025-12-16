@@ -105,6 +105,19 @@ describe('DomPainter virtualization (vertical)', () => {
     expect(bottomSpacer).toBeTruthy();
   });
 
+  it('defaults virtualization gap to 72px when no gap is provided', () => {
+    const painter = createDomPainter({
+      blocks: [block],
+      measures: [measure],
+      virtualization: { enabled: true, window: 2 },
+    });
+
+    const layout = makeLayout(3);
+    painter.paint(layout, mount);
+
+    expect(mount.style.gap).toBe('72px');
+  });
+
   it('updates the window on scroll', () => {
     const painter = createDomPainter({
       blocks: [block],

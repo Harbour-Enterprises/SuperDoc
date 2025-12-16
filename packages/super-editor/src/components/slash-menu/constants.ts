@@ -46,7 +46,7 @@ export const TEXTS: Record<string, string> = {
   deleteRow: 'Delete row',
   deleteColumn: 'Delete column',
   deleteTable: 'Delete table',
-  transparentBorders: 'Transparent borders',
+  removeBorders: 'Remove borders',
   mergeCells: 'Merge cells',
   splitCell: 'Split cell',
   fixTables: 'Fix tables',
@@ -141,7 +141,7 @@ export const tableActionsOptions: TableAction[] = [
     },
   },
   {
-    label: TEXTS.transparentBorders,
+    label: TEXTS.removeBorders,
     command: 'deleteCellAndTableBorders',
     icon: ICONS.deleteBorders,
     bottomBorder: true,

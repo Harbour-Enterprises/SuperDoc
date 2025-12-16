@@ -22,9 +22,9 @@ export const extractListLevelStyles = (
   return styleMap;
 };
 
-export const extractParagraphStyles = (cssText: string, className: string | null): Record<string, string> | null => {
-  if (!className) return null;
-  const pattern = new RegExp(`\\.(${className})\\s*\\{([^}]+)\\}`, 'i');
+export const extractParagraphStyles = (cssText: string, selector: string | null): Record<string, string> | null => {
+  if (!selector) return null;
+  const pattern = new RegExp(`(${selector})\\s*\\{([^}]+)\\}`, 'i');
   const match = cssText.match(pattern);
   if (!match) return null;
   const rawStyles = match[2]

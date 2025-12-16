@@ -46,6 +46,7 @@ type SectionType = 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
 type Orientation = 'portrait' | 'landscape';
 type HeaderRefType = Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
 type NumberingFormat = 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+type VerticalAlign = 'top' | 'center' | 'bottom' | 'both';
 
 interface SectionElement {
   name: string;
@@ -115,22 +116,30 @@ function extractPageSizeAndOrientation(elements: SectionElement[]): {
 
 /**
  * Extract fallback margins from <w:pgMar> element (for non-normalized values).
+ * Includes both header/footer margins and page margins (top/right/bottom/left).
  */
 function extractFallbackMargins(
   elements: SectionElement[],
   currentHeader: number | undefined,
   currentFooter: number | undefined,
-): { headerPx: number | undefined; footerPx: number | undefined } {
-  if (currentHeader !== undefined && currentFooter !== undefined) {
-    return { headerPx: currentHeader, footerPx: currentFooter };
-  }
-
+): {
+  headerPx: number | undefined;
+  footerPx: number | undefined;
+  topPx: number | undefined;
+  rightPx: number | undefined;
+  bottomPx: number | undefined;
+  leftPx: number | undefined;
+} {
   const pgMar = elements.find((el) => el?.name === 'w:pgMar');
   const a = pgMar?.attributes || {};
 
   return {
     headerPx: currentHeader ?? (a['w:header'] != null ? twipsToPixels(a['w:header']) : undefined),
     footerPx: currentFooter ?? (a['w:footer'] != null ? twipsToPixels(a['w:footer']) : undefined),
+    topPx: a['w:top'] != null ? twipsToPixels(a['w:top']) : undefined,
+    rightPx: a['w:right'] != null ? twipsToPixels(a['w:right']) : undefined,
+    bottomPx: a['w:bottom'] != null ? twipsToPixels(a['w:bottom']) : undefined,
+    leftPx: a['w:left'] != null ? twipsToPixels(a['w:left']) : undefined,
   };
 }
 
@@ -160,6 +169,10 @@ function extractHeaderFooterRefs(
 
 /**
  * Extract page numbering format and start number from <w:pgNumType>.
+ *
+ * Per OOXML spec, when w:fmt is absent the format defaults to 'decimal'.
+ * When w:start is present, it restarts page numbering from that value.
+ * If neither attribute is present, the element has no effect on numbering.
  */
 function extractPageNumbering(elements: SectionElement[]):
   | {
@@ -177,8 +190,11 @@ function extractPageNumbering(elements: SectionElement[]):
   const startRaw = pgNumType.attributes['w:start'];
   const startNum = startRaw != null ? Number(startRaw) : undefined;
 
+  // Per OOXML spec, when w:start restarts numbering without w:fmt, default to decimal (Arabic numerals)
+  const effectiveFormat = fmt ?? (Number.isFinite(startNum) ? 'decimal' : undefined);
+
   return {
-    format: fmt,
+    format: effectiveFormat,
     ...(Number.isFinite(startNum) ? { start: Number(startNum) } : {}),
   };
 }
@@ -200,12 +216,67 @@ function extractColumns(elements: SectionElement[]): { count: number; gap: numbe
 }
 
 /**
- * Extract section data (margins, type, page size, orientation, columns) from a paragraph node.
+ * Extract vertical alignment from <w:vAlign> element.
+ * Controls how content is positioned vertically within the page.
+ *
+ * OOXML values:
+ * - 'top': Content aligned to top of text area (default)
+ * - 'center': Content vertically centered in text area
+ * - 'bottom': Content aligned to bottom of text area
+ * - 'both': Content justified vertically (distributed)
+ *
+ * @param elements - Array of section property elements from w:sectPr
+ * @returns The vertical alignment value if valid w:vAlign element found, undefined otherwise
+ *
+ * @example
+ * ```typescript
+ * const elements = [
+ *   { name: 'w:vAlign', attributes: { 'w:val': 'center' } }
+ * ];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: 'center'
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Missing vAlign element
+ * const elements = [{ name: 'w:pgSz', attributes: { 'w:w': '12240' } }];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: undefined
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Invalid vAlign value
+ * const elements = [
+ *   { name: 'w:vAlign', attributes: { 'w:val': 'invalid' } }
+ * ];
+ * const vAlign = extractVerticalAlign(elements);
+ * // Returns: undefined
+ * ```
+ */
+function extractVerticalAlign(elements: SectionElement[]): VerticalAlign | undefined {
+  const vAlign = elements.find((el) => el?.name === 'w:vAlign');
+  if (!vAlign?.attributes) return undefined;
+
+  const val = vAlign.attributes['w:val'];
+  if (val === 'top' || val === 'center' || val === 'bottom' || val === 'both') {
+    return val;
+  }
+  return undefined;
+}
+
+/**
+ * Extract section data (margins, type, page size, orientation, columns, vAlign) from a paragraph node.
  * Prefers normalized attrs.sectionMargins (inches), falls back to raw sectPr parsing (twips).
  */
 export function extractSectionData(para: PMNode): {
   headerPx?: number;
   footerPx?: number;
+  topPx?: number;
+  rightPx?: number;
+  bottomPx?: number;
+  leftPx?: number;
   type?: SectionType;
   pageSizePx?: { w: number; h: number };
   orientation?: Orientation;
@@ -214,6 +285,7 @@ export function extractSectionData(para: PMNode): {
   headerRefs?: HeaderRefType;
   footerRefs?: HeaderRefType;
   numbering?: { format?: NumberingFormat; start?: number };
+  vAlign?: VerticalAlign;
 } | null {
   const attrs = (para.attrs ?? {}) as Record<string, unknown>;
 
@@ -242,12 +314,32 @@ export function extractSectionData(para: PMNode): {
   const type = extractSectionType(sectPrElements);
   const { pageSizePx, orientation } = extractPageSizeAndOrientation(sectPrElements);
   const titlePg = sectPrElements.some((el) => el?.name === 'w:titlePg');
-  ({ headerPx, footerPx } = extractFallbackMargins(sectPrElements, headerPx, footerPx));
+  const fallbackMargins = extractFallbackMargins(sectPrElements, headerPx, footerPx);
+  headerPx = fallbackMargins.headerPx;
+  footerPx = fallbackMargins.footerPx;
+  const { topPx, rightPx, bottomPx, leftPx } = fallbackMargins;
   const headerRefs = extractHeaderFooterRefs(sectPrElements, 'w:headerReference');
   const footerRefs = extractHeaderFooterRefs(sectPrElements, 'w:footerReference');
   const numbering = extractPageNumbering(sectPrElements);
   const columnsPx = extractColumns(sectPrElements);
+  const vAlign = extractVerticalAlign(sectPrElements);
 
   // When sectPrElements exist, always return data (even if minimal) since type defaults to 'nextPage'
-  return { headerPx, footerPx, type, pageSizePx, orientation, columnsPx, titlePg, headerRefs, footerRefs, numbering };
+  return {
+    headerPx,
+    footerPx,
+    topPx,
+    rightPx,
+    bottomPx,
+    leftPx,
+    type,
+    pageSizePx,
+    orientation,
+    columnsPx,
+    titlePg,
+    headerRefs,
+    footerRefs,
+    numbering,
+    vAlign,
+  };
 }

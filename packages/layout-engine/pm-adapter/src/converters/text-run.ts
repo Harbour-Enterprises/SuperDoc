@@ -63,9 +63,16 @@ export function textNodeToRun(
  * @param positions - Position map for PM node tracking
  * @param tabIndex - Index of this tab in the paragraph
  * @param paragraph - Parent paragraph node (for tab stops and indent)
+ * @param inheritedMarks - Marks inherited from parent nodes (e.g., underline for signature lines)
  * @returns TabRun block or null if position not found
  */
-export function tabNodeToRun(node: PMNode, positions: PositionMap, tabIndex: number, paragraph: PMNode): Run | null {
+export function tabNodeToRun(
+  node: PMNode,
+  positions: PositionMap,
+  tabIndex: number,
+  paragraph: PMNode,
+  inheritedMarks: PMMark[] = [],
+): Run | null {
   const pos = positions.get(node);
   if (!pos) return null;
   const paragraphAttrs = paragraph.attrs ?? {};
@@ -83,7 +90,7 @@ export function tabNodeToRun(node: PMNode, positions: PositionMap, tabIndex: num
     (paragraphAttrs.indent as ParagraphIndent | undefined) ??
     (paragraphProps.indent as ParagraphIndent | undefined) ??
     undefined;
-  return {
+  const run: TabRun = {
     kind: 'tab',
     text: '\t',
     pmStart: pos.start,
@@ -93,6 +100,14 @@ export function tabNodeToRun(node: PMNode, positions: PositionMap, tabIndex: num
     indent,
     leader: (node.attrs?.leader as TabRun['leader']) ?? null,
   };
+
+  // Apply marks (e.g., underline) to the tab run
+  const marks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
+  if (marks.length > 0) {
+    applyMarksToRun(run, marks);
+  }
+
+  return run;
 }
 
 /**
@@ -132,7 +147,16 @@ export function tokenNodeToRun(
     run.pmEnd = pos.end;
   }
 
-  const marks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
+  // For page-number and total-page-number tokens, marks may be stored in attrs.marksAsAttrs
+  // (from the autoPageNumber/totalPageNumber translator) rather than node.marks.
+  // Check both locations to ensure styling is properly applied.
+  const nodeMarks = node.marks ?? [];
+  // marksAsAttrs is set by autoPageNumber/totalPageNumber translators during import
+  // and is guaranteed to be PMMark[] when present. Validate it's an array for safety.
+  const marksAsAttrs = Array.isArray(node.attrs?.marksAsAttrs) ? (node.attrs.marksAsAttrs as PMMark[]) : [];
+  const effectiveMarks = nodeMarks.length > 0 ? nodeMarks : marksAsAttrs;
+
+  const marks = [...effectiveMarks, ...(inheritedMarks ?? [])];
   applyMarksToRun(run, marks, hyperlinkConfig, themeColors);
   return run;
 }

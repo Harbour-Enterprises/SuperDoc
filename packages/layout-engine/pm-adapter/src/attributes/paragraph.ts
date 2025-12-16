@@ -5,7 +5,14 @@
  * including style resolution, boolean attributes, and Word layout integration.
  */
 
-import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing, TabStop } from '@superdoc/contracts';
+import type {
+  ParagraphAttrs,
+  ParagraphIndent,
+  ParagraphSpacing,
+  TabStop,
+  DropCapDescriptor,
+  DropCapRun,
+} from '@superdoc/contracts';
 import type { PMNode, StyleNode, StyleContext, ListCounterContext, ListRenderingAttrs } from '../types.js';
 import { resolveStyle } from '@superdoc/style-engine';
 import type {
@@ -16,6 +23,8 @@ import type {
   ResolvedRunProperties,
   ResolvedTabStop,
   NumberingFormat,
+  WordListJustification,
+  WordListSuffix,
 } from '@superdoc/word-layout';
 import { computeWordParagraphLayout } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
@@ -35,11 +44,299 @@ import { normalizeParagraphBorders, normalizeParagraphShading } from './borders.
 import { mirrorIndentForRtl, ensureBidiIndentPx, DEFAULT_BIDI_INDENT_PX } from './bidi.js';
 import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
 import type { ParagraphStyleHydration } from './paragraph-styles.js';
-import type { ConverterContext } from '../converter-context.js';
+import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 
 const { resolveSpacingIndent } = Engines;
 
 const DEFAULT_DECIMAL_SEPARATOR = '.';
+
+/**
+ * Checks if a numbering ID represents valid numbering properties.
+ *
+ * Per OOXML spec §17.9.16, `numId="0"` is a special sentinel value that disables
+ * numbering inherited from paragraph styles. This function validates that a numId
+ * is not null/undefined and not the special zero value (either numeric 0 or string '0').
+ *
+ * @param numId - The numbering ID to validate (can be number, string, null, or undefined)
+ * @returns true if numId represents valid numbering (not null/undefined/0/'0'), false otherwise
+ *
+ * @example
+ * ```typescript
+ * isValidNumberingId(1)      // true  - valid numbering
+ * isValidNumberingId('5')    // true  - valid numbering (string form)
+ * isValidNumberingId(0)      // false - disables numbering (OOXML spec)
+ * isValidNumberingId('0')    // false - disables numbering (string form)
+ * isValidNumberingId(null)   // false - no numbering
+ * isValidNumberingId(undefined) // false - no numbering
+ * ```
+ */
+export const isValidNumberingId = (numId: number | string | null | undefined): boolean => {
+  return numId != null && numId !== 0 && numId !== '0';
+};
+
+type OoxmlElement = {
+  name?: string;
+  attributes?: Record<string, unknown>;
+  elements?: OoxmlElement[];
+};
+
+const asOoxmlElement = (value: unknown): OoxmlElement | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  const element = value as OoxmlElement;
+  if (element.name == null && element.attributes == null && element.elements == null) return undefined;
+  return element;
+};
+
+const findChild = (parent: OoxmlElement | undefined, name: string): OoxmlElement | undefined => {
+  return parent?.elements?.find((child) => child?.name === name);
+};
+
+const getAttribute = (element: OoxmlElement | undefined, key: string): unknown => {
+  if (!element?.attributes) return undefined;
+  const attrs = element.attributes as Record<string, unknown>;
+  return attrs[key] ?? attrs[key.startsWith('w:') ? key.slice(2) : `w:${key}`];
+};
+
+const parseNumberAttr = (value: unknown): number | undefined => {
+  if (value == null) return undefined;
+  const num = typeof value === 'number' ? value : Number.parseInt(String(value), 10);
+  return Number.isFinite(num) ? num : undefined;
+};
+
+/**
+ * Merges spacing from multiple sources with increasing priority.
+ *
+ * In OOXML, a paragraph can have partial spacing overrides (e.g., only `line`)
+ * while inheriting other properties (e.g., `before`, `after`) from docDefaults
+ * or styles. This function merges all sources so that explicit values override
+ * defaults, but missing values fall back to lower-priority sources.
+ *
+ * Priority (lowest to highest): base (docDefaults/styles) < paragraphProps < attrs
+ *
+ * @param base - Spacing from hydrated styles (includes docDefaults)
+ * @param paragraphProps - Spacing from paragraphProperties
+ * @param attrs - Spacing from direct paragraph attrs (highest priority)
+ * @returns Merged spacing object, or undefined if all sources are empty
+ *
+ * @example
+ * ```typescript
+ * // Partial override: attrs only specifies 'line', inherits 'before' and 'after' from base
+ * mergeSpacingSources(
+ *   { before: 10, after: 10 },
+ *   {},
+ *   { line: 1.5 }
+ * )
+ * // Returns: { before: 10, after: 10, line: 1.5 }
+ *
+ * // Full override: attrs overrides all properties from base
+ * mergeSpacingSources(
+ *   { before: 10, after: 10, line: 1.0 },
+ *   {},
+ *   { before: 20, after: 20, line: 2.0 }
+ * )
+ * // Returns: { before: 20, after: 20, line: 2.0 }
+ *
+ * // Empty sources: returns undefined
+ * mergeSpacingSources({}, {}, {})
+ * // Returns: undefined
+ * ```
+ */
+export const mergeSpacingSources = (
+  base: unknown,
+  paragraphProps: unknown,
+  attrs: unknown,
+): Record<string, unknown> | undefined => {
+  const isObject = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object';
+
+  const baseObj = isObject(base) ? base : {};
+  const propsObj = isObject(paragraphProps) ? paragraphProps : {};
+  const attrsObj = isObject(attrs) ? attrs : {};
+
+  // If none of the sources have any data, return undefined
+  if (Object.keys(baseObj).length === 0 && Object.keys(propsObj).length === 0 && Object.keys(attrsObj).length === 0) {
+    return undefined;
+  }
+
+  // Merge with increasing priority: base < paragraphProps < attrs
+  return { ...baseObj, ...propsObj, ...attrsObj };
+};
+
+const normalizeNumFmt = (value?: unknown): NumberingFormat | undefined => {
+  if (typeof value !== 'string') return undefined;
+  switch (value) {
+    case 'decimal':
+      return 'decimal';
+    case 'lowerLetter':
+      return 'lowerLetter';
+    case 'upperLetter':
+      return 'upperLetter';
+    case 'lowerRoman':
+      return 'lowerRoman';
+    case 'upperRoman':
+      return 'upperRoman';
+    case 'bullet':
+      return 'bullet';
+    default:
+      return undefined;
+  }
+};
+
+const normalizeSuffix = (value?: unknown): WordListSuffix => {
+  if (typeof value !== 'string') return undefined;
+  if (value === 'tab' || value === 'space' || value === 'nothing') {
+    return value;
+  }
+  return undefined;
+};
+
+const normalizeJustification = (value?: unknown): WordListJustification | undefined => {
+  if (typeof value !== 'string') return undefined;
+  if (value === 'start') return 'left';
+  if (value === 'end') return 'right';
+  if (value === 'left' || value === 'center' || value === 'right') return value;
+  return undefined;
+};
+
+const extractIndentFromLevel = (lvl: OoxmlElement | undefined): ParagraphIndent | undefined => {
+  const pPr = findChild(lvl, 'w:pPr');
+  const ind = findChild(pPr, 'w:ind');
+  if (!ind) return undefined;
+  const left = parseNumberAttr(getAttribute(ind, 'w:left'));
+  const right = parseNumberAttr(getAttribute(ind, 'w:right'));
+  const firstLine = parseNumberAttr(getAttribute(ind, 'w:firstLine'));
+  const hanging = parseNumberAttr(getAttribute(ind, 'w:hanging'));
+  const indent: ParagraphIndent = {};
+  if (left != null) indent.left = left;
+  if (right != null) indent.right = right;
+  if (firstLine != null) indent.firstLine = firstLine;
+  if (hanging != null) indent.hanging = hanging;
+  return Object.keys(indent).length ? indent : undefined;
+};
+
+const normalizeColor = (value?: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === 'auto') return undefined;
+  const upper = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
+  return `#${upper.toUpperCase()}`;
+};
+
+const extractMarkerRun = (lvl: OoxmlElement | undefined): ResolvedRunProperties | undefined => {
+  const rPr = findChild(lvl, 'w:rPr');
+  if (!rPr) return undefined;
+
+  const run: Partial<ResolvedRunProperties> = {};
+  const rFonts = findChild(rPr, 'w:rFonts');
+  const font = getAttribute(rFonts, 'w:ascii') ?? getAttribute(rFonts, 'w:hAnsi') ?? getAttribute(rFonts, 'w:eastAsia');
+  if (typeof font === 'string' && font.trim()) {
+    run.fontFamily = font;
+  }
+
+  const sz =
+    parseNumberAttr(getAttribute(findChild(rPr, 'w:sz'), 'w:val')) ??
+    parseNumberAttr(getAttribute(findChild(rPr, 'w:szCs'), 'w:val'));
+  if (sz != null) {
+    run.fontSize = sz / 2; // w:sz is in half-points
+  }
+
+  const color = normalizeColor(getAttribute(findChild(rPr, 'w:color'), 'w:val'));
+  if (color) run.color = color;
+
+  const boldEl = findChild(rPr, 'w:b');
+  if (boldEl) {
+    const boldVal = getAttribute(boldEl, 'w:val');
+    if (boldVal == null || isTruthy(boldVal)) run.bold = true;
+  }
+
+  const italicEl = findChild(rPr, 'w:i');
+  if (italicEl) {
+    const italicVal = getAttribute(italicEl, 'w:val');
+    if (italicVal == null || isTruthy(italicVal)) run.italic = true;
+  }
+
+  const spacingTwips = parseNumberAttr(getAttribute(findChild(rPr, 'w:spacing'), 'w:val'));
+  if (spacingTwips != null && Number.isFinite(spacingTwips)) {
+    run.letterSpacing = twipsToPx(spacingTwips);
+  }
+
+  return Object.keys(run).length ? (run as ResolvedRunProperties) : undefined;
+};
+
+const findNumFmtElement = (lvl: OoxmlElement | undefined): OoxmlElement | undefined => {
+  if (!lvl) return undefined;
+  const direct = findChild(lvl, 'w:numFmt');
+  if (direct) return direct;
+  const alternate = findChild(lvl, 'mc:AlternateContent');
+  const choice = findChild(alternate, 'mc:Choice');
+  if (choice) {
+    return findChild(choice, 'w:numFmt');
+  }
+  return undefined;
+};
+
+const resolveNumberingFromContext = (
+  numId: string | number,
+  ilvl: number,
+  numbering?: ConverterNumberingContext,
+): Partial<AdapterNumberingProps> | undefined => {
+  const definitions = numbering?.definitions as Record<string, unknown> | undefined;
+  const abstracts = numbering?.abstracts as Record<string, unknown> | undefined;
+  if (!definitions || !abstracts) {
+    return undefined;
+  }
+
+  const numDef = asOoxmlElement(definitions[String(numId)]);
+  if (!numDef) {
+    return undefined;
+  }
+
+  const abstractId = getAttribute(findChild(numDef, 'w:abstractNumId'), 'w:val');
+  if (abstractId == null) {
+    return undefined;
+  }
+
+  const abstract = asOoxmlElement(abstracts[String(abstractId)]);
+  if (!abstract) {
+    return undefined;
+  }
+
+  let levelDef = abstract.elements?.find(
+    (el) => el?.name === 'w:lvl' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
+  );
+
+  const override = numDef.elements?.find(
+    (el) => el?.name === 'w:lvlOverride' && parseNumberAttr(el.attributes?.['w:ilvl']) === ilvl,
+  );
+  const overrideLvl = findChild(override, 'w:lvl');
+  if (overrideLvl) {
+    levelDef = overrideLvl;
+  }
+  const startOverride = parseNumberAttr(getAttribute(findChild(override, 'w:startOverride'), 'w:val'));
+
+  if (!levelDef) {
+    return undefined;
+  }
+
+  const numFmtEl = findNumFmtElement(levelDef);
+  const lvlText = getAttribute(findChild(levelDef, 'w:lvlText'), 'w:val') as string | undefined;
+  const start = startOverride ?? parseNumberAttr(getAttribute(findChild(levelDef, 'w:start'), 'w:val'));
+  const suffix = normalizeSuffix(getAttribute(findChild(levelDef, 'w:suff'), 'w:val'));
+  const lvlJc = normalizeJustification(getAttribute(findChild(levelDef, 'w:lvlJc'), 'w:val'));
+  const indent = extractIndentFromLevel(levelDef);
+  const markerRun = extractMarkerRun(levelDef);
+
+  const numFmt = normalizeNumFmt(getAttribute(numFmtEl, 'w:val'));
+
+  return {
+    format: numFmt,
+    lvlText,
+    start,
+    suffix,
+    lvlJc,
+    resolvedLevelIndent: indent,
+    resolvedMarkerRpr: markerRun,
+  };
+};
 
 /**
  * Check if a value represents a truthy boolean.
@@ -53,6 +350,22 @@ const isTruthy = (value: unknown): boolean => {
     }
   }
   return false;
+};
+
+/**
+ * Safely extracts a property from an unknown object.
+ * Used to replace unsafe type assertions with proper type guards.
+ *
+ * @param obj - The object to extract from
+ * @param key - The property key to extract
+ * @returns The property value, or undefined if not accessible
+ */
+const safeGetProperty = (obj: unknown, key: string): unknown => {
+  if (!obj || typeof obj !== 'object') {
+    return undefined;
+  }
+  const record = obj as Record<string, unknown>;
+  return record[key];
 };
 
 /**
@@ -160,6 +473,13 @@ export const cloneParagraphAttrs = (attrs?: ParagraphAttrs): ParagraphAttrs | un
   }
   if (attrs.shading) clone.shading = { ...attrs.shading };
   if (attrs.tabs) clone.tabs = attrs.tabs.map((tab) => ({ ...tab }));
+  // Clone drop cap descriptor deeply
+  if (attrs.dropCapDescriptor) {
+    clone.dropCapDescriptor = {
+      ...attrs.dropCapDescriptor,
+      run: { ...attrs.dropCapDescriptor.run },
+    };
+  }
   return clone;
 };
 
@@ -264,10 +584,21 @@ export const buildNumberingPath = (
 const convertIndentTwipsToPx = (indent?: ParagraphIndent | null): ParagraphIndent | undefined => {
   if (!indent) return undefined;
   const result: ParagraphIndent = {};
-  if (isFiniteNumber(indent.left)) result.left = twipsToPx(Number(indent.left));
-  if (isFiniteNumber(indent.right)) result.right = twipsToPx(Number(indent.right));
-  if (isFiniteNumber(indent.firstLine)) result.firstLine = twipsToPx(Number(indent.firstLine));
-  if (isFiniteNumber(indent.hanging)) result.hanging = twipsToPx(Number(indent.hanging));
+  const toNum = (v: unknown): number | undefined => {
+    if (typeof v === 'string' && v.trim() !== '' && isFinite(Number(v))) return Number(v);
+    if (isFiniteNumber(v)) return Number(v);
+    return undefined;
+  };
+
+  const left = toNum(indent.left);
+  const right = toNum(indent.right);
+  const firstLine = toNum(indent.firstLine);
+  const hanging = toNum(indent.hanging);
+
+  if (left != null) result.left = twipsToPx(left);
+  if (right != null) result.right = twipsToPx(right);
+  if (firstLine != null) result.firstLine = twipsToPx(firstLine);
+  if (hanging != null) result.hanging = twipsToPx(hanging);
   return Object.keys(result).length > 0 ? result : undefined;
 };
 
@@ -333,6 +664,184 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
 };
 
 /**
+ * Default drop cap font size in pixels.
+ * Corresponds to roughly 48pt which is a common drop cap size.
+ */
+const DEFAULT_DROP_CAP_FONT_SIZE_PX = 64;
+
+/**
+ * Default font family for drop cap when none is specified.
+ */
+const DEFAULT_DROP_CAP_FONT_FAMILY = 'Times New Roman';
+
+/**
+ * Extract drop cap run information from a paragraph node.
+ *
+ * Drop cap paragraphs in DOCX typically contain just the drop cap letter(s)
+ * with specific font styling (large font size, vertical position offset, etc.).
+ * This function extracts the text and run properties from the first text node.
+ *
+ * @param para - The paragraph PM node to extract drop cap info from
+ * @returns DropCapRun with text and styling, or null if extraction fails
+ */
+const extractDropCapRunFromParagraph = (para: PMNode): DropCapRun | null => {
+  const content = para.content;
+  if (!Array.isArray(content) || content.length === 0) {
+    return null;
+  }
+
+  // Find the first text content in the paragraph
+  let text = '';
+  let runProperties: Record<string, unknown> = {};
+  let textStyleMarks: Record<string, unknown> = {};
+
+  /**
+   * Maximum recursion depth for extractTextAndStyle to prevent stack overflow.
+   * A depth of 50 should be sufficient for any reasonable document structure.
+   */
+  const MAX_RECURSION_DEPTH = 50;
+
+  const extractTextAndStyle = (nodes: PMNode[], depth = 0): boolean => {
+    // Guard against excessive recursion depth
+    if (depth > MAX_RECURSION_DEPTH) {
+      console.warn(`extractTextAndStyle exceeded max recursion depth (${MAX_RECURSION_DEPTH})`);
+      return false;
+    }
+
+    for (const node of nodes) {
+      if (!node) continue;
+
+      // Check for text node
+      if (node.type === 'text' && typeof node.text === 'string' && node.text.length > 0) {
+        text = node.text;
+        // Extract styling from marks
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        return true;
+      }
+
+      // Check for run node that may contain text
+      if (node.type === 'run') {
+        // Extract run properties
+        if (node.attrs?.runProperties && typeof node.attrs.runProperties === 'object') {
+          runProperties = { ...runProperties, ...(node.attrs.runProperties as Record<string, unknown>) };
+        }
+        // Also check for marks on the run node
+        if (Array.isArray(node.marks)) {
+          for (const mark of node.marks) {
+            if (mark?.type === 'textStyle' && mark.attrs) {
+              textStyleMarks = { ...textStyleMarks, ...(mark.attrs as Record<string, unknown>) };
+            }
+          }
+        }
+        // Look for text in run's children with incremented depth
+        if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+          return true;
+        }
+      }
+
+      // Look for text in other container nodes with incremented depth
+      if (Array.isArray(node.content) && extractTextAndStyle(node.content, depth + 1)) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  extractTextAndStyle(content);
+
+  // If no text found, cannot create a drop cap run
+  if (!text) {
+    return null;
+  }
+
+  // Merge run properties and text style marks to get final styling
+  const mergedStyle = { ...runProperties, ...textStyleMarks };
+
+  // Parse font size - can be in various formats: '117pt', '48px', number, etc.
+  let fontSizePx = DEFAULT_DROP_CAP_FONT_SIZE_PX;
+  const rawFontSize = mergedStyle.fontSize ?? mergedStyle['w:sz'] ?? mergedStyle.sz;
+  if (rawFontSize != null) {
+    if (typeof rawFontSize === 'number') {
+      // If number > 100, assume it's half-points (Word uses half-points for sz)
+      // Half-points: w:sz=234 means 117pt
+      const converted = rawFontSize > 100 ? ptToPx(rawFontSize / 2) : rawFontSize;
+      fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+    } else if (typeof rawFontSize === 'string') {
+      const numericPart = parseFloat(rawFontSize);
+      if (Number.isFinite(numericPart)) {
+        if (rawFontSize.endsWith('pt')) {
+          const converted = ptToPx(numericPart);
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        } else if (rawFontSize.endsWith('px')) {
+          // px values are already in pixels
+          fontSizePx = numericPart;
+        } else {
+          // Plain number string - assume half-points if large
+          const converted = numericPart > 100 ? ptToPx(numericPart / 2) : numericPart;
+          fontSizePx = converted ?? DEFAULT_DROP_CAP_FONT_SIZE_PX;
+        }
+      }
+    }
+  }
+
+  // Parse font family
+  let fontFamily = DEFAULT_DROP_CAP_FONT_FAMILY;
+  const rawFontFamily = mergedStyle.fontFamily ?? mergedStyle['w:rFonts'] ?? mergedStyle.rFonts;
+  if (typeof rawFontFamily === 'string') {
+    fontFamily = rawFontFamily;
+  } else if (rawFontFamily && typeof rawFontFamily === 'object') {
+    // rFonts can be an object with ascii, hAnsi, etc.
+    const rFonts = rawFontFamily as Record<string, unknown>;
+    const ascii = rFonts['w:ascii'] ?? rFonts.ascii;
+    if (typeof ascii === 'string') {
+      fontFamily = ascii;
+    }
+  }
+
+  // Build the drop cap run
+  const dropCapRun: DropCapRun = {
+    text,
+    fontFamily,
+    fontSize: fontSizePx,
+  };
+
+  // Parse optional properties
+  const bold = mergedStyle.bold ?? mergedStyle['w:b'] ?? mergedStyle.b;
+  if (isTruthy(bold)) {
+    dropCapRun.bold = true;
+  }
+
+  const italic = mergedStyle.italic ?? mergedStyle['w:i'] ?? mergedStyle.i;
+  if (isTruthy(italic)) {
+    dropCapRun.italic = true;
+  }
+
+  const color = mergedStyle.color ?? mergedStyle['w:color'] ?? mergedStyle.val;
+  if (typeof color === 'string' && color.length > 0 && color.toLowerCase() !== 'auto') {
+    // Ensure color has # prefix if it's a hex color
+    dropCapRun.color = color.startsWith('#') ? color : `#${color}`;
+  }
+
+  // Parse vertical position offset (from w:position, in half-points, can be negative)
+  const position = mergedStyle.position ?? mergedStyle['w:position'];
+  if (position != null) {
+    const posNum = pickNumber(position);
+    if (posNum != null) {
+      // Convert half-points to pixels
+      dropCapRun.position = ptToPx(posNum / 2);
+    }
+  }
+
+  return dropCapRun;
+};
+
+/**
  * Compute Word paragraph layout for numbered paragraphs.
  *
  * Integrates with @superdoc/word-layout to compute accurate list marker positioning,
@@ -362,14 +871,19 @@ export const computeWordLayoutForParagraph = (
   }
 
   try {
-    // Merge paragraph indent with level-specific indent from numbering definition
+    // Merge paragraph indent with level-specific indent from numbering definition.
+    // Numbering level provides base indent, but paragraph/style can override specific properties.
+    // For example, a style may set firstLine=0 to remove numbering's firstLine indent.
     let effectiveIndent = paragraphAttrs.indent;
+
     if (numberingProps?.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(numberingProps.resolvedLevelIndent as ParagraphIndent);
-      // Level indent from numbering definition takes precedence
+      const numberingIndent = resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent);
+
+      // Numbering indent is the base, paragraph/style indent overrides
       effectiveIndent = {
+        ...numberingIndent,
         ...paragraphAttrs.indent,
-        ...(resolvedIndentPx ?? (numberingProps.resolvedLevelIndent as ParagraphIndent)),
       };
     }
 
@@ -472,14 +986,11 @@ export const computeParagraphAttrs = (
       ? (attrs.paragraphProperties as Record<string, unknown>)
       : {};
   const hydrated = hydrationOverride ?? hydrateParagraphStyleAttrs(para, converterContext);
-  // Prefer explicit spacing from attrs even if it's null/empty - don't fall back to hydrated
-  const spacingSource =
-    attrs.spacing !== undefined
-      ? attrs.spacing
-      : paragraphProps.spacing !== undefined
-        ? paragraphProps.spacing
-        : hydrated?.spacing;
-  const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
+  // Merge spacing from all sources: hydrated (docDefaults/styles) < paragraphProps < attrs
+  // This ensures that a partial spacing override (e.g., only line) doesn't discard
+  // defaults for unspecified fields (e.g., before/after from docDefaults).
+  const mergedSpacing = mergeSpacingSources(hydrated?.spacing, paragraphProps.spacing, attrs.spacing);
+  const normalizedSpacing = normalizeParagraphSpacing(mergedSpacing);
   const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
     normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
@@ -546,7 +1057,10 @@ export const computeParagraphAttrs = (
           typeof tabObj.tabType === 'string' ? tabObj.tabType : typeof tabObj.val === 'string' ? tabObj.val : undefined;
 
         // Validate and extract pos (position in twips)
-        const pos = pickNumber(tabObj.originalPos ?? tabObj.pos);
+        // Priority: originalPos > pos. If originalPos is absent, preserve pos as both pos and originalPos
+        // so downstream normalization (which doesn't know about nesting) keeps twips and skips px heuristics.
+        const originalPos = pickNumber(tabObj.originalPos);
+        const pos = originalPos ?? pickNumber(tabObj.pos);
 
         // Skip entry if required fields are missing or invalid
         if (!val || pos == null) {
@@ -556,16 +1070,17 @@ export const computeParagraphAttrs = (
         // Build normalized tab stop object with validated properties
         const normalized: Record<string, unknown> = { val, pos };
 
+        // Set originalPos when available; if absent, mirror pos to preserve twips through later flattening
+        if (originalPos != null && Number.isFinite(originalPos)) {
+          normalized.originalPos = originalPos;
+        } else {
+          normalized.originalPos = pos;
+        }
+
         // Validate and add optional leader property
         const leader = tabObj.leader;
         if (typeof leader === 'string' && leader.length > 0) {
           normalized.leader = leader;
-        }
-
-        // Validate and add optional originalPos property
-        const originalPos = pickNumber(tabObj.originalPos);
-        if (originalPos != null && Number.isFinite(originalPos)) {
-          normalized.originalPos = originalPos;
         }
 
         unwrapped.push(normalized);
@@ -624,22 +1139,36 @@ export const computeParagraphAttrs = (
     paragraphAttrs.rtl = true;
   }
 
+  /**
+   * Paragraph alignment priority cascade (6 levels, highest to lowest):
+   *
+   * 1. bidi + adjustRightInd: Forced right alignment for BiDi paragraphs with right indent adjustment
+   * 2. explicitAlignment: Direct alignment attribute on the paragraph node (attrs.alignment or attrs.textAlign)
+   * 3. paragraphAlignment: Paragraph justification from paragraphProperties (inline paragraph-level formatting)
+   * 4. bidi alone: Default right alignment for BiDi paragraphs without explicit alignment
+   * 5. styleAlignment: Alignment from hydrated paragraph style (style-based formatting)
+   * 6. computed.paragraph.alignment: Fallback alignment from style engine computation
+   *
+   * This cascade ensures that inline paragraph properties (level 3) correctly override style-based
+   * alignment (levels 5-6), matching Microsoft Word's behavior where direct paragraph formatting
+   * takes precedence over style-based formatting.
+   */
   const explicitAlignment = normalizeAlignment(attrs.alignment ?? attrs.textAlign);
+  const paragraphAlignment =
+    typeof paragraphProps.justification === 'string' ? normalizeAlignment(paragraphProps.justification) : undefined;
   const styleAlignment = hydrated?.alignment ? normalizeAlignment(hydrated.alignment) : undefined;
-  const paragraphAlignment = paragraphProps.justification
-    ? normalizeAlignment(paragraphProps.justification as string)
-    : undefined;
   if (bidi && adjustRightInd) {
     paragraphAttrs.alignment = 'right';
   } else if (explicitAlignment) {
     paragraphAttrs.alignment = explicitAlignment;
+  } else if (paragraphAlignment) {
+    // Inline paragraph justification should override style-derived alignment
+    paragraphAttrs.alignment = paragraphAlignment;
   } else if (bidi) {
     // RTL paragraphs without explicit alignment default to right
     paragraphAttrs.alignment = 'right';
   } else if (styleAlignment) {
     paragraphAttrs.alignment = styleAlignment;
-  } else if (paragraphAlignment) {
-    paragraphAttrs.alignment = paragraphAlignment;
   } else if (computed.paragraph.alignment) {
     paragraphAttrs.alignment = computed.paragraph.alignment;
   }
@@ -655,8 +1184,30 @@ export const computeParagraphAttrs = (
       (paragraphAttrs.spacing as Record<string, unknown>).afterAutospacing = normalizedSpacing.afterAutospacing;
     }
   }
-  if (normalizedSpacing?.contextualSpacing != null) {
-    paragraphAttrs.contextualSpacing = normalizedSpacing.contextualSpacing;
+  /**
+   * Extract contextualSpacing from multiple sources with fallback chain.
+   *
+   * OOXML stores contextualSpacing (w:contextualSpacing) as a sibling to spacing (w:spacing),
+   * not nested within it. However, our normalization may place it in different locations.
+   *
+   * Fallback priority (highest to lowest):
+   * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
+   * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
+   * 3. attrs.contextualSpacing - Top-level attribute
+   *
+   * OOXML Boolean Handling:
+   * - Supports multiple representations: true, 1, '1', 'true', 'on'
+   * - Uses isTruthy() to handle all valid OOXML boolean forms
+   * - Treats null/undefined as "not set" (no contextualSpacing)
+   */
+  const contextualSpacingValue =
+    normalizedSpacing?.contextualSpacing ??
+    safeGetProperty(paragraphProps, 'contextualSpacing') ??
+    safeGetProperty(attrs, 'contextualSpacing');
+
+  if (contextualSpacingValue != null) {
+    // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')
+    paragraphAttrs.contextualSpacing = isTruthy(contextualSpacingValue);
   }
 
   const hasExplicitIndent = Boolean(normalizedIndent);
@@ -813,7 +1364,40 @@ export const computeParagraphAttrs = (
       dropCap != null &&
       (typeof dropCap === 'string' || typeof dropCap === 'number' || typeof dropCap === 'boolean')
     ) {
+      // Keep the legacy dropCap flag for backward compatibility
       paragraphAttrs.dropCap = dropCap;
+
+      // Build structured DropCapDescriptor for enhanced drop cap support
+      const dropCapMode = typeof dropCap === 'string' ? dropCap.toLowerCase() : 'drop';
+      const linesValue = pickNumber(framePr['w:lines'] ?? framePr.lines);
+      const wrapValue = asString(framePr['w:wrap'] ?? framePr.wrap);
+
+      // Extract the drop cap text and run styling from paragraph content
+      const dropCapRunInfo = extractDropCapRunFromParagraph(para);
+
+      if (dropCapRunInfo) {
+        const descriptor: DropCapDescriptor = {
+          mode: dropCapMode === 'margin' ? 'margin' : 'drop',
+          lines: linesValue != null && linesValue > 0 ? linesValue : 3,
+          run: dropCapRunInfo,
+        };
+
+        // Map wrap value to the expected types
+        if (wrapValue) {
+          const normalizedWrap = wrapValue.toLowerCase();
+          if (
+            normalizedWrap === 'around' ||
+            normalizedWrap === 'notbeside' ||
+            normalizedWrap === 'none' ||
+            normalizedWrap === 'tight'
+          ) {
+            descriptor.wrap =
+              normalizedWrap === 'notbeside' ? 'notBeside' : (normalizedWrap as 'around' | 'none' | 'tight');
+          }
+        }
+
+        paragraphAttrs.dropCapDescriptor = descriptor;
+      }
     }
 
     const frame: ParagraphAttrs['frame'] = {};
@@ -847,15 +1431,87 @@ export const computeParagraphAttrs = (
   }
 
   // Track B: Compute wordLayout for paragraphs with numberingProperties
+  const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
   const numberingSource =
     attrs.numberingProperties ?? paragraphProps.numberingProperties ?? hydrated?.numberingProperties;
-  const rawNumberingProps = toAdapterNumberingProps(numberingSource);
-  if (rawNumberingProps) {
+  let rawNumberingProps = toAdapterNumberingProps(numberingSource);
+
+  /**
+   * Fallback mechanism for table paragraphs with list rendering but no numbering properties.
+   *
+   * **Why this is needed:**
+   * Some document sources (particularly table cells imported from certain formats) provide
+   * listRendering attributes (marker text, path, styling) but lack the traditional OOXML
+   * numberingProperties structure (numId, ilvl). This fallback synthesizes minimal
+   * numbering properties from the listRendering data to ensure list markers render correctly.
+   *
+   * **When this is used:**
+   * - Table paragraphs that have listRendering but no numberingProperties
+   * - Imported documents where numbering context was lost but visual marker info was preserved
+   * - Fallback rendering path when traditional OOXML numbering is unavailable
+   *
+   * **Synthesis logic:**
+   * - `numId`: Set to -1 (sentinel value indicating synthesized/unavailable)
+   * - `ilvl`: Calculated from path length (path.length - 1), defaults to 0
+   * - `path`: Preserved from listRendering (e.g., [1, 2, 3] for nested lists)
+   * - `counterValue`: Extracted from last element of path array
+   * - Other properties (markerText, format, justification, suffix) copied from listRendering
+   */
+  if (!rawNumberingProps && listRendering) {
+    const path = listRendering.path;
+    const counterFromPath = path && path.length ? path[path.length - 1] : undefined;
+    const ilvl = path && path.length > 1 ? path.length - 1 : 0;
+
+    rawNumberingProps = {
+      numId: -1,
+      ilvl,
+      path,
+      counterValue: Number.isFinite(counterFromPath) ? Number(counterFromPath) : undefined,
+      markerText: listRendering.markerText,
+      format: listRendering.numberingType as NumberingFormat | undefined,
+      lvlJc: listRendering.justification,
+      suffix: listRendering.suffix,
+    } as AdapterNumberingProps;
+  }
+
+  /**
+   * Validates that the paragraph has valid numbering properties.
+   * Per OOXML spec §17.9.16, numId="0" (or '0') is a special sentinel value that disables
+   * numbering inherited from paragraph styles. We skip word layout processing entirely for numId=0.
+   */
+  const hasValidNumbering = rawNumberingProps && isValidNumberingId(rawNumberingProps.numId);
+  if (hasValidNumbering) {
     const numberingProps = rawNumberingProps;
     const numId = numberingProps.numId;
     const ilvl = Number.isFinite(numberingProps.ilvl) ? Math.max(0, Math.floor(Number(numberingProps.ilvl))) : 0;
-    const listRendering = normalizeListRenderingAttrs(attrs.listRendering);
     const numericNumId = typeof numId === 'number' ? numId : undefined;
+
+    // Resolve numbering definition details (format, text, indent, marker run) from converter context
+    const resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+
+    if (resolvedLevel) {
+      if (resolvedLevel.format && numberingProps.format == null) {
+        numberingProps.format = resolvedLevel.format;
+      }
+      if (resolvedLevel.lvlText && numberingProps.lvlText == null) {
+        numberingProps.lvlText = resolvedLevel.lvlText;
+      }
+      if (resolvedLevel.start != null && numberingProps.start == null) {
+        numberingProps.start = resolvedLevel.start;
+      }
+      if (resolvedLevel.suffix && numberingProps.suffix == null) {
+        numberingProps.suffix = resolvedLevel.suffix;
+      }
+      if (resolvedLevel.lvlJc && numberingProps.lvlJc == null) {
+        numberingProps.lvlJc = resolvedLevel.lvlJc;
+      }
+      if (resolvedLevel.resolvedLevelIndent && !numberingProps.resolvedLevelIndent) {
+        numberingProps.resolvedLevelIndent = resolvedLevel.resolvedLevelIndent;
+      }
+      if (resolvedLevel.resolvedMarkerRpr && !numberingProps.resolvedMarkerRpr) {
+        numberingProps.resolvedMarkerRpr = resolvedLevel.resolvedMarkerRpr;
+      }
+    }
 
     // Track B: Increment list counter and build path array
     let counterValue = 1;
@@ -910,7 +1566,43 @@ export const computeParagraphAttrs = (
       // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    const wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+    let wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+
+    // Fallback: some numbering levels only specify a firstLine indent (no left/hanging).
+    // When wordLayout computation returns null, ensure we still provide a textStartPx
+    // so first-line wrapping in columns has the correct width.
+    if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
+          firstLineIndentMode: true,
+          textStartPx: firstLinePx,
+        } as WordParagraphLayoutOutput;
+      }
+    }
+
+    // If computeWordLayout returned an object but did not provide textStartPx and
+    // the numbering indent has a firstLine value, set a minimal textStartPx to
+    // match the resolved first-line indent. This guards against cases where
+    // word-layout computation omits textStart for levels without left/hanging.
+    if (
+      wordLayout &&
+      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
+      enrichedNumberingProps.resolvedLevelIndent
+    ) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
+      if (firstLinePx > 0) {
+        wordLayout = {
+          ...wordLayout,
+          firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
+          textStartPx: firstLinePx,
+        };
+      }
+    }
+
     if (wordLayout) {
       if (wordLayout.marker) {
         if (listRendering?.markerText) {
@@ -924,17 +1616,36 @@ export const computeParagraphAttrs = (
         }
       }
       paragraphAttrs.wordLayout = wordLayout;
+    }
 
-      // Track B: Update paragraphAttrs.indent with the effective indent from resolvedLevelIndent
-      // This ensures the renderer uses the correct level-specific indent for padding
-      if (enrichedNumberingProps.resolvedLevelIndent) {
-        const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-        paragraphAttrs.indent = {
-          ...paragraphAttrs.indent,
-          ...(resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent),
-        };
+    // Always merge resolvedLevelIndent into paragraphAttrs.indent, regardless of wordLayout success.
+    // This ensures sublists get correct indentation even if wordLayout computation fails.
+    // Per OOXML spec, paragraph indent MERGES with numbering definition:
+    // - Numbering definition provides base values (left, hanging from level)
+    // - Paragraph's explicit indent properties override specific values
+    // - Missing paragraph indent properties inherit from numbering definition
+    // This fixes cases where a paragraph only specifies w:hanging but should
+    // inherit w:left from the numbering level definition.
+    if (enrichedNumberingProps.resolvedLevelIndent) {
+      const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+
+      // Merge: numbering definition as base, paragraph explicit values override
+      paragraphAttrs.indent = {
+        ...baseIndent,
+        ...(normalizedIndent ?? {}),
+      };
+
+      // In OOXML, hanging and firstLine are mutually exclusive.
+      // If the paragraph explicitly specifies one, the other should be cleared.
+      // This ensures proper marker positioning when paragraph overrides numbering indent.
+      if (normalizedIndent?.firstLine !== undefined) {
+        delete paragraphAttrs.indent.hanging;
+      } else if (normalizedIndent?.hanging !== undefined) {
+        delete paragraphAttrs.indent.firstLine;
       }
     }
+
     // Preserve numberingProperties for downstream consumers (e.g., measurement stage)
     paragraphAttrs.numberingProperties = enrichedNumberingProps as Record<string, unknown>;
   }
@@ -959,6 +1670,13 @@ export const mergeParagraphAttrs = (base?: ParagraphAttrs, override?: ParagraphA
   }
   if (override.indent) {
     merged.indent = { ...(base.indent ?? {}), ...override.indent };
+    // In OOXML, hanging and firstLine are mutually exclusive.
+    // If override specifies one, clear the other from the merged result.
+    if (override.indent.firstLine !== undefined) {
+      delete merged.indent.hanging;
+    } else if (override.indent.hanging !== undefined) {
+      delete merged.indent.firstLine;
+    }
   }
   if (override.borders) {
     merged.borders = { ...(base.borders ?? {}), ...override.borders };

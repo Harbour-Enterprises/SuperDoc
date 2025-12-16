@@ -83,3 +83,5 @@ function isVisuallyEmptyParagraph(node: Node): boolean {
   // No text, no inline leafs, no hard breaks => visually empty
   return true;
 }
+
+export { isVisuallyEmptyParagraph };

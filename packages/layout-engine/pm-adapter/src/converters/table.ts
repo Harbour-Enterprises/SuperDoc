@@ -15,6 +15,9 @@ import type {
   TableBorders,
   TableRow,
   TableRowAttrs,
+  TableBlock,
+  TableAnchor,
+  TableWrap,
 } from '@superdoc/contracts';
 import type {
   PMNode,
@@ -27,10 +30,14 @@ import type {
   ThemeColorPalette,
   ConverterContext,
   ListCounterContext,
+  TableNodeToBlockOptions,
+  NestedConverters,
 } from '../types.js';
 import { extractTableBorders, extractCellBorders, extractCellPadding } from '../attributes/index.js';
-import { pickNumber } from '../utilities.js';
+import { pickNumber, twipsToPx } from '../utilities.js';
 import { hydrateTableStyleAttrs } from './table-styles.js';
+import { collectTrackedChangeFromMarks } from '../marks/index.js';
+import { annotateBlockWithTrackedChange, shouldHideTrackedNode } from '../tracked-changes.js';
 
 type ParagraphConverter = (
   node: PMNode,
@@ -53,12 +60,14 @@ type TableParserDependencies = {
   defaultFont: string;
   defaultSize: number;
   styleContext: StyleContext;
+  listCounterContext?: ListCounterContext;
   trackedChanges?: TrackedChangesConfig;
   bookmarks?: Map<string, number>;
   hyperlinkConfig?: HyperlinkConfig;
   themeColors?: ThemeColorPalette;
-  paragraphToFlowBlocks: ParagraphConverter;
+  paragraphToFlowBlocks?: ParagraphConverter;
   converterContext?: ConverterContext;
+  converters?: NestedConverters;
 };
 
 type ParseTableCellArgs = {
@@ -67,6 +76,8 @@ type ParseTableCellArgs = {
   cellIndex: number;
   context: TableParserDependencies;
   defaultCellPadding?: BoxSpacing;
+  /** Table style paragraph props to pass to paragraph converter for style cascade */
+  tableStyleParagraphProps?: import('../converter-context.js').TableStyleParagraphProps;
 };
 
 type ParseTableRowArgs = {
@@ -74,6 +85,8 @@ type ParseTableRowArgs = {
   rowIndex: number;
   context: TableParserDependencies;
   defaultCellPadding?: BoxSpacing;
+  /** Table style paragraph props to pass to paragraph converter for style cascade */
+  tableStyleParagraphProps?: import('../converter-context.js').TableStyleParagraphProps;
 };
 
 const isTableRowNode = (node: PMNode): boolean => node.type === 'tableRow' || node.type === 'table_row';
@@ -84,8 +97,99 @@ const isTableCellNode = (node: PMNode): boolean =>
   node.type === 'tableHeader' ||
   node.type === 'table_header';
 
+type NormalizedRowHeight =
+  | {
+      value: number;
+      rule: 'exact' | 'atLeast' | 'auto';
+    }
+  | undefined;
+
+/**
+ * Normalize row height from DOCX row properties, converting from twips to pixels.
+ *
+ * Extracts the row height value and rule from OOXML table row properties and converts
+ * the height value from twips (twentieth of a point) to pixels for consistent rendering.
+ * This conversion is critical to prevent small twips values (e.g., 277 twips ≈ 18.5px)
+ * from being misinterpreted as large pixel values.
+ *
+ * @param rowProps - Table row properties object containing optional rowHeight configuration
+ * @returns Normalized height object with pixel value and rule, or undefined if no valid height is found
+ *
+ * @example
+ * // DOCX row with exact height of 277 twips
+ * const props = { rowHeight: { value: 277, rule: 'exact' } };
+ * const normalized = normalizeRowHeight(props);
+ * // Returns: { value: 18.467, rule: 'exact' }
+ *
+ * @example
+ * // Missing or invalid height
+ * normalizeRowHeight(undefined); // Returns: undefined
+ * normalizeRowHeight({}); // Returns: undefined
+ */
+const normalizeRowHeight = (rowProps?: Record<string, unknown>): NormalizedRowHeight => {
+  if (!rowProps || typeof rowProps !== 'object') return undefined;
+  const rawRowHeight = (rowProps as Record<string, unknown>).rowHeight;
+  if (!rawRowHeight || typeof rawRowHeight !== 'object') return undefined;
+
+  const heightObj = rawRowHeight as Record<string, unknown>;
+  const rawValue = pickNumber(heightObj.value ?? heightObj.val);
+  if (rawValue == null) return undefined;
+
+  const rawRule = heightObj.rule ?? heightObj.hRule;
+  const rule =
+    rawRule === 'exact' || rawRule === 'atLeast' || rawRule === 'auto'
+      ? (rawRule as 'exact' | 'atLeast' | 'auto')
+      : 'atLeast';
+
+  // Row heights from DOCX are defined in twips. Always convert to px so small values (e.g. 277 twips)
+  // don't get misinterpreted as pixels.
+  const valuePx = twipsToPx(rawValue);
+
+  return {
+    value: valuePx,
+    rule,
+  };
+};
+
+/**
+ * Parse a ProseMirror table cell node into a TableCell block.
+ *
+ * Converts a PM table cell node (tableCell, table_cell, tableHeader, or table_header)
+ * into the SuperDoc TableCell contract format. Processes all paragraphs within the cell,
+ * extracts cell attributes (borders, padding, alignment, background), and handles
+ * merged cells (rowspan/colspan).
+ *
+ * @param args - Cell parsing arguments including node, position, context, and style cascade props
+ * @param args.cellNode - ProseMirror cell node to parse
+ * @param args.rowIndex - Zero-based row index for ID generation
+ * @param args.cellIndex - Zero-based cell index for ID generation
+ * @param args.context - Parser dependencies (block ID generator, converters, style context)
+ * @param args.defaultCellPadding - Optional default padding from table style
+ * @param args.tableStyleParagraphProps - Optional paragraph properties from table style for cascade
+ * @returns TableCell object with blocks and attributes, or null if the cell is invalid or empty
+ *
+ * @example
+ * // Valid cell with content
+ * const cell = parseTableCell({
+ *   cellNode: { type: 'tableCell', content: [paragraphNode] },
+ *   rowIndex: 0,
+ *   cellIndex: 1,
+ *   context: parserDeps,
+ * });
+ * // Returns: { id: 'cell-0-1', blocks: [...], attrs: {...} }
+ *
+ * @example
+ * // Empty cell returns null
+ * parseTableCell({
+ *   cellNode: { type: 'tableCell', content: [] },
+ *   rowIndex: 0,
+ *   cellIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: null
+ */
 const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
-  const { cellNode, rowIndex, cellIndex, context, defaultCellPadding } = args;
+  const { cellNode, rowIndex, cellIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableCellNode(cellNode) || !Array.isArray(cellNode.content)) {
     return null;
   }
@@ -94,28 +198,109 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   // Note: Table cells can only contain paragraphs, images, and drawings (not nested tables)
   const blocks: (ParagraphBlock | ImageBlock | DrawingBlock)[] = [];
 
+  // Create enhanced converter context with table style paragraph props for the style cascade
+  // This allows paragraphs inside table cells to inherit table style's pPr
+  const cellConverterContext: ConverterContext | undefined = tableStyleParagraphProps
+    ? {
+        ...context.converterContext,
+        tableStyleParagraphProps,
+      }
+    : context.converterContext;
+
+  const paragraphToFlowBlocks = context.converters?.paragraphToFlowBlocks ?? context.paragraphToFlowBlocks;
+  const listCounterContext = context.listCounterContext;
+
   for (const childNode of cellNode.content) {
     if (childNode.type === 'paragraph') {
-      const paragraphBlocks = context.paragraphToFlowBlocks(
+      if (!paragraphToFlowBlocks) continue;
+      const paragraphBlocks = paragraphToFlowBlocks(
         childNode,
         context.nextBlockId,
         context.positions,
         context.defaultFont,
         context.defaultSize,
         context.styleContext,
-        undefined,
+        listCounterContext,
         context.trackedChanges,
         context.bookmarks,
         context.hyperlinkConfig,
         context.themeColors,
-        context.converterContext,
+        cellConverterContext,
       );
-      const paragraph = paragraphBlocks.find((b): b is ParagraphBlock => b.kind === 'paragraph');
-      if (paragraph) {
-        blocks.push(paragraph);
+      paragraphBlocks.forEach((block) => {
+        if (block.kind === 'paragraph' || block.kind === 'image' || block.kind === 'drawing') {
+          blocks.push(block);
+        }
+      });
+      continue;
+    }
+
+    if (childNode.type === 'image' && context.converters?.imageNodeToBlock) {
+      const mergedMarks = [...(childNode.marks ?? [])];
+      const trackedMeta = context.trackedChanges ? collectTrackedChangeFromMarks(mergedMarks) : undefined;
+      if (shouldHideTrackedNode(trackedMeta, context.trackedChanges)) {
+        continue;
+      }
+      const imageBlock = context.converters.imageNodeToBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+        trackedMeta,
+        context.trackedChanges,
+      );
+      if (imageBlock && imageBlock.kind === 'image') {
+        annotateBlockWithTrackedChange(imageBlock, trackedMeta, context.trackedChanges);
+        blocks.push(imageBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'vectorShape' && context.converters?.vectorShapeNodeToDrawingBlock) {
+      const drawingBlock = context.converters.vectorShapeNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock) {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeGroup' && context.converters?.shapeGroupNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeGroupNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock) {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeContainer' && context.converters?.shapeContainerNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeContainerNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock) {
+        blocks.push(drawingBlock);
+      }
+      continue;
+    }
+
+    if (childNode.type === 'shapeTextbox' && context.converters?.shapeTextboxNodeToDrawingBlock) {
+      const drawingBlock = context.converters.shapeTextboxNodeToDrawingBlock(
+        childNode,
+        context.nextBlockId,
+        context.positions,
+      );
+      if (drawingBlock) {
+        blocks.push(drawingBlock);
       }
     }
-    // TODO: Add support for other block types (lists, images) if needed
   }
 
   if (blocks.length === 0) {
@@ -132,8 +317,14 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   if (padding) cellAttrs.padding = padding;
 
   const verticalAlign = cellNode.attrs?.verticalAlign;
-  if (verticalAlign === 'top' || verticalAlign === 'middle' || verticalAlign === 'bottom') {
-    cellAttrs.verticalAlign = verticalAlign;
+  const normalizedVerticalAlign =
+    verticalAlign === 'middle' ? 'center' : verticalAlign === 'center' ? 'center' : verticalAlign;
+  if (
+    normalizedVerticalAlign === 'top' ||
+    normalizedVerticalAlign === 'center' ||
+    normalizedVerticalAlign === 'bottom'
+  ) {
+    cellAttrs.verticalAlign = normalizedVerticalAlign;
   }
 
   const background = cellNode.attrs?.background as { color?: string } | undefined;
@@ -161,8 +352,41 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   };
 };
 
+/**
+ * Parse a ProseMirror table row node into a TableRow block.
+ *
+ * Converts a PM table row node (tableRow or table_row) into the SuperDoc TableRow
+ * contract format. Processes all table cells within the row, extracts row attributes
+ * (row height with twips-to-pixels conversion), and preserves OOXML table row properties.
+ *
+ * @param args - Row parsing arguments including node, position, context, and style cascade props
+ * @param args.rowNode - ProseMirror row node to parse
+ * @param args.rowIndex - Zero-based row index for ID generation
+ * @param args.context - Parser dependencies (block ID generator, converters, style context)
+ * @param args.defaultCellPadding - Optional default padding from table style to pass to cells
+ * @param args.tableStyleParagraphProps - Optional paragraph properties from table style for cascade
+ * @returns TableRow object with cells and attributes, or null if the row contains no valid cells
+ *
+ * @example
+ * // Row with cells
+ * const row = parseTableRow({
+ *   rowNode: { type: 'tableRow', content: [cellNode1, cellNode2] },
+ *   rowIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: { id: 'row-0', cells: [...], attrs: {...} }
+ *
+ * @example
+ * // Row with no valid cells returns null
+ * parseTableRow({
+ *   rowNode: { type: 'tableRow', content: [] },
+ *   rowIndex: 0,
+ *   context: parserDeps,
+ * });
+ * // Returns: null
+ */
 const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
-  const { rowNode, rowIndex, context, defaultCellPadding } = args;
+  const { rowNode, rowIndex, context, defaultCellPadding, tableStyleParagraphProps } = args;
   if (!isTableRowNode(rowNode) || !Array.isArray(rowNode.content)) {
     return null;
   }
@@ -175,6 +399,7 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
       cellIndex,
       context,
       defaultCellPadding,
+      tableStyleParagraphProps,
     });
     if (parsedCell) {
       cells.push(parsedCell);
@@ -184,12 +409,20 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
   if (cells.length === 0) return null;
 
   const rowProps = rowNode.attrs?.tableRowProperties;
+  const rowHeight = normalizeRowHeight(rowProps as Record<string, unknown> | undefined);
   const attrs: TableRowAttrs | undefined =
     rowProps && typeof rowProps === 'object'
       ? {
           tableRowProperties: rowProps as Record<string, unknown>,
+          ...(rowHeight ? { rowHeight } : {}),
         }
-      : undefined;
+      : rowHeight
+        ? { rowHeight }
+        : undefined;
+
+  // Note: cantSplit is stored within tableRowProperties.cantSplit (not as a separate attr)
+  // The PM table-row extension has both cantSplit as a top-level attr AND within tableRowProperties
+  // For layout engine, we only need to read from tableRowProperties.cantSplit
 
   return {
     id: context.nextBlockId(`row-${rowIndex}`),
@@ -197,6 +430,125 @@ const parseTableRow = (args: ParseTableRowArgs): TableRow | null => {
     attrs,
   };
 };
+
+/**
+ * Floating table properties from OOXML w:tblpPr.
+ * Values are in twips.
+ */
+type FloatingTableProperties = {
+  leftFromText?: number;
+  rightFromText?: number;
+  topFromText?: number;
+  bottomFromText?: number;
+  tblpX?: number;
+  tblpY?: number;
+  horzAnchor?: 'margin' | 'page' | 'text';
+  vertAnchor?: 'margin' | 'page' | 'text';
+  tblpXSpec?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  tblpYSpec?: 'inline' | 'top' | 'center' | 'bottom' | 'inside' | 'outside';
+};
+
+/**
+ * Extract floating table properties from node attrs and convert to TableAnchor and TableWrap.
+ * Returns undefined values if the table is not floating (no tblpPr).
+ */
+function extractFloatingTableAnchorWrap(node: PMNode): { anchor?: TableAnchor; wrap?: TableWrap } {
+  const tableProperties = node.attrs?.tableProperties as Record<string, unknown> | undefined;
+  const floatingProps = tableProperties?.floatingTableProperties as FloatingTableProperties | undefined;
+
+  if (!floatingProps) {
+    return {};
+  }
+
+  // A table is considered anchored/floating if it has any positioning properties
+  const hasPositioning =
+    floatingProps.tblpX !== undefined ||
+    floatingProps.tblpY !== undefined ||
+    floatingProps.tblpXSpec !== undefined ||
+    floatingProps.tblpYSpec !== undefined ||
+    floatingProps.horzAnchor !== undefined ||
+    floatingProps.vertAnchor !== undefined;
+
+  if (!hasPositioning) {
+    return {};
+  }
+
+  // Map OOXML anchor values to contract types
+  const mapHorzAnchor = (val?: string): TableAnchor['hRelativeFrom'] => {
+    switch (val) {
+      case 'page':
+        return 'page';
+      case 'margin':
+        return 'margin';
+      case 'text':
+      default:
+        return 'column'; // 'text' in OOXML maps to column-relative positioning
+    }
+  };
+
+  const mapVertAnchor = (val?: string): TableAnchor['vRelativeFrom'] => {
+    switch (val) {
+      case 'page':
+        return 'page';
+      case 'margin':
+        return 'margin';
+      case 'text':
+      default:
+        return 'paragraph'; // 'text' in OOXML maps to paragraph-relative positioning
+    }
+  };
+
+  const anchor: TableAnchor = {
+    isAnchored: true,
+    hRelativeFrom: mapHorzAnchor(floatingProps.horzAnchor),
+    vRelativeFrom: mapVertAnchor(floatingProps.vertAnchor),
+  };
+
+  // Set alignment from tblpXSpec/tblpYSpec if present
+  if (floatingProps.tblpXSpec) {
+    anchor.alignH = floatingProps.tblpXSpec;
+  }
+  if (floatingProps.tblpYSpec) {
+    anchor.alignV = floatingProps.tblpYSpec;
+  }
+
+  // Set absolute offsets (convert twips to px)
+  if (floatingProps.tblpX !== undefined) {
+    anchor.offsetH = twipsToPx(floatingProps.tblpX);
+  }
+  if (floatingProps.tblpY !== undefined) {
+    anchor.offsetV = twipsToPx(floatingProps.tblpY);
+  }
+
+  // Build wrap properties from text distances
+  const hasDistances =
+    floatingProps.leftFromText !== undefined ||
+    floatingProps.rightFromText !== undefined ||
+    floatingProps.topFromText !== undefined ||
+    floatingProps.bottomFromText !== undefined;
+
+  const wrap: TableWrap = {
+    type: 'Square', // Floating tables with text distances use square wrapping
+    wrapText: 'bothSides', // Default to text on both sides
+  };
+
+  if (hasDistances) {
+    if (floatingProps.topFromText !== undefined) {
+      wrap.distTop = twipsToPx(floatingProps.topFromText);
+    }
+    if (floatingProps.bottomFromText !== undefined) {
+      wrap.distBottom = twipsToPx(floatingProps.bottomFromText);
+    }
+    if (floatingProps.leftFromText !== undefined) {
+      wrap.distLeft = twipsToPx(floatingProps.leftFromText);
+    }
+    if (floatingProps.rightFromText !== undefined) {
+      wrap.distRight = twipsToPx(floatingProps.rightFromText);
+    }
+  }
+
+  return { anchor, wrap };
+}
 
 /**
  * Convert a ProseMirror table node to a TableBlock
@@ -239,9 +591,11 @@ export function tableNodeToBlock(
     converterContext?: ConverterContext,
   ) => FlowBlock[],
   converterContext?: ConverterContext,
+  options?: TableNodeToBlockOptions,
 ): FlowBlock | null {
   if (!Array.isArray(node.content) || node.content.length === 0) return null;
-  if (!paragraphToFlowBlocks) return null;
+  const paragraphConverter = paragraphToFlowBlocks ?? options?.converters?.paragraphToFlowBlocks;
+  if (!paragraphConverter) return null;
 
   const parserDeps: TableParserDependencies = {
     nextBlockId,
@@ -253,12 +607,15 @@ export function tableNodeToBlock(
     bookmarks,
     hyperlinkConfig,
     themeColors,
-    paragraphToFlowBlocks,
+    listCounterContext: options?.listCounterContext,
+    paragraphToFlowBlocks: paragraphConverter,
     converterContext,
+    converters: options?.converters,
   };
 
   const hydratedTableStyle = hydrateTableStyleAttrs(node, converterContext);
   const defaultCellPadding = hydratedTableStyle?.cellPadding;
+  const tableStyleParagraphProps = hydratedTableStyle?.paragraphProps;
 
   const rows: TableRow[] = [];
   node.content.forEach((rowNode, rowIndex) => {
@@ -267,6 +624,7 @@ export function tableNodeToBlock(
       rowIndex,
       context: parserDeps,
       defaultCellPadding,
+      tableStyleParagraphProps,
     });
     if (parsedRow) {
       rows.push(parsedRow);
@@ -317,6 +675,12 @@ export function tableNodeToBlock(
   const tableLayout = node.attrs?.tableLayout;
   if (tableLayout) {
     tableAttrs.tableLayout = tableLayout;
+  }
+
+  // Preserve tableProperties for floating table detection and other OOXML metadata
+  const tableProperties = node.attrs?.tableProperties;
+  if (tableProperties && typeof tableProperties === 'object') {
+    tableAttrs.tableProperties = tableProperties as Record<string, unknown>;
   }
 
   let columnWidths: number[] | undefined = undefined;
@@ -394,13 +758,18 @@ export function tableNodeToBlock(
 
   // Priority 4: Auto-calculate from content (columnWidths remains undefined)
 
-  const tableBlock = {
+  // Extract floating table anchor/wrap properties
+  const { anchor, wrap } = extractFloatingTableAnchorWrap(node);
+
+  const tableBlock: TableBlock = {
     kind: 'table',
     id: nextBlockId('table'),
     rows,
     attrs: Object.keys(tableAttrs).length > 0 ? tableAttrs : undefined,
     columnWidths,
-  } as FlowBlock;
+    ...(anchor ? { anchor } : {}),
+    ...(wrap ? { wrap } : {}),
+  };
 
   return tableBlock;
 }
@@ -421,6 +790,7 @@ export function handleTableNode(node: PMNode, context: NodeHandlerContext): void
     defaultFont,
     defaultSize,
     styleContext,
+    listCounterContext,
     trackedChangesConfig,
     bookmarks,
     hyperlinkConfig,
@@ -441,6 +811,7 @@ export function handleTableNode(node: PMNode, context: NodeHandlerContext): void
     undefined, // themeColors
     converters?.paragraphToFlowBlocks,
     converterContext,
+    { listCounterContext, converters },
   );
   if (tableBlock) {
     blocks.push(tableBlock);
