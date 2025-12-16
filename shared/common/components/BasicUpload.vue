@@ -8,7 +8,7 @@ const props = withDefaults(
     accept?: string;
   }>(),
   {
-    accept: '.docx, .pdf, .html, .md',
+    accept: '.docx, .pdf, .html, .md, .doc',
   },
 );
 
