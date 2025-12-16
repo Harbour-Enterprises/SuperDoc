@@ -92,7 +92,14 @@ export interface SectionRange {
   startParagraphIndex: number;
   endParagraphIndex: number;
   sectPr: SectPrElement | null;
-  margins: { header: number; footer: number } | null;
+  margins: {
+    top?: number;
+    right?: number;
+    bottom?: number;
+    left?: number;
+    header: number;
+    footer: number;
+  } | null;
   pageSize: { w: number; h: number } | null;
   orientation: 'portrait' | 'landscape' | null;
   columns: { count: number; gap: number } | null;

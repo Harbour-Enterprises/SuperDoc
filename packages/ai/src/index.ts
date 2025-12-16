@@ -1,3 +1,7 @@
+import { logPackageVersion } from './logger';
+
+logPackageVersion();
+
 export { AIActions } from './ai-actions';
 export { AIActionsService } from './ai-actions-service';
 export { EditorAdapter } from './editor-adapter';

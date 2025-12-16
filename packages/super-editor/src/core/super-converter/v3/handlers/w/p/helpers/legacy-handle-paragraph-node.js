@@ -44,6 +44,7 @@ export const handleParagraphNode = (params) => {
     params,
     inlineParagraphProperties,
     insideTable,
+    false,
     tableStyleId,
   );
 

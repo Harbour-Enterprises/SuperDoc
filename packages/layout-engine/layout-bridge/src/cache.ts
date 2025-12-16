@@ -1,5 +1,15 @@
-import type { FlowBlock, ImageRun, TableBlock, ParagraphBlock } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  ImageRun,
+  TableBlock,
+  ParagraphBlock,
+  ParagraphAttrs,
+  ParagraphFrame,
+  TableAttrs,
+  TableCellAttrs,
+} from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
+import { hashParagraphBorders, hashTableBorders, hashCellBorders } from './paragraph-hash-utils.js';
 
 /**
  * Maximum cache size (number of entries)
@@ -16,6 +26,25 @@ const BYTES_PER_ENTRY_ESTIMATE = 5_000; // ~5KB per entry
 
 const NORMALIZED_WHITESPACE = /\s+/g;
 const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ');
+
+/**
+ * Creates a deterministic hash string for a paragraph frame.
+ * Ensures consistent property ordering for reliable cache keys.
+ *
+ * @param frame - The paragraph frame to hash
+ * @returns A deterministic hash string
+ */
+const hashParagraphFrame = (frame: ParagraphFrame): string => {
+  const parts: string[] = [];
+  if (frame.wrap !== undefined) parts.push(`w:${frame.wrap}`);
+  if (frame.x !== undefined) parts.push(`x:${frame.x}`);
+  if (frame.y !== undefined) parts.push(`y:${frame.y}`);
+  if (frame.xAlign !== undefined) parts.push(`xa:${frame.xAlign}`);
+  if (frame.yAlign !== undefined) parts.push(`ya:${frame.yAlign}`);
+  if (frame.hAnchor !== undefined) parts.push(`ha:${frame.hAnchor}`);
+  if (frame.vAnchor !== undefined) parts.push(`va:${frame.vAnchor}`);
+  return parts.join(',');
+};
 
 /**
  * Generates a cache key hash from a block's runs, incorporating content and formatting.
@@ -49,6 +78,29 @@ const hashRuns = (block: FlowBlock): string => {
       }
 
       for (const cell of row.cells) {
+        // Include cell-level attributes that affect rendering (borders, padding, etc.)
+        // This ensures cache invalidation when cell formatting changes (e.g., remove borders).
+        if (cell.attrs) {
+          const cellAttrs = cell.attrs as TableCellAttrs;
+          const cellAttrParts: string[] = [];
+          if (cellAttrs.borders) {
+            cellAttrParts.push(`cb:${hashCellBorders(cellAttrs.borders)}`);
+          }
+          if (cellAttrs.padding) {
+            const p = cellAttrs.padding;
+            cellAttrParts.push(`cp:${p.top ?? 0}:${p.right ?? 0}:${p.bottom ?? 0}:${p.left ?? 0}`);
+          }
+          if (cellAttrs.verticalAlign) {
+            cellAttrParts.push(`va:${cellAttrs.verticalAlign}`);
+          }
+          if (cellAttrs.background) {
+            cellAttrParts.push(`bg:${cellAttrs.background}`);
+          }
+          if (cellAttrParts.length > 0) {
+            cellHashes.push(`ca:${cellAttrParts.join(':')}`);
+          }
+        }
+
         // Support both new multi-block cells and legacy single paragraph cells
         const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
 
@@ -70,6 +122,7 @@ const hashRuns = (block: FlowBlock): string => {
             const color = 'color' in run ? run.color : undefined;
             const fontSize = 'fontSize' in run ? run.fontSize : undefined;
             const fontFamily = 'fontFamily' in run ? run.fontFamily : undefined;
+            const highlight = 'highlight' in run ? run.highlight : undefined;
 
             // Build marks string including all formatting properties
             const marks = [
@@ -78,6 +131,7 @@ const hashRuns = (block: FlowBlock): string => {
               color ?? '',
               fontSize !== undefined ? `fs:${fontSize}` : '',
               fontFamily ? `ff:${fontFamily}` : '',
+              highlight ? `hl:${highlight}` : '',
             ].join('');
 
             // Include tracked change metadata in hash
@@ -91,11 +145,81 @@ const hashRuns = (block: FlowBlock): string => {
 
             cellHashes.push(`${text}:${marks}${trackedKey}`);
           }
+
+          // Include paragraph-level attributes that affect layout/rendering in hash.
+          // This ensures cache invalidation when paragraph formatting changes
+          // (alignment, spacing, line height, indent, etc.) without text changes.
+          // Fixes toolbar commands not updating for text inside tables.
+          if (paragraphBlock.attrs) {
+            const attrs = paragraphBlock.attrs as ParagraphAttrs;
+            const parts: string[] = [];
+
+            // Alignment
+            if (attrs.alignment) parts.push(`al:${attrs.alignment}`);
+
+            // Spacing (includes line height)
+            if (attrs.spacing) {
+              const s = attrs.spacing;
+              if (s.before !== undefined) parts.push(`sb:${s.before}`);
+              if (s.after !== undefined) parts.push(`sa:${s.after}`);
+              if (s.line !== undefined) parts.push(`sl:${s.line}`);
+              if (s.lineRule) parts.push(`sr:${s.lineRule}`);
+            }
+
+            // Indentation
+            if (attrs.indent) {
+              const ind = attrs.indent;
+              if (ind.left !== undefined) parts.push(`il:${ind.left}`);
+              if (ind.right !== undefined) parts.push(`ir:${ind.right}`);
+              if (ind.firstLine !== undefined) parts.push(`if:${ind.firstLine}`);
+              if (ind.hanging !== undefined) parts.push(`ih:${ind.hanging}`);
+            }
+
+            // Borders
+            if (attrs.borders) {
+              parts.push(`br:${hashParagraphBorders(attrs.borders)}`);
+            }
+
+            // Shading
+            if (attrs.shading) {
+              const sh = attrs.shading;
+              if (sh.fill) parts.push(`shf:${sh.fill}`);
+              if (sh.color) parts.push(`shc:${sh.color}`);
+            }
+
+            // Direction and RTL
+            if (attrs.direction) parts.push(`dir:${attrs.direction}`);
+            if (attrs.rtl) parts.push('rtl');
+
+            if (parts.length > 0) {
+              cellHashes.push(`pa:${parts.join(':')}`);
+            }
+          }
         }
       }
     }
+    // Include table-level attributes that affect rendering (borders, etc.)
+    // This ensures cache invalidation when table formatting changes (e.g., remove borders).
+    let tableAttrsKey = '';
+    if (tableBlock.attrs) {
+      const tblAttrs = tableBlock.attrs as TableAttrs;
+      const tableAttrParts: string[] = [];
+      if (tblAttrs.borders) {
+        tableAttrParts.push(`tb:${hashTableBorders(tblAttrs.borders)}`);
+      }
+      if (tblAttrs.borderCollapse) {
+        tableAttrParts.push(`bc:${tblAttrs.borderCollapse}`);
+      }
+      if (tblAttrs.cellSpacing !== undefined) {
+        tableAttrParts.push(`cs:${tblAttrs.cellSpacing}`);
+      }
+      if (tableAttrParts.length > 0) {
+        tableAttrsKey = `|ta:${tableAttrParts.join(':')}`;
+      }
+    }
+
     const contentHash = cellHashes.join('|');
-    return `${block.id}:table:${contentHash}`;
+    return `${block.id}:table:${contentHash}${tableAttrsKey}`;
   }
 
   if (block.kind !== 'paragraph') return block.id;
@@ -123,12 +247,14 @@ const hashRuns = (block: FlowBlock): string => {
       const color = 'color' in run ? run.color : undefined;
       const fontSize = 'fontSize' in run ? run.fontSize : undefined;
       const fontFamily = 'fontFamily' in run ? run.fontFamily : undefined;
+      const highlight = 'highlight' in run ? run.highlight : undefined;
       const marks = [
         bold ? 'b' : '',
         italic ? 'i' : '',
         color ?? '',
         fontSize !== undefined ? `fs:${fontSize}` : '',
         fontFamily ? `ff:${fontFamily}` : '',
+        highlight ? `hl:${highlight}` : '',
       ].join('');
 
       // Include tracked change metadata in hash
@@ -168,7 +294,95 @@ const hashRuns = (block: FlowBlock): string => {
     }
   }
 
-  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}${numberingKey}`;
+  // Include paragraph-level attributes that affect layout/rendering in hash.
+  // This ensures cache invalidation when paragraph formatting changes (alignment, spacing, etc.)
+  // without text changes. Previously only runs were hashed, causing stale measurements
+  // when toolbar commands like "align center" were used.
+  let paragraphAttrsKey = '';
+  if (block.attrs) {
+    const attrs = block.attrs as ParagraphAttrs;
+
+    // Build a deterministic hash of visual paragraph attributes
+    const parts: string[] = [];
+
+    // Alignment (most common change via toolbar)
+    if (attrs.alignment) parts.push(`al:${attrs.alignment}`);
+
+    // Spacing
+    if (attrs.spacing) {
+      const s = attrs.spacing;
+      if (s.before !== undefined) parts.push(`sb:${s.before}`);
+      if (s.after !== undefined) parts.push(`sa:${s.after}`);
+      if (s.line !== undefined) parts.push(`sl:${s.line}`);
+      if (s.lineRule) parts.push(`sr:${s.lineRule}`);
+    }
+
+    // Indentation
+    if (attrs.indent) {
+      const ind = attrs.indent;
+      if (ind.left !== undefined) parts.push(`il:${ind.left}`);
+      if (ind.right !== undefined) parts.push(`ir:${ind.right}`);
+      if (ind.firstLine !== undefined) parts.push(`if:${ind.firstLine}`);
+      if (ind.hanging !== undefined) parts.push(`ih:${ind.hanging}`);
+    }
+
+    // Borders (use deterministic hash for consistent cache keys)
+    if (attrs.borders) {
+      parts.push(`br:${hashParagraphBorders(attrs.borders)}`);
+    }
+
+    // Shading
+    if (attrs.shading) {
+      const sh = attrs.shading;
+      if (sh.fill) parts.push(`shf:${sh.fill}`);
+      if (sh.color) parts.push(`shc:${sh.color}`);
+    }
+
+    // Tabs
+    if (attrs.tabs && attrs.tabs.length > 0) {
+      const tabsHash = attrs.tabs.map((t) => `${t.val ?? ''}:${t.pos ?? ''}:${t.leader ?? ''}`).join(',');
+      parts.push(`tb:${tabsHash}`);
+    }
+
+    // Direction and RTL
+    if (attrs.direction) parts.push(`dir:${attrs.direction}`);
+    if (attrs.rtl) parts.push('rtl');
+
+    // Pagination properties
+    if (attrs.keepNext) parts.push('kn');
+    if (attrs.keepLines) parts.push('kl');
+
+    // Float alignment
+    if (attrs.floatAlignment) parts.push(`fa:${attrs.floatAlignment}`);
+
+    // Contextual spacing
+    if (attrs.contextualSpacing) parts.push('cs');
+
+    // Suppress first line indent
+    if (attrs.suppressFirstLineIndent) parts.push('sfi');
+
+    // Drop cap
+    if (attrs.dropCap) parts.push(`dc:${attrs.dropCap}`);
+    if (attrs.dropCapDescriptor) {
+      const dcd = attrs.dropCapDescriptor;
+      parts.push(`dcd:${dcd.mode ?? ''}:${dcd.lines ?? ''}`);
+    }
+
+    // Frame (use deterministic hash for consistent cache keys)
+    if (attrs.frame) {
+      parts.push(`fr:${hashParagraphFrame(attrs.frame)}`);
+    }
+
+    // Tab settings
+    if (attrs.tabIntervalTwips !== undefined) parts.push(`ti:${attrs.tabIntervalTwips}`);
+    if (attrs.decimalSeparator) parts.push(`ds:${attrs.decimalSeparator}`);
+
+    if (parts.length > 0) {
+      paragraphAttrsKey = `|pa:${parts.join(':')}`;
+    }
+  }
+
+  return `${trackedMode}:${trackedEnabled ? 'on' : 'off'}|${runsHash}${numberingKey}${paragraphAttrsKey}`;
 };
 
 /**

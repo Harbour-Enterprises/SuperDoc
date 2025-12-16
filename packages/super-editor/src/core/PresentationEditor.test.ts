@@ -242,6 +242,14 @@ vi.mock('@superdoc/layout-bridge', () => ({
     },
   })),
   computeDisplayPageNumber: vi.fn((pages) => pages.map((p) => ({ displayText: String(p.number ?? 1) }))),
+  PageGeometryHelper: vi.fn().mockImplementation(({ layout, pageGap }) => ({
+    updateLayout: vi.fn(),
+    getPageIndexAtY: vi.fn(() => 0),
+    getNearestPageIndex: vi.fn(() => 0),
+    getPageTop: vi.fn(() => 0),
+    getPageGap: vi.fn(() => pageGap ?? 0),
+    getLayout: vi.fn(() => layout),
+  })),
 }));
 
 // Mock painter-dom
@@ -1445,6 +1453,64 @@ describe('PresentationEditor', () => {
       const ariaLive = container.querySelector('.presentation-editor__aria-live');
       expect(ariaLive?.textContent).toContain('Editing Header');
       boundingSpy.mockRestore();
+    });
+
+    it('clears leftover footer transform when entering footer editing with non-negative minY', async () => {
+      mockIncrementalLayout.mockResolvedValueOnce(buildLayoutResult());
+
+      const editorContainer = document.createElement('div');
+      editorContainer.className = 'super-editor';
+      editorContainer.style.transform = 'translateY(24px)';
+      const editorHost = document.createElement('div');
+      editorHost.appendChild(editorContainer);
+
+      const showEditingOverlay = vi.fn(() => ({
+        success: true,
+        editorHost,
+        reason: null,
+      }));
+
+      mockEditorOverlayManager.mockImplementationOnce(() => ({
+        showEditingOverlay,
+        hideEditingOverlay: vi.fn(),
+        showSelectionOverlay: vi.fn(),
+        hideSelectionOverlay: vi.fn(),
+        setOnDimmingClick: vi.fn(),
+        getActiveEditorHost: vi.fn(() => editorHost),
+        destroy: vi.fn(),
+      }));
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+      });
+
+      await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
+      const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      const mockPage = document.createElement('div');
+      mockPage.setAttribute('data-page-index', '0');
+      pagesHost.appendChild(mockPage);
+
+      const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 800,
+        height: 1000,
+        right: 800,
+        bottom: 1000,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect);
+
+      // Click inside the footer hitbox (y between footer margin 36 and bottom margin 72)
+      viewport.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, clientX: 120, clientY: 740, button: 0 }));
+
+      await vi.waitFor(() => expect(showEditingOverlay).toHaveBeenCalled());
+      await vi.waitFor(() => expect(editorContainer.style.transform).toBe(''));
     });
 
     it('exits header mode on Escape and announces the transition', async () => {

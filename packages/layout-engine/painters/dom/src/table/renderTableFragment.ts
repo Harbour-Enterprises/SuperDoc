@@ -1,4 +1,5 @@
 import type {
+  DrawingBlock,
   Fragment,
   Line,
   ParagraphBlock,
@@ -30,7 +31,15 @@ export type TableRenderDependencies = {
   /** Lookup map for retrieving block data and measurements */
   blockLookup: BlockLookup;
   /** Function to render a line of paragraph content */
-  renderLine: (block: ParagraphBlock, line: Line, context: FragmentRenderContext) => HTMLElement;
+  renderLine: (
+    block: ParagraphBlock,
+    line: Line,
+    context: FragmentRenderContext,
+    lineIndex: number,
+    isLastLine: boolean,
+  ) => HTMLElement;
+  /** Function to render drawing content (images, shapes, shape groups) */
+  renderDrawingContent?: (block: DrawingBlock) => HTMLElement;
   /** Function to apply fragment positioning and dimensions */
   applyFragmentFrame: (el: HTMLElement, fragment: Fragment) => void;
   /** Function to apply SDT metadata as data attributes */
@@ -101,7 +110,17 @@ export type TableRenderDependencies = {
  * ```
  */
 export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement => {
-  const { doc, fragment, blockLookup, context, renderLine, applyFragmentFrame, applySdtDataset, applyStyles } = deps;
+  const {
+    doc,
+    fragment,
+    blockLookup,
+    context,
+    renderLine,
+    renderDrawingContent,
+    applyFragmentFrame,
+    applySdtDataset,
+    applyStyles,
+  } = deps;
 
   // Check document first before using it in error handlers
   if (!doc) {
@@ -281,6 +300,7 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
         allRowHeights,
         context,
         renderLine,
+        renderDrawingContent,
         applySdtDataset,
         // Headers are always rendered as-is (no border suppression)
         continuesFromPrev: false,
@@ -316,6 +336,7 @@ export const renderTableFragment = (deps: TableRenderDependencies): HTMLElement 
       allRowHeights,
       context,
       renderLine,
+      renderDrawingContent,
       applySdtDataset,
       // Draw top border if table continues from previous fragment (MS Word behavior)
       continuesFromPrev: isFirstRenderedBodyRow && fragment.continuesFromPrev === true,

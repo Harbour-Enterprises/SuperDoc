@@ -20,6 +20,7 @@ import type {
   ImageDrawing,
   ParagraphAttrs,
   ParagraphBorder,
+  ParagraphBorders,
   ListItemFragment,
   ListBlock,
   ListMeasure,
@@ -40,6 +41,8 @@ import type {
   SolidFillWithAlpha,
   ShapeTextContent,
   DropCapDescriptor,
+  TableAttrs,
+  TableCellAttrs,
 } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
@@ -70,6 +73,17 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
+import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import {
+  hashParagraphBorders,
+  hashTableBorders,
+  hashCellBorders,
+  getRunStringProp,
+  getRunNumberProp,
+  getRunBooleanProp,
+  getRunUnderlineStyle,
+  getRunUnderlineColor,
+} from './paragraph-hash-utils.js';
 
 /**
  * Minimal type for WordParagraphLayoutOutput marker data used in rendering.
@@ -158,6 +172,11 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
       return false;
     }
     const marker = obj.marker as Record<string, unknown>;
+
+    // Validate marker.markerText if present (must be a string)
+    if (marker.markerText !== undefined && typeof marker.markerText !== 'string') {
+      return false;
+    }
 
     // Validate marker.markerX if present
     if (marker.markerX !== undefined && typeof marker.markerX !== 'number') {
@@ -260,12 +279,15 @@ export type RulerOptions = {
 type PainterOptions = {
   pageStyles?: PageStyles;
   layoutMode?: LayoutMode;
+  /** Gap between pages in pixels (default: 24px for vertical, 20px for horizontal) */
+  pageGap?: number;
   headerProvider?: PageDecorationProvider;
   footerProvider?: PageDecorationProvider;
   virtualization?: {
     enabled?: boolean;
     window?: number;
     overscan?: number;
+    /** Virtualization gap override (defaults to 72px; independent of pageGap) */
     gap?: number;
     paddingTop?: number;
   };
@@ -330,6 +352,8 @@ const DEFAULT_TAB_INTERVAL_PX = 48;
  * Used as a fallback when page size information is not available for ruler rendering.
  */
 const DEFAULT_PAGE_HEIGHT_PX = 1056;
+/** Default gap used when virtualization is enabled (kept in sync with PresentationEditor layout defaults). */
+const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
 const COMMENT_INTERNAL_COLOR = '#078383';
 const COMMENT_INACTIVE_ALPHA = '22';
@@ -744,11 +768,13 @@ export class DomPainter {
    * @private
    */
   private pendingTooltips = new WeakMap<HTMLElement, string>();
+  // Page gap for normal (non-virtualized) rendering
+  private pageGap = 24; // px, default for vertical mode
   // Virtualization state (vertical mode only)
   private virtualEnabled = false;
   private virtualWindow = 5;
   private virtualOverscan = 0;
-  private virtualGap = 72; // px, approximates prior margin + gap look
+  private virtualGap = DEFAULT_VIRTUALIZED_PAGE_GAP; // px, default for virtualized mode
   private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
   private topSpacerEl: HTMLElement | null = null;
   private bottomSpacerEl: HTMLElement | null = null;
@@ -769,14 +795,23 @@ export class DomPainter {
     this.blockLookup = this.buildBlockLookup(blocks, measures);
     this.headerProvider = options.headerProvider;
     this.footerProvider = options.footerProvider;
+
+    // Initialize page gap (defaults: 24px vertical, 20px horizontal)
+    const defaultGap = this.layoutMode === 'horizontal' ? 20 : 24;
+    this.pageGap =
+      typeof options.pageGap === 'number' && Number.isFinite(options.pageGap)
+        ? Math.max(0, options.pageGap)
+        : defaultGap;
+
     // Initialize virtualization config (feature-flagged)
     if (this.layoutMode === 'vertical' && options.virtualization?.enabled) {
       this.virtualEnabled = true;
       this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
       this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
-      if (typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap)) {
-        this.virtualGap = Math.max(0, options.virtualization.gap);
-      }
+      // Virtualization gap: use explicit virtualization.gap if provided, otherwise default to virtualized gap (72px)
+      const hasExplicitVirtualGap =
+        typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap);
+      this.virtualGap = hasExplicitVirtualGap ? Math.max(0, options.virtualization.gap) : DEFAULT_VIRTUALIZED_PAGE_GAP;
       if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
         this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
       }
@@ -911,6 +946,8 @@ export class DomPainter {
     const mode = this.layoutMode;
     if (mode === 'horizontal') {
       applyStyles(mount, containerStylesHorizontal);
+      // Use configured page gap for horizontal rendering
+      mount.style.gap = `${this.pageGap}px`;
       this.renderHorizontal(layout, mount);
       this.currentLayout = layout;
       this.pageStates = [];
@@ -938,6 +975,8 @@ export class DomPainter {
       return;
     }
 
+    // Use configured page gap for normal vertical rendering
+    mount.style.gap = `${this.pageGap}px`;
     if (!this.currentLayout || this.pageStates.length === 0) {
       this.fullRender(layout);
     } else {
@@ -1351,9 +1390,25 @@ export class DomPainter {
     const container = (existing as HTMLElement) ?? this.doc.createElement('div');
     container.className = className;
     container.innerHTML = '';
-    const offset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
+    const baseOffset = data.offset ?? (kind === 'footer' ? pageEl.clientHeight - data.height : 0);
     const marginLeft = data.marginLeft ?? 0;
     const marginRight = page.margins?.right ?? 0;
+
+    // For footers, if content is taller than reserved space, expand container upward
+    // The container bottom stays anchored at footerMargin from page bottom
+    let effectiveHeight = data.height;
+    let effectiveOffset = baseOffset;
+    if (
+      kind === 'footer' &&
+      typeof data.contentHeight === 'number' &&
+      Number.isFinite(data.contentHeight) &&
+      data.contentHeight > 0 &&
+      data.contentHeight > data.height
+    ) {
+      effectiveHeight = data.contentHeight;
+      // Move container up to accommodate taller content while keeping bottom edge in place
+      effectiveOffset = baseOffset - (data.contentHeight - data.height);
+    }
 
     container.style.position = 'absolute';
     container.style.left = `${marginLeft}px`;
@@ -1363,8 +1418,8 @@ export class DomPainter {
       container.style.width = `calc(100% - ${marginLeft + marginRight}px)`;
     }
     container.style.pointerEvents = 'none';
-    container.style.height = `${data.height}px`;
-    container.style.top = `${Math.max(0, offset)}px`;
+    container.style.height = `${effectiveHeight}px`;
+    container.style.top = `${Math.max(0, effectiveOffset)}px`;
     container.style.zIndex = '1';
     // Allow header/footer content to overflow its container bounds.
     // In OOXML, headers and footers can extend past their allocated margin space
@@ -1373,6 +1428,7 @@ export class DomPainter {
 
     // For footers, calculate offset to push content to bottom of container
     // Fragments are absolutely positioned, so we need to adjust their y values
+    // Use effectiveHeight (which accounts for overflow) rather than reserved height
     let footerYOffset = 0;
     if (kind === 'footer' && data.fragments.length > 0) {
       const contentHeight =
@@ -1384,7 +1440,8 @@ export class DomPainter {
               return Math.max(max, f.y + Math.max(0, fragHeight));
             }, 0);
       // Offset to push content to bottom of container
-      footerYOffset = Math.max(0, data.height - contentHeight);
+      // When container has expanded (effectiveHeight >= contentHeight), offset is 0
+      footerYOffset = Math.max(0, effectiveHeight - contentHeight);
     }
 
     const context: FragmentRenderContext = {
@@ -1644,9 +1701,12 @@ export class DomPainter {
         block.attrs?.sdt?.type === 'structuredContent' ||
         block.attrs?.containerSdt?.type === 'documentSection' ||
         block.attrs?.containerSdt?.type === 'structuredContent';
+      // Negative indents extend text into the margin area, requiring overflow:visible
+      const paraIndentForOverflow = block.attrs?.indent;
+      const hasNegativeIndent = (paraIndentForOverflow?.left ?? 0) < 0 || (paraIndentForOverflow?.right ?? 0) < 0;
       const styles = isTocEntry
         ? { ...fragmentStyles, whiteSpace: 'nowrap' }
-        : hasMarker || hasSdtContainer
+        : hasMarker || hasSdtContainer || hasNegativeIndent
           ? { ...fragmentStyles, overflow: 'visible' }
           : fragmentStyles;
       applyStyles(fragmentEl, styles);
@@ -1689,8 +1749,11 @@ export class DomPainter {
       }
 
       // Remove fragment-level indent so line-level indent handling doesn't double-apply.
+      // Include margin properties for negative indents (which use margin instead of padding).
       if (fragmentEl.style.paddingLeft) fragmentEl.style.removeProperty('padding-left');
       if (fragmentEl.style.paddingRight) fragmentEl.style.removeProperty('padding-right');
+      if (fragmentEl.style.marginLeft) fragmentEl.style.removeProperty('margin-left');
+      if (fragmentEl.style.marginRight) fragmentEl.style.removeProperty('margin-right');
       if (fragmentEl.style.textIndent) fragmentEl.style.removeProperty('text-indent');
 
       const paraIndent = block.attrs?.indent;
@@ -1794,20 +1857,37 @@ export class DomPainter {
             // The segment X positions already include the paragraph indent from layout calculation.
             // For first lines with firstLineOffset, adjust the starting position.
             if (isFirstLine && firstLineOffset !== 0) {
-              const adjustedPadding = paraIndentLeft + firstLineOffset;
-              lineEl.style.paddingLeft = `${adjustedPadding}px`;
+              // For negative left indent, fragment position is already adjusted in layout engine.
+              // Only apply padding for the firstLineOffset (relative to the paragraph indent).
+              const effectiveLeftIndent = paraIndentLeft < 0 ? 0 : paraIndentLeft;
+              const adjustedPadding = effectiveLeftIndent + firstLineOffset;
+              if (adjustedPadding > 0) {
+                lineEl.style.paddingLeft = `${adjustedPadding}px`;
+              }
+              // Note: negative adjustedPadding (from hanging indent) is handled by textIndent below
             }
             // Otherwise, don't set paddingLeft - segment positions handle indentation
-          } else if (paraIndentLeft) {
+          } else if (paraIndentLeft && paraIndentLeft > 0) {
+            // Only apply positive left indent as padding.
+            // Negative left indent is handled by fragment positioning in layout engine.
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
+          } else if (!isFirstLine && paraIndent?.hanging && paraIndent.hanging > 0) {
+            // Body lines with hanging indent need paddingLeft = hanging.
+            // This applies even when paraIndentLeft is negative (text extending into margin).
+            // First line doesn't get this padding because it "hangs" (starts further left).
+            lineEl.style.paddingLeft = `${paraIndent.hanging}px`;
           }
         }
-        if (paraIndentRight) {
+        if (paraIndentRight && paraIndentRight > 0) {
+          // Only apply positive right indent as padding.
+          // Negative right indent is handled by fragment positioning in layout engine.
           lineEl.style.paddingRight = `${paraIndentRight}px`;
         }
         // Apply first-line/hanging text-indent (skip for list first lines and lines with explicit positioning)
         // When using explicit segment positioning, segments are absolutely positioned and textIndent
         // has no effect, so we skip it to avoid confusion.
+        // Also skip when left indent is negative - fragment positioning already handles that case.
+        const hasNegativeLeftIndent = paraIndentLeft != null && paraIndentLeft < 0;
         if (!fragment.continuesFromPrev && index === 0 && firstLineOffset && !isListFirstLine) {
           if (!hasExplicitSegmentPositioning) {
             lineEl.style.textIndent = `${firstLineOffset}px`;
@@ -1877,8 +1957,9 @@ export class DomPainter {
             markerContainer.style.top = '0';
           }
 
-          // Apply marker run styling
-          markerEl.style.fontFamily = wordLayout.marker.run.fontFamily;
+          // Apply marker run styling with font fallback chain
+          markerEl.style.fontFamily =
+            toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily;
           markerEl.style.fontSize = `${wordLayout.marker.run.fontSize}px`;
           markerEl.style.fontWeight = wordLayout.marker.run.bold ? 'bold' : '';
           markerEl.style.fontStyle = wordLayout.marker.run.italic ? 'italic' : '';
@@ -2173,8 +2254,8 @@ export class DomPainter {
         markerEl.style.paddingRight = `${LIST_MARKER_GAP}px`;
         markerEl.style.textAlign = marker.justification ?? 'left';
 
-        // Apply marker run styling
-        markerEl.style.fontFamily = marker.run.fontFamily;
+        // Apply marker run styling with font fallback chain
+        markerEl.style.fontFamily = toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily;
         markerEl.style.fontSize = `${marker.run.fontSize}px`;
         if (marker.run.bold) markerEl.style.fontWeight = 'bold';
         if (marker.run.italic) markerEl.style.fontStyle = 'italic';
@@ -2866,10 +2947,56 @@ export class DomPainter {
       this.applyFragmentFrame(el, frag, context.section);
     };
 
-    // Create a wrapper for renderLine that always skips justification for table cell content.
-    // Word does not justify text inside table cells, even if jc="both" is specified.
-    const renderLineForTableCell = (block: ParagraphBlock, line: Line, ctx: FragmentRenderContext): HTMLElement => {
-      return this.renderLine(block, line, ctx, undefined, undefined, true); // skipJustify = true
+    // Create a wrapper for renderLine that applies Word's justification rules for table cells.
+    // Word DOES justify text inside table cells, but skips justification on the last line
+    // (unless the paragraph ends with a line break, which shifts the "last line" down).
+    const renderLineForTableCell = (
+      block: ParagraphBlock,
+      line: Line,
+      ctx: FragmentRenderContext,
+      lineIndex: number,
+      isLastLine: boolean,
+    ): HTMLElement => {
+      // Check if paragraph ends with a line break
+      const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
+      const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
+
+      // Skip justify only on the last line, unless the paragraph ends with a line break
+      const shouldSkipJustify = isLastLine && !paragraphEndsWithLineBreak;
+
+      return this.renderLine(block, line, ctx, undefined, lineIndex, shouldSkipJustify);
+    };
+
+    /**
+     * Wrapper function for rendering drawing content inside table cells.
+     *
+     * This function delegates to the appropriate DomPainter methods based on the drawing kind:
+     * - 'image': Creates a standard image element with src and object-fit
+     * - 'shapeGroup': Creates a group container with positioned child shapes (images and vectors)
+     * - 'vectorShape': Creates an SVG element for the vector shape (without geometry transforms in table cells)
+     *
+     * For unsupported or unrecognized drawing kinds, returns a placeholder element with diagonal stripes.
+     *
+     * @param block - The DrawingBlock to render
+     * @returns HTMLElement representing the rendered drawing content
+     *
+     * @remarks
+     * This wrapper is specifically designed for table cell rendering where:
+     * - Vector shapes are rendered without geometry transforms (to avoid layout conflicts)
+     * - The returned element will have width: 100% and height: 100% applied by the table cell renderer
+     */
+    const renderDrawingContentForTableCell = (block: DrawingBlock): HTMLElement => {
+      if (block.drawingKind === 'image') {
+        return this.createDrawingImageElement(block);
+      }
+      if (block.drawingKind === 'shapeGroup') {
+        return this.createShapeGroupElement(block);
+      }
+      if (block.drawingKind === 'vectorShape') {
+        // For vectorShapes in table cells, render without geometry transforms
+        return this.createVectorShapeElement(block, block.geometry, false);
+      }
+      return this.createDrawingPlaceholder();
     };
 
     return renderTableFragmentElement({
@@ -2878,6 +3005,7 @@ export class DomPainter {
       context,
       blockLookup: this.blockLookup,
       renderLine: renderLineForTableCell,
+      renderDrawingContent: renderDrawingContentForTableCell,
       applyFragmentFrame: applyFragmentFrameWithSection,
       applySdtDataset: this.applySdtDataset.bind(this),
       applyStyles,
@@ -3653,11 +3781,10 @@ export class DomPainter {
       el.setAttribute('styleid', styleId);
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
-    // Note: skipJustify only affects word-spacing for justify alignment, not other alignments.
-    // Center and right alignment should always be respected.
-    if (alignment === 'center' || alignment === 'right') {
-      el.style.textAlign = alignment;
-    } else if (alignment === 'justify') {
+    const effectiveAlignment = alignment;
+    if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
+      el.style.textAlign = effectiveAlignment;
+    } else if (effectiveAlignment === 'justify') {
       // Use manual spacing distribution; avoid native justify to prevent double stretching
       el.style.textAlign = 'left';
     } else {
@@ -3681,6 +3808,8 @@ export class DomPainter {
             .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
             .map((r) => r.text)
         : gatherTextSlicesForLine(block, line);
+
+    // Targeted debug removed now that issue is understood.
 
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
@@ -3740,16 +3869,21 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    const shouldJustify = !skipJustify && alignment === 'justify' && !hasExplicitPositioning;
+    // Check if paragraph has justified alignment and line should be justified
+    // TODO: Remove this override when justify bugs are fixed
+    const shouldJustify = false; // block.attrs?.alignment === 'justify' && !hasExplicitPositioning;
     if (shouldJustify) {
       const spaceCount = textSlices.reduce(
         (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
         0,
       );
-      const slack = Math.max(0, availableWidth - line.width);
-      if (spaceCount > 0 && slack > 0) {
-        const extraPerSpace = slack / spaceCount;
-        el.style.wordSpacing = `${extraPerSpace}px`;
+      const slack = availableWidth - line.width;
+      if (spaceCount > 0 && slack !== 0) {
+        // Positive slack = expand spaces to fill line (normal justify)
+        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
+        const spacingPerSpace = slack / spaceCount;
+        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
+        el.style.wordSpacing = `${spacingPerSpace}px`;
       }
     }
 
@@ -4548,6 +4682,16 @@ const hasListMarkerProperties = (
  * - Position markers (pmStart, pmEnd)
  * - Special tokens (page numbers, etc.)
  * - List marker properties (numId, ilvl, markerText) - for list indent changes
+ * - Paragraph attributes (alignment, spacing, indent, borders, shading, direction, rtl, tabs)
+ * - Table cell content and paragraph formatting within cells
+ *
+ * For table blocks, a deep hash is computed across all rows and cells, including:
+ * - Cell block content (paragraph runs, text, formatting)
+ * - Paragraph-level attributes in cells (alignment, spacing, line height, indent, borders, shading)
+ * - Run-level formatting (color, highlight, bold, italic, fontSize, fontFamily, underline, strike)
+ *
+ * This ensures toolbar commands that modify paragraph or run formatting within tables
+ * trigger proper DOM updates.
  *
  * @param block - The flow block to generate a version string for
  * @returns A pipe-delimited string representing all visual properties of the block.
@@ -4609,12 +4753,39 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.pmStart ?? '',
           textRun.pmEnd ?? '',
           textRun.token ?? '',
+          // Tracked changes - force re-render when added or removed tracked change
+          textRun.trackedChange ? 1 : 0,
         ].join(',');
       })
       .join('|');
 
-    // Combine marker version with runs version
-    return markerVersion ? `${markerVersion}|${runsVersion}` : runsVersion;
+    // Include paragraph-level attributes that affect rendering (alignment, spacing, indent, etc.)
+    // This ensures DOM updates when toolbar commands like "align center" change these properties.
+    const attrs = block.attrs as ParagraphAttrs | undefined;
+
+    const paragraphAttrsVersion = attrs
+      ? [
+          attrs.alignment ?? '',
+          attrs.spacing?.before ?? '',
+          attrs.spacing?.after ?? '',
+          attrs.spacing?.line ?? '',
+          attrs.spacing?.lineRule ?? '',
+          attrs.indent?.left ?? '',
+          attrs.indent?.right ?? '',
+          attrs.indent?.firstLine ?? '',
+          attrs.indent?.hanging ?? '',
+          attrs.borders ? hashParagraphBorders(attrs.borders) : '',
+          attrs.shading?.fill ?? '',
+          attrs.shading?.color ?? '',
+          attrs.direction ?? '',
+          attrs.rtl ? '1' : '',
+          attrs.tabs?.length ? JSON.stringify(attrs.tabs) : '',
+        ].join(':')
+      : '';
+
+    // Combine marker version, runs version, and paragraph attrs version
+    const parts = [markerVersion, runsVersion, paragraphAttrsVersion].filter(Boolean);
+    return parts.join('|');
   }
 
   if (block.kind === 'list') {
@@ -4672,7 +4843,14 @@ const deriveBlockVersion = (block: FlowBlock): string => {
 
   if (block.kind === 'table') {
     const tableBlock = block as TableBlock;
-    // Robust hash across all rows/cells so deep edits invalidate version
+    /**
+     * Local hash function for strings using FNV-1a algorithm.
+     * Used to create a robust hash across all table rows/cells so deep edits invalidate version.
+     *
+     * @param seed - Initial hash value
+     * @param value - String value to hash
+     * @returns Updated hash value
+     */
     const hashString = (seed: number, value: string): number => {
       let hash = seed >>> 0;
       for (let i = 0; i < value.length; i++) {
@@ -4681,6 +4859,15 @@ const deriveBlockVersion = (block: FlowBlock): string => {
       }
       return hash >>> 0;
     };
+
+    /**
+     * Local hash function for numbers.
+     * Handles undefined/null values safely by treating them as 0.
+     *
+     * @param seed - Initial hash value
+     * @param value - Number value to hash (or undefined/null)
+     * @returns Updated hash value
+     */
     const hashNumber = (seed: number, value: number | undefined | null): number => {
       const n = Number.isFinite(value) ? (value as number) : 0;
       let hash = seed ^ n;
@@ -4703,15 +4890,62 @@ const deriveBlockVersion = (block: FlowBlock): string => {
         if (!cell) continue;
         const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
         hash = hashNumber(hash, cellBlocks.length);
-        // Include cell attributes that affect rendering (rowSpan, colSpan)
+        // Include cell attributes that affect rendering (rowSpan, colSpan, borders, etc.)
         hash = hashNumber(hash, cell.rowSpan ?? 1);
         hash = hashNumber(hash, cell.colSpan ?? 1);
+
+        // Include cell-level attributes (borders, padding, background) that affect rendering
+        // This ensures cache invalidation when cell formatting changes (e.g., remove borders).
+        if (cell.attrs) {
+          const cellAttrs = cell.attrs as TableCellAttrs;
+          if (cellAttrs.borders) {
+            hash = hashString(hash, hashCellBorders(cellAttrs.borders));
+          }
+          if (cellAttrs.padding) {
+            const p = cellAttrs.padding;
+            hash = hashNumber(hash, p.top ?? 0);
+            hash = hashNumber(hash, p.right ?? 0);
+            hash = hashNumber(hash, p.bottom ?? 0);
+            hash = hashNumber(hash, p.left ?? 0);
+          }
+          if (cellAttrs.verticalAlign) {
+            hash = hashString(hash, cellAttrs.verticalAlign);
+          }
+          if (cellAttrs.background) {
+            hash = hashString(hash, cellAttrs.background);
+          }
+        }
 
         for (const cellBlock of cellBlocks) {
           hash = hashString(hash, cellBlock?.kind ?? 'unknown');
           if (cellBlock?.kind === 'paragraph') {
-            const runs = (cellBlock as ParagraphBlock).runs ?? [];
+            const paragraphBlock = cellBlock as ParagraphBlock;
+            const runs = paragraphBlock.runs ?? [];
             hash = hashNumber(hash, runs.length);
+
+            // Include paragraph-level attributes that affect rendering
+            // (alignment, spacing, indent, etc.) - fixes toolbar commands not updating tables
+            const attrs = paragraphBlock.attrs as ParagraphAttrs | undefined;
+
+            if (attrs) {
+              hash = hashString(hash, attrs.alignment ?? '');
+              hash = hashNumber(hash, attrs.spacing?.before ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.after ?? 0);
+              hash = hashNumber(hash, attrs.spacing?.line ?? 0);
+              hash = hashString(hash, attrs.spacing?.lineRule ?? '');
+              hash = hashNumber(hash, attrs.indent?.left ?? 0);
+              hash = hashNumber(hash, attrs.indent?.right ?? 0);
+              hash = hashNumber(hash, attrs.indent?.firstLine ?? 0);
+              hash = hashNumber(hash, attrs.indent?.hanging ?? 0);
+              hash = hashString(hash, attrs.shading?.fill ?? '');
+              hash = hashString(hash, attrs.shading?.color ?? '');
+              hash = hashString(hash, attrs.direction ?? '');
+              hash = hashString(hash, attrs.rtl ? '1' : '');
+              if (attrs.borders) {
+                hash = hashString(hash, hashParagraphBorders(attrs.borders));
+              }
+            }
+
             for (const run of runs) {
               // Only text runs have .text property; ImageRun does not
               if ('text' in run && typeof run.text === 'string') {
@@ -4719,9 +4953,36 @@ const deriveBlockVersion = (block: FlowBlock): string => {
               }
               hash = hashNumber(hash, run.pmStart ?? -1);
               hash = hashNumber(hash, run.pmEnd ?? -1);
+
+              // Include run formatting properties that affect rendering
+              // (color, highlight, bold, italic, etc.) - fixes toolbar commands not updating tables
+              hash = hashString(hash, getRunStringProp(run, 'color'));
+              hash = hashString(hash, getRunStringProp(run, 'highlight'));
+              hash = hashString(hash, getRunBooleanProp(run, 'bold') ? '1' : '');
+              hash = hashString(hash, getRunBooleanProp(run, 'italic') ? '1' : '');
+              hash = hashNumber(hash, getRunNumberProp(run, 'fontSize'));
+              hash = hashString(hash, getRunStringProp(run, 'fontFamily'));
+              hash = hashString(hash, getRunUnderlineStyle(run));
+              hash = hashString(hash, getRunUnderlineColor(run));
+              hash = hashString(hash, getRunBooleanProp(run, 'strike') ? '1' : '');
             }
           }
         }
+      }
+    }
+
+    // Include table-level attributes (borders, etc.) that affect rendering
+    // This ensures cache invalidation when table formatting changes (e.g., remove borders).
+    if (tableBlock.attrs) {
+      const tblAttrs = tableBlock.attrs as TableAttrs;
+      if (tblAttrs.borders) {
+        hash = hashString(hash, hashTableBorders(tblAttrs.borders));
+      }
+      if (tblAttrs.borderCollapse) {
+        hash = hashString(hash, tblAttrs.borderCollapse);
+      }
+      if (tblAttrs.cellSpacing !== undefined) {
+        hash = hashNumber(hash, tblAttrs.cellSpacing);
       }
     }
 
@@ -4841,15 +5102,22 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
   }
   const indent = attrs.indent;
   if (indent) {
-    if (indent.left) {
+    // Only apply positive indents as padding.
+    // Negative indents are handled by fragment positioning in the layout engine.
+    if (indent.left && indent.left > 0) {
       element.style.paddingLeft = `${indent.left}px`;
     }
-    if (indent.right) {
+    if (indent.right && indent.right > 0) {
       element.style.paddingRight = `${indent.right}px`;
     }
-    const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
-    if (textIndent) {
-      element.style.textIndent = `${textIndent}px`;
+    // Skip textIndent when left indent is negative - fragment positioning handles the indent,
+    // and per-line paddingLeft handles the hanging indent for body lines.
+    const hasNegativeLeftIndent = indent.left != null && indent.left < 0;
+    if (!hasNegativeLeftIndent) {
+      const textIndent = (indent.firstLine ?? 0) - (indent.hanging ?? 0);
+      if (textIndent) {
+        element.style.textIndent = `${textIndent}px`;
+      }
     }
   }
   applyParagraphBorderStyles(element, attrs.borders);

@@ -597,40 +597,42 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
-   * Get position from client-space coordinates. Falls back to PresentationEditor hit testing in layout mode.
+   * Get position from client-space coordinates.
+   * In layout/presentation mode, uses PresentationEditor hit testing for accurate coordinate mapping.
+   * Falls back to ProseMirror view for standard editing mode.
    */
   posAtCoords(coords: Parameters<PmEditorView['posAtCoords']>[0]): ReturnType<PmEditorView['posAtCoords']> {
+    // In presentation/layout mode, use the layout engine's hit testing
+    // which properly converts visible surface coordinates to document positions
+    if (typeof this.presentationEditor?.hitTest === 'function') {
+      // Extract coordinates from various possible coordinate formats
+      const coordsObj = coords as {
+        clientX?: number;
+        clientY?: number;
+        left?: number;
+        top?: number;
+        x?: number;
+        y?: number;
+      };
+      const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
+      const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
+      if (Number.isFinite(clientX) && Number.isFinite(clientY)) {
+        const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
+        if (hit) {
+          return {
+            pos: hit.pos,
+            inside: hit.pos,
+          };
+        }
+      }
+    }
+
+    // Fall back to ProseMirror view for standard editing mode
     if (this.view) {
       return this.view.posAtCoords(coords);
     }
-    if (typeof this.presentationEditor?.hitTest !== 'function') {
-      return null;
-    }
 
-    // Extract coordinates from various possible coordinate formats
-    const coordsObj = coords as {
-      clientX?: number;
-      clientY?: number;
-      left?: number;
-      top?: number;
-      x?: number;
-      y?: number;
-    };
-    const clientX = coordsObj?.clientX ?? coordsObj?.left ?? coordsObj?.x ?? null;
-    const clientY = coordsObj?.clientY ?? coordsObj?.top ?? coordsObj?.y ?? null;
-    if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) {
-      return null;
-    }
-
-    const hit = this.presentationEditor.hitTest(clientX as number, clientY as number);
-    if (!hit) {
-      return null;
-    }
-
-    return {
-      pos: hit.pos,
-      inside: hit.pos,
-    };
+    return null;
   }
 
   #registerCopyHandler(): void {
@@ -676,13 +678,13 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const provider = this.options.collaborationProvider;
 
     const postSyncInit = () => {
-      provider.off('synced', postSyncInit);
+      provider.off?.('synced', postSyncInit);
       this.#insertNewFileData();
     };
 
     if (provider.synced) this.#insertNewFileData();
     // If we are not sync'd yet, wait for the event then insert the data
-    else provider.on('synced', postSyncInit);
+    else provider.on?.('synced', postSyncInit);
   }
 
   /**
@@ -878,7 +880,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       return;
     }
 
-    const mediaMap = this.options.ydoc.getMap('media');
+    const mediaMap = (this.options.ydoc as { getMap: (name: string) => Map<string, unknown> }).getMap('media');
 
     // We are creating a new file and need to set the media
     if (this.options.isNewFile) {
@@ -1890,7 +1892,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     try {
       console.debug('🔗 [super-editor] Ending collaboration');
       this.options.collaborationProvider?.disconnect?.();
-      this.options.ydoc.destroy();
+      (this.options.ydoc as { destroy: () => void }).destroy();
     } catch (error) {
       const err = error instanceof Error ? error : new Error(String(error));
       this.emit('exception', { error: err, editor: this });
@@ -1947,7 +1949,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     console.debug('[checkVersionMigrations] Current editor version', __APP_VERSION__);
     if (!this.options.ydoc) return;
 
-    const metaMap = this.options.ydoc.getMap('meta');
+    const metaMap = (this.options.ydoc as { getMap: (name: string) => Map<string, unknown> }).getMap('meta');
     let docVersion = metaMap.get('version');
     if (!docVersion) docVersion = 'initial';
     console.debug('[checkVersionMigrations] Document version', docVersion);

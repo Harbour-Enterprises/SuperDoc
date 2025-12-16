@@ -24,6 +24,11 @@ import {
   findParagraphBoundaries,
   createDragHandler,
   hitTestTableFragment,
+  isListItem,
+  getWordLayoutConfig,
+  calculateTextStartIndent,
+  extractParagraphIndent,
+  PageGeometryHelper,
 } from '@superdoc/layout-bridge';
 import type {
   HeaderFooterIdentifier,
@@ -219,7 +224,7 @@ export type PresenceOptions = {
  * without resorting to type assertions throughout the codebase.
  */
 interface EditorWithConverter extends Editor {
-  converter?: {
+  converter: Editor['converter'] & {
     pageStyles?: { alternateHeaders?: boolean };
     headerIds?: { default?: string; first?: string; even?: string; odd?: string };
     footerIds?: { default?: string; first?: string; even?: string; odd?: string };
@@ -332,6 +337,9 @@ type HeaderFooterRegion = {
   localY: number;
   width: number;
   height: number;
+  contentHeight?: number;
+  /** Minimum Y coordinate from layout (can be negative if content extends above y=0) */
+  minY?: number;
 };
 
 type HeaderFooterLayoutContext = {
@@ -395,6 +403,8 @@ const DEFAULT_MARGINS: PageMargins = { top: 72, right: 72, bottom: 72, left: 72 
 const DEFAULT_VIRTUALIZED_PAGE_GAP = 72;
 /** Default gap between pages without virtualization (from containerStyles in styles.ts) */
 const DEFAULT_PAGE_GAP = 24;
+/** Default gap for horizontal layout mode */
+const DEFAULT_HORIZONTAL_PAGE_GAP = 20;
 const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
 
 // Constants for interaction timing and thresholds
@@ -536,6 +546,7 @@ export class PresentationEditor extends EventEmitter {
   #layoutOptions: LayoutEngineOptions;
   #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
   #domPainter: ReturnType<typeof createDomPainter> | null = null;
+  #pageGeometryHelper: PageGeometryHelper | null = null;
   #dragHandlerCleanup: (() => void) | null = null;
   #layoutError: LayoutError | null = null;
   #layoutErrorState: 'healthy' | 'degraded' | 'failed' = 'healthy';
@@ -1323,8 +1334,14 @@ export class PresentationEditor extends EventEmitter {
       }
       if (!this.#layoutState.layout) return [];
       const rects =
-        selectionToRects(this.#layoutState.layout, this.#layoutState.blocks, this.#layoutState.measures, start, end) ??
-        [];
+        selectionToRects(
+          this.#layoutState.layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          start,
+          end,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       return rects;
     };
 
@@ -1724,6 +1741,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#pendingDocChange = true;
     this.#scheduleRerender();
   }
@@ -1758,7 +1776,17 @@ export class PresentationEditor extends EventEmitter {
         x: localX,
         y: headerPageIndex * headerPageHeight + (localY - headerPageIndex * headerPageHeight),
       };
-      const hit = clickToPosition(context.layout, context.blocks, context.measures, headerPoint) ?? null;
+      const hit =
+        clickToPosition(
+          context.layout,
+          context.blocks,
+          context.measures,
+          headerPoint,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+        ) ?? null;
       return hit;
     }
 
@@ -1774,6 +1802,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         clientX,
         clientY,
+        this.#pageGeometryHelper ?? undefined,
       ) ?? null;
     return hit;
   }
@@ -2081,6 +2110,7 @@ export class PresentationEditor extends EventEmitter {
     this.#activeHeaderFooterEditor = null;
 
     this.#domPainter = null;
+    this.#pageGeometryHelper = null;
     this.#dragHandlerCleanup?.();
     this.#dragHandlerCleanup = null;
     this.#selectionOverlay?.remove();
@@ -2306,22 +2336,28 @@ export class PresentationEditor extends EventEmitter {
       // Skip local client
       if (clientId === provider.awareness?.clientID) return;
 
+      // Type assertion for awareness state properties
+      const awState = aw as {
+        cursor?: { anchor: unknown; head: unknown };
+        user?: { name?: string; email?: string; color?: string };
+      };
+
       // Skip states without cursor data
-      if (!aw.cursor) return;
+      if (!awState.cursor) return;
 
       try {
         // Convert relative positions to absolute PM positions
         const anchor = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.anchor),
+          Y.createRelativePositionFromJSON(awState.cursor.anchor),
           ystate.binding.mapping,
         );
 
         const head = relativePositionToAbsolutePosition(
           ystate.doc,
           ystate.type,
-          Y.createRelativePositionFromJSON(aw.cursor.head),
+          Y.createRelativePositionFromJSON(awState.cursor.head),
           ystate.binding.mapping,
         );
 
@@ -2342,9 +2378,9 @@ export class PresentationEditor extends EventEmitter {
         normalized.set(clientId, {
           clientId,
           user: {
-            name: aw.user?.name,
-            email: aw.user?.email,
-            color: aw.user?.color || this.#getFallbackColor(clientId),
+            name: awState.user?.name,
+            email: awState.user?.email,
+            color: awState.user?.color || this.#getFallbackColor(clientId),
           },
           anchor: clampedAnchor,
           head: clampedHead,
@@ -2774,7 +2810,7 @@ export class PresentationEditor extends EventEmitter {
 
     // Get selection rectangles using layout-bridge helper
     // Edge case: selectionToRects returns null for unsupported node types or empty documents
-    const rects = selectionToRects(layout, blocks, measures, start, end) ?? [];
+    const rects = selectionToRects(layout, blocks, measures, start, end, this.#pageGeometryHelper ?? undefined) ?? [];
 
     // Validate color once at the start for all selection rects
     const color = this.#getValidatedColor(cursor);
@@ -3192,6 +3228,7 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost,
       event.clientX,
       event.clientY,
+      this.#pageGeometryHelper ?? undefined,
     );
 
     // Clamp hit position to valid document bounds to handle stale layout data
@@ -3816,18 +3853,30 @@ export class PresentationEditor extends EventEmitter {
 
     let pageY = 0;
     let pageHit: PageHit | null = null;
+    const geometryHelper = this.#pageGeometryHelper;
 
-    for (let i = 0; i < layout.pages.length; i++) {
-      const page = layout.pages[i];
-      // Use page.size.h if available, otherwise fall back to configured page size
-      const pageHeight = page.size?.h ?? configuredPageSize.h;
-      const gap = this.#layoutOptions.virtualization?.gap ?? DEFAULT_PAGE_GAP;
-
-      if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
-        pageHit = { pageIndex: i, page };
-        break;
+    if (geometryHelper) {
+      const idx = geometryHelper.getPageIndexAtY(normalizedY) ?? geometryHelper.getNearestPageIndex(normalizedY);
+      if (idx != null && layout.pages[idx]) {
+        pageHit = { pageIndex: idx, page: layout.pages[idx] };
+        pageY = geometryHelper.getPageTop(idx);
       }
-      pageY += pageHeight + gap;
+    }
+
+    // Fallback to manual scan if helper unavailable
+    if (!pageHit) {
+      const gap = layout.pageGap ?? this.#getEffectivePageGap();
+      for (let i = 0; i < layout.pages.length; i++) {
+        const page = layout.pages[i];
+        // Use page.size.h if available, otherwise fall back to configured page size
+        const pageHeight = page.size?.h ?? configuredPageSize.h;
+
+        if (normalizedY >= pageY && normalizedY < pageY + pageHeight) {
+          pageHit = { pageIndex: i, page };
+          break;
+        }
+        pageY += pageHeight + gap;
+      }
     }
 
     if (!pageHit) {
@@ -4073,6 +4122,7 @@ export class PresentationEditor extends EventEmitter {
         this.#viewportHost,
         event.clientX,
         event.clientY,
+        this.#pageGeometryHelper ?? undefined,
       );
 
       // If we can't find a position, keep the last selection
@@ -4532,12 +4582,7 @@ export class PresentationEditor extends EventEmitter {
       ({ layout, measures } = result);
       // Add pageGap to layout for hit testing to account for gaps between rendered pages.
       // Gap depends on virtualization mode and must be non-negative.
-      if (this.#layoutOptions.virtualization?.enabled) {
-        const gap = this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP;
-        layout.pageGap = Math.max(0, gap);
-      } else {
-        layout.pageGap = DEFAULT_PAGE_GAP;
-      }
+      layout.pageGap = this.#getEffectivePageGap();
       headerLayouts = result.headers;
       footerLayouts = result.footers;
     } catch (error) {
@@ -4557,6 +4602,19 @@ export class PresentationEditor extends EventEmitter {
     this.#layoutState = { blocks, measures, layout, bookmarks, anchorMap };
     this.#headerLayoutResults = headerLayouts ?? null;
     this.#footerLayoutResults = footerLayouts ?? null;
+
+    // Initialize or update PageGeometryHelper when layout changes
+    if (this.#layoutState.layout) {
+      const pageGap = this.#layoutState.layout.pageGap ?? this.#getEffectivePageGap();
+      if (!this.#pageGeometryHelper) {
+        this.#pageGeometryHelper = new PageGeometryHelper({
+          layout: this.#layoutState.layout,
+          pageGap,
+        });
+      } else {
+        this.#pageGeometryHelper.updateLayout(this.#layoutState.layout, pageGap);
+      }
+    }
 
     // Process per-rId header/footer content for multi-section support
     await this.#layoutPerRIdHeaderFooters(headerFooterInput, layout, sectionMetadata);
@@ -4649,6 +4707,7 @@ export class PresentationEditor extends EventEmitter {
         headerProvider: this.#headerDecorationProvider,
         footerProvider: this.#footerDecorationProvider,
         ruler: this.#layoutOptions.ruler,
+        pageGap: this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap(),
       });
     }
     return this.#domPainter;
@@ -4839,7 +4898,14 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const rects: LayoutRect[] =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, from, to) ?? [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        from,
+        to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
     // Apply DOM-based position correction to align selection with actual rendered text
     // (same approach used in getRectsForRange for external consumers)
@@ -4858,7 +4924,9 @@ export class PresentationEditor extends EventEmitter {
 
     try {
       this.#localSelectionLayer.innerHTML = '';
-      this.#renderSelectionRects(correctedRects);
+      if (correctedRects.length > 0) {
+        this.#renderSelectionRects(correctedRects);
+      }
     } catch (error) {
       // DOM manipulation can fail if element is detached or in invalid state
       if (process.env.NODE_ENV === 'development') {
@@ -4878,13 +4946,17 @@ export class PresentationEditor extends EventEmitter {
           kind: 'sectionBreak';
           pageSize?: PageSize;
           columns?: ColumnLayout;
-          margins?: { header?: number; footer?: number };
+          margins?: { header?: number; footer?: number; top?: number; right?: number; bottom?: number; left?: number };
         })
       | undefined;
 
     const pageSize = firstSection?.pageSize ?? defaults.pageSize;
     const margins: PageMargins = {
       ...defaults.margins,
+      ...(firstSection?.margins?.top != null ? { top: firstSection.margins.top } : {}),
+      ...(firstSection?.margins?.right != null ? { right: firstSection.margins.right } : {}),
+      ...(firstSection?.margins?.bottom != null ? { bottom: firstSection.margins.bottom } : {}),
+      ...(firstSection?.margins?.left != null ? { left: firstSection.margins.left } : {}),
       ...(firstSection?.margins?.header != null ? { header: firstSection.margins.header } : {}),
       ...(firstSection?.margins?.footer != null ? { footer: firstSection.margins.footer } : {}),
     };
@@ -5131,8 +5203,14 @@ export class PresentationEditor extends EventEmitter {
             page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
           const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
           const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+          // Normalize fragments to start at y=0 if minY is negative
+          const layoutMinY = rIdLayout.layout.minY ?? 0;
+          const normalizedFragments =
+            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
           return {
-            fragments,
+            fragments: normalizedFragments,
             height: box.height,
             contentHeight: rIdLayout.layout.height ?? box.height,
             offset: box.offset,
@@ -5140,6 +5218,7 @@ export class PresentationEditor extends EventEmitter {
             contentWidth: box.width,
             headerId: sectionRId,
             sectionType: headerFooterType,
+            minY: layoutMinY,
             box: {
               x: box.x,
               y: box.offset,
@@ -5176,8 +5255,13 @@ export class PresentationEditor extends EventEmitter {
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
+
+      // Normalize fragments to start at y=0 if minY is negative
+      const layoutMinY = variant.layout.minY ?? 0;
+      const normalizedFragments = layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
       return {
-        fragments,
+        fragments: normalizedFragments,
         height: box.height,
         contentHeight: variant.layout.height ?? box.height,
         offset: box.offset,
@@ -5185,6 +5269,7 @@ export class PresentationEditor extends EventEmitter {
         contentWidth: box.width,
         headerId: finalHeaderId,
         sectionType: headerFooterType,
+        minY: layoutMinY,
         box: {
           x: box.x,
           y: box.offset,
@@ -5374,6 +5459,8 @@ export class PresentationEditor extends EventEmitter {
         localY: footerPayload?.hitRegion?.y ?? footerBox.offset,
         width: footerPayload?.hitRegion?.width ?? footerBox.width,
         height: footerPayload?.hitRegion?.height ?? footerBox.height,
+        contentHeight: footerPayload?.contentHeight,
+        minY: footerPayload?.minY,
       });
     });
   }
@@ -5519,6 +5606,26 @@ export class PresentationEditor extends EventEmitter {
           context: 'enterHeaderFooterMode.ensureEditor',
         });
         return;
+      }
+
+      // For footers, apply positioning adjustments to match static rendering.
+      // Only adjust for negative minY (content with elements above y=0).
+      // Note: Bottom-alignment (footerYOffset) is handled by the shape's own CSS
+      // positioning in ProseMirror, so we don't apply container-level transforms for that.
+      if (region.kind === 'footer') {
+        const editorContainer = editorHost.firstElementChild;
+        if (editorContainer instanceof HTMLElement) {
+          editorContainer.style.overflow = 'visible';
+
+          // Only compensate for negative minY (content extending above y=0)
+          if (region.minY != null && region.minY < 0) {
+            const shiftDown = Math.abs(region.minY);
+            editorContainer.style.transform = `translateY(${shiftDown}px)`;
+          } else {
+            // Clear any leftover transform from previous sessions to avoid misalignment
+            editorContainer.style.transform = '';
+          }
+        }
       }
 
       try {
@@ -5933,7 +6040,14 @@ export class PresentationEditor extends EventEmitter {
 
       // Try to get exact position rect for precise scrolling
       const rects =
-        selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, pmPos, pmPos + 1) ?? [];
+        selectionToRects(
+          layout,
+          this.#layoutState.blocks,
+          this.#layoutState.measures,
+          pmPos,
+          pmPos + 1,
+          this.#pageGeometryHelper ?? undefined,
+        ) ?? [];
       const rect = rects[0];
 
       // Find the page containing this position by scanning fragments
@@ -6044,6 +6158,20 @@ export class PresentationEditor extends EventEmitter {
     });
   }
 
+  /**
+   * Get effective page gap based on layout mode and virtualization settings.
+   * Keeps painter, layout, and geometry in sync.
+   */
+  #getEffectivePageGap(): number {
+    if (this.#layoutOptions.virtualization?.enabled) {
+      return Math.max(0, this.#layoutOptions.virtualization.gap ?? DEFAULT_VIRTUALIZED_PAGE_GAP);
+    }
+    if (this.#layoutOptions.layoutMode === 'horizontal') {
+      return DEFAULT_HORIZONTAL_PAGE_GAP;
+    }
+    return DEFAULT_PAGE_GAP;
+  }
+
   #getBodyPageHeight() {
     return this.#layoutState.layout?.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
   }
@@ -6107,7 +6235,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
 
-    return rects.map((rect, idx) => {
+    const corrected = rects.map((rect, idx) => {
       const delta = pageDelta[rect.pageIndex];
       let adjustedX = delta ? rect.x + delta.dx : rect.x;
       let adjustedY = delta ? rect.y + delta.dy : rect.y;
@@ -6127,6 +6255,8 @@ export class PresentationEditor extends EventEmitter {
       // For last rect, compute width from DOM end position
       if (isLastRect && domEnd && rect.pageIndex === domEnd.pageIndex) {
         const endX = domEnd.x;
+        // Ensure the rect ends exactly at domEnd.x; if start overshoots, clamp start to end
+        adjustedX = Math.min(adjustedX, endX);
         adjustedWidth = Math.max(1, endX - adjustedX);
       }
 
@@ -6137,6 +6267,33 @@ export class PresentationEditor extends EventEmitter {
         width: adjustedWidth,
       };
     });
+
+    // Sanity validation: compare corrected rects against DOM start/end. If deltas are too large, drop rects.
+    const MAX_DELTA_PX = 12; // threshold for mismatch
+    let invalid = false;
+    if (domStart && corrected[0]) {
+      const dx = Math.abs(corrected[0].x - domStart.x);
+      const dy = Math.abs(corrected[0].y - domStart.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+    if (domEnd && corrected[corrected.length - 1]) {
+      const last = corrected[corrected.length - 1];
+      const dx = Math.abs(last.x + last.width - domEnd.x);
+      const dy = Math.abs(last.y - domEnd.y);
+      if (dx > MAX_DELTA_PX || dy > MAX_DELTA_PX) invalid = true;
+    }
+
+    if (invalid) {
+      console.warn('[SelectionOverlay] Suppressing selection render due to large DOM/Layout mismatch', {
+        domStart,
+        domEnd,
+        rectStart: corrected[0],
+        rectEnd: corrected[corrected.length - 1],
+      });
+      return [];
+    }
+
+    return corrected;
   }
 
   /**
@@ -6527,7 +6684,7 @@ export class PresentationEditor extends EventEmitter {
       return [];
     }
     if (!bodyLayout) return [];
-    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to) ?? [];
+    const rects = selectionToRects(context.layout, context.blocks, context.measures, from, to, undefined) ?? [];
     const headerPageHeight = context.layout.pageSize?.h ?? context.region.height ?? 1;
     const bodyPageHeight = this.#getBodyPageHeight();
     return rects.map((rect: LayoutRect) => {
@@ -6850,7 +7007,7 @@ export class PresentationEditor extends EventEmitter {
       };
     }
     const pmStart = Number(targetSpan.dataset.pmStart ?? 'NaN');
-    const charIndex = Math.min(pos - pmStart, textNode.length);
+    const charIndex = Math.min(pos - pmStart, (textNode as Text).length);
     const range = document.createRange();
     range.setStart(textNode, Math.max(0, charIndex));
     range.setEnd(textNode, Math.max(0, charIndex));
@@ -6983,23 +7140,95 @@ export class PresentationEditor extends EventEmitter {
     // Calculate character offset from PM position using layout-aware mapping (accounts for PM gaps)
     const pmOffset = pmPosToCharOffset(block, line, pos);
 
-    // Account for list marker width - this matches selectionToRects behavior
     const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
-    const paraIndentLeft = block.attrs?.indent?.left ?? 0;
-    const paraIndentRight = block.attrs?.indent?.right ?? 0;
-    const availableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+    const indent = extractParagraphIndent(block.attrs?.indent);
+    const availableWidth = Math.max(0, fragment.width - (indent.left + indent.right));
     const charX = measureCharacterX(block, line, pmOffset, availableWidth);
-    // Align with painter DOM indent handling: add paragraph indent (left) and first-line offset when applicable
-    // The painter applies indent to ALL non-list lines (both segment-based and regular)
-    const firstLineOffset = (block.attrs?.indent?.firstLine ?? 0) - (block.attrs?.indent?.hanging ?? 0);
+
+    // Determine list item status and text indent
     const isFirstLine = index === fragment.fromLine;
-    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && (fragment.markerWidth ?? 0) > 0;
-    let indentAdjust = 0;
-    if (!isListFirstLine) {
-      indentAdjust = paraIndentLeft + (isFirstLine ? firstLineOffset : 0);
+    const isListItemFlag = isListItem(markerWidth, block);
+    const isListFirstLine = isFirstLine && !fragment.continuesFromPrev && isListItemFlag;
+
+    // Get word layout configuration for firstLineIndentMode detection
+    const wordLayout = getWordLayoutConfig(block);
+    const isFirstLineIndentMode = wordLayout?.firstLineIndentMode === true;
+
+    if (isListFirstLine && isFirstLineIndentMode) {
+      // In firstLineIndentMode, text starts at textStartPx (after marker + tab),
+      // not at fragment.x + markerWidth. Use textStartPx directly as the X offset.
+      const textStartPx = calculateTextStartIndent({
+        isFirstLine,
+        isListItem: isListItemFlag,
+        markerWidth,
+        paraIndentLeft: indent.left,
+        firstLineIndent: indent.firstLine,
+        hangingIndent: indent.hanging,
+        wordLayout,
+      });
+      const localX = fragment.x + textStartPx + charX;
+      const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
+      const localY = fragment.y + lineOffset;
+
+      const result = {
+        pageIndex: hit.pageIndex,
+        x: localX,
+        y: localY,
+        height: line.lineHeight,
+      };
+
+      // Check DOM for firstLineIndentMode lists too
+      const pageEl = this.#painterHost?.querySelector(
+        `.superdoc-page[data-page-index="${hit.pageIndex}"]`,
+      ) as HTMLElement | null;
+      const pageRect = pageEl?.getBoundingClientRect();
+      const zoom = this.#layoutOptions.zoom ?? 1;
+
+      let domCaretX: number | null = null;
+      let domCaretY: number | null = null;
+      const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+      for (const spanEl of Array.from(spanEls ?? [])) {
+        const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
+        const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
+        if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
+          const textNode = spanEl.firstChild as Text;
+          const charIndex = Math.min(pos - pmStart, textNode.length);
+          const rangeObj = document.createRange();
+          rangeObj.setStart(textNode, charIndex);
+          rangeObj.setEnd(textNode, charIndex);
+          const rangeRect = rangeObj.getBoundingClientRect();
+          if (pageRect) {
+            domCaretX = (rangeRect.left - pageRect.left) / zoom;
+            domCaretY = (rangeRect.top - pageRect.top) / zoom;
+          }
+          break;
+        }
+      }
+
+      if (includeDomFallback && domCaretX != null && domCaretY != null) {
+        return {
+          pageIndex: hit.pageIndex,
+          x: domCaretX,
+          y: domCaretY,
+          height: line.lineHeight,
+        };
+      }
+
+      return result;
     }
 
-    const localX = fragment.x + markerWidth + indentAdjust + charX;
+    // For standard lists and non-list paragraphs, calculate text indent using shared utility
+    const indentAdjust = calculateTextStartIndent({
+      isFirstLine,
+      isListItem: isListItemFlag,
+      markerWidth,
+      paraIndentLeft: indent.left,
+      firstLineIndent: indent.firstLine,
+      hangingIndent: indent.hanging,
+      wordLayout,
+    });
+
+    const localX = fragment.x + indentAdjust + charX;
     const lineOffset = this.#lineHeightBeforeIndex(measure.lines, fragment.fromLine, index);
     const localY = fragment.y + lineOffset;
 
@@ -7020,8 +7249,8 @@ export class PresentationEditor extends EventEmitter {
     // Find span containing this pos and measure actual DOM position
     let domCaretX: number | null = null;
     let domCaretY: number | null = null;
-    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]') ?? [];
-    for (const spanEl of spanEls) {
+    const spanEls = pageEl?.querySelectorAll('span[data-pm-start][data-pm-end]');
+    for (const spanEl of Array.from(spanEls ?? [])) {
       const pmStart = Number((spanEl as HTMLElement).dataset.pmStart);
       const pmEnd = Number((spanEl as HTMLElement).dataset.pmEnd);
       if (pos >= pmStart && pos <= pmEnd && spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
@@ -7356,8 +7585,14 @@ export class PresentationEditor extends EventEmitter {
 
     // Try selectionToRects first
     const rects =
-      selectionToRects(layout, this.#layoutState.blocks, this.#layoutState.measures, selection.from, selection.to) ??
-      [];
+      selectionToRects(
+        layout,
+        this.#layoutState.blocks,
+        this.#layoutState.measures,
+        selection.from,
+        selection.to,
+        this.#pageGeometryHelper ?? undefined,
+      ) ?? [];
 
     if (rects.length > 0) {
       return rects[0]?.pageIndex ?? 0;

@@ -41,6 +41,11 @@ export type HeaderFooterRegion = {
   width: number;
   /** Height of the region in pixels */
   height: number;
+  /**
+   * Minimum Y coordinate from layout (can be negative if content extends above y=0).
+   * Used to adjust editor host positioning for content with negative offsets.
+   */
+  minY?: number;
 };
 
 /**
@@ -275,6 +280,7 @@ export class EditorOverlayManager {
         const editorContainer = this.#activeEditorHost.querySelector('.super-editor');
         if (editorContainer instanceof HTMLElement) {
           editorContainer.style.top = '0';
+          editorContainer.style.transform = '';
         }
       }
     }

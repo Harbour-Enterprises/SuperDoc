@@ -340,6 +340,7 @@ describe('SuperConverter Document GUID', () => {
 
         SuperConverter.setStoredCustomProperty(docx, 'MyCustomProp', 'MyValue');
         const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+        expect(prop.name).toBe('op:property'); // Verify namespace prefix is preserved
         expect(prop.attributes.name).toBe('MyCustomProp');
         expect(prop.elements[0].elements[0].text).toBe('MyValue');
       });
@@ -378,6 +379,85 @@ describe('SuperConverter Document GUID', () => {
 
         SuperConverter.setStoredCustomProperty(docx, 'ExistingProp', 'NewValue');
         const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+        expect(prop.name).toBe('op:property'); // Verify namespace prefix is preserved
+        expect(prop.elements[0].elements[0].text).toBe('NewValue');
+      });
+
+      it('normalizes existing property namespace prefix to match parent', () => {
+        const docx = {
+          'docProps/custom.xml': {
+            elements: [
+              {
+                name: 'op:Properties',
+                elements: [
+                  {
+                    // Existing property without prefix, but parent has prefix
+                    name: 'property',
+                    attributes: {
+                      name: 'MismatchedProp',
+                      pid: 2,
+                    },
+                    elements: [
+                      {
+                        type: 'element',
+                        name: 'vt:lpwstr',
+                        elements: [
+                          {
+                            type: 'text',
+                            text: 'OldValue',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        };
+
+        SuperConverter.setStoredCustomProperty(docx, 'MismatchedProp', 'NewValue');
+        const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+        expect(prop.name).toBe('op:property'); // Verify namespace prefix is normalized to match parent
+        expect(prop.elements[0].elements[0].text).toBe('NewValue');
+      });
+
+      it('normalizes existing property when parent has no prefix', () => {
+        const docx = {
+          'docProps/custom.xml': {
+            elements: [
+              {
+                name: 'Properties',
+                elements: [
+                  {
+                    // Existing property with prefix, but parent has no prefix
+                    name: 'op:property',
+                    attributes: {
+                      name: 'MismatchedProp',
+                      pid: 2,
+                    },
+                    elements: [
+                      {
+                        type: 'element',
+                        name: 'vt:lpwstr',
+                        elements: [
+                          {
+                            type: 'text',
+                            text: 'OldValue',
+                          },
+                        ],
+                      },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        };
+
+        SuperConverter.setStoredCustomProperty(docx, 'MismatchedProp', 'NewValue');
+        const prop = docx['docProps/custom.xml'].elements[0].elements[0];
+        expect(prop.name).toBe('property'); // Verify namespace prefix is normalized to match parent (no prefix)
         expect(prop.elements[0].elements[0].text).toBe('NewValue');
       });
     });

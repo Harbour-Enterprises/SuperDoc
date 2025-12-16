@@ -14,6 +14,20 @@ const expectParagraphMeasure = (measure: Measure): ParagraphMeasure => {
   return measure as ParagraphMeasure;
 };
 
+const extractLineText = (block: FlowBlock, line: ParagraphMeasure['lines'][number]): string => {
+  if (block.kind !== 'paragraph') return '';
+  const runs = (block as FlowBlock).runs || [];
+  const parts: string[] = [];
+  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex++) {
+    const run = runs[runIndex] as { text?: string };
+    if (!run || typeof run.text !== 'string') continue;
+    const start = runIndex === line.fromRun ? line.fromChar : 0;
+    const end = runIndex === line.toRun ? line.toChar : run.text.length;
+    parts.push(run.text.slice(start, end));
+  }
+  return parts.join('');
+};
+
 const expectImageMeasure = (measure: Measure): ImageMeasure => {
   expect(measure.kind).toBe('image');
   return measure as ImageMeasure;
@@ -95,12 +109,11 @@ describe('measureBlock', () => {
       }
     });
 
-    it('uses content width minus marker space for wordLayout list first lines with hanging indent', async () => {
+    it('uses content width for wordLayout list first lines with standard hanging indent', async () => {
+      // Standard hanging indent pattern: marker is positioned in the hanging area (left of text),
+      // NOT inline with text. The marker doesn't consume horizontal space on the first line.
       const maxWidth = 200;
       const indentLeft = 32;
-      const markerBoxWidthPx = 20;
-      const gutterWidthPx = 12;
-      const leftJustifiedMarkerSpace = markerBoxWidthPx + gutterWidthPx;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list',
@@ -115,10 +128,11 @@ describe('measureBlock', () => {
           indent: { left: indentLeft, hanging: indentLeft },
           wordLayout: {
             indentLeftPx: indentLeft,
+            // Note: firstLineIndentMode is NOT set, so this is standard hanging indent
             marker: {
               markerText: '1.',
-              markerBoxWidthPx,
-              gutterWidthPx,
+              markerBoxWidthPx: 20,
+              gutterWidthPx: 12,
               run: {
                 fontFamily: 'Times New Roman',
                 fontSize: 16,
@@ -132,19 +146,20 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      // For left-justified markers, the marker space is subtracted from content width
-      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft - leftJustifiedMarkerSpace);
+      // For standard hanging indent, the marker is in the hanging area (doesn't take in-flow space).
+      // First line available width = maxWidth - indentLeft (same as subsequent lines).
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - indentLeft);
     });
 
-    it('uses textStartPx for wordLayout list first lines with firstLineIndentMode', async () => {
+    it('uses textStartPx for wordLayout list first lines when textStartPx > indentLeft', async () => {
       const maxWidth = 200;
-      const textStartPx = 100; // Where text actually starts in firstLineIndentMode
+      const textStartPx = 100; // Where text actually starts (after marker + tab)
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'wordlayout-list-firstline',
         runs: [
           {
-            text: 'List item text in firstLineIndentMode should wrap based on textStartPx',
+            text: 'List item text should wrap based on textStartPx when marker occupies space',
             fontFamily: 'Times New Roman',
             fontSize: 16,
           },
@@ -153,7 +168,6 @@ describe('measureBlock', () => {
           indent: { left: 0, firstLine: 48 },
           wordLayout: {
             indentLeftPx: 0,
-            firstLineIndentMode: true,
             textStartPx,
             marker: {
               markerText: '(a)',
@@ -172,7 +186,7 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
-      // In firstLineIndentMode, available width = maxWidth - textStartPx
+      // When textStartPx > indentLeft, available width = maxWidth - textStartPx
       expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
@@ -841,7 +855,7 @@ describe('measureBlock', () => {
       expect(measure.totalHeight).toBeGreaterThan(0);
     });
 
-    it('handles single long word exceeding maxWidth', async () => {
+    it('handles single long word exceeding maxWidth by breaking mid-word', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
         id: '0-paragraph',
@@ -857,9 +871,148 @@ describe('measureBlock', () => {
 
       const measure = expectParagraphMeasure(await measureBlock(block, 100));
 
-      // Should keep the word on a single line even if it exceeds maxWidth
-      expect(measure.lines).toHaveLength(1);
-      expect(measure.lines[0].width).toBeGreaterThan(100);
+      // Should break the word across multiple lines, with each line fitting within maxWidth
+      expect(measure.lines.length).toBeGreaterThan(1);
+      // Each line (except possibly the last) should fit within maxWidth
+      for (let i = 0; i < measure.lines.length - 1; i++) {
+        expect(measure.lines[i].width).toBeLessThanOrEqual(100);
+      }
+      // All lines together should contain the full word
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe('Supercalifragilisticexpialidocious'.length);
+    });
+  });
+
+  describe('mid-word breaking for table cells', () => {
+    it('breaks a long word into multiple lines that fit within narrow maxWidth', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-1',
+        runs: [
+          {
+            text: 'Antidisestablishmentarianism',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use a narrow maxWidth to force breaking
+      const measure = expectParagraphMeasure(await measureBlock(block, 80));
+
+      // Should break into multiple lines
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // Each line should fit within maxWidth (with some tolerance for the last line)
+      for (let i = 0; i < measure.lines.length - 1; i++) {
+        expect(measure.lines[i].width).toBeLessThanOrEqual(80 + 1); // +1 for floating point
+      }
+    });
+
+    it('preserves correct character positions when breaking mid-word', async () => {
+      const word = 'HelloWorld';
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-2',
+        runs: [
+          {
+            text: word,
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use very narrow width to force multiple breaks
+      const measure = expectParagraphMeasure(await measureBlock(block, 40));
+
+      // Verify character continuity - each line should pick up where the last left off
+      let lastChar = 0;
+      for (const line of measure.lines) {
+        expect(line.fromChar).toBe(lastChar);
+        expect(line.toChar).toBeGreaterThan(line.fromChar);
+        lastChar = line.toChar;
+      }
+
+      // All characters should be accounted for
+      expect(lastChar).toBe(word.length);
+    });
+
+    it('finishes existing line content before breaking a long word', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-3',
+        runs: [
+          {
+            text: 'Hi Supercalifragilisticexpialidocious',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // First line should contain "Hi " before the long word breaks
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // The first line should have content from "Hi " or be part of the broken word
+      // Total chars should equal the full text length
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe('Hi Supercalifragilisticexpialidocious'.length);
+    });
+
+    it('handles words that fit exactly without unnecessary breaking', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-4',
+        runs: [
+          {
+            text: 'Hello',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // First measure to get the exact width
+      const initialMeasure = expectParagraphMeasure(await measureBlock(block, 1000));
+      const exactWidth = initialMeasure.lines[0].width;
+
+      // Now measure with maxWidth equal to text width - should NOT break
+      const exactMeasure = expectParagraphMeasure(await measureBlock(block, exactWidth));
+      expect(exactMeasure.lines).toHaveLength(1);
+    });
+
+    it('handles very narrow cells with at least one character per line', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'mid-word-test-5',
+        runs: [
+          {
+            text: 'ABC',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use extremely narrow width (1px) - should still render each character
+      const measure = expectParagraphMeasure(await measureBlock(block, 1));
+
+      // Should have at least 1 character per line
+      for (const line of measure.lines) {
+        expect(line.toChar - line.fromChar).toBeGreaterThanOrEqual(1);
+      }
+
+      // All characters should be present
+      const totalChars = measure.lines.reduce((sum, line) => sum + (line.toChar - line.fromChar), 0);
+      expect(totalChars).toBe(3);
     });
   });
 
@@ -1599,6 +1752,116 @@ describe('measureBlock', () => {
   });
 
   describe('overflow protection', () => {
+    it('keeps justified line packed by allowing small space flex (Word parity case)', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'justify-word-parity',
+        runs: [
+          {
+            text: 'Por este instrumento particular, de um lado a empresa ',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+          },
+          {
+            text: 'EMPRESA',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+          {
+            text: ' ABC',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+          {
+            text: ', pessoa jurídica de direito privado, inscrita no CNPJ sob n. XXXXXXXX com sede à Av. Presidente Juscelino Kubitschek, N° 2041, 22° Andar, Torre D, no Bairro Vila Nova Conceição na Cidade de São Paulo – SP – CEP 04.543-011, neste ato representado por seu representante legal',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+          },
+          {
+            text: ' FULANO DE TAL',
+            fontFamily: 'Times New Roman',
+            fontSize: 12,
+            bold: true,
+          },
+        ],
+        attrs: { alignment: 'justify' },
+      };
+
+      // Page width 12240 twips (8.5in) minus margins 1701/1134 twips ≈ 627px content width at 96dpi
+      const measure = expectParagraphMeasure(await measureBlock(block, 627));
+      const lineTexts = measure.lines.map((line) => extractLineText(block, line));
+      const lineWithRepresentado = lineTexts.find((text) => text.includes('representado'));
+
+      expect(lineWithRepresentado).toBeDefined();
+      expect(lineWithRepresentado).toContain('neste ato representado por seu representante legal');
+    });
+
+    it('preserves leading spaces in runs (xml:space="preserve" case)', async () => {
+      // When a run starts with a space (common in DOCX with xml:space="preserve"),
+      // the space should be included in the line width, not dropped.
+      // This tests the fix for segments like " Headquarters:" where split(' ') produces ['', 'Headquarters:']
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'leading-space-test',
+        runs: [
+          {
+            text: 'Location',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: ' ',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: 'of',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+          {
+            text: ' Headquarters:',
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+      const lineText = extractLineText(block, measure.lines[0]);
+
+      // The extracted text should include all spaces
+      expect(lineText).toBe('Location of Headquarters:');
+
+      // Also verify there's a space between 'of' and 'Headquarters'
+      expect(lineText).toContain('of Headquarters');
+    });
+
+    it('preserves multiple consecutive spaces from split', async () => {
+      // Test consecutive spaces which produce multiple empty strings from split(' ')
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'consecutive-spaces-test',
+        runs: [
+          {
+            text: 'Hello  World', // Two spaces between Hello and World
+            fontFamily: 'Arial',
+            fontSize: 12,
+          },
+        ],
+        attrs: {},
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 500));
+      const lineText = extractLineText(block, measure.lines[0]);
+
+      // Both spaces should be preserved
+      expect(lineText).toBe('Hello  World');
+    });
+
     it('prevents line width from exceeding maxWidth after appending segment with trailing space', async () => {
       // This test verifies the post-append overflow guard
       // Scenario: Word fits without space, but word+space exceeds maxWidth
