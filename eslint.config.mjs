@@ -36,8 +36,6 @@ export default [
       '**/commitlint.config.js',
       // E2E tests
       'e2e-tests/**',
-      // Demo apps
-      'packages/layout-engine/v1-beta-demo/**',
     ],
   },
   {
