@@ -431,29 +431,105 @@ export function cleanHtmlUnnecessaryTags(html: string): string {
 }
 
 /**
- * Recursive function to sanitize HTML and remove forbidden tags.
+ * Default forbidden tags that will be removed during sanitization.
+ * Includes script execution, embedding, and form-related elements.
+ */
+const DEFAULT_FORBIDDEN_TAGS = [
+  'script',
+  'style',
+  'meta',
+  'link',
+  'base',
+  'svg',
+  'math',
+  'iframe',
+  'frame',
+  'frameset',
+  'object',
+  'embed',
+  'applet',
+  'form',
+  'input',
+  'textarea',
+  'select',
+  'button',
+  'template',
+  'noscript',
+  'plaintext',
+  'xmp',
+];
+
+/**
+ * URL protocols that are considered dangerous and will be removed.
+ */
+const DANGEROUS_URL_PATTERN = /^\s*(javascript|vbscript|data):/i;
+
+/**
+ * Attributes that can contain URLs and need to be checked for dangerous protocols.
+ */
+const URL_ATTRIBUTES = ['href', 'src', 'action', 'formaction', 'xlink:href', 'poster', 'background'];
+
+/**
+ * Checks if an attribute name is an event handler (starts with "on").
+ */
+function isEventHandler(attrName: string): boolean {
+  return attrName.toLowerCase().startsWith('on');
+}
+
+/**
+ * Checks if a URL value contains a dangerous protocol.
+ */
+function hasDangerousUrl(value: string): boolean {
+  return DANGEROUS_URL_PATTERN.test(value);
+}
+
+/**
+ * Sanitizes HTML to prevent XSS attacks by removing forbidden tags,
+ * event handler attributes, and dangerous URL protocols.
  * @param html The HTML string to be sanitized.
  * @param forbiddenTags The list of forbidden tags to remove from the HTML.
  * @returns The sanitized HTML as a DocumentFragment.
  */
-export function sanitizeHtml(
-  html: string,
-  forbiddenTags: string[] = ['meta', 'svg', 'script', 'style', 'button'],
-): DocumentFragment {
+export function sanitizeHtml(html: string, forbiddenTags: string[] = DEFAULT_FORBIDDEN_TAGS): DocumentFragment {
   const container = document.createElement('div');
   container.innerHTML = html;
 
   const walkAndClean = (node: Element): void => {
     const children = Array.from(node.children);
     for (const child of children) {
-      if (forbiddenTags.includes(child.tagName.toLowerCase())) {
+      const tagName = child.tagName.toLowerCase();
+
+      // Remove forbidden tags entirely
+      if (forbiddenTags.includes(tagName)) {
         child.remove();
         continue;
       }
 
-      // Remove linebreaktype here - we don't want it when pasting HTML
-      if (child.hasAttribute('linebreaktype')) {
-        child.removeAttribute('linebreaktype');
+      // Remove dangerous attributes
+      const attrsToRemove: string[] = [];
+      for (const attr of Array.from(child.attributes)) {
+        const attrName = attr.name.toLowerCase();
+
+        // Remove event handlers (onclick, onerror, onload, etc.)
+        if (isEventHandler(attrName)) {
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Remove dangerous URL protocols from URL attributes
+        if (URL_ATTRIBUTES.includes(attrName) && hasDangerousUrl(attr.value)) {
+          attrsToRemove.push(attr.name);
+          continue;
+        }
+
+        // Remove linebreaktype - we don't want it when pasting HTML
+        if (attrName === 'linebreaktype') {
+          attrsToRemove.push(attr.name);
+        }
+      }
+
+      for (const attrName of attrsToRemove) {
+        child.removeAttribute(attrName);
       }
 
       walkAndClean(child);
