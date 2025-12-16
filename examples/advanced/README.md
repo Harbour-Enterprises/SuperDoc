@@ -15,6 +15,7 @@ Advanced examples demonstrating complex SuperDoc features and use cases.
 | [text-selection](./text-selection) | Programmatic text selection APIs |
 | [docxtemplater](./docxtemplater) | Template-based document generation |
 | [grading-papers](./grading-papers) | Document review and annotation use case |
+| [headless-converter](./headless-converter) | Convert DOCX to HTML/JSON/text/Markdown (Node.js) |
 
 ## Running an Example
 
