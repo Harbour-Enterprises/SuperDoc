@@ -11,5 +11,8 @@
   "scripts": {
     "build": "tsc --project tsconfig.json --noEmit",
     "test": "vitest run"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
   }
 }

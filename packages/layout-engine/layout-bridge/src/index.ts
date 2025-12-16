@@ -52,7 +52,7 @@ export type { BoundaryRange } from './text-boundaries';
 export { incrementalLayout, measureCache } from './incrementalLayout';
 export type { HeaderFooterLayoutResult } from './incrementalLayout';
 // Re-export computeDisplayPageNumber from layout-engine for section-aware page numbering
-export { computeDisplayPageNumber, type DisplayPageInfo } from '../../layout-engine/src/index';
+export { computeDisplayPageNumber, type DisplayPageInfo } from '@superdoc/layout-engine/src/index';
 export { remeasureParagraph } from './remeasure';
 export { measureCharacterX } from './text-measurement';
 export { clickToPositionDom } from './dom-mapping';

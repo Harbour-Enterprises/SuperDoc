@@ -3,8 +3,13 @@ import { ref, reactive, computed } from 'vue';
 import { comments_module_events } from '@superdoc/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
-import { Editor, trackChangesHelpers, TrackChangesBasePluginKey, CommentsPluginKey } from '@superdoc/super-editor';
-import { getRichTextExtensions } from '@superdoc/super-editor';
+import {
+  Editor,
+  trackChangesHelpers,
+  TrackChangesBasePluginKey,
+  CommentsPluginKey,
+  getRichTextExtensions,
+} from '@superdoc/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { groupChanges } from '../helpers/group-changes.js';
 

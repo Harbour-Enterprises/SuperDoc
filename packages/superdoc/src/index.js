@@ -5,8 +5,6 @@ import {
   createZip,
   Extensions,
   registeredHandlers,
-} from '@superdoc/super-editor';
-import {
   helpers as superEditorHelpers,
   fieldAnnotationHelpers,
   trackChangesHelpers,

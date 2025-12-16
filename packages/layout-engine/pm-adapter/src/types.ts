@@ -2,8 +2,7 @@
  * Type definitions for ProseMirror to FlowBlock adapter
  */
 
-import type { TrackedChangesMode, SectionMetadata, FlowBlock, TrackedChangeMeta } from '@superdoc/contracts';
-import type { Engines } from '@superdoc/contracts';
+import type { TrackedChangesMode, SectionMetadata, FlowBlock, TrackedChangeMeta, Engines } from '@superdoc/contracts';
 import type {
   StyleContext as StyleEngineContext,
   StyleNode as StyleEngineNode,
