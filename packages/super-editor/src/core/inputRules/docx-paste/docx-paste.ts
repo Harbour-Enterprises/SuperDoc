@@ -2,7 +2,7 @@ import type { EditorView } from 'prosemirror-view';
 import { DOMParser, Fragment } from 'prosemirror-model';
 import type { Node as PmNode } from 'prosemirror-model';
 import type { Editor } from '../../Editor.js';
-import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste } from '../../InputRule.js';
+import { cleanHtmlUnnecessaryTags, convertEmToPt, handleHtmlPaste, sanitizeHtml } from '../../InputRule.js';
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import {
   extractListLevelStyles,
@@ -36,7 +36,8 @@ export const handleDocxPaste = (html: string, editor: Editor, view: EditorView):
   cleanedHtml = cleanHtmlUnnecessaryTags(cleanedHtml);
 
   const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = cleanedHtml;
+  const sanitizedFragment = sanitizeHtml(cleanedHtml);
+  tempDiv.appendChild(sanitizedFragment);
 
   const data = tempDiv.querySelectorAll('p, li, ' + [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `h${n}`).join(', '));
 
