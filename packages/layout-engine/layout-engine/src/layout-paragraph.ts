@@ -37,8 +37,114 @@ type WordLayoutAttrs = {
   textStartPx?: number;
 };
 
+/**
+ * Type definition for paragraph spacing attributes.
+ * Represents spacing values in pixels for paragraph layout.
+ */
+type ParagraphSpacingAttrs = {
+  /** Spacing before the paragraph in pixels */
+  before?: number;
+  /** Spacing after the paragraph in pixels */
+  after?: number;
+  /** Legacy property for spacing before */
+  lineSpaceBefore?: number;
+  /** Legacy property for spacing after */
+  lineSpaceAfter?: number;
+};
+
+/**
+ * Type definition for paragraph block attributes accessed during layout.
+ * Provides type-safe access to common paragraph properties.
+ */
+type ParagraphBlockAttrs = {
+  /** Spacing configuration for the paragraph */
+  spacing?: ParagraphSpacingAttrs;
+  /** Style identifier for the paragraph */
+  styleId?: string;
+  /** Whether to suppress spacing between same-style paragraphs */
+  contextualSpacing?: boolean | string | number;
+  /** Word layout output for list paragraphs */
+  wordLayout?: WordLayoutAttrs;
+  /** Frame positioning attributes */
+  frame?: {
+    wrap?: string;
+    x?: number;
+    y?: number;
+    xAlign?: 'left' | 'right' | 'center';
+  };
+  /** Float alignment (left, right, center) */
+  floatAlignment?: unknown;
+};
+
 const spacingDebugLog = (..._args: unknown[]): void => {
   if (!spacingDebugEnabled) return;
+};
+
+/**
+ * Type guard to safely access paragraph block attributes.
+ * Validates that the attrs property exists and returns it with proper typing.
+ *
+ * @param block - The paragraph block to extract attributes from
+ * @returns Typed paragraph attributes or undefined if attrs is missing
+ */
+const getParagraphAttrs = (block: ParagraphBlock): ParagraphBlockAttrs | undefined => {
+  if (!block.attrs || typeof block.attrs !== 'object') {
+    return undefined;
+  }
+  return block.attrs as ParagraphBlockAttrs;
+};
+
+/**
+ * Safely extracts a string value from an unknown type.
+ * Used for extracting styleId and similar string properties.
+ *
+ * @param value - The value to extract
+ * @returns The value as a string, or undefined if not a string
+ */
+const asString = (value: unknown): string | undefined => {
+  return typeof value === 'string' ? value : undefined;
+};
+
+/**
+ * Safely extracts a boolean value from OOXML boolean representations.
+ * Handles true, 1, '1', 'true', 'on' as truthy values.
+ *
+ * @param value - The value to convert to boolean
+ * @returns Boolean value, or false if value is falsy or invalid
+ */
+const asBoolean = (value: unknown): boolean => {
+  if (value === true || value === 1) return true;
+  if (typeof value === 'string') {
+    const normalized = value.toLowerCase();
+    return normalized === 'true' || normalized === '1' || normalized === 'on';
+  }
+  return false;
+};
+
+/**
+ * Safely extracts a finite numeric value, returning 0 for invalid values.
+ * Validates that the number is finite (not NaN, Infinity, or -Infinity) and non-negative.
+ *
+ * @param value - The value to extract and validate
+ * @returns A finite non-negative number, or 0 if value is invalid
+ *
+ * @example
+ * ```typescript
+ * asSafeNumber(15)        // 15
+ * asSafeNumber(NaN)       // 0
+ * asSafeNumber(Infinity)  // 0
+ * asSafeNumber(-10)       // 0
+ * asSafeNumber(null)      // 0
+ * ```
+ */
+const asSafeNumber = (value: unknown): number => {
+  if (typeof value !== 'number') {
+    return 0;
+  }
+  if (!Number.isFinite(value) || value < 0) {
+    return 0;
+  }
+  return value;
 };
 
 /**
@@ -146,14 +252,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const { block, measure, columnWidth, ensurePage, advanceColumn, columnX, floatManager } = ctx;
   const remeasureParagraph = ctx.remeasureParagraph;
 
-  const frame = (block.attrs as { frame?: Record<string, unknown> } | undefined)?.frame as
-    | {
-        wrap?: string;
-        x?: number;
-        y?: number;
-        xAlign?: 'left' | 'right' | 'center';
-      }
-    | undefined;
+  const blockAttrs = getParagraphAttrs(block);
+  const frame = blockAttrs?.frame;
 
   if (anchors?.anchoredDrawings?.length) {
     for (const entry of anchors.anchoredDrawings) {
@@ -314,9 +414,10 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   }
 
   let fromLine = 0;
-  const spacing = (block.attrs?.spacing ?? {}) as Record<string, unknown>;
-  const styleId = (block.attrs as Record<string, unknown>)?.styleId as string | undefined;
-  const contextualSpacing = Boolean((block.attrs as Record<string, unknown>)?.contextualSpacing);
+  const attrs = getParagraphAttrs(block);
+  const spacing = attrs?.spacing ?? {};
+  const styleId = asString(attrs?.styleId);
+  const contextualSpacing = asBoolean(attrs?.contextualSpacing);
   let spacingBefore = Math.max(0, Number(spacing.before ?? spacing.lineSpaceBefore ?? 0));
   const spacingAfter = Math.max(0, Number(spacing.after ?? spacing.lineSpaceAfter ?? 0));
   let appliedSpacingBefore = spacingBefore === 0;
@@ -426,14 +527,35 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   while (fromLine < lines.length) {
     let state = ensurePage();
     if (state.trailingSpacing == null) state.trailingSpacing = 0;
-    if (contextualSpacing) {
-      const prevStyle = state.lastParagraphStyleId;
-      if (styleId && prevStyle && prevStyle === styleId) {
-        spacingBefore = 0;
-      }
-    }
+
+    /**
+     * Contextual Spacing Logic (OOXML w:contextualSpacing)
+     *
+     * When contextualSpacing is enabled on a paragraph, spacing before and after is
+     * suppressed when the paragraph is adjacent to another paragraph with the same style.
+     *
+     * This implements Microsoft Word's contextual spacing behavior:
+     * 1. Check if contextualSpacing is enabled on the current paragraph
+     * 2. Check if both paragraphs have style IDs (required for comparison)
+     * 3. Check if the style IDs match (same style = suppress spacing)
+     *
+     * When all conditions are met:
+     * - spacingBefore is zeroed (prevents adding space before this paragraph)
+     * - Previous paragraph's spacingAfter (trailingSpacing) is undone by subtracting
+     *   it from cursorY, effectively removing the space already added
+     *
+     * Input Validation:
+     * - trailingSpacing is validated to be a finite, non-negative number
+     * - Invalid values (NaN, Infinity, negative, null, undefined) are treated as 0
+     * - This prevents layout corruption from malformed input data
+     */
     if (contextualSpacing && state.lastParagraphStyleId && styleId && state.lastParagraphStyleId === styleId) {
       spacingBefore = 0;
+      const prevTrailing = asSafeNumber(state.trailingSpacing);
+      if (prevTrailing > 0) {
+        state.cursorY -= prevTrailing;
+        state.trailingSpacing = 0;
+      }
     }
 
     if (!appliedSpacingBefore && spacingBefore > 0) {
