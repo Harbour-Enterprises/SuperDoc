@@ -26,7 +26,9 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@superdoc/layout-engine": "workspace:*",
+    "@superdoc/painter-dom": "workspace:*"
   },
   "dependencies": {
     "@superdoc/super-editor": "workspace:*",
