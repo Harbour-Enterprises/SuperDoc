@@ -34,12 +34,6 @@
       "import": "./dist/super-editor.es.js",
       "require": "./dist/super-editor.cjs"
     },
-    "./super-editor/style.css": {
-      "import": "./dist/super-editor/style.css"
-    },
-    "./common": {
-      "import": "./dist/common.es.js"
-    },
     "./file-zipper": {
       "import": "./dist/super-editor/file-zipper.es.js"
     },

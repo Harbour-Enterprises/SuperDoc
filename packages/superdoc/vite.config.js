@@ -51,7 +51,7 @@ export default defineConfig(({ mode, command}) => {
     copy({
       targets: [
         { 
-          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
+          src: 'node_modules/pdfjs-dist/web/images/*',
           dest: 'dist/images',
         },
       ],
@@ -97,6 +97,9 @@ export default defineConfig(({ mode, command}) => {
         input: {
           'superdoc': 'src/index.js',
           'super-editor': 'src/super-editor.js',
+          'super-editor/docx-zipper': '@core/DocxZipper',
+          'super-editor/converter': '@core/super-converter/SuperConverter',
+          'super-editor/file-zipper': '@core/super-converter/zipper.js',
         },
         external: [
           'yjs',
