@@ -10,10 +10,9 @@ import { toFlowBlocks } from './index.js';
 import type { PMNode } from './index.js';
 import { measureBlock } from '@superdoc/measuring-dom';
 import { layoutDocument } from '@superdoc/layout-engine';
-import type { ParaFragment } from '@superdoc/layout-engine';
 import { createDomPainter } from '@superdoc/painter-dom';
 // Cleaned: remove unused PDF painter import
-import type { Measure, ParagraphMeasure, TabStop } from '@superdoc/contracts';
+import type { Measure, ParaFragment, ParagraphMeasure, TabStop } from '@superdoc/contracts';
 import basicParagraphFixture from './fixtures/basic-paragraph.json';
 import edgeCasesFixture from './fixtures/edge-cases.json';
 import twoColumnFixture from './fixtures/two-column-two-page.json';
