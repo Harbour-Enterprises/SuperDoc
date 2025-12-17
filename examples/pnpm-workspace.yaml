@@ -1,0 +1,6 @@
+packages:
+  - "**/*"
+  - "!collaboration/tiptap-cloud"
+
+overrides:
+  superdoc: "file:../packages/superdoc/superdoc.tgz"
