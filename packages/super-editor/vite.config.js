@@ -58,7 +58,6 @@ export default defineConfig(({ mode }) => {
       },
       rollupOptions: {
         external: [
-          'vite-plugin-node-polyfills/shims/process',
           'vue',
           'yjs',
           'y-protocols',

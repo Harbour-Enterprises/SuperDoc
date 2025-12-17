@@ -97,3 +97,6 @@ onlyBuiltDependencies:
   - esbuild
   - unrs-resolver
   - vue-demi
+
+patchedDependencies:
+  vite-plugin-node-polyfills: patches/vite-plugin-node-polyfills.patch
