@@ -183,6 +183,12 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Pack SuperDoc
+        run: pnpm run --filter superdoc pack
+
       - name: Setup visual tests
         run: |
           cd examples/tests
