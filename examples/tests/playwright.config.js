@@ -1,8 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
 import testConfig from './test-config.js';
 
-const foldersToTest = testConfig.include;
-
 export default defineConfig({
   testMatch: '**/*.spec.js',
 
@@ -37,12 +35,12 @@ export default defineConfig({
   ],
 
   // Open every example in a separate server
-  webServer: testConfig.include.map(({name, command}, i) => {
+  webServer: testConfig.packages.map((packagePath, i) => {
     return {
-        command: `${command} -- --port ${5173 + i}`,
-        url: `http://localhost:${5173 + i}`,
-        reuseExistingServer: !process.env.CI,
-        timeout: 120 * 1000, // 2 minutes timeout for server startup
+      command: `pnpm run --prefix ../${packagePath} dev --port ${5173 + i}`,
+      url: `http://localhost:${5173 + i}`,
+      reuseExistingServer: !process.env.CI,
+      timeout: 120 * 1000, // 2 minutes timeout for server startup
     }
   })
 });
