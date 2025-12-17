@@ -1157,6 +1157,7 @@ export const computeParagraphAttrs = (
   const paragraphAlignment =
     typeof paragraphProps.justification === 'string' ? normalizeAlignment(paragraphProps.justification) : undefined;
   const styleAlignment = hydrated?.alignment ? normalizeAlignment(hydrated.alignment) : undefined;
+
   if (bidi && adjustRightInd) {
     paragraphAttrs.alignment = 'right';
   } else if (explicitAlignment) {
@@ -1170,7 +1171,7 @@ export const computeParagraphAttrs = (
   } else if (styleAlignment) {
     paragraphAttrs.alignment = styleAlignment;
   } else if (computed.paragraph.alignment) {
-    paragraphAttrs.alignment = computed.paragraph.alignment;
+    paragraphAttrs.alignment = normalizeAlignment(computed.paragraph.alignment);
   }
 
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);

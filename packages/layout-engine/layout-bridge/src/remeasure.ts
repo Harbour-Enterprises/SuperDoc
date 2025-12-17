@@ -17,7 +17,7 @@ type ParagraphBlockAttrs = {
   indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
   tabs?: TabStop[];
   tabIntervalTwips?: number;
-  wordLayout?: { textStartPx?: number };
+  wordLayout?: { textStartPx?: number; marker?: { textStartX?: number } };
   numberingProperties?: unknown;
 };
 
@@ -474,7 +474,17 @@ export function remeasureParagraph(
   const indentHanging = Math.max(0, indent?.hanging ?? 0);
   const rawFirstLineOffset = Math.max(0, firstLineIndent || indentFirstLine - indentHanging);
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  const textStartPx = wordLayout?.textStartPx;
+  // Some producers provide `marker.textStartX` without setting top-level `textStartPx`.
+  // Both values represent the same concept: where the first-line text begins after the marker/tab.
+  // IMPORTANT: Priority must match the painter (renderer.ts) which prefers marker.textStartX
+  // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
+  const markerTextStartX = wordLayout?.marker?.textStartX;
+  const textStartPx =
+    typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
+      ? markerTextStartX
+      : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+        ? wordLayout.textStartPx
+        : undefined;
   // If numbering defines only a firstLine indent with no left/hanging, treat it as a hanging-style layout:
   // don't shrink available width in columns (matches Word which positions marker + tab but leaves normal text width).
   const treatAsHanging = textStartPx && indentLeft === 0 && indentHanging === 0;

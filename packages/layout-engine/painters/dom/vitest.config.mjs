@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const presetGeometryPath = path.resolve(__dirname, '../../../preset-geometry/index.js');
+const contractsPath = path.resolve(__dirname, '../../contracts/src/index.ts');
 
 export default defineConfig({
   test: {
@@ -12,7 +13,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@superdoc/contracts': '../../contracts/src/index.ts',
+      '@superdoc/contracts': contractsPath,
       '@superdoc/preset-geometry': presetGeometryPath,
     },
   },
