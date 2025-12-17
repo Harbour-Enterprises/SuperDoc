@@ -18,7 +18,7 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/packages/superdoc/src/index.d.ts",
+      "types": "./dist/superdoc/src/index.d.ts",
       "source": "./src/index.js",
       "import": "./dist/superdoc.es.js",
       "require": "./dist/superdoc.cjs"
@@ -39,15 +39,15 @@
     },
     "./style.css": "./dist/style.css"
   },
-  "types": "./dist/packages/superdoc/src/index.d.ts",
+  "types": "./dist/superdoc/src/index.d.ts",
   "main": "./dist/superdoc.umd.js",
   "module": "./dist/superdoc.es.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && tsc -p tsconfig.build.json && pnpm run build:umd",
+    "build": "vite build && pnpm run build:umd",
     "postbuild": "node ./scripts/ensure-types.cjs",
     "build:es": "vite build",
-    "watch:es": "nodemon --watch src --watch ../super-editor/src --ext js,ts,vue --exec \"pnpm run build:es\" --delay 100ms",
+    "watch:es": "vite build --watch",
     "build:umd": "vite build --config vite.config.umd.js",
     "clean": "rm -rf dist",
     "pack:local": "pnpm run pack",
@@ -72,10 +72,10 @@
     "yjs": "catalog:"
   },
   "devDependencies": {
-    "@superdoc/super-editor": "workspace:*",
     "@hocuspocus/provider": "catalog:",
     "@superdoc/common": "workspace:*",
     "@superdoc/painter-pdf": "workspace:*",
+    "@superdoc/super-editor": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "jszip": "catalog:",
@@ -88,6 +88,7 @@
     "rollup-plugin-visualizer": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
+    "vite-plugin-dts": "catalog:",
     "vite-plugin-node-polyfills": "catalog:",
     "vitest": "catalog:",
     "xml-js": "catalog:"

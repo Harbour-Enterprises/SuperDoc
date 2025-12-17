@@ -1,5 +1,6 @@
 import path from 'path';
 import copy from 'rollup-plugin-copy'
+import dts from 'vite-plugin-dts'
 import { defineConfig } from 'vite'
 import { configDefaults } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url';
@@ -48,6 +49,7 @@ export const getAliases = (_isDev) => {
 export default defineConfig(({ mode, command}) => {
   const plugins = [
     vue(),
+    dts(),
     copy({
       targets: [
         { 

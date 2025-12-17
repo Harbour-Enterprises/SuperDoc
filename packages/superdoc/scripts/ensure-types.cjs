@@ -3,8 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-// TypeScript emits to dist/packages/superdoc/src/index.d.ts when common is included
-const basePath = 'dist/packages/superdoc/src/index.d.ts';
+// TypeScript emits to dist/superdoc/src/index.d.ts when common is included
+const basePath = 'dist/superdoc/src/index.d.ts';
 const distIndexPath = path.resolve(__dirname, '..', basePath);
 
 if (!fs.existsSync(distIndexPath)) {
