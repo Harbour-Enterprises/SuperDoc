@@ -110,6 +110,11 @@ export class SuperDoc extends EventEmitter {
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
 
+    // Override visual margins for the flow editor (values in pixels)
+    // Only applies when layout engine is disabled (useLayoutEngine: false)
+    // Example: { top: 48, bottom: 48, left: 48, right: 48 }
+    displayMarginsOverride: null,
+
     // Internal: toggle layout-engine-powered PresentationEditor in dev shells
     useLayoutEngine: true,
   };

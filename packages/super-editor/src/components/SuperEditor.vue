@@ -59,6 +59,9 @@ const contextMenuDisabled = computed(() => {
   return active?.options ? Boolean(active.options.disableContextMenu) : Boolean(props.options.disableContextMenu);
 });
 
+const isFlowEditor = computed(() => props.options?.editorCtor !== PresentationEditor);
+const shouldRelaxMinSize = computed(() => isFlowEditor.value && Boolean(props.options?.displayMarginsOverride));
+
 /**
  * Reactive ruler visibility state.
  * Uses a ref with a deep watcher to ensure proper reactivity when options.rulers changes.
@@ -783,7 +786,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="super-editor-container">
+  <div class="super-editor-container" :class="{ 'no-min-height': shouldRelaxMinSize }">
     <!-- Ruler: teleport to external container if specified, otherwise render inline -->
     <Teleport v-if="options.rulerContainer && rulersVisible && !!activeEditor" :to="options.rulerContainer">
       <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
@@ -883,6 +886,12 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.super-editor-container.no-min-height {
+  width: 100%;
+  min-height: 0;
+  min-width: 0;
 }
 
 .ruler {

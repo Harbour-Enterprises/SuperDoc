@@ -135,7 +135,6 @@ const init = async () => {
     role: userRole,
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
-    pagination: useLayoutEngine.value,
     rulers: true,
     rulerContainer: '#ruler-container',
     annotations: true,
@@ -160,7 +159,10 @@ const init = async () => {
     //   },
     // ],
     // cspNonce: 'testnonce123',
+
     useLayoutEngine: useLayoutEngine.value,
+    // displayMarginsOverride: { top: 10, bottom: 10, left: 10, right: 10 }, // useLayoutEngine must be false for this to apply
+
     modules: {
       comments: {
         // comments: sampleComments,

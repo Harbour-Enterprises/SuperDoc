@@ -54,6 +54,17 @@ export interface DocxFileEntry {
 }
 
 /**
+ * Override visual margins for non-layout-engine mode.
+ * Values are in pixels and only apply when PresentationEditor is not used.
+ */
+export interface DisplayMarginsOverride {
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+}
+
+/**
  * Awareness interface - matches y-protocols Awareness.
  * All properties optional to support various provider implementations.
  */
@@ -186,6 +197,12 @@ export interface EditorOptions {
 
   /** Editor scale/zoom */
   scale?: number;
+
+  /**
+   * Override visual margins (values in pixels).
+   * Only applies when PresentationEditor (layout engine) is disabled.
+   */
+  displayMarginsOverride?: DisplayMarginsOverride | null;
 
   /** Whether annotations are enabled */
   annotations?: boolean;
