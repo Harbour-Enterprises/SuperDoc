@@ -80,6 +80,9 @@ export class SuperDoc extends EventEmitter {
     toolbarIcons: {},
     toolbarTexts: {},
 
+    // UI font for SuperDoc surfaces (toolbar, comments UI, etc.)
+    uiDisplayFallbackFont: 'Arial, Helvetica, sans-serif',
+
     isDev: false,
 
     // telemetry config
@@ -607,6 +610,7 @@ export class SuperDoc extends EventEmitter {
       superdoc: this,
       aiApiKey: this.config.modules?.ai?.apiKey,
       aiEndpoint: this.config.modules?.ai?.endpoint,
+      uiDisplayFallbackFont: this.config.uiDisplayFallbackFont,
       ...moduleConfig,
       excludeItems, // Override moduleConfig.excludeItems with our computed list
     };

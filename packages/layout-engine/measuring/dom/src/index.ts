@@ -1737,8 +1737,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   }
 
   if (!currentLine && lines.length === 0) {
-    const fallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
-    const metrics = calculateTypographyMetrics(fallbackFontSize, spacing);
+    const uiDisplayFallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
+    const metrics = calculateTypographyMetrics(uiDisplayFallbackFontSize, spacing);
     const fallbackLine: Line = {
       fromRun: 0,
       fromChar: 0,

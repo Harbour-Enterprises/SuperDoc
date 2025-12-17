@@ -1,5 +1,6 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
+import '../dev-styles.css';
 import { nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, computed } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
@@ -107,6 +108,11 @@ const readFileAsText = (file) => {
 };
 
 const init = async () => {
+  // If the dev shell re-initializes (e.g. on file upload), tear down the previous instance first.
+  superdoc.value?.destroy?.();
+  superdoc.value = null;
+  activeEditor.value = null;
+
   let testId = 'document-123';
 
   // eslint-disable-next-line no-unused-vars

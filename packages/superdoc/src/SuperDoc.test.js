@@ -147,6 +147,17 @@ vi.mock('@superdoc/components/CommentsLayer/CommentsLayer.vue', () => ({
 }));
 
 vi.mock('naive-ui', () => ({
+  NConfigProvider: defineComponent({
+    name: 'NConfigProvider',
+    props: {
+      abstract: Boolean,
+      preflightStyleDisabled: Boolean,
+      styleMountTarget: Object,
+    },
+    setup(_, { slots }) {
+      return () => slots.default?.();
+    },
+  }),
   NMessageProvider: defineComponent({
     name: 'NMessageProvider',
     setup(_, { slots }) {
