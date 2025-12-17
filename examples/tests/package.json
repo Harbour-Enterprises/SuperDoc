@@ -4,7 +4,7 @@
   "description": "Automated tests suites for all examples on the demo gallery",
   "main": "index.js",
   "scripts": {
-    "test": "npx playwright test"
+    "test": "playwright test"
   },
   "author": "",
   "license": "ISC",

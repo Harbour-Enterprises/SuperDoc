@@ -29,7 +29,7 @@
     "lint:fix": "eslint --fix --ext .js,.ts,.tsx --ignore-pattern \"**/{test,tests,__tests__}/**\" --ignore-pattern \"**/*.test.*\" --ignore-pattern \"**/*.spec.*\" --ignore-pattern \"**/*.vue\" packages shared scripts",
     "lint:jsdoc": "eslint packages/super-editor/src/extensions/field-annotation/field-annotation.js --config eslint.config.docs.mjs",
     "lint:jsdoc:fix": "eslint packages/super-editor/src/extensions/field-annotation/field-annotation.js --config eslint.config.docs.mjs --fix",
-    "pack": "pnpm run build:super-editor && pnpm --prefix ./packages/superdoc run pack",
+    "pack": "pnpm --prefix ./packages/superdoc run pack",
     "prepare": "husky",
     "test:layout": "node ./scripts/test-layout.mjs",
     "lint:staged": "lint-staged",
