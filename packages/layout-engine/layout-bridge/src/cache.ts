@@ -24,9 +24,6 @@ const MAX_CACHE_SIZE = 10_000;
  */
 const BYTES_PER_ENTRY_ESTIMATE = 5_000; // ~5KB per entry
 
-const NORMALIZED_WHITESPACE = /\s+/g;
-const normalizeText = (text: string) => text.replace(NORMALIZED_WHITESPACE, ' ');
-
 /**
  * Creates a deterministic hash string for a paragraph frame.
  * Ensures consistent property ordering for reliable cache keys.
@@ -113,8 +110,8 @@ const hashRuns = (block: FlowBlock): string => {
           }
 
           for (const run of paragraphBlock.runs) {
-            // Include text content
-            const text = 'text' in run && typeof run.text === 'string' ? normalizeText(run.text) : '';
+            // Text is used verbatim without normalization - whitespace affects measurements
+            const text = 'text' in run && typeof run.text === 'string' ? run.text : '';
 
             // Include formatting marks that affect measurement (mirroring paragraph approach)
             const bold = 'bold' in run ? run.bold : false;
@@ -237,11 +234,11 @@ const hashRuns = (block: FlowBlock): string => {
         return `img:${srcHash}:${imgRun.width}x${imgRun.height}`;
       }
 
-      const text = normalizeText(
+      // Text is used verbatim without normalization - whitespace affects measurements
+      const text =
         'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
           ? ''
-          : (run.text ?? ''),
-      );
+          : (run.text ?? '');
       const bold = 'bold' in run ? run.bold : false;
       const italic = 'italic' in run ? run.italic : false;
       const color = 'color' in run ? run.color : undefined;
