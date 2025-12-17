@@ -1,5 +1,4 @@
 packages:
-  - examples/*
   - e2e-tests
   - e2e-tests/templates/vue
   - apps/*
@@ -28,10 +27,10 @@ catalog:
   color2k: ^2.0.3
   concurrently: ^9.1.2
   eslint: ^9.39.1
-  eslint-plugin-jsdoc: ^54.1.0
   eslint-config-prettier: ^9.1.0
   eslint-import-resolver-typescript: ^4.4.4
   eslint-plugin-import-x: ^4.16.1
+  eslint-plugin-jsdoc: ^54.1.0
   eventemitter3: ^5.0.1
   he: ^1.2.0
   husky: ^9.1.7
