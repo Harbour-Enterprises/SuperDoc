@@ -21,12 +21,9 @@ npm install @superdoc-dev/ai
 
 ## Quick Start
 
-> ⚠️ **SECURITY WARNING**: This example is for **development only**. Never expose API keys in production browser code. See [Production Deployment](#production-deployment) for secure patterns.
-
 ```typescript
 import { AIActions } from '@superdoc-dev/ai';
 
-// ⚠️ DEVELOPMENT ONLY - See "Production Deployment" section
 const ai = new AIActions(superdoc, {
   user: {
     displayName: 'AI Assistant',
@@ -471,15 +468,11 @@ AGPL-3.0 - see [LICENSE](../../LICENSE) for details.
 
 ## Version & Compatibility
 
-**Current Version**: 0.1.7-next (Pre-release)
+**Current Version**: 0.1.8-next.6 (Pre-release)
 
-**Supported SuperDoc Versions**: >=1.0.0-beta.17 <2.0.0
+**Supported SuperDoc Versions**: >=1.0.0-next <2.0.0
 
-> **Before deploying to production**, you MUST:
->
-> - ✅ Implement server-side API proxy (security)
-> - ✅ Never expose API keys in browser
-> - ✅ Configure `maxContextLength` to respect your provider's token limits
+> ⚠️ **Production Security**: Never expose API keys in browser code. Implement a server-side API proxy and configure `maxContextLength` appropriately. Note: `maxContextLength` is measured in **characters** (not tokens). A rough estimate is 2,000–3,000 tokens per 8,000 characters, depending on content. Adjust based on your provider's token limits.
 
 ### What's New in 0.1.x
 

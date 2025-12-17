@@ -4,7 +4,7 @@
  */
 
 /**
- * Default maximum length of document context sent to AI provider (in characters)
+ * Default maximum length of document context sent to AI provider (in characters, not tokens).
  */
 export const DEFAULT_CONTEXT_LENGTH = 8000;
 

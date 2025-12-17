@@ -96,6 +96,7 @@ export type AIActionsConfig = {
   user: AIUser;
   systemPrompt?: string;
   enableLogging?: boolean;
+  /** Maximum document context length in characters (not tokens). Default: 8,000 characters */
   maxContextLength?: number;
 };
 
@@ -114,6 +115,7 @@ export type AIActionsCallbacks = {
  * Planner-specific configuration options
  */
 export type PlannerOptions = {
+  /** Maximum document context length in characters (not tokens). Default: 8,000 characters */
   maxContextLength?: number;
   documentContextProvider?: () => string;
   tools?: AIToolDefinition[];

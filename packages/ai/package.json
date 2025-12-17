@@ -54,7 +54,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "1.0.0-next.1",
+    "superdoc": "^1.0.0-next.1",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4"

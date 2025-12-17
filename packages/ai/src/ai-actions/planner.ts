@@ -56,6 +56,7 @@ export interface AIPlannerConfig {
 
   // Optional configuration
   enableLogging?: boolean;
+  /** Maximum document context length in characters (not tokens). */
   maxContextLength?: number;
   documentContextProvider?: () => string;
   tools?: AIToolDefinition[];
@@ -355,7 +356,8 @@ export class AIPlanner {
           const detail = getErrorMessage(error);
           this.logger.error('Tool execution error', error, {
             tool: step.tool,
-            instruction: instruction.substring(0, 100),
+            stepId: step.id,
+            instructionLength: instruction.length,
           });
           this.onProgress?.({ type: 'complete', success: false });
           return {
@@ -559,6 +561,7 @@ export class AIPlanner {
 
   /**
    * Truncates document text to fit within context length limits
+   * Uses character count (not tokens).
    * @private
    * @param text - Text to truncate
    * @returns Truncated text with head and tail preserved
