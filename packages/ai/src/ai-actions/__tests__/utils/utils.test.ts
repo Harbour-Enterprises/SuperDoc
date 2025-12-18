@@ -1,24 +1,24 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateInput, parseJSON, removeMarkdownCodeBlocks, generateId } from './utils';
-import type { Result } from './types';
+import { validateInput, parseJSON, removeMarkdownCodeBlocks, generateId } from '../../../shared/utils';
+import type { Result } from '../../../shared/types';
 
 describe('utils', () => {
   describe('validateInput', () => {
     it('should return true for valid input', () => {
-      expect(validateInput('valid input', 'Test')).toBe(true);
+      expect(validateInput('valid input')).toBe(true);
     });
 
     it('should return false for empty string', () => {
-      expect(validateInput('', 'Test')).toBe(false);
+      expect(validateInput('')).toBe(false);
     });
 
     it('should return false for whitespace-only string', () => {
-      expect(validateInput('   ', 'Query')).toBe(false);
+      expect(validateInput('   ')).toBe(false);
     });
 
     it('should return false for null/undefined', () => {
-      expect(validateInput(null as unknown as string, 'Input')).toBe(false);
-      expect(validateInput(undefined as unknown as string, 'Input')).toBe(false);
+      expect(validateInput(null as unknown as string)).toBe(false);
+      expect(validateInput(undefined as unknown as string)).toBe(false);
     });
   });
 
@@ -63,7 +63,7 @@ describe('utils', () => {
 
     it('should not log errors when logging is disabled', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-        /* noop */
+        // Mock implementation
       });
       parseJSON('invalid', {}, false);
       expect(consoleSpy).not.toHaveBeenCalled();
@@ -72,7 +72,7 @@ describe('utils', () => {
 
     it('should log errors when logging is enabled', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {
-        /* noop */
+        // Mock implementation
       });
       parseJSON('invalid', {}, true);
       expect(consoleSpy).toHaveBeenCalled();

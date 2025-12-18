@@ -1,6 +1,6 @@
-import type { Editor, FoundMatch, MarkType } from './types';
+import type { Editor, FoundMatch, MarkType } from '../../shared';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
-import { generateId } from './utils';
+import { generateId, stripListPrefix } from '../../shared';
 
 /**
  * Default highlight color for text selections.
@@ -41,7 +41,29 @@ export class EditorAdapter {
     return results
       .map((match) => {
         const text = match.originalText;
-        const rawMatches = this.editor.commands?.search?.(text, { highlight }) ?? [];
+        let rawMatches: Array<{ from?: number; to?: number }> = [];
+
+        if (this.editor.commands?.search) {
+          // First try with original text
+          rawMatches = this.editor.commands.search(text, { highlight }) ?? [];
+
+          // If no matches and text has list prefix, try with stripped prefix
+          if (rawMatches.length === 0 && text && /^\d+(\.\d+)?\.\s+/.test(text)) {
+            const strippedText = stripListPrefix(text);
+            if (strippedText) {
+              rawMatches = this.editor.commands.search(strippedText, { highlight }) ?? [];
+            }
+          }
+
+          // If still no matches, try with normalized whitespace (collapse multiple spaces to single space)
+          // This handles cases where text is split across nodes and whitespace differs
+          if (rawMatches.length === 0 && text) {
+            const normalizedText = text.replace(/\s+/g, ' ').trim();
+            if (normalizedText !== text && normalizedText.length > 0) {
+              rawMatches = this.editor.commands.search(normalizedText, { highlight }) ?? [];
+            }
+          }
+        }
 
         let positions = rawMatches
           .map((match: { from?: number; to?: number }) => {
@@ -70,6 +92,65 @@ export class EditorAdapter {
   }
 
   /**
+   * Performs a literal text search across the entire document without mutating editor state.
+   * The search works across text nodes with different marks/formatting, as the underlying
+   * search implementation extracts text content regardless of formatting.
+   *
+   * @param query - Exact text to find
+   * @param caseSensitive - Whether the search should be case sensitive
+   */
+  findLiteralMatches(query: string, caseSensitive: boolean = false): Array<{ from: number; to: number; text: string }> {
+    const doc = this.editor?.state?.doc;
+    if (!doc || !query) {
+      return [];
+    }
+
+    if (this.editor?.commands?.search && typeof this.editor.commands.search === 'function') {
+      const listPrefixMatch = query.match(/^\d+(\.\d+)?\.\s+/);
+
+      if (listPrefixMatch) {
+        // First try with original query (escaped for regex)
+        const escapedOriginal = this.escapeRegex(query);
+        const regexOriginal = new RegExp(escapedOriginal, caseSensitive ? 'g' : 'gi');
+        const originalResults = this.editor.commands.search(regexOriginal, { highlight: false }) || [];
+
+        // Then try with stripped prefix (also escaped for regex)
+        const strippedQuery = query.replace(/^\d+(\.\d+)?\.\s+/, '');
+        const escapedStripped = this.escapeRegex(strippedQuery);
+        const regexStripped = new RegExp(escapedStripped, caseSensitive ? 'g' : 'gi');
+        const strippedResults = this.editor.commands.search(regexStripped, { highlight: false }) || [];
+
+        // Return stripped results if found, otherwise original
+        const results = strippedResults.length > 0 ? strippedResults : originalResults;
+        return results.map((match: { from: number; to: number; text?: string }) => ({
+          from: match.from,
+          to: match.to,
+          text: match.text || doc.textBetween(match.from, match.to),
+        }));
+      }
+
+      // No list prefix, just search normally
+      const escapedQuery = this.escapeRegex(query);
+      const regex = new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi');
+      const results = this.editor.commands.search(regex, { highlight: false }) || [];
+
+      return results.map((match: { from: number; to: number; text?: string }) => ({
+        from: match.from,
+        to: match.to,
+        text: match.text || doc.textBetween(match.from, match.to),
+      }));
+    }
+    return [];
+  }
+
+  /**
+   * Escapes special regex characters in a string for use in a RegExp
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }
+
+  /**
    * Creates a highlight mark at the specified document range.
    * Automatically scrolls to bring the highlighted range into view.
    *
@@ -79,18 +160,17 @@ export class EditorAdapter {
    */
   createHighlight(from: number, to: number, inlineColor: string = DEFAULT_HIGHLIGHT_COLOR): void {
     this.editor.chain().setTextSelection({ from, to }).setHighlight(inlineColor).run();
-    this.scrollToPosition(from, to);
+    this.scrollToPosition(from);
   }
 
   /**
    * Scrolls the editor view to bring a specific position range into view.
    *
    * @param from - Start position to scroll to
-   * @param to - End position to scroll to
    */
-  scrollToPosition(from: number, to: number): void {
-    const { view } = this.editor;
-    if (!view?.domAtPos) {
+  scrollToPosition(from: number): void {
+    const { state, view } = this.editor;
+    if (!state || !view) {
       return;
     }
     const domPos = view.domAtPos(from);
@@ -228,27 +308,92 @@ export class EditorAdapter {
       return [schema.text(suggestedText, this.getMarksAtPosition(from))];
     }
 
-    const nodes: ProseMirrorNode[] = [];
-    let cursor = 0;
-
-    for (const segment of resolvedSegments) {
-      if (cursor >= suggestedText.length) {
-        break;
+    // Helper to compare marks arrays for equality
+    const marksEqual = (marks1: MarkType[], marks2: MarkType[]): boolean => {
+      if (marks1.length !== marks2.length) {
+        return false;
       }
+      const sorted1 = [...marks1].sort((a, b) => a.type.name.localeCompare(b.type.name));
+      const sorted2 = [...marks2].sort((a, b) => a.type.name.localeCompare(b.type.name));
+      return sorted1.every((mark, idx) => mark.eq(sorted2[idx]));
+    };
 
-      const take = Math.min(segment.length, suggestedText.length - cursor);
-      if (!take) {
-        continue;
-      }
-
-      const textSegment = suggestedText.slice(cursor, cursor + take);
-      nodes.push(schema.text(textSegment, segment.marks));
-      cursor += take;
+    // Group consecutive segments with identical marks together
+    // This prevents breaking paragraphs into multiple nodes unnecessarily
+    interface MarkGroup {
+      marks: MarkType[];
+      totalLength: number;
+      segmentIndices: number[];
     }
 
-    if (cursor < suggestedText.length) {
-      const fallbackMarks = resolvedSegments[resolvedSegments.length - 1].marks;
-      nodes.push(schema.text(suggestedText.slice(cursor), fallbackMarks));
+    const groups: MarkGroup[] = [];
+    let currentGroup: MarkGroup | null = null;
+
+    for (let i = 0; i < resolvedSegments.length; i++) {
+      const segment = resolvedSegments[i];
+
+      if (currentGroup === null) {
+        // Start first group
+        currentGroup = {
+          marks: segment.marks,
+          totalLength: segment.length,
+          segmentIndices: [i],
+        };
+      } else if (marksEqual(currentGroup.marks, segment.marks)) {
+        // Merge into current group
+        currentGroup.totalLength += segment.length;
+        currentGroup.segmentIndices.push(i);
+      } else {
+        // Finalize current group and start new one
+        groups.push(currentGroup);
+        currentGroup = {
+          marks: segment.marks,
+          totalLength: segment.length,
+          segmentIndices: [i],
+        };
+      }
+    }
+
+    // Don't forget the last group
+    if (currentGroup !== null) {
+      groups.push(currentGroup);
+    }
+
+    // If there's only one group, create a single node
+    if (groups.length === 1) {
+      return [schema.text(suggestedText, groups[0].marks)];
+    }
+
+    // Calculate total original length for proportional text distribution
+    const totalOriginalLength = resolvedSegments.reduce((sum, seg) => sum + seg.length, 0);
+
+    // Build nodes by distributing text proportionally to each group
+    const nodes: ProseMirrorNode[] = [];
+    let textCursor = 0;
+
+    for (let groupIndex = 0; groupIndex < groups.length; groupIndex++) {
+      const group = groups[groupIndex];
+      const isLastGroup = groupIndex === groups.length - 1;
+
+      // Calculate how much text this group should get
+      let textLength: number;
+      if (isLastGroup) {
+        // Last group gets all remaining text to avoid rounding errors
+        textLength = suggestedText.length - textCursor;
+      } else {
+        // Proportional allocation based on original segment lengths
+        const proportion = group.totalLength / totalOriginalLength;
+        textLength = Math.floor(suggestedText.length * proportion);
+      }
+
+      // Ensure we don't exceed available text
+      textLength = Math.min(textLength, suggestedText.length - textCursor);
+
+      if (textLength > 0) {
+        const groupText = suggestedText.slice(textCursor, textCursor + textLength);
+        nodes.push(schema.text(groupText, group.marks));
+        textCursor += textLength;
+      }
     }
 
     return nodes;
@@ -448,21 +593,10 @@ export class EditorAdapter {
     }
 
     // If replacing the entire range (no prefix or suffix), use original positions directly
-    // Otherwise, map character offsets to positions (handles node boundaries correctly)
-    let changeFrom: number;
-    let changeTo: number;
-
-    if (prefix === 0 && suffix === 0) {
-      // Full replacement - resolve position to ensure it points to actual text content
-      // This handles edge cases where search returns positions at node boundaries
-      changeFrom = this.mapCharOffsetToPosition(from, to, 0);
-      changeTo = to;
-    } else {
-      // Partial replacement - map character offsets to positions
-      changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
-      const originalTextLength = originalText.length;
-      changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
-    }
+    // Otherwise, map character offsets to document positions (handles node boundaries correctly)
+    const changeFrom = this.mapCharOffsetToPosition(from, to, prefix);
+    const originalTextLength = originalText.length;
+    const changeTo = this.mapCharOffsetToPosition(from, to, originalTextLength - suffix);
 
     const replacementEnd = suggestedText.length - suffix;
     const replacementText = suggestedText.slice(prefix, replacementEnd);
@@ -503,8 +637,11 @@ export class EditorAdapter {
   createTrackedChange(from: number, to: number, suggestedText: string): string {
     const changeId = generateId('tracked-change');
     this.editor.commands.enableTrackChanges();
-    this.applyPatch(from, to, suggestedText);
-    this.editor.commands.disableTrackChanges();
+    try {
+      this.applyPatch(from, to, suggestedText);
+    } finally {
+      this.editor.commands.disableTrackChanges();
+    }
     return changeId;
   }
 
@@ -540,13 +677,24 @@ export class EditorAdapter {
    * Preserves marks from the surrounding context at the insertion point.
    *
    * @param suggestedText - The text to insert
+   * @param options
    */
-  insertText(suggestedText: string): void {
+  insertText(suggestedText: string, options?: { position?: 'before' | 'after' | 'replace' }): void {
     const position = this.getSelectionRange();
     if (!position) {
       return;
     }
 
-    this.applyPatch(position.from, position.to, suggestedText);
+    const mode = options?.position ?? 'replace';
+    let from = position.from;
+    let to = position.to;
+
+    if (mode === 'before') {
+      to = from;
+    } else if (mode === 'after') {
+      from = to;
+    }
+
+    this.applyPatch(from, to, suggestedText);
   }
 }
