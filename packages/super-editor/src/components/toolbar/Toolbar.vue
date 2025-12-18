@@ -81,8 +81,8 @@ const restoreSelection = () => {
 </script>
 
 <template>
-  <n-config-provider abstract preflight-style-disabled>
-    <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar" data-editor-ui-surface>
+  <div class="superdoc-toolbar" :key="toolbarKey" role="toolbar" aria-label="Toolbar" data-editor-ui-surface>
+    <n-config-provider abstract preflight-style-disabled>
       <ButtonGroup
         tabindex="0"
         v-if="showLeftSide"
@@ -112,8 +112,8 @@ const restoreSelection = () => {
         @item-clicked="restoreSelection"
         class="superdoc-toolbar-group-side"
       />
-    </div>
-  </n-config-provider>
+    </n-config-provider>
+  </div>
 </template>
 
 <style scoped>
