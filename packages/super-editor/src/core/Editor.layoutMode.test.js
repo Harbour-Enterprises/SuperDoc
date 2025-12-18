@@ -250,6 +250,23 @@ describe('Editor layoutMode', () => {
 
       expect(editor.options.layoutMode).toBe('responsive');
     });
+
+    it('responsive mode takes precedence over pagination: true', (context) => {
+      const { editor } = initTestEditor({
+        content: docx,
+        media,
+        mediaFiles,
+        fonts,
+        layoutMode: 'responsive',
+        pagination: true,
+      });
+      context.editor = editor;
+
+      // layoutMode: 'responsive' should work even if pagination: true is set
+      expect(editor.options.layoutMode).toBe('responsive');
+      // The editor should still treat this as responsive mode
+      expect(editor.options.pagination).toBe(true); // Option preserved, but behavior overridden
+    });
   });
 
   describe('getMaxContentSize()', () => {
@@ -397,10 +414,11 @@ describe('Editor layoutMode', () => {
 
       const result = editor.getMaxContentSize();
 
-      // Expected: (8.5 * 96 - 0 - 0 - 20) = 796 (left/right use 0 when margins missing)
-      // Expected: (11 * 96 - 50 - 0 - 50) = 956 (top override, bottom uses 0)
-      expect(result.width).toBe(796);
-      expect(result.height).toBe(956);
+      // In responsive mode, missing layoutMargins default to 96px (1in)
+      // Expected: (8.5 * 96 - 96 - 96 - 20) = 604 (left/right default to 96px)
+      // Expected: (11 * 96 - 50 - 96 - 50) = 860 (top override, bottom defaults to 96px)
+      expect(result.width).toBe(604);
+      expect(result.height).toBe(860);
     });
   });
 
@@ -478,12 +496,11 @@ describe('Editor layoutMode', () => {
 
       editor.updateEditorStyles(element, proseMirror, false);
 
-      // Uses document margins for left/right padding
-      expect(element.style.paddingLeft).toBe('1in');
-      expect(element.style.paddingRight).toBe('1in');
-      // Uses default 1in for top/bottom in responsive mode without layoutMargins
-      expect(proseMirror.style.paddingTop).toBe('1in');
-      expect(proseMirror.style.paddingBottom).toBe('1in');
+      // Uses default 1in (96px) for all sides in responsive mode without layoutMargins
+      expect(element.style.paddingLeft).toBe('96px');
+      expect(element.style.paddingRight).toBe('96px');
+      expect(proseMirror.style.paddingTop).toBe('96px');
+      expect(proseMirror.style.paddingBottom).toBe('96px');
     });
 
     it('does not apply layoutMargins in paginated mode', () => {
@@ -505,7 +522,7 @@ describe('Editor layoutMode', () => {
       expect(proseMirror.style.paddingBottom).toBe('0');
     });
 
-    it('applies partial layoutMargins with fallback to document margins', () => {
+    it('applies partial layoutMargins with fallback to default', () => {
       editor.options.layoutMode = 'responsive';
       editor.options.layoutMargins = {
         left: 100,
@@ -515,7 +532,7 @@ describe('Editor layoutMode', () => {
       editor.updateEditorStyles(element, proseMirror, false);
 
       expect(element.style.paddingLeft).toBe('100px');
-      expect(element.style.paddingRight).toBeUndefined(); // Not set by override, uses document margin
+      expect(element.style.paddingRight).toBe('96px'); // Falls back to 1in = 96px
       expect(proseMirror.style.paddingTop).toBe('50px');
       expect(proseMirror.style.paddingBottom).toBe('96px'); // Falls back to 1in = 96px
     });
