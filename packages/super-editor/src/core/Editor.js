@@ -43,6 +43,14 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
 import { buildSchemaSummary } from './schema-summary.js';
+
+/**
+ * Constants for layout calculations
+ */
+const PIXELS_PER_INCH = 96;
+const MAX_HEIGHT_BUFFER_PX = 50;
+const MAX_WIDTH_BUFFER_PX = 20;
+
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -139,6 +147,7 @@ import { buildSchemaSummary } from './schema-summary.js';
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
+ * @property {{top?: number, bottom?: number, left?: number, right?: number}} [displayMarginsOverride] - Override visual margins (values in pixels, only applies when pagination is disabled)
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -233,6 +242,7 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
+    displayMarginsOverride: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -284,6 +294,7 @@ export class Editor extends EventEmitter {
 
     this.#initContainerElement(options);
     this.#checkHeadless(options);
+    this.#validateDisplayMarginsOverride(options);
     this.setOptions(options);
 
     let modes = {
@@ -506,6 +517,48 @@ export class Editor extends EventEmitter {
       global.document = options.mockDocument;
       global.window = options.mockWindow;
     }
+  }
+
+  /**
+   * Validate displayMarginsOverride option values
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
+  #validateDisplayMarginsOverride(options) {
+    if (!options.displayMarginsOverride) return;
+
+    const override = options.displayMarginsOverride;
+    const validatedOverride = {};
+    let hasValidValues = false;
+
+    for (const key of ['top', 'bottom', 'left', 'right']) {
+      if (override[key] !== undefined && override[key] !== null) {
+        const value = override[key];
+
+        // Validate that value is a positive finite number
+        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+          validatedOverride[key] = value;
+          hasValidValues = true;
+        } else {
+          console.warn(
+            `[SuperDoc] Invalid displayMarginsOverride.${key}: ${value}. ` +
+              `Value must be a positive finite number. Ignoring this property.`,
+          );
+        }
+      }
+    }
+
+    // Replace the override with the validated version, or null if no valid values
+    options.displayMarginsOverride = hasValidValues ? validatedOverride : null;
+  }
+
+  /**
+   * Check if displayMarginsOverride should be applied
+   * @returns {boolean} True if pagination is disabled and displayMarginsOverride is set
+   * @private
+   */
+  #shouldApplyMarginsOverride() {
+    return !this.options.pagination && !!this.options.displayMarginsOverride;
   }
 
   /**
@@ -1220,20 +1273,34 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get the maximum content size
-   * @returns {Object} Size object with width and height
+   * Get the maximum content size based on page dimensions and margins
+   * @returns {{width: number, height: number} | {}} Size object with width and height in pixels, or empty object if no page size
    */
   getMaxContentSize() {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
+    const { displayMarginsOverride } = this.options;
     const { width, height } = pageSize;
-    const { top = 0, bottom = 0, left = 0, right = 0 } = pageMargins;
 
-    // All sizes are in inches so we multiply by 96 to get pixels
+    // displayMarginsOverride only applies when pagination is disabled
+    // Override values are in pixels, document margins are in inches
+    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
+
+    const getMarginPx = (side) => {
+      const defaultPx = (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
+      return shouldApplyMarginsOverride ? (displayMarginsOverride?.[side] ?? defaultPx) : defaultPx;
+    };
+
+    const topPx = getMarginPx('top');
+    const bottomPx = getMarginPx('bottom');
+    const leftPx = getMarginPx('left');
+    const rightPx = getMarginPx('right');
+
+    // All sizes are in inches so we multiply by PIXELS_PER_INCH to get pixels
     if (!width || !height) return {};
 
-    const maxHeight = height * 96 - top * 96 - bottom * 96 - 50;
-    const maxWidth = width * 96 - left * 96 - right * 96 - 20;
+    const maxHeight = height * PIXELS_PER_INCH - topPx - bottomPx - MAX_HEIGHT_BUFFER_PX;
+    const maxWidth = width * PIXELS_PER_INCH - leftPx - rightPx - MAX_WIDTH_BUFFER_PX;
     return {
       width: maxWidth,
       height: maxHeight,
@@ -1242,9 +1309,18 @@ export class Editor extends EventEmitter {
 
   /**
    * Attach styles and attributes to the editor element
+   * @param {HTMLElement} element - The editor container element
+   * @param {HTMLElement} proseMirror - The ProseMirror element
+   * @param {boolean} [hasPaginationEnabled=true] - Whether pagination is enabled
+   * @returns {void}
    */
   updateEditorStyles(element, proseMirror, hasPaginationEnabled = true) {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
+    const { displayMarginsOverride, pagination } = this.options;
+
+    // displayMarginsOverride only applies when pagination is disabled
+    // Check this.options.pagination directly since hasPaginationEnabled parameter may not reflect config
+    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
 
     if (!proseMirror || !element) {
       return;
@@ -1257,13 +1333,24 @@ export class Editor extends EventEmitter {
     proseMirror.classList.remove('view-mode');
 
     // Set fixed dimensions and padding that won't change with scaling
-    if (pageSize) {
-      element.style.width = pageSize.width + 'in';
-      element.style.minWidth = pageSize.width + 'in';
-      element.style.minHeight = pageSize.height + 'in';
+    if (pageSize?.width != null) {
+      element.style.width = shouldApplyMarginsOverride ? '100%' : `${pageSize.width}in`;
+      element.style.minWidth = shouldApplyMarginsOverride ? '' : `${pageSize.width}in`;
     }
 
-    if (pageMargins) {
+    if (pageSize?.height != null) {
+      element.style.minHeight = shouldApplyMarginsOverride ? '' : `${pageSize.height}in`;
+    }
+
+    // Apply left/right margins - use displayMarginsOverride (in pixels) if provided and pagination disabled
+    if (shouldApplyMarginsOverride) {
+      if (displayMarginsOverride.left != null) {
+        element.style.paddingLeft = displayMarginsOverride.left + 'px';
+      }
+      if (displayMarginsOverride.right != null) {
+        element.style.paddingRight = displayMarginsOverride.right + 'px';
+      }
+    } else if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
     }
@@ -1297,9 +1384,15 @@ export class Editor extends EventEmitter {
     proseMirror.style.lineHeight = defaultLineHeight;
 
     // If we are not using pagination, we still need to add some padding for header/footer
-    if (!hasPaginationEnabled) {
-      proseMirror.style.paddingTop = '1in';
-      proseMirror.style.paddingBottom = '1in';
+    // Use displayMarginsOverride (in pixels) for top/bottom if provided, otherwise default to 1in
+    if (!pagination) {
+      if (shouldApplyMarginsOverride) {
+        proseMirror.style.paddingTop = (displayMarginsOverride.top ?? PIXELS_PER_INCH) + 'px'; // Default to 1in
+        proseMirror.style.paddingBottom = (displayMarginsOverride.bottom ?? PIXELS_PER_INCH) + 'px';
+      } else {
+        proseMirror.style.paddingTop = '1in';
+        proseMirror.style.paddingBottom = '1in';
+      }
     } else {
       proseMirror.style.paddingTop = '0';
       proseMirror.style.paddingBottom = '0';

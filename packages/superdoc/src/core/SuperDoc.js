@@ -111,6 +111,11 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+
+    // Override visual margins for the editor (values in pixels)
+    // Only applies when pagination is disabled
+    // Example: { top: 48, bottom: 48, left: 48, right: 48 }
+    displayMarginsOverride: null,
   };
 
   /**

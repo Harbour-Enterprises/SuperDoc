@@ -128,9 +128,13 @@ const init = async () => {
     role: userRole,
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
-    pagination: true,
     rulers: false,
     annotations: true,
+
+    // Override visual margins (values in pixels) - uncomment to test
+    pagination: true,
+    // displayMarginsOverride: { top: 10, bottom: 10, left: 10, right: 10 }, // Pagination must be false for this to do anything
+
     isInternal,
     telemetry: false,
     // disableContextMenu: true,

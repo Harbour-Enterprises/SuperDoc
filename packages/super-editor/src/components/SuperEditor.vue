@@ -1,7 +1,7 @@
 <script setup>
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
-import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed } from 'vue';
 import { Editor } from '@/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
@@ -44,6 +44,15 @@ const props = defineProps({
 const editorReady = ref(false);
 const editor = shallowRef(null);
 const message = useMessage();
+
+/**
+ * Computed property that determines if displayMarginsOverride is active.
+ * The override is only active when pagination is disabled and an override is provided.
+ * @returns {boolean} True if displayMarginsOverride should be applied
+ */
+const hasDisplayMarginsOverride = computed(() => {
+  return !props.options.pagination && !!props.options.displayMarginsOverride;
+});
 
 const editorWrapper = ref(null);
 const editorElem = ref(null);
@@ -308,7 +317,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="super-editor-container">
+  <div class="super-editor-container" :class="{ 'no-min-height': hasDisplayMarginsOverride }">
     <Ruler class="ruler" v-if="options.rulers && !!editor" :editor="editor" @margin-change="handleMarginChange" />
 
     <div
@@ -371,6 +380,11 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.super-editor-container.no-min-height {
+  min-height: unset;
+  min-width: unset;
 }
 
 .ruler {
