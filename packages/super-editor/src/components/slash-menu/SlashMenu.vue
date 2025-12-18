@@ -230,9 +230,23 @@ const handleRightClick = async (event) => {
 
   event.preventDefault();
 
-  // Update cursor position to the right-click location before opening context menu
-  // This ensures context menu actions operate on the clicked position, not the previous cursor position
-  moveCursorToMouseEvent(event, props.editor);
+  // Update cursor position to the right-click location before opening context menu,
+  // unless the click lands inside an active selection (keep selection intact).
+  const editorState = props.editor?.state;
+  const hasRangeSelection = editorState?.selection?.from !== editorState?.selection?.to;
+  let isClickInsideSelection = false;
+
+  if (hasRangeSelection && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    const hit = props.editor?.posAtCoords?.({ left: event.clientX, top: event.clientY });
+    if (typeof hit?.pos === 'number') {
+      const { from, to } = editorState.selection;
+      isClickInsideSelection = hit.pos >= from && hit.pos <= to;
+    }
+  }
+
+  if (!isClickInsideSelection) {
+    moveCursorToMouseEvent(event, props.editor);
+  }
 
   try {
     const context = await getEditorContext(props.editor, event);
@@ -241,13 +255,13 @@ const handleRightClick = async (event) => {
     selectedId.value = flattenedItems.value[0]?.id || null;
     searchQuery.value = '';
 
-    const state = props.editor.state;
-    if (!state) return;
+    const currentState = props.editor.state;
+    if (!currentState) return;
 
     props.editor.dispatch(
-      state.tr.setMeta(SlashMenuPluginKey, {
+      currentState.tr.setMeta(SlashMenuPluginKey, {
         type: 'open',
-        pos: context?.pos ?? state.selection.from,
+        pos: context?.pos ?? currentState.selection.from,
         clientX: event.clientX,
         clientY: event.clientY,
       }),
@@ -265,10 +279,23 @@ const executeCommand = async (item) => {
     if (item.component) {
       const menuElement = menuRef.value;
       const componentProps = getPropsByItemId(item.id, props);
-      props.openPopover(markRaw(item.component), componentProps, {
-        left: menuPosition.value.left,
-        top: menuPosition.value.top,
-      });
+
+      // Convert viewport-relative coordinates (used by fixed-position SlashMenu)
+      // to container-relative coordinates (used by absolute-position GenericPopover)
+      let popoverPosition = { left: menuPosition.value.left, top: menuPosition.value.top };
+      if (menuElement) {
+        const menuRect = menuElement.getBoundingClientRect();
+        const container = menuElement.closest('.super-editor');
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          popoverPosition = {
+            left: `${menuRect.left - containerRect.left}px`,
+            top: `${menuRect.top - containerRect.top}px`,
+          };
+        }
+      }
+
+      props.openPopover(markRaw(item.component), componentProps, popoverPosition);
       closeMenu({ restoreCursor: false });
     } else {
       // For paste operations, don't restore cursor

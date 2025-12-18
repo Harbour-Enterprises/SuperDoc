@@ -159,9 +159,9 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           action: (editor) => {
             editor.commands.createDocumentSection();
           },
-          showWhen: (context) => {
-            const { trigger } = context;
-            return trigger === TRIGGERS.click;
+          // TODO: Temporarily disabled - restore original: `return trigger === TRIGGERS.click;`
+          showWhen: () => {
+            return false;
           },
         },
         {
