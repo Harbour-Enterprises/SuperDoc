@@ -346,9 +346,7 @@ const init = async () => {
   // });
 };
 
-const onCommentsUpdate = (updateData) => {
-  console.debug('[END USER] Comments updated', updateData);
-};
+const onCommentsUpdate = () => {};
 
 const onContentError = ({ editor, error, documentId, file }) => {
   console.debug('Content error on', documentId, error);
