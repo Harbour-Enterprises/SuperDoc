@@ -1,3 +1,9 @@
+# [0.36.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.3...v0.36.0) (2025-12-18)
+
+### Features
+
+- add displayMarginsOverride, used only when pagination is off [stable] ([#1555](https://github.com/Harbour-Enterprises/SuperDoc/issues/1555)) ([ee93168](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee9316811ad56aa0d185f5fdb8964c5e4880cc58)), closes [#1561](https://github.com/Harbour-Enterprises/SuperDoc/issues/1561)
+
 ## [0.35.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.2...v0.35.3) (2025-12-11)
 
 ### Bug Fixes
