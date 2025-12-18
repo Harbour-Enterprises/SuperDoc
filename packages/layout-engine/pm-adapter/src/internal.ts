@@ -25,6 +25,7 @@ import {
 } from './utilities.js';
 import {
   paragraphToFlowBlocks as paragraphToFlowBlocksImpl,
+  contentBlockNodeToDrawingBlock,
   imageNodeToBlock,
   handleImageNode,
   vectorShapeNodeToDrawingBlock,
@@ -457,6 +458,7 @@ function paragraphToFlowBlocks(
     hyperlinkConfig,
     themeColors,
     {
+      contentBlockNodeToDrawingBlock,
       imageNodeToBlock,
       vectorShapeNodeToDrawingBlock,
       shapeGroupNodeToDrawingBlock,

@@ -2223,6 +2223,31 @@ describe('measureBlock', () => {
       expect(measure.scale).toBe(1);
     });
 
+    it('resolves full-width drawings using maxWidth constraints and indents', async () => {
+      const block: DrawingBlock = {
+        kind: 'drawing',
+        id: 'drawing-full-width',
+        drawingKind: 'vectorShape',
+        geometry: {
+          width: 1,
+          height: 2,
+          rotation: 0,
+          flipH: false,
+          flipV: false,
+        },
+        attrs: {
+          isFullWidth: true,
+          hrIndentLeft: -20,
+          hrIndentRight: 10,
+        },
+      };
+
+      const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 300, maxHeight: 20 }));
+      expect(measure.width).toBe(310);
+      expect(measure.height).toBe(2);
+      expect(measure.geometry.width).toBe(310);
+    });
+
     it('scales proportionally when exceeding constraints', async () => {
       const block: DrawingBlock = {
         kind: 'drawing',
