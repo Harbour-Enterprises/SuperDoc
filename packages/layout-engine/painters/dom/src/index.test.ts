@@ -1242,6 +1242,97 @@ describe('DomPainter', () => {
     expect(lines[1].style.wordSpacing).toBe('');
   });
 
+  it('handles negative indents correctly with justify alignment', () => {
+    // Regression test: When a paragraph has negative indents, the layout engine expands
+    // fragment.width to include the negative indent area. The painter should NOT subtract
+    // negative indents again (which would cause text overflow).
+    const negativeIndentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'negative-indent-test',
+      runs: [{ text: 'This text has negative left indent to extend into margin', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        alignment: 'justify',
+        indent: {
+          left: -18, // Negative indent extends 18px into left margin
+          right: 0,
+          firstLine: 0,
+          hanging: 0,
+        },
+      },
+    };
+
+    // Fragment width (594px) already includes the negative indent expansion.
+    // The painter should justify to 594px, NOT 594 - (-18) = 612px.
+    const negativeIndentMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 30, // "This text has negative left i" - not last line
+          width: 594,
+          maxWidth: 594,
+          naturalWidth: 580, // Natural width < maxWidth, will expand
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 0,
+          fromChar: 30,
+          toRun: 0,
+          toChar: 58, // rest of text - last line
+          width: 350,
+          maxWidth: 594,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const negativeIndentLayout: Layout = {
+      pageSize: { w: 612, h: 792 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'negative-indent-test',
+              x: 54, // Page left margin is 72px, negative indent of -18px puts fragment at 72-18=54px
+              y: 0,
+              width: 594, // Fragment width includes the negative indent expansion
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [negativeIndentBlock], measures: [negativeIndentMeasure] });
+    painter.paint(negativeIndentLayout, mount);
+
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should be justified with positive word-spacing (expanding from 580 to 594)
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing);
+    expect(firstLineWordSpacing).toBeGreaterThan(0);
+    // Word spacing should be reasonable - expanding 14px across ~6 spaces = ~2.33px per space
+    expect(firstLineWordSpacing).toBeLessThan(5);
+
+    // Last line should NOT be justified
+    expect(lines[1].style.wordSpacing).toBe('');
+
+    // Verify the fragment has the correct width (should be 594px, not expanded to 612px)
+    const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
+    expect(fragment.style.width).toBe('594px');
+  });
+
   it('emits pm metadata attributes', () => {
     const painter = createDomPainter({ blocks: [block], measures: [measure] });
     painter.paint(layout, mount);

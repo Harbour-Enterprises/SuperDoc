@@ -1861,7 +1861,9 @@ export class DomPainter {
       lines.forEach((line, index) => {
         // Calculate available width from fragment dimensions (the actual rendered width).
         // This is the ground truth for justify calculations since it matches what's visible.
-        const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
+        // Only subtract positive indents - negative indents already expand fragment.width in layout
+        const positiveIndentReduction = Math.max(0, paraIndentLeft) + Math.max(0, paraIndentRight);
+        const fallbackAvailableWidth = Math.max(0, fragment.width - positiveIndentReduction);
         // Use line.maxWidth if available (accounts for drop caps, exclusion zones), but cap it at
         // fallbackAvailableWidth to handle cases where measurement used a different width than layout
         // (e.g., paragraph measured at full page width but laid out in narrower column).
@@ -1872,8 +1874,9 @@ export class DomPainter {
         // which is based on textStartPx and may not match the actual rendered inline width.
         // Must also subtract paraIndentRight to match measurer's calculation:
         // initialAvailableWidth = maxWidth - textStartPx - indentRight
+        // Only subtract positive paraIndentRight - negative indents already expand fragment.width
         if (index === 0 && listFirstLineMarkerTabWidth != null) {
-          availableWidthOverride = fragment.width - listFirstLineMarkerTabWidth - paraIndentRight;
+          availableWidthOverride = fragment.width - listFirstLineMarkerTabWidth - Math.max(0, paraIndentRight);
         }
 
         // Determine if this is the true last line of the paragraph that should skip justification.
@@ -1961,9 +1964,16 @@ export class DomPainter {
             // Only apply positive left indent as padding.
             // Negative left indent is handled by fragment positioning in layout engine.
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
-          } else if (!isFirstLine && paraIndent?.hanging && paraIndent.hanging > 0) {
-            // Body lines with hanging indent need paddingLeft = hanging.
-            // This applies even when paraIndentLeft is negative (text extending into margin).
+          } else if (
+            !isFirstLine &&
+            paraIndent?.hanging &&
+            paraIndent.hanging > 0 &&
+            // Only apply hanging padding when left indent is NOT negative.
+            // When left indent is negative, the fragment position already accounts for it.
+            // Adding padding here would shift body lines right, causing right-side overflow.
+            !(paraIndentLeft != null && paraIndentLeft < 0)
+          ) {
+            // Body lines with hanging indent need paddingLeft = hanging when left indent is non-negative.
             // First line doesn't get this padding because it "hangs" (starts further left).
             lineEl.style.paddingLeft = `${paraIndent.hanging}px`;
           }
