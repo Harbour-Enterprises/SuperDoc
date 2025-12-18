@@ -170,14 +170,14 @@ const getJustifyAdjustment = (
   }
 
   const alignment = alignmentOverride ?? block.attrs?.alignment;
-  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined) ?? false;
 
   // Derive last-line info from block/line when not explicitly provided.
   // This ensures measurement matches rendering even when callers don't pass these flags.
   const lastRunIndex = block.runs.length - 1;
   const lastRun = block.runs[lastRunIndex];
   const derivedIsLastLine = line.toRun >= lastRunIndex;
-  const derivedEndsWithLineBreak = lastRun.kind === 'lineBreak';
+  const derivedEndsWithLineBreak = lastRun ? lastRun.kind === 'lineBreak' : false;
 
   // Determine if justify should be applied using shared logic
   const shouldJustify = shouldApplyJustify({

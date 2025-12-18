@@ -504,6 +504,10 @@ export function remeasureParagraph(
     const startRun = currentRun;
     const startChar = currentChar;
     let width = 0;
+    // Track the measured width at the last valid break point (space/tab/hyphen).
+    // When we wrap back to that break point, we must rewind width to avoid
+    // counting overflow content in the stored line width (which would zero-out justify slack).
+    let widthAtLastBreak = -1;
     let lastBreakRun = -1;
     let lastBreakChar = -1;
     let endRun = currentRun;
@@ -522,6 +526,7 @@ export function remeasureParagraph(
         endChar = 1; // tab is treated as a single character
         lastBreakRun = r;
         lastBreakChar = 1;
+        widthAtLastBreak = width;
         continue;
       }
       const text = runText(run);
@@ -533,6 +538,7 @@ export function remeasureParagraph(
           if (lastBreakRun >= 0) {
             endRun = lastBreakRun;
             endChar = lastBreakChar;
+            width = widthAtLastBreak >= 0 ? widthAtLastBreak : width;
           } else {
             endRun = r;
             endChar = c;
@@ -547,6 +553,7 @@ export function remeasureParagraph(
         if (ch === ' ' || ch === '\t' || ch === '-') {
           lastBreakRun = r;
           lastBreakChar = c + 1;
+          widthAtLastBreak = width;
         }
       }
       if (didBreakInThisLine) break;

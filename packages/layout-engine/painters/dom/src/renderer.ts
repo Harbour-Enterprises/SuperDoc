@@ -1859,9 +1859,14 @@ export class DomPainter {
       }
 
       lines.forEach((line, index) => {
-        // Prefer measurer-provided maxWidth (accounts for indents, drop caps, exclusion zones).
+        // Calculate available width from fragment dimensions (the actual rendered width).
+        // This is the ground truth for justify calculations since it matches what's visible.
         const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
-        let availableWidthOverride = line.maxWidth ?? fallbackAvailableWidth;
+        // Use line.maxWidth if available (accounts for drop caps, exclusion zones), but cap it at
+        // fallbackAvailableWidth to handle cases where measurement used a different width than layout
+        // (e.g., paragraph measured at full page width but laid out in narrower column).
+        let availableWidthOverride =
+          line.maxWidth != null ? Math.min(line.maxWidth, fallbackAvailableWidth) : fallbackAvailableWidth;
 
         // For list first lines, use the actual marker+tab inline width instead of line.maxWidth
         // which is based on textStartPx and may not match the actual rendered inline width.

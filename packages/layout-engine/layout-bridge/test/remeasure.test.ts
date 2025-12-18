@@ -493,6 +493,20 @@ describe('remeasureParagraph', () => {
       // Should break between "Hello" and "World"
     });
 
+    it('uses width at the break point instead of overflow content', () => {
+      // Ensure the stored line width matches the text that actually fits before the break.
+      // Without rewinding to the break point, width would include overflow characters,
+      // resulting in zero justify slack in columns.
+      const block = createBlock([textRun('Hello world')]);
+      const measure = remeasureParagraph(block, 85); // Forces wrap mid-second word
+
+      expect(measure.lines.length).toBe(2);
+      const firstLine = measure.lines[0];
+      // Breaks after "Hello " (6 chars)
+      expect(firstLine.toChar - firstLine.fromChar).toBe(6);
+      expect(firstLine.width).toBeCloseTo(6 * CHAR_WIDTH);
+    });
+
     it('breaks mid-word when no whitespace is available (forced break)', () => {
       // Long word with no spaces should break mid-word
       const block = createBlock([textRun('HelloWorld')]);
