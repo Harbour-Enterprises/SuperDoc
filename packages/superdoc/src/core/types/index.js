@@ -97,12 +97,19 @@
  */
 
 /**
- * @typedef {Object} DisplayMarginsOverride
+ * @typedef {'responsive' | 'paginated'} LayoutMode
+ * Determines how the document is displayed:
+ * - 'paginated' (default): Fixed page width, shows page breaks like a real document
+ * - 'responsive': 100% width, text reflows to fit the container (useful for mobile/accessibility)
+ */
+
+/**
+ * @typedef {Object} LayoutMargins
  * @property {number} [top] Override for the top margin in pixels
  * @property {number} [bottom] Override for the bottom margin in pixels
  * @property {number} [left] Override for the left margin in pixels
  * @property {number} [right] Override for the right margin in pixels
- * @description Only applies when pagination is disabled. Values are in pixels.
+ * @description Custom margins for responsive layout mode. Values are in pixels. Defaults to 96px (1 inch) if not specified.
  */
 
 /**
@@ -164,7 +171,8 @@
  * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] Whether to enable debug mode
- * @property {DisplayMarginsOverride} [displayMarginsOverride] Override visual margins for the editor (values in pixels, only applies when pagination is disabled)
+ * @property {LayoutMode} [layoutMode='paginated'] Document layout mode ('paginated' for fixed page width, 'responsive' for fluid width)
+ * @property {LayoutMargins} [layoutMargins] Custom margins in pixels for responsive layout mode
  */
 
 export {};

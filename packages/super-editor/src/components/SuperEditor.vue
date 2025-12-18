@@ -46,12 +46,11 @@ const editor = shallowRef(null);
 const message = useMessage();
 
 /**
- * Computed property that determines if displayMarginsOverride is active.
- * The override is only active when pagination is disabled and an override is provided.
- * @returns {boolean} True if displayMarginsOverride should be applied
+ * Computed property that determines if responsive layout mode is active.
+ * @returns {boolean} True if layoutMode is 'responsive'
  */
-const hasDisplayMarginsOverride = computed(() => {
-  return !props.options.pagination && !!props.options.displayMarginsOverride;
+const isResponsiveMode = computed(() => {
+  return props.options.layoutMode === 'responsive';
 });
 
 const editorWrapper = ref(null);
@@ -317,7 +316,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="super-editor-container" :class="{ 'no-min-height': hasDisplayMarginsOverride }">
+  <div class="super-editor-container" :class="{ 'no-min-height': isResponsiveMode }">
     <Ruler class="ruler" v-if="options.rulers && !!editor" :editor="editor" @margin-change="handleMarginChange" />
 
     <div
