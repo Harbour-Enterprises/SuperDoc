@@ -118,19 +118,20 @@ export const syncCommentsToClients = (superdoc, event) => {
   if (!superdoc.isCollaborative || !superdoc.config.modules.comments) return;
 
   const yArray = superdoc.ydoc.getArray('comments');
+  const user = superdoc.config.user;
 
   switch (event.type) {
     case 'add':
-      addYComment(yArray, superdoc.ydoc, event);
+      addYComment(yArray, superdoc.ydoc, event, user);
       break;
     case 'update':
-      updateYComment(yArray, superdoc.ydoc, event);
+      updateYComment(yArray, superdoc.ydoc, event, user);
       break;
     case 'resolved':
-      updateYComment(yArray, superdoc.ydoc, event);
+      updateYComment(yArray, superdoc.ydoc, event, user);
       break;
     case 'deleted':
-      deleteYComment(yArray, superdoc.ydoc, event);
+      deleteYComment(yArray, superdoc.ydoc, event, user);
       break;
   }
 };
