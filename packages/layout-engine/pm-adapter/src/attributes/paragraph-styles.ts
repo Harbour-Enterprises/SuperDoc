@@ -4,6 +4,7 @@ import type { PMNode } from '../types.js';
 import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 import { hasParagraphStyleContext } from '../converter-context.js';
 import type { ResolvedParagraphProperties } from '@superdoc/word-layout';
+import { normalizeAlignment } from './spacing-indent.js';
 
 /**
  * Empty numbering context used as a fallback when documents don't have lists.
@@ -166,13 +167,15 @@ export const hydrateParagraphStyleAttrs = (
     }
   }
 
+  const normalizedAlign = normalizeAlignment(resolvedExtended.justification);
+
   const hydrated: ParagraphStyleHydration = {
     resolved,
     spacing: resolvedSpacing,
     indent: resolvedIndent,
     borders: cloneIfObject(resolvedExtended.borders) as ParagraphAttrs['borders'],
     shading: cloneIfObject(resolvedExtended.shading) as ParagraphAttrs['shading'],
-    alignment: resolvedExtended.justification as ParagraphAttrs['alignment'],
+    alignment: normalizedAlign,
     tabStops: cloneIfObject(resolvedExtended.tabStops),
     keepLines: resolvedExtended.keepLines,
     keepNext: resolvedExtended.keepNext,

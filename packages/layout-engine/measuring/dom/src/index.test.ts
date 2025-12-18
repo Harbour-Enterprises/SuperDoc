@@ -190,6 +190,45 @@ describe('measureBlock', () => {
       expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
+    it('falls back to marker.textStartX when wordLayout.textStartPx is missing', async () => {
+      const maxWidth = 200;
+      const textStartX = 96; // First-line text start after marker + tab
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'wordlayout-list-textStartX',
+        runs: [
+          {
+            text: 'List item text should wrap based on marker.textStartX when textStartPx is missing',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 0, firstLine: 48 },
+          wordLayout: {
+            indentLeftPx: 0,
+            // Intentionally omit top-level textStartPx to simulate partial/legacy producers.
+            marker: {
+              markerText: '(a)',
+              markerBoxWidthPx: 24,
+              gutterWidthPx: 8,
+              textStartX,
+              run: {
+                fontFamily: 'Times New Roman',
+                fontSize: 16,
+                bold: false,
+                italic: false,
+                letterSpacing: 0,
+              },
+            },
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartX);
+    });
+
     it('measures empty block correctly', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
@@ -1792,10 +1831,14 @@ describe('measureBlock', () => {
       // Page width 12240 twips (8.5in) minus margins 1701/1134 twips ≈ 627px content width at 96dpi
       const measure = expectParagraphMeasure(await measureBlock(block, 627));
       const lineTexts = measure.lines.map((line) => extractLineText(block, line));
-      const lineWithRepresentado = lineTexts.find((text) => text.includes('representado'));
+      const representadoIndex = lineTexts.findIndex((text) => text.includes('representado'));
 
-      expect(lineWithRepresentado).toBeDefined();
-      expect(lineWithRepresentado).toContain('neste ato representado por seu representante legal');
+      expect(representadoIndex).toBeGreaterThanOrEqual(0);
+      const windowText = [lineTexts[representadoIndex], lineTexts[representadoIndex + 1] ?? '']
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      expect(windowText).toContain('neste ato representado por seu representante legal');
     });
 
     it('preserves leading spaces in runs (xml:space="preserve" case)', async () => {

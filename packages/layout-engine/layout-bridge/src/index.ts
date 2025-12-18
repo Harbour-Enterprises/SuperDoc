@@ -980,10 +980,14 @@ export function clickToPosition(
         );
       }
 
-      // List items are rendered with left alignment in the DOM regardless of paragraph alignment
+      // List items use textAlign: 'left' in the DOM for non-justify alignments.
+      // For justify, the DOM uses textAlign: 'left' but applies word-spacing for actual justify effect.
+      // We only override alignment for list items when NOT justified, so justify caret positioning works correctly.
       const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
       const isListItem = markerWidth > 0;
-      const alignmentOverride = isListItem ? 'left' : undefined;
+      const paraAlignment = block.attrs?.alignment;
+      const isJustified = paraAlignment === 'justify' || paraAlignment === 'both';
+      const alignmentOverride = isListItem && !isJustified ? 'left' : undefined;
 
       const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth, alignmentOverride);
       if (pos == null) {
@@ -1088,10 +1092,13 @@ export function clickToPosition(
         );
       }
 
-      // List items in table cells are also rendered with left alignment
+      // List items in table cells use textAlign: 'left' in the DOM for non-justify alignments.
+      // For justify, we don't override so justify caret positioning works correctly.
       const cellMarkerWidth = cellMeasure.marker?.markerWidth ?? 0;
       const isListItem = cellMarkerWidth > 0;
-      const alignmentOverride = isListItem ? 'left' : undefined;
+      const cellAlignment = cellBlock.attrs?.alignment;
+      const isJustified = cellAlignment === 'justify' || cellAlignment === 'both';
+      const alignmentOverride = isListItem && !isJustified ? 'left' : undefined;
 
       const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth, alignmentOverride);
 
@@ -1414,9 +1421,11 @@ export function selectionToRects(
           // Detect list items by checking for marker presence
           const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
           const isListItemFlag = isListItem(markerWidth, block);
-          // List items are always rendered with left alignment in the DOM (painter forces textAlign: 'left'),
-          // regardless of the paragraph's alignment attribute. Pass 'left' override to match DOM rendering.
-          const alignmentOverride = isListItemFlag ? 'left' : undefined;
+          // List items use textAlign: 'left' in the DOM for non-justify alignments.
+          // For justify, we don't override so justify selection rectangles are calculated correctly.
+          const blockAlignment = block.attrs?.alignment;
+          const isJustified = blockAlignment === 'justify' || blockAlignment === 'both';
+          const alignmentOverride = isListItemFlag && !isJustified ? 'left' : undefined;
           const startX = mapPmToX(block, line, charOffsetFrom, fragment.width, alignmentOverride);
           const endX = mapPmToX(block, line, charOffsetTo, fragment.width, alignmentOverride);
 

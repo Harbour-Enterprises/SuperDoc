@@ -231,11 +231,16 @@ export function calculateTextStartIndent(params: TextIndentCalculationParams): n
 
   if (isListItem && isFirstLine && isFirstLineIndentMode) {
     // First-line indent mode: text starts at textStartPx (after marker + tab)
+    // IMPORTANT: Priority must match the painter (renderer.ts) which prefers marker.textStartX
+    // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
     const textStartFallback = paraIndentLeft + Math.max(firstLineIndent, 0) + markerWidth;
+    const markerTextStartX = (wordLayout as { marker?: { textStartX?: unknown } } | undefined)?.marker?.textStartX;
     indentAdjust =
-      typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
-        ? wordLayout.textStartPx
-        : textStartFallback;
+      typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
+        ? markerTextStartX
+        : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+          ? wordLayout.textStartPx
+          : textStartFallback;
   } else if (isFirstLine && !isListItem) {
     // Non-list paragraph: apply first-line offset on the first line
     indentAdjust += firstLineOffset;

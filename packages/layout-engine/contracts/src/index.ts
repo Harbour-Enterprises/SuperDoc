@@ -4,6 +4,15 @@ export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/ta
 // Re-export TabStop for external consumers
 export type { TabStop };
 
+// Export justify utilities
+export {
+  shouldApplyJustify,
+  calculateJustifySpacing,
+  SPACE_CHARS,
+  type ShouldApplyJustifyParams,
+  type CalculateJustifySpacingParams,
+} from './justify-utils.js';
+
 /** Inline field annotation metadata extracted from w:sdt nodes. */
 export type FieldAnnotationMetadata = {
   type: 'fieldAnnotation';
@@ -1196,6 +1205,10 @@ export type Line = {
   lineHeight: number;
   /** Maximum available width for this line (used during measurement). */
   maxWidth?: number;
+  /** Content width before justify compression (used for negative word-spacing calculation). */
+  naturalWidth?: number;
+  /** Number of spaces in the line (pre-computed for efficiency in justify calculations). */
+  spaceCount?: number;
   segments?: LineSegment[];
   leaders?: LeaderDecoration[];
   bars?: BarDecoration[];

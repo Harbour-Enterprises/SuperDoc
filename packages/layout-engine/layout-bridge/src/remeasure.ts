@@ -17,7 +17,7 @@ type ParagraphBlockAttrs = {
   indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
   tabs?: TabStop[];
   tabIntervalTwips?: number;
-  wordLayout?: { textStartPx?: number };
+  wordLayout?: { textStartPx?: number; marker?: { textStartX?: number } };
   numberingProperties?: unknown;
 };
 
@@ -474,7 +474,17 @@ export function remeasureParagraph(
   const indentHanging = Math.max(0, indent?.hanging ?? 0);
   const rawFirstLineOffset = Math.max(0, firstLineIndent || indentFirstLine - indentHanging);
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
-  const textStartPx = wordLayout?.textStartPx;
+  // Some producers provide `marker.textStartX` without setting top-level `textStartPx`.
+  // Both values represent the same concept: where the first-line text begins after the marker/tab.
+  // IMPORTANT: Priority must match the painter (renderer.ts) which prefers marker.textStartX
+  // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
+  const markerTextStartX = wordLayout?.marker?.textStartX;
+  const textStartPx =
+    typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
+      ? markerTextStartX
+      : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+        ? wordLayout.textStartPx
+        : undefined;
   // If numbering defines only a firstLine indent with no left/hanging, treat it as a hanging-style layout:
   // don't shrink available width in columns (matches Word which positions marker + tab but leaves normal text width).
   const treatAsHanging = textStartPx && indentLeft === 0 && indentHanging === 0;
@@ -494,6 +504,10 @@ export function remeasureParagraph(
     const startRun = currentRun;
     const startChar = currentChar;
     let width = 0;
+    // Track the measured width at the last valid break point (space/tab/hyphen).
+    // When we wrap back to that break point, we must rewind width to avoid
+    // counting overflow content in the stored line width (which would zero-out justify slack).
+    let widthAtLastBreak = -1;
     let lastBreakRun = -1;
     let lastBreakChar = -1;
     let endRun = currentRun;
@@ -512,6 +526,7 @@ export function remeasureParagraph(
         endChar = 1; // tab is treated as a single character
         lastBreakRun = r;
         lastBreakChar = 1;
+        widthAtLastBreak = width;
         continue;
       }
       const text = runText(run);
@@ -523,6 +538,7 @@ export function remeasureParagraph(
           if (lastBreakRun >= 0) {
             endRun = lastBreakRun;
             endChar = lastBreakChar;
+            width = widthAtLastBreak >= 0 ? widthAtLastBreak : width;
           } else {
             endRun = r;
             endChar = c;
@@ -537,6 +553,7 @@ export function remeasureParagraph(
         if (ch === ' ' || ch === '\t' || ch === '-') {
           lastBreakRun = r;
           lastBreakChar = c + 1;
+          widthAtLastBreak = width;
         }
       }
       if (didBreakInThisLine) break;

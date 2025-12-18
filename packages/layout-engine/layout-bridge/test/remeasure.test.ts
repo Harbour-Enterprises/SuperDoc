@@ -493,6 +493,20 @@ describe('remeasureParagraph', () => {
       // Should break between "Hello" and "World"
     });
 
+    it('uses width at the break point instead of overflow content', () => {
+      // Ensure the stored line width matches the text that actually fits before the break.
+      // Without rewinding to the break point, width would include overflow characters,
+      // resulting in zero justify slack in columns.
+      const block = createBlock([textRun('Hello world')]);
+      const measure = remeasureParagraph(block, 85); // Forces wrap mid-second word
+
+      expect(measure.lines.length).toBe(2);
+      const firstLine = measure.lines[0];
+      // Breaks after "Hello " (6 chars)
+      expect(firstLine.toChar - firstLine.fromChar).toBe(6);
+      expect(firstLine.width).toBeCloseTo(6 * CHAR_WIDTH);
+    });
+
     it('breaks mid-word when no whitespace is available (forced break)', () => {
       // Long word with no spaces should break mid-word
       const block = createBlock([textRun('HelloWorld')]);
@@ -762,6 +776,18 @@ describe('remeasureParagraph', () => {
       // First line should have reduced width (100 - 50 = 50px)
       // Subsequent lines should have full width (100px)
       expect(measure.lines.length).toBeGreaterThan(1);
+    });
+
+    it('falls back to wordLayout.marker.textStartX when wordLayout.textStartPx is missing', () => {
+      const block = createBlock([textRun('A'.repeat(60))], {
+        indent: { left: 10 },
+        wordLayout: { marker: { textStartX: 50 } },
+      });
+      const measure = remeasureParagraph(block, 100);
+
+      expect(measure.lines.length).toBeGreaterThan(1);
+      expect(measure.lines[0].maxWidth).toBe(50);
+      expect(measure.lines[1].maxWidth).toBe(90);
     });
 
     it('handles hanging indent with left indent for list formatting', () => {
