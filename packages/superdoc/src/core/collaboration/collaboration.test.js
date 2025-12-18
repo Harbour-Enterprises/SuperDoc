@@ -325,27 +325,29 @@ describe('collaboration helpers', () => {
 });
 
 describe('collaboration comments primitives', () => {
+  const testUser = { name: 'Test User', email: 'test@example.com' };
+
   it('manages Yjs comment array operations', () => {
     const ydoc = new MockYDoc();
     const yArray = ydoc.getArray('comments');
     const baseComment = { commentId: 'c1', body: 'Hello' };
 
-    addYComment(yArray, ydoc, { comment: baseComment });
+    addYComment(yArray, ydoc, { comment: baseComment }, testUser);
     expect(yArray.toJSON()).toEqual([baseComment]);
-    expect(ydoc._lastMeta.user).toEqual(globalThis.superdoc.user);
+    expect(ydoc._lastMeta.user).toEqual(testUser);
 
     const updatedComment = { commentId: 'c1', body: 'Updated' };
-    updateYComment(yArray, ydoc, { comment: updatedComment });
+    updateYComment(yArray, ydoc, { comment: updatedComment }, testUser);
     expect(yArray.toJSON()).toEqual([updatedComment]);
 
-    deleteYComment(yArray, ydoc, { comment: updatedComment });
+    deleteYComment(yArray, ydoc, { comment: updatedComment }, testUser);
     expect(yArray.toJSON()).toEqual([]);
   });
 
   it('getCommentIndex finds matching comment ids', () => {
     const ydoc = new MockYDoc();
     const yArray = ydoc.getArray('comments');
-    addYComment(yArray, ydoc, { comment: { commentId: 'c5', body: 'Test' } });
+    addYComment(yArray, ydoc, { comment: { commentId: 'c5', body: 'Test' } }, testUser);
     expect(getCommentIndex(yArray, { commentId: 'missing' })).toBe(-1);
     expect(getCommentIndex(yArray, { commentId: 'c5' })).toBe(0);
   });
@@ -363,6 +365,7 @@ describe('syncCommentsToClients routing', () => {
       ydoc,
       isCollaborative: true,
       config: {
+        user: { name: 'Test User', email: 'test@example.com' },
         modules: { comments: true },
       },
     };
