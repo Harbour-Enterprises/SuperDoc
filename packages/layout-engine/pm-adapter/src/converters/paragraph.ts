@@ -592,11 +592,11 @@ const extractFirstTextRunFont = (para: PMNode): { fontSizePx?: number; fontFamil
 const applyBaseRunDefaults = (
   run: TextRun,
   defaults: RunDefaults,
-  fallbackFont: string,
+  uiDisplayFallbackFont: string,
   fallbackSize: number,
 ): void => {
   if (!run) return;
-  if (defaults.fontFamily && run.fontFamily === fallbackFont) {
+  if (defaults.fontFamily && run.fontFamily === uiDisplayFallbackFont) {
     run.fontFamily = defaults.fontFamily;
   }
   if (defaults.fontSizePx != null && run.fontSize === fallbackSize) {

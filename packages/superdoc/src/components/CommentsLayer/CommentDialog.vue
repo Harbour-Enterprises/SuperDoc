@@ -1,6 +1,5 @@
 <script setup>
 import { computed, toRefs, ref, getCurrentInstance, onMounted, nextTick } from 'vue';
-import { NDropdown, NTooltip, NSelect } from 'naive-ui';
 import { storeToRefs } from 'pinia';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
@@ -413,6 +412,7 @@ onMounted(() => {
   padding: 10px 15px;
   border-radius: 12px;
   background-color: #f3f6fd;
+  font-family: var(--sd-ui-font-family, Arial, Helvetica, sans-serif);
   transition: background-color 250ms ease;
   -webkit-box-shadow: 0px 4px 12px 0px rgba(50, 50, 50, 0.15);
   -moz-box-shadow: 0px 4px 12px 0px rgba(50, 50, 50, 0.15);
