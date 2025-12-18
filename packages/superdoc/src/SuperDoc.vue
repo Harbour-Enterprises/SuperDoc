@@ -327,6 +327,8 @@ const editorOptions = (doc) => {
     suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
     disableContextMenu: proxy.$superdoc.config.disableContextMenu,
     jsonOverride: proxy.$superdoc.config.jsonOverride,
+    layoutMode: proxy.$superdoc.config.layoutMode,
+    layoutMargins: proxy.$superdoc.config.layoutMargins,
     permissionResolver: (payload = {}) =>
       proxy.$superdoc.canPerformPermission({
         role: proxy.$superdoc.config.role,

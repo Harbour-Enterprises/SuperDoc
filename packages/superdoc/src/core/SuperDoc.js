@@ -111,6 +111,16 @@ export class SuperDoc extends EventEmitter {
 
     // Disable context menus (slash and right-click) globally
     disableContextMenu: false,
+
+    // Document layout mode: 'paginated' (default) or 'responsive'
+    // 'paginated': Fixed page width, shows page breaks like a real document
+    // 'responsive': 100% width, text reflows to fit the container (useful for mobile/accessibility)
+    layoutMode: 'paginated',
+
+    // Custom margins for responsive layout mode (values in pixels)
+    // Only applies when layoutMode is 'responsive'
+    // Example: { top: 48, bottom: 48, left: 48, right: 48 }
+    layoutMargins: null,
   };
 
   /**

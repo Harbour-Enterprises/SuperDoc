@@ -43,6 +43,14 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
 import { buildSchemaSummary } from './schema-summary.js';
+
+/**
+ * Constants for layout calculations
+ */
+const PIXELS_PER_INCH = 96;
+const MAX_HEIGHT_BUFFER_PX = 50;
+const MAX_WIDTH_BUFFER_PX = 20;
+
 /**
  * @typedef {Object} FieldValue
  * @property {string} input_id The id of the input field
@@ -139,6 +147,8 @@ import { buildSchemaSummary } from './schema-summary.js';
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
+ * @property {'responsive' | 'paginated'} [layoutMode='paginated'] - Document layout mode ('paginated' for fixed page width, 'responsive' for fluid width)
+ * @property {{top?: number, bottom?: number, left?: number, right?: number}} [layoutMargins] - Custom margins in pixels for responsive layout mode
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -233,6 +243,8 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
+    layoutMode: 'paginated',
+    layoutMargins: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -284,6 +296,7 @@ export class Editor extends EventEmitter {
 
     this.#initContainerElement(options);
     this.#checkHeadless(options);
+    this.#validateLayoutMargins(options);
     this.setOptions(options);
 
     let modes = {
@@ -506,6 +519,48 @@ export class Editor extends EventEmitter {
       global.document = options.mockDocument;
       global.window = options.mockWindow;
     }
+  }
+
+  /**
+   * Validate layoutMargins option values
+   * @param {EditorOptions} options - Editor options
+   * @returns {void}
+   */
+  #validateLayoutMargins(options) {
+    if (!options.layoutMargins) return;
+
+    const margins = options.layoutMargins;
+    const validatedMargins = {};
+    let hasValidValues = false;
+
+    for (const key of ['top', 'bottom', 'left', 'right']) {
+      if (margins[key] !== undefined && margins[key] !== null) {
+        const value = margins[key];
+
+        // Validate that value is a positive finite number
+        if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+          validatedMargins[key] = value;
+          hasValidValues = true;
+        } else {
+          console.warn(
+            `[SuperDoc] Invalid layoutMargins.${key}: ${value}. ` +
+              `Value must be a positive finite number. Ignoring this property.`,
+          );
+        }
+      }
+    }
+
+    // Replace the margins with the validated version, or null if no valid values
+    options.layoutMargins = hasValidValues ? validatedMargins : null;
+  }
+
+  /**
+   * Check if responsive layout mode is enabled
+   * @returns {boolean} True if layoutMode is 'responsive'
+   * @private
+   */
+  #isResponsiveMode() {
+    return this.options.layoutMode === 'responsive';
   }
 
   /**
@@ -1220,20 +1275,36 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Get the maximum content size
-   * @returns {Object} Size object with width and height
+   * Get the maximum content size based on page dimensions and margins
+   * @returns {{width: number, height: number} | {}} Size object with width and height in pixels, or empty object if no page size
    */
   getMaxContentSize() {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
+    const { layoutMargins } = this.options;
     const { width, height } = pageSize;
-    const { top = 0, bottom = 0, left = 0, right = 0 } = pageMargins;
 
-    // All sizes are in inches so we multiply by 96 to get pixels
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
+    // In paginated mode: use document margins (inches converted to pixels)
+    const isResponsive = this.#isResponsiveMode();
+
+    const getMarginPx = (side) => {
+      if (isResponsive) {
+        return layoutMargins?.[side] ?? PIXELS_PER_INCH;
+      }
+      return (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
+    };
+
+    const topPx = getMarginPx('top');
+    const bottomPx = getMarginPx('bottom');
+    const leftPx = getMarginPx('left');
+    const rightPx = getMarginPx('right');
+
+    // All sizes are in inches so we multiply by PIXELS_PER_INCH to get pixels
     if (!width || !height) return {};
 
-    const maxHeight = height * 96 - top * 96 - bottom * 96 - 50;
-    const maxWidth = width * 96 - left * 96 - right * 96 - 20;
+    const maxHeight = height * PIXELS_PER_INCH - topPx - bottomPx - MAX_HEIGHT_BUFFER_PX;
+    const maxWidth = width * PIXELS_PER_INCH - leftPx - rightPx - MAX_WIDTH_BUFFER_PX;
     return {
       width: maxWidth,
       height: maxHeight,
@@ -1242,9 +1313,17 @@ export class Editor extends EventEmitter {
 
   /**
    * Attach styles and attributes to the editor element
+   * @param {HTMLElement} element - The editor container element
+   * @param {HTMLElement} proseMirror - The ProseMirror element
+   * @param {boolean} [hasPaginationEnabled=true] - Whether pagination is enabled
+   * @returns {void}
    */
   updateEditorStyles(element, proseMirror, hasPaginationEnabled = true) {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
+    const { layoutMargins, pagination } = this.options;
+
+    // Responsive mode uses 100% width and custom margins
+    const isResponsive = this.#isResponsiveMode();
 
     if (!proseMirror || !element) {
       return;
@@ -1257,13 +1336,22 @@ export class Editor extends EventEmitter {
     proseMirror.classList.remove('view-mode');
 
     // Set fixed dimensions and padding that won't change with scaling
-    if (pageSize) {
-      element.style.width = pageSize.width + 'in';
-      element.style.minWidth = pageSize.width + 'in';
-      element.style.minHeight = pageSize.height + 'in';
+    if (pageSize?.width != null) {
+      element.style.width = isResponsive ? '100%' : `${pageSize.width}in`;
+      element.style.minWidth = isResponsive ? '' : `${pageSize.width}in`;
     }
 
-    if (pageMargins) {
+    if (pageSize?.height != null) {
+      element.style.minHeight = isResponsive ? '' : `${pageSize.height}in`;
+    }
+
+    // Apply left/right margins
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
+    // In paginated mode: use document margins (inches)
+    if (isResponsive) {
+      element.style.paddingLeft = (layoutMargins?.left ?? PIXELS_PER_INCH) + 'px';
+      element.style.paddingRight = (layoutMargins?.right ?? PIXELS_PER_INCH) + 'px';
+    } else if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
     }
@@ -1296,8 +1384,14 @@ export class Editor extends EventEmitter {
     const defaultLineHeight = 1.2;
     proseMirror.style.lineHeight = defaultLineHeight;
 
-    // If we are not using pagination, we still need to add some padding for header/footer
-    if (!hasPaginationEnabled) {
+    // Top/bottom padding
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
+    // In paginated mode with pagination disabled: use 1in
+    // In paginated mode with pagination enabled: no padding (pages handle it)
+    if (isResponsive) {
+      proseMirror.style.paddingTop = (layoutMargins?.top ?? PIXELS_PER_INCH) + 'px';
+      proseMirror.style.paddingBottom = (layoutMargins?.bottom ?? PIXELS_PER_INCH) + 'px';
+    } else if (!pagination) {
       proseMirror.style.paddingTop = '1in';
       proseMirror.style.paddingBottom = '1in';
     } else {
@@ -1327,12 +1421,18 @@ export class Editor extends EventEmitter {
   /**
    * Initializes responsive styles for mobile devices.
    * Sets up scaling based on viewport width and handles orientation changes.
+   * Note: Scaling is skipped in responsive layout mode since content reflows naturally.
    *
    * @param {HTMLElement|void} element - The DOM element to apply mobile styles to
    * @returns {void}
    */
   initMobileStyles(element) {
     if (!element) {
+      return;
+    }
+
+    // In responsive mode, content reflows naturally - no scaling needed
+    if (this.#isResponsiveMode()) {
       return;
     }
 
@@ -1446,6 +1546,11 @@ export class Editor extends EventEmitter {
    */
   async #initPagination() {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
+      return;
+    }
+
+    // Responsive mode disables pagination - content reflows naturally
+    if (this.#isResponsiveMode()) {
       return;
     }
 

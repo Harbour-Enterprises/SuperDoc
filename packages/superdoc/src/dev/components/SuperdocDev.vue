@@ -128,9 +128,14 @@ const init = async () => {
     role: userRole,
     documentMode: 'editing',
     toolbarGroups: ['left', 'center', 'right'],
-    pagination: true,
     rulers: false,
     annotations: true,
+
+    // Document layout mode: 'paginated' (default) or 'responsive'
+    // 'responsive' enables 100% width and custom margins - useful for mobile/accessibility
+    // layoutMode: 'responsive',
+    // layoutMargins: { top: 10, bottom: 10, left: 10, right: 10 },
+
     isInternal,
     telemetry: false,
     // disableContextMenu: true,
