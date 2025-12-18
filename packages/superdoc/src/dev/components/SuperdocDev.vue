@@ -133,8 +133,8 @@ const init = async () => {
 
     // Document layout mode: 'paginated' (default) or 'responsive'
     // 'responsive' enables 100% width and custom margins - useful for mobile/accessibility
-    layoutMode: 'responsive',
-    layoutMargins: { top: 10, bottom: 10, left: 10, right: 10 },
+    // layoutMode: 'responsive',
+    // layoutMargins: { top: 10, bottom: 10, left: 10, right: 10 },
 
     isInternal,
     telemetry: false,
