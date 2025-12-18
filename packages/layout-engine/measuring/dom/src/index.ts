@@ -2301,11 +2301,19 @@ async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureCons
   }
 
   const geometry = ensureDrawingGeometry(block.geometry);
+  const attrs = block.attrs as Record<string, unknown> | undefined;
+  const indentLeft = typeof attrs?.hrIndentLeft === 'number' ? attrs.hrIndentLeft : 0;
+  const indentRight = typeof attrs?.hrIndentRight === 'number' ? attrs.hrIndentRight : 0;
+  const hasFullWidth = attrs?.isFullWidth === true && constraints.maxWidth > 0;
+  const fullWidthMax = hasFullWidth ? Math.max(1, constraints.maxWidth - indentLeft - indentRight) : undefined;
+  if (fullWidthMax != null) {
+    geometry.width = fullWidthMax;
+  }
   const rotatedBounds = calculateRotatedBounds(geometry);
   const naturalWidth = Math.max(1, rotatedBounds.width);
   const naturalHeight = Math.max(1, rotatedBounds.height);
 
-  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth;
+  const maxWidth = fullWidthMax ?? (constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth);
 
   // For anchored drawings with negative vertical positioning (designed to overflow their container),
   // bypass the height constraint. This is common for footer/header graphics that extend beyond

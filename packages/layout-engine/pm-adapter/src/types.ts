@@ -351,6 +351,7 @@ export type TableNodeToBlockConverter = (
 export type NestedConverters = {
   paragraphToFlowBlocks?: ParagraphToFlowBlocksConverter;
   tableNodeToBlock?: TableNodeToBlockConverter;
+  contentBlockNodeToDrawingBlock?: DrawingNodeToBlockConverter;
   imageNodeToBlock?: ImageNodeToBlockConverter;
   vectorShapeNodeToDrawingBlock?: DrawingNodeToBlockConverter;
   shapeGroupNodeToDrawingBlock?: DrawingNodeToBlockConverter;
