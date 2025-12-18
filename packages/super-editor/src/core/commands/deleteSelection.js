@@ -8,14 +8,14 @@ export const deleteSelection =
   ({ state, tr, dispatch }) => {
     const { from, to, empty } = state.selection;
 
-    // Fix for SD-1013: when a single character is selected in the DOM (e.g., selecting right-to-left then typing),
-    // ProseMirror can treat the replacement as a backspace. Skip delete in that case.
-    if (typeof document !== 'undefined' && document.getSelection) {
+    // Fix for SD-1013
+    // Docs that are loaded into SuperDoc, when user selects text from right to left and replace it with a single char:
+    // Prosemirror will interpret this as a backspace operation, which will delete the character.
+    // This is a workaround to prevent this from happening, by checking if the current DOM selection is a single character.
+    if (document && document.getSelection) {
       const currentDomSelection = document.getSelection();
-      const selectedLength = currentDomSelection?.toString?.().length;
-      const isCollapsed = currentDomSelection?.isCollapsed;
-      // Only guard when there is a non-collapsed single-character DOM selection
-      if (!isCollapsed && selectedLength === 1) {
+      // If the current DOM selection is a single character, we don't want to delete it.
+      if (currentDomSelection?.baseNode?.data?.length == 1) {
         return false;
       }
     }
