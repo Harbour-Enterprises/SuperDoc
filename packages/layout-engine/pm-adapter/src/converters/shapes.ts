@@ -308,7 +308,7 @@ const normalizeAnchorData = (
  * const block = buildDrawingBlock(attrs, nextBlockId, positions, node, geometry, 'vectorShape');
  * ```
  */
-const buildDrawingBlock = (
+export const buildDrawingBlock = (
   rawAttrs: Record<string, unknown>,
   nextBlockId: BlockIdGenerator,
   positions: PositionMap,

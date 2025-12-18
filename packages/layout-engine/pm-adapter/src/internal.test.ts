@@ -16,6 +16,7 @@ import type { PMNode, AdapterOptions, BatchAdapterOptions, PMDocumentMap } from 
 vi.mock('./converters/index.js', () => ({
   paragraphToFlowBlocks: vi.fn(() => []),
   handleParagraphNode: vi.fn(),
+  contentBlockNodeToDrawingBlock: vi.fn(),
   imageNodeToBlock: vi.fn(),
   handleImageNode: vi.fn(),
   vectorShapeNodeToDrawingBlock: vi.fn(),
