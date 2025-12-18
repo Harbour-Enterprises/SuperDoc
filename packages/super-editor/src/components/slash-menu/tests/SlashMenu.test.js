@@ -273,6 +273,48 @@ describe('SlashMenu.vue', () => {
       expect(renderSpy).toHaveBeenCalledWith(expect.objectContaining({ event: rightClickEvent }));
     });
 
+    it('should keep selection when right-click happens inside the active selection', async () => {
+      mount(SlashMenu, { props: mockProps });
+
+      const { moveCursorToMouseEvent } = await import('../../cursor-helpers.js');
+      moveCursorToMouseEvent.mockClear();
+
+      mockEditor.state.selection.from = 5;
+      mockEditor.state.selection.to = 15;
+      mockEditor.posAtCoords = vi.fn(() => ({ pos: 10 }));
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      const rightClickEvent = new MouseEvent('contextmenu', { clientX: 120, clientY: 160 });
+
+      await contextMenuHandler(rightClickEvent);
+
+      expect(moveCursorToMouseEvent).not.toHaveBeenCalled();
+    });
+
+    it('should move cursor when right-click happens outside the active selection', async () => {
+      mount(SlashMenu, { props: mockProps });
+
+      const { moveCursorToMouseEvent } = await import('../../cursor-helpers.js');
+      moveCursorToMouseEvent.mockClear();
+
+      mockEditor.state.selection.from = 5;
+      mockEditor.state.selection.to = 15;
+      mockEditor.posAtCoords = vi.fn(() => ({ pos: 25 }));
+
+      const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu',
+      )[1];
+
+      const rightClickEvent = new MouseEvent('contextmenu', { clientX: 120, clientY: 160 });
+
+      await contextMenuHandler(rightClickEvent);
+
+      expect(moveCursorToMouseEvent).toHaveBeenCalledWith(rightClickEvent, mockEditor);
+    });
+
     it('should allow native context menu when modifier is pressed', async () => {
       mount(SlashMenu, { props: mockProps });
 
