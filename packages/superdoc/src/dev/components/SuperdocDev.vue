@@ -55,7 +55,6 @@ const collaborationEnabled = (() => {
 const collabRoom = import.meta.env.VITE_COLLAB_ROOM || 'demo-rooms21';
 const documentId = import.meta.env.VITE_COLLAB_DOCUMENT_ID || 'document-21';
 const collabUrl = import.meta.env.VITE_COLLAB_URL || `ws://localhost:3000/v1/collaborate/${collabRoom}`;
-const collabApiKey = import.meta.env.VITE_COLLAB_API_KEY?.trim();
 
 const user = {
   name: testUserName,
@@ -83,9 +82,24 @@ async function documentExists() {
     return false;
   }
 
-  // Convert WebSocket URL to HTTP for status check
-  const httpUrl = collabUrl.replace('ws://', 'http://').replace('wss://', 'https://');
-  const statusUrl = `${httpUrl}/${documentId}/status`;
+  // Convert WebSocket URL to HTTP for status check:
+  //   http(s)://host/v1/collaborate/:roomId/:documentId/status
+  const statusUrl = (() => {
+    try {
+      const httpUrl = collabRoomUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+      const url = new URL(httpUrl);
+      const parts = url.pathname.split('/').filter(Boolean);
+      const collabIndex = parts.findIndex((p) => p === 'collaborate');
+      const hasRoom = collabIndex !== -1 && Boolean(parts[collabIndex + 1]);
+      if (hasRoom) parts.push(documentId, 'status');
+      else parts.push('status');
+      url.pathname = `/${parts.join('/')}`;
+      return url.toString();
+    } catch {
+      const httpUrl = collabRoomUrl.replace('ws://', 'http://').replace('wss://', 'https://');
+      return `${httpUrl.replace(/\/$/, '')}/${documentId}/status`;
+    }
+  })();
 
   try {
     const headers = collabApiKey ? { Authorization: `Bearer ${collabApiKey}` } : undefined;
@@ -371,7 +385,7 @@ const init = async () => {
   };
   if (collaborationEnabled) {
     config.modules.collaboration = {
-      url: collabUrl,
+      url: collabWsUrl,
       user: user,
     };
   }

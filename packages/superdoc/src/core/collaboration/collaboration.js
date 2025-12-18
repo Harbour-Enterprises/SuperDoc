@@ -70,7 +70,9 @@ function createProvider({ config, user, documentId, socket, superdocInstance }) 
 function createSuperDocProvider({ config, user, documentId, superdocInstance }) {
   const ydoc = new YDoc({ gc: false });
   const options = {
-    params: config.params,
+    params: {
+      ...config.params,
+    },
   };
 
   const provider = new WebsocketProvider(config.url, documentId, ydoc, options);
