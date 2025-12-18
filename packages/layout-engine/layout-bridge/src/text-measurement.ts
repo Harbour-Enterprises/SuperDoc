@@ -123,6 +123,7 @@ const countSpaces = (text: string): number => {
  * - No spaces: Returns zero adjustment (prevents division by zero)
  * - Lines with explicit segment positioning: Returns zero adjustment
  * - Compressed lines: Returns negative adjustment (naturalWidth used for slack calculation)
+ * - Empty runs array: Returns zero adjustment
  *
  * @param block - The paragraph block containing the line
  * @param line - The line to compute justify adjustment for
@@ -130,8 +131,12 @@ const countSpaces = (text: string): number => {
  *   Must match what the painter uses to ensure consistent justify spacing. If not provided,
  *   falls back to line.maxWidth or line.width.
  * @param alignmentOverride - Optional alignment override (defaults to block.attrs.alignment)
- * @param isLastLineOfParagraph - Whether this is the last line of the paragraph
- * @param paragraphEndsWithLineBreak - Whether the paragraph ends with a soft break (Shift+Enter)
+ * @param isLastLineOfParagraph - Whether this is the last line of the paragraph.
+ *   If not provided, auto-derived from block/line: `line.toRun >= block.runs.length - 1`.
+ *   Auto-derivation ensures measurement matches rendering. Returns false for empty runs arrays.
+ * @param paragraphEndsWithLineBreak - Whether the paragraph ends with a soft break (Shift+Enter).
+ *   If not provided, auto-derived: `lastRun?.kind === 'lineBreak'`.
+ *   Auto-derivation ensures measurement matches rendering. Returns false for empty runs arrays.
  * @param skipJustifyOverride - Explicit override to skip justify
  * @returns Object containing extraPerSpace (pixels to add after each space) and totalSpaces
  *
@@ -159,15 +164,27 @@ const getJustifyAdjustment = (
     return { extraPerSpace: 0, totalSpaces: 0 };
   }
 
+  // Guard against empty runs array
+  if (block.runs.length === 0) {
+    return { extraPerSpace: 0, totalSpaces: 0 };
+  }
+
   const alignment = alignmentOverride ?? block.attrs?.alignment;
   const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+
+  // Derive last-line info from block/line when not explicitly provided.
+  // This ensures measurement matches rendering even when callers don't pass these flags.
+  const lastRunIndex = block.runs.length - 1;
+  const lastRun = block.runs[lastRunIndex];
+  const derivedIsLastLine = line.toRun >= lastRunIndex;
+  const derivedEndsWithLineBreak = lastRun.kind === 'lineBreak';
 
   // Determine if justify should be applied using shared logic
   const shouldJustify = shouldApplyJustify({
     alignment,
     hasExplicitPositioning,
-    isLastLineOfParagraph: isLastLineOfParagraph ?? false,
-    paragraphEndsWithLineBreak: paragraphEndsWithLineBreak ?? false,
+    isLastLineOfParagraph: isLastLineOfParagraph ?? derivedIsLastLine,
+    paragraphEndsWithLineBreak: paragraphEndsWithLineBreak ?? derivedEndsWithLineBreak,
     skipJustifyOverride,
   });
 
