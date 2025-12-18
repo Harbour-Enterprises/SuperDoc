@@ -146,7 +146,7 @@ jobs:
         id: run-e2e-tests
         if: always()
         run: cd e2e-tests && pnpm test 
-  
+
       - name: Upload e2e test results
         id: upload_artifact
         if: always() && steps.run-e2e-tests.outcome == 'failure'
@@ -208,6 +208,16 @@ jobs:
           pnpx playwright install-deps chromium
 
       - name: Run visual tests
+        id: run-visual-tests
         run: |
           cd examples/tests
           pnpm test
+
+      - name: Upload visual test results
+        id: upload_artifact
+        if: always() && steps.run-visual-tests.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: visual-tests
+          path: examples/tests/test-results
+          retention-days: 15
