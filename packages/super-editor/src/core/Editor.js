@@ -1284,14 +1284,13 @@ export class Editor extends EventEmitter {
     const { layoutMargins } = this.options;
     const { width, height } = pageSize;
 
-    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
     // In paginated mode: use document margins (inches converted to pixels)
     const isResponsive = this.#isResponsiveMode();
-    const DEFAULT_RESPONSIVE_MARGIN = 16;
 
     const getMarginPx = (side) => {
       if (isResponsive) {
-        return layoutMargins?.[side] ?? DEFAULT_RESPONSIVE_MARGIN;
+        return layoutMargins?.[side] ?? PIXELS_PER_INCH;
       }
       return (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
     };
@@ -1347,11 +1346,11 @@ export class Editor extends EventEmitter {
     }
 
     // Apply left/right margins
-    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
     // In paginated mode: use document margins (inches)
     if (isResponsive) {
-      element.style.paddingLeft = (layoutMargins?.left ?? 16) + 'px';
-      element.style.paddingRight = (layoutMargins?.right ?? 16) + 'px';
+      element.style.paddingLeft = (layoutMargins?.left ?? PIXELS_PER_INCH) + 'px';
+      element.style.paddingRight = (layoutMargins?.right ?? PIXELS_PER_INCH) + 'px';
     } else if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
@@ -1386,12 +1385,12 @@ export class Editor extends EventEmitter {
     proseMirror.style.lineHeight = defaultLineHeight;
 
     // Top/bottom padding
-    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In responsive mode: use layoutMargins (pixels) or defaults (1in = 96px)
     // In paginated mode with pagination disabled: use 1in
     // In paginated mode with pagination enabled: no padding (pages handle it)
     if (isResponsive) {
-      proseMirror.style.paddingTop = (layoutMargins?.top ?? 16) + 'px';
-      proseMirror.style.paddingBottom = (layoutMargins?.bottom ?? 16) + 'px';
+      proseMirror.style.paddingTop = (layoutMargins?.top ?? PIXELS_PER_INCH) + 'px';
+      proseMirror.style.paddingBottom = (layoutMargins?.bottom ?? PIXELS_PER_INCH) + 'px';
     } else if (!pagination) {
       proseMirror.style.paddingTop = '1in';
       proseMirror.style.paddingBottom = '1in';
@@ -1547,6 +1546,11 @@ export class Editor extends EventEmitter {
    */
   async #initPagination() {
     if (this.options.isHeadless || !this.extensionService || this.options.isHeaderOrFooter) {
+      return;
+    }
+
+    // Responsive mode disables pagination - content reflows naturally
+    if (this.#isResponsiveMode()) {
       return;
     }
 
