@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { initTestEditor, loadTestDataForEditorTests } from '../tests/helpers/helpers.js';
 
-describe('Editor displayMarginsOverride', () => {
+describe('Editor layoutMode', () => {
   let docx;
   let media;
   let mediaFiles;
@@ -22,8 +22,8 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: 100,
           bottom: 50,
           left: 75,
@@ -32,7 +32,7 @@ describe('Editor displayMarginsOverride', () => {
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         top: 100,
         bottom: 50,
         left: 75,
@@ -46,8 +46,8 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: 0,
           bottom: 0,
           left: 0,
@@ -56,7 +56,7 @@ describe('Editor displayMarginsOverride', () => {
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         top: 0,
         bottom: 0,
         left: 0,
@@ -64,21 +64,21 @@ describe('Editor displayMarginsOverride', () => {
       });
     });
 
-    it('accepts partial displayMarginsOverride with only some properties set', (context) => {
+    it('accepts partial layoutMargins with only some properties set', (context) => {
       const { editor } = initTestEditor({
         content: docx,
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: 50,
           left: 75,
         },
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         top: 50,
         left: 75,
       });
@@ -92,18 +92,18 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: -10,
           bottom: 50,
         },
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         bottom: 50,
       });
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid displayMarginsOverride.top'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid layoutMargins.top'));
 
       warnSpy.mockRestore();
     });
@@ -116,18 +116,18 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: NaN,
           bottom: 50,
         },
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         bottom: 50,
       });
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid displayMarginsOverride.top'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid layoutMargins.top'));
 
       warnSpy.mockRestore();
     });
@@ -140,18 +140,18 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: Infinity,
           bottom: 50,
         },
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         bottom: 50,
       });
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid displayMarginsOverride.top'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid layoutMargins.top'));
 
       warnSpy.mockRestore();
     });
@@ -164,23 +164,23 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: '100',
           bottom: 50,
         },
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         bottom: 50,
       });
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid displayMarginsOverride.top'));
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('Invalid layoutMargins.top'));
 
       warnSpy.mockRestore();
     });
 
-    it('sets displayMarginsOverride to null if all values are invalid', (context) => {
+    it('sets layoutMargins to null if all values are invalid', (context) => {
       const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
 
       const { editor } = initTestEditor({
@@ -188,8 +188,8 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: -10,
           bottom: 'invalid',
           left: NaN,
@@ -198,7 +198,7 @@ describe('Editor displayMarginsOverride', () => {
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toBeNull();
+      expect(editor.options.layoutMargins).toBeNull();
       expect(warnSpy).toHaveBeenCalledTimes(4);
 
       warnSpy.mockRestore();
@@ -210,8 +210,8 @@ describe('Editor displayMarginsOverride', () => {
         media,
         mediaFiles,
         fonts,
-        pagination: false,
-        displayMarginsOverride: {
+        layoutMode: 'responsive',
+        layoutMargins: {
           top: 100,
           bottom: null,
           left: undefined,
@@ -220,10 +220,35 @@ describe('Editor displayMarginsOverride', () => {
       });
       context.editor = editor;
 
-      expect(editor.options.displayMarginsOverride).toEqual({
+      expect(editor.options.layoutMargins).toEqual({
         top: 100,
         right: 50,
       });
+    });
+
+    it('defaults to paginated layout mode', (context) => {
+      const { editor } = initTestEditor({
+        content: docx,
+        media,
+        mediaFiles,
+        fonts,
+      });
+      context.editor = editor;
+
+      expect(editor.options.layoutMode).toBe('paginated');
+    });
+
+    it('accepts responsive layout mode', (context) => {
+      const { editor } = initTestEditor({
+        content: docx,
+        media,
+        mediaFiles,
+        fonts,
+        layoutMode: 'responsive',
+      });
+      context.editor = editor;
+
+      expect(editor.options.layoutMode).toBe('responsive');
     });
   });
 
@@ -261,9 +286,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(result).toEqual({});
     });
 
-    it('calculates max content size with default margins when pagination is enabled', () => {
-      editor.options.pagination = true;
-      editor.options.displayMarginsOverride = null;
+    it('calculates max content size with default margins when in paginated mode', () => {
+      editor.options.layoutMode = 'paginated';
+      editor.options.layoutMargins = null;
       editor.converter.pageStyles = {
         pageSize: { width: 8.5, height: 11 },
         pageMargins: { top: 1, bottom: 1, left: 1, right: 1 },
@@ -277,9 +302,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(result.height).toBe(814);
     });
 
-    it('applies displayMarginsOverride when pagination is disabled', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+    it('applies layoutMargins in responsive mode', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         top: 50,
         bottom: 50,
         left: 100,
@@ -298,9 +323,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(result.height).toBe(906);
     });
 
-    it('uses partial displayMarginsOverride and falls back to document margins', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+    it('uses partial layoutMargins and falls back to document margins', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         top: 50,
         left: 100,
       };
@@ -317,9 +342,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(result.height).toBe(860);
     });
 
-    it('ignores displayMarginsOverride when pagination is enabled', () => {
-      editor.options.pagination = true;
-      editor.options.displayMarginsOverride = {
+    it('ignores layoutMargins in paginated mode', () => {
+      editor.options.layoutMode = 'paginated';
+      editor.options.layoutMargins = {
         top: 50,
         bottom: 50,
         left: 100,
@@ -339,9 +364,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(result.height).toBe(814);
     });
 
-    it('handles zero values in displayMarginsOverride', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+    it('handles zero values in layoutMargins', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         top: 0,
         bottom: 0,
         left: 0,
@@ -361,8 +386,8 @@ describe('Editor displayMarginsOverride', () => {
     });
 
     it('handles missing page margins gracefully', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         top: 50,
       };
       editor.converter.pageStyles = {
@@ -430,9 +455,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(proseMirror.style.paddingTop).toBeUndefined();
     });
 
-    it('applies displayMarginsOverride padding when pagination is disabled', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+    it('applies layoutMargins padding in responsive mode', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         top: 50,
         bottom: 75,
         left: 100,
@@ -447,21 +472,24 @@ describe('Editor displayMarginsOverride', () => {
       expect(proseMirror.style.paddingBottom).toBe('75px');
     });
 
-    it('applies default padding when pagination is disabled without override', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = null;
+    it('applies default padding in responsive mode without layoutMargins', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = null;
 
       editor.updateEditorStyles(element, proseMirror, false);
 
+      // Uses document margins for left/right padding
       expect(element.style.paddingLeft).toBe('1in');
       expect(element.style.paddingRight).toBe('1in');
+      // Uses default 1in for top/bottom in responsive mode without layoutMargins
       expect(proseMirror.style.paddingTop).toBe('1in');
       expect(proseMirror.style.paddingBottom).toBe('1in');
     });
 
-    it('does not apply displayMarginsOverride when pagination is enabled', () => {
+    it('does not apply layoutMargins in paginated mode', () => {
+      editor.options.layoutMode = 'paginated';
       editor.options.pagination = true;
-      editor.options.displayMarginsOverride = {
+      editor.options.layoutMargins = {
         top: 50,
         bottom: 75,
         left: 100,
@@ -477,9 +505,9 @@ describe('Editor displayMarginsOverride', () => {
       expect(proseMirror.style.paddingBottom).toBe('0');
     });
 
-    it('applies partial displayMarginsOverride with fallback to document margins', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = {
+    it('applies partial layoutMargins with fallback to document margins', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = {
         left: 100,
         top: 50,
       };
@@ -492,22 +520,41 @@ describe('Editor displayMarginsOverride', () => {
       expect(proseMirror.style.paddingBottom).toBe('96px'); // Falls back to 1in = 96px
     });
 
-    it('removes minHeight when displayMarginsOverride is active', () => {
-      editor.options.pagination = false;
-      editor.options.displayMarginsOverride = { top: 50 };
+    it('removes minHeight in responsive mode', () => {
+      editor.options.layoutMode = 'responsive';
+      editor.options.layoutMargins = { top: 50 };
 
       editor.updateEditorStyles(element, proseMirror, false);
 
       expect(element.style.minHeight).toBe('');
     });
 
-    it('sets minHeight when displayMarginsOverride is not active', () => {
+    it('sets minHeight in paginated mode', () => {
+      editor.options.layoutMode = 'paginated';
       editor.options.pagination = true;
-      editor.options.displayMarginsOverride = null;
+      editor.options.layoutMargins = null;
 
       editor.updateEditorStyles(element, proseMirror, true);
 
       expect(element.style.minHeight).toBe('11in');
+    });
+
+    it('sets width to 100% in responsive mode', () => {
+      editor.options.layoutMode = 'responsive';
+
+      editor.updateEditorStyles(element, proseMirror, false);
+
+      expect(element.style.width).toBe('100%');
+      expect(element.style.minWidth).toBe('');
+    });
+
+    it('sets fixed width in paginated mode', () => {
+      editor.options.layoutMode = 'paginated';
+
+      editor.updateEditorStyles(element, proseMirror, true);
+
+      expect(element.style.width).toBe('8.5in');
+      expect(element.style.minWidth).toBe('8.5in');
     });
   });
 });

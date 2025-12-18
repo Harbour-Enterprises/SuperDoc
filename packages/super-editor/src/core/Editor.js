@@ -147,7 +147,8 @@ const MAX_WIDTH_BUFFER_PX = 20;
  * @property {string} [html] - HTML content to initialize the editor with
  * @property {string} [markdown] - Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] - Whether to enable debug mode
- * @property {{top?: number, bottom?: number, left?: number, right?: number}} [displayMarginsOverride] - Override visual margins (values in pixels, only applies when pagination is disabled)
+ * @property {'responsive' | 'paginated'} [layoutMode='paginated'] - Document layout mode ('paginated' for fixed page width, 'responsive' for fluid width)
+ * @property {{top?: number, bottom?: number, left?: number, right?: number}} [layoutMargins] - Custom margins in pixels for responsive layout mode
  * @property {(params: {
  *   permission: string,
  *   role?: string,
@@ -242,7 +243,8 @@ export class Editor extends EventEmitter {
     lastSelection: null,
     suppressDefaultDocxStyles: false,
     jsonOverride: null,
-    displayMarginsOverride: null,
+    layoutMode: 'paginated',
+    layoutMargins: null,
     onBeforeCreate: () => null,
     onCreate: () => null,
     onUpdate: () => null,
@@ -294,7 +296,7 @@ export class Editor extends EventEmitter {
 
     this.#initContainerElement(options);
     this.#checkHeadless(options);
-    this.#validateDisplayMarginsOverride(options);
+    this.#validateLayoutMargins(options);
     this.setOptions(options);
 
     let modes = {
@@ -520,45 +522,45 @@ export class Editor extends EventEmitter {
   }
 
   /**
-   * Validate displayMarginsOverride option values
+   * Validate layoutMargins option values
    * @param {EditorOptions} options - Editor options
    * @returns {void}
    */
-  #validateDisplayMarginsOverride(options) {
-    if (!options.displayMarginsOverride) return;
+  #validateLayoutMargins(options) {
+    if (!options.layoutMargins) return;
 
-    const override = options.displayMarginsOverride;
-    const validatedOverride = {};
+    const margins = options.layoutMargins;
+    const validatedMargins = {};
     let hasValidValues = false;
 
     for (const key of ['top', 'bottom', 'left', 'right']) {
-      if (override[key] !== undefined && override[key] !== null) {
-        const value = override[key];
+      if (margins[key] !== undefined && margins[key] !== null) {
+        const value = margins[key];
 
         // Validate that value is a positive finite number
         if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
-          validatedOverride[key] = value;
+          validatedMargins[key] = value;
           hasValidValues = true;
         } else {
           console.warn(
-            `[SuperDoc] Invalid displayMarginsOverride.${key}: ${value}. ` +
+            `[SuperDoc] Invalid layoutMargins.${key}: ${value}. ` +
               `Value must be a positive finite number. Ignoring this property.`,
           );
         }
       }
     }
 
-    // Replace the override with the validated version, or null if no valid values
-    options.displayMarginsOverride = hasValidValues ? validatedOverride : null;
+    // Replace the margins with the validated version, or null if no valid values
+    options.layoutMargins = hasValidValues ? validatedMargins : null;
   }
 
   /**
-   * Check if displayMarginsOverride should be applied
-   * @returns {boolean} True if pagination is disabled and displayMarginsOverride is set
+   * Check if responsive layout mode is enabled
+   * @returns {boolean} True if layoutMode is 'responsive'
    * @private
    */
-  #shouldApplyMarginsOverride() {
-    return !this.options.pagination && !!this.options.displayMarginsOverride;
+  #isResponsiveMode() {
+    return this.options.layoutMode === 'responsive';
   }
 
   /**
@@ -1279,16 +1281,19 @@ export class Editor extends EventEmitter {
   getMaxContentSize() {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
-    const { displayMarginsOverride } = this.options;
+    const { layoutMargins } = this.options;
     const { width, height } = pageSize;
 
-    // displayMarginsOverride only applies when pagination is disabled
-    // Override values are in pixels, document margins are in inches
-    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
+    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In paginated mode: use document margins (inches converted to pixels)
+    const isResponsive = this.#isResponsiveMode();
+    const DEFAULT_RESPONSIVE_MARGIN = 16;
 
     const getMarginPx = (side) => {
-      const defaultPx = (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
-      return shouldApplyMarginsOverride ? (displayMarginsOverride?.[side] ?? defaultPx) : defaultPx;
+      if (isResponsive) {
+        return layoutMargins?.[side] ?? DEFAULT_RESPONSIVE_MARGIN;
+      }
+      return (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
     };
 
     const topPx = getMarginPx('top');
@@ -1316,11 +1321,10 @@ export class Editor extends EventEmitter {
    */
   updateEditorStyles(element, proseMirror, hasPaginationEnabled = true) {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
-    const { displayMarginsOverride, pagination } = this.options;
+    const { layoutMargins, pagination } = this.options;
 
-    // displayMarginsOverride only applies when pagination is disabled
-    // Check this.options.pagination directly since hasPaginationEnabled parameter may not reflect config
-    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
+    // Responsive mode uses 100% width and custom margins
+    const isResponsive = this.#isResponsiveMode();
 
     if (!proseMirror || !element) {
       return;
@@ -1334,22 +1338,20 @@ export class Editor extends EventEmitter {
 
     // Set fixed dimensions and padding that won't change with scaling
     if (pageSize?.width != null) {
-      element.style.width = shouldApplyMarginsOverride ? '100%' : `${pageSize.width}in`;
-      element.style.minWidth = shouldApplyMarginsOverride ? '' : `${pageSize.width}in`;
+      element.style.width = isResponsive ? '100%' : `${pageSize.width}in`;
+      element.style.minWidth = isResponsive ? '' : `${pageSize.width}in`;
     }
 
     if (pageSize?.height != null) {
-      element.style.minHeight = shouldApplyMarginsOverride ? '' : `${pageSize.height}in`;
+      element.style.minHeight = isResponsive ? '' : `${pageSize.height}in`;
     }
 
-    // Apply left/right margins - use displayMarginsOverride (in pixels) if provided and pagination disabled
-    if (shouldApplyMarginsOverride) {
-      if (displayMarginsOverride.left != null) {
-        element.style.paddingLeft = displayMarginsOverride.left + 'px';
-      }
-      if (displayMarginsOverride.right != null) {
-        element.style.paddingRight = displayMarginsOverride.right + 'px';
-      }
+    // Apply left/right margins
+    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In paginated mode: use document margins (inches)
+    if (isResponsive) {
+      element.style.paddingLeft = (layoutMargins?.left ?? 16) + 'px';
+      element.style.paddingRight = (layoutMargins?.right ?? 16) + 'px';
     } else if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
@@ -1383,16 +1385,16 @@ export class Editor extends EventEmitter {
     const defaultLineHeight = 1.2;
     proseMirror.style.lineHeight = defaultLineHeight;
 
-    // If we are not using pagination, we still need to add some padding for header/footer
-    // Use displayMarginsOverride (in pixels) for top/bottom if provided, otherwise default to 1in
-    if (!pagination) {
-      if (shouldApplyMarginsOverride) {
-        proseMirror.style.paddingTop = (displayMarginsOverride.top ?? PIXELS_PER_INCH) + 'px'; // Default to 1in
-        proseMirror.style.paddingBottom = (displayMarginsOverride.bottom ?? PIXELS_PER_INCH) + 'px';
-      } else {
-        proseMirror.style.paddingTop = '1in';
-        proseMirror.style.paddingBottom = '1in';
-      }
+    // Top/bottom padding
+    // In responsive mode: use layoutMargins (pixels) or defaults (16px)
+    // In paginated mode with pagination disabled: use 1in
+    // In paginated mode with pagination enabled: no padding (pages handle it)
+    if (isResponsive) {
+      proseMirror.style.paddingTop = (layoutMargins?.top ?? 16) + 'px';
+      proseMirror.style.paddingBottom = (layoutMargins?.bottom ?? 16) + 'px';
+    } else if (!pagination) {
+      proseMirror.style.paddingTop = '1in';
+      proseMirror.style.paddingBottom = '1in';
     } else {
       proseMirror.style.paddingTop = '0';
       proseMirror.style.paddingBottom = '0';
@@ -1420,12 +1422,18 @@ export class Editor extends EventEmitter {
   /**
    * Initializes responsive styles for mobile devices.
    * Sets up scaling based on viewport width and handles orientation changes.
+   * Note: Scaling is skipped in responsive layout mode since content reflows naturally.
    *
    * @param {HTMLElement|void} element - The DOM element to apply mobile styles to
    * @returns {void}
    */
   initMobileStyles(element) {
     if (!element) {
+      return;
+    }
+
+    // In responsive mode, content reflows naturally - no scaling needed
+    if (this.#isResponsiveMode()) {
       return;
     }
 

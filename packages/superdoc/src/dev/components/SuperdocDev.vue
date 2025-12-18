@@ -131,9 +131,10 @@ const init = async () => {
     rulers: false,
     annotations: true,
 
-    // Override visual margins (values in pixels) - uncomment to test
-    pagination: true,
-    // displayMarginsOverride: { top: 10, bottom: 10, left: 10, right: 10 }, // Pagination must be false for this to do anything
+    // Document layout mode: 'paginated' (default) or 'responsive'
+    // 'responsive' enables 100% width and custom margins - useful for mobile/accessibility
+    layoutMode: 'responsive',
+    layoutMargins: { top: 10, bottom: 10, left: 10, right: 10 },
 
     isInternal,
     telemetry: false,
