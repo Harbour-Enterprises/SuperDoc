@@ -34,12 +34,14 @@ type StructuredContentInlineInsert = {
   text?: string;
   json?: ProseMirrorJSON;
   attrs?: Record<string, unknown>;
+  preserveMarks?: boolean;
 };
 
 type StructuredContentBlockInsert = {
   html?: string;
   json?: ProseMirrorJSON;
   attrs?: Record<string, unknown>;
+  preserveMarks?: boolean;
 };
 
 type StructuredContentUpdateOptions = {
@@ -47,6 +49,10 @@ type StructuredContentUpdateOptions = {
   html?: string;
   json?: ProseMirrorJSON;
   attrs?: Record<string, unknown>;
+  /** When true, preserves marks from the first text node (only applies with text option) */
+  preserveMarks?: boolean;
+  /** @deprecated Use preserveMarks instead */
+  keepTextNodeStyles?: boolean;
 };
 
 type StructuredContentTableAppendOptions = {

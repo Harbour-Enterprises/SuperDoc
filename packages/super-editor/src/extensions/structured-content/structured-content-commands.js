@@ -34,6 +34,7 @@ const findFirstTextNode = (node) => {
  * @property {Object} [json] - ProseMirror JSON
  * @property {Object} [attrs] - Node attributes
  * @property {string} [attrs.group] - Group identifier for linking multiple fields (auto-encoded to JSON tag)
+ * @property {boolean} [preserveMarks] - When true, preserves marks from the current selection
  */
 
 /**
@@ -42,6 +43,7 @@ const findFirstTextNode = (node) => {
  * @property {Object} [json] - ProseMirror JSON
  * @property {Object} [attrs] - Node attributes
  * @property {string} [attrs.group] - Group identifier for linking multiple fields (auto-encoded to JSON tag)
+ * @property {boolean} [preserveMarks] - When true, preserves marks from the current selection
  */
 
 /**
@@ -50,7 +52,8 @@ const findFirstTextNode = (node) => {
  * @property {string} [html] - Replace content with HTML (only for structured content block)
  * @property {Object} [json] - Replace content with ProseMirror JSON (overrides html)
  * @property {Object} [attrs] - Update attributes only (preserves content)
- * @property {boolean} [keepTextNodeStyles] - When true, preserves marks from the first text node (only applies with text option)
+ * @property {boolean} [preserveMarks] - When true, preserves marks from the first text node (only applies with text option)
+ * @property {boolean} [keepTextNodeStyles] - @deprecated Use preserveMarks instead. Kept for backward compatibility.
  */
 
 /**
@@ -100,14 +103,17 @@ export const StructuredContentCommands = Extension.create({
           if (dispatch) {
             const selectionText = state.doc.textBetween(from, to);
 
+            // Get marks from selection if preserveMarks is enabled
+            const marks = options.preserveMarks ? state.storedMarks || state.selection.$from.marks() : [];
+
             let content = null;
 
             if (selectionText) {
-              content = schema.text(selectionText);
+              content = schema.text(selectionText, marks);
             }
 
             if (options.text) {
-              content = schema.text(options.text);
+              content = schema.text(options.text, marks);
             }
 
             if (options.json) {
@@ -115,7 +121,7 @@ export const StructuredContentCommands = Extension.create({
             }
 
             if (!content) {
-              content = schema.text(' ');
+              content = schema.text(' ', marks);
             }
 
             // Handle group parameter: convert to JSON tag
@@ -236,7 +242,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {string} id - Unique identifier of the field
        * @param {StructuredContentUpdate} options
        * @example
-       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe', keepTextNodeStyles: true });
+       * editor.commands.updateStructuredContentById('123', { text: 'Jane Doe', preserveMarks: true });
        * editor.commands.updateStructuredContentById('123', {
        *  json: { type: 'text', text: 'Jane Doe' },
        * });
@@ -264,9 +270,9 @@ export const StructuredContentCommands = Extension.create({
             let content = null;
 
             if (options.text) {
-              // If keepTextNodeStyles is true, use the marks from the first text node
-              // Useful for preserving text styles when updating structured content
-              const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
+              // Support both preserveMarks and keepTextNodeStyles (legacy) for backward compat
+              const shouldPreserve = options.preserveMarks ?? options.keepTextNodeStyles;
+              const firstTextNode = shouldPreserve === true ? findFirstTextNode(node) : null;
               const textMarks = firstTextNode ? firstTextNode.marks : [];
               content = schema.text(options.text, textMarks);
             }
@@ -398,7 +404,7 @@ export const StructuredContentCommands = Extension.create({
        * @param {StructuredContentUpdate} options
        * @example
        * // Update all fields in the customer-info group
-       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe', keepTextNodeStyles: true });
+       * editor.commands.updateStructuredContentByGroup('customer-info', { text: 'Jane Doe', preserveMarks: true });
        *
        * // Update block content in a group
        * editor.commands.updateStructuredContentByGroup('terms-section', {
@@ -427,9 +433,9 @@ export const StructuredContentCommands = Extension.create({
               let content = null;
 
               if (options.text) {
-                // If keepTextNodeStyles is true, use the marks from the first text node
-                // Useful for preserving text styles when updating structured content
-                const firstTextNode = options.keepTextNodeStyles === true ? findFirstTextNode(node) : null;
+                // Support both preserveMarks and keepTextNodeStyles (legacy) for backward compat
+                const shouldPreserve = options.preserveMarks ?? options.keepTextNodeStyles;
+                const firstTextNode = shouldPreserve === true ? findFirstTextNode(node) : null;
                 const textMarks = firstTextNode ? firstTextNode.marks : [];
                 content = schema.text(options.text, textMarks);
               }

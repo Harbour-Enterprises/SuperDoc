@@ -165,11 +165,11 @@ describe('updateStructuredContentById', () => {
     schema = null;
   });
 
-  describe('keepTextNodeStyles option', () => {
-    it('preserves marks from the first text node when keepTextNodeStyles is true', () => {
+  describe('preserveMarks option', () => {
+    it('preserves marks from the first text node when preserveMarks is true', () => {
       const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
         text: 'New Content',
-        keepTextNodeStyles: true,
+        preserveMarks: true,
       });
 
       expect(didUpdate).toBe(true);
@@ -197,10 +197,10 @@ describe('updateStructuredContentById', () => {
       }
     });
 
-    it('does not preserve marks when keepTextNodeStyles is false or not provided', () => {
+    it('does not preserve marks when preserveMarks is false or not provided', () => {
       const didUpdate = editor.commands.updateStructuredContentById(INLINE_ID, {
         text: 'New Content',
-        keepTextNodeStyles: false,
+        preserveMarks: false,
       });
 
       expect(didUpdate).toBe(true);
@@ -236,7 +236,7 @@ describe('updateStructuredContentById', () => {
 
       const didUpdate = editor.commands.updateStructuredContentById(emptyInlineId, {
         text: 'New Content',
-        keepTextNodeStyles: true,
+        preserveMarks: true,
       });
 
       expect(didUpdate).toBe(true);
@@ -407,11 +407,11 @@ describe('updateStructuredContentByGroup', () => {
     schema = null;
   });
 
-  describe('keepTextNodeStyles option', () => {
-    it('preserves marks from the first text node for all nodes in group when keepTextNodeStyles is true', () => {
+  describe('preserveMarks option', () => {
+    it('preserves marks from the first text node for all nodes in group when preserveMarks is true', () => {
       const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
         text: 'Updated Content',
-        keepTextNodeStyles: true,
+        preserveMarks: true,
       });
 
       expect(didUpdate).toBe(true);
@@ -442,10 +442,10 @@ describe('updateStructuredContentByGroup', () => {
       });
     });
 
-    it('does not preserve marks when keepTextNodeStyles is false or not provided', () => {
+    it('does not preserve marks when preserveMarks is false or not provided', () => {
       const didUpdate = editor.commands.updateStructuredContentByGroup(GROUP_NAME, {
         text: 'Updated Content',
-        keepTextNodeStyles: false,
+        preserveMarks: false,
       });
 
       expect(didUpdate).toBe(true);
