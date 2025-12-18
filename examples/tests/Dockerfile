@@ -12,8 +12,9 @@ ENV PNPM_HOME="/pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN corepack enable
 
-COPY --exclude=examples . .
+COPY --exclude=e2e-tests . .
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install
-RUN pnpm run --prefix packages/superdoc build
+RUN pnpm run pack
+RUN --mount=type=cache,id=pnpm,target=/pnpm/store cd examples && pnpm install --no-frozen-lockfile
 
-CMD ["bash", "-c", "pnpm run --prefix e2e-tests test $PLAYWRIGHT_ARGS --workers=4"]
+CMD ["bash", "-c", "pnpm run --prefix examples/tests test $PLAYWRIGHT_ARGS --workers=4"]
