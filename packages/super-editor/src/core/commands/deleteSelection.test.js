@@ -120,22 +120,6 @@ describe('deleteSelection', () => {
     expect(res).toBe('delegated-non-empty');
   });
 
-  // Fix for SD-1013: prevent single-character selections from being treated as backspace
-  it('returns false when current DOM selection is a single character', () => {
-    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
-    const sel = TextSelection.create(doc, 2, 5);
-    const state = EditorState.create({ schema, doc, selection: sel });
-
-    vi.spyOn(document, 'getSelection').mockReturnValue({
-      toString: () => 'a',
-      isCollapsed: false,
-    });
-
-    const cmd = deleteSelection();
-    const ok = cmd({ state, tr: state.tr });
-    expect(ok).toBe(false);
-  });
-
   it('returns true when dispatch is omitted (list content case)', () => {
     // Ensure DOM selection is empty so the single-char guard does not short-circuit
     vi.spyOn(document, 'getSelection').mockReturnValue({
@@ -159,5 +143,25 @@ describe('deleteSelection', () => {
 
     expect(ok).toBe(true);
     expect(pmDeleteSelection).not.toHaveBeenCalled();
+  });
+
+  // This is a workaround. It was a fix for SD-1013.
+  // When user selects text from right to left and replace it with a single char,
+  // Prosemirror will interpret this as a backspace operation, which will delete the character.
+  // This is a workaround to prevent this from happening, by checking if the current DOM selection is a single character.
+  it('returns false when current dom selection is a single character', () => {
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+    const sel = TextSelection.create(doc, 2, 5);
+    const state = EditorState.create({ schema, doc, selection: sel });
+
+    vi.spyOn(document, 'getSelection').mockReturnValue({
+      baseNode: {
+        data: 'a',
+      },
+    });
+
+    const cmd = deleteSelection();
+    const ok = cmd({ state, tr: state.tr });
+    expect(ok).toBe(false);
   });
 });
