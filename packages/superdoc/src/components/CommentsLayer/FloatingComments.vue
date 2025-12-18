@@ -110,20 +110,14 @@ watchEffect(() => {
   }
 
   const totalComments = getFloatingComments.value.length;
+  const measuredComments = renderedSizes.value.length;
 
-  if (totalComments === 0) {
+  if (totalComments === 0 || measuredComments === 0) {
     return;
   }
 
   nextTick(processLocations);
 });
-
-const resetLayout = async () => {
-  firstGroupRendered.value = false;
-  renderedSizes.value = [];
-  commentsRenderKey.value++;
-  verticalOffset.value = 0;
-};
 
 watch(activeComment, (newVal, oldVal) => {
   nextTick(() => {
