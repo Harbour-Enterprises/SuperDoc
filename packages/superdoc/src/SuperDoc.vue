@@ -450,6 +450,7 @@ const editorOptions = (doc) => {
     suppressDefaultDocxStyles: proxy.$superdoc.config.suppressDefaultDocxStyles,
     disableContextMenu: proxy.$superdoc.config.disableContextMenu,
     jsonOverride: proxy.$superdoc.config.jsonOverride,
+    displayMarginsOverride: useLayoutEngine ? null : proxy.$superdoc.config.displayMarginsOverride,
     layoutEngineOptions: useLayoutEngine
       ? {
           ...(proxy.$superdoc.config.layoutEngineOptions || {}),
@@ -785,7 +786,15 @@ watch(getFloatingComments, () => {
 </script>
 
 <template>
-  <div class="superdoc" :class="{ 'superdoc--with-sidebar': showCommentsSidebar, 'high-contrast': isHighContrastMode }">
+  <div
+    class="superdoc"
+    :class="{
+      'superdoc--with-sidebar': showCommentsSidebar,
+      'superdoc--flow':
+        proxy.$superdoc.config.useLayoutEngine === false && Boolean(proxy.$superdoc.config.displayMarginsOverride),
+      'high-contrast': isHighContrastMode,
+    }"
+  >
     <div class="superdoc__layers layers" ref="layers" role="group">
       <!-- Floating tools menu (shows up when user has text selection)-->
       <div v-if="showToolsFloatingMenu" class="superdoc__tools tools" :style="toolsMenuPosition">
@@ -919,6 +928,11 @@ watch(getFloatingComments, () => {
 <style scoped>
 .superdoc {
   display: flex;
+}
+
+.superdoc.superdoc--flow .superdoc__layers {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .right-sidebar {

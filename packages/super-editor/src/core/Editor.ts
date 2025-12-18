@@ -1,7 +1,7 @@
 import type { EditorState, Transaction, Plugin } from 'prosemirror-state';
 import type { EditorView as PmEditorView } from 'prosemirror-view';
 import type { Node as PmNode, Schema } from 'prosemirror-model';
-import type { EditorOptions, User, FieldValue, DocxFileEntry } from './types/EditorConfig.js';
+import type { DocxFileEntry, DisplayMarginsOverride, EditorOptions, FieldValue, User } from './types/EditorConfig.js';
 import type {
   EditorHelpers,
   ExtensionStorage,
@@ -55,6 +55,13 @@ import { buildSchemaSummary } from './schema-summary.js';
 
 declare const __APP_VERSION__: string;
 declare const version: string | undefined;
+
+/**
+ * Constants for layout calculations.
+ */
+const PIXELS_PER_INCH = 96;
+const MAX_HEIGHT_BUFFER_PX = 50;
+const MAX_WIDTH_BUFFER_PX = 20;
 
 /**
  * Image storage structure used by the image extension
@@ -157,6 +164,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
     isCommentsEnabled: false,
     isNewFile: false,
     scale: 1,
+    displayMarginsOverride: null,
     annotations: false,
     isInternal: false,
     externalExtensions: [],
@@ -224,6 +232,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     this.#initContainerElement(options);
     this.#checkHeadless(options);
+    this.#validateDisplayMarginsOverride(options);
     this.setOptions(options);
 
     const modes: Record<string, () => void> = {
@@ -432,6 +441,62 @@ export class Editor extends EventEmitter<EditorEventMap> {
       (global as typeof globalThis).document = options.mockDocument;
       (global as typeof globalThis).window = options.mockWindow as Window & typeof globalThis;
     }
+  }
+
+  /**
+   * Validate displayMarginsOverride option values.
+   */
+  #validateDisplayMarginsOverride(options: Partial<EditorOptions>): void {
+    if (!options.displayMarginsOverride) return;
+
+    const override = options.displayMarginsOverride;
+    if (typeof override !== 'object') {
+      console.warn(
+        `[SuperDoc] Invalid displayMarginsOverride: ${String(override)}. ` +
+          `Value must be an object containing positive finite numbers. Ignoring this option.`,
+      );
+      options.displayMarginsOverride = null;
+      return;
+    }
+
+    const validatedOverride: DisplayMarginsOverride = {};
+    let hasValidValues = false;
+
+    for (const key of ['top', 'bottom', 'left', 'right'] as const) {
+      const value = override[key];
+      if (value === undefined || value === null) continue;
+
+      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+        validatedOverride[key] = value;
+        hasValidValues = true;
+        continue;
+      }
+
+      console.warn(
+        `[SuperDoc] Invalid displayMarginsOverride.${key}: ${String(value)}. ` +
+          `Value must be a positive finite number. Ignoring this property.`,
+      );
+    }
+
+    options.displayMarginsOverride = hasValidValues ? validatedOverride : null;
+  }
+
+  /**
+   * Check if displayMarginsOverride should be applied.
+   */
+  #shouldApplyMarginsOverride(): boolean {
+    return !this.#isLayoutEngineContext() && Boolean(this.options.displayMarginsOverride);
+  }
+
+  /**
+   * Determine whether the editor is running under the layout engine.
+   *
+   * PresentationEditor assigns `presentationEditor` after constructing the hidden Editor instance,
+   * so we also detect the hidden host element by class name during early initialization.
+   */
+  #isLayoutEngineContext(element: HTMLElement | null = this.element): boolean {
+    if (this.presentationEditor) return true;
+    return Boolean(element?.classList.contains('presentation-editor__hidden-host'));
   }
 
   /**
@@ -1170,14 +1235,25 @@ export class Editor extends EventEmitter<EditorEventMap> {
   getMaxContentSize(): { width?: number; height?: number } {
     if (!this.converter) return {};
     const { pageSize = {}, pageMargins = {} } = this.converter.pageStyles ?? {};
+    const { displayMarginsOverride } = this.options;
     const { width, height } = pageSize;
-    const { top = 0, bottom = 0, left = 0, right = 0 } = pageMargins;
 
-    // All sizes are in inches so we multiply by 96 to get pixels
     if (!width || !height) return {};
 
-    const maxHeight = height * 96 - top * 96 - bottom * 96 - 50;
-    const maxWidth = width * 96 - left * 96 - right * 96 - 20;
+    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
+
+    const getMarginPx = (side: 'top' | 'bottom' | 'left' | 'right'): number => {
+      const defaultPx = (pageMargins?.[side] ?? 0) * PIXELS_PER_INCH;
+      return shouldApplyMarginsOverride ? (displayMarginsOverride?.[side] ?? defaultPx) : defaultPx;
+    };
+
+    const topPx = getMarginPx('top');
+    const bottomPx = getMarginPx('bottom');
+    const leftPx = getMarginPx('left');
+    const rightPx = getMarginPx('right');
+
+    const maxHeight = height * PIXELS_PER_INCH - topPx - bottomPx - MAX_HEIGHT_BUFFER_PX;
+    const maxWidth = width * PIXELS_PER_INCH - leftPx - rightPx - MAX_WIDTH_BUFFER_PX;
     return {
       width: maxWidth,
       height: maxHeight,
@@ -1189,6 +1265,9 @@ export class Editor extends EventEmitter<EditorEventMap> {
    */
   updateEditorStyles(element: HTMLElement, proseMirror: HTMLElement): void {
     const { pageSize, pageMargins } = this.converter.pageStyles ?? {};
+    const { displayMarginsOverride } = this.options;
+    const isLayoutEngineContext = this.#isLayoutEngineContext(element);
+    const shouldApplyMarginsOverride = this.#shouldApplyMarginsOverride();
 
     if (!proseMirror || !element) {
       return;
@@ -1201,13 +1280,23 @@ export class Editor extends EventEmitter<EditorEventMap> {
     proseMirror.classList.remove('view-mode');
 
     // Set fixed dimensions and padding that won't change with scaling
-    if (pageSize) {
-      element.style.width = pageSize.width + 'in';
-      element.style.minWidth = pageSize.width + 'in';
-      element.style.minHeight = pageSize.height + 'in';
+    if (pageSize?.width != null) {
+      element.style.width = shouldApplyMarginsOverride ? '100%' : `${pageSize.width}in`;
+      element.style.minWidth = shouldApplyMarginsOverride ? '' : `${pageSize.width}in`;
     }
 
-    if (pageMargins) {
+    if (pageSize?.height != null) {
+      element.style.minHeight = shouldApplyMarginsOverride ? '' : `${pageSize.height}in`;
+    }
+
+    if (shouldApplyMarginsOverride) {
+      if (displayMarginsOverride?.left != null) {
+        element.style.paddingLeft = displayMarginsOverride.left + 'px';
+      }
+      if (displayMarginsOverride?.right != null) {
+        element.style.paddingRight = displayMarginsOverride.right + 'px';
+      }
+    } else if (pageMargins) {
       element.style.paddingLeft = pageMargins.left + 'in';
       element.style.paddingRight = pageMargins.right + 'in';
     }
@@ -1240,20 +1329,28 @@ export class Editor extends EventEmitter<EditorEventMap> {
     const defaultLineHeight = 1.2;
     proseMirror.style.lineHeight = String(defaultLineHeight);
 
-    // If we are not using pagination, we still need to add some padding for header/footer
-    // Always pad the body to the page top margin so the body baseline
-    // starts at pageTop + topMargin (Word parity). Pagination decorations
-    // will only reserve header overflow beyond this margin.
-    if (this.presentationEditor && pageMargins?.top != null) {
+    if (isLayoutEngineContext && pageMargins?.top != null) {
+      // Layout engine: always pad body to top margin for Word parity.
       proseMirror.style.paddingTop = `${pageMargins.top}in`;
-    } else if (this.presentationEditor) {
-      // Fallback for missing margins
-      proseMirror.style.paddingTop = '1in';
-    } else {
-      proseMirror.style.paddingTop = '0';
+      proseMirror.style.paddingBottom = '0';
+      return;
     }
 
-    // Keep footer padding managed by pagination; set to 0 here.
+    if (isLayoutEngineContext) {
+      // Layout engine: fallback for missing margins.
+      proseMirror.style.paddingTop = '1in';
+      proseMirror.style.paddingBottom = '0';
+      return;
+    }
+
+    // Non-layout-engine: apply optional displayMarginsOverride for top/bottom padding.
+    if (shouldApplyMarginsOverride) {
+      proseMirror.style.paddingTop = `${displayMarginsOverride?.top ?? PIXELS_PER_INCH}px`;
+      proseMirror.style.paddingBottom = `${displayMarginsOverride?.bottom ?? PIXELS_PER_INCH}px`;
+      return;
+    }
+
+    proseMirror.style.paddingTop = '0';
     proseMirror.style.paddingBottom = '0';
   }
 
