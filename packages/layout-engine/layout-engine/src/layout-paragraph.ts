@@ -415,20 +415,12 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     typeof measurementWidth === 'number' &&
     measurementWidth > remeasureWidth
   ) {
-    // Calculate firstLineIndent for list markers (same logic as float remeasurement)
-    let firstLineIndent = 0;
-    const wordLayout = block.attrs?.wordLayout as
-      | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
-      | undefined;
-    if (wordLayout?.marker && measure.marker) {
-      const markerJustification = wordLayout.marker.justification ?? 'left';
-      if (markerJustification === 'left') {
-        const markerWidth = measure.marker.markerWidth ?? 0;
-        const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
-        firstLineIndent = markerWidth + gutterWidth;
-      }
-    }
-    const newMeasure = remeasureParagraph(block, remeasureWidth, firstLineIndent);
+    // Use the proper helper to calculate firstLineIndent based on list marker mode.
+    // This ensures correct handling of firstLineIndentMode vs standard hanging indent.
+    const firstLineIndent = calculateFirstLineIndent(block, measure);
+    // Pass columnWidth (not remeasureWidth) because the measurer handles indent subtraction internally.
+    // Using remeasureWidth would cause double-subtraction, making line.maxWidth too small for justify calculations.
+    const newMeasure = remeasureParagraph(block, columnWidth, firstLineIndent);
     lines = normalizeLines(newMeasure);
     didRemeasureForColumnWidth = true;
   }
@@ -537,19 +529,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     // If we found a narrower width, remeasure the entire paragraph once with that width
     const narrowestRemeasureWidth = Math.max(1, narrowestWidth - indentLeft - indentRight);
     if (narrowestRemeasureWidth < remeasureWidth) {
-      // Calculate firstLineIndent for left-justified list markers (position: relative, in-flow)
-      let firstLineIndent = 0;
-      const wordLayout = block.attrs?.wordLayout as
-        | { marker?: { justification?: string; gutterWidthPx?: number; markerBoxWidthPx?: number } }
-        | undefined;
-      if (wordLayout?.marker && measure.marker) {
-        const markerJustification = wordLayout.marker.justification ?? 'left';
-        if (markerJustification === 'left') {
-          const markerWidth = measure.marker.markerWidth ?? 0;
-          const gutterWidth = measure.marker.gutterWidth ?? wordLayout.marker.gutterWidthPx ?? 0;
-          firstLineIndent = markerWidth + gutterWidth;
-        }
-      }
+      // Use the proper helper to calculate firstLineIndent based on list marker mode.
+      const firstLineIndent = calculateFirstLineIndent(block, measure);
 
       const newMeasure = remeasureParagraph(block, narrowestRemeasureWidth, firstLineIndent);
       lines = normalizeLines(newMeasure);

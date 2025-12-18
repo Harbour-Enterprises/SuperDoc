@@ -44,6 +44,7 @@ import type {
   TableAttrs,
   TableCellAttrs,
 } from '@superdoc/contracts';
+import { calculateJustifySpacing, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
 import {
@@ -1771,20 +1772,112 @@ export class DomPainter {
       const lastRun = block.runs.length > 0 ? block.runs[block.runs.length - 1] : null;
       const paragraphEndsWithLineBreak = lastRun?.kind === 'lineBreak';
 
+      // Pre-calculate actual marker+tab inline width for list first lines.
+      // The measurer uses textStartPx to calculate line.maxWidth, but the painter renders
+      // marker+tab as inline elements that may consume MORE space than textStartPx indicates.
+      // This causes justify overflow when line.maxWidth > (fragment.width - actualMarkerTabWidth).
+      let listFirstLineMarkerTabWidth: number | undefined;
+      if (!fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker) {
+        // IMPORTANT: Use the same markerTextWidth source as the marker rendering section (lines ~1997-2000)
+        // to ensure the pre-calculated width matches the actual rendered width.
+        const markerBoxWidth = fragment.markerWidth;
+        const markerTextWidth =
+          fragment.markerTextWidth != null && isFinite(fragment.markerTextWidth) && fragment.markerTextWidth >= 0
+            ? fragment.markerTextWidth
+            : markerBoxWidth;
+
+        // Calculate tab width using same logic as marker rendering section
+        const suffix = wordLayout.marker.suffix ?? 'tab';
+        if (suffix === 'tab') {
+          const markerJustification = wordLayout.marker.justification ?? 'left';
+          const isFirstLineIndentMode = wordLayout.firstLineIndentMode === true;
+
+          // IMPORTANT: Must match the render section's logic (lines ~2009-2023).
+          // markerX is ONLY used when isFirstLineIndentMode is true.
+          let markerStartPos: number;
+          if (
+            isFirstLineIndentMode &&
+            wordLayout.marker.markerX !== undefined &&
+            Number.isFinite(wordLayout.marker.markerX)
+          ) {
+            markerStartPos = wordLayout.marker.markerX;
+          } else {
+            const hanging = paraIndent?.hanging ?? 0;
+            const firstLine = paraIndent?.firstLine ?? 0;
+            markerStartPos = paraIndentLeft - hanging + firstLine;
+          }
+          const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
+
+          let tabWidth: number;
+          if (markerJustification === 'left') {
+            const currentPos = validMarkerStartPos + markerTextWidth;
+
+            if (isFirstLineIndentMode) {
+              const textStartTarget =
+                wordLayout.marker.textStartX !== undefined && Number.isFinite(wordLayout.marker.textStartX)
+                  ? wordLayout.marker.textStartX
+                  : wordLayout.textStartPx;
+              if (textStartTarget !== undefined && Number.isFinite(textStartTarget) && textStartTarget > currentPos) {
+                tabWidth = textStartTarget - currentPos;
+              } else {
+                tabWidth = LIST_MARKER_GAP;
+              }
+            } else {
+              // Standard hanging mode
+              const firstLine = paraIndent?.firstLine ?? 0;
+              const textStart = paraIndentLeft + firstLine;
+              tabWidth = textStart - currentPos;
+              if (tabWidth <= 0) {
+                tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+              } else if (tabWidth < LIST_MARKER_GAP) {
+                tabWidth = LIST_MARKER_GAP;
+              }
+            }
+          } else {
+            // Non-left justified markers use gutter width
+            const gutterWidth = fragment.markerGutter ?? wordLayout.marker.gutterWidthPx;
+            tabWidth =
+              gutterWidth !== undefined && Number.isFinite(gutterWidth) && gutterWidth > 0
+                ? gutterWidth
+                : LIST_MARKER_GAP;
+          }
+          if (tabWidth < LIST_MARKER_GAP) {
+            tabWidth = LIST_MARKER_GAP;
+          }
+          // textStartX is where text actually starts (from fragment's left edge)
+          // This must include markerStartPos to match measurer's calculation
+          listFirstLineMarkerTabWidth = validMarkerStartPos + markerTextWidth + tabWidth;
+        } else if (suffix === 'space') {
+          // Space suffix: marker + ~4px for the non-breaking space
+          // Need to include markerStartPos here too
+          const hanging = paraIndent?.hanging ?? 0;
+          const firstLine = paraIndent?.firstLine ?? 0;
+          const markerStartPos = paraIndentLeft - hanging + firstLine;
+          const validMarkerStartPos = Number.isFinite(markerStartPos) ? markerStartPos : 0;
+          listFirstLineMarkerTabWidth = validMarkerStartPos + markerTextWidth + 4;
+        }
+      }
+
       lines.forEach((line, index) => {
-        /**
-         * Calculate available width for text justification.
-         *
-         * Uses line.maxWidth (from measurement phase) as the canonical source because it
-         * correctly accounts for line-specific width constraints like firstLine indent
-         * offsets, drop cap width reduction, and exclusion zones from wrapped images.
-         *
-         * Bug fix: Previously calculated from fragment.width minus indents, which caused
-         * lines with firstLine indent to be justified to the wrong width. For example,
-         * a line measured at 624.8px was justified to 672.8px, causing right margin overflow.
-         */
-        const fallbackAvailableWidth = Math.max(0, fragment.width - (paraIndentLeft + paraIndentRight));
-        const availableWidthOverride = line.maxWidth ?? fallbackAvailableWidth;
+        // Calculate available width from fragment dimensions (the actual rendered width).
+        // This is the ground truth for justify calculations since it matches what's visible.
+        // Only subtract positive indents - negative indents already expand fragment.width in layout
+        const positiveIndentReduction = Math.max(0, paraIndentLeft) + Math.max(0, paraIndentRight);
+        const fallbackAvailableWidth = Math.max(0, fragment.width - positiveIndentReduction);
+        // Use line.maxWidth if available (accounts for drop caps, exclusion zones), but cap it at
+        // fallbackAvailableWidth to handle cases where measurement used a different width than layout
+        // (e.g., paragraph measured at full page width but laid out in narrower column).
+        let availableWidthOverride =
+          line.maxWidth != null ? Math.min(line.maxWidth, fallbackAvailableWidth) : fallbackAvailableWidth;
+
+        // For list first lines, use the actual marker+tab inline width instead of line.maxWidth
+        // which is based on textStartPx and may not match the actual rendered inline width.
+        // Must also subtract paraIndentRight to match measurer's calculation:
+        // initialAvailableWidth = maxWidth - textStartPx - indentRight
+        // Only subtract positive paraIndentRight - negative indents already expand fragment.width
+        if (index === 0 && listFirstLineMarkerTabWidth != null) {
+          availableWidthOverride = fragment.width - listFirstLineMarkerTabWidth - Math.max(0, paraIndentRight);
+        }
 
         // Determine if this is the true last line of the paragraph that should skip justification.
         // Skip justify if: this is the last line of the last fragment AND no trailing lineBreak.
@@ -1871,9 +1964,16 @@ export class DomPainter {
             // Only apply positive left indent as padding.
             // Negative left indent is handled by fragment positioning in layout engine.
             lineEl.style.paddingLeft = `${paraIndentLeft}px`;
-          } else if (!isFirstLine && paraIndent?.hanging && paraIndent.hanging > 0) {
-            // Body lines with hanging indent need paddingLeft = hanging.
-            // This applies even when paraIndentLeft is negative (text extending into margin).
+          } else if (
+            !isFirstLine &&
+            paraIndent?.hanging &&
+            paraIndent.hanging > 0 &&
+            // Only apply hanging padding when left indent is NOT negative.
+            // When left indent is negative, the fragment position already accounts for it.
+            // Adding padding here would shift body lines right, causing right-side overflow.
+            !(paraIndentLeft != null && paraIndentLeft < 0)
+          ) {
+            // Body lines with hanging indent need paddingLeft = hanging when left indent is non-negative.
             // First line doesn't get this padding because it "hangs" (starts further left).
             lineEl.style.paddingLeft = `${paraIndent.hanging}px`;
           }
@@ -1926,6 +2026,10 @@ export class DomPainter {
 
           const markerContainer = this.doc!.createElement('span');
           markerContainer.style.display = 'inline-block';
+          // Justification is implemented via `word-spacing` on the line element. The list marker (and its
+          // tab/space suffix) must not inherit this spacing or it will shift the text start and can
+          // cause overflow for justified list paragraphs.
+          markerContainer.style.wordSpacing = '0px';
 
           const markerEl = this.doc!.createElement('span');
           markerEl.classList.add('superdoc-paragraph-marker');
@@ -2092,11 +2196,19 @@ export class DomPainter {
             }
 
             tabEl.style.display = 'inline-block';
+            tabEl.style.wordSpacing = '0px';
             tabEl.style.width = `${tabWidth}px`;
+
             lineEl.prepend(tabEl);
           } else if (suffix === 'space') {
             // Insert a non-breaking space in the inline flow to separate marker and text.
-            lineEl.prepend(this.doc!.createTextNode('\u00A0'));
+            // Wrap it so it can opt out of inherited `word-spacing` used for justification.
+            const spaceEl = this.doc!.createElement('span');
+            spaceEl.classList.add('superdoc-marker-suffix-space');
+            spaceEl.style.wordSpacing = '0px';
+            spaceEl.textContent = '\u00A0';
+
+            lineEl.prepend(spaceEl);
           }
           lineEl.prepend(markerContainer);
         }
@@ -2282,7 +2394,11 @@ export class DomPainter {
       // Track B: preserve indent for wordLayout-based lists to show hierarchy
       const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
       applyParagraphBlockStyles(contentEl, contentAttrs);
-      // Force list content to left alignment AFTER applyParagraphBlockStyles (which may set justify)
+      // INTENTIONAL DIVERGENCE: Force list content to left alignment
+      // Microsoft Word DOES justify list paragraphs when alignment is 'justify',
+      // but we intentionally keep lists left-aligned to match user expectations
+      // and current behavior. This is a documented design decision, not a bug.
+      // Applied AFTER applyParagraphBlockStyles (which may set justify from paragraph properties).
       contentEl.style.textAlign = 'left';
       // Override alignment to left for list content rendering
       const paraForList: ParagraphBlock = {
@@ -3781,13 +3897,13 @@ export class DomPainter {
       el.setAttribute('styleid', styleId);
     }
     const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
-    const effectiveAlignment = alignment;
-    if (effectiveAlignment === 'center' || effectiveAlignment === 'right') {
-      el.style.textAlign = effectiveAlignment;
-    } else if (effectiveAlignment === 'justify') {
-      // Use manual spacing distribution; avoid native justify to prevent double stretching
-      el.style.textAlign = 'left';
+
+    // Apply text-align for center/right immediately.
+    // For justify, we keep 'left' and apply spacing via word-spacing.
+    if (alignment === 'center' || alignment === 'right') {
+      el.style.textAlign = alignment;
     } else {
+      // Default to 'left' for 'left', 'justify', 'both', and undefined
       el.style.textAlign = 'left';
     }
 
@@ -3800,14 +3916,8 @@ export class DomPainter {
       el.dataset.pmEnd = String(lineRange.pmEnd);
     }
 
-    const runsForLine = sliceRunsForLine(block, line);
+    let runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
-    const textSlices =
-      runsForLine.length > 0
-        ? runsForLine
-            .filter((r): r is TextRun => (r.kind === 'text' || r.kind === undefined) && 'text' in r && r.text != null)
-            .map((r) => r.text)
-        : gatherTextSlicesForLine(block, line);
 
     // Targeted debug removed now that issue is understood.
 
@@ -3869,22 +3979,182 @@ export class DomPainter {
     const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
     const availableWidth = availableWidthOverride ?? line.maxWidth ?? line.width;
 
-    // Check if paragraph has justified alignment and line should be justified
-    // TODO: Remove this override when justify bugs are fixed
-    const shouldJustify = false; // block.attrs?.alignment === 'justify' && !hasExplicitPositioning;
-    if (shouldJustify) {
-      const spaceCount = textSlices.reduce(
-        (sum, s) => sum + Array.from(s).filter((ch) => ch === ' ' || ch === '\u00A0').length,
-        0,
-      );
-      const slack = availableWidth - line.width;
-      if (spaceCount > 0 && slack !== 0) {
-        // Positive slack = expand spaces to fill line (normal justify)
-        // Negative slack = compress spaces to fit line (when measurer allowed small overflow)
-        const spacingPerSpace = slack / spaceCount;
-        // CSS 2.1 allows negative word-spacing for text compression (supported in all modern browsers)
-        el.style.wordSpacing = `${spacingPerSpace}px`;
+    const justifyShouldApply = shouldApplyJustify({
+      alignment: (block as ParagraphBlock).attrs?.alignment,
+      hasExplicitPositioning: hasExplicitPositioning ?? false,
+      // Caller already folds last-line + trailing lineBreak behavior into skipJustify.
+      isLastLineOfParagraph: false,
+      paragraphEndsWithLineBreak: false,
+      skipJustifyOverride: skipJustify,
+    });
+
+    const countSpaces = (text: string): number => {
+      let count = 0;
+      for (let i = 0; i < text.length; i += 1) {
+        if (SPACE_CHARS.has(text[i])) count += 1;
       }
+      return count;
+    };
+
+    if (justifyShouldApply) {
+      // The measurer trims wrap-point trailing spaces from line ranges, but slicing can still
+      // produce whitespace-only runs at style boundaries. These runs are especially problematic
+      // for justify because `word-spacing` behavior is inconsistent on pure-whitespace spans.
+      //
+      // Normalize by merging whitespace-only slices into adjacent runs with identical styling.
+      const stableDataAttrs = (attrs: Record<string, string> | undefined): Record<string, string> | undefined => {
+        if (!attrs) return undefined;
+        const keys = Object.keys(attrs).sort();
+        const out: Record<string, string> = {};
+        keys.forEach((key) => {
+          out[key] = attrs[key]!;
+        });
+        return out;
+      };
+
+      const mergeSignature = (run: TextRun): string =>
+        JSON.stringify({
+          kind: run.kind ?? 'text',
+          fontFamily: run.fontFamily,
+          fontSize: run.fontSize,
+          bold: run.bold ?? false,
+          italic: run.italic ?? false,
+          letterSpacing: run.letterSpacing ?? null,
+          color: run.color ?? null,
+          underline: run.underline ?? null,
+          strike: run.strike ?? false,
+          highlight: run.highlight ?? null,
+          textTransform: run.textTransform ?? null,
+          token: run.token ?? null,
+          pageRefMetadata: run.pageRefMetadata ?? null,
+          trackedChange: run.trackedChange ?? null,
+          sdt: run.sdt ?? null,
+          link: run.link ?? null,
+          comments: run.comments ?? null,
+          dataAttrs: stableDataAttrs(run.dataAttrs) ?? null,
+        });
+
+      const isWhitespaceOnly = (text: string): boolean => {
+        if (text.length === 0) return false;
+        for (let i = 0; i < text.length; i += 1) {
+          if (!SPACE_CHARS.has(text[i])) return false;
+        }
+        return true;
+      };
+
+      const cloneTextRun = (run: TextRun): TextRun => ({
+        ...(run as TextRun),
+        comments: run.comments ? [...run.comments] : undefined,
+        dataAttrs: run.dataAttrs ? { ...run.dataAttrs } : undefined,
+        underline: run.underline ? { ...run.underline } : undefined,
+        pageRefMetadata: run.pageRefMetadata ? { ...run.pageRefMetadata } : undefined,
+      });
+
+      const normalized: Run[] = runsForLine.map((run) => {
+        if ((run.kind !== 'text' && run.kind !== undefined) || !('text' in run)) return run;
+        return cloneTextRun(run as TextRun);
+      });
+
+      const merged: Run[] = [];
+      for (let i = 0; i < normalized.length; i += 1) {
+        const run = normalized[i]!;
+        if ((run.kind !== 'text' && run.kind !== undefined) || !('text' in run)) {
+          merged.push(run);
+          continue;
+        }
+
+        const textRun = run as TextRun;
+        if (!isWhitespaceOnly(textRun.text ?? '')) {
+          merged.push(textRun);
+          continue;
+        }
+
+        const prev = merged[merged.length - 1];
+        if (prev && (prev.kind === 'text' || prev.kind === undefined) && 'text' in prev) {
+          const prevTextRun = prev as TextRun;
+          if (mergeSignature(prevTextRun) === mergeSignature(textRun)) {
+            const extra = textRun.text ?? '';
+            prevTextRun.text = (prevTextRun.text ?? '') + extra;
+            if (prevTextRun.pmStart != null) {
+              prevTextRun.pmEnd = prevTextRun.pmStart + prevTextRun.text.length;
+            } else if (prevTextRun.pmEnd != null) {
+              prevTextRun.pmEnd = prevTextRun.pmEnd + extra.length;
+            }
+            continue;
+          }
+        }
+
+        const next = normalized[i + 1];
+        if (next && (next.kind === 'text' || next.kind === undefined) && 'text' in next) {
+          const nextTextRun = next as TextRun;
+          if (mergeSignature(nextTextRun) === mergeSignature(textRun)) {
+            const extra = textRun.text ?? '';
+            nextTextRun.text = extra + (nextTextRun.text ?? '');
+            if (textRun.pmStart != null) {
+              nextTextRun.pmStart = textRun.pmStart;
+            } else if (nextTextRun.pmStart != null) {
+              nextTextRun.pmStart = nextTextRun.pmStart - extra.length;
+            }
+            if (nextTextRun.pmStart != null && nextTextRun.pmEnd == null) {
+              nextTextRun.pmEnd = nextTextRun.pmStart + nextTextRun.text.length;
+            }
+            continue;
+          }
+        }
+
+        merged.push(textRun);
+      }
+
+      runsForLine = merged;
+
+      // Suppress trailing wrap-point spaces on justified lines. With `white-space: pre`, they would
+      // otherwise consume width and be stretched by word-spacing, producing a ragged visible edge.
+      // Preserve intentionally space-only lines (rare but supported).
+      const hasNonSpaceText = runsForLine.some(
+        (run) => (run.kind === 'text' || run.kind === undefined) && 'text' in run && (run.text ?? '').trim().length > 0,
+      );
+      if (hasNonSpaceText) {
+        for (let i = runsForLine.length - 1; i >= 0; i -= 1) {
+          const run = runsForLine[i];
+          if ((run.kind !== 'text' && run.kind !== undefined) || !('text' in run)) continue;
+          const text = run.text ?? '';
+          let trimCount = 0;
+          for (let j = text.length - 1; j >= 0 && text[j] === ' '; j -= 1) {
+            trimCount += 1;
+          }
+          if (trimCount === 0) break;
+
+          const nextText = text.slice(0, Math.max(0, text.length - trimCount));
+          if (nextText.length === 0) {
+            runsForLine.splice(i, 1);
+            continue;
+          }
+          (run as TextRun).text = nextText;
+          if ((run as TextRun).pmEnd != null) {
+            (run as TextRun).pmEnd = (run as TextRun).pmEnd! - trimCount;
+          }
+          break;
+        }
+      }
+    }
+
+    const spaceCount =
+      line.spaceCount ??
+      runsForLine.reduce((sum, run) => {
+        if ((run.kind !== 'text' && run.kind !== undefined) || !('text' in run) || run.text == null) return sum;
+        return sum + countSpaces(run.text);
+      }, 0);
+    const lineWidth = line.naturalWidth ?? line.width;
+    const spacingPerSpace = calculateJustifySpacing({
+      lineWidth,
+      availableWidth,
+      spaceCount,
+      shouldJustify: justifyShouldApply,
+    });
+
+    if (spacingPerSpace !== 0) {
+      // Each rendered line is its own block; relying on text-align-last is brittle, so we use word-spacing.
+      el.style.wordSpacing = `${spacingPerSpace}px`;
     }
 
     if (hasExplicitPositioning && line.segments) {
@@ -5095,7 +5365,8 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
     element.setAttribute('styleid', attrs.styleId);
   }
   if (attrs.alignment) {
-    element.style.textAlign = attrs.alignment;
+    // Avoid native CSS justify: DomPainter applies justify via per-line word-spacing.
+    element.style.textAlign = attrs.alignment === 'justify' || attrs.alignment === 'both' ? 'left' : attrs.alignment;
   }
   if ((attrs as Record<string, unknown>).dropCap) {
     element.classList.add('sd-editor-dropcap');
@@ -5172,31 +5443,6 @@ const stripListIndent = (attrs?: ParagraphAttrs): ParagraphAttrs | undefined => 
 const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
   if (!shading?.fill) return;
   element.style.backgroundColor = shading.fill;
-};
-
-/**
- * Extracts text content from all runs within a line for justification calculations.
- *
- * @param block - The paragraph block containing the runs
- * @param line - The line definition with run and character boundaries
- * @returns Array of text slices from the line, used to count spaces for justification
- */
-const gatherTextSlicesForLine = (block: ParagraphBlock, line: Line): string[] => {
-  const slices: string[] = [];
-  const startRun = line.fromRun ?? 0;
-  const endRun = line.toRun ?? startRun;
-  for (let runIndex = startRun; runIndex <= endRun; runIndex += 1) {
-    const run = block.runs[runIndex];
-    if (!run || (run.kind !== 'text' && run.kind !== undefined) || !('text' in run) || !run.text) continue;
-    const isFirst = runIndex === startRun;
-    const isLast = runIndex === endRun;
-    const start = isFirst ? (line.fromChar ?? 0) : 0;
-    const end = isLast ? (line.toChar ?? run.text.length) : run.text.length;
-    if (start >= end) continue;
-    const slice = run.text.slice(start, end);
-    if (slice) slices.push(slice);
-  }
-  return slices;
 };
 
 /**

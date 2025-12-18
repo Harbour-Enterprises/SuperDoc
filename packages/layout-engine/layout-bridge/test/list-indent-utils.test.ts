@@ -310,6 +310,24 @@ describe('list-indent-utils', () => {
         expect(result).toBe(56);
       });
 
+      it('should use marker.textStartX when textStartPx is missing', () => {
+        const result = calculateTextStartIndent({
+          isFirstLine: true,
+          isListItem: true,
+          markerWidth: 20,
+          paraIndentLeft: 36,
+          firstLineIndent: 0,
+          hangingIndent: 18,
+          wordLayout: {
+            firstLineIndentMode: true,
+            marker: {
+              textStartX: 60,
+            },
+          },
+        });
+        expect(result).toBe(60);
+      });
+
       it('should calculate fallback when textStartPx is not available', () => {
         const result = calculateTextStartIndent({
           isFirstLine: true,
