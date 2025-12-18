@@ -1,13 +1,29 @@
-import { logPackageVersion } from './logger';
+import { logPackageVersion } from './shared/logger';
 
 logPackageVersion();
 
 export { AIActions } from './ai-actions';
-export { AIActionsService } from './ai-actions-service';
-export { EditorAdapter } from './editor-adapter';
+export type { AIPlannerConfig, AIPlannerExecutionResult, AIPlan } from './ai-actions/planner';
 
-export * from './types';
-export * from './utils';
+export { AIActionsService } from './ai-actions/services';
+
+export { EditorAdapter } from './ai-actions/editor';
+
+export { createAIProvider } from './ai-actions/providers';
+
+export * from './shared/types';
+export * from './shared/utils';
+export * from './shared/constants';
+export type {
+  AIToolActions,
+  SafeRecord,
+  SelectionRange,
+  SelectionSnapshot,
+  PlannerContextSnapshot,
+  BuilderPlanResult,
+} from './shared/types';
+
+export { createToolRegistry, getToolDescriptions, isValidTool } from './ai-actions/tools';
 
 export type {
   AIProviderInput,
@@ -16,4 +32,4 @@ export type {
   HttpProviderConfig,
   OpenAIProviderConfig,
   ProviderRequestContext,
-} from './providers';
+} from './ai-actions/providers/types';
