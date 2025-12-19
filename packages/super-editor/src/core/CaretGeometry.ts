@@ -214,6 +214,9 @@ export function computeCaretLayoutRectGeometry(
         const rangeObj = document.createRange();
         rangeObj.setStart(textNode, charIndex);
         rangeObj.setEnd(textNode, charIndex);
+        if (typeof rangeObj.getBoundingClientRect !== 'function') {
+          break;
+        }
         const rangeRect = rangeObj.getBoundingClientRect();
         if (pageRect) {
           domCaretX = (rangeRect.left - pageRect.left) / zoom;
@@ -274,6 +277,9 @@ export function computeCaretLayoutRectGeometry(
       const rangeObj = document.createRange();
       rangeObj.setStart(textNode, charIndex);
       rangeObj.setEnd(textNode, charIndex);
+      if (typeof rangeObj.getBoundingClientRect !== 'function') {
+        break;
+      }
       const rangeRect = rangeObj.getBoundingClientRect();
       if (pageRect) {
         domCaretX = (rangeRect.left - pageRect.left) / zoom;

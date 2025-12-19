@@ -56,8 +56,8 @@ export function buildPositionMapFromPmDoc(pmDoc: PMNode, jsonDoc: unknown): Posi
 
   const walk = (pmNode: PMNode, jsonNode: Record<string, unknown>, pos: number, isDoc: boolean): boolean => {
     const jsonType = jsonNode.type;
-    const expectedType = pmNode.isText ? 'text' : pmNode.type.name;
-    if (jsonType !== expectedType) {
+    const expectedType = pmNode.isText ? 'text' : pmNode.type?.name;
+    if (!expectedType || jsonType !== expectedType) {
       return false;
     }
 

@@ -113,6 +113,12 @@ export function computeWordSelectionRangeAt(state: EditorState, pos: number): { 
   const parentStart = textblockPos.start();
   const parentEnd = textblockPos.end();
 
+  const sampleEnd = Math.min(pos + 1, parentEnd);
+  const charAtPos = state.doc.textBetween(pos, sampleEnd, '\u0000', '\u0000');
+  if (!isWordCharacter(charAtPos)) {
+    return null;
+  }
+
   let startPos = pos;
   while (startPos > parentStart) {
     const prevChar = state.doc.textBetween(startPos - 1, startPos, '\u0000', '\u0000');

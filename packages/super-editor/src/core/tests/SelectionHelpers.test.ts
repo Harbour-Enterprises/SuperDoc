@@ -24,7 +24,7 @@ describe('SelectionHelpers', () => {
     });
 
     it('returns true for right single quotation mark (curly apostrophe)', () => {
-      expect(isWordCharacter('')).toBe(true);
+      expect(isWordCharacter('\u2019')).toBe(true);
     });
 
     it('returns true for underscore', () => {

@@ -7,12 +7,13 @@ import { computeCaretLayoutRectGeometry, type ComputeCaretLayoutRectGeometryDeps
  * Mock helper to create a minimal paragraph block for testing.
  */
 function createMockParagraphBlock(id: string, pmStart: number, pmEnd: number): FlowBlock {
+  const textLength = Math.max(1, pmEnd - pmStart);
   return {
     kind: 'paragraph',
     id,
     runs: [
       {
-        text: 'Hello world',
+        text: 'x'.repeat(textLength),
         fontFamily: 'Arial',
         fontSize: 14,
         pmStart,
@@ -36,11 +37,13 @@ function createMockParagraphMeasure(lines: Line[]): Measure {
  * Mock helper to create a minimal line for testing.
  */
 function createMockLine(pmStart: number, pmEnd: number, lineHeight: number): Line {
+  const fromChar = Math.max(0, pmStart - 1);
+  const toChar = Math.max(fromChar, pmEnd - 1);
   return {
     fromRun: 0,
     toRun: 0,
-    fromChar: 0,
-    toChar: 11,
+    fromChar,
+    toChar,
     width: 100,
     ascent: 12,
     descent: 4,
@@ -74,6 +77,8 @@ function createMockParaFragment(
   height: number,
   fromLine: number,
   toLine: number,
+  pmStart: number,
+  pmEnd: number,
 ): ParaFragment {
   return {
     kind: 'para',
@@ -84,6 +89,8 @@ function createMockParaFragment(
     height,
     fromLine,
     toLine,
+    pmStart,
+    pmEnd,
     markerWidth: 0,
     continuesFromPrev: false,
     continuesToNext: false,
@@ -140,7 +147,7 @@ describe('CaretGeometry', () => {
       const block = createMockParagraphBlock('1-para', 1, 12);
       const line = createMockLine(1, 12, 16);
       const measure = createMockParagraphMeasure([line]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       const deps: ComputeCaretLayoutRectGeometryDeps = {
@@ -162,7 +169,7 @@ describe('CaretGeometry', () => {
       const block = createMockParagraphBlock('1-para', 1, 12);
       const line = createMockLine(1, 12, 16);
       const measure = createMockParagraphMeasure([line]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       const deps: ComputeCaretLayoutRectGeometryDeps = {
@@ -270,6 +277,8 @@ describe('CaretGeometry', () => {
         height: 16,
         fromLine: 0,
         toLine: 1,
+        pmStart: 1,
+        pmEnd: 10,
         markerWidth: 15,
         continuesFromPrev: false,
         continuesToNext: false,
@@ -296,7 +305,7 @@ describe('CaretGeometry', () => {
       const block = createMockParagraphBlock('1-para', 1, 12);
       const line = createMockLine(1, 12, 16);
       const measure = createMockParagraphMeasure([line]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       // Add a text node to the span for DOM fallback testing
@@ -324,7 +333,7 @@ describe('CaretGeometry', () => {
       const block = createMockParagraphBlock('1-para', 1, 12);
       const line = createMockLine(1, 12, 16);
       const measure = createMockParagraphMeasure([line]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       // Empty painter host simulates virtualized content
@@ -359,7 +368,7 @@ describe('CaretGeometry', () => {
       };
 
       // Create a para fragment but with mismatched block kind
-      const fragment = createMockParaFragment('1-table', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-table', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       const deps: ComputeCaretLayoutRectGeometryDeps = {
@@ -383,7 +392,7 @@ describe('CaretGeometry', () => {
       const line2 = createMockLine(16, 30, 16);
 
       const measure = createMockParagraphMeasure([line1, line2]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 32, 0, 2);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 32, 0, 2, 1, 30);
       const layout = createMockLayout(fragment);
 
       const deps: ComputeCaretLayoutRectGeometryDeps = {
@@ -408,7 +417,7 @@ describe('CaretGeometry', () => {
       const block = createMockParagraphBlock('1-para', 1, 12);
       const line = createMockLine(1, 12, 16);
       const measure = createMockParagraphMeasure([line]);
-      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1);
+      const fragment = createMockParaFragment('1-para', 10, 10, 200, 16, 0, 1, 1, 12);
       const layout = createMockLayout(fragment);
 
       const deps: ComputeCaretLayoutRectGeometryDeps = {

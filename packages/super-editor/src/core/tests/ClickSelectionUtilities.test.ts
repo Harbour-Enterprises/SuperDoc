@@ -185,7 +185,7 @@ describe('ClickSelectionUtilities', () => {
     });
 
     it('returns 1 when doc has no content', () => {
-      const doc = testSchema.node('doc', null, []);
+      const doc = testSchema.node('doc', null, [testSchema.node('paragraph')]);
       const result = getFirstTextPosition(doc);
       expect(result).toBe(1);
     });

@@ -1,6 +1,7 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import type { FlowBlock, Layout, Measure } from '@superdoc/contracts';
 import type { PageGeometryHelper } from '@superdoc/layout-bridge';
+import * as layoutBridge from '@superdoc/layout-bridge';
 
 import { renderRemoteCursors } from '../RemoteCursorRendering.js';
 import type { RemoteCursorState } from '../PresentationEditor.js';
@@ -32,6 +33,30 @@ function createMockLayout(): Layout {
     pageSize: { w: 800, h: 1200 },
     pageGap: 20,
   } as Layout;
+}
+
+function normalizeColor(color: string): string {
+  const trimmed = color.trim();
+  const rgbMatch = trimmed.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*[\d.]+)?\s*\)$/i);
+  if (rgbMatch) {
+    const toHex = (value: string) => Number(value).toString(16).padStart(2, '0').toUpperCase();
+    return `#${toHex(rgbMatch[1])}${toHex(rgbMatch[2])}${toHex(rgbMatch[3])}`;
+  }
+
+  const hexMatch = trimmed.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (hexMatch) {
+    const hex = hexMatch[1];
+    if (hex.length === 3) {
+      const expanded = hex
+        .split('')
+        .map((value) => value + value)
+        .join('');
+      return `#${expanded.toUpperCase()}`;
+    }
+    return `#${hex.toUpperCase()}`;
+  }
+
+  return trimmed;
 }
 
 describe('renderRemoteCursors', () => {
@@ -77,6 +102,10 @@ describe('renderRemoteCursors', () => {
       x: x + pageIndex * 100,
       y: y + pageIndex * 100,
     }));
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('performance guardrails', () => {
@@ -538,14 +567,10 @@ describe('renderRemoteCursors', () => {
       remoteCursorState.set(1, createMockRemoteCursor(1, 100, 200));
 
       // Mock selectionToRects to return some rectangles
-      const mockSelectionToRects = vi.fn(() => [
+      vi.spyOn(layoutBridge, 'selectionToRects').mockReturnValue([
         { x: 50, y: 100, width: 200, height: 16, pageIndex: 0 },
         { x: 50, y: 120, width: 150, height: 16, pageIndex: 0 },
       ]);
-
-      vi.mock('@superdoc/layout-bridge', () => ({
-        selectionToRects: mockSelectionToRects,
-      }));
 
       renderRemoteCursors({
         layout,
@@ -582,11 +607,7 @@ describe('renderRemoteCursors', () => {
         pageIndex: 0,
       }));
 
-      const mockSelectionToRects = vi.fn(() => manyRects);
-
-      vi.mock('@superdoc/layout-bridge', () => ({
-        selectionToRects: mockSelectionToRects,
-      }));
+      vi.spyOn(layoutBridge, 'selectionToRects').mockReturnValue(manyRects);
 
       renderRemoteCursors({
         layout,
@@ -614,11 +635,9 @@ describe('renderRemoteCursors', () => {
     it('applies custom highlightOpacity when provided', () => {
       remoteCursorState.set(1, createMockRemoteCursor(1, 100, 200));
 
-      const mockSelectionToRects = vi.fn(() => [{ x: 50, y: 100, width: 200, height: 16, pageIndex: 0 }]);
-
-      vi.mock('@superdoc/layout-bridge', () => ({
-        selectionToRects: mockSelectionToRects,
-      }));
+      vi.spyOn(layoutBridge, 'selectionToRects').mockReturnValue([
+        { x: 50, y: 100, width: 200, height: 16, pageIndex: 0 },
+      ]);
 
       renderRemoteCursors({
         layout,
@@ -648,11 +667,9 @@ describe('renderRemoteCursors', () => {
     it('uses default highlightOpacity of 0.35 when not provided', () => {
       remoteCursorState.set(1, createMockRemoteCursor(1, 100, 200));
 
-      const mockSelectionToRects = vi.fn(() => [{ x: 50, y: 100, width: 200, height: 16, pageIndex: 0 }]);
-
-      vi.mock('@superdoc/layout-bridge', () => ({
-        selectionToRects: mockSelectionToRects,
-      }));
+      vi.spyOn(layoutBridge, 'selectionToRects').mockReturnValue([
+        { x: 50, y: 100, width: 200, height: 16, pageIndex: 0 },
+      ]);
 
       renderRemoteCursors({
         layout,
@@ -762,7 +779,7 @@ describe('renderRemoteCursors', () => {
       });
 
       const caret = remoteCursorElements.get(1);
-      expect(caret!.style.borderLeftColor).toBe('#AABBCC');
+      expect(normalizeColor(caret!.style.borderLeftColor)).toBe('#AABBCC');
     });
 
     it('falls back to default color when invalid color is provided', () => {
@@ -789,7 +806,7 @@ describe('renderRemoteCursors', () => {
 
       const caret = remoteCursorElements.get(1);
       // Should use fallback color based on clientId (1 % 5 = 1 -> '#00FF00')
-      expect(fallbackColors).toContain(caret!.style.borderLeftColor);
+      expect(fallbackColors).toContain(normalizeColor(caret!.style.borderLeftColor));
     });
   });
 
@@ -963,8 +980,8 @@ describe('renderRemoteCursors', () => {
       const caret1 = remoteCursorElements.get(1);
       const caret2 = remoteCursorElements.get(2);
 
-      expect(caret1!.style.borderLeftColor).toBe('#FF0000');
-      expect(caret2!.style.borderLeftColor).toBe('#00FF00');
+      expect(normalizeColor(caret1!.style.borderLeftColor)).toBe('#FF0000');
+      expect(normalizeColor(caret2!.style.borderLeftColor)).toBe('#00FF00');
     });
   });
 

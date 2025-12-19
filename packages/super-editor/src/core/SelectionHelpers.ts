@@ -9,14 +9,14 @@ import { findParagraphBoundaries, findWordBoundaries } from '@superdoc/layout-br
  * - \p{L}: Any Unicode letter (across all languages and scripts)
  * - \p{N}: Any Unicode number (digits in any script)
  * - '': Apostrophe (for contractions like "don't")
- * - ': Right single quotation mark (Unicode equivalent)
+ * - ': Left/right single quotation marks (Unicode equivalents)
  * - _: Underscore (common in programming identifiers)
  * - ~: Tilde (used in some contexts)
  * - -: Hyphen (for hyphenated words)
  *
  * The 'u' flag enables Unicode mode for proper Unicode property escape support.
  */
-const WORD_CHARACTER_REGEX = /[\p{L}\p{N}''_~-]/u;
+const WORD_CHARACTER_REGEX = /[\p{L}\p{N}'\u2018\u2019_~-]/u;
 
 /**
  * Determines if a character is considered part of a word for selection purposes.

@@ -21,6 +21,7 @@ export class DomPositionIndexObserverManager {
   #onRebuild: () => void;
   #observer: MutationObserver | null = null;
   #rebuildScheduled = false;
+  #rebuildRafId: number | null = null;
 
   /**
    * Creates a new DomPositionIndexObserverManager.
@@ -116,6 +117,10 @@ export class DomPositionIndexObserverManager {
     this.#observer?.disconnect();
     this.#observer = null;
     this.#rebuildScheduled = false;
+    if (this.#rebuildRafId != null && typeof this.#windowRoot.cancelAnimationFrame === 'function') {
+      this.#windowRoot.cancelAnimationFrame(this.#rebuildRafId);
+    }
+    this.#rebuildRafId = null;
   }
 
   /**
@@ -136,8 +141,9 @@ export class DomPositionIndexObserverManager {
     if (this.#rebuildScheduled) return;
     this.#rebuildScheduled = true;
 
-    this.#windowRoot.requestAnimationFrame(() => {
+    this.#rebuildRafId = this.#windowRoot.requestAnimationFrame(() => {
       this.#rebuildScheduled = false;
+      this.#rebuildRafId = null;
       const painterHost = this.#getPainterHost();
       if (!painterHost?.isConnected) return;
       this.#onRebuild();

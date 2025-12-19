@@ -1,5 +1,5 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
-import type { CellSelection } from 'prosemirror-tables';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { TableMap, type CellSelection } from 'prosemirror-tables';
 import type { FlowBlock, Layout, Measure, TableBlock, TableFragment, TableMeasure } from '@superdoc/contracts';
 
 import { renderCellSelectionOverlay, type RenderCellSelectionOverlayDeps } from '../CellSelectionOverlay.js';
@@ -121,6 +121,10 @@ describe('renderCellSelectionOverlay', () => {
     }));
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('renders basic cell selection with single cell', () => {
     const selection = createMockCellSelection(2, 2, 0, 'table');
     (selection as unknown as { _setCellNodes: (nodes: unknown[]) => void })._setCellNodes([
@@ -144,7 +148,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1], // Cell offsets
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -167,7 +171,7 @@ describe('renderCellSelectionOverlay', () => {
     (selection as unknown as { _setCellNodes: (nodes: unknown[]) => void })._setCellNodes([
       {
         node: { attrs: { colspan: 2, rowspan: 1 } },
-        pos: 2,
+        pos: 1,
       },
     ]);
 
@@ -186,7 +190,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 2,
       map: [0, 0, 1], // First cell spans 2 columns
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -213,7 +217,7 @@ describe('renderCellSelectionOverlay', () => {
     (selection as unknown as { _setCellNodes: (nodes: unknown[]) => void })._setCellNodes([
       {
         node: { attrs: { colspan: 1, rowspan: 2 } },
-        pos: 2,
+        pos: 1,
       },
     ]);
 
@@ -227,7 +231,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 0, 1], // First cell spans 2 rows
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -273,7 +277,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 6,
       map: [0, 1, 2, 3, 4, 5],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -296,11 +300,11 @@ describe('renderCellSelectionOverlay', () => {
     (selection as unknown as { _setCellNodes: (nodes: unknown[]) => void })._setCellNodes([
       {
         node: { attrs: { colspan: 1, rowspan: 1 } },
-        pos: 2, // Row 0
+        pos: 1, // Row 0
       },
       {
         node: { attrs: { colspan: 1, rowspan: 1 } },
-        pos: 3, // Row 5 (outside fragment range)
+        pos: 6, // Row 5 (outside fragment range)
       },
     ]);
 
@@ -315,7 +319,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 6,
       map: [0, 1, 2, 3, 4, 5],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -349,7 +353,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1, 2],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -397,7 +401,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1, 2],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -435,7 +439,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1, 2],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     // Coordinate conversion returns null (page not mounted)
     const coordsReturningNull = vi.fn(() => null);
@@ -475,7 +479,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1, 2],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,
@@ -533,7 +537,7 @@ describe('renderCellSelectionOverlay', () => {
     const tableMeasure = createMockTableMeasure([60, 60, 60]);
 
     // Mock TableMap.get to throw an error
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockImplementation(() => {
+    vi.spyOn(TableMap, 'get').mockImplementation(() => {
       throw new Error('Invalid table structure');
     });
 
@@ -608,7 +612,7 @@ describe('renderCellSelectionOverlay', () => {
       height: 3,
       map: [0, 1, 2],
     };
-    vi.spyOn(require('prosemirror-tables'), 'TableMap', 'get').mockReturnValue(() => mockTableMap);
+    vi.spyOn(TableMap, 'get').mockReturnValue(mockTableMap as unknown as TableMap);
 
     const deps: RenderCellSelectionOverlayDeps = {
       selection,

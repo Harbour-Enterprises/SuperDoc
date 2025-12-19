@@ -360,12 +360,7 @@ describe('computeA11ySelectionAnnouncement', () => {
   });
 
   it('returns "Table cells selected." message for CellSelection', () => {
-    const mockCellSelection = new CellSelection(
-      {} as unknown as Parameters<typeof CellSelection>[0],
-      {} as unknown as Parameters<typeof CellSelection>[1],
-    );
-
-    // Override from/to properties
+    const mockCellSelection = Object.create(CellSelection.prototype) as CellSelection;
     Object.defineProperty(mockCellSelection, 'from', { value: 5, writable: true });
     Object.defineProperty(mockCellSelection, 'to', { value: 20, writable: true });
 

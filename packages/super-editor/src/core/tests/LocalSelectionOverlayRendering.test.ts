@@ -347,7 +347,7 @@ describe('renderCaretOverlay', () => {
 
     const caret = localSelectionLayer.querySelector('.presentation-editor__selection-caret') as HTMLElement;
     expect(caret.style.width).toBe('2px');
-    expect(caret.style.backgroundColor).toBe('#000000');
+    expect(caret.style.backgroundColor).toMatch(/#000000|rgb\(0,\s*0,\s*0\)/);
     expect(caret.style.borderRadius).toBe('1px');
     expect(caret.style.pointerEvents).toBe('none');
   });
