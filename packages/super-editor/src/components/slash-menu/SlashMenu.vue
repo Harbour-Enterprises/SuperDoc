@@ -7,6 +7,7 @@ import { moveCursorToMouseEvent } from '../cursor-helpers.js';
 import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
+import { SLASH_MENU_HANDLED_FLAG } from './event-flags.js';
 
 const props = defineProps({
   editor: {
@@ -219,12 +220,46 @@ const handleGlobalOutsideClick = (event) => {
   }
 };
 
-const handleRightClick = async (event) => {
+/**
+ * Determines whether the SlashMenu should handle a context menu event.
+ * Checks if the editor is editable, context menu is enabled, and the event
+ * should not be bypassed (e.g., modifier keys are not pressed).
+ *
+ * @param {MouseEvent} event - The context menu event to validate
+ * @returns {boolean} true if the SlashMenu should handle the event, false otherwise
+ */
+const shouldHandleContextMenu = (event) => {
   const readOnly = !props.editor?.isEditable;
   const contextMenuDisabled = props.editor?.options?.disableContextMenu;
   const bypass = shouldBypassContextMenu(event);
 
-  if (readOnly || contextMenuDisabled || bypass) {
+  return !readOnly && !contextMenuDisabled && !bypass;
+};
+
+/**
+ * Capture phase handler for context menu events that marks the event as handled by SlashMenu.
+ * This flag is used by PresentationInputBridge to skip forwarding the event to the hidden editor,
+ * preventing duplicate context menu handling.
+ *
+ * The capture phase ensures this runs before PresentationInputBridge's bubble phase handler,
+ * allowing us to set the flag before the event reaches other handlers.
+ *
+ * @param {MouseEvent} event - The context menu event in capture phase
+ */
+const handleRightClickCapture = (event) => {
+  try {
+    if (shouldHandleContextMenu(event)) {
+      event[SLASH_MENU_HANDLED_FLAG] = true;
+    }
+  } catch (error) {
+    // Prevent handler crashes from breaking the event flow
+    // Log warning but don't throw to allow other handlers to run
+    console.warn('[SlashMenu] Error in capture phase context menu handler:', error);
+  }
+};
+
+const handleRightClick = async (event) => {
+  if (!shouldHandleContextMenu(event)) {
     return;
   }
 
@@ -378,6 +413,7 @@ onMounted(() => {
   // Attach context menu to the active surface (flow view.dom or presentation host)
   contextMenuTarget = getEditorSurfaceElement(props.editor);
   if (contextMenuTarget) {
+    contextMenuTarget.addEventListener('contextmenu', handleRightClickCapture, true);
     contextMenuTarget.addEventListener('contextmenu', handleRightClick);
   }
 
@@ -407,6 +443,7 @@ onBeforeUnmount(() => {
         props.editor.off('slashMenu:close', slashMenuCloseHandler);
       }
       props.editor.off('update', handleEditorUpdate);
+      contextMenuTarget?.removeEventListener('contextmenu', handleRightClickCapture, true);
       contextMenuTarget?.removeEventListener('contextmenu', handleRightClick);
     } catch (error) {
       console.warn('[SlashMenu] Error during cleanup:', error);
