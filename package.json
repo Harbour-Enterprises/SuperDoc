@@ -13,7 +13,6 @@
     "packages/layout-engine/geometry-utils",
     "packages/layout-engine/style-engine",
     "packages/layout-engine/tests",
-    "packages/layout-engine/demo-app",
     "packages/layout-engine/layout-bridge",
     "packages/preset-geometry",
     "shared/*"
