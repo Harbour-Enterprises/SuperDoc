@@ -421,7 +421,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     // Pass columnWidth (not remeasureWidth) because the measurer handles indent subtraction internally.
     // Using remeasureWidth would cause double-subtraction, making line.maxWidth too small for justify calculations.
     const newMeasure = remeasureParagraph(block, columnWidth, firstLineIndent);
-    lines = normalizeLines(newMeasure);
+    const newLines = normalizeLines(newMeasure);
+    lines = newLines;
     didRemeasureForColumnWidth = true;
   }
 
@@ -533,7 +534,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       const firstLineIndent = calculateFirstLineIndent(block, measure);
 
       const newMeasure = remeasureParagraph(block, narrowestRemeasureWidth, firstLineIndent);
-      lines = normalizeLines(newMeasure);
+      const newLines = normalizeLines(newMeasure);
+      lines = newLines;
       didRemeasureForFloats = true;
     }
   }

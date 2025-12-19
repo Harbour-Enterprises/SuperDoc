@@ -969,6 +969,41 @@ export const computeWordLayoutForParagraph = (
   }
 };
 
+const normalizeWordLayoutForIndent = (
+  wordLayout: WordParagraphLayoutOutput,
+  paragraphIndent: ParagraphIndent | undefined,
+): WordParagraphLayoutOutput => {
+  const resolvedIndent = wordLayout.resolvedIndent ?? paragraphIndent ?? {};
+  const indentLeft = isFiniteNumber(resolvedIndent.left) ? resolvedIndent.left : 0;
+  const firstLine = isFiniteNumber(resolvedIndent.firstLine) ? resolvedIndent.firstLine : 0;
+  const hanging = isFiniteNumber(resolvedIndent.hanging) ? resolvedIndent.hanging : 0;
+  const shouldFirstLineIndentMode = firstLine > 0 && !hanging;
+
+  if (wordLayout.firstLineIndentMode === true && !shouldFirstLineIndentMode) {
+    wordLayout.firstLineIndentMode = false;
+  }
+
+  if (wordLayout.firstLineIndentMode === true) {
+    if (isFiniteNumber(wordLayout.textStartPx)) {
+      if (
+        wordLayout.marker &&
+        (!isFiniteNumber(wordLayout.marker.textStartX) || wordLayout.marker.textStartX !== wordLayout.textStartPx)
+      ) {
+        wordLayout.marker.textStartX = wordLayout.textStartPx;
+      }
+    } else if (wordLayout.marker && isFiniteNumber(wordLayout.marker.textStartX)) {
+      wordLayout.textStartPx = wordLayout.marker.textStartX;
+    }
+  } else {
+    wordLayout.textStartPx = indentLeft;
+    if (wordLayout.marker) {
+      wordLayout.marker.textStartX = indentLeft;
+    }
+  }
+
+  return wordLayout;
+};
+
 /**
  * Compute paragraph attributes from PM node, resolving styles and handling BiDi text.
  * This is the main function for converting PM paragraph attributes to layout engine format.
@@ -1577,8 +1612,11 @@ export const computeParagraphAttrs = (
     // so first-line wrapping in columns has the correct width.
     if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
           firstLineIndentMode: true,
@@ -1591,14 +1629,13 @@ export const computeParagraphAttrs = (
     // the numbering indent has a firstLine value, set a minimal textStartPx to
     // match the resolved first-line indent. This guards against cases where
     // word-layout computation omits textStart for levels without left/hanging.
-    if (
-      wordLayout &&
-      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
-      enrichedNumberingProps.resolvedLevelIndent
-    ) {
+    if (wordLayout && !Number.isFinite(wordLayout.textStartPx) && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           ...wordLayout,
           firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
@@ -1619,6 +1656,7 @@ export const computeParagraphAttrs = (
           wordLayout.marker.suffix = listRendering.suffix;
         }
       }
+      wordLayout = normalizeWordLayoutForIndent(wordLayout, paragraphAttrs.indent);
       paragraphAttrs.wordLayout = wordLayout;
     }
 
