@@ -178,7 +178,6 @@ const getJustifyAdjustment = (
   const lastRun = block.runs[lastRunIndex];
   const derivedIsLastLine = line.toRun >= lastRunIndex;
   const derivedEndsWithLineBreak = lastRun ? lastRun.kind === 'lineBreak' : false;
-
   // Determine if justify should be applied using shared logic
   const shouldJustify = shouldApplyJustify({
     alignment,

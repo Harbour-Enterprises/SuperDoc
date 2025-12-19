@@ -118,6 +118,7 @@ const {
       destroy: vi.fn(),
       setZoom: vi.fn(),
       setLayoutMode: vi.fn(),
+      setVirtualizationPins: vi.fn(),
       setProviders: vi.fn(),
       setData: vi.fn(),
     })),
@@ -2767,6 +2768,191 @@ describe('PresentationEditor', () => {
           set: originalSetter,
           configurable: true,
         });
+      });
+    });
+
+    describe('Selection-aware virtualization pins', () => {
+      it('pins drag endpoints (with buffer) when dragging into an unmounted page', async () => {
+        mockIncrementalLayout.mockResolvedValueOnce({
+          layout: {
+            pageSize: { w: 612, h: 792 },
+            pageGap: 72,
+            pages: [
+              {
+                number: 1,
+                size: { w: 612, h: 792 },
+                fragments: [],
+                margins: { top: 72, bottom: 72, left: 72, right: 72, header: 36, footer: 36 },
+              },
+              {
+                number: 2,
+                size: { w: 612, h: 792 },
+                fragments: [],
+                margins: { top: 72, bottom: 72, left: 72, right: 72, header: 36, footer: 36 },
+              },
+              {
+                number: 3,
+                size: { w: 612, h: 792 },
+                fragments: [],
+                margins: { top: 72, bottom: 72, left: 72, right: 72, header: 36, footer: 36 },
+              },
+            ],
+          },
+          measures: [],
+        });
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+          layoutEngineOptions: {
+            virtualization: { enabled: true, window: 2, overscan: 0 },
+          },
+        });
+
+        await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        const painterInstance = (mockCreateDomPainter as unknown as Mock).mock.results[
+          (mockCreateDomPainter as unknown as Mock).mock.results.length - 1
+        ].value as { setVirtualizationPins?: Mock };
+        const setPins = painterInstance.setVirtualizationPins as unknown as Mock;
+        expect(setPins).toBeDefined();
+        setPins.mockClear();
+
+        // Mark page 0 as mounted for the drag anchor.
+        const pagesHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+        const page0 = document.createElement('div');
+        page0.setAttribute('data-page-index', '0');
+        pagesHost.appendChild(page0);
+
+        const viewport = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        vi.spyOn(viewport, 'getBoundingClientRect').mockReturnValue({
+          left: 0,
+          top: 0,
+          width: 800,
+          height: 1000,
+          right: 800,
+          bottom: 1000,
+          x: 0,
+          y: 0,
+          toJSON: () => ({}),
+        } as DOMRect);
+
+        // pointerdown: page 0 (mounted), pointermove: page 1 (unmounted), pointerup finalize: page 1
+        mockClickToPosition.mockReset();
+        mockClickToPosition
+          .mockReturnValueOnce({ pos: 1, layoutEpoch: 0, pageIndex: 0 })
+          .mockReturnValueOnce({ pos: 10, layoutEpoch: 0, pageIndex: 1 })
+          .mockReturnValueOnce({ pos: 12, layoutEpoch: 0, pageIndex: 1 });
+
+        viewport.dispatchEvent(
+          new MouseEvent('pointerdown', {
+            bubbles: true,
+            clientX: 120,
+            clientY: 200,
+            button: 0,
+          }),
+        );
+
+        viewport.dispatchEvent(
+          new MouseEvent('pointermove', {
+            bubbles: true,
+            clientX: 120,
+            clientY: 900,
+            buttons: 1,
+          }),
+        );
+
+        const lastPinsBeforePointerUp = setPins.mock.calls[setPins.mock.calls.length - 1]?.[0] as number[] | undefined;
+        expect(lastPinsBeforePointerUp).toEqual([0, 1, 2]);
+
+        // Simulate virtualization mounting the endpoint page before pointerup finalization.
+        const page1 = document.createElement('div');
+        page1.setAttribute('data-page-index', '1');
+        pagesHost.appendChild(page1);
+
+        viewport.dispatchEvent(
+          new MouseEvent('pointerup', {
+            bubbles: true,
+            clientX: 120,
+            clientY: 900,
+            button: 0,
+          }),
+        );
+
+        // pointerup should attempt a DOM-refined finalize after using geometry fallback.
+        expect(mockClickToPosition).toHaveBeenCalledTimes(3);
+      });
+    });
+
+    describe('Accessibility announcements (aria-live)', () => {
+      it('announces caret moves (debounced)', async () => {
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        // Wait for initial render to complete so timers/RAF have settled.
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        mockEditorInstance.state.selection = { from: 5, to: 5 };
+
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        expect(selectionUpdateCall).toBeDefined();
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        const ariaLive = container.querySelector('.presentation-editor__aria-live');
+        expect(ariaLive?.textContent).toContain('Cursor moved');
+      });
+
+      it('announces a selection snippet when doc.textBetween is available', async () => {
+        const layoutResult = {
+          layout: { pages: [] },
+          measures: [],
+        };
+        mockIncrementalLayout.mockResolvedValue(layoutResult);
+
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+        });
+
+        const mockEditorInstance = (Editor as unknown as MockedEditor).mock.results[
+          (Editor as unknown as MockedEditor).mock.results.length - 1
+        ].value;
+
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        mockEditorInstance.state.selection = { from: 1, to: 6 };
+        (mockEditorInstance.state.doc as unknown as { textBetween?: () => string }).textBetween = () => 'Hello world';
+
+        const onCalls = mockEditorInstance.on as unknown as Mock;
+        const selectionUpdateCall = onCalls.mock.calls.find((call) => call[0] === 'selectionUpdate');
+        expect(selectionUpdateCall).toBeDefined();
+        const handleSelection = selectionUpdateCall![1] as () => void;
+
+        handleSelection();
+
+        await new Promise((resolve) => setTimeout(resolve, 200));
+
+        const ariaLive = container.querySelector('.presentation-editor__aria-live');
+        expect(ariaLive?.textContent).toContain('Selected:');
+        expect(ariaLive?.textContent).toContain('Hello world');
       });
     });
   });
