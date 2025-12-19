@@ -46,6 +46,11 @@ const hashParagraphFrame = (frame: ParagraphFrame): string => {
 /**
  * Generates a cache key hash from a block's runs, incorporating content and formatting.
  *
+ * Text content is preserved verbatim without whitespace normalization. Different
+ * whitespace (multiple spaces, tabs, leading/trailing spaces) produces different
+ * text measurements and must generate distinct cache keys to prevent incorrect
+ * cache hits. See PR #1551 for context on the whitespace normalization bug.
+ *
  * For image runs, includes the image source (first 50 chars) and dimensions to ensure
  * cache invalidation when image properties change. This is critical for converted
  * metafiles (WMF/EMF) where placeholder images may have different dimensions than
@@ -111,6 +116,7 @@ const hashRuns = (block: FlowBlock): string => {
 
           for (const run of paragraphBlock.runs) {
             // Text is used verbatim without normalization - whitespace affects measurements
+            // (Fix for PR #1551: previously /\s+/g normalization caused cache collisions)
             const text = 'text' in run && typeof run.text === 'string' ? run.text : '';
 
             // Include formatting marks that affect measurement (mirroring paragraph approach)
@@ -235,6 +241,7 @@ const hashRuns = (block: FlowBlock): string => {
       }
 
       // Text is used verbatim without normalization - whitespace affects measurements
+      // (Fix for PR #1551: previously /\s+/g normalization caused cache collisions)
       const text =
         'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
           ? ''

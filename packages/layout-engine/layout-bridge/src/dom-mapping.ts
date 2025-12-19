@@ -407,11 +407,31 @@ function processFragment(fragmentEl: HTMLElement, viewX: number, viewY: number):
 
   const textNode = firstChild as Text;
   const charIndex = findCharIndexAtX(textNode, targetEl, viewX);
-  const pos = spanStart + charIndex;
+  const pos = mapCharIndexToPm(spanStart, spanEnd, textNode.length, charIndex);
 
   log('Character position:', { charIndex, spanStart, finalPos: pos });
 
   return pos;
+}
+
+function mapCharIndexToPm(spanStart: number, spanEnd: number, textLength: number, charIndex: number): number {
+  if (!Number.isFinite(spanStart) || !Number.isFinite(spanEnd)) {
+    return spanStart;
+  }
+  if (textLength <= 0) {
+    return spanStart;
+  }
+  const pmRange = spanEnd - spanStart;
+  if (!Number.isFinite(pmRange) || pmRange <= 0) {
+    return spanStart;
+  }
+  if (pmRange === textLength) {
+    const mapped = spanStart + charIndex;
+    return Math.min(spanEnd, Math.max(spanStart, mapped));
+  }
+
+  const ratio = charIndex / textLength;
+  return ratio <= 0.5 ? spanStart : spanEnd;
 }
 
 /**

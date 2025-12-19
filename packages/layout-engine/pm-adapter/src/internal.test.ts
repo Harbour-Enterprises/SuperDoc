@@ -16,6 +16,7 @@ import type { PMNode, AdapterOptions, BatchAdapterOptions, PMDocumentMap } from 
 vi.mock('./converters/index.js', () => ({
   paragraphToFlowBlocks: vi.fn(() => []),
   handleParagraphNode: vi.fn(),
+  contentBlockNodeToDrawingBlock: vi.fn(),
   imageNodeToBlock: vi.fn(),
   handleImageNode: vi.fn(),
   vectorShapeNodeToDrawingBlock: vi.fn(),
@@ -715,6 +716,18 @@ describe('internal', () => {
         toFlowBlocks(doc);
 
         expect(buildPositionMap).toHaveBeenCalledWith(doc);
+      });
+
+      it('should pass atom node types to position map when provided', () => {
+        const doc: PMNode = {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [] }],
+        };
+        const atomNodeTypes = ['customAtom'];
+
+        toFlowBlocks(doc, { atomNodeTypes });
+
+        expect(buildPositionMap).toHaveBeenCalledWith(doc, { atomNodeTypes });
       });
 
       it('should pass position map to handlers', () => {

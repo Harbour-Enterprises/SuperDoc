@@ -402,6 +402,9 @@ describe('MeasureCache', () => {
     });
 
     it('distinguishes different whitespace counts in table cells', () => {
+      // REGRESSION TEST (PR #1551): Previously whitespace was normalized with /\s+/g
+      // causing "Hello   World" and "Hello World" to incorrectly share cache despite
+      // having different text widths when rendered.
       // Multiple spaces affect text width, so they MUST produce different cache keys
       const table1: TableBlock = {
         kind: 'table',

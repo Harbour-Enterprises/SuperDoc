@@ -246,6 +246,14 @@ export class SuperToolbar extends EventEmitter {
     }
 
     this.toolbarContainer = this.findElementBySelector(this.config.selector);
+    if (this.toolbarContainer) {
+      const uiFontFamily =
+        (this.config?.uiDisplayFallbackFont || '').toString().trim() || 'Arial, Helvetica, sans-serif';
+      // Set the --sd-ui-font-family CSS variable on the toolbar container.
+      // This variable is used throughout the toolbar and its child components
+      // to ensure consistent typography across all UI surfaces (dropdowns, tooltips, etc.)
+      this.toolbarContainer.style.setProperty('--sd-ui-font-family', uiFontFamily);
+    }
     this.#initToolbarGroups();
     this.#makeToolbarItems({
       superToolbar: this,

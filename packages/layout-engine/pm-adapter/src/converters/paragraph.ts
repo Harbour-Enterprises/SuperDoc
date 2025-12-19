@@ -51,6 +51,7 @@ import {
   applyTrackedChangesModeToRuns,
 } from '../tracked-changes.js';
 import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
+import { contentBlockNodeToDrawingBlock } from './content-block.js';
 import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
 import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
 import { ptToPx, pickNumber, isPlainObject } from '../utilities.js';
@@ -592,11 +593,11 @@ const extractFirstTextRunFont = (para: PMNode): { fontSizePx?: number; fontFamil
 const applyBaseRunDefaults = (
   run: TextRun,
   defaults: RunDefaults,
-  fallbackFont: string,
+  uiDisplayFallbackFont: string,
   fallbackSize: number,
 ): void => {
   if (!run) return;
-  if (defaults.fontFamily && run.fontFamily === fallbackFont) {
+  if (defaults.fontFamily && run.fontFamily === uiDisplayFallbackFont) {
     run.fontFamily = defaults.fontFamily;
   }
   if (defaults.fontSizePx != null && run.fontSize === fallbackSize) {
@@ -655,6 +656,11 @@ export function paragraphToFlowBlocks(
   themeColors?: ThemeColorPalette,
   // Converter dependencies injected to avoid circular imports
   converters?: {
+    contentBlockNodeToDrawingBlock?: (
+      node: PMNode,
+      nextBlockId: BlockIdGenerator,
+      positions: PositionMap,
+    ) => FlowBlock | null;
     imageNodeToBlock: (
       node: PMNode,
       nextBlockId: BlockIdGenerator,
@@ -1094,6 +1100,26 @@ export function paragraphToFlowBlocks(
         if (imageBlock && imageBlock.kind === 'image') {
           annotateBlockWithTrackedChange(imageBlock, trackedMeta, trackedChanges);
           blocks.push(imageBlock);
+        }
+      }
+      return;
+    }
+
+    if (node.type === 'contentBlock') {
+      const attrs = node.attrs ?? {};
+      if (attrs.horizontalRule === true) {
+        flushParagraph();
+        const indent = paragraphAttrs?.indent;
+        const hrIndentLeft = typeof indent?.left === 'number' ? indent.left : undefined;
+        const hrIndentRight = typeof indent?.right === 'number' ? indent.right : undefined;
+        const hasIndent =
+          (typeof hrIndentLeft === 'number' && hrIndentLeft !== 0) ||
+          (typeof hrIndentRight === 'number' && hrIndentRight !== 0);
+        const hrNode = hasIndent ? { ...node, attrs: { ...attrs, hrIndentLeft, hrIndentRight } } : node;
+        const convert = converters?.contentBlockNodeToDrawingBlock ?? contentBlockNodeToDrawingBlock;
+        const drawingBlock = convert(hrNode, nextBlockId, positions);
+        if (drawingBlock) {
+          blocks.push(drawingBlock);
         }
       }
       return;

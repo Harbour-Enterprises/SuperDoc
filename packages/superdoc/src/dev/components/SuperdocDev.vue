@@ -1,5 +1,6 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
+import '../dev-styles.css';
 import { nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, computed } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
@@ -409,9 +410,7 @@ const init = async () => {
   // });
 };
 
-const onCommentsUpdate = (updateData) => {
-  console.debug('[END USER] Comments updated', updateData);
-};
+const onCommentsUpdate = () => {};
 
 const onContentError = ({ editor, error, documentId, file }) => {
   console.debug('Content error on', documentId, error);

@@ -25,6 +25,7 @@ import {
 } from './utilities.js';
 import {
   paragraphToFlowBlocks as paragraphToFlowBlocksImpl,
+  contentBlockNodeToDrawingBlock,
   imageNodeToBlock,
   handleImageNode,
   vectorShapeNodeToDrawingBlock,
@@ -165,7 +166,9 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
 
   const blocks: FlowBlock[] = [];
   const bookmarks = new Map<string, number>();
-  const positions = buildPositionMap(doc);
+  const positions =
+    options?.positions ??
+    (options?.atomNodeTypes ? buildPositionMap(doc, { atomNodeTypes: options.atomNodeTypes }) : buildPositionMap(doc));
 
   const nextBlockId = createBlockIdGenerator(idPrefix);
   const blockCounts: Partial<Record<FlowBlock['kind'], number>> = {};
@@ -457,6 +460,7 @@ function paragraphToFlowBlocks(
     hyperlinkConfig,
     themeColors,
     {
+      contentBlockNodeToDrawingBlock,
       imageNodeToBlock,
       vectorShapeNodeToDrawingBlock,
       shapeGroupNodeToDrawingBlock,

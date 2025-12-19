@@ -318,10 +318,10 @@ describe('DomPainter', () => {
 
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(2);
-    // First line should be justified (word-spacing > 0)
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    // First line should be justified via word-spacing (non-last line)
+    expect(lines[0].style.wordSpacing).toBe('40px');
     // Last line should NOT be justified (Word behavior: last line of paragraph is left-aligned)
-    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+    expect(lines[1].style.wordSpacing).toBe('');
   });
 
   it('justifies last visible line when paragraph ends with lineBreak', () => {
@@ -393,8 +393,8 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(2);
     // Both lines should be justified because paragraph ends with lineBreak
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
-    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBeGreaterThan(0);
+    expect(lines[0].style.wordSpacing).toBe('40px');
+    expect(lines[1].style.wordSpacing).toBe('50px');
   });
 
   it('does not justify single-line paragraph (features_lists case)', () => {
@@ -451,7 +451,7 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(1);
     // Single line = last line, should NOT be justified
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
+    expect(lines[0].style.wordSpacing).toBe('');
   });
 
   it('justifies single-line paragraph when it ends with lineBreak', () => {
@@ -508,7 +508,7 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(1);
     // Ends with lineBreak, so this visible line SHOULD be justified
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    expect(lines[0].style.wordSpacing).not.toBe('');
   });
 
   it('justifies last line of fragment when paragraph continues to next fragment', () => {
@@ -597,9 +597,9 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(2);
     // First fragment's last line SHOULD be justified (continuesOnNext=true)
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    expect(lines[0].style.wordSpacing).toBe('50px');
     // Second fragment's last line should NOT be justified (true last line of paragraph)
-    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+    expect(lines[1].style.wordSpacing).toBe('');
   });
 
   it('preserves right/center alignment for single-line paragraphs', () => {
@@ -776,9 +776,112 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(2);
     // First line SHOULD be justified (not the last line)
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBeGreaterThan(0);
+    expect(lines[0].style.wordSpacing).toBe('44px');
     // Second line should NOT be justified (last line of paragraph)
-    expect(parseFloat(lines[1].style.wordSpacing || '0')).toBe(0);
+    expect(lines[1].style.wordSpacing).toBe('');
+  });
+
+  it('does not stretch list marker suffix spaces when justifying', () => {
+    const listParaBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'list-suffix-space',
+      runs: [
+        { text: 'First line of list item text', fontFamily: 'Arial', fontSize: 16 },
+        { text: ' Second line of list item text', fontFamily: 'Arial', fontSize: 16 },
+      ],
+      attrs: {
+        alignment: 'justify',
+        indent: { left: 48, hanging: 24 },
+        wordLayout: {
+          indentLeftPx: 48,
+          marker: {
+            markerText: '1.',
+            glyphWidthPx: 12,
+            markerBoxWidthPx: 24,
+            markerX: 4,
+            textStartX: 24,
+            baselineOffsetPx: 0,
+            justification: 'left',
+            suffix: 'space',
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const listParaMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 28,
+          width: 180,
+          maxWidth: 400,
+          spaceCount: 5,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 1,
+          fromChar: 0,
+          toRun: 1,
+          toChar: 31,
+          width: 190,
+          maxWidth: 400,
+          spaceCount: 6,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+      marker: {
+        markerWidth: 24,
+        markerTextWidth: 12,
+        indentLeft: 48,
+      },
+    };
+
+    const listParaLayout: Layout = {
+      pageSize: { w: 500, h: 500 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'list-suffix-space',
+              fromLine: 0,
+              toLine: 2,
+              x: 0,
+              y: 0,
+              width: 400,
+              markerWidth: 24,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [listParaBlock], measures: [listParaMeasure] });
+    painter.paint(listParaLayout, mount);
+
+    const firstLine = mount.querySelector('.superdoc-line') as HTMLElement;
+    // Word-spacing is calculated based on available width AFTER accounting for marker position + inline width.
+    // Fragment has indent: { left: 48, hanging: 24 }, so markerStartPos = 48 - 24 = 24
+    // fragment.markerTextWidth is not set, so falls back to fragment.markerWidth = 24
+    // Text starts at: markerStartPos (24) + markerTextWidth (24) + space (~4px) = 52px
+    // availableWidth = 400 - 52 = 348
+    // slack = 348 - 180 = 168, wordSpacing = 168 / 5 = 33.6px
+    expect(firstLine.style.wordSpacing).toBe('33.6px');
+
+    const suffix = firstLine.querySelector('.superdoc-marker-suffix-space') as HTMLElement;
+    expect(suffix).toBeTruthy();
+    expect(suffix.style.wordSpacing).toBe('0px');
+    expect(suffix.textContent).toBe('\u00A0');
   });
 
   it('does not justify single-line list paragraphs (last line rule)', () => {
@@ -853,7 +956,7 @@ describe('DomPainter', () => {
     const lines = Array.from(mount.querySelectorAll('.superdoc-line')) as HTMLElement[];
     expect(lines).toHaveLength(1);
     // Single line = last line, should NOT be justified
-    expect(parseFloat(lines[0].style.wordSpacing || '0')).toBe(0);
+    expect(lines[0].style.wordSpacing).toBe('');
   });
 
   it('does not justify last line in table cell (same as regular paragraph)', () => {
@@ -947,11 +1050,11 @@ describe('DomPainter', () => {
     const line = mount.querySelector('.superdoc-line') as HTMLElement;
     expect(line).toBeTruthy();
     // Single-line cell = last line, so should NOT be justified
-    expect(parseFloat(line.style.wordSpacing || '0')).toBe(0);
+    expect(line.style.wordSpacing).toBe('');
   });
 
   it('justifies non-last lines in multi-line table cell', () => {
-    // Word justifies text inside table cells, applying word-spacing to all lines except the last.
+    // Word justifies text inside table cells, justifying all lines except the last.
     // This test verifies that the first line of a multi-line cell IS justified.
     const tableBlock: TableBlock = {
       kind: 'table',
@@ -1058,18 +1161,16 @@ describe('DomPainter', () => {
     const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
     expect(lines.length).toBe(2);
 
-    // First line should be justified (has word-spacing > 0)
-    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
-    expect(firstLineWordSpacing).toBeGreaterThan(0);
+    // First line should be justified (non-last line)
+    expect(lines[0].style.wordSpacing).not.toBe('');
 
-    // Last line should NOT be justified (word-spacing = 0)
-    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
-    expect(lastLineWordSpacing).toBe(0);
+    // Last line should NOT be justified
+    expect(lines[1].style.wordSpacing).toBe('');
   });
 
-  it('applies negative word-spacing when line width exceeds available width (compression case)', () => {
-    // When the measurer allows small overflow for justified text (assuming space compression),
-    // the renderer must apply negative word-spacing to actually compress the spaces.
+  it('applies negative word-spacing for compressed justify lines', () => {
+    // When the measurer allows small overflow for justified text, the painter applies
+    // negative word-spacing so the line still fits the available width.
     const compressBlock: ParagraphBlock = {
       kind: 'paragraph',
       id: 'compress-test',
@@ -1077,7 +1178,7 @@ describe('DomPainter', () => {
       attrs: { alignment: 'justify' },
     };
 
-    // Simulate a line where width > maxWidth (measurer allowed overflow assuming compression)
+    // Simulate a line where natural width > maxWidth (measurer allowed overflow via compression)
     const compressMeasure: ParagraphMeasure = {
       kind: 'paragraph',
       lines: [
@@ -1086,7 +1187,8 @@ describe('DomPainter', () => {
           fromChar: 0,
           toRun: 0,
           toChar: 14, // "Word one two t" - not last line
-          width: 210, // Width exceeds maxWidth
+          width: 200, // Compressed to maxWidth
+          naturalWidth: 210, // Original width before compression
           maxWidth: 200,
           ascent: 12,
           descent: 4,
@@ -1133,18 +1235,102 @@ describe('DomPainter', () => {
     const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
     expect(lines.length).toBe(2);
 
-    // First line should have NEGATIVE word-spacing (compression)
-    // line.width (210) > maxWidth (200), so slack = -10
-    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
-    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing || '0');
-    // slack = availableWidth (200) - line.width (210) = -10
-    // Text "Word one two t" has 3 spaces, so word-spacing = -10/3 ≈ -3.33px
-    const expectedSpacing = (200 - 210) / 3;
-    expect(firstLineWordSpacing).toBeCloseTo(expectedSpacing, 1);
+    // First line should have negative word-spacing applied
+    expect(lines[0].style.wordSpacing).toBe('-3.3333333333333335px');
 
     // Last line should NOT be justified
-    const lastLineWordSpacing = parseFloat(lines[1].style.wordSpacing || '0');
-    expect(lastLineWordSpacing).toBe(0);
+    expect(lines[1].style.wordSpacing).toBe('');
+  });
+
+  it('handles negative indents correctly with justify alignment', () => {
+    // Regression test: When a paragraph has negative indents, the layout engine expands
+    // fragment.width to include the negative indent area. The painter should NOT subtract
+    // negative indents again (which would cause text overflow).
+    const negativeIndentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'negative-indent-test',
+      runs: [{ text: 'This text has negative left indent to extend into margin', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        alignment: 'justify',
+        indent: {
+          left: -18, // Negative indent extends 18px into left margin
+          right: 0,
+          firstLine: 0,
+          hanging: 0,
+        },
+      },
+    };
+
+    // Fragment width (594px) already includes the negative indent expansion.
+    // The painter should justify to 594px, NOT 594 - (-18) = 612px.
+    const negativeIndentMeasure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 30, // "This text has negative left i" - not last line
+          width: 594,
+          maxWidth: 594,
+          naturalWidth: 580, // Natural width < maxWidth, will expand
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+        {
+          fromRun: 0,
+          fromChar: 30,
+          toRun: 0,
+          toChar: 58, // rest of text - last line
+          width: 350,
+          maxWidth: 594,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+        },
+      ],
+      totalHeight: 40,
+    };
+
+    const negativeIndentLayout: Layout = {
+      pageSize: { w: 612, h: 792 },
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'negative-indent-test',
+              x: 54, // Page left margin is 72px, negative indent of -18px puts fragment at 72-18=54px
+              y: 0,
+              width: 594, // Fragment width includes the negative indent expansion
+              fromLine: 0,
+              toLine: 2,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [negativeIndentBlock], measures: [negativeIndentMeasure] });
+    painter.paint(negativeIndentLayout, mount);
+
+    const lines = mount.querySelectorAll('.superdoc-line') as NodeListOf<HTMLElement>;
+    expect(lines.length).toBe(2);
+
+    // First line should be justified with positive word-spacing (expanding from 580 to 594)
+    const firstLineWordSpacing = parseFloat(lines[0].style.wordSpacing);
+    expect(firstLineWordSpacing).toBeGreaterThan(0);
+    // Word spacing should be reasonable - expanding 14px across ~6 spaces = ~2.33px per space
+    expect(firstLineWordSpacing).toBeLessThan(5);
+
+    // Last line should NOT be justified
+    expect(lines[1].style.wordSpacing).toBe('');
+
+    // Verify the fragment has the correct width (should be 594px, not expanded to 612px)
+    const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
+    expect(fragment.style.width).toBe('594px');
   });
 
   it('emits pm metadata attributes', () => {

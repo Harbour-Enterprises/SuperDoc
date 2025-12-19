@@ -53,7 +53,7 @@ describe('parseMarks', () => {
         { name: 'w:sz', attributes: { 'w:val': 22 } },
         {
           name: 'w:rFonts',
-          attributes: { 'w:ascii': 'FallbackFont', 'w:asciiTheme': 'majorAscii' },
+          attributes: { 'w:ascii': 'uiDisplayFallbackFont', 'w:asciiTheme': 'majorAscii' },
         },
         { name: 'w:spacing', attributes: { 'w:line': '360', 'w:lineRule': 'auto' } },
         { name: 'w:spacing', attributes: { 'w:val': '120' } },

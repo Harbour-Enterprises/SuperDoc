@@ -503,12 +503,36 @@ const IMAGE_SELECTION_STYLES = `
 }
 `;
 
+/**
+ * Native Selection Hiding Styles
+ *
+ * Hides the browser's native text selection highlight on layout engine content.
+ * The PresentationEditor renders its own selection overlay for precise control
+ * over selection appearance across pages, zoom levels, and virtualization.
+ *
+ * Without these styles, users would see BOTH the custom selection overlay AND
+ * the native browser selection, causing a "double selection" visual artifact.
+ */
+const NATIVE_SELECTION_STYLES = `
+/* Hide native browser selection on layout engine content.
+ * We render our own selection overlay via PresentationEditor's #localSelectionLayer
+ * for precise control over selection geometry across pages and zoom levels. */
+.superdoc-layout *::selection {
+  background: transparent;
+}
+
+.superdoc-layout *::-moz-selection {
+  background: transparent;
+}
+`;
+
 let printStylesInjected = false;
 let linkStylesInjected = false;
 let trackChangeStylesInjected = false;
 let sdtContainerStylesInjected = false;
 let fieldAnnotationStylesInjected = false;
 let imageSelectionStylesInjected = false;
+let nativeSelectionStylesInjected = false;
 
 export const ensurePrintStyles = (doc: Document | null | undefined) => {
   if (printStylesInjected || !doc) return;
@@ -568,4 +592,25 @@ export const ensureImageSelectionStyles = (doc: Document | null | undefined) => 
   styleEl.textContent = IMAGE_SELECTION_STYLES;
   doc.head?.appendChild(styleEl);
   imageSelectionStylesInjected = true;
+};
+
+/**
+ * Injects styles to hide native browser selection on layout engine content.
+ * This prevents the "double selection" visual artifact where both the browser's
+ * native selection and our custom overlay are visible simultaneously.
+ *
+ * The function is idempotent - calling it multiple times on the same document
+ * will only inject the styles once. This is tracked via the module-level
+ * `nativeSelectionStylesInjected` flag.
+ *
+ * @param doc - The document to inject styles into. If null or undefined, the function returns early without action.
+ * @returns void
+ */
+export const ensureNativeSelectionStyles = (doc: Document | null | undefined): void => {
+  if (nativeSelectionStylesInjected || !doc) return;
+  const styleEl = doc.createElement('style');
+  styleEl.setAttribute('data-superdoc-native-selection-styles', 'true');
+  styleEl.textContent = NATIVE_SELECTION_STYLES;
+  doc.head?.appendChild(styleEl);
+  nativeSelectionStylesInjected = true;
 };

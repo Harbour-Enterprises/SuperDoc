@@ -518,7 +518,18 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // Note: wordLayout.marker.justification (from lvlJc) describes text alignment WITHIN
   // the marker box (left/center/right), NOT whether the marker takes in-flow space.
   let initialAvailableWidth: number;
-  const textStartPx = (wordLayout as { textStartPx?: number } | undefined)?.textStartPx;
+  // Some producers provide `marker.textStartX` without setting top-level `textStartPx`.
+  // Both values represent the same concept: where the first-line text begins after the marker/tab.
+  // IMPORTANT: Priority must match the painter (renderer.ts) which prefers marker.textStartX
+  // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
+  const rawTextStartPx = (wordLayout as { textStartPx?: unknown } | undefined)?.textStartPx;
+  const markerTextStartX = (wordLayout as { marker?: { textStartX?: unknown } } | undefined)?.marker?.textStartX;
+  const textStartPx =
+    typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
+      ? markerTextStartX
+      : typeof rawTextStartPx === 'number' && Number.isFinite(rawTextStartPx)
+        ? rawTextStartPx
+        : undefined;
 
   if (typeof textStartPx === 'number' && textStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
@@ -733,6 +744,52 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     }
   }
 
+  /**
+   * Trims trailing regular spaces from a line when it is finalized.
+   *
+   * Our renderer uses `white-space: pre`, so trailing wrap-point spaces would otherwise occupy
+   * width and make the visible right edge look ragged (and would be incorrectly stretched by
+   * word-spacing justify).
+   *
+   * This matches typical word-processor behavior: spaces that exist only because of wrapping at
+   * a word boundary do not render at line ends.
+   */
+  const trimTrailingWrapSpaces = (lineToTrim: NonNullable<typeof currentLine>): void => {
+    const lastRun = runsToProcess[lineToTrim.toRun];
+    if (!lastRun || !('text' in lastRun) || typeof lastRun.text !== 'string') return;
+
+    const sliceStart = lineToTrim.toRun === lineToTrim.fromRun ? lineToTrim.fromChar : 0;
+    const sliceEnd = lineToTrim.toChar;
+    if (sliceEnd <= sliceStart) return;
+
+    const sliceText = lastRun.text.slice(sliceStart, sliceEnd);
+    let trimCount = 0;
+    for (let i = sliceText.length - 1; i >= 0 && sliceText[i] === ' '; i -= 1) {
+      trimCount += 1;
+    }
+    if (trimCount === 0) return;
+
+    // Preserve intentionally space-only lines (used in tests and in some documents).
+    if (lineToTrim.fromRun === lineToTrim.toRun && sliceText.trim().length === 0) {
+      return;
+    }
+
+    const keptText = sliceText.slice(0, Math.max(0, sliceText.length - trimCount));
+    const { font } = buildFontString(
+      lastRun as { fontFamily: string; fontSize: number; bold?: boolean; italic?: boolean },
+    );
+    const fullWidth = measureRunWidth(sliceText, font, ctx, lastRun);
+    const keptWidth = keptText.length > 0 ? measureRunWidth(keptText, font, ctx, lastRun) : 0;
+    const delta = Math.max(0, fullWidth - keptWidth);
+
+    lineToTrim.width = roundValue(Math.max(0, lineToTrim.width - delta));
+    lineToTrim.spaceCount = Math.max(0, lineToTrim.spaceCount - trimCount);
+
+    if ((lineToTrim as any).naturalWidth != null && typeof (lineToTrim as any).naturalWidth === 'number') {
+      (lineToTrim as any).naturalWidth = roundValue(Math.max(0, (lineToTrim as any).naturalWidth - delta));
+    }
+  };
+
   // Process each run
   for (let runIndex = 0; runIndex < runsToProcess.length; runIndex++) {
     const run = runsToProcess[runIndex];
@@ -740,7 +797,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     if ((run as Run).kind === 'break') {
       if (currentLine) {
         const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-        const { spaceCount: _sc, ...lineBase } = currentLine;
+        const lineBase = currentLine;
         const completedLine: Line = { ...lineBase, ...metrics };
         addBarTabsToLine(completedLine);
         lines.push(completedLine);
@@ -790,7 +847,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toRun: runIndex,
           toChar: 0,
           width: 0,
-          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
           segments: [],
           ...metrics,
         };
@@ -833,7 +890,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1,
           width: 0,
           maxFontSize: 12, // Default font size for tabs
-          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
           segments: [],
           spaceCount: 0,
         };
@@ -897,7 +954,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1, // Images are treated as single atomic units
           width: imageWidth,
           maxFontSize: imageHeight, // Use image height for line height calculation
-          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
           spaceCount: 0,
           segments: [
             {
@@ -918,8 +975,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Check if image fits on current line
       if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
         // Image doesn't fit - finish current line and start new line with image
+        trimTrailingWrapSpaces(currentLine);
         const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-        const { spaceCount: _sc, ...lineBase } = currentLine;
+        const lineBase = currentLine;
         const completedLine: Line = {
           ...lineBase,
           ...metrics,
@@ -1022,7 +1080,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           toChar: 1, // Field annotations are atomic units
           width: annotationWidth,
           maxFontSize: annotationHeight,
-          maxWidth: getEffectiveWidth(initialAvailableWidth),
+          maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
           spaceCount: 0,
           segments: [
             {
@@ -1040,8 +1098,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Check if annotation fits on current line
       if (currentLine.width + annotationWidth > currentLine.maxWidth && currentLine.width > 0) {
         // Doesn't fit - finish current line and start new one
+        trimTrailingWrapSpaces(currentLine);
         const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-        const { spaceCount: _sc, ...lineBase } = currentLine;
+        const lineBase = currentLine;
         const completedLine: Line = {
           ...lineBase,
           ...metrics,
@@ -1129,7 +1188,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             width: spacesWidth,
             maxFontSize: run.fontSize,
             maxFontInfo: getFontInfoFromRun(run),
-            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
             segments: [{ runIndex, fromChar: spacesStartChar, toChar: spacesEndChar, width: spacesWidth }],
             spaceCount: spacesLength,
           };
@@ -1139,8 +1198,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
             currentLine.width > 0
           ) {
+            trimTrailingWrapSpaces(currentLine);
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-            const { spaceCount: _sc, ...lineBase } = currentLine;
+            const lineBase = currentLine;
             const completedLine: Line = {
               ...lineBase,
               ...metrics,
@@ -1180,6 +1240,17 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       }
 
       const words = segment.split(' ');
+      // `split(' ')` produces empty strings for leading, consecutive, AND trailing spaces.
+      // We need to know the last non-empty word index so we don't double-count a trailing space:
+      //   "Por " → ["Por", ""]  (one trailing space)
+      // If we treated "Por" as "not last", we'd append a space AND also process the "" token.
+      let lastNonEmptyWordIndex = -1;
+      for (let i = words.length - 1; i >= 0; i -= 1) {
+        if (words[i] !== '') {
+          lastNonEmptyWordIndex = i;
+          break;
+        }
+      }
 
       // Align this segment if a tab alignment is pending
       let segmentStartX: number | undefined;
@@ -1220,7 +1291,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               width: singleSpaceWidth,
               maxFontSize: run.fontSize,
               maxFontInfo: getFontInfoFromRun(run),
-              maxWidth: getEffectiveWidth(initialAvailableWidth),
+              maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
               segments: [{ runIndex, fromChar: spaceStartChar, toChar: spaceEndChar, width: singleSpaceWidth }],
               spaceCount: 1,
             };
@@ -1233,8 +1304,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               currentLine.width > 0
             ) {
               // Space doesn't fit - finish current line and start new one with the space
+              trimTrailingWrapSpaces(currentLine);
               const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-              const { spaceCount: _sc, ...lineBase } = currentLine;
+              const lineBase = currentLine;
               const completedLine: Line = { ...lineBase, ...metrics };
               addBarTabsToLine(completedLine);
               lines.push(completedLine);
@@ -1270,14 +1342,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           charPosInRun = spaceEndChar;
           continue;
         }
-        const isLastWordInSegment = wordIndex === words.length - 1;
-        const isLastWord = isLastWordInSegment && isLastSegment;
         const wordOnlyWidth = measureRunWidth(word, font, ctx, run);
-        const spaceWidth = isLastWord ? 0 : measureRunWidth(' ', font, ctx, run);
-        const wordCommitWidth = isLastWord ? wordOnlyWidth : wordOnlyWidth + spaceWidth;
+        // Only include the implicit single delimiter space when there is a later non-empty word
+        // in this same segment (i.e., before the next word). Do NOT include one before tabs or
+        // at the end of the segment; those spaces are represented explicitly by "" tokens.
+        const shouldIncludeDelimiterSpace = wordIndex < lastNonEmptyWordIndex;
+        const spaceWidth = shouldIncludeDelimiterSpace ? measureRunWidth(' ', font, ctx, run) : 0;
+        const wordCommitWidth = wordOnlyWidth + spaceWidth;
         const wordStartChar = charPosInRun;
         const wordEndNoSpace = charPosInRun + word.length;
-        const wordEndWithSpace = charPosInRun + (isLastWord ? word.length : word.length + 1);
+        const wordEndWithSpace = wordEndNoSpace + (shouldIncludeDelimiterSpace ? 1 : 0);
 
         // Determine the effective maxWidth for character-level breaking
         const effectiveMaxWidth = currentLine
@@ -1296,8 +1370,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           // If the line only has width from tab advances but no text, we should keep it so the
           // long word can use the pending tab alignment.
           if (currentLine && currentLine.width > 0 && currentLine.segments && currentLine.segments.length > 0) {
+            trimTrailingWrapSpaces(currentLine);
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-            const { spaceCount: _sc, ...lineBase } = currentLine;
+            const lineBase = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
             addBarTabsToLine(completedLine);
             lines.push(completedLine);
@@ -1346,7 +1421,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               if (isLastChunk) {
                 // If this is also the last chunk, keep currentLine open for more content
                 const ls = (run as TextRun).letterSpacing ?? 0;
-                if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+                if (
+                  shouldIncludeDelimiterSpace &&
+                  currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX
+                ) {
                   currentLine.toChar = wordEndWithSpace;
                   currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
                   charPosInRun = wordEndWithSpace;
@@ -1356,8 +1434,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
                 }
               } else {
                 // More chunks to come - finish this line and push it
+                trimTrailingWrapSpaces(currentLine);
                 const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-                const { spaceCount: _sc, ...lineBase } = currentLine;
+                const lineBase = currentLine;
                 const completedLine: Line = { ...lineBase, ...metrics };
                 addBarTabsToLine(completedLine);
                 lines.push(completedLine);
@@ -1381,7 +1460,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               };
               // If trailing space fits, include it
               const ls = (run as TextRun).letterSpacing ?? 0;
-              if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+              if (
+                shouldIncludeDelimiterSpace &&
+                currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX
+              ) {
                 currentLine.toChar = wordEndWithSpace;
                 currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
                 charPosInRun = wordEndWithSpace;
@@ -1420,14 +1502,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             width: wordOnlyWidth,
             maxFontSize: run.fontSize,
             maxFontInfo: getFontInfoFromRun(run),
-            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
             segments: [{ runIndex, fromChar: wordStartChar, toChar: wordEndNoSpace, width: wordOnlyWidth }],
             spaceCount: 0,
           };
           // If a trailing space exists and fits safely, include it on this line
           // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           const ls = (run as TextRun).letterSpacing ?? 0;
-          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
             charPosInRun = wordEndWithSpace;
@@ -1452,7 +1534,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           boundarySpacing +
           wordCommitWidth +
           // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-          (isLastWord ? 0 : ((run as TextRun).letterSpacing ?? 0));
+          (shouldIncludeDelimiterSpace ? ((run as TextRun).letterSpacing ?? 0) : 0);
         const availableWidth = currentLine.maxWidth - WIDTH_FUDGE_PX;
         let shouldBreak =
           currentLine.width + boundarySpacing + wordOnlyWidth > availableWidth && currentLine.width > 0 && !isTocEntry;
@@ -1460,10 +1542,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
         // Justify-aware fit: allow minor per-space compression (non-last paragraph line) to keep the word.
         if (shouldBreak && justifyAlignment) {
-          const isParagraphLastWord = isLastWord && runIndex === runsToProcess.length - 1;
+          const isLastNonEmptyWordInSegment = wordIndex === lastNonEmptyWordIndex;
+          const isParagraphLastWord =
+            isLastSegment && isLastNonEmptyWordInSegment && runIndex === runsToProcess.length - 1;
           if (!isParagraphLastWord) {
             const existingSpaces = currentLine.spaceCount ?? 0;
-            const candidateSpaces = existingSpaces + (isLastWord ? 0 : 1);
+            const candidateSpaces = existingSpaces + (shouldIncludeDelimiterSpace ? 1 : 0);
             if (candidateSpaces > 0) {
               const overflow = totalWidthWithWord - availableWidth;
               if (overflow > 0) {
@@ -1481,8 +1565,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         }
 
         if (shouldBreak) {
+          trimTrailingWrapSpaces(currentLine);
           const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-          const { spaceCount: _sc, ...lineBase } = currentLine;
+          const lineBase = currentLine;
           const completedLine: Line = {
             ...lineBase,
             ...metrics,
@@ -1506,7 +1591,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: 0,
           };
           // If trailing space would fit on the new line, consume it here; otherwise skip it
-          if (!isLastWord && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
+          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
             charPosInRun = wordEndWithSpace;
@@ -1519,7 +1604,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           currentLine.toRun = runIndex;
           // If adding the trailing space would exceed, commit only the word and finalize line
           if (
-            !isLastWord &&
+            shouldIncludeDelimiterSpace &&
             currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX
           ) {
             currentLine.toChar = wordEndNoSpace;
@@ -1538,8 +1623,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               useExplicitXHere ? segmentStartX : undefined,
             );
             // finish current line and start a new one on next iteration
+            trimTrailingWrapSpaces(currentLine);
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-            const { spaceCount: _sc, ...lineBase } = currentLine;
+            const lineBase = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
             addBarTabsToLine(completedLine);
             lines.push(completedLine);
@@ -1550,7 +1636,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             charPosInRun = wordEndNoSpace + 1;
             continue;
           }
-          const newToChar = isLastWord ? wordEndNoSpace : wordEndWithSpace;
+          const newToChar = shouldIncludeDelimiterSpace ? wordEndWithSpace : wordEndNoSpace;
           currentLine.toChar = newToChar;
           // For the first word in a tab-aligned segment, pass the explicit X position
           const useExplicitX = wordIndex === 0 && segmentStartX !== undefined;
@@ -1561,17 +1647,21 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               : currentLine.width +
                 boundarySpacing +
                 wordCommitWidth +
-                (isLastWord ? 0 : ((run as TextRun).letterSpacing ?? 0));
+                (shouldIncludeDelimiterSpace ? ((run as TextRun).letterSpacing ?? 0) : 0);
+          // Preserve natural width when compression is applied for justify calculations
+          if (compressedWidth != null) {
+            (currentLine as any).naturalWidth = roundValue(totalWidthWithWord);
+          }
           currentLine.width = roundValue(targetWidth);
           currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
           currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
           appendSegment(currentLine.segments, runIndex, wordStartChar, newToChar, wordCommitWidth, explicitX);
-          if (!isLastWord) {
+          if (shouldIncludeDelimiterSpace) {
             currentLine.spaceCount += 1;
           }
         }
 
-        charPosInRun = isLastWord ? wordEndNoSpace : wordEndWithSpace;
+        charPosInRun = shouldIncludeDelimiterSpace ? wordEndWithSpace : wordEndNoSpace;
       }
 
       // If this segment was positioned by a right-aligned tab, clamp the
@@ -1595,7 +1685,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             width: 0,
             maxFontSize: run.fontSize,
             maxFontInfo: getFontInfoFromRun(run),
-            maxWidth: getEffectiveWidth(initialAvailableWidth),
+            maxWidth: getEffectiveWidth(lines.length === 0 ? initialAvailableWidth : bodyContentWidth),
             segments: [],
             spaceCount: 0,
           };
@@ -1737,8 +1827,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   }
 
   if (!currentLine && lines.length === 0) {
-    const fallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
-    const metrics = calculateTypographyMetrics(fallbackFontSize, spacing);
+    const uiDisplayFallbackFontSize = (block.runs[0]?.kind === 'text' ? block.runs[0].fontSize : undefined) ?? 12;
+    const metrics = calculateTypographyMetrics(uiDisplayFallbackFontSize, spacing);
     const fallbackLine: Line = {
       fromRun: 0,
       fromChar: 0,
@@ -1754,7 +1844,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
   if (currentLine) {
     const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
-    const { spaceCount: _sc, ...lineBase } = currentLine;
+    const lineBase = currentLine;
     const finalLine: Line = {
       ...lineBase,
       ...metrics,
@@ -2211,11 +2301,19 @@ async function measureDrawingBlock(block: DrawingBlock, constraints: MeasureCons
   }
 
   const geometry = ensureDrawingGeometry(block.geometry);
+  const attrs = block.attrs as Record<string, unknown> | undefined;
+  const indentLeft = typeof attrs?.hrIndentLeft === 'number' ? attrs.hrIndentLeft : 0;
+  const indentRight = typeof attrs?.hrIndentRight === 'number' ? attrs.hrIndentRight : 0;
+  const hasFullWidth = attrs?.isFullWidth === true && constraints.maxWidth > 0;
+  const fullWidthMax = hasFullWidth ? Math.max(1, constraints.maxWidth - indentLeft - indentRight) : undefined;
+  if (fullWidthMax != null) {
+    geometry.width = fullWidthMax;
+  }
   const rotatedBounds = calculateRotatedBounds(geometry);
   const naturalWidth = Math.max(1, rotatedBounds.width);
   const naturalHeight = Math.max(1, rotatedBounds.height);
 
-  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth;
+  const maxWidth = fullWidthMax ?? (constraints.maxWidth > 0 ? constraints.maxWidth : naturalWidth);
 
   // For anchored drawings with negative vertical positioning (designed to overflow their container),
   // bypass the height constraint. This is common for footer/header graphics that extend beyond

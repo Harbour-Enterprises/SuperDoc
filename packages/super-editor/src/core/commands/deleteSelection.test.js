@@ -120,22 +120,6 @@ describe('deleteSelection', () => {
     expect(res).toBe('delegated-non-empty');
   });
 
-  // Fix for SD-1013: prevent single-character selections from being treated as backspace
-  it('returns false when current DOM selection is a single character', () => {
-    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
-    const sel = TextSelection.create(doc, 2, 5);
-    const state = EditorState.create({ schema, doc, selection: sel });
-
-    vi.spyOn(document, 'getSelection').mockReturnValue({
-      toString: () => 'a',
-      isCollapsed: false,
-    });
-
-    const cmd = deleteSelection();
-    const ok = cmd({ state, tr: state.tr });
-    expect(ok).toBe(false);
-  });
-
   it('returns true when dispatch is omitted (list content case)', () => {
     // Ensure DOM selection is empty so the single-char guard does not short-circuit
     vi.spyOn(document, 'getSelection').mockReturnValue({
@@ -159,5 +143,94 @@ describe('deleteSelection', () => {
 
     expect(ok).toBe(true);
     expect(pmDeleteSelection).not.toHaveBeenCalled();
+  });
+
+  // This is a workaround. It was a fix for SD-1013.
+  // When user selects text from right to left and replace it with a single char,
+  // Prosemirror will interpret this as a backspace operation, which will delete the character.
+  // This is a workaround to prevent this from happening, by checking if the current DOM selection is a single character.
+  it('returns false when current dom selection is a single character', () => {
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+    const sel = TextSelection.create(doc, 2, 5);
+    const state = EditorState.create({ schema, doc, selection: sel });
+
+    vi.spyOn(document, 'getSelection').mockReturnValue({
+      baseNode: {
+        data: 'a',
+      },
+    });
+
+    const cmd = deleteSelection();
+    const ok = cmd({ state, tr: state.tr });
+    expect(ok).toBe(false);
+  });
+
+  it('handles SSR environment when document is undefined', () => {
+    // Save original document reference
+    const originalDocument = globalThis.document;
+
+    // Simulate SSR by removing document
+    delete globalThis.document;
+
+    try {
+      const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+      const sel = TextSelection.create(doc, 2, 6); // non-empty selection
+      const state = EditorState.create({ schema, doc, selection: sel });
+
+      pmDeleteSelection.mockReturnValueOnce('delegated-ssr');
+
+      const cmd = deleteSelection();
+      const dispatch = vi.fn();
+      const res = cmd({ state, tr: state.tr, dispatch });
+
+      // Should delegate to original deleteSelection without error
+      expect(pmDeleteSelection).toHaveBeenCalledTimes(1);
+      expect(res).toBe('delegated-ssr');
+    } finally {
+      // Restore document
+      globalThis.document = originalDocument;
+    }
+  });
+
+  it('handles null getSelection result', () => {
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+    const sel = TextSelection.create(doc, 2, 6); // non-empty selection
+    const state = EditorState.create({ schema, doc, selection: sel });
+
+    // Mock getSelection to return null (can happen in some browsers/contexts)
+    vi.spyOn(document, 'getSelection').mockReturnValue(null);
+
+    pmDeleteSelection.mockReturnValueOnce('delegated-null-selection');
+
+    const cmd = deleteSelection();
+    const dispatch = vi.fn();
+    const res = cmd({ state, tr: state.tr, dispatch });
+
+    // Should delegate to original deleteSelection without error
+    expect(pmDeleteSelection).toHaveBeenCalledTimes(1);
+    expect(res).toBe('delegated-null-selection');
+  });
+
+  it('allows deletion when baseNode has multiple characters even if selection is single char', () => {
+    const doc = schema.node('doc', null, [schema.node('paragraph', null, schema.text('abc def ghi'))]);
+    const sel = TextSelection.create(doc, 2, 3); // single character selection "b"
+    const state = EditorState.create({ schema, doc, selection: sel });
+
+    // Mock getSelection with a multi-character baseNode
+    vi.spyOn(document, 'getSelection').mockReturnValue({
+      baseNode: {
+        data: 'abc def ghi', // Multi-character node
+      },
+    });
+
+    pmDeleteSelection.mockReturnValueOnce('delegated-multi-char-node');
+
+    const cmd = deleteSelection();
+    const dispatch = vi.fn();
+    const res = cmd({ state, tr: state.tr, dispatch });
+
+    // Should delegate to original deleteSelection (not trigger SD-1013 workaround)
+    expect(pmDeleteSelection).toHaveBeenCalledTimes(1);
+    expect(res).toBe('delegated-multi-char-node');
   });
 });
