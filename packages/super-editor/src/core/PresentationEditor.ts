@@ -3282,6 +3282,32 @@ export class PresentationEditor extends EventEmitter {
       this.#dragExtensionMode = 'char';
     }
 
+    debugLog(
+      'verbose',
+      `Drag selection start ${JSON.stringify({
+        pointer: { clientX: event.clientX, clientY: event.clientY, x, y },
+        clickDepth,
+        extensionMode: this.#dragExtensionMode,
+        anchor: this.#dragAnchor,
+        anchorPageIndex: this.#dragAnchorPageIndex,
+        rawHit: rawHit
+          ? {
+              pos: rawHit.pos,
+              pageIndex: rawHit.pageIndex,
+              blockId: rawHit.blockId,
+              lineIndex: rawHit.lineIndex,
+              layoutEpoch: rawHit.layoutEpoch,
+            }
+          : null,
+        mapped: mapped
+          ? mapped.ok
+            ? { ok: true, pos: mapped.pos, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
+            : { ok: false, reason: mapped.reason, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
+          : null,
+        hit: hit ? { pos: hit.pos, pageIndex: hit.pageIndex, layoutEpoch: hit.layoutEpoch } : null,
+      })}`,
+    );
+
     // Capture pointer for reliable drag tracking even outside viewport
     // Guard for test environments where setPointerCapture may not exist
     if (typeof this.#viewportHost.setPointerCapture === 'function') {
@@ -3628,6 +3654,8 @@ export class PresentationEditor extends EventEmitter {
     // Handle drag selection when button is held
     if (this.#isDragging && this.#dragAnchor !== null && event.buttons & 1) {
       this.#pendingMarginClick = null;
+      const prevPointer = this.#dragLastPointer;
+      const prevRawHit = this.#dragLastRawHit;
       this.#dragLastPointer = { clientX: event.clientX, clientY: event.clientY, x: normalized.x, y: normalized.y };
       const rawHit = clickToPosition(
         this.#layoutState.layout,
@@ -3641,7 +3669,17 @@ export class PresentationEditor extends EventEmitter {
       );
 
       // If we can't find a position, keep the last selection
-      if (!rawHit) return;
+      if (!rawHit) {
+        debugLog(
+          'verbose',
+          `Drag selection update (no hit) ${JSON.stringify({
+            pointer: { clientX: event.clientX, clientY: event.clientY, x: normalized.x, y: normalized.y },
+            prevPointer,
+            anchor: this.#dragAnchor,
+          })}`,
+        );
+        return;
+      }
 
       const doc = this.#editor.state?.doc;
       if (!doc) return;
@@ -3657,6 +3695,27 @@ export class PresentationEditor extends EventEmitter {
       const mappedHead = this.#epochMapper.mapPosFromLayoutToCurrentDetailed(rawHit.pos, rawHit.layoutEpoch, 1);
       if (!mappedHead.ok) {
         debugLog('warn', 'drag mapping failed', mappedHead);
+        debugLog(
+          'verbose',
+          `Drag selection update (map failed) ${JSON.stringify({
+            pointer: { clientX: event.clientX, clientY: event.clientY, x: normalized.x, y: normalized.y },
+            prevPointer,
+            anchor: this.#dragAnchor,
+            rawHit: {
+              pos: rawHit.pos,
+              pageIndex: rawHit.pageIndex,
+              blockId: rawHit.blockId,
+              lineIndex: rawHit.lineIndex,
+              layoutEpoch: rawHit.layoutEpoch,
+            },
+            mapped: {
+              ok: false,
+              reason: mappedHead.reason,
+              fromEpoch: mappedHead.fromEpoch,
+              toEpoch: mappedHead.toEpoch,
+            },
+          })}`,
+        );
         return;
       }
 
@@ -3672,6 +3731,44 @@ export class PresentationEditor extends EventEmitter {
         mappedPos: hit.pos,
       };
       this.#updateSelectionDebugHud();
+
+      const anchor = this.#dragAnchor;
+      const head = hit.pos;
+      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
+      debugLog(
+        'verbose',
+        `Drag selection update ${JSON.stringify({
+          pointer: { clientX: event.clientX, clientY: event.clientY, x: normalized.x, y: normalized.y },
+          prevPointer,
+          rawHit: {
+            pos: rawHit.pos,
+            pageIndex: rawHit.pageIndex,
+            blockId: rawHit.blockId,
+            lineIndex: rawHit.lineIndex,
+            layoutEpoch: rawHit.layoutEpoch,
+          },
+          prevRawHit: prevRawHit
+            ? {
+                pos: prevRawHit.pos,
+                pageIndex: prevRawHit.pageIndex,
+                blockId: prevRawHit.blockId,
+                lineIndex: prevRawHit.lineIndex,
+                layoutEpoch: prevRawHit.layoutEpoch,
+              }
+            : null,
+          mappedHead: { pos: mappedHead.pos, fromEpoch: mappedHead.fromEpoch, toEpoch: mappedHead.toEpoch },
+          hit: { pos: hit.pos, pageIndex: hit.pageIndex, layoutEpoch: hit.layoutEpoch },
+          anchor,
+          head,
+          selAnchor,
+          selHead,
+          direction: head >= anchor ? 'down' : 'up',
+          selectionDirection: selHead >= selAnchor ? 'down' : 'up',
+          extensionMode: this.#dragExtensionMode,
+          hitSource: pageMounted ? 'dom' : 'geometry',
+          pageMounted,
+        })}`,
+      );
 
       // Check for cell selection mode (table drag)
       const currentTableHit = this.#hitTestTable(normalized.x, normalized.y);
@@ -3724,11 +3821,7 @@ export class PresentationEditor extends EventEmitter {
       }
 
       // Text selection mode (default)
-      const anchor = this.#dragAnchor;
-      const head = hit.pos;
-
       // Apply extension mode to expand selection boundaries, preserving direction
-      const { selAnchor, selHead } = this.#calculateExtendedSelection(anchor, head, this.#dragExtensionMode);
 
       try {
         const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, selAnchor, selHead));

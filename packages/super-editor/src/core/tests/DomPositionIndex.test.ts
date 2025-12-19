@@ -42,6 +42,188 @@ describe('DomPositionIndex', () => {
     expect(index.findElementAtPosition(6)?.textContent).toBe('bar');
   });
 
+  it('skips header/footer descendants when building the index', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page">
+        <div class="superdoc-page-header">
+          <span data-pm-start="1" data-pm-end="2">header</span>
+        </div>
+        <div class="superdoc-line">
+          <span data-pm-start="1" data-pm-end="2">body</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <span data-pm-start="1" data-pm-end="2">footer</span>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    expect(index.size).toBe(1);
+    expect(index.findElementAtPosition(1)?.textContent).toBe('body');
+  });
+
+  it('skips footer-only content when building the index', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page">
+        <div class="superdoc-line">
+          <span data-pm-start="1" data-pm-end="5">body content</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <div class="superdoc-line">
+            <span data-pm-start="10" data-pm-end="20">footer text</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    expect(index.size).toBe(1);
+    expect(index.findElementAtPosition(1)?.textContent).toBe('body content');
+    expect(index.findElementAtPosition(10)).toBe(null);
+  });
+
+  it('correctly distributes elements across header, body, and footer sections', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page">
+        <div class="superdoc-page-header">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="5">header 1</span>
+            <span data-pm-start="6" data-pm-end="10">header 2</span>
+          </div>
+        </div>
+        <div class="superdoc-line">
+          <span data-pm-start="11" data-pm-end="15">body 1</span>
+          <span data-pm-start="16" data-pm-end="20">body 2</span>
+          <span data-pm-start="21" data-pm-end="25">body 3</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <div class="superdoc-line">
+            <span data-pm-start="26" data-pm-end="30">footer 1</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    // Should only index body elements (3 elements)
+    expect(index.size).toBe(3);
+    expect(index.findElementAtPosition(13)?.textContent).toBe('body 1');
+    expect(index.findElementAtPosition(18)?.textContent).toBe('body 2');
+    expect(index.findElementAtPosition(23)?.textContent).toBe('body 3');
+
+    // Header and footer elements should not be in index
+    expect(index.findElementAtPosition(3)).toBe(null);
+    expect(index.findElementAtPosition(8)).toBe(null);
+    expect(index.findElementAtPosition(28)).toBe(null);
+  });
+
+  it('handles multiple pages with headers and footers', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page" data-page-index="0">
+        <div class="superdoc-page-header">
+          <span data-pm-start="1" data-pm-end="5">page 1 header</span>
+        </div>
+        <div class="superdoc-line">
+          <span data-pm-start="6" data-pm-end="10">page 1 body</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <span data-pm-start="11" data-pm-end="15">page 1 footer</span>
+        </div>
+      </div>
+      <div class="superdoc-page" data-page-index="1">
+        <div class="superdoc-page-header">
+          <span data-pm-start="16" data-pm-end="20">page 2 header</span>
+        </div>
+        <div class="superdoc-line">
+          <span data-pm-start="21" data-pm-end="25">page 2 body</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <span data-pm-start="26" data-pm-end="30">page 2 footer</span>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    // Should only index body elements from both pages
+    expect(index.size).toBe(2);
+    expect(index.findElementAtPosition(8)?.textContent).toBe('page 1 body');
+    expect(index.findElementAtPosition(23)?.textContent).toBe('page 2 body');
+
+    // Headers and footers should not be indexed
+    expect(index.findElementAtPosition(3)).toBe(null);
+    expect(index.findElementAtPosition(13)).toBe(null);
+    expect(index.findElementAtPosition(18)).toBe(null);
+    expect(index.findElementAtPosition(28)).toBe(null);
+  });
+
+  it('handles nested elements within header/footer (deeply nested filtering)', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page">
+        <div class="superdoc-page-header">
+          <div class="superdoc-line">
+            <div class="wrapper">
+              <span data-pm-start="1" data-pm-end="5">nested header</span>
+            </div>
+          </div>
+        </div>
+        <div class="superdoc-line">
+          <span data-pm-start="6" data-pm-end="10">body</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <div class="superdoc-line">
+            <div class="wrapper">
+              <span data-pm-start="11" data-pm-end="15">nested footer</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    // Should skip deeply nested header/footer elements
+    expect(index.size).toBe(1);
+    expect(index.findElementAtPosition(8)?.textContent).toBe('body');
+    expect(index.findElementAtPosition(3)).toBe(null);
+    expect(index.findElementAtPosition(13)).toBe(null);
+  });
+
+  it('handles page with only header and footer (no body content)', () => {
+    const container = document.createElement('div');
+    container.innerHTML = `
+      <div class="superdoc-page">
+        <div class="superdoc-page-header">
+          <span data-pm-start="1" data-pm-end="5">header only</span>
+        </div>
+        <div class="superdoc-page-footer">
+          <span data-pm-start="6" data-pm-end="10">footer only</span>
+        </div>
+      </div>
+    `;
+
+    const index = new DomPositionIndex();
+    index.rebuild(container);
+
+    // Should have no indexed elements
+    expect(index.size).toBe(0);
+    expect(index.findElementAtPosition(3)).toBe(null);
+    expect(index.findElementAtPosition(8)).toBe(null);
+  });
+
   it('finds all leaf elements intersecting a range', () => {
     const container = document.createElement('div');
     container.innerHTML = `
