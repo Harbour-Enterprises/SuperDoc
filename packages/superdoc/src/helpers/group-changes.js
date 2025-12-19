@@ -6,7 +6,7 @@
  * @returns {Array} Grouped track changes array with combined replacements
  */
 
-export const groupChanges = (changes = []) => {
+export const groupChanges = (changes) => {
   const markMetaKeys = {
     trackInsert: 'insertedMark',
     trackDelete: 'deletionMark',
@@ -17,12 +17,9 @@ export const groupChanges = (changes = []) => {
   for (let i = 0; i < changes.length; i++) {
     const c1 = changes[i];
     const c2 = changes[i + 1];
-    if (!c1) {
-      continue;
-    }
+    const c1Key = markMetaKeys[c1.mark.type.name];
 
     if (c1 && c2 && c1.to === c2.from && c1.mark.attrs.id === c2.mark.attrs.id) {
-      const c1Key = markMetaKeys[c1.mark.type.name];
       const c2Key = markMetaKeys[c2.mark.type.name];
       grouped.push({
         from: c1.from,
@@ -32,7 +29,6 @@ export const groupChanges = (changes = []) => {
       });
       i++;
     } else {
-      const c1Key = markMetaKeys[c1.mark.type.name];
       grouped.push({
         from: c1.from,
         to: c1.to,
