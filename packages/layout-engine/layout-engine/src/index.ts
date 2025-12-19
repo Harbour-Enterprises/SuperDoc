@@ -269,8 +269,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     footer: options.margins?.footer ?? options.margins?.bottom ?? DEFAULT_MARGINS.bottom,
   };
 
-  const contentWidth = pageSize.w - (margins.left + margins.right);
-  if (contentWidth <= 0) {
+  const baseContentWidth = pageSize.w - (margins.left + margins.right);
+  if (baseContentWidth <= 0) {
     throw new Error('layoutDocument: pageSize and margins yield non-positive content area');
   }
 
@@ -331,8 +331,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
   let activeTopMargin = effectiveTopMargin;
   let activeBottomMargin = effectiveBottomMargin;
+  let activeLeftMargin = margins.left;
+  let activeRightMargin = margins.right;
   let pendingTopMargin: number | null = null;
   let pendingBottomMargin: number | null = null;
+  let pendingLeftMargin: number | null = null;
+  let pendingRightMargin: number | null = null;
   let activeHeaderDistance = margins.header ?? margins.top;
   let pendingHeaderDistance: number | null = null;
   let activeFooterDistance = margins.footer ?? margins.bottom;
@@ -356,10 +360,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let pendingVAlign: VerticalAlign | null = null;
 
   // Create floating-object manager for anchored image tracking
+  const paginatorMargins = { left: activeLeftMargin, right: activeRightMargin };
   const floatManager = createFloatingObjectManager(
-    normalizeColumns(activeColumns, contentWidth),
-    { left: margins.left, right: margins.right },
-    pageSize.w,
+    normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
+    { left: activeLeftMargin, right: activeRightMargin },
+    activePageSize.w,
   );
 
   // Will be aliased to paginator.pages/states after paginator is created
@@ -394,23 +399,40 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         next.activeOrientation = block.orientation;
         next.pendingOrientation = null;
       }
+      const headerDistance =
+        typeof block.margins?.header === 'number' ? Math.max(0, block.margins.header) : next.activeHeaderDistance;
+      const footerDistance =
+        typeof block.margins?.footer === 'number' ? Math.max(0, block.margins.footer) : next.activeFooterDistance;
+      const sectionTop = typeof block.margins?.top === 'number' ? Math.max(0, block.margins.top) : baseMargins.top;
+      const sectionBottom =
+        typeof block.margins?.bottom === 'number' ? Math.max(0, block.margins.bottom) : baseMargins.bottom;
       if (block.margins?.header !== undefined) {
-        const headerDist = Math.max(0, block.margins.header);
-        next.activeHeaderDistance = headerDist;
-        next.pendingHeaderDistance = headerDist;
-        // Account for actual header content height
-        const requiredTop = maxHeaderContentHeight > 0 ? headerDist + maxHeaderContentHeight : headerDist;
-        next.activeTopMargin = Math.max(baseMargins.top, requiredTop);
-        next.pendingTopMargin = next.activeTopMargin;
+        next.activeHeaderDistance = headerDistance;
+        next.pendingHeaderDistance = headerDistance;
       }
       if (block.margins?.footer !== undefined) {
-        const footerDistance = Math.max(0, block.margins.footer);
         next.activeFooterDistance = footerDistance;
         next.pendingFooterDistance = footerDistance;
-        // Account for actual footer content height
+      }
+      if (block.margins?.top !== undefined || block.margins?.header !== undefined) {
+        const requiredTop = maxHeaderContentHeight > 0 ? headerDistance + maxHeaderContentHeight : headerDistance;
+        next.activeTopMargin = Math.max(sectionTop, requiredTop);
+        next.pendingTopMargin = next.activeTopMargin;
+      }
+      if (block.margins?.bottom !== undefined || block.margins?.footer !== undefined) {
         const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
-        next.activeBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
+        next.activeBottomMargin = Math.max(sectionBottom, requiredBottom);
         next.pendingBottomMargin = next.activeBottomMargin;
+      }
+      if (block.margins?.left !== undefined) {
+        const leftMargin = Math.max(0, block.margins.left);
+        next.activeLeftMargin = leftMargin;
+        next.pendingLeftMargin = leftMargin;
+      }
+      if (block.margins?.right !== undefined) {
+        const rightMargin = Math.max(0, block.margins.right);
+        next.activeRightMargin = rightMargin;
+        next.pendingRightMargin = rightMargin;
       }
       if (block.columns) {
         next.activeColumns = { count: block.columns.count, gap: block.columns.gap };
@@ -446,8 +468,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     const headerPx = block.margins?.header;
     const footerPx = block.margins?.footer;
     const topPx = block.margins?.top;
+    const bottomPx = block.margins?.bottom;
+    const leftPx = block.margins?.left;
+    const rightPx = block.margins?.right;
     const nextTop = next.pendingTopMargin ?? next.activeTopMargin;
     const nextBottom = next.pendingBottomMargin ?? next.activeBottomMargin;
+    const nextLeft = next.pendingLeftMargin ?? next.activeLeftMargin;
+    const nextRight = next.pendingRightMargin ?? next.activeRightMargin;
     const nextHeader = next.pendingHeaderDistance ?? next.activeHeaderDistance;
     const nextFooter = next.pendingFooterDistance ?? next.activeFooterDistance;
 
@@ -458,7 +485,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     // Account for actual header content height when calculating top margin
     // Recalculate if either top or header margin changes
     if (typeof headerPx === 'number' || typeof topPx === 'number') {
-      const sectionTop = topPx ?? baseMargins.top;
+      const sectionTop = typeof topPx === 'number' ? Math.max(0, topPx) : baseMargins.top;
       const sectionHeader = next.pendingHeaderDistance;
       const requiredTop = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
       next.pendingTopMargin = Math.max(sectionTop, requiredTop);
@@ -467,13 +494,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     }
 
     // Account for actual footer content height when calculating bottom margin
-    if (typeof footerPx === 'number') {
+    if (typeof footerPx === 'number' || typeof bottomPx === 'number') {
       const sectionFooter = next.pendingFooterDistance;
+      const sectionBottom = typeof bottomPx === 'number' ? Math.max(0, bottomPx) : baseMargins.bottom;
       const requiredBottom = maxFooterContentHeight > 0 ? sectionFooter + maxFooterContentHeight : sectionFooter;
-      next.pendingBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
+      next.pendingBottomMargin = Math.max(sectionBottom, requiredBottom);
     } else {
       next.pendingBottomMargin = nextBottom;
     }
+    next.pendingLeftMargin = typeof leftPx === 'number' ? Math.max(0, leftPx) : nextLeft;
+    next.pendingRightMargin = typeof rightPx === 'number' ? Math.max(0, rightPx) : nextRight;
     if (block.pageSize) next.pendingPageSize = { w: block.pageSize.w, h: block.pageSize.h };
     if (block.orientation) next.pendingOrientation = block.orientation;
     const sectionType = block.type ?? 'continuous';
@@ -579,7 +609,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let pendingSectionIndex: number | null = null;
 
   const paginator = createPaginator({
-    margins: { left: margins.left, right: margins.right },
+    margins: paginatorMargins,
     getActiveTopMargin: () => activeTopMargin,
     getActiveBottomMargin: () => activeBottomMargin,
     getActiveHeaderDistance: () => activeHeaderDistance,
@@ -595,8 +625,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const applied = applyPendingToActive({
           activeTopMargin,
           activeBottomMargin,
+          activeLeftMargin,
+          activeRightMargin,
           pendingTopMargin,
           pendingBottomMargin,
+          pendingLeftMargin,
+          pendingRightMargin,
           activeHeaderDistance,
           activeFooterDistance,
           pendingHeaderDistance,
@@ -611,8 +645,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         });
         activeTopMargin = applied.activeTopMargin;
         activeBottomMargin = applied.activeBottomMargin;
+        activeLeftMargin = applied.activeLeftMargin;
+        activeRightMargin = applied.activeRightMargin;
         pendingTopMargin = applied.pendingTopMargin;
         pendingBottomMargin = applied.pendingBottomMargin;
+        pendingLeftMargin = applied.pendingLeftMargin;
+        pendingRightMargin = applied.pendingRightMargin;
         activeHeaderDistance = applied.activeHeaderDistance;
         activeFooterDistance = applied.activeFooterDistance;
         pendingHeaderDistance = applied.pendingHeaderDistance;
@@ -624,6 +662,14 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         activeOrientation = applied.activeOrientation;
         pendingOrientation = applied.pendingOrientation;
         cachedColumnsState.state = null;
+        paginatorMargins.left = activeLeftMargin;
+        paginatorMargins.right = activeRightMargin;
+        const contentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
+        floatManager.setLayoutContext(
+          normalizeColumns(activeColumns, contentWidth),
+          { left: activeLeftMargin, right: activeRightMargin },
+          activePageSize.w,
+        );
         // Apply pending numbering
         if (pendingNumbering) {
           if (pendingNumbering.format) activeNumberFormat = pendingNumbering.format;
@@ -688,7 +734,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   } = { state: null, constraintIndex: -2, contentWidth: -1, colsConfig: null, normalized: null };
 
   const getCurrentColumns = (): NormalizedColumns => {
-    const currentContentWidth = activePageSize.w - (margins.left + margins.right);
+    const currentContentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
     const state = states[states.length - 1] ?? null;
     const colsConfig = state ? getActiveColumnsForState(state) : activeColumns;
     const constraintIndex = state ? state.activeConstraintIndex : -1;
@@ -743,6 +789,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
     // Invalidate columns cache to ensure recalculation with new region
     cachedColumnsState.state = null;
+
+    const contentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
+    floatManager.setLayoutContext(
+      normalizeColumns(activeColumns, contentWidth),
+      { left: activeLeftMargin, right: activeRightMargin },
+      activePageSize.w,
+    );
 
     // Note: We do NOT reset cursorY - content continues from current position
     // This creates the mid-page region effect
@@ -817,6 +870,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
         activeBottomMargin = Math.max(margins.bottom, requiredBottomMargin);
         pendingBottomMargin = activeBottomMargin;
+      }
+      if (block.margins?.left !== undefined) {
+        const leftMargin = Math.max(0, block.margins.left);
+        activeLeftMargin = leftMargin;
+        pendingLeftMargin = leftMargin;
+      }
+      if (block.margins?.right !== undefined) {
+        const rightMargin = Math.max(0, block.margins.right);
+        activeRightMargin = rightMargin;
+        pendingRightMargin = rightMargin;
       }
       if (block.columns) {
         activeColumns = { count: block.columns.count, gap: block.columns.gap };
@@ -1037,10 +1100,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       if (alignV === 'top') {
         anchorY = offsetV;
       } else if (alignV === 'bottom') {
-        const pageHeight = contentBottom + margins.bottom;
+        const pageHeight = contentBottom + (state.page.margins?.bottom ?? activeBottomMargin);
         anchorY = pageHeight - imageHeight + offsetV;
       } else if (alignV === 'center') {
-        const pageHeight = contentBottom + margins.bottom;
+        const pageHeight = contentBottom + (state.page.margins?.bottom ?? activeBottomMargin);
         anchorY = (pageHeight - imageHeight) / 2 + offsetV;
       } else {
         anchorY = offsetV;
@@ -1055,12 +1118,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       ? computeAnchorX(
           entry.block.anchor,
           state.columnIndex,
-          normalizeColumns(activeColumns, contentWidth),
+          normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
           entry.measure.width,
-          { left: margins.left, right: margins.right },
+          { left: activeLeftMargin, right: activeRightMargin },
           activePageSize.w,
         )
-      : margins.left;
+      : activeLeftMargin;
 
     // Register with float manager so all paragraphs see this exclusion
     // NOTE: We only register exclusion zones here, NOT fragments.
@@ -1117,8 +1180,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       const sectionState: SectionState = {
         activeTopMargin,
         activeBottomMargin,
+        activeLeftMargin,
+        activeRightMargin,
         pendingTopMargin,
         pendingBottomMargin,
+        pendingLeftMargin,
+        pendingRightMargin,
         activeHeaderDistance,
         activeFooterDistance,
         pendingHeaderDistance,
@@ -1157,8 +1224,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       // Sync updated section state
       activeTopMargin = updatedState.activeTopMargin;
       activeBottomMargin = updatedState.activeBottomMargin;
+      activeLeftMargin = updatedState.activeLeftMargin;
+      activeRightMargin = updatedState.activeRightMargin;
       pendingTopMargin = updatedState.pendingTopMargin;
       pendingBottomMargin = updatedState.pendingBottomMargin;
+      pendingLeftMargin = updatedState.pendingLeftMargin;
+      pendingRightMargin = updatedState.pendingRightMargin;
       activeHeaderDistance = updatedState.activeHeaderDistance;
       activeFooterDistance = updatedState.activeFooterDistance;
       pendingHeaderDistance = updatedState.pendingHeaderDistance;
@@ -1358,8 +1429,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
               pageMargins: {
                 top: activeTopMargin,
                 bottom: activeBottomMargin,
-                left: margins.left,
-                right: margins.right,
+                left: activeLeftMargin,
+                right: activeRightMargin,
               },
               columns: getCurrentColumns(),
               placedAnchoredIds,
@@ -1391,9 +1462,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const cols = getCurrentColumns();
         let maxWidth: number;
         if (relativeFrom === 'page') {
-          maxWidth = cols.count === 1 ? activePageSize.w - margins.left - margins.right : activePageSize.w;
+          maxWidth = cols.count === 1 ? activePageSize.w - (activeLeftMargin + activeRightMargin) : activePageSize.w;
         } else if (relativeFrom === 'margin') {
-          maxWidth = activePageSize.w - margins.left - margins.right;
+          maxWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
         } else {
           maxWidth = cols.width;
         }
