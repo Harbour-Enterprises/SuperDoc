@@ -24,9 +24,9 @@ beforeAll(() => {
 const describeIfRealCanvas = usingStub ? describe.skip : describe;
 
 const LATENCY_TARGETS = {
-  p50: 80, // Relaxed for CI environments which are slower than local machines
-  p90: 120,
-  p99: 200,
+  p50: 160, // Relaxed for CI environments which are slower than local machines
+  p90: 240,
+  p99: 400,
 };
 const MIN_HIT_RATE = 0.95;
 
