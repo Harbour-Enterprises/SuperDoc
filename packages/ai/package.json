@@ -50,6 +50,7 @@
     "@types/node": "catalog:",
     "@typescript-eslint/eslint-plugin": "catalog:",
     "@typescript-eslint/parser": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
     "eslint": "catalog:",
     "prosemirror-model": "catalog:",
     "prosemirror-state": "catalog:",
@@ -57,7 +58,8 @@
     "superdoc": "workspace:",
     "tsup": "^8.5.1",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "vue": "catalog:"
   },
   "files": [
     "dist",

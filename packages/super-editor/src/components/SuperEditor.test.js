@@ -75,7 +75,7 @@ vi.mock('@extensions/index.js', () => ({
   getStarterExtensions: getStarterExtensionsMock,
 }));
 
-vi.mock('@/index.js', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   Editor: EditorConstructor,
 }));
 
