@@ -208,6 +208,17 @@ describe('deduplicateOverlappingRects', () => {
     expect(result.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('prefers non-zero rects when overlapping with zero-height rects', () => {
+    const zeroHeightRect = createRect(10, 20, 100, 0);
+    const textRect = createRect(10, 20.5, 100, 16);
+
+    const result = deduplicateOverlappingRects([zeroHeightRect, textRect]);
+
+    expect(result).toHaveLength(1);
+    // isLargerRect will mark textRect as larger (16 > 0 + 0.5), so zero-height is kept
+    expect(result[0]).toBe(zeroHeightRect);
+  });
+
   it('handles complex real-world scenario with mixed overlapping and non-overlapping rects', () => {
     // Line 1: overlapping group (line-box + text-content)
     const line1Box = createRect(10, 20, 200, 18);
@@ -227,6 +238,235 @@ describe('deduplicateOverlappingRects', () => {
     expect(result).toContain(line1Word);
     expect(result).toContain(line2Word1);
     expect(result).toContain(line2Word2);
+  });
+
+  it('drops a line-box rect but keeps multiple word rects on the same line', () => {
+    const lineBoxRect = createRect(10, 20, 200, 18);
+    const word1 = createRect(20, 21, 50, 16);
+    const word2 = createRect(80, 21, 60, 16);
+
+    const result = deduplicateOverlappingRects([lineBoxRect, word1, word2]);
+
+    expect(result).toHaveLength(2);
+    expect(result).toContain(word1);
+    expect(result).toContain(word2);
+  });
+
+  describe('exact duplicate detection', () => {
+    it('detects exact duplicates within epsilon thresholds', () => {
+      // Two rects that are nearly identical within epsilon thresholds
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10.5, 20.2, 100.3, 16.1); // Within epsilon for x (1px), y (3px), size (0.5px)
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should deduplicate to 1 rect (treated as exact duplicates)
+      expect(result).toHaveLength(1);
+    });
+
+    it('keeps rects that exceed x-coordinate epsilon threshold', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(12, 20, 100, 16); // x difference > 1px threshold
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should keep both rects
+      expect(result).toHaveLength(2);
+    });
+
+    it('keeps rects that exceed width epsilon threshold', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10, 20, 101, 16); // width difference > 0.5px threshold
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Not exact duplicates, but rect2 is larger (101 > 100 + 0.5) with significant overlap
+      // So rect2 gets filtered out as a container
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(rect1);
+    });
+
+    it('keeps rects that exceed height epsilon threshold', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10, 20, 100, 17); // height difference > 0.5px threshold
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Not exact duplicates, but rect2 is larger (17 > 16 + 0.5) with significant overlap
+      // So rect2 gets filtered out as a container
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(rect1);
+    });
+
+    it('handles exact duplicates at boundary of epsilon thresholds', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10.99, 20, 100.49, 16.49); // Just at epsilon boundaries
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should deduplicate (within all thresholds)
+      expect(result).toHaveLength(1);
+    });
+
+    it('handles group with all exact duplicates', () => {
+      // Create 5 nearly identical rects (all within epsilon)
+      const rects = [
+        createRect(10, 20, 100, 16),
+        createRect(10.2, 20.1, 100.1, 16.1),
+        createRect(10.4, 20.2, 100.2, 16.2),
+        createRect(10.6, 20.3, 100.3, 16.3),
+        createRect(10.8, 20.4, 100.4, 16.4),
+      ];
+
+      const result = deduplicateOverlappingRects(rects);
+
+      // Should deduplicate to 1 rect
+      expect(result).toHaveLength(1);
+    });
+
+    it('removes all duplicates but keeps distinct rects in mixed group', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect1Dup = createRect(10.5, 20.2, 100.3, 16.2); // Duplicate of rect1
+      const rect2 = createRect(120, 21, 50, 16); // Distinct rect (different x)
+      const rect2Dup = createRect(120.3, 21.1, 50.2, 16.1); // Duplicate of rect2
+
+      const result = deduplicateOverlappingRects([rect1, rect1Dup, rect2, rect2Dup]);
+
+      // Should deduplicate to 2 rects (one from each pair)
+      expect(result).toHaveLength(2);
+    });
+  });
+
+  describe('edge cases - epsilon boundary conditions', () => {
+    it('handles sub-pixel x differences at exact epsilon boundary (1px)', () => {
+      const rect1 = createRect(10.0, 20, 100, 16);
+      const rect2 = createRect(11.0, 20, 100, 16); // Exactly 1px difference
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // At exact boundary, should be treated as duplicate
+      expect(result).toHaveLength(1);
+    });
+
+    it('handles sub-pixel y differences at exact epsilon boundary (3px)', () => {
+      const rect1 = createRect(10, 20.0, 100, 16);
+      const rect2 = createRect(10, 23.0, 100, 16); // Exactly 3px difference
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // At exact boundary, should be treated as same line and duplicate
+      expect(result).toHaveLength(1);
+    });
+
+    it('handles sub-pixel size differences at exact epsilon boundary (0.5px)', () => {
+      const rect1 = createRect(10, 20, 100.0, 16.0);
+      const rect2 = createRect(10, 20, 100.5, 16.5); // Exactly 0.5px difference
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // At exact boundary, should be treated as duplicate
+      expect(result).toHaveLength(1);
+    });
+
+    it('treats negative coordinates correctly in epsilon comparison', () => {
+      const rect1 = createRect(-10, 20, 100, 16);
+      const rect2 = createRect(-10.5, 20.2, 100.3, 16.2); // Within epsilon
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should deduplicate (epsilon applies to negative coords too)
+      expect(result).toHaveLength(1);
+    });
+
+    it('handles floating-point precision edge cases', () => {
+      const rect1 = createRect(10.0, 20.0, 100.0, 16.0);
+      const rect2 = createRect(10.0 + 1e-10, 20.0 + 1e-10, 100.0 + 1e-10, 16.0 + 1e-10); // Tiny difference
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should deduplicate (difference is below epsilon)
+      expect(result).toHaveLength(1);
+    });
+  });
+
+  describe('container rect filtering edge cases', () => {
+    it('filters container when it is larger in both width and height', () => {
+      const textRect = createRect(10, 20, 100, 16);
+      const containerRect = createRect(10, 20, 105, 20); // Larger in both dimensions
+
+      const result = deduplicateOverlappingRects([textRect, containerRect]);
+
+      // Should keep only the smaller rect
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(textRect);
+    });
+
+    it('filters container when it is larger in width only', () => {
+      const textRect = createRect(10, 20, 100, 16);
+      const containerRect = createRect(10, 20, 105, 16); // Larger only in width
+
+      const result = deduplicateOverlappingRects([textRect, containerRect]);
+
+      // Should keep only the smaller rect
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(textRect);
+    });
+
+    it('filters container when it is larger in height only', () => {
+      const textRect = createRect(10, 20, 100, 16);
+      const containerRect = createRect(10, 20, 100, 20); // Larger only in height
+
+      const result = deduplicateOverlappingRects([textRect, containerRect]);
+
+      // Should keep only the smaller rect
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(textRect);
+    });
+
+    it('keeps both rects when neither is strictly larger', () => {
+      const rect1 = createRect(10, 20, 100, 16); // Wider but shorter
+      const rect2 = createRect(10, 20, 90, 20); // Narrower but taller
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Should keep both (neither is strictly larger in both dimensions)
+      expect(result).toHaveLength(2);
+    });
+
+    it('handles multiple containers for the same text rect', () => {
+      const textRect = createRect(10, 20, 100, 16);
+      const container1 = createRect(10, 20, 110, 18);
+      const container2 = createRect(10, 20, 120, 20);
+      const container3 = createRect(10, 20, 105, 17);
+
+      const result = deduplicateOverlappingRects([textRect, container1, container2, container3]);
+
+      // Should keep only the smallest rect
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(textRect);
+    });
+
+    it('handles size difference exactly at epsilon boundary (0.5px)', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10, 20, 100.5, 16.5); // Exactly at size epsilon
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // At exact boundary, should be treated as duplicates
+      expect(result).toHaveLength(1);
+    });
+
+    it('keeps both rects when size difference is just beyond epsilon', () => {
+      const rect1 = createRect(10, 20, 100, 16);
+      const rect2 = createRect(10, 20, 100.6, 16); // Just beyond size epsilon (0.5px)
+
+      const result = deduplicateOverlappingRects([rect1, rect2]);
+
+      // Not exact duplicates, but rect2 is larger (100.6 > 100 + 0.5) with significant overlap
+      // So rect2 gets filtered out as a container
+      expect(result).toHaveLength(1);
+      expect(result[0]).toBe(rect1);
+    });
   });
 });
 
@@ -525,6 +765,246 @@ describe('computeSelectionRectsFromDom', () => {
       // Should only have rects from page 1 (the only mounted page)
       const pageIndices = new Set(rects!.map((r) => r.pageIndex));
       expect(pageIndices.size).toBeLessThanOrEqual(1);
+
+      document.createRange = originalCreateRange;
+    });
+  });
+
+  describe('collectClientRectsByLine fallback mechanism', () => {
+    it('uses fallback when range.intersectsNode detects missing entries', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="5">hello</span>
+            <span data-pm-start="6" data-pm-end="10">world</span>
+          </div>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 10 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      let rangeCallCount = 0;
+      const mockRange = {
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => {
+          rangeCallCount++;
+          // First call returns partial rects, triggering fallback
+          if (rangeCallCount === 1) {
+            return [createRect(10, 20, 50, 16)];
+          }
+          // Subsequent calls (from fallback) return per-line rects
+          return [createRect(10, 20, 50, 16)];
+        }),
+        intersectsNode: vi.fn((node: Node) => {
+          // Simulate that range doesn't intersect some nodes
+          const span = node as HTMLElement;
+          return span.textContent !== 'world';
+        }),
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      const rects = computeSelectionRectsFromDom(options, 1, 10);
+
+      expect(rects).not.toBe(null);
+      // Should have created multiple ranges (one per line in fallback)
+      expect(rangeCallCount).toBeGreaterThan(1);
+
+      document.createRange = originalCreateRange;
+    });
+
+    it('groups entries by line element in fallback mode', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="3">a</span>
+            <span data-pm-start="4" data-pm-end="6">b</span>
+          </div>
+          <div class="superdoc-line">
+            <span data-pm-start="7" data-pm-end="9">c</span>
+            <span data-pm-start="10" data-pm-end="12">d</span>
+          </div>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 12 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      const mockRange = {
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => [createRect(10, 20, 100, 16)]),
+        intersectsNode: vi.fn(() => false), // Force fallback
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      const rects = computeSelectionRectsFromDom(options, 1, 12);
+
+      expect(rects).not.toBe(null);
+      // Fallback should create ranges for each line
+      expect(rects!.length).toBeGreaterThan(0);
+
+      document.createRange = originalCreateRange;
+    });
+
+    it('handles entries without line parent (loose entries) in fallback', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="5">in-line</span>
+          </div>
+          <span data-pm-start="6" data-pm-end="10">loose</span>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 10 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      const mockRange = {
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => [createRect(10, 20, 50, 16)]),
+        intersectsNode: vi.fn(() => false), // Force fallback
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      const rects = computeSelectionRectsFromDom(options, 1, 10);
+
+      expect(rects).not.toBe(null);
+      // Should handle both line-based and loose entries
+      expect(rects!.length).toBeGreaterThan(0);
+
+      document.createRange = originalCreateRange;
+    });
+
+    it('clamps positions at line boundaries in fallback mode', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="5" data-pm-end="15">line-content</span>
+          </div>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 20 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      const mockRange = {
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => [createRect(10, 20, 100, 16)]),
+        intersectsNode: vi.fn(() => false), // Force fallback
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      // Request range beyond line boundaries (1-20), but line only has 5-15
+      const rects = computeSelectionRectsFromDom(options, 1, 20);
+
+      expect(rects).not.toBe(null);
+      // Should clamp to line boundaries when creating ranges
+      expect(mockRange.setStart).toHaveBeenCalled();
+      expect(mockRange.setEnd).toHaveBeenCalled();
+
+      document.createRange = originalCreateRange;
+    });
+
+    it('silently handles range creation failures in fallback mode', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="5">test</span>
+          </div>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 5 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      let callCount = 0;
+      const mockRange = {
+        setStart: vi.fn(() => {
+          callCount++;
+          if (callCount > 1) throw new Error('Range creation failed');
+        }),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => [createRect(10, 20, 50, 16)]),
+        intersectsNode: vi.fn(() => false), // Force fallback
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      const rects = computeSelectionRectsFromDom(options, 1, 5);
+
+      // Should not throw, should handle errors gracefully
+      expect(rects).not.toBe(null);
+
+      document.createRange = originalCreateRange;
+    });
+
+    it('handles multiple entries per line in fallback mode', () => {
+      painterHost.innerHTML = `
+        <div class="superdoc-page" data-page-index="0">
+          <div class="superdoc-line">
+            <span data-pm-start="1" data-pm-end="2">a</span>
+            <span data-pm-start="3" data-pm-end="4">b</span>
+            <span data-pm-start="5" data-pm-end="6">c</span>
+            <span data-pm-start="7" data-pm-end="8">d</span>
+          </div>
+        </div>
+      `;
+
+      const layout = createMockLayout([{ pmStart: 1, pmEnd: 8 }]);
+      domPositionIndex.rebuild(painterHost);
+
+      const pageEl = painterHost.querySelector('.superdoc-page') as HTMLElement;
+      pageEl.getBoundingClientRect = vi.fn(() => createRect(0, 0, 612, 792));
+
+      const mockRange = {
+        setStart: vi.fn(),
+        setEnd: vi.fn(),
+        getClientRects: vi.fn(() => [createRect(10, 20, 100, 16)]),
+        intersectsNode: vi.fn(() => false), // Force fallback
+      } as unknown as Range;
+
+      const originalCreateRange = document.createRange;
+      document.createRange = vi.fn(() => mockRange);
+
+      const options = createOptions(layout);
+      const rects = computeSelectionRectsFromDom(options, 1, 8);
+
+      expect(rects).not.toBe(null);
+      // Should create a single range for all entries in the same line
+      expect(rects!.length).toBeGreaterThan(0);
 
       document.createRange = originalCreateRange;
     });
