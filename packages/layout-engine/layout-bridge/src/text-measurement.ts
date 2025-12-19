@@ -35,6 +35,31 @@ const SPACE_CHARS = SHARED_SPACE_CHARS;
 
 const isTabRun = (run: Run): run is TabRun => run?.kind === 'tab';
 
+const isWordChar = (char: string): boolean => {
+  if (!char) return false;
+  const code = char.charCodeAt(0);
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || char === "'";
+};
+
+const capitalizeText = (text: string): string => {
+  if (!text) return text;
+  let result = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const prevChar = i > 0 ? text[i - 1] : '';
+    const ch = text[i];
+    result += isWordChar(ch) && !isWordChar(prevChar) ? ch.toUpperCase() : ch;
+  }
+  return result;
+};
+
+const applyTextTransform = (text: string, transform: Run['textTransform'] | undefined): string => {
+  if (!text || !transform || transform === 'none') return text;
+  if (transform === 'uppercase') return text.toUpperCase();
+  if (transform === 'lowercase') return text.toLowerCase();
+  if (transform === 'capitalize') return capitalizeText(text);
+  return text;
+};
+
 /**
  * Get or create the measurement canvas context.
  * Lazy initialization to avoid creating canvas in non-browser environments.
@@ -413,6 +438,7 @@ export function measureCharacterX(
         ? ''
         : (run.text ?? '');
     const runLength = text.length;
+    const displayText = applyTextTransform(text, run.textTransform);
 
     // If target character is within this run
     if (currentCharOffset + runLength >= charOffset) {
@@ -420,11 +446,11 @@ export function measureCharacterX(
       ctx.font = getRunFontString(run);
 
       // Measure text up to the target character
-      const textUpToTarget = text.slice(0, offsetInRun);
+      const textUpToTarget = displayText.slice(0, offsetInRun);
 
       const measured = ctx.measureText(textUpToTarget);
       const spacingWidth = computeLetterSpacingWidth(run, offsetInRun, runLength);
-      const spacesInPortion = justify.extraPerSpace !== 0 ? countSpaces(textUpToTarget) : 0;
+      const spacesInPortion = justify.extraPerSpace !== 0 ? countSpaces(text.slice(0, offsetInRun)) : 0;
       return (
         alignmentOffset +
         currentX +
@@ -436,7 +462,7 @@ export function measureCharacterX(
 
     // Measure entire run and advance
     ctx.font = getRunFontString(run);
-    const measured = ctx.measureText(text);
+    const measured = ctx.measureText(displayText);
     const runLetterSpacing = computeLetterSpacingWidth(run, runLength, runLength);
     const spacesInRun = justify.extraPerSpace !== 0 ? countSpaces(text) : 0;
     currentX += measured.width + runLetterSpacing + justify.extraPerSpace * spacesInRun;
@@ -517,8 +543,9 @@ function measureCharacterXSegmentBased(
 
       // For text runs, measure up to the target character
       const text = run.text ?? '';
-      const segmentText = text.slice(segment.fromChar, segment.toChar);
-      const textUpToTarget = segmentText.slice(0, offsetInSegment);
+      const displayText = applyTextTransform(text, run.textTransform);
+      const displaySegmentText = displayText.slice(segment.fromChar, segment.toChar);
+      const textUpToTarget = displaySegmentText.slice(0, offsetInSegment);
 
       ctx.font = getRunFontString(run);
       const measured = ctx.measureText(textUpToTarget);
@@ -718,6 +745,7 @@ export function findCharacterAtX(
         ? ''
         : (run.text ?? '');
     const runLength = text.length;
+    const displayText = applyTextTransform(text, run.textTransform);
 
     if (runLength === 0) continue;
 
@@ -725,9 +753,9 @@ export function findCharacterAtX(
 
     // Measure each character in the run to find the closest boundary
     for (let i = 0; i <= runLength; i++) {
-      const textUpToChar = text.slice(0, i);
+      const textUpToChar = displayText.slice(0, i);
       const measured = ctx.measureText(textUpToChar);
-      const spacesInPortion = justify.extraPerSpace > 0 ? countSpaces(textUpToChar) : 0;
+      const spacesInPortion = justify.extraPerSpace > 0 ? countSpaces(text.slice(0, i)) : 0;
       const charX =
         currentX +
         measured.width +
@@ -747,7 +775,7 @@ export function findCharacterAtX(
         }
 
         // Check which boundary is closer
-        const prevText = text.slice(0, i - 1);
+        const prevText = displayText.slice(0, i - 1);
         const prevMeasured = ctx.measureText(prevText);
         const prevX = currentX + prevMeasured.width + computeLetterSpacingWidth(run, i - 1, runLength);
 
@@ -765,7 +793,7 @@ export function findCharacterAtX(
     }
 
     // Advance past this run
-    const measured = ctx.measureText(text);
+    const measured = ctx.measureText(displayText);
     const runLetterSpacing = computeLetterSpacingWidth(run, runLength, runLength);
     const spacesInRun = justify.extraPerSpace > 0 ? countSpaces(text) : 0;
     currentX += measured.width + runLetterSpacing + justify.extraPerSpace * spacesInRun;

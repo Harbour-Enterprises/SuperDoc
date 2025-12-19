@@ -1,4 +1,6 @@
 import type { ParagraphBlock, ParagraphIndent, WordLayoutConfig } from '@superdoc/contracts';
+import { LIST_MARKER_GAP } from '@superdoc/common/layout-constants';
+import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 
 /**
  * Utilities for list item detection and text indent calculation.
@@ -231,17 +233,19 @@ export function calculateTextStartIndent(params: TextIndentCalculationParams): n
   let indentAdjust = paraIndentLeft;
 
   if (isListItem && isFirstLine && isFirstLineIndentMode) {
-    // First-line indent mode: text starts at textStartPx (after marker + tab)
-    // IMPORTANT: Priority must match the painter (renderer.ts) which prefers marker.textStartX
-    // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
+    // First-line indent mode: text starts after marker + tab/space, following painter rules.
+    const resolvedTextStart = resolveListTextStartPx(
+      wordLayout,
+      paraIndentLeft,
+      Math.max(firstLineIndent, 0),
+      Math.max(hangingIndent, 0),
+      () => markerWidth, // Use provided markerWidth since we don't have canvas access here
+    );
     const textStartFallback = paraIndentLeft + Math.max(firstLineIndent, 0) + markerWidth;
-    const markerTextStartX = (wordLayout as { marker?: { textStartX?: unknown } } | undefined)?.marker?.textStartX;
     indentAdjust =
-      typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
-        ? markerTextStartX
-        : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
-          ? wordLayout.textStartPx
-          : textStartFallback;
+      typeof resolvedTextStart === 'number' && Number.isFinite(resolvedTextStart)
+        ? resolvedTextStart
+        : textStartFallback;
   } else if (isFirstLine && !isListItem) {
     // Non-list paragraph: apply first-line offset on the first line
     indentAdjust += firstLineOffset;

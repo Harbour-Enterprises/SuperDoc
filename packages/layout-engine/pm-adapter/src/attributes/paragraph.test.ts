@@ -937,6 +937,29 @@ describe('computeParagraphAttrs', () => {
     expect(result?.indent?.left).toBeCloseTo(24);
   });
 
+  it('should not force first-line indent mode when paragraph overrides numbering firstLine', () => {
+    const para: PMNode = {
+      attrs: {
+        indent: { left: 0, firstLine: 0 },
+        numberingProperties: {
+          numId: 1,
+          ilvl: 0,
+          resolvedLevelIndent: { left: 0, firstLine: 2160 },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+
+    expect(result?.wordLayout?.firstLineIndentMode).not.toBe(true);
+    expect(result?.wordLayout?.textStartPx).toBe(0);
+    expect(result?.wordLayout?.marker?.textStartX).toBe(0);
+  });
+
   it('should normalize paragraph borders', () => {
     const para: PMNode = {
       attrs: {
