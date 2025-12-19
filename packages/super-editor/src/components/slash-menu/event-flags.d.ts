@@ -12,4 +12,7 @@ declare global {
   }
 }
 
-export {};
+/**
+ * Flag name used to mark context menu events that have been handled by the SlashMenu component.
+ */
+export declare const SLASH_MENU_HANDLED_FLAG: string;

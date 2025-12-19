@@ -1,6 +1,5 @@
 import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
 import { SLASH_MENU_HANDLED_FLAG } from '../components/slash-menu/event-flags.js';
-import type {} from '../components/slash-menu/event-flags.js';
 
 export class PresentationInputBridge {
   #windowRoot: Window;
@@ -265,7 +264,7 @@ export class PresentationInputBridge {
    */
   #forwardContextMenu(event: MouseEvent) {
     // Skip forwarding if SlashMenu has already handled this event
-    const handledBySlashMenu = Boolean(event[SLASH_MENU_HANDLED_FLAG]);
+    const handledBySlashMenu = Boolean((event as unknown as Record<string, unknown>)[SLASH_MENU_HANDLED_FLAG]);
     if (handledBySlashMenu) {
       return;
     }

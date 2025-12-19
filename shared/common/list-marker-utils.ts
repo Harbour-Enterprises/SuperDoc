@@ -216,16 +216,20 @@ export function resolveListTextStartPx(
   }
 
   // Fallback to marker box width if measurement failed or unavailable
-  if (!Number.isFinite(markerTextWidth) || markerTextWidth < 0) {
+  if (!Number.isFinite(markerTextWidth) || (markerTextWidth !== undefined && markerTextWidth < 0)) {
     markerTextWidth = markerBoxWidth;
   }
 
-  // Ensure non-negative width
-  markerTextWidth = Math.max(0, markerTextWidth);
+  // Ensure non-negative width (markerTextWidth is guaranteed to be a number here)
+  const finalMarkerTextWidth = Math.max(0, markerTextWidth ?? 0);
 
   // Step 3: Determine marker start position
   let markerStartPos: number;
-  if (wordLayout?.firstLineIndentMode === true && Number.isFinite(marker.markerX)) {
+  if (
+    wordLayout?.firstLineIndentMode === true &&
+    typeof marker.markerX === 'number' &&
+    Number.isFinite(marker.markerX)
+  ) {
     // First-line indent mode: marker positioned at markerX
     markerStartPos = marker.markerX;
   } else {
@@ -239,17 +243,17 @@ export function resolveListTextStartPx(
   }
 
   // Current horizontal position after marker
-  const currentPos = markerStartPos + markerTextWidth;
+  const currentPos = markerStartPos + finalMarkerTextWidth;
   const suffix = marker.suffix ?? 'tab';
 
   // Step 4: Handle 'space' suffix
   if (suffix === 'space') {
-    return markerStartPos + markerTextWidth + SPACE_SUFFIX_GAP_PX;
+    return markerStartPos + finalMarkerTextWidth + SPACE_SUFFIX_GAP_PX;
   }
 
   // Step 5: Handle 'nothing' suffix
   if (suffix === 'nothing') {
-    return markerStartPos + markerTextWidth;
+    return markerStartPos + finalMarkerTextWidth;
   }
 
   // Step 6: Handle 'tab' suffix with justification
@@ -261,7 +265,7 @@ export function resolveListTextStartPx(
       typeof marker.gutterWidthPx === 'number' && Number.isFinite(marker.gutterWidthPx) && marker.gutterWidthPx > 0
         ? marker.gutterWidthPx
         : LIST_MARKER_GAP;
-    return markerStartPos + markerTextWidth + Math.max(gutterWidth, LIST_MARKER_GAP);
+    return markerStartPos + finalMarkerTextWidth + Math.max(gutterWidth, LIST_MARKER_GAP);
   }
 
   // Step 7: Left justification with 'tab' suffix in first-line indent mode
@@ -301,7 +305,7 @@ export function resolveListTextStartPx(
       tabWidth = LIST_MARKER_GAP;
     }
 
-    return markerStartPos + markerTextWidth + tabWidth;
+    return markerStartPos + finalMarkerTextWidth + tabWidth;
   }
 
   // Step 8: Left justification with 'tab' suffix in standard mode
@@ -316,5 +320,5 @@ export function resolveListTextStartPx(
     tabWidth = LIST_MARKER_GAP;
   }
 
-  return markerStartPos + markerTextWidth + tabWidth;
+  return markerStartPos + finalMarkerTextWidth + tabWidth;
 }

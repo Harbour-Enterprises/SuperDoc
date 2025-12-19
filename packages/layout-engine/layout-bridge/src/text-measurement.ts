@@ -52,7 +52,10 @@ const capitalizeText = (text: string): string => {
   return result;
 };
 
-const applyTextTransform = (text: string, transform: Run['textTransform'] | undefined): string => {
+const applyTextTransform = (
+  text: string,
+  transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none' | undefined,
+): string => {
   if (!text || !transform || transform === 'none') return text;
   if (transform === 'uppercase') return text.toUpperCase();
   if (transform === 'lowercase') return text.toLowerCase();
@@ -438,7 +441,16 @@ export function measureCharacterX(
         ? ''
         : (run.text ?? '');
     const runLength = text.length;
-    const displayText = applyTextTransform(text, run.textTransform);
+    // Only TextRun and TabRun have textTransform (via RunMarks)
+    const transform =
+      isTabRun(run) ||
+      'src' in run ||
+      run.kind === 'lineBreak' ||
+      run.kind === 'break' ||
+      run.kind === 'fieldAnnotation'
+        ? undefined
+        : run.textTransform;
+    const displayText = applyTextTransform(text, transform);
 
     // If target character is within this run
     if (currentCharOffset + runLength >= charOffset) {
@@ -543,7 +555,10 @@ function measureCharacterXSegmentBased(
 
       // For text runs, measure up to the target character
       const text = run.text ?? '';
-      const displayText = applyTextTransform(text, run.textTransform);
+      // Only TextRun and TabRun have textTransform (via RunMarks)
+      // At this point, we've already filtered out TabRun, ImageRun, etc., so run must be TextRun
+      const transform = 'textTransform' in run ? run.textTransform : undefined;
+      const displayText = applyTextTransform(text, transform);
       const displaySegmentText = displayText.slice(segment.fromChar, segment.toChar);
       const textUpToTarget = displaySegmentText.slice(0, offsetInSegment);
 
@@ -745,7 +760,16 @@ export function findCharacterAtX(
         ? ''
         : (run.text ?? '');
     const runLength = text.length;
-    const displayText = applyTextTransform(text, run.textTransform);
+    // Only TextRun and TabRun have textTransform (via RunMarks)
+    const transform =
+      isTabRun(run) ||
+      'src' in run ||
+      run.kind === 'lineBreak' ||
+      run.kind === 'break' ||
+      run.kind === 'fieldAnnotation'
+        ? undefined
+        : run.textTransform;
+    const displayText = applyTextTransform(text, transform);
 
     if (runLength === 0) continue;
 

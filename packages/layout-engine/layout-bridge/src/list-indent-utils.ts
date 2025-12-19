@@ -1,6 +1,6 @@
 import type { ParagraphBlock, ParagraphIndent, WordLayoutConfig } from '@superdoc/contracts';
 import { LIST_MARKER_GAP } from '@superdoc/common/layout-constants';
-import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
+import { resolveListTextStartPx, type MinimalWordLayout } from '@superdoc/common/list-marker-utils';
 
 /**
  * Utilities for list item detection and text indent calculation.
@@ -235,7 +235,7 @@ export function calculateTextStartIndent(params: TextIndentCalculationParams): n
   if (isListItem && isFirstLine && isFirstLineIndentMode) {
     // First-line indent mode: text starts after marker + tab/space, following painter rules.
     const resolvedTextStart = resolveListTextStartPx(
-      wordLayout,
+      wordLayout as MinimalWordLayout | undefined,
       paraIndentLeft,
       Math.max(firstLineIndent, 0),
       Math.max(hangingIndent, 0),
