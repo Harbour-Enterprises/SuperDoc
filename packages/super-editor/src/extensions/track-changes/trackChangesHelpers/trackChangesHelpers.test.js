@@ -2,6 +2,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { EditorState, TextSelection } from 'prosemirror-state';
 import { AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
 import { undo } from 'prosemirror-history';
+import { ySyncPluginKey } from 'y-prosemirror';
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../constants.js';
 import {
   markInsertion,
@@ -250,6 +251,15 @@ describe('trackChangesHelpers', () => {
     const state = createState(createDocWithText('abc'));
     const tr = state.tr.insertText('!', 1);
     tr.setMeta('custom', true);
+    const result = trackedTransaction({ tr, state, user });
+    expect(result).toBe(tr);
+  });
+
+  it('trackedTransaction skips Yjs-origin transactions', () => {
+    const state = createState(createDocWithText('abc'));
+    const tr = state.tr.insertText('!', 1);
+    tr.setMeta('inputType', 'insertText');
+    tr.setMeta(ySyncPluginKey, { isChangeOrigin: true });
     const result = trackedTransaction({ tr, state, user });
     expect(result).toBe(tr);
   });

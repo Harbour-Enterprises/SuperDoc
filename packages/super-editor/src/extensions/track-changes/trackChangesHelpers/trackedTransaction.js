@@ -1,5 +1,6 @@
 import { Mapping, ReplaceStep, AddMarkStep, RemoveMarkStep } from 'prosemirror-transform';
 import { TextSelection } from 'prosemirror-state';
+import { ySyncPluginKey } from 'y-prosemirror';
 import { replaceStep } from './replaceStep.js';
 import { addMarkStep } from './addMarkStep.js';
 import { removeMarkStep } from './removeMarkStep.js';
@@ -16,10 +17,14 @@ export const trackedTransaction = ({ tr, state, user }) => {
   const onlyInputTypeMeta = ['inputType', 'uiEvent', 'paste', 'pointer'];
   const notAllowedMeta = ['historyUndo', 'historyRedo', 'acceptReject'];
   const isProgrammaticInput = tr.getMeta('inputType') === 'programmatic';
+  const ySyncMeta = tr.getMeta(ySyncPluginKey);
+  const allowedMeta = new Set([...onlyInputTypeMeta, ySyncPluginKey.key]);
+  const hasDisallowedMeta = tr.meta && Object.keys(tr.meta).some((meta) => !allowedMeta.has(meta));
 
   if (
+    ySyncMeta?.isChangeOrigin || // Skip Yjs-origin transactions (remote/rehydration).
     !tr.steps.length ||
-    (tr.meta && !Object.keys(tr.meta).every((meta) => onlyInputTypeMeta.includes(meta)) && !isProgrammaticInput) ||
+    (hasDisallowedMeta && !isProgrammaticInput) ||
     notAllowedMeta.includes(tr.getMeta('inputType')) ||
     tr.getMeta(CommentsPluginKey) // Skip if it's a comment transaction.
   ) {
