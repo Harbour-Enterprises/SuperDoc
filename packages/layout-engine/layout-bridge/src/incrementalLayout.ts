@@ -75,7 +75,7 @@ export async function incrementalLayout(
     measureCache.invalidate(dirty.deletedBlockIds);
   }
 
-  const { measurementWidth, measurementHeight } = resolveMeasurementConstraints(options);
+  const { measurementWidth, measurementHeight } = resolveMeasurementConstraints(options, nextBlocks);
 
   if (measurementWidth <= 0 || measurementHeight <= 0) {
     throw new Error('incrementalLayout: invalid measurement constraints resolved from options');
@@ -477,7 +477,68 @@ const DEFAULT_MARGINS = { top: 72, right: 72, bottom: 72, left: 72 };
 export const normalizeMargin = (value: number | undefined, fallback: number): number =>
   Number.isFinite(value) ? (value as number) : fallback;
 
-export function resolveMeasurementConstraints(options: LayoutOptions): {
+/**
+ * Resolves the maximum measurement constraints (width and height) needed for measuring blocks
+ * across all sections in a document.
+ *
+ * This function scans the entire document (including all section breaks) to determine the
+ * widest column configuration and tallest content area that will be encountered during layout.
+ * All blocks must be measured at these maximum constraints to ensure they fit correctly when
+ * placed in any section, preventing remeasurement during pagination.
+ *
+ * Why maximum constraints are needed:
+ * - Documents can have multiple sections with different page sizes, margins, and column counts
+ * - Each section may have a different effective column width (e.g., 2 columns vs 3 columns)
+ * - Blocks measured too narrow will overflow when placed in wider sections
+ * - Blocks measured at maximum width will fit in all sections (may have extra space in narrower ones)
+ *
+ * Algorithm:
+ * 1. Start with base content width/height from options.pageSize and options.margins
+ * 2. Calculate base column width from options.columns (if multi-column)
+ * 3. Scan all sectionBreak blocks to find maximum column width and content height
+ * 4. For each section: compute content area, calculate column width, track maximum
+ * 5. Return the widest column width and tallest content height found
+ *
+ * Column width calculation:
+ * - Single column: contentWidth (no gap subtraction)
+ * - Multi-column: (contentWidth - totalGap) / columnCount
+ * - Total gap = gap * (columnCount - 1)
+ *
+ * @param options - Layout options containing default page size, margins, and columns
+ * @param blocks - Optional array of flow blocks to scan for section breaks
+ *   If not provided, only base constraints from options are used
+ * @returns Object containing:
+ *   - measurementWidth: Maximum column width in pixels (guaranteed positive)
+ *   - measurementHeight: Maximum content height in pixels (guaranteed positive)
+ *
+ * @throws Error if resolved constraints are non-positive (indicates invalid configuration)
+ *
+ * @example
+ * ```typescript
+ * // Document with two sections: single column and 2-column
+ * const options = {
+ *   pageSize: { w: 612, h: 792 }, // Letter size
+ *   margins: { top: 72, right: 72, bottom: 72, left: 72 },
+ *   columns: { count: 1, gap: 0 }
+ * };
+ * const blocks = [
+ *   // ... content blocks ...
+ *   {
+ *     kind: 'sectionBreak',
+ *     columns: { count: 2, gap: 48 },
+ *     // ... other section properties ...
+ *   }
+ * ];
+ * const constraints = resolveMeasurementConstraints(options, blocks);
+ * // Returns: { measurementWidth: 468, measurementHeight: 648 }
+ * // 468px = (612 - 72 - 72) width, single column (wider than 2-column: 234px)
+ * // All blocks measured at 468px will fit in both sections
+ * ```
+ */
+export function resolveMeasurementConstraints(
+  options: LayoutOptions,
+  blocks?: FlowBlock[],
+): {
   measurementWidth: number;
   measurementHeight: number;
 } {
@@ -488,26 +549,45 @@ export function resolveMeasurementConstraints(options: LayoutOptions): {
     bottom: normalizeMargin(options.margins?.bottom, DEFAULT_MARGINS.bottom),
     left: normalizeMargin(options.margins?.left, DEFAULT_MARGINS.left),
   };
-  const contentWidth = pageSize.w - (margins.left + margins.right);
-  const contentHeight = pageSize.h - (margins.top + margins.bottom);
+  const baseContentWidth = pageSize.w - (margins.left + margins.right);
+  const baseContentHeight = pageSize.h - (margins.top + margins.bottom);
 
-  const columns = options.columns;
-
-  if (columns && columns.count > 1) {
+  const computeColumnWidth = (contentWidth: number, columns?: { count: number; gap?: number }): number => {
+    if (!columns || columns.count <= 1) return contentWidth;
     const gap = Math.max(0, columns.gap ?? 0);
     const totalGap = gap * (columns.count - 1);
-    const columnWidth = (contentWidth - totalGap) / columns.count;
-    if (columnWidth > 0) {
-      return {
-        measurementWidth: columnWidth,
-        measurementHeight: contentHeight,
+    return (contentWidth - totalGap) / columns.count;
+  };
+
+  let measurementWidth = computeColumnWidth(baseContentWidth, options.columns);
+  let measurementHeight = baseContentHeight;
+
+  if (blocks && blocks.length > 0) {
+    for (const block of blocks) {
+      if (block.kind !== 'sectionBreak') continue;
+      const sectionPageSize = block.pageSize ?? pageSize;
+      const sectionMargins = {
+        top: normalizeMargin(block.margins?.top, margins.top),
+        right: normalizeMargin(block.margins?.right, margins.right),
+        bottom: normalizeMargin(block.margins?.bottom, margins.bottom),
+        left: normalizeMargin(block.margins?.left, margins.left),
       };
+      const contentWidth = sectionPageSize.w - (sectionMargins.left + sectionMargins.right);
+      const contentHeight = sectionPageSize.h - (sectionMargins.top + sectionMargins.bottom);
+      if (contentWidth <= 0 || contentHeight <= 0) continue;
+      const columnWidth = computeColumnWidth(contentWidth, block.columns ?? options.columns);
+      if (columnWidth > measurementWidth) {
+        measurementWidth = columnWidth;
+      }
+      if (contentHeight > measurementHeight) {
+        measurementHeight = contentHeight;
+      }
     }
   }
 
   return {
-    measurementWidth: contentWidth,
-    measurementHeight: contentHeight,
+    measurementWidth,
+    measurementHeight,
   };
 }
 

@@ -65,7 +65,10 @@ import {
   DEFAULT_LIST_INDENT_BASE_PX as DEFAULT_LIST_INDENT_BASE,
   DEFAULT_LIST_INDENT_STEP_PX as DEFAULT_LIST_INDENT_STEP,
   DEFAULT_LIST_HANGING_PX as DEFAULT_LIST_HANGING,
+  SPACE_SUFFIX_GAP_PX,
+  DEFAULT_TAB_INTERVAL_PX,
 } from '@superdoc/common/layout-constants';
+import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
 import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
 export { installNodeCanvasPolyfill } from './setup.js';
@@ -530,11 +533,28 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       : typeof rawTextStartPx === 'number' && Number.isFinite(rawTextStartPx)
         ? rawTextStartPx
         : undefined;
+  const resolvedTextStartPx = resolveListTextStartPx(
+    wordLayout,
+    indentLeft,
+    firstLine,
+    hanging,
+    (markerText, marker) => {
+      const markerRun = {
+        fontFamily: toCssFontFamily(marker.run?.fontFamily) ?? marker.run?.fontFamily ?? 'Arial',
+        fontSize: marker.run?.fontSize ?? 16,
+        bold: marker.run?.bold ?? false,
+        italic: marker.run?.italic ?? false,
+      };
+      const { font: markerFont } = buildFontString(markerRun);
+      return measureText(markerText, markerFont, ctx);
+    },
+  );
+  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
 
-  if (typeof textStartPx === 'number' && textStartPx > indentLeft) {
+  if (typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
     // Available width = from textStartPx to right margin.
-    initialAvailableWidth = Math.max(1, maxWidth - textStartPx - indentRight);
+    initialAvailableWidth = Math.max(1, maxWidth - effectiveTextStartPx - indentRight);
   } else {
     // No textStartPx: text starts at the normal indent position.
     initialAvailableWidth = Math.max(1, contentWidth - firstLineOffset);
@@ -692,7 +712,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
    * @param runContext - The Run object containing styling properties (letterSpacing, etc.)
    * @returns The aligned starting X position for the segment, or undefined if no tab alignment is pending
    */
-  const alignSegmentAtTab = (segmentText: string, font: string, runContext: Run): number | undefined => {
+  const alignSegmentAtTab = (
+    segmentText: string,
+    font: string,
+    runContext: Run,
+    segmentStartChar: number,
+  ): number | undefined => {
     if (!pendingTabAlignment || !currentLine) return undefined;
     const { val } = pendingTabAlignment;
 
@@ -703,11 +728,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const idx = segmentText.indexOf(decimalSeparator);
       if (idx >= 0) {
         const beforeText = segmentText.slice(0, idx);
-        beforeDecimalWidth = beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, runContext) : 0;
+        beforeDecimalWidth =
+          beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, runContext, segmentStartChar) : 0;
       }
-      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext, segmentStartChar) : 0;
     } else if (val === 'end' || val === 'center') {
-      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext) : 0;
+      segmentWidth = segmentText.length > 0 ? measureRunWidth(segmentText, font, ctx, runContext, segmentStartChar) : 0;
     }
 
     return alignPendingTabForWidth(segmentWidth, beforeDecimalWidth);
@@ -778,8 +804,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     const { font } = buildFontString(
       lastRun as { fontFamily: string; fontSize: number; bold?: boolean; italic?: boolean },
     );
-    const fullWidth = measureRunWidth(sliceText, font, ctx, lastRun);
-    const keptWidth = keptText.length > 0 ? measureRunWidth(keptText, font, ctx, lastRun) : 0;
+    const fullWidth = measureRunWidth(sliceText, font, ctx, lastRun, sliceStart);
+    const keptWidth = keptText.length > 0 ? measureRunWidth(keptText, font, ctx, lastRun, sliceStart) : 0;
     const delta = Math.max(0, fullWidth - keptWidth);
 
     lineToTrim.width = roundValue(Math.max(0, lineToTrim.width - delta));
@@ -1038,7 +1064,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // Handle field annotation runs (pill-styled form fields)
     if (isFieldAnnotationRun(run)) {
       // Use displayLabel for text measurement, with fallback defaults
-      const displayText = run.displayLabel || '';
+      const rawDisplayText = run.displayLabel || '';
+      const displayText = applyTextTransform(rawDisplayText, run);
 
       // Use annotation's typography or fallback to defaults (16px Arial is standard)
       const annotationFontSize =
@@ -1177,7 +1204,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const spacesLength = segment.length;
         const spacesStartChar = charPosInRun;
         const spacesEndChar = charPosInRun + spacesLength;
-        const spacesWidth = measureRunWidth(segment, font, ctx, run);
+        const spacesWidth = measureRunWidth(segment, font, ctx, run, spacesStartChar);
 
         if (!currentLine) {
           currentLine = {
@@ -1255,7 +1282,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Align this segment if a tab alignment is pending
       let segmentStartX: number | undefined;
       if (currentLine && pendingTabAlignment) {
-        segmentStartX = alignSegmentAtTab(segment, font, run);
+        segmentStartX = alignSegmentAtTab(segment, font, run, charPosInRun);
         // After alignment, currentLine.width is the X position where this segment starts
         if (segmentStartX == null) {
           segmentStartX = currentLine.width;
@@ -1279,7 +1306,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           // We must add the space width to the line, not just skip it.
           const spaceStartChar = charPosInRun;
           const spaceEndChar = charPosInRun + 1;
-          const singleSpaceWidth = measureRunWidth(' ', font, ctx, run);
+          const singleSpaceWidth = measureRunWidth(' ', font, ctx, run, spaceStartChar);
 
           if (!currentLine) {
             // Start a new line with just the space
@@ -1342,15 +1369,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           charPosInRun = spaceEndChar;
           continue;
         }
-        const wordOnlyWidth = measureRunWidth(word, font, ctx, run);
+        const wordStartChar = charPosInRun;
+        const wordOnlyWidth = measureRunWidth(word, font, ctx, run, wordStartChar);
         // Only include the implicit single delimiter space when there is a later non-empty word
         // in this same segment (i.e., before the next word). Do NOT include one before tabs or
         // at the end of the segment; those spaces are represented explicitly by "" tokens.
         const shouldIncludeDelimiterSpace = wordIndex < lastNonEmptyWordIndex;
-        const spaceWidth = shouldIncludeDelimiterSpace ? measureRunWidth(' ', font, ctx, run) : 0;
-        const wordCommitWidth = wordOnlyWidth + spaceWidth;
-        const wordStartChar = charPosInRun;
         const wordEndNoSpace = charPosInRun + word.length;
+        const spaceWidth = shouldIncludeDelimiterSpace ? measureRunWidth(' ', font, ctx, run, wordEndNoSpace) : 0;
+        const wordCommitWidth = wordOnlyWidth + spaceWidth;
         const wordEndWithSpace = wordEndNoSpace + (shouldIncludeDelimiterSpace ? 1 : 0);
 
         // Determine the effective maxWidth for character-level breaking
@@ -1392,7 +1419,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
           // Use remaining width for chunking if we have a tab-only line, otherwise use full line width
           const chunkWidth = hasTabOnlyLine ? Math.max(remainingWidthAfterTab, lineMaxWidth * 0.25) : lineMaxWidth;
-          const chunks = breakWordIntoChunks(word, chunkWidth - WIDTH_FUDGE_PX, font, ctx, run);
+          const chunks = breakWordIntoChunks(word, chunkWidth - WIDTH_FUDGE_PX, font, ctx, run, wordStartChar);
 
           // Process all chunks except the last one as complete lines
           let chunkCharOffset = wordStartChar;
@@ -1552,7 +1579,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               const overflow = totalWidthWithWord - availableWidth;
               if (overflow > 0) {
                 const baseSpaceWidth =
-                  spaceWidth || measureRunWidth(' ', font, ctx, run) || Math.max(1, boundarySpacing);
+                  spaceWidth || measureRunWidth(' ', font, ctx, run, wordEndNoSpace) || Math.max(1, boundarySpacing);
                 const perSpaceCompression = overflow / candidateSpaces;
                 const maxPerSpaceCompression = baseSpaceWidth * 0.25; // ~25% squeeze permitted
                 if (perSpaceCompression <= maxPerSpaceCompression) {
@@ -2469,10 +2496,53 @@ const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
   );
 };
 
-const measureRunWidth = (text: string, font: string, ctx: CanvasRenderingContext2D, run: Run): number => {
+const isWordChar = (char: string): boolean => {
+  if (!char) return false;
+  const code = char.charCodeAt(0);
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || char === "'";
+};
+
+const capitalizeText = (text: string, fullText?: string, startOffset?: number): string => {
+  if (!text) return text;
+  const hasFullText = typeof startOffset === 'number' && fullText != null;
+  let result = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const prevChar = hasFullText
+      ? startOffset! + i > 0
+        ? fullText![startOffset! + i - 1]
+        : ''
+      : i > 0
+        ? text[i - 1]
+        : '';
+    const ch = text[i];
+    result += isWordChar(ch) && !isWordChar(prevChar) ? ch.toUpperCase() : ch;
+  }
+  return result;
+};
+
+const applyTextTransform = (text: string, run: Run, startOffset?: number): string => {
+  const transform = run.textTransform;
+  if (!text || !transform || transform === 'none') return text;
+  if (transform === 'uppercase') return text.toUpperCase();
+  if (transform === 'lowercase') return text.toLowerCase();
+  if (transform === 'capitalize') {
+    const fullText = 'text' in run && typeof run.text === 'string' ? run.text : text;
+    return capitalizeText(text, fullText, startOffset);
+  }
+  return text;
+};
+
+const measureRunWidth = (
+  text: string,
+  font: string,
+  ctx: CanvasRenderingContext2D,
+  run: Run,
+  startOffset?: number,
+): number => {
   // TextRun.kind is optional and defaults to 'text', so check for undefined or 'text'
   const letterSpacing = run.kind === 'text' || run.kind === undefined ? (run as TextRun).letterSpacing || 0 : 0;
-  const width = getMeasuredTextWidth(text, font, letterSpacing, ctx);
+  const displayText = applyTextTransform(text, run, startOffset);
+  const width = getMeasuredTextWidth(displayText, font, letterSpacing, ctx);
   return roundValue(width);
 };
 
@@ -2513,14 +2583,17 @@ const breakWordIntoChunks = (
   font: string,
   ctx: CanvasRenderingContext2D,
   run: Run,
+  startOffset?: number,
 ): Array<{ text: string; width: number }> => {
   const chunks: Array<{ text: string; width: number }> = [];
+  const baseOffset = typeof startOffset === 'number' ? startOffset : 0;
 
   // Edge case: maxWidth is too small for even a single character
   // In this case, put one character per line as a fallback
   if (maxWidth <= 0) {
-    for (const char of word) {
-      const charWidth = measureRunWidth(char, font, ctx, run);
+    for (let i = 0; i < word.length; i++) {
+      const char = word[i];
+      const charWidth = measureRunWidth(char, font, ctx, run, baseOffset + i);
       chunks.push({ text: char, width: charWidth });
     }
     return chunks;
@@ -2532,13 +2605,13 @@ const breakWordIntoChunks = (
   for (let i = 0; i < word.length; i++) {
     const char = word[i];
     const testChunk = currentChunk + char;
-    const testWidth = measureRunWidth(testChunk, font, ctx, run);
+    const testWidth = measureRunWidth(testChunk, font, ctx, run, baseOffset);
 
     if (testWidth > maxWidth && currentChunk.length > 0) {
       // Current chunk is full, save it and start a new one
       chunks.push({ text: currentChunk, width: currentWidth });
       currentChunk = char;
-      currentWidth = measureRunWidth(char, font, ctx, run);
+      currentWidth = measureRunWidth(char, font, ctx, run, baseOffset + i);
     } else {
       // Character fits (or it's the first character and we must include it)
       currentChunk = testChunk;
@@ -2686,7 +2759,8 @@ const measureDropCap = (
 
   // Measure the text width
   ctx.font = font;
-  const metrics = ctx.measureText(run.text);
+  const displayText = applyTextTransform(run.text, run);
+  const metrics = ctx.measureText(displayText);
   const advanceWidth = metrics.width;
   const paintedWidth = (metrics.actualBoundingBoxLeft || 0) + (metrics.actualBoundingBoxRight || 0);
   const textWidth = Math.max(advanceWidth, paintedWidth);
