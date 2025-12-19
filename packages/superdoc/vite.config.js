@@ -27,6 +27,8 @@ export const getAliases = (_isDev) => {
     //
     // Until then, the alias for "./src" is a regexp that matches any imports starting
     // with "@superdoc/" that don't also match one of the known packages.
+    //
+    // Also note: this regexp is duplicated in packages/ai/vitest.config.mjs
 
     {
       find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-engine|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor|locale-utils|font-utils)(.*)/,
