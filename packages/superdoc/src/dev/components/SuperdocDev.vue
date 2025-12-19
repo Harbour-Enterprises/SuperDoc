@@ -1,7 +1,7 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
 import '../dev-styles.css';
-import { nextTick, onMounted, onBeforeUnmount, provide, ref, shallowRef, computed } from 'vue';
+import { nextTick, onMounted, onBeforeUnmount, ref, shallowRef, computed } from 'vue';
 
 import { SuperDoc } from '@superdoc/index.js';
 import { DOCX, PDF, HTML } from '@superdoc/common';
@@ -55,7 +55,78 @@ const collaborationEnabled = (() => {
 
 const collabRoom = import.meta.env.VITE_COLLAB_ROOM || 'demo-rooms21';
 const documentId = import.meta.env.VITE_COLLAB_DOCUMENT_ID || 'document-21';
-const collabUrl = import.meta.env.VITE_COLLAB_URL || `ws://localhost:3000/v1/collaborate/${collabRoom}`;
+const collabApiKey = urlParams.get('apiKey') || import.meta.env.VITE_COLLAB_API_KEY || '';
+const rawCollabUrl = import.meta.env.VITE_COLLAB_URL || `http://localhost:3000/v1/collaborate/${collabRoom}`;
+
+const normalizeToHttpUrl = (value, fallback = '') => {
+  if (!value) return fallback;
+  if (value.startsWith('http://') || value.startsWith('https://')) return value;
+  if (value.startsWith('wss://')) return `https://${value.slice('wss://'.length)}`;
+  if (value.startsWith('ws://')) return `http://${value.slice('ws://'.length)}`;
+  if (value.startsWith('//')) return `http:${value}`;
+  if (value.startsWith('/')) return `http://localhost:3000${value}`;
+  return `http://${value}`;
+};
+
+const toWebsocketUrl = (httpUrl) => {
+  if (!httpUrl) return '';
+  if (httpUrl.startsWith('ws://') || httpUrl.startsWith('wss://')) {
+    return httpUrl;
+  }
+  if (httpUrl.startsWith('https://')) {
+    return `wss://${httpUrl.slice('https://'.length)}`;
+  }
+  if (httpUrl.startsWith('http://')) {
+    return `ws://${httpUrl.slice('http://'.length)}`;
+  }
+  return `ws://${httpUrl.replace(/^\/+/, '')}`;
+};
+
+const buildCollabUrls = (baseUrl, roomId, docId) => {
+  const httpBase = normalizeToHttpUrl(baseUrl, `http://localhost:3000/v1/collaborate/${roomId}`);
+  let parsedUrl;
+  try {
+    parsedUrl = new URL(httpBase);
+  } catch {
+    parsedUrl = new URL(`http://localhost:3000/v1/collaborate/${roomId}`);
+  }
+
+  const origin = `${parsedUrl.protocol}//${parsedUrl.host}`;
+  const parts = parsedUrl.pathname.split('/').filter(Boolean);
+  const collabIndex = parts.indexOf('collaborate');
+  const basePrefix = collabIndex >= 0 ? parts.slice(0, collabIndex + 1) : [...parts, 'collaborate'];
+  const existingRoom = collabIndex >= 0 ? parts[collabIndex + 1] : undefined;
+  const existingDocument = collabIndex >= 0 ? parts[collabIndex + 2] : undefined;
+
+  const resolvedRoom = roomId || existingRoom || '';
+  const resolvedDocument = docId || existingDocument || '';
+
+  const roomSegments = resolvedRoom ? [...basePrefix, resolvedRoom] : basePrefix;
+  const roomPath = roomSegments.join('/');
+  const roomUrl = `${origin}/${roomPath}`;
+
+  const lastRoomSegment = roomSegments[roomSegments.length - 1];
+  const documentSegments =
+    resolvedDocument && resolvedDocument !== lastRoomSegment ? [...roomSegments, resolvedDocument] : roomSegments;
+  const documentPath = documentSegments.join('/');
+  const documentUrl = `${origin}/${documentPath}`;
+
+  return { origin, roomPath, documentPath, roomUrl, documentUrl };
+};
+
+// Build canonical HTTP + WS endpoints shared by status checks and the editor provider
+const { roomUrl: collabRoomUrl, documentUrl: collabDocumentUrl } = buildCollabUrls(
+  rawCollabUrl,
+  collabRoom,
+  documentId,
+);
+const collabStatusUrl = `${collabDocumentUrl}/status`;
+const collabWsUrl = toWebsocketUrl(collabRoomUrl);
+const collabHeaders = collabApiKey
+  ? {
+      Authorization: `Bearer ${collabApiKey}`,
+    }
+  : undefined;
 
 const user = {
   name: testUserName,
@@ -78,42 +149,30 @@ const commentPermissionResolver = ({ permission, comment, defaultDecision, curre
   return defaultDecision;
 };
 
-async function documentExists() {
+async function documentExists({ maxAttempts = 4, delayMs = 400 } = {}) {
   if (!collaborationEnabled) {
     return false;
   }
 
-  // Convert WebSocket URL to HTTP for status check:
-  //   http(s)://host/v1/collaborate/:roomId/:documentId/status
-  const statusUrl = (() => {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const httpUrl = collabRoomUrl.replace('ws://', 'http://').replace('wss://', 'https://');
-      const url = new URL(httpUrl);
-      const parts = url.pathname.split('/').filter(Boolean);
-      const collabIndex = parts.findIndex((p) => p === 'collaborate');
-      const hasRoom = collabIndex !== -1 && Boolean(parts[collabIndex + 1]);
-      if (hasRoom) parts.push(documentId, 'status');
-      else parts.push('status');
-      url.pathname = `/${parts.join('/')}`;
-      return url.toString();
-    } catch {
-      const httpUrl = collabRoomUrl.replace('ws://', 'http://').replace('wss://', 'https://');
-      return `${httpUrl.replace(/\/$/, '')}/${documentId}/status`;
+      const response = await fetch(collabStatusUrl, collabHeaders ? { headers: collabHeaders } : undefined);
+      if (response.ok) {
+        const body = await response.json();
+        if (body?.exists) {
+          return true;
+        }
+      }
+    } catch (error) {
+      console.warn('Unable to query collaboration status endpoint, will retry if possible', error);
     }
-  })();
 
-  try {
-    const headers = collabApiKey ? { Authorization: `Bearer ${collabApiKey}` } : undefined;
-    const response = await fetch(statusUrl, headers ? { headers } : undefined);
-    if (!response.ok) {
-      return false;
+    if (attempt < maxAttempts - 1) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
-    const body = await response.json();
-    return Boolean(body?.exists);
-  } catch (error) {
-    console.warn('Unable to query collaboration status endpoint, defaulting to seeding new document', error);
-    return false;
   }
+
+  return false;
 }
 
 const handleNewFile = async (file) => {
@@ -385,9 +444,21 @@ const init = async () => {
     },
   };
   if (collaborationEnabled) {
+    const collabParams = {
+      roomId: collabRoom,
+      name: user.name,
+      email: user.email,
+      role: userRole,
+      color,
+    };
+
+    if (collabApiKey) {
+      collabParams.apiKey = collabApiKey;
+    }
+
     config.modules.collaboration = {
       url: collabWsUrl,
-      user: user,
+      params: collabParams,
     };
   }
   superdoc.value = new SuperDoc(config);
