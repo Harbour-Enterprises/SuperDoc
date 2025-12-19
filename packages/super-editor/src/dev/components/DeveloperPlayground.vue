@@ -1,11 +1,11 @@
 <script setup>
-import '@/style.css';
+import '@superdoc/super-editor/style.css';
 import '@superdoc/common/styles/common-styles.css';
 
 import { ref, shallowRef, computed, onMounted } from 'vue';
 import { NMessageProvider } from 'naive-ui';
-import { SuperEditor } from '@/index.js';
-import { PresentationEditor } from '@/core/PresentationEditor.js';
+import { SuperEditor } from '@superdoc/super-editor';
+import { PresentationEditor } from '@core/PresentationEditor.js';
 import { getFileObject } from '@superdoc/common/helpers/get-file-object';
 import { DOCX } from '@superdoc/common';
 import { SuperToolbar } from '@components/toolbar/super-toolbar';

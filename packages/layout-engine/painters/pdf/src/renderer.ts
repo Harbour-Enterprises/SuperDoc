@@ -27,7 +27,7 @@ import type {
   TrackedChangeKind,
 } from '@superdoc/contracts';
 import type { PageDecorationProvider } from './index.js';
-import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 
 const PX_TO_PT = 72 / 96;
 const COMMENT_EXTERNAL_COLOR = '#B1124B';
@@ -192,24 +192,28 @@ const translateFragment = (fragment: Fragment, offsetY: number, offsetX: number 
 };
 
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
-  if (run.kind === 'tab') {
-    return run.text;
+  switch (run.kind) {
+    case 'tab':
+      return run.text;
+
+    case 'image':
+    case 'lineBreak':
+    case 'break':
+    case 'fieldAnnotation':
+      return '';
+
+    case 'text':
+    case undefined:
+      if (run.token === 'pageNumber') {
+        // Use formatted page number text from layout if available
+        return context.pageNumberText ?? String(context.pageNumber);
+      }
+      if (run.token === 'totalPageCount') {
+        return context.totalPages ? String(context.totalPages) : (run.text ?? '');
+      }
+
+      return run.text;
   }
-  if (run.kind === 'image') {
-    // Image runs don't have text content
-    return '';
-  }
-  if (!run.token) {
-    return run.text ?? '';
-  }
-  if (run.token === 'pageNumber') {
-    // Use formatted page number text from layout if available
-    return context.pageNumberText ?? String(context.pageNumber);
-  }
-  if (run.token === 'totalPageCount') {
-    return context.totalPages ? String(context.totalPages) : (run.text ?? '');
-  }
-  return run.text ?? '';
 };
 
 type BorderBox = {
@@ -508,7 +512,7 @@ export class PdfPainter {
     parts.push(textContent);
 
     // Paragraph marker rendering (Track B paragraph pipeline)
-    const wordLayout = (block.attrs as Record<string, unknown>)?.wordLayout;
+    const wordLayout = block.attrs?.wordLayout;
     if (!fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker && measure.marker) {
       console.log('[PdfPainter.renderParagraphFragment] Rendering marker', {
         blockId: fragment.blockId,
@@ -645,7 +649,7 @@ export class PdfPainter {
     const markerBaseline = fragment.y + (lines[0]?.lineHeight ?? 0) - (lines[0]?.descent ?? 0);
 
     // Track B: Use wordLayout for marker styling and positioning
-    const wordLayout = item.paragraph.attrs?.wordLayout as Record<string, unknown> | undefined;
+    const wordLayout = item.paragraph.attrs?.wordLayout;
     let markerX: number;
     let markerRun: Run;
     let markerText: string;

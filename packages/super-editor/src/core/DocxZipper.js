@@ -1,4 +1,4 @@
-import xmljs from 'xml-js';
+import * as xmljs from 'xml-js';
 import JSZip from 'jszip';
 import { getContentTypesFromXml } from './super-converter/helpers.js';
 import { ensureXmlString, isXmlLike } from './encoding-helpers.js';

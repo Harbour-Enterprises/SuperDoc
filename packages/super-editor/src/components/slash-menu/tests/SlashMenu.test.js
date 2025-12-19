@@ -13,7 +13,7 @@ import {
   assertEventListenersCleanup,
 } from './testHelpers.js';
 
-vi.mock('@/extensions/slash-menu', () => ({
+vi.mock('@extensions/slash-menu', () => ({
   SlashMenuPluginKey: {
     getState: vi.fn(() => ({ anchorPos: 100 })),
   },

@@ -75,7 +75,7 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
-import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 import {
   hashParagraphBorders,
   hashTableBorders,

@@ -10,6 +10,9 @@
     ".": {
       "types": "./src/index.ts",
       "default": "./src/index.ts"
+    },
+    "./*": {
+      "source": "./src/*"
     }
   },
   "scripts": {
@@ -22,12 +25,19 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix",
     "type-check": "tsc --noEmit"
   },
+  "devDependencies": {
+    "vitest": "catalog:",
+    "@superdoc/layout-engine": "workspace:*",
+    "@superdoc/painter-dom": "workspace:*"
+  },
   "dependencies": {
-    "@superdoc/common": "*",
-    "@superdoc/contracts": "*",
-    "@superdoc/measuring-dom": "*",
-    "@superdoc/style-engine": "*",
-    "@superdoc/word-layout": "*",
-    "@superdoc/url-validation": "*"
+    "@superdoc/super-editor": "workspace:*",
+    "@superdoc/common": "workspace:*",
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/locale-utils": "workspace:*",
+    "@superdoc/measuring-dom": "workspace:*",
+    "@superdoc/style-engine": "workspace:*",
+    "@superdoc/word-layout": "workspace:*",
+    "@superdoc/url-validation": "workspace:*"
   }
 }

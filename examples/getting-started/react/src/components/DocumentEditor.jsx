@@ -39,6 +39,7 @@ const DocumentEditor = ({
     // Cleanup on unmount
     return () => {
       if (editorRef.current) {
+        editorRef.current.destroy();
         editorRef.current = null;
       }
     };

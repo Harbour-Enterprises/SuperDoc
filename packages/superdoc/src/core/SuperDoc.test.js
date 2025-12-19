@@ -41,7 +41,7 @@ class MockToolbar {
 
 const createZipMock = vi.fn(async (blobs, names) => ({ zip: true, blobs, names }));
 
-vi.mock('@harbour-enterprises/super-editor', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   SuperToolbar: MockToolbar,
   createZip: createZipMock,
 }));

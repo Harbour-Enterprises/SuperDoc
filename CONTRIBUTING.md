@@ -216,7 +216,7 @@ BREAKING CHANGE: Plugins must now export a default function
 Preview what will be released:
 
 ```bash
-npx semantic-release --dry-run --no-ci
+pnpx semantic-release --dry-run --no-ci
 ```
 
 ### CI/CD Pipeline Details

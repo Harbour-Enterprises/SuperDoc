@@ -3,7 +3,7 @@ import { computed, toRefs, ref, getCurrentInstance, onMounted, nextTick } from '
 import { storeToRefs } from 'pinia';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
-import { SuperInput } from '@harbour-enterprises/super-editor';
+import { SuperInput } from '@superdoc/super-editor';
 import { superdocIcons } from '@superdoc/icons.js';
 import useSelection from '@superdoc/helpers/use-selection';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';

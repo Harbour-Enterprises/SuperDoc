@@ -6,6 +6,5 @@
     "declarationMap": true,
     "lib": ["DOM", "ES2021"]
   },
-  "include": ["src/**/*.ts", "../../geometry-utils/src/**/*.ts"],
-  "references": [{ "path": "../../contracts" }]
+  "include": ["src/**/*.ts"]
 }

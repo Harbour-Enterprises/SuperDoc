@@ -1,4 +1,4 @@
-import xmljs from 'xml-js';
+import * as xmljs from 'xml-js';
 import { v4 as uuidv4 } from 'uuid';
 import crc32 from 'buffer-crc32';
 import { DocxExporter, exportSchemaToJson } from './exporter';

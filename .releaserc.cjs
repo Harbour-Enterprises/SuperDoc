@@ -25,7 +25,7 @@ const config = {
     '@semantic-release/release-notes-generator',
     // NPM plugin MUST come before git plugin - ADD pkgRoot HERE!
     [
-      '@semantic-release/npm',
+      'semantic-release-pnpm',
       {
         npmPublish: false,
         pkgRoot: 'packages/superdoc'

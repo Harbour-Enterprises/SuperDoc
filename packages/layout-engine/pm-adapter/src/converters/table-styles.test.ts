@@ -1,11 +1,11 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { hydrateTableStyleAttrs } from './table-styles.js';
 import type { PMNode } from '../types.js';
-import * as tblTranslator from '@converter/v3/handlers/w/tbl/tbl-translator.js';
+import * as tblTranslator from '@superdoc/super-editor/converter/internal/v3/handlers/w/tbl/tbl-translator.js';
 
 // Mock the external super-converter module that's imported by table-styles.ts
 // This module is part of super-editor package and not available in pm-adapter tests
-vi.mock('@converter/v3/handlers/w/tbl/tbl-translator.js');
+vi.mock('@superdoc/super-editor/converter/internal/v3/handlers/w/tbl/tbl-translator.js');
 
 describe('hydrateTableStyleAttrs', () => {
   beforeEach(() => {

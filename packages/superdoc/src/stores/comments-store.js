@@ -8,8 +8,8 @@ import {
   trackChangesHelpers,
   TrackChangesBasePluginKey,
   CommentsPluginKey,
-} from '@harbour-enterprises/super-editor';
-import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
+  getRichTextExtensions,
+} from '@superdoc/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { groupChanges } from '../helpers/group-changes.js';
 

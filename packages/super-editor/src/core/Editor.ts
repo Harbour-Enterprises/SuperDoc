@@ -52,6 +52,7 @@ import { transformListsInCopiedContent } from '@core/inputRules/html/transform-c
 import { applyStyleIsolationClass } from '../utils/styleIsolation.js';
 import { isHeadless } from '../utils/headless-helpers.js';
 import { buildSchemaSummary } from './schema-summary.js';
+import { PresentationEditor } from './PresentationEditor';
 
 declare const __APP_VERSION__: string;
 declare const version: string | undefined;
@@ -96,7 +97,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Active PresentationEditor instance when layout mode is enabled.
    * Set by PresentationEditor constructor to enable renderer-neutral helpers.
    */
-  presentationEditor: import('./PresentationEditor.js').PresentationEditor | null = null;
+  presentationEditor: PresentationEditor | null = null;
 
   /**
    * Whether the editor currently has focus

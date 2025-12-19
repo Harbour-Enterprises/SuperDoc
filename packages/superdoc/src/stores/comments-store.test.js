@@ -58,7 +58,7 @@ vi.mock('../helpers/group-changes.js', () => ({
   groupChanges: vi.fn(() => []),
 }));
 
-vi.mock('@harbour-enterprises/super-editor', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   Editor: class {
     getJSON() {
       return { content: [{}] };

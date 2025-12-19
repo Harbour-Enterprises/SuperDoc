@@ -4,7 +4,11 @@
   "description": "Automated tests suites for all examples on the demo gallery",
   "main": "index.js",
   "scripts": {
-    "test": "npx playwright test"
+    "docker:build": "docker build -t playwright-visual-tests -f Dockerfile ../..",
+    "docker:test": "docker run -e PLAYWRIGHT_ARGS=\"$PLAYWRIGHT_ARGS\" --rm  -v ./test-results:/app/examples/tests/test-results -v ./tests.spec.js-snapshots:/app/examples/tests/tests.spec.js-snapshots -ti playwright-visual-tests",
+    "docker:update-screenshots": "PLAYWRIGHT_ARGS='--update-snapshots' pnpm run docker:test",
+    "test": "playwright test",
+    "update-screenshots": "playwright test --update-screenshots"
   },
   "author": "",
   "license": "ISC",

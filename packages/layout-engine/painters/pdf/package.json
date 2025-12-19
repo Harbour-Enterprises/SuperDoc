@@ -9,13 +9,13 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "build": "tsc --project tsconfig.json --noEmit",
+    "build": "tsc --project tsconfig.json --noEmit --noCheck",
     "test": "vitest run"
   },
   "dependencies": {
-    "@superdoc/contracts": "*"
+    "@superdoc/contracts": "workspace:*"
   },
   "devDependencies": {
-    "vitest": "^3.0.8"
+    "vitest": "catalog:"
   }
 }

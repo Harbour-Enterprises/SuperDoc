@@ -2,8 +2,8 @@ import { PluginKey } from 'prosemirror-state';
 import { Editor as SuperEditor } from '@core/Editor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
-import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { applyStyleIsolationClass } from '@utils/styleIsolation.js';
+import { isHeadless } from '@utils/headless-helpers.js';
 
 export const PaginationPluginKey = new PluginKey('paginationPlugin');
 

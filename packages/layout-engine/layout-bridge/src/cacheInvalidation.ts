@@ -12,7 +12,7 @@
  */
 
 import type { FlowBlock, SectionMetadata } from '@superdoc/contracts';
-import type { HeaderFooterConstraints } from '../../layout-engine/src/index';
+import type { HeaderFooterConstraints } from '@superdoc/layout-engine';
 import type { MeasureCache } from './cache';
 import type { HeaderFooterLayoutCache } from './layoutHeaderFooter';
 import { HeaderFooterCacheLogger } from './instrumentation';
