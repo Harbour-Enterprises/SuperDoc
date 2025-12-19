@@ -56,7 +56,10 @@ import type {
   DrawingMeasure,
   DrawingGeometry,
   DropCapDescriptor,
+  CompleteTableCell,
+  CompleteTableCellAttrs,
 } from '@superdoc/contracts';
+import { defaultTableCell, defaultTableCellAttrs } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
 import {
@@ -2040,8 +2043,8 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
     let gridColIndex = 0; // Track position in the grid
 
     for (const cell of row.cells) {
-      const colspan = cell.colSpan ?? 1;
-      const rowspan = cell.rowSpan ?? 1;
+      const colspan = cell.colSpan ?? defaultTableCell.colSpan;
+      const rowspan = cell.rowSpan ?? defaultTableCell.rowSpan;
 
       // Skip grid columns that are occupied by rowspans from previous rows
       // before processing this cell
@@ -2064,12 +2067,16 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         }
       }
 
-      // Get cell padding for height calculation
-      const cellPadding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
-      const paddingTop = cellPadding.top ?? 2;
-      const paddingBottom = cellPadding.bottom ?? 2;
-      const paddingLeft = cellPadding.left ?? 4;
-      const paddingRight = cellPadding.right ?? 4;
+      // Get cell padding and borders for width and height calculations
+      const paddingTop = cell.attrs?.padding?.top ?? defaultTableCell.attrs.padding.top;
+      const paddingBottom = cell.attrs?.padding?.bottom ?? defaultTableCell.attrs.padding.bottom;
+      const paddingLeft = cell.attrs?.padding?.left ?? defaultTableCell.attrs.padding.left;
+      const paddingRight = cell.attrs?.padding?.right ?? defaultTableCell.attrs.padding.right;
+
+      const borderTop = cell.attrs?.borders?.top?.width ?? defaultTableCell.attrs.borders.top.width;
+      const borderBottom = cell.attrs?.borders?.bottom?.width ?? defaultTableCell.attrs.borders.bottom.width;
+      const borderLeft = cell.attrs?.borders?.left?.width ?? defaultTableCell.attrs.borders.left.width;
+      const borderRight = cell.attrs?.borders?.right?.width ?? defaultTableCell.attrs.borders.right.width;
 
       // Content width accounts for horizontal padding
       const contentWidth = Math.max(1, cellWidth - paddingLeft - paddingRight);
@@ -2089,7 +2096,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
        *
        * Height Calculation:
        * - contentHeight = sum of all block.totalHeight values
-       * - totalCellHeight = contentHeight + paddingTop + paddingBottom
+       * - totalCellHeight = contentHeight + paddingTop + paddingBottom + borderTop + borderBottom
        *
        * Example:
        * ```
@@ -2122,7 +2129,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       }
 
       // Total cell height includes vertical padding
-      const totalCellHeight = contentHeight + paddingTop + paddingBottom;
+      const totalCellHeight = contentHeight + paddingTop + paddingBottom + borderTop + borderBottom;
 
       cellMeasures.push({
         blocks: blockMeasures,

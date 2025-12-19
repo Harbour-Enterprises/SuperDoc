@@ -1,4 +1,5 @@
 import type { TabStop } from './engines/tabs.js';
+import type { DeepReadonly, DeepRequired } from '@superdoc/common';
 export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/tabs.js';
 
 // Re-export TabStop for external consumers
@@ -436,9 +437,29 @@ export type TableCellAttrs = {
   borders?: CellBorders;
   padding?: BoxSpacing;
   verticalAlign?: 'top' | 'middle' | 'center' | 'bottom';
-  background?: string;
+  background?: string | null;
   tableCellProperties?: Record<string, unknown>;
 };
+
+export type CompleteTableCellAttrs = DeepRequired<TableCellAttrs>;
+
+export const defaultTableCellAttrs: DeepReadonly<CompleteTableCellAttrs> = {
+  borders: {
+    top: { style: 'single', width: 0.5, color: 'auto', space: 0 },
+    right: { style: 'single', width: 0.5, color: 'auto', space: 0 },
+    bottom: { style: 'single', width: 0.5, color: 'auto', space: 0 },
+    left: { style: 'single', width: 0.5, color: 'auto', space: 0 },
+  },
+  padding: {
+    top: 2,
+    left: 4,
+    right: 4,
+    bottom: 2
+  },
+  verticalAlign: 'top',
+  background: null,
+  tableCellProperties: {},
+}
 
 export type TableAttrs = {
   borders?: TableBorders;
@@ -459,6 +480,15 @@ export type TableCell = {
   colSpan?: number;
   attrs?: TableCellAttrs;
 };
+
+export type CompleteTableCell = DeepRequired<TableCell>;
+
+export const defaultTableCell: DeepReadonly<Omit<CompleteTableCell, 'id' | 'paragraph'>> = {
+  blocks: [],
+  rowSpan: 1,
+  colSpan: 1,
+  attrs: defaultTableCellAttrs,
+}
 
 export type TableRowAttrs = {
   tableRowProperties?: Record<string, unknown>;
