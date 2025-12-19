@@ -66,7 +66,6 @@ import {
   DEFAULT_LIST_INDENT_STEP_PX as DEFAULT_LIST_INDENT_STEP,
   DEFAULT_LIST_HANGING_PX as DEFAULT_LIST_HANGING,
   SPACE_SUFFIX_GAP_PX,
-  DEFAULT_TAB_INTERVAL_PX,
 } from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
@@ -2521,7 +2520,8 @@ const capitalizeText = (text: string, fullText?: string, startOffset?: number): 
 };
 
 const applyTextTransform = (text: string, run: Run, startOffset?: number): string => {
-  const transform = run.textTransform;
+  // Only TextRun and TabRun have textTransform (via RunMarks)
+  const transform = 'textTransform' in run ? run.textTransform : undefined;
   if (!text || !transform || transform === 'none') return text;
   if (transform === 'uppercase') return text.toUpperCase();
   if (transform === 'lowercase') return text.toLowerCase();
