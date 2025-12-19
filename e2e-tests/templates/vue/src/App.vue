@@ -21,7 +21,12 @@ const hideRulerIfNeeded = () => {
 };
 
 const init = async () => {
-  if (superdoc.value) superdoc.value.destroy();
+  if (superdoc.value) {
+    superdoc.value.destroy();
+    // Clear global refs so tests wait for the new editor
+    window.editor = undefined;
+    window.superdoc = undefined;
+  }
 
   const config = {
     selector: '#editor',

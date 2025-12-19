@@ -59,7 +59,7 @@ describe('Table commands', async () => {
     const doc = schema.nodes.doc.create(null, [table]);
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
 
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   };
 
   afterEach(async () => {

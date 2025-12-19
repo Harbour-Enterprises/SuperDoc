@@ -77,7 +77,7 @@ describe('StructuredContentTableCommands', () => {
     const doc = schema.nodes.doc.create(null, [block]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
@@ -155,7 +155,7 @@ describe('updateStructuredContentById', () => {
     const doc = schema.nodes.doc.create(null, [paragraph]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
@@ -232,7 +232,7 @@ describe('updateStructuredContentById', () => {
       const doc = schema.nodes.doc.create(null, [paragraph]);
 
       const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-      editor.view.updateState(nextState);
+      editor.setState(nextState);
 
       const didUpdate = editor.commands.updateStructuredContentById(emptyInlineId, {
         text: 'New Content',
@@ -397,7 +397,7 @@ describe('updateStructuredContentByGroup', () => {
     const doc = schema.nodes.doc.create(null, [paragraph]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
