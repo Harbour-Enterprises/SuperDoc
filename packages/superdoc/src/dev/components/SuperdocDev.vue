@@ -510,10 +510,38 @@ const showExportMenu = ref(false);
 const closeExportMenu = () => {
   showExportMenu.value = false;
 };
+
+// Scroll test mode - adds content above editor to make page scrollable (for testing focus scroll bugs)
+const scrollTestMode = ref(urlParams.get('scrolltest') === '1');
+const toggleScrollTestMode = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.set('scrolltest', scrollTestMode.value ? '0' : '1');
+  window.location.href = url.toString();
+};
+
+// Debug: Track all scroll changes when in scroll test mode
+if (scrollTestMode.value) {
+  let lastScrollY = 0;
+  window.addEventListener('scroll', () => {
+    if (Math.abs(window.scrollY - lastScrollY) > 10) {
+      console.log('[SCROLL-DEBUG] Scroll changed:', lastScrollY, '→', window.scrollY);
+      console.trace('[SCROLL-DEBUG] Stack trace:');
+      lastScrollY = window.scrollY;
+    }
+  });
+
+  // Also intercept scrollTo calls
+  const originalScrollTo = window.scrollTo.bind(window);
+  window.scrollTo = function (...args) {
+    console.log('[SCROLL-DEBUG] scrollTo called:', args);
+    console.trace('[SCROLL-DEBUG] scrollTo stack:');
+    return originalScrollTo(...args);
+  };
+}
 </script>
 
 <template>
-  <div class="dev-app">
+  <div class="dev-app" :class="{ 'dev-app--scroll-test': scrollTestMode }">
     <div class="dev-app__layout">
       <div class="dev-app__header">
         <div class="dev-app__brand">
@@ -524,6 +552,7 @@ const closeExportMenu = () => {
             <div class="dev-app__meta-row">
               <span class="dev-app__pill">SUPERDOC LABS</span>
               <span class="badge">Layout Engine: {{ useLayoutEngine ? 'ON' : 'OFF' }}</span>
+              <span v-if="scrollTestMode" class="badge badge--warning">Scroll Test: ON</span>
             </div>
             <h2 class="dev-app__title">SuperDoc Dev</h2>
             <div class="dev-app__header-layout-toggle">
@@ -610,6 +639,17 @@ const closeExportMenu = () => {
               Turn Layout Engine {{ useLayoutEngine ? 'off' : 'on' }} (reloads)
             </button>
           </div>
+        </div>
+      </div>
+
+      <!-- Spacer to push content down and make page scrollable (for testing focus scroll bugs) -->
+      <div v-if="scrollTestMode" class="dev-app__scroll-test-spacer">
+        <div class="dev-app__scroll-test-notice">
+          <strong>⚠️ SCROLL TEST MODE</strong>
+          <p>
+            Scroll down to see the editor. This mode tests that clicking/typing in the editor doesn't cause page jumps.
+          </p>
+          <p>If clicking or typing causes the page to scroll back up here, the bug is present.</p>
         </div>
       </div>
 
@@ -813,6 +853,11 @@ const closeExportMenu = () => {
   pointer-events: none;
 }
 
+.badge--warning {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fcd34d;
+}
+
 .dev-app__upload-block {
   display: flex;
   flex-direction: column;
@@ -971,7 +1016,7 @@ const closeExportMenu = () => {
   border-radius: 10px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   padding: 6px;
-  z-index: 5;
+  z-index: 200;
   display: grid;
   gap: 4px;
 }
@@ -1030,5 +1075,52 @@ const closeExportMenu = () => {
   display: grid;
   overflow-y: auto;
   scrollbar-width: none;
+}
+
+/* Scroll Test Mode - makes page scrollable to test focus scroll bugs */
+.dev-app--scroll-test {
+  height: auto;
+  min-height: 100vh;
+}
+
+.dev-app--scroll-test .dev-app__layout {
+  height: auto;
+  min-height: 100vh;
+}
+
+.dev-app--scroll-test .dev-app__main {
+  overflow: visible;
+}
+
+.dev-app__scroll-test-spacer {
+  height: 120vh;
+  background: linear-gradient(180deg, #1e293b 0%, #334155 50%, #475569 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.dev-app__scroll-test-notice {
+  background: rgba(251, 191, 36, 0.15);
+  border: 2px solid rgba(251, 191, 36, 0.5);
+  border-radius: 12px;
+  padding: 24px 32px;
+  max-width: 500px;
+  text-align: center;
+  color: #fcd34d;
+}
+
+.dev-app__scroll-test-notice strong {
+  font-size: 18px;
+  display: block;
+  margin-bottom: 12px;
+}
+
+.dev-app__scroll-test-notice p {
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #fde68a;
 }
 </style>
