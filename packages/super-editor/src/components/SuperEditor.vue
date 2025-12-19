@@ -2,8 +2,8 @@
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
-import { Editor } from '@/index.js';
-import { PresentationEditor } from '@/core/PresentationEditor.js';
+import { Editor } from '@superdoc/super-editor';
+import { PresentationEditor } from '@core/PresentationEditor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
@@ -17,8 +17,8 @@ import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
-import { isHeadless } from '@/utils/headless-helpers.js';
-import { isMacOS } from '@/core/utilities/isMacOS.js';
+import { isHeadless } from '@utils/headless-helpers.js';
+import { isMacOS } from '@core/utilities/isMacOS.js';
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';

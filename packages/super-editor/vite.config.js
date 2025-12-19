@@ -5,6 +5,7 @@ import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import vue from '@vitejs/plugin-vue'
 
 import { version as superdocVersion } from '../superdoc/package.json';
+import sourceResolve from '../../vite.sourceResolve'
 
 export default defineConfig(({ mode }) => {
   const plugins = [vue()];
@@ -97,19 +98,8 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
     },
     resolve: {
-      alias: {
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
-        '@extensions': fileURLToPath(new URL('./src/extensions', import.meta.url)),
-        '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
-        '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-        '@helpers': fileURLToPath(new URL('./src/core/helpers', import.meta.url)),
-        '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
-        '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
-        '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
-      },
+      ...sourceResolve,
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
-      conditions: ['source'],
     },
     environments: {
       ssr: {

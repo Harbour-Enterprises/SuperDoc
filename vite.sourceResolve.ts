@@ -17,6 +17,7 @@ const sourceResolve = {
         'packages/super-editor/src/core/super-converter/v3/node-translator/index.js',
       ),
     },
+    { find: '@utils', replacement: path.resolve(__dirname, 'packages/super-editor/src/utils') },
   ],
 };
 
