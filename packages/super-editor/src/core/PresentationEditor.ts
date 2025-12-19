@@ -2689,7 +2689,7 @@ export class PresentationEditor extends EventEmitter {
     }
     const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
     if (editorDom) {
-      editorDom.focus();
+      editorDom.focus({ preventScroll: true });
       this.#editor.view?.focus();
     }
   }
@@ -2834,8 +2834,8 @@ export class PresentationEditor extends EventEmitter {
         }
       }
 
-      // Focus the hidden editor
-      editorDom.focus();
+      // Focus the hidden editor (preventScroll avoids jumping the page)
+      editorDom.focus({ preventScroll: true });
       this.#editor.view?.focus();
       // Force selection update to render the caret
       this.#scheduleSelectionUpdate();
@@ -2936,7 +2936,7 @@ export class PresentationEditor extends EventEmitter {
             }
           }
         }
-        editorDom.focus();
+        editorDom.focus({ preventScroll: true });
         this.#editor.view?.focus();
         // Force selection update to render the caret
         this.#scheduleSelectionUpdate();
@@ -3096,7 +3096,7 @@ export class PresentationEditor extends EventEmitter {
       }
       const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
       if (editorDom) {
-        editorDom.focus();
+        editorDom.focus({ preventScroll: true });
         this.#editor.view?.focus();
       }
 
@@ -3188,8 +3188,8 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    // Try direct DOM focus first
-    editorDom.focus();
+    // Try direct DOM focus first (preventScroll avoids jumping the page)
+    editorDom.focus({ preventScroll: true });
     this.#editor.view?.focus();
   };
 
