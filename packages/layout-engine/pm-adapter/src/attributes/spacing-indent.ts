@@ -177,7 +177,9 @@ export const indentPtToPx = (indent: EngineParagraphIndent): ParagraphIndent | u
  * normalizeAlignment('CENTER'); // undefined (case-sensitive)
  * ```
  */
-export const normalizeAlignment = (value: unknown): ParagraphAttrs['alignment'] => {
+type NormalizedParagraphAlignment = Exclude<ParagraphAttrs['alignment'], 'both'>;
+
+export const normalizeAlignment = (value: unknown): NormalizedParagraphAlignment => {
   switch (value) {
     case 'center':
     case 'right':

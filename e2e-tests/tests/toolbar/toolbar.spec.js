@@ -19,7 +19,7 @@ test.describe('toolbar', () => {
       await lastButton.click();
       await page.keyboard.type('Hello');
 
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.getByText('Hello', { exact: true });
       const customAttribute = await hello.getAttribute('data-custom-id');
       expect(customAttribute).not.toBeNull();
     });
@@ -49,7 +49,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.ProseMirror').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).fontFamily)).toBe('Georgia');
     });
@@ -247,7 +247,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -274,7 +274,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -301,7 +301,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      const helloText = await superEditor.getByText('Hello');
+      const helloText = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       await helloText.click({
         clickCount: 2,
       });
@@ -330,7 +330,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      const helloText = await superEditor.getByText('Hello');
+      const helloText = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       await helloText.click({
         clickCount: 2,
       });
@@ -359,7 +359,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -371,7 +371,7 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="red"]').click();
 
       // Ensure the text is red
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).color)).toBe('rgb(210, 0, 63)');
     });
@@ -390,7 +390,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -405,7 +405,7 @@ test.describe('toolbar', () => {
       await superEditor.click();
 
       // Ensure the text is highlighted
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
 
       expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
@@ -425,7 +425,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -455,7 +455,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -487,7 +487,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -522,7 +522,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -548,7 +548,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -558,9 +558,12 @@ test.describe('toolbar', () => {
       // Ensure the text is italic
       await sleep(500);
       expect(
-        await superEditor.getByText('Hello').evaluate((el) => {
-          return window.getComputedStyle(el).fontStyle;
-        }),
+        await superEditor
+          .locator('.superdoc-layout')
+          .getByText('Hello', { exact: true })
+          .evaluate((el) => {
+            return window.getComputedStyle(el).fontStyle;
+          }),
       ).toBe('italic');
     });
 
@@ -579,7 +582,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -607,7 +610,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -636,7 +639,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -651,7 +654,7 @@ test.describe('toolbar', () => {
       await sleep(500);
 
       // Click back on the text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -673,7 +676,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -688,7 +691,7 @@ test.describe('toolbar', () => {
       await sleep(500);
 
       // Click back on the text
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -711,7 +714,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -720,7 +723,7 @@ test.describe('toolbar', () => {
       await boldButton.click();
 
       // Click back on the bold text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -746,7 +749,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -755,7 +758,7 @@ test.describe('toolbar', () => {
       await italicButton.click();
 
       // Click back on the italic text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -782,7 +785,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -791,7 +794,7 @@ test.describe('toolbar', () => {
       await underlineButton.click();
 
       // Click back on the underline text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -818,7 +821,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -827,7 +830,7 @@ test.describe('toolbar', () => {
       await strikethroughButton.click();
 
       // Click back on the strikethrough text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -854,7 +857,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -884,7 +887,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -973,7 +976,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -985,7 +988,7 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Linked style - Heading2"]').click();
 
       // Click back on the text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar button text to update and verify
       const styleButtonText = styleButton.getByText('heading 2');
@@ -1005,23 +1008,23 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Select the text and apply Heading2 style
-      await superEditor.getByText('Hello').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({ clickCount: 2 });
 
       const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
       await styleButton.click();
       await page.locator('div[aria-label="Linked style - Heading2"]').click();
 
       // Verify heading 2 label is shown
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
       await expect(styleButton.getByText('heading 2')).toBeVisible({ timeout: 2000 });
 
       // Select the text again and remove the style by applying "Normal"
-      await superEditor.getByText('Hello').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({ clickCount: 2 });
       await styleButton.click();
       await page.locator('div[aria-label="Linked style - Normal"]').click();
 
       // Click on the text and verify label resets
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
       const formatTextLabel = styleButton.getByText('format text', { exact: false });
       await expect(formatTextLabel).toBeVisible({ timeout: 2000 });
     });
@@ -1039,7 +1042,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Test');
 
       // Select text and open linked styles dropdown
-      await superEditor.getByText('Test').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Test', { exact: true }).click({ clickCount: 2 });
 
       const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
       await styleButton.click();
@@ -1067,7 +1070,7 @@ test.describe('toolbar', () => {
       await page.keyboard.press('Enter');
 
       // Verify the style was applied
-      await superEditor.getByText('Test').click();
+      await superEditor.locator('.superdoc-layout').getByText('Test', { exact: true }).click();
       await page.waitForSelector('.superdoc-layout [styleid="Heading2"]', { timeout: 10000 });
       const styleButtonText = styleButton.getByText('heading 2');
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
