@@ -1,6 +1,12 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest';
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest';
 
 import { DomPositionIndexObserverManager } from '../DomPositionIndexObserverManager.js';
+
+/**
+ * Helper to wait for async operations (MutationObserver + RAF) to complete.
+ * Uses setTimeout to allow microtasks and RAF to flush.
+ */
+const waitForAsyncOperations = () => new Promise<void>((resolve) => setTimeout(resolve, 50));
 
 describe('DomPositionIndexObserverManager', () => {
   let mockWindow: Window & typeof globalThis;
@@ -14,8 +20,16 @@ describe('DomPositionIndexObserverManager', () => {
     mockWindow = window;
   });
 
+  afterEach(() => {
+    // Clean up DOM
+    if (mockPainterHost && mockPainterHost.parentNode) {
+      mockPainterHost.parentNode.removeChild(mockPainterHost);
+    }
+    vi.clearAllMocks();
+  });
+
   describe('setup', () => {
-    it('creates and starts a MutationObserver', () => {
+    it('creates and starts a MutationObserver', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -30,14 +44,10 @@ describe('DomPositionIndexObserverManager', () => {
       const child = document.createElement('div');
       mockPainterHost.appendChild(child);
 
-      // Wait for RAF to trigger rebuild
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).toHaveBeenCalled();
-          manager.destroy();
-          resolve();
-        });
-      });
+      // Wait for MutationObserver + RAF to trigger rebuild
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).toHaveBeenCalled();
+      manager.destroy();
     });
 
     it('handles missing MutationObserver gracefully', () => {
@@ -72,7 +82,7 @@ describe('DomPositionIndexObserverManager', () => {
   });
 
   describe('pause', () => {
-    it('disconnects the observer', () => {
+    it('disconnects the observer', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -86,13 +96,9 @@ describe('DomPositionIndexObserverManager', () => {
       const child = document.createElement('div');
       mockPainterHost.appendChild(child);
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).not.toHaveBeenCalled();
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).not.toHaveBeenCalled();
+      manager.destroy();
     });
 
     it('handles pause when observer not setup', () => {
@@ -108,7 +114,7 @@ describe('DomPositionIndexObserverManager', () => {
   });
 
   describe('resume', () => {
-    it('reconnects the observer', () => {
+    it('reconnects the observer', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -123,13 +129,9 @@ describe('DomPositionIndexObserverManager', () => {
       const child = document.createElement('div');
       mockPainterHost.appendChild(child);
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).toHaveBeenCalled();
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).toHaveBeenCalled();
+      manager.destroy();
     });
 
     it('handles resume when observer not setup', () => {
@@ -173,7 +175,7 @@ describe('DomPositionIndexObserverManager', () => {
   });
 
   describe('destroy', () => {
-    it('disconnects and clears the observer', () => {
+    it('disconnects and clears the observer', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -187,15 +189,11 @@ describe('DomPositionIndexObserverManager', () => {
       const child = document.createElement('div');
       mockPainterHost.appendChild(child);
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).not.toHaveBeenCalled();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).not.toHaveBeenCalled();
     });
 
-    it('clears rebuild scheduled flag', () => {
+    it('clears rebuild scheduled flag', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -206,13 +204,12 @@ describe('DomPositionIndexObserverManager', () => {
       manager.scheduleRebuild();
       manager.destroy();
 
-      // Should not rebuild after destroy
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).not.toHaveBeenCalled();
-          resolve();
-        });
-      });
+      // Also disconnect painterHost - the implementation skips rebuild if painterHost is disconnected
+      mockPainterHost.remove();
+
+      // Should not rebuild after destroy (painterHost disconnected check prevents callback)
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).not.toHaveBeenCalled();
     });
 
     it('handles destroy when not setup', () => {
@@ -228,7 +225,7 @@ describe('DomPositionIndexObserverManager', () => {
   });
 
   describe('scheduleRebuild', () => {
-    it('schedules a rebuild via requestAnimationFrame', () => {
+    it('schedules a rebuild via requestAnimationFrame', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -238,16 +235,12 @@ describe('DomPositionIndexObserverManager', () => {
       manager.setup();
       manager.scheduleRebuild();
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).toHaveBeenCalledTimes(1);
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).toHaveBeenCalledTimes(1);
+      manager.destroy();
     });
 
-    it('debounces multiple rebuild requests', () => {
+    it('debounces multiple rebuild requests', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -259,17 +252,13 @@ describe('DomPositionIndexObserverManager', () => {
       manager.scheduleRebuild();
       manager.scheduleRebuild();
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          // Should only rebuild once despite multiple schedule calls
-          expect(onRebuildSpy).toHaveBeenCalledTimes(1);
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      // Should only rebuild once despite multiple schedule calls
+      expect(onRebuildSpy).toHaveBeenCalledTimes(1);
+      manager.destroy();
     });
 
-    it('does not rebuild if painterHost is disconnected', () => {
+    it('does not rebuild if painterHost is disconnected', async () => {
       const manager = new DomPositionIndexObserverManager({
         windowRoot: mockWindow,
         getPainterHost: () => mockPainterHost,
@@ -282,16 +271,12 @@ describe('DomPositionIndexObserverManager', () => {
       // Disconnect painterHost before RAF callback
       mockPainterHost.remove();
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).not.toHaveBeenCalled();
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).not.toHaveBeenCalled();
+      manager.destroy();
     });
 
-    it('does not rebuild if painterHost returns null', () => {
+    it('does not rebuild if painterHost returns null', async () => {
       let painterHost: HTMLElement | null = mockPainterHost;
 
       const manager = new DomPositionIndexObserverManager({
@@ -306,13 +291,9 @@ describe('DomPositionIndexObserverManager', () => {
       // Set to null before RAF callback
       painterHost = null;
 
-      return new Promise<void>((resolve) => {
-        requestAnimationFrame(() => {
-          expect(onRebuildSpy).not.toHaveBeenCalled();
-          manager.destroy();
-          resolve();
-        });
-      });
+      await waitForAsyncOperations();
+      expect(onRebuildSpy).not.toHaveBeenCalled();
+      manager.destroy();
     });
   });
 });

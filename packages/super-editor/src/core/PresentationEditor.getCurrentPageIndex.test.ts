@@ -148,10 +148,15 @@ vi.mock('./Editor', () => {
       state: {
         selection: { from: 0, to: 0 },
         doc: {
+          type: { name: 'doc' },
+          isText: false,
+          isLeaf: false,
+          childCount: 0,
           nodeSize: 100,
           content: {
             size: 100,
           },
+          forEach: vi.fn(),
           descendants: vi.fn(),
           nodesBetween: vi.fn((_from: number, _to: number, callback: (node: unknown, pos: number) => void) => {
             callback({ isTextblock: true }, 0);
@@ -280,6 +285,7 @@ vi.mock('./header-footer/EditorOverlayManager', () => ({
 describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
   let container: HTMLElement;
   let presentation: PresentationEditor;
+  let rafSpy: ReturnType<typeof vi.spyOn> | null = null;
 
   beforeEach(() => {
     container = document.createElement('div');
@@ -292,9 +298,19 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
     };
     mockEditorConverterStore.mediaFiles = {};
     (PresentationEditor as typeof PresentationEditor & { instances: Map<string, unknown> }).instances = new Map();
+
+    // Mock requestAnimationFrame to execute callbacks after a microtask
+    // jsdom doesn't run a real animation loop, so RAF callbacks may not fire
+    // We use queueMicrotask to allow constructor to complete before callback runs
+    rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb: FrameRequestCallback) => {
+      queueMicrotask(() => cb(0));
+      return 1;
+    });
   });
 
   afterEach(() => {
+    rafSpy?.mockRestore();
+    rafSpy = null;
     if (presentation) {
       presentation.destroy();
     }
@@ -344,6 +360,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const styles = presentation.getCurrentSectionPageStyles();
@@ -395,6 +412,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Mock editor selection to position 0 (should be on page 0)
@@ -458,6 +476,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Mock editor selection to position 75 (should be on page 1, section 1)
@@ -507,6 +526,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Mock editor selection to position 999 (beyond any fragment)
@@ -568,6 +588,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Mock editor selection to position 60 (should be on page 1)
@@ -623,6 +644,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Test position at end of first fragment
@@ -668,6 +690,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const styles = presentation.getCurrentSectionPageStyles();
@@ -718,6 +741,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     const mockEditor = (presentation as unknown as { editor?: { state?: { selection?: { from: number } } } }).editor;
@@ -772,6 +796,7 @@ describe('PresentationEditor.#getCurrentPageIndex() fragment fallback', () => {
       mode: 'docx',
     });
 
+    await vi.waitFor(() => expect(mockIncrementalLayout).toHaveBeenCalled());
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     // Mock editor position to 50 (which would be page 0 via fragments)
