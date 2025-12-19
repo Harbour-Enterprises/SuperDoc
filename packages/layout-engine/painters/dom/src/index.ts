@@ -104,6 +104,7 @@ export const createDomPainter = (
   options: DomPainterOptions,
 ): PainterDOM & {
   setProviders?: (header?: PageDecorationProvider, footer?: PageDecorationProvider) => void;
+  setVirtualizationPins?: (pageIndices: number[] | null | undefined) => void;
 } => {
   const painter = new DomPainter(options.blocks, options.measures, {
     pageStyles: options.pageStyles,
@@ -132,6 +133,9 @@ export const createDomPainter = (
     // Non-standard extension for demo app to avoid re-instantiating on provider changes
     setProviders(header?: PageDecorationProvider, footer?: PageDecorationProvider) {
       painter.setProviders(header, footer);
+    },
+    setVirtualizationPins(pageIndices: number[] | null | undefined) {
+      painter.setVirtualizationPins(pageIndices);
     },
   };
 };

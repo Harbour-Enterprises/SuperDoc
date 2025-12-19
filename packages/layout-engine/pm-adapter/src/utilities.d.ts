@@ -429,7 +429,10 @@ export declare function toBoxSpacing(spacing?: Record<string, unknown>): BoxSpac
  * map.get(paragraph); // { start: 0, end: 7 } (1 open + 5 text + 1 close)
  * ```
  */
-export declare const buildPositionMap: (root: PMNode) => PositionMap;
+type BuildPositionMapOptions = {
+  atomNodeTypes?: Iterable<string>;
+};
+export declare const buildPositionMap: (root: PMNode, options?: BuildPositionMapOptions) => PositionMap;
 /**
  * Creates a block ID generator function with sequential numbering.
  *

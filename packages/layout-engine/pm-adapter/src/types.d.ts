@@ -78,6 +78,16 @@ export interface AdapterOptions {
    */
   blockIdPrefix?: string;
   /**
+   * Optional list of ProseMirror node type names that should be treated as atom/leaf nodes
+   * for position mapping. Use this to keep PM positions correct when custom atom nodes exist.
+   */
+  atomNodeTypes?: Iterable<string>;
+  /**
+   * Optional precomputed position map keyed by the PM JSON nodes passed to toFlowBlocks.
+   * When provided, this is used directly instead of building a new position map.
+   */
+  positions?: PositionMap;
+  /**
    * Optional media files map for hydrating image blocks.
    * Key: normalized file path (e.g., "word/media/image1.jpeg")
    * Value: base64-encoded image data

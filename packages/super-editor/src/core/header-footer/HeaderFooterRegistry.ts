@@ -1,4 +1,5 @@
 import { toFlowBlocks } from '@superdoc/pm-adapter';
+import { getAtomNodeTypes as getAtomNodeTypesFromSchema } from '../SchemaNodeTypes.js';
 import type { FlowBlock } from '@superdoc/contracts';
 import type { HeaderFooterBatch } from '@superdoc/layout-bridge';
 import type { Editor } from '@core/Editor.js';
@@ -1145,6 +1146,7 @@ export class HeaderFooterLayoutAdapter {
     const providedMedia = this.#mediaFiles;
     const fallbackMedia = rootConverter?.media;
     const mediaFiles = providedMedia && Object.keys(providedMedia).length > 0 ? providedMedia : fallbackMedia;
+    const atomNodeTypes = getAtomNodeTypesFromSchema((this.#manager.rootEditor as Editor | undefined)?.schema ?? null);
 
     // Get document defaults for consistent rendering with main document
     const docDefaults = rootConverter?.getDocumentDefaultStyles?.();
@@ -1158,6 +1160,7 @@ export class HeaderFooterLayoutAdapter {
       converterContext,
       defaultFont,
       defaultSize,
+      ...(atomNodeTypes.length > 0 ? { atomNodeTypes } : {}),
     });
     const blocks = result.blocks;
 

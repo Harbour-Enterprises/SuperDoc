@@ -13,6 +13,7 @@ export {
   type CalculateJustifySpacingParams,
 } from './justify-utils.js';
 
+export { computeFragmentPmRange, computeLinePmRange, type LinePmRange } from './pm-range.js';
 /** Inline field annotation metadata extracted from w:sdt nodes. */
 export type FieldAnnotationMetadata = {
   type: 'fieldAnnotation';
@@ -1097,7 +1098,7 @@ export type WordLayoutConfig = {
 
 export type ParagraphAttrs = {
   styleId?: string;
-  alignment?: 'left' | 'center' | 'right' | 'justify';
+  alignment?: 'left' | 'center' | 'right' | 'justify' | 'both';
   spacing?: ParagraphSpacing;
   contextualSpacing?: boolean;
   indent?: ParagraphIndent;
@@ -1552,6 +1553,14 @@ export type Layout = {
    * Defaults to 0 if not specified (pages assumed to be stacked with no gap).
    */
   pageGap?: number;
+  /**
+   * Document epoch identifier for the document state used to produce this layout.
+   *
+   * This value is set by higher-level orchestration (e.g., PresentationEditor) and is
+   * stamped into the painted DOM as `data-layout-epoch` to enable deterministic mapping
+   * from DOM-derived positions back to the current ProseMirror document state.
+   */
+  layoutEpoch?: number;
 };
 
 export interface PainterDOM {
