@@ -315,10 +315,16 @@ export function handleHtmlPaste(html, editor, source) {
  * @param {Editor} editor The editor instance.
  * @returns {DocumentFragment} The processed HTML string.
  */
-export function htmlHandler(html, editor) {
-  const flatHtml = flattenListsInHtml(html, editor);
+export function htmlHandler(html, editor, domDocument) {
+  const resolvedDocument =
+    domDocument ??
+    editor?.options?.document ??
+    editor?.options?.mockDocument ??
+    (typeof document !== 'undefined' ? document : null);
+
+  const flatHtml = flattenListsInHtml(html, editor, resolvedDocument);
   const htmlWithPtSizing = convertEmToPt(flatHtml);
-  return sanitizeHtml(htmlWithPtSizing);
+  return sanitizeHtml(htmlWithPtSizing, undefined, resolvedDocument);
 }
 
 /**
@@ -356,8 +362,15 @@ export function cleanHtmlUnnecessaryTags(html) {
  * @param {string[]} forbiddenTags The list of forbidden tags to remove from the HTML.
  * @returns {DocumentFragment} The sanitized HTML as a DocumentFragment.
  */
-export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button']) {
-  const container = document.createElement('div');
+export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button'], domDocument) {
+  const resolvedDocument = domDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!resolvedDocument) {
+    throw new Error(
+      '[super-editor] HTML sanitization requires a DOM. Provide { document } (e.g. from JSDOM), set DOM globals, or run in a browser environment.',
+    );
+  }
+
+  const container = resolvedDocument.createElement('div');
   container.innerHTML = html;
 
   const walkAndClean = (node) => {
