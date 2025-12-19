@@ -10,7 +10,9 @@ const XML_NODE_NAME = 'wp:inline';
 const SD_NODE_NAME = ['image', 'shapeGroup', 'vectorShape', 'contentBlock'];
 
 /** @type {import('@translator').AttrConfig[]} */
-const validXmlAttributes = ['distT', 'distB', 'distL', 'distR'].map((xmlName) => createAttributeHandler(xmlName));
+const validXmlAttributes = ['distT', 'distB', 'distL', 'distR', 'wp14:anchorId', 'wp14:editId'].map((xmlName) =>
+  createAttributeHandler(xmlName),
+);
 /**
  * @param {import('@translator').SCEncoderConfig} params
  * @returns {import('@translator').SCEncoderResult}

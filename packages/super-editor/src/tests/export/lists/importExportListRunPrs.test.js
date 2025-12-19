@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 // prettier-ignore
 import { beforeAll, expect } from 'vitest';
-import { loadTestDataForEditorTests, initTestEditor, getNewTransaction } from '@tests/helpers/helpers.js';
+import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 
 describe('[exported-list-font.docx] Imports/export list with inline run properties', () => {
   const filename = 'exported-list-font.docx';
@@ -15,17 +15,12 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
   });
 
   it('correctly imports list with inline run properties', () => {
-    const list = doc.content[0];
-    const item = list.content[0];
-    expect(list.type).toBe('orderedList');
-    expect(item.type).toBe('listItem');
-    expect(item.attrs.indent.left).toBeUndefined();
-    expect(item.attrs.indent.hanging).toBeUndefined();
+    const item = doc.content[0];
+    expect(item.type).toBe('paragraph');
+    const paragraphProperties = item.attrs.paragraphProperties || {};
+    expect(paragraphProperties.numberingProperties).toEqual({ ilvl: 0, numId: 1 });
 
-    const content = item.content[0];
-    expect(content.type).toBe('paragraph');
-
-    const runNode = content.content.find((node) => node.type === 'run');
+    const runNode = item.content.find((node) => node.type === 'run');
     expect(runNode).toBeDefined();
 
     const text = runNode.content?.find((child) => child.type === 'text');
@@ -61,6 +56,6 @@ describe('[exported-list-font.docx] Imports/export list with inline run properti
     expect(wsz).toBeDefined();
     const { attributes } = wsz;
     expect(attributes).toBeDefined();
-    expect(attributes['w:val']).toBe(16);
+    expect(attributes['w:val']).toBe('16');
   });
 });

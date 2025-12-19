@@ -3,10 +3,10 @@ import { computed, ref, h } from 'vue';
 import ToolbarButton from './ToolbarButton.vue';
 import ToolbarSeparator from './ToolbarSeparator.vue';
 import OverflowMenu from './OverflowMenu.vue';
-import { NDropdown, NTooltip, NSelect } from 'naive-ui';
+import { NDropdown, NTooltip } from 'naive-ui';
 import { useHighContrastMode } from '../../composables/use-high-contrast-mode';
 
-const emit = defineEmits(['command', 'item-clicked']);
+const emit = defineEmits(['command', 'item-clicked', 'dropdown-update-show']);
 
 const toolbarItemRefs = ref([]);
 const props = defineProps({
@@ -17,6 +17,16 @@ const props = defineProps({
   overflowItems: {
     type: Array,
     default: () => [],
+  },
+  /**
+   * The font-family to use for UI elements like dropdowns and tooltips.
+   * This ensures consistent typography across toolbar UI components.
+   * @type {string}
+   * @default 'Arial, Helvetica, sans-serif'
+   */
+  uiFontFamily: {
+    type: String,
+    default: 'Arial, Helvetica, sans-serif',
   },
   position: {
     type: String,
@@ -101,18 +111,6 @@ const getDropdownAttributes = (option, item) => {
     role: 'menuitem',
     ariaLabel: `${item.attributes.value.ariaLabel} - ${option.label}`,
   };
-};
-
-const handleClickOutside = (e) => {
-  const target = e.target;
-  const itemCtn = target.closest('.toolbar-item-ctn');
-  const targetItemId = itemCtn?.dataset.itemId;
-
-  if (targetItemId === currentItem.value.id) {
-    return;
-  }
-
-  closeDropdowns();
 };
 
 const moveToNextButton = (e) => {
@@ -205,6 +203,13 @@ const handleFocus = (e) => {
     firstButton.focus();
   }
 };
+
+const handleDropdownUpdateShow = (open) => {
+  if (!open) {
+    closeDropdowns();
+  }
+  emit('dropdown-update-show', open);
+};
 </script>
 
 <template>
@@ -232,21 +237,23 @@ const handleFocus = (e) => {
         :options="dropdownOptions(item)"
         :trigger="item.disabled.value ? null : 'click'"
         :show="item.expand.value"
+        :content-style="{ fontFamily: props.uiFontFamily }"
         size="medium"
         placement="bottom-start"
         class="toolbar-button toolbar-dropdown sd-editor-toolbar-dropdown"
         :class="{ 'high-contrast': isHighContrastMode }"
         @select="(key, option) => handleSelect(item, option)"
-        @clickoutside="handleClickOutside"
+        @update-show="handleDropdownUpdateShow"
         :style="item.dropdownStyles.value"
         :menu-props="
           () => ({
             role: 'menu',
+            style: { fontFamily: props.uiFontFamily },
           })
         "
         :node-props="(option) => getDropdownAttributes(option, item)"
       >
-        <n-tooltip trigger="hover" :disabled="!item.tooltip?.value">
+        <n-tooltip trigger="hover" :disabled="!item.tooltip?.value" :content-style="{ fontFamily: props.uiFontFamily }">
           <template #trigger>
             <ToolbarButton
               :toolbar-item="item"
@@ -262,7 +269,12 @@ const handleFocus = (e) => {
         </n-tooltip>
       </n-dropdown>
 
-      <n-tooltip trigger="hover" v-else-if="isButton(item)" class="sd-editor-toolbar-tooltip">
+      <n-tooltip
+        trigger="hover"
+        v-else-if="isButton(item)"
+        class="sd-editor-toolbar-tooltip"
+        :content-style="{ fontFamily: props.uiFontFamily }"
+      >
         <template #trigger>
           <ToolbarButton
             :toolbar-item="item"
@@ -283,6 +295,7 @@ const handleFocus = (e) => {
         :toolbar-item="item"
         @buttonClick="handleToolbarButtonClick(item)"
         :overflow-items="overflowItems"
+        @close="closeDropdowns"
       />
     </div>
   </div>

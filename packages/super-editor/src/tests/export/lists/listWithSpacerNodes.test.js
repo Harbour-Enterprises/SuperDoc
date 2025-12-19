@@ -21,9 +21,9 @@ describe('[listWithSpacerNodes.docx] list with spacer nodes', async () => {
     expect(spacer.elements.length).toEqual(1);
     expect(spacer.elements[0].name).toEqual('w:pPr');
     expect(spacer.elements[0].elements[0].name).toEqual('w:spacing');
-    expect(spacer.elements[0].elements[0].attributes['w:before']).toEqual(0);
-    expect(spacer.elements[0].elements[0].attributes['w:after']).toEqual(0);
-    expect(spacer.elements[0].elements[0].attributes['w:line']).toEqual(276);
+    expect(spacer.elements[0].elements[0].attributes['w:before']).toEqual('0');
+    expect(spacer.elements[0].elements[0].attributes['w:after']).toEqual('0');
+    expect(spacer.elements[0].elements[0].attributes['w:line']).toEqual('276');
     expect(spacer.elements[0].elements[0].attributes['w:lineRule']).toEqual('auto');
   });
 });
@@ -60,7 +60,7 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem1PPr = subListItem1.elements.find((el) => el.name === 'w:pPr');
     const subListItem1NumPr = subListItem1PPr.elements.find((el) => el.name === 'w:numPr');
     const subListItem1ilvl = subListItem1NumPr.elements.find((el) => el.name === 'w:ilvl');
-    expect(subListItem1ilvl.attributes['w:val']).toEqual(1);
+    expect(subListItem1ilvl.attributes['w:val']).toEqual('1');
     const subListItem1NumId = subListItem1NumPr.elements.find((el) => el.name === 'w:numId');
     expect(subListItem1NumId.attributes['w:val']).toEqual('1');
 
@@ -85,7 +85,7 @@ describe('[list-with-table-break.docx] list with a table in between sub list nod
     const subListItem2NumPr = subListItem2PPr.elements.find((el) => el.name === 'w:numPr');
 
     const subListItem2ilvl = subListItem2NumPr.elements.find((el) => el.name === 'w:ilvl');
-    expect(subListItem2ilvl.attributes['w:val']).toEqual(1);
+    expect(subListItem2ilvl.attributes['w:val']).toEqual('1');
     const subListItem2NumId = subListItem2NumPr.elements.find((el) => el.name === 'w:numId');
     expect(subListItem2NumId.attributes['w:val']).toEqual('1');
 
@@ -115,7 +115,7 @@ describe('[list-spacer1.docx] correctly imports invalid list (no abstract) as pa
   it('correctly imports the list styles', () => {
     const importedParagraph = content.content[2];
     expect(importedParagraph.type).toEqual('paragraph');
-    expect(importedParagraph.attrs.styleId).toEqual('StandardL1');
+    expect(importedParagraph.attrs.paragraphProperties?.styleId).toEqual('StandardL1');
 
     const paragraph = body.elements[2];
     const pPr = paragraph.elements.find((el) => el.name === 'w:pPr');

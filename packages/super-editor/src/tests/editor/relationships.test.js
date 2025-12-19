@@ -1,5 +1,4 @@
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
-import { TextSelection } from 'prosemirror-state';
 import { expect } from 'vitest';
 import { getDocumentRelationshipElements } from '@core/super-converter/docx-helpers/document-rels.js';
 import {
@@ -21,15 +20,16 @@ describe('Relationships tests', () => {
   beforeEach(() => ({ editor } = initTestEditor({ content: docx, media, mediaFiles, fonts })));
 
   it('tests that the inserted link has a rId and a relationship', () => {
-    editor.commands.insertContentAt(0, 'link');
+    // Insert 'link' text
+    editor.commands.insertContent('link');
 
-    const paragraphStart = 1; // position where paragraph content begins
-    editor.view.dispatch(
-      editor.state.tr.setSelection(TextSelection.create(editor.state.doc, paragraphStart, paragraphStart + 4)),
-    );
+    // Select all the inserted text
+    editor.commands.selectAll();
+
+    // Apply the link
     editor.commands.setLink({ href: 'https://www.superdoc.dev' });
 
-    const linkMark = editor.state.doc.firstChild.firstChild.marks[0];
+    const linkMark = editor.state.doc.firstChild.firstChild.firstChild.marks[0];
 
     expect(linkMark.type.name).toBe('link');
     expect(linkMark.attrs.rId).toBeTruthy();

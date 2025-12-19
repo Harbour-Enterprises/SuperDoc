@@ -32,7 +32,7 @@ const encode = (params, encodedAttrs = {}) => {
 
 const decode = (params) => {
   const attrs = params?.node?.attrs || {};
-  const highlightValue = attrs.highlight ?? attrs.color ?? null;
+  const highlightValue = attrs.highlight?.['w:val'] ?? attrs.highlight ?? attrs.color ?? null;
   if (!highlightValue) return undefined;
 
   const normalizedValue = String(highlightValue).trim().toLowerCase();

@@ -97,22 +97,6 @@
  */
 
 /**
- * @typedef {'responsive' | 'paginated'} LayoutMode
- * Determines how the document is displayed:
- * - 'paginated' (default): Fixed page width, shows page breaks like a real document
- * - 'responsive': 100% width, text reflows to fit the container (useful for mobile/accessibility)
- */
-
-/**
- * @typedef {Object} LayoutMargins
- * @property {number} [top] Override for the top margin in pixels
- * @property {number} [bottom] Override for the bottom margin in pixels
- * @property {number} [left] Override for the left margin in pixels
- * @property {number} [right] Override for the right margin in pixels
- * @description Custom margins for responsive layout mode. Values are in pixels. Defaults to 96px (1 inch) if not specified.
- */
-
-/**
  * @typedef {Object} Config
  * @property {string} [superdocId] The ID of the SuperDoc
  * @property {string | HTMLElement} selector The selector or element to mount the SuperDoc into
@@ -133,13 +117,23 @@
  *   currentUser?: User | null,
  *   superdoc?: SuperDoc | null,
  * }) => boolean | undefined} [permissionResolver] Top-level override for permission checks
- * @property {boolean} [pagination] Whether to show pagination in SuperEditors
  * @property {string} [toolbar] Optional DOM element to render the toolbar in
  * @property {Array<string>} [toolbarGroups] Toolbar groups to show
  * @property {Object} [toolbarIcons] Icons to show in the toolbar
  * @property {Object} [toolbarTexts] Texts to override in the toolbar
+ * @property {string} [uiDisplayFallbackFont='Arial, Helvetica, sans-serif'] The font-family to use for all SuperDoc UI surfaces
+ *   (toolbar, comments UI, dropdowns, tooltips, etc.). This ensures consistent typography across the entire application
+ *   and helps match your application's design system. The value should be a valid CSS font-family string.
+ *   @example
+ *   // Use system fonts
+ *   uiDisplayFallbackFont: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+ *   @example
+ *   // Use a custom font
+ *   uiDisplayFallbackFont: '"Inter", Arial, sans-serif'
  * @property {boolean} [isDev] Whether the SuperDoc is in development mode
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
+ * @property {Object} [layoutEngineOptions] Layout engine overrides passed through to PresentationEditor (page size, margins, virtualization, zoom, debug label, etc.)
+ * @property {Object} [layoutEngineOptions.trackedChanges] Optional override for paginated track-changes rendering (e.g., `{ mode: 'final' }` to force final view or `{ enabled: false }` to strip metadata entirely)
  * @property {(editor: Editor) => void} [onEditorBeforeCreate] Callback before an editor is created
  * @property {(editor: Editor) => void} [onEditorCreate] Callback after an editor is created
  * @property {(params: { editor: Editor, transaction: any, duration: number }) => void} [onTransaction] Callback when a transaction is made
@@ -171,8 +165,6 @@
  * @property {string} [html] HTML content to initialize the editor with
  * @property {string} [markdown] Markdown content to initialize the editor with
  * @property {boolean} [isDebug=false] Whether to enable debug mode
- * @property {LayoutMode} [layoutMode='paginated'] Document layout mode ('paginated' for fixed page width, 'responsive' for fluid width)
- * @property {LayoutMargins} [layoutMargins] Custom margins in pixels for responsive layout mode
  */
 
 export {};

@@ -77,7 +77,6 @@ describe('preProcessHyperlinkInstruction', () => {
           {
             type: 'link',
             attrs: {
-              history: false,
               rId: 'rId123',
               href: 'http://example.com',
             },

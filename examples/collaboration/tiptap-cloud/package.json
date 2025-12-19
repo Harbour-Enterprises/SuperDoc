@@ -10,7 +10,7 @@
     "@tiptap-pro/provider": "^3.3.0",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
-    "superdoc": "latest",
+    "superdoc": "link:../../../packages/superdoc",
     "yjs": "^13.6.27"
   },
   "devDependencies": {

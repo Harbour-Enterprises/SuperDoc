@@ -1,4 +1,5 @@
-// @ts-check
+// @ts-nocheck
+
 import { Node, Attribute } from '@core/index.js';
 import { DocumentSectionView } from './document-section/DocumentSectionView.js';
 import { htmlHandler } from '@core/InputRule.js';
@@ -105,6 +106,7 @@ export const DocumentSection = Node.create({
     };
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**

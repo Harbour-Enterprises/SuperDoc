@@ -1,116 +1,3 @@
-# [0.36.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.3...v0.36.0) (2025-12-18)
-
-### Features
-
-- add displayMarginsOverride, used only when pagination is off [stable] ([#1555](https://github.com/Harbour-Enterprises/SuperDoc/issues/1555)) ([ee93168](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee9316811ad56aa0d185f5fdb8964c5e4880cc58)), closes [#1561](https://github.com/Harbour-Enterprises/SuperDoc/issues/1561)
-
-## [0.35.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.2...v0.35.3) (2025-12-11)
-
-### Bug Fixes
-
-- comments module typedef for disable [stable] ([#1494](https://github.com/Harbour-Enterprises/SuperDoc/issues/1494)) ([bdac63c](https://github.com/Harbour-Enterprises/SuperDoc/commit/bdac63c05f8f8ae122023d4eee70450ac12695a5))
-
-## [0.35.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.1...v0.35.2) (2025-12-10)
-
-### Bug Fixes
-
-- cicd ([f3f2dc4](https://github.com/Harbour-Enterprises/SuperDoc/commit/f3f2dc4c2ca347bedfa0f14cdb8ea2aa96310a04))
-- cicd ([4069de0](https://github.com/Harbour-Enterprises/SuperDoc/commit/4069de0ad259f5f3a84da8c0c8e97eb434ed9418))
-- cicd ([9203541](https://github.com/Harbour-Enterprises/SuperDoc/commit/9203541635add05680d5adb66d23bd592494b283))
-- cicd ([6162b55](https://github.com/Harbour-Enterprises/SuperDoc/commit/6162b55b51ab02f4b548027c9e7f10665a01d3b1))
-- remove custom empty text tags from header/footer xml ([fe79efd](https://github.com/Harbour-Enterprises/SuperDoc/commit/fe79efd9e990f71899b668b4d06e961006655edf))
-
-## [0.35.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.35.0...v0.35.1) (2025-12-09)
-
-### Bug Fixes
-
-- block keyboard, paste, and drop events in view mode during collab ([#1471](https://github.com/Harbour-Enterprises/SuperDoc/issues/1471)) ([48b2555](https://github.com/Harbour-Enterprises/SuperDoc/commit/48b2555552ca124d23444d1569b47c43746050da))
-
-# [0.35.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.9...v0.35.0) (2025-12-08)
-
-### Bug Fixes
-
-- collaboratio tests and more scenarios ([4153017](https://github.com/Harbour-Enterprises/SuperDoc/commit/4153017da205a32c853da3cbafad57fda881cc94))
-
-### Features
-
-- add y-sweet example + remove type file ([#1463](https://github.com/Harbour-Enterprises/SuperDoc/issues/1463)) ([ac26255](https://github.com/Harbour-Enterprises/SuperDoc/commit/ac2625599395230d78293fff9255562a58d5e9fa))
-- make collab provider agnostic ([0096abc](https://github.com/Harbour-Enterprises/SuperDoc/commit/0096abc581b297ec4594a96eae20e90c7b9a572c))
-- y-sweet example ([fa71867](https://github.com/Harbour-Enterprises/SuperDoc/commit/fa71867f22b5c6f0bac5435c3b11d47afbdbf66a))
-
-## [0.34.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.8...v0.34.9) (2025-12-06)
-
-### Bug Fixes
-
-- tests ([a59aae8](https://github.com/Harbour-Enterprises/SuperDoc/commit/a59aae887989c5433274c2d0d916e939f65219ba))
-
-## [0.34.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.7...v0.34.8) (2025-12-06)
-
-### Bug Fixes
-
-- onlyoffice docs fail to import from null pointer crash ([2892612](https://github.com/Harbour-Enterprises/SuperDoc/commit/289261257d6c081304833cbe1fcad15c446f51ad))
-
-## [0.34.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.6...v0.34.7) (2025-12-05)
-
-### Bug Fixes
-
-- temp workaround for docx ydoc updates ([4d5e23f](https://github.com/Harbour-Enterprises/SuperDoc/commit/4d5e23f996bcb08b883b53fd7110a00c1d7a0a24))
-- temp workaround for docx ydoc updates ([#1429](https://github.com/Harbour-Enterprises/SuperDoc/issues/1429)) ([addaab8](https://github.com/Harbour-Enterprises/SuperDoc/commit/addaab886d42cdea5cd519b4f80d1aa51741a7f9))
-
-## [0.34.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.5...v0.34.6) (2025-12-03)
-
-### Bug Fixes
-
-- merge SD-379 ([#1401](https://github.com/Harbour-Enterprises/SuperDoc/issues/1401)) ([691ee32](https://github.com/Harbour-Enterprises/SuperDoc/commit/691ee3275b136b894f95f8f8a08e683d45ef058f))
-
-## [0.34.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.4...v0.34.5) (2025-12-03)
-
-### Bug Fixes
-
-- persist date on comments extensible ([#1387](https://github.com/Harbour-Enterprises/SuperDoc/issues/1387)) ([85187d5](https://github.com/Harbour-Enterprises/SuperDoc/commit/85187d54147724c1073c25df53e71713fc4399e8))
-
-## [0.34.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.3...v0.34.4) (2025-12-02)
-
-### Bug Fixes
-
-- include tracked change date fix ([#1384](https://github.com/Harbour-Enterprises/SuperDoc/issues/1384)) ([10dbd16](https://github.com/Harbour-Enterprises/SuperDoc/commit/10dbd16e071522ed3f5a6c8be7f2d36d605e9bba))
-
-## [0.34.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.2...v0.34.3) (2025-12-02)
-
-### Bug Fixes
-
-- validateJSON fn ([bf3296e](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf3296e91633d903b7dbdf37715bd9fc1f58f941))
-
-## [0.34.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.1...v0.34.2) (2025-11-30)
-
-### Bug Fixes
-
-- positional shift problem and node text boundaries ([#1359](https://github.com/Harbour-Enterprises/SuperDoc/issues/1359)) ([d8fbe04](https://github.com/Harbour-Enterprises/SuperDoc/commit/d8fbe0467698f5384edebf367482aa75584af8c1))
-
-## [0.34.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.34.0...v0.34.1) (2025-11-30)
-
-### Reverts
-
-- Revert "AI Actions: positional shift problem and node text boundaries ([#1311](https://github.com/Harbour-Enterprises/SuperDoc/issues/1311))" ([#1360](https://github.com/Harbour-Enterprises/SuperDoc/issues/1360)) ([4b1058b](https://github.com/Harbour-Enterprises/SuperDoc/commit/4b1058bf58e8f097d36b6f1497038da969dce66d))
-
-# [0.34.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.33.0...v0.34.0) (2025-11-30)
-
-### Features
-
-- add getSchemaSummaryJSON to Editor ([59a0ce5](https://github.com/Harbour-Enterprises/SuperDoc/commit/59a0ce5cebffbdcdc2ffd6c1695d9303b718abed))
-
-# [0.33.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.32.0...v0.33.0) (2025-11-26)
-
-### Features
-
-- compress docx file on export ([#1344](https://github.com/Harbour-Enterprises/SuperDoc/issues/1344)) ([4c223a3](https://github.com/Harbour-Enterprises/SuperDoc/commit/4c223a3470c198624a895b5cc354201f573c7be9))
-
-# [0.32.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.3...v0.32.0) (2025-11-25)
-
-### Features
-
-- control search results highlighting ([#1332](https://github.com/Harbour-Enterprises/SuperDoc/issues/1332)) ([5ac75e6](https://github.com/Harbour-Enterprises/SuperDoc/commit/5ac75e6f6750e45d6fe80c8b73017ae9e0e8cda8))
-
 ## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
 
 ### Bug Fixes
@@ -128,6 +15,12 @@
 ### Bug Fixes
 
 - import and export tagUtils for enhanced structured content management ([#1300](https://github.com/Harbour-Enterprises/SuperDoc/issues/1300)) ([7b8551d](https://github.com/Harbour-Enterprises/SuperDoc/commit/7b8551d46cfac7a1b9f77bb448cedf26544392ff))
+
+# [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
+
+### Features
+
+- add tag-based operations for structured content management ([#1296](https://github.com/Harbour-Enterprises/SuperDoc/issues/1296)) ([af80442](https://github.com/Harbour-Enterprises/SuperDoc/commit/af80442b451739dc1a0a08270edc9c317c53c127))
 
 # [0.31.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.30.0...v0.31.0) (2025-11-21)
 

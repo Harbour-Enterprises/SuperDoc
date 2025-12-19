@@ -1,4 +1,4 @@
-import { translateParagraphNode } from '../../exporter.js';
+import { translator as wPTranslator } from '@converter/v3/handlers/w/p';
 import { carbonCopy } from '../../../utilities/carbonCopy.js';
 import { COMMENT_REF, COMMENTS_XML_DEFINITIONS } from '../../exporter-docx-defs.js';
 import { generateRandom32BitHex } from '../../../helpers/generateDocxRandomId.js';
@@ -26,7 +26,7 @@ export const prepareCommentParaIds = (comment) => {
  * @returns {Object} The w:comment node for the comment
  */
 export const getCommentDefinition = (comment, commentId, allComments, editor) => {
-  const translatedText = translateParagraphNode({ editor, node: comment.commentJSON });
+  const translatedText = wPTranslator.decode({ editor, node: comment.commentJSON });
   const attributes = {
     'w:id': String(commentId),
     'w:author': comment.creatorName || comment.importedAuthor?.name,
@@ -96,11 +96,15 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
 
   // Re-build the comment definitions
   commentDefs.forEach((commentDef) => {
-    const elements = commentDef.elements[0].elements;
+    // Ensure we always have a paragraph node and attributes container
+    const paraNode = commentDef.elements[0];
+    if (!paraNode.attributes) paraNode.attributes = {};
+
+    const elements = paraNode.elements;
     elements.unshift(COMMENT_REF);
 
     const paraId = commentDef.attributes['w15:paraId'];
-    commentDef.elements[0].attributes['w14:paraId'] = paraId;
+    paraNode.attributes['w14:paraId'] = paraId;
 
     commentDef.attributes = {
       'w:id': commentDef.attributes['w:id'],

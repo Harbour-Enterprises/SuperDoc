@@ -7,7 +7,31 @@ import { checkAndProcessImage, uploadAndInsertImage } from './startImageUpload';
 import { buildMediaPath, ensureUniqueFileName } from './fileNameUtils.js';
 import { addImageRelationship } from '@extensions/image/imageHelpers/startImageUpload.js';
 const key = new PluginKey('ImageRegistration');
-const WORD_MEDIA_PREFIX = 'word/';
+
+/**
+ * Determines whether an image node still needs to go through the registration flow.
+ *
+ * Images are considered already registered (returns false) if:
+ * - src starts with 'word/media' (already in DOCX media folder)
+ * - src is a data URI with an rId (already has a relationship ID for export)
+ *
+ * @param {import('prosemirror-model').Node} node
+ * @returns {boolean}
+ */
+export const needsImageRegistration = (node) => {
+  if (!node || node.type?.name !== 'image') return false;
+
+  const src = node.attrs?.src;
+  if (typeof src !== 'string' || src.length === 0) return false;
+
+  // Already registered in DOCX media folder
+  if (src.startsWith('word/media')) return false;
+
+  // Data URI with rId means it was converted (e.g., EMF→SVG) but already has export metadata
+  if (src.startsWith('data:') && node.attrs?.rId) return false;
+
+  return true;
+};
 
 export const ImageRegistrationPlugin = ({ editor }) => {
   const { view } = editor;
@@ -59,7 +83,7 @@ export const ImageRegistrationPlugin = ({ editor }) => {
                 stepMap.map(step.from, -1),
                 stepMap.map(step.to, 1),
                 (node, pos) => {
-                  if (node.type.name === 'image' && !node.attrs.src.startsWith('word/media')) {
+                  if (node.type.name === 'image' && needsImageRegistration(node)) {
                     // Node contains an image that is not yet registered.
                     const id = {};
                     foundImages.push({ node, pos, id });
@@ -135,7 +159,7 @@ export const handleNodePath = (foundImages, editor, state) => {
     const mediaPath = buildMediaPath(uniqueFileName);
     mediaStore[mediaPath] = src;
 
-    const path = mediaPath.startsWith(WORD_MEDIA_PREFIX) ? mediaPath.slice(WORD_MEDIA_PREFIX.length) : mediaPath;
+    const path = mediaPath.startsWith('word/') ? mediaPath.slice(5) : mediaPath;
     const rId = addImageRelationship({ editor, path });
 
     tr.setNodeMarkup(pos, undefined, {

@@ -9,12 +9,14 @@ export const unsetAllMarks = () => ({ tr, dispatch, editor }) => {
   }
   const { empty, ranges } = selection;
 
-  if (empty) return true;
-
   if (dispatch) {
-    ranges.forEach((range) => {
-      tr.removeMark(range.$from.pos, range.$to.pos);
-    });
+    if (!empty) {
+      ranges.forEach((range) => {
+        tr.removeMark(range.$from.pos, range.$to.pos);
+      });
+    }
+    // Clear stored marks to prevent formatting from being inherited by newly typed content
+    tr.setStoredMarks([]);
   }
 
   return true;

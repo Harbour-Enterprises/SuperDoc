@@ -1,8 +1,17 @@
 {
   "name": "superdoc",
   "type": "module",
-  "version": "0.36.0",
+  "version": "1.0.0-beta.17",
   "license": "AGPL-3.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Harbour-Enterprises/SuperDoc.git",
+    "directory": "packages/superdoc"
+  },
+  "homepage": "https://www.superdoc.dev/",
+  "bugs": {
+    "url": "https://github.com/Harbour-Enterprises/SuperDoc/issues"
+  },
   "readme": "../../README.md",
   "files": [
     "dist"
