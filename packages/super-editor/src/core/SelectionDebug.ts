@@ -3,6 +3,8 @@ export type SelectionDebugLogLevel = 'off' | 'error' | 'warn' | 'info' | 'verbos
 export type SelectionDebugConfig = {
   logLevel: SelectionDebugLogLevel;
   hud: boolean;
+  dumpRects: boolean;
+  disableRectDedupe: boolean;
 };
 
 export type SelectionDebugHudState = {
@@ -36,6 +38,8 @@ declare global {
 const DEFAULT_CONFIG: SelectionDebugConfig = {
   logLevel: 'off',
   hud: false,
+  dumpRects: false,
+  disableRectDedupe: false,
 };
 
 const levelOrder: Record<Exclude<SelectionDebugLogLevel, 'off'>, number> = {
@@ -57,6 +61,8 @@ export function getSelectionDebugConfig(): SelectionDebugConfig {
   return {
     logLevel: cfg.logLevel ?? DEFAULT_CONFIG.logLevel,
     hud: cfg.hud ?? DEFAULT_CONFIG.hud,
+    dumpRects: cfg.dumpRects ?? DEFAULT_CONFIG.dumpRects,
+    disableRectDedupe: cfg.disableRectDedupe ?? DEFAULT_CONFIG.disableRectDedupe,
   };
 }
 

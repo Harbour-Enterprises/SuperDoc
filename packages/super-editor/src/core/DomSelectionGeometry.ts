@@ -2,7 +2,7 @@ import type { Layout } from '@superdoc/contracts';
 import { DOM_CLASS_NAMES } from '@superdoc/painter-dom';
 
 import type { DomPositionIndex, DomPositionIndexEntry } from './DomPositionIndex.js';
-import { debugLog } from './SelectionDebug.js';
+import { debugLog, getSelectionDebugConfig } from './SelectionDebug.js';
 
 /**
  * A rectangle representing a selection highlight in document layout coordinates.
@@ -84,6 +84,61 @@ export function computeSelectionRectsFromDom(
 
   const out: LayoutRect[] = [];
   let rebuiltOnce = false;
+  const debugConfig = getSelectionDebugConfig();
+  const isVerbose = debugConfig.logLevel === 'verbose';
+  const dumpRects = isVerbose && debugConfig.dumpRects;
+  const disableRectDedupe = debugConfig.disableRectDedupe;
+
+  type EntryDebugInfo = {
+    pmStart: number;
+    pmEnd: number;
+    pageIndex: string | null;
+    section: 'header' | 'footer' | 'body';
+    connected: boolean;
+    layoutEpoch: string | null;
+    pageEpoch: string | null;
+    text: string;
+  };
+
+  type RectDebugInfo = {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    top: number;
+    left: number;
+    right: number;
+    bottom: number;
+  };
+
+  const entryDebugInfo = (entry: DomPositionIndexEntry): EntryDebugInfo => {
+    const pageEl = entry.el.closest(`.${DOM_CLASS_NAMES.PAGE}`) as HTMLElement | null;
+    const section = entry.el.closest('.superdoc-page-header')
+      ? 'header'
+      : entry.el.closest('.superdoc-page-footer')
+        ? 'footer'
+        : 'body';
+    return {
+      pmStart: entry.pmStart,
+      pmEnd: entry.pmEnd,
+      pageIndex: pageEl?.dataset.pageIndex ?? null,
+      section,
+      connected: entry.el.isConnected,
+      layoutEpoch: entry.el.dataset.layoutEpoch ?? null,
+      pageEpoch: pageEl?.dataset.layoutEpoch ?? null,
+      text: (entry.el.textContent ?? '').slice(0, 80),
+    };
+  };
+  const rectDebugInfo = (rect: DOMRect): RectDebugInfo => ({
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height,
+    top: rect.top,
+    left: rect.left,
+    right: rect.right,
+    bottom: rect.bottom,
+  });
 
   for (const pageEl of pageEls) {
     const pageIndex = Number(pageEl.dataset.pageIndex ?? 'NaN');
@@ -115,11 +170,51 @@ export function computeSelectionRectsFromDom(
       continue;
     }
 
+    if (isVerbose) {
+      debugLog(
+        'verbose',
+        `DOM selection rects: slice entries ${JSON.stringify({
+          pageIndex,
+          sliceFrom,
+          sliceTo,
+          entriesCount: sliceEntries.length,
+          entriesPreview: sliceEntries.slice(0, 20).map(entryDebugInfo),
+        })}`,
+      );
+    }
+
     let startEntry = options.domPositionIndex.findEntryAtPosition(sliceFrom) ?? sliceEntries[0]!;
     let endEntry = options.domPositionIndex.findEntryAtPosition(sliceTo) ?? sliceEntries[sliceEntries.length - 1]!;
 
+    if (isVerbose) {
+      debugLog(
+        'verbose',
+        `DOM selection rects: boundaries ${JSON.stringify({
+          pageIndex,
+          sliceFrom,
+          sliceTo,
+          start: entryDebugInfo(startEntry),
+          end: entryDebugInfo(endEntry),
+        })}`,
+      );
+    }
+
     // If the index is stale (virtualization mount/unmount), rebuild once and retry.
-    if (!pageEl.contains(startEntry.el) || !pageEl.contains(endEntry.el)) {
+    let startContained = pageEl.contains(startEntry.el);
+    let endContained = pageEl.contains(endEntry.el);
+    if (!startContained || !endContained) {
+      if (isVerbose) {
+        debugLog(
+          'verbose',
+          `DOM selection rects: boundary containment ${JSON.stringify({
+            pageIndex,
+            sliceFrom,
+            sliceTo,
+            startContained,
+            endContained,
+          })}`,
+        );
+      }
       if (!rebuiltOnce) {
         options.rebuildDomPositionIndex();
         rebuiltOnce = true;
@@ -127,9 +222,34 @@ export function computeSelectionRectsFromDom(
         if (sliceEntries.length === 0) continue;
         startEntry = options.domPositionIndex.findEntryAtPosition(sliceFrom) ?? sliceEntries[0]!;
         endEntry = options.domPositionIndex.findEntryAtPosition(sliceTo) ?? sliceEntries[sliceEntries.length - 1]!;
+        startContained = pageEl.contains(startEntry.el);
+        endContained = pageEl.contains(endEntry.el);
+        if (isVerbose) {
+          debugLog(
+            'verbose',
+            `DOM selection rects: boundary containment after rebuild ${JSON.stringify({
+              pageIndex,
+              sliceFrom,
+              sliceTo,
+              startContained,
+              endContained,
+              start: entryDebugInfo(startEntry),
+              end: entryDebugInfo(endEntry),
+            })}`,
+          );
+        }
       }
-      if (!pageEl.contains(startEntry.el) || !pageEl.contains(endEntry.el)) {
-        debugLog('warn', 'DOM selection rects: stale index after rebuild', { pageIndex, sliceFrom, sliceTo });
+      if (!startContained || !endContained) {
+        debugLog(
+          'warn',
+          `DOM selection rects: stale index after rebuild ${JSON.stringify({
+            pageIndex,
+            sliceFrom,
+            sliceTo,
+            start: entryDebugInfo(startEntry),
+            end: entryDebugInfo(endEntry),
+          })}`,
+        );
         return null;
       }
     }
@@ -146,10 +266,87 @@ export function computeSelectionRectsFromDom(
 
     let clientRects: DOMRect[] = [];
     try {
-      const rawRects = Array.from(range.getClientRects()) as unknown as DOMRect[];
+      let rawRects = Array.from(range.getClientRects()) as unknown as DOMRect[];
+      if (dumpRects) {
+        debugLog(
+          'verbose',
+          `DOM selection rects: raw rects ${JSON.stringify({
+            pageIndex,
+            sliceFrom,
+            sliceTo,
+            rects: rawRects.map(rectDebugInfo),
+          })}`,
+        );
+      }
+      let missingEntries: DomPositionIndexEntry[] | null = null;
+      if (typeof range.intersectsNode === 'function') {
+        for (const entry of sliceEntries) {
+          try {
+            if (!range.intersectsNode(entry.el)) {
+              missingEntries ??= [];
+              missingEntries.push(entry);
+            }
+          } catch {
+            // Ignore per-node errors; we only need a signal for fallback.
+          }
+        }
+      }
+      if (missingEntries && missingEntries.length > 0) {
+        if (isVerbose) {
+          debugLog(
+            'verbose',
+            `DOM selection rects: range missing entries ${JSON.stringify({
+              pageIndex,
+              sliceFrom,
+              sliceTo,
+              missingCount: missingEntries.length,
+              missingPreview: missingEntries.slice(0, 20).map(entryDebugInfo),
+            })}`,
+          );
+        }
+        rawRects = collectClientRectsByLine(doc, sliceEntries, sliceFrom, sliceTo);
+        if (dumpRects) {
+          debugLog(
+            'verbose',
+            `DOM selection rects: fallback raw rects ${JSON.stringify({
+              pageIndex,
+              sliceFrom,
+              sliceTo,
+              rects: rawRects.map(rectDebugInfo),
+            })}`,
+          );
+        }
+      }
       // Deduplicate overlapping rects - browser can return both line-box and text-content rects
       // for the same visual line, causing "double selection" appearance
-      clientRects = deduplicateOverlappingRects(rawRects);
+      clientRects = disableRectDedupe ? rawRects : deduplicateOverlappingRects(rawRects);
+      if (dumpRects) {
+        debugLog(
+          'verbose',
+          `DOM selection rects: final rects ${JSON.stringify({
+            pageIndex,
+            sliceFrom,
+            sliceTo,
+            dedupeDisabled: disableRectDedupe,
+            rects: clientRects.map(rectDebugInfo),
+          })}`,
+        );
+        const nonPositive = clientRects.filter(
+          (rect) =>
+            !Number.isFinite(rect.width) || !Number.isFinite(rect.height) || rect.width <= 0 || rect.height <= 0,
+        );
+        if (nonPositive.length > 0) {
+          debugLog(
+            'verbose',
+            `DOM selection rects: non-positive rects ${JSON.stringify({
+              pageIndex,
+              sliceFrom,
+              sliceTo,
+              rects: nonPositive.map(rectDebugInfo),
+            })}`,
+          );
+        }
+      }
     } catch (error) {
       debugLog('warn', 'DOM selection rects: getClientRects failed', { error: String(error) });
       return null;
@@ -176,6 +373,96 @@ export function computeSelectionRectsFromDom(
   }
 
   return out;
+}
+
+/**
+ * Collects client rectangles by grouping entries by line element when Range.getClientRects()
+ * misses some entries due to range boundary issues.
+ *
+ * This is a fallback mechanism triggered when range.intersectsNode() detects that the DOM Range
+ * doesn't properly intersect all expected entries. It groups entries by their containing line
+ * element and creates separate ranges for each line to ensure all text runs are included.
+ *
+ * @param doc - The document to create ranges from
+ * @param entries - DOM position index entries to collect rectangles for
+ * @param sliceFrom - Starting PM position for the selection
+ * @param sliceTo - Ending PM position for the selection
+ * @returns Array of DOMRect objects representing the visual selection
+ *
+ * @remarks
+ * - Groups entries by `.superdoc-line` parent element
+ * - Creates individual ranges per line to avoid range boundary issues
+ * - Handles "loose" entries without line parents separately
+ * - Silently catches and skips ranges that fail to set boundaries
+ *
+ * @internal
+ */
+function collectClientRectsByLine(
+  doc: Document,
+  entries: DomPositionIndexEntry[],
+  sliceFrom: number,
+  sliceTo: number,
+): DOMRect[] {
+  const rects: DOMRect[] = [];
+  const lineMap = new Map<HTMLElement, DomPositionIndexEntry[]>();
+  const looseEntries: DomPositionIndexEntry[] = [];
+
+  for (const entry of entries) {
+    const lineEl = entry.el.closest('.superdoc-line') as HTMLElement | null;
+    if (!lineEl) {
+      looseEntries.push(entry);
+      continue;
+    }
+    const list = lineMap.get(lineEl);
+    if (list) {
+      list.push(entry);
+    } else {
+      lineMap.set(lineEl, [entry]);
+    }
+  }
+
+  for (const [, lineEntries] of lineMap) {
+    lineEntries.sort((a, b) => (a.pmStart - b.pmStart !== 0 ? a.pmStart - b.pmStart : a.pmEnd - b.pmEnd));
+    const linePmStart = lineEntries[0]?.pmStart ?? Infinity;
+    const linePmEnd = lineEntries[lineEntries.length - 1]?.pmEnd ?? -Infinity;
+    if (!Number.isFinite(linePmStart) || !Number.isFinite(linePmEnd) || linePmEnd <= linePmStart) continue;
+
+    const lineFrom = Math.max(sliceFrom, linePmStart);
+    const lineTo = Math.min(sliceTo, linePmEnd);
+    if (lineFrom >= lineTo) continue;
+
+    const startEntry =
+      lineEntries.find((entry) => lineFrom >= entry.pmStart && lineFrom <= entry.pmEnd) ?? lineEntries[0]!;
+    const endEntry =
+      lineEntries.find((entry) => lineTo >= entry.pmStart && lineTo <= entry.pmEnd) ??
+      lineEntries[lineEntries.length - 1]!;
+
+    const range = doc.createRange();
+    try {
+      if (!setDomRangeStart(range, startEntry, lineFrom)) continue;
+      if (!setDomRangeEnd(range, endEntry, lineTo)) continue;
+    } catch {
+      continue;
+    }
+
+    rects.push(...(Array.from(range.getClientRects()) as unknown as DOMRect[]));
+  }
+
+  for (const entry of looseEntries) {
+    const entryFrom = Math.max(sliceFrom, entry.pmStart);
+    const entryTo = Math.min(sliceTo, entry.pmEnd);
+    if (entryFrom >= entryTo) continue;
+    const range = doc.createRange();
+    try {
+      if (!setDomRangeStart(range, entry, entryFrom)) continue;
+      if (!setDomRangeEnd(range, entry, entryTo)) continue;
+    } catch {
+      continue;
+    }
+    rects.push(...(Array.from(range.getClientRects()) as unknown as DOMRect[]));
+  }
+
+  return rects;
 }
 
 /**
@@ -409,6 +696,29 @@ const HORIZONTAL_OVERLAP_THRESHOLD = 0.8;
  *
  * @param rects - Array of DOMRect objects returned by Range.getClientRects(). Input is not mutated.
  * @returns A new array containing deduplicated rectangles, sorted by position
+ *
+ * @remarks
+ * Algorithm phases:
+ *
+ * **Phase 1: Group rects by Y coordinate (same line)**
+ * - Sorts all rects by y coordinate (then by x within same y)
+ * - Groups rects that are within Y_SAME_LINE_THRESHOLD_PX (3px) of each other
+ * - Rects on the same visual line will be in the same group
+ *
+ * **Phase 2: Within each group, deduplicate**
+ * - First pass: Remove exact duplicates (same x, y, width, height within epsilon thresholds)
+ *   - X_DUPLICATE_EPS_PX (1px) for x-coordinate matching
+ *   - Y_SAME_LINE_THRESHOLD_PX (3px) for y-coordinate matching
+ *   - SIZE_EPS_PX (0.5px) for width/height matching
+ * - Second pass: Filter out larger container rects
+ *   - For rects with >80% horizontal overlap (HORIZONTAL_OVERLAP_THRESHOLD)
+ *   - Marks and removes rects that are larger in width or height (by SIZE_EPS_PX)
+ *
+ * **Edge cases handled:**
+ * - Zero-height/zero-width rects: Processed normally, larger ones removed in favor of smaller
+ * - Multiple words on same line: Preserved if horizontal overlap <80%
+ * - Unsorted input: Automatically sorted before processing
+ * - Sub-pixel rendering differences: Handled via epsilon thresholds
  */
 export function deduplicateOverlappingRects(rects: DOMRect[]): DOMRect[] {
   if (rects.length <= 1) return rects;
@@ -421,41 +731,77 @@ export function deduplicateOverlappingRects(rects: DOMRect[]): DOMRect[] {
   });
 
   const result: DOMRect[] = [];
-  let i = 0;
+  const groups: DOMRect[][] = [];
+  let currentGroup: DOMRect[] = [];
 
-  while (i < sorted.length) {
-    const current = sorted[i];
-    let best = current;
+  for (const rect of sorted) {
+    if (currentGroup.length === 0) {
+      currentGroup.push(rect);
+      continue;
+    }
+    const groupY = currentGroup[0]!.y;
+    if (Math.abs(rect.y - groupY) <= Y_SAME_LINE_THRESHOLD_PX) {
+      currentGroup.push(rect);
+    } else {
+      groups.push(currentGroup);
+      currentGroup = [rect];
+    }
+  }
+  if (currentGroup.length > 0) {
+    groups.push(currentGroup);
+  }
 
-    // Look ahead for rects that overlap with current
-    let j = i + 1;
-    while (j < sorted.length) {
-      const next = sorted[j];
+  const SIZE_EPS_PX = 0.5;
+  const X_DUPLICATE_EPS_PX = 1;
 
-      // Check if rects are on the same visual line (y coordinates within threshold)
-      // and have significant horizontal overlap
-      const yOverlap = Math.abs(next.y - current.y) < Y_SAME_LINE_THRESHOLD_PX;
-      const xOverlapStart = Math.max(current.x, next.x);
-      const xOverlapEnd = Math.min(current.x + current.width, next.x + next.width);
-      const hasHorizontalOverlap = xOverlapEnd > xOverlapStart;
-      const overlapWidth = Math.max(0, xOverlapEnd - xOverlapStart);
-      const minWidth = Math.min(current.width, next.width);
-      const significantOverlap = minWidth > 0 && overlapWidth / minWidth > HORIZONTAL_OVERLAP_THRESHOLD;
+  const hasSignificantOverlap = (a: DOMRect, b: DOMRect): boolean => {
+    const xOverlapStart = Math.max(a.x, b.x);
+    const xOverlapEnd = Math.min(a.x + a.width, b.x + b.width);
+    const hasHorizontalOverlap = xOverlapEnd > xOverlapStart;
+    if (!hasHorizontalOverlap) return false;
+    const overlapWidth = Math.max(0, xOverlapEnd - xOverlapStart);
+    const minWidth = Math.min(a.width, b.width);
+    return minWidth > 0 && overlapWidth / minWidth > HORIZONTAL_OVERLAP_THRESHOLD;
+  };
 
-      if (yOverlap && hasHorizontalOverlap && significantOverlap) {
-        // These rects represent the same visual line - keep the smaller one
-        // (text-content rect is typically smaller than line-box rect)
-        if (next.height < best.height) {
-          best = next;
-        }
-        j++;
-      } else {
-        break;
+  const isLargerRect = (a: DOMRect, b: DOMRect): boolean => {
+    return a.width > b.width + SIZE_EPS_PX || a.height > b.height + SIZE_EPS_PX;
+  };
+
+  for (const group of groups) {
+    const unique: DOMRect[] = [];
+    for (const rect of group) {
+      const isDuplicate = unique.some((existing) => {
+        const xClose = Math.abs(existing.x - rect.x) <= X_DUPLICATE_EPS_PX;
+        const yClose = Math.abs(existing.y - rect.y) <= Y_SAME_LINE_THRESHOLD_PX;
+        const widthClose = Math.abs(existing.width - rect.width) <= SIZE_EPS_PX;
+        const heightClose = Math.abs(existing.height - rect.height) <= SIZE_EPS_PX;
+        return xClose && yClose && widthClose && heightClose;
+      });
+      if (!isDuplicate) {
+        unique.push(rect);
       }
     }
 
-    result.push(best);
-    i = j;
+    if (unique.length <= 1) {
+      result.push(...unique);
+      continue;
+    }
+
+    const containers = new Set<DOMRect>();
+    for (const rect of unique) {
+      for (const other of unique) {
+        if (rect === other) continue;
+        if (!hasSignificantOverlap(rect, other)) continue;
+        if (isLargerRect(rect, other)) {
+          containers.add(rect);
+          break;
+        }
+      }
+    }
+
+    const filtered = unique.filter((rect) => !containers.has(rect));
+    result.push(...(filtered.length > 0 ? filtered : unique));
   }
 
   return result;
