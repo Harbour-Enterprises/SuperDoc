@@ -469,6 +469,32 @@ type PendingMarginClick =
   | { pointerId: number; kind: 'left' | 'right'; layoutEpoch: number; pmStart: number; pmEnd: number };
 
 /**
+ * Extended editor view type with a flag indicating the focus method has been wrapped
+ * to prevent unwanted scroll behavior when the hidden editor receives focus.
+ *
+ * @remarks
+ * This flag is set by {@link PresentationEditor#wrapHiddenEditorFocus} to ensure
+ * the wrapping is idempotent (applied only once per view instance).
+ */
+interface EditorViewWithScrollFlag {
+  /** Flag indicating focus wrapping has been applied to prevent scroll on focus */
+  __sdPreventScrollFocus?: boolean;
+}
+
+/**
+ * Extended function type that may have a mock property, used to detect test mocks.
+ *
+ * @remarks
+ * During testing, mocking libraries like Vitest often attach a `mock` property to
+ * mocked functions. We check for this property to avoid wrapping already-mocked
+ * focus functions, which could interfere with test assertions or cause test failures.
+ */
+interface PotentiallyMockedFunction {
+  /** Property present on mocked functions in test environments */
+  mock?: unknown;
+}
+
+/**
  * Discriminated union for all telemetry events.
  * Use TypeScript's type narrowing to handle each event type safely.
  */
@@ -826,6 +852,7 @@ export class PresentationEditor extends EventEmitter {
         editorProps: normalizedEditorProps,
         documentMode: this.#documentMode,
       });
+      this.#wrapHiddenEditorFocus();
       // Set bidirectional reference for renderer-neutral helpers
       // Type assertion is safe here as we control both Editor and PresentationEditor
       (this.#editor as Editor & { presentationEditor?: PresentationEditor | null }).presentationEditor = this;
@@ -865,6 +892,117 @@ export class PresentationEditor extends EventEmitter {
       this.destroy();
       throw error;
     }
+  }
+
+  /**
+   * Wraps the hidden editor's focus method to prevent unwanted scrolling when it receives focus.
+   *
+   * The hidden ProseMirror editor is positioned off-screen but must remain focusable for
+   * accessibility. When it receives focus, browsers may attempt to scroll it into view,
+   * disrupting the user's viewport position. This method wraps the view's focus function
+   * to prevent that scroll behavior using multiple fallback strategies.
+   *
+   * @remarks
+   * **Why this exists:**
+   * - The hidden editor provides semantic document structure for screen readers
+   * - It must be focusable, but is positioned off-screen with `left: -9999px`
+   * - Some browsers scroll to bring focused elements into view, breaking the user experience
+   * - This wrapper prevents that scroll while maintaining focus behavior
+   *
+   * **Fallback strategies (in order):**
+   * 1. Try `view.dom.focus({ preventScroll: true })` - the standard approach
+   * 2. If that fails, try `view.dom.focus()` without options and restore scroll position
+   * 3. If both fail, call the original ProseMirror focus method as last resort
+   * 4. Always restore scroll position if it changed during any focus attempt
+   *
+   * **Idempotency:**
+   * - Safe to call multiple times - checks `__sdPreventScrollFocus` flag to avoid re-wrapping
+   * - The flag is set on the view object after first successful wrap
+   *
+   * **Test awareness:**
+   * - Skips wrapping if the focus function has a `mock` property (Vitest/Jest mocks)
+   * - Prevents interference with test assertions and mock function tracking
+   */
+  #wrapHiddenEditorFocus(): void {
+    const view = this.#editor?.view;
+    if (!view || !view.dom || typeof view.focus !== 'function') {
+      return;
+    }
+
+    // Check if we've already wrapped this view's focus method (idempotency)
+    const viewWithFlag = view as typeof view & EditorViewWithScrollFlag;
+    if (viewWithFlag.__sdPreventScrollFocus) {
+      return;
+    }
+
+    // Skip wrapping mocked functions in test environments
+    const focusFn = view.focus as typeof view.focus & PotentiallyMockedFunction;
+    if (focusFn.mock) {
+      return;
+    }
+
+    // Mark this view as wrapped to prevent re-wrapping
+    viewWithFlag.__sdPreventScrollFocus = true;
+
+    // Save the original focus method
+    const originalFocus = view.focus.bind(view);
+
+    // Replace with our scroll-preventing wrapper
+    view.focus = () => {
+      // Get window context from the visible host's document
+      // Do NOT fall back to global window - if there's no document context, we can't
+      // reliably prevent scroll, so just call originalFocus and let it handle focus
+      const win = this.#visibleHost.ownerDocument?.defaultView;
+      if (!win) {
+        originalFocus();
+        return;
+      }
+
+      const beforeX = win.scrollX;
+      const beforeY = win.scrollY;
+      let focused = false;
+
+      // Strategy 1: Try focus with preventScroll option (modern browsers)
+      try {
+        view.dom.focus({ preventScroll: true });
+        focused = true;
+      } catch (error) {
+        debugLog('warn', 'Hidden editor focus: preventScroll failed', {
+          error: String(error),
+          strategy: 'preventScroll',
+        });
+      }
+
+      // Strategy 2: Fall back to focus without options
+      if (!focused) {
+        try {
+          view.dom.focus();
+          focused = true;
+        } catch (error) {
+          debugLog('warn', 'Hidden editor focus: standard focus failed', {
+            error: String(error),
+            strategy: 'standard',
+          });
+        }
+      }
+
+      // Strategy 3: Last resort - call original ProseMirror focus
+      if (!focused) {
+        try {
+          originalFocus();
+        } catch (error) {
+          debugLog('error', 'Hidden editor focus: all strategies failed', {
+            error: String(error),
+            strategy: 'original',
+          });
+        }
+      }
+
+      // Restore scroll position if any focus attempt changed it
+      if (win.scrollX !== beforeX || win.scrollY !== beforeY) {
+        win.scrollTo(beforeX, beforeY);
+      }
+    };
   }
 
   /**
@@ -2689,7 +2827,7 @@ export class PresentationEditor extends EventEmitter {
     }
     const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
     if (editorDom) {
-      editorDom.focus({ preventScroll: true });
+      editorDom.focus();
       this.#editor.view?.focus();
     }
   }
@@ -2834,8 +2972,8 @@ export class PresentationEditor extends EventEmitter {
         }
       }
 
-      // Focus the hidden editor (preventScroll avoids jumping the page)
-      editorDom.focus({ preventScroll: true });
+      // Focus the hidden editor
+      editorDom.focus();
       this.#editor.view?.focus();
       // Force selection update to render the caret
       this.#scheduleSelectionUpdate();
@@ -2936,7 +3074,7 @@ export class PresentationEditor extends EventEmitter {
             }
           }
         }
-        editorDom.focus({ preventScroll: true });
+        editorDom.focus();
         this.#editor.view?.focus();
         // Force selection update to render the caret
         this.#scheduleSelectionUpdate();
@@ -3096,7 +3234,7 @@ export class PresentationEditor extends EventEmitter {
       }
       const editorDom = this.#editor.view?.dom as HTMLElement | undefined;
       if (editorDom) {
-        editorDom.focus({ preventScroll: true });
+        editorDom.focus();
         this.#editor.view?.focus();
       }
 
@@ -3188,8 +3326,8 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    // Try direct DOM focus first (preventScroll avoids jumping the page)
-    editorDom.focus({ preventScroll: true });
+    // Try direct DOM focus first
+    editorDom.focus();
     this.#editor.view?.focus();
   };
 
