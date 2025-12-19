@@ -578,6 +578,7 @@ export function toBoxSpacing(spacing?: Record<string, unknown>): BoxSpacing | un
  * storing references that would prevent garbage collection.
  *
  * @param root - The root ProseMirror node to build position map from
+ * @param options - Optional atom node type metadata for schema-aware position sizing
  * @returns A WeakMap mapping each node to its { start, end } position range
  *
  * @example
@@ -588,13 +589,26 @@ export function toBoxSpacing(spacing?: Record<string, unknown>): BoxSpacing | un
  *     { type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }
  *   ]
  * };
- * const map = buildPositionMap(doc);
+ * const map = buildPositionMap(doc, { atomNodeTypes: ['customAtom'] });
  * const paragraph = doc.content[0];
  * map.get(paragraph); // { start: 0, end: 7 } (1 open + 5 text + 1 close)
  * ```
  */
-export const buildPositionMap = (root: PMNode): PositionMap => {
+type BuildPositionMapOptions = {
+  atomNodeTypes?: Iterable<string>;
+};
+
+export const buildPositionMap = (root: PMNode, options?: BuildPositionMapOptions): PositionMap => {
   const map: PositionMap = new WeakMap();
+  const atomNodeTypes = new Set(ATOMIC_INLINE_TYPES);
+
+  if (options?.atomNodeTypes) {
+    for (const nodeType of options.atomNodeTypes) {
+      if (typeof nodeType === 'string' && nodeType.length > 0) {
+        atomNodeTypes.add(nodeType);
+      }
+    }
+  }
 
   const visit = (node: PMNode, pos: number): number => {
     if (node.type === 'text') {
@@ -604,7 +618,7 @@ export const buildPositionMap = (root: PMNode): PositionMap => {
       return end;
     }
 
-    if (ATOMIC_INLINE_TYPES.has(node.type)) {
+    if (atomNodeTypes.has(node.type)) {
       const end = pos + 1;
       map.set(node, { start: pos, end });
       return end;

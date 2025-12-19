@@ -718,6 +718,18 @@ describe('internal', () => {
         expect(buildPositionMap).toHaveBeenCalledWith(doc);
       });
 
+      it('should pass atom node types to position map when provided', () => {
+        const doc: PMNode = {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [] }],
+        };
+        const atomNodeTypes = ['customAtom'];
+
+        toFlowBlocks(doc, { atomNodeTypes });
+
+        expect(buildPositionMap).toHaveBeenCalledWith(doc, { atomNodeTypes });
+      });
+
       it('should pass position map to handlers', () => {
         const doc: PMNode = {
           type: 'doc',

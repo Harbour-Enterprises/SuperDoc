@@ -44,7 +44,7 @@ import type {
   TableAttrs,
   TableCellAttrs,
 } from '@superdoc/contracts';
-import { calculateJustifySpacing, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
+import { calculateJustifySpacing, computeLinePmRange, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
 import { applyGradientToSVG, applyAlphaToSVG, validateHexColor } from './svg-utils.js';
 import {
@@ -61,6 +61,7 @@ import {
   ensureSdtContainerStyles,
   ensureFieldAnnotationStyles,
   ensureImageSelectionStyles,
+  ensureNativeSelectionStyles,
   type PageStyles,
 } from './styles.js';
 import { DOM_CLASS_NAMES } from './constants.js';
@@ -779,12 +780,16 @@ export class DomPainter {
   private virtualPaddingTop: number | null = null; // px; computed from mount if not provided
   private topSpacerEl: HTMLElement | null = null;
   private bottomSpacerEl: HTMLElement | null = null;
+  private virtualGapSpacers: HTMLElement[] = [];
+  private virtualPinnedPages: number[] = [];
+  private virtualMountedKey = '';
   private pageIndexToState: Map<number, PageDomState> = new Map();
   private virtualHeights: number[] = [];
   private virtualOffsets: number[] = [];
   private virtualStart = 0;
   private virtualEnd = -1;
   private layoutVersion = 0;
+  private layoutEpoch = 0;
   private processedLayoutVersion = -1;
   private onScrollHandler: ((e: Event) => void) | null = null;
   private onWindowScrollHandler: ((e: Event) => void) | null = null;
@@ -810,9 +815,12 @@ export class DomPainter {
       this.virtualWindow = Math.max(1, options.virtualization.window ?? 5);
       this.virtualOverscan = Math.max(0, options.virtualization.overscan ?? 0);
       // Virtualization gap: use explicit virtualization.gap if provided, otherwise default to virtualized gap (72px)
-      const hasExplicitVirtualGap =
-        typeof options.virtualization.gap === 'number' && Number.isFinite(options.virtualization.gap);
-      this.virtualGap = hasExplicitVirtualGap ? Math.max(0, options.virtualization.gap) : DEFAULT_VIRTUALIZED_PAGE_GAP;
+      const maybeGap = options.virtualization.gap;
+      if (typeof maybeGap === 'number' && Number.isFinite(maybeGap)) {
+        this.virtualGap = Math.max(0, maybeGap);
+      } else {
+        this.virtualGap = DEFAULT_VIRTUALIZED_PAGE_GAP;
+      }
       if (typeof options.virtualization.paddingTop === 'number' && Number.isFinite(options.virtualization.paddingTop)) {
         this.virtualPaddingTop = Math.max(0, options.virtualization.paddingTop);
       }
@@ -822,6 +830,20 @@ export class DomPainter {
   public setProviders(header?: PageDecorationProvider, footer?: PageDecorationProvider): void {
     this.headerProvider = header;
     this.footerProvider = footer;
+  }
+
+  /**
+   * Pins specific page indices so they remain mounted when virtualization is enabled.
+   *
+   * Used by selection/drag logic to ensure endpoints can be resolved via DOM
+   * even when they fall outside the current scroll window.
+   */
+  public setVirtualizationPins(pageIndices: number[] | null | undefined): void {
+    const next = Array.from(new Set((pageIndices ?? []).filter((n) => Number.isInteger(n)))).sort((a, b) => a - b);
+    this.virtualPinnedPages = next;
+    if (this.virtualEnabled && this.mount) {
+      this.updateVirtualWindow();
+    }
   }
 
   /**
@@ -932,6 +954,7 @@ export class DomPainter {
     ensureFieldAnnotationStyles(doc);
     ensureSdtContainerStyles(doc);
     ensureImageSelectionStyles(doc);
+    ensureNativeSelectionStyles(doc);
     if (this.options.ruler?.enabled) {
       ensureRulerStyles(doc);
     }
@@ -941,6 +964,7 @@ export class DomPainter {
       this.resetState();
     }
     this.layoutVersion += 1;
+    this.layoutEpoch = layout.layoutEpoch ?? 0;
     this.mount = mount;
 
     this.totalPages = layout.pages.length;
@@ -1013,6 +1037,8 @@ export class DomPainter {
     mount.innerHTML = '';
     this.pageStates = [];
     this.pageIndexToState.clear();
+    this.virtualGapSpacers = [];
+    this.virtualMountedKey = '';
 
     // Create and configure spacer elements
     this.topSpacerEl = this.doc.createElement('div');
@@ -1027,7 +1053,7 @@ export class DomPainter {
     this.bindVirtualizationHandlers(mount);
   }
 
-  private configureSpacerElement(element: HTMLElement, type: 'top' | 'bottom'): void {
+  private configureSpacerElement(element: HTMLElement, type: 'top' | 'bottom' | 'gap'): void {
     element.style.width = '1px';
     element.style.height = '0px';
     element.style.flex = '0 0 auto';
@@ -1147,27 +1173,32 @@ export class DomPainter {
     // Adjust start if we overshot end due to trailing clamp
     start = Math.max(0, Math.min(start, end - baseWindow + 1));
 
-    // No-op if window unchanged and nothing changed
+    const needed = new Set<number>();
+    for (let i = start; i <= end; i += 1) needed.add(i);
+    for (const pageIndex of this.virtualPinnedPages) {
+      const idx = Math.max(0, Math.min(pageIndex, N - 1));
+      needed.add(idx);
+    }
+
+    const mounted = Array.from(needed).sort((a, b) => a - b);
+    const mountedKey = mounted.join(',');
+
+    // No-op if mounted pages unchanged and nothing changed
     const alreadyProcessedLayout = this.processedLayoutVersion === this.layoutVersion;
-    if (
-      start === this.virtualStart &&
-      end === this.virtualEnd &&
-      this.changedBlocks.size === 0 &&
-      alreadyProcessedLayout
-    ) {
-      // Still ensure spacer heights are correct if sizes changed
-      this.updateSpacers(start, end);
+    if (mountedKey === this.virtualMountedKey && this.changedBlocks.size === 0 && alreadyProcessedLayout) {
+      this.virtualStart = start;
+      this.virtualEnd = end;
+      this.updateSpacersForMountedPages(mounted);
       return;
     }
+
+    this.virtualMountedKey = mountedKey;
     this.virtualStart = start;
     this.virtualEnd = end;
 
-    // Update spacers
-    this.updateSpacers(start, end);
-
-    // Mount/patch visible pages
-    const needed = new Set<number>();
-    for (let i = start; i <= end; i += 1) needed.add(i);
+    // Update spacers + rebuild gap spacers
+    this.updateSpacersForMountedPages(mounted);
+    this.clearGapSpacers();
 
     // Remove pages that are no longer needed
     for (const [idx, state] of this.pageIndexToState.entries()) {
@@ -1177,8 +1208,8 @@ export class DomPainter {
       }
     }
 
-    // Insert or patch needed pages in order
-    for (let i = start; i <= end; i += 1) {
+    // Insert or patch needed pages
+    for (const i of mounted) {
       const page = layout.pages[i];
       const pageSize = page.size ?? layout.pageSize;
       const existing = this.pageIndexToState.get(i);
@@ -1196,10 +1227,29 @@ export class DomPainter {
       }
     }
 
-    // Ensure pages are ordered from start..end by reinserting before bottom spacer
-    for (let i = start; i <= end; i += 1) {
-      const state = this.pageIndexToState.get(i)!;
+    // Ensure top spacer is first and bottom spacer is last.
+    if (this.mount.firstChild !== this.topSpacerEl) {
+      this.mount.insertBefore(this.topSpacerEl, this.mount.firstChild);
+    }
+    this.mount.appendChild(this.bottomSpacerEl);
+
+    // Ensure mounted pages are ordered (with gap spacers) before bottom spacer.
+    let prevIndex: number | null = null;
+    for (const idx of mounted) {
+      if (prevIndex != null && idx > prevIndex + 1) {
+        const gap = this.doc!.createElement('div');
+        this.configureSpacerElement(gap, 'gap');
+        gap.dataset.gapFrom = String(prevIndex);
+        gap.dataset.gapTo = String(idx);
+        const gapHeight =
+          this.topOfIndex(idx) - this.topOfIndex(prevIndex) - this.virtualHeights[prevIndex] - this.virtualGap * 2;
+        gap.style.height = `${Math.max(0, Math.floor(gapHeight))}px`;
+        this.virtualGapSpacers.push(gap);
+        this.mount.insertBefore(gap, this.bottomSpacerEl);
+      }
+      const state = this.pageIndexToState.get(idx)!;
       this.mount.insertBefore(state.element, this.bottomSpacerEl);
+      prevIndex = idx;
     }
 
     // Clear changed blocks now that current visible pages are patched
@@ -1213,6 +1263,33 @@ export class DomPainter {
     const bottom = this.contentTotalHeight() - this.topOfIndex(end + 1);
     this.topSpacerEl.style.height = `${Math.max(0, Math.floor(top))}px`;
     this.bottomSpacerEl.style.height = `${Math.max(0, Math.floor(bottom))}px`;
+  }
+
+  private updateSpacersForMountedPages(mountedPageIndices: number[]): void {
+    if (!this.topSpacerEl || !this.bottomSpacerEl) return;
+    if (mountedPageIndices.length === 0) {
+      this.topSpacerEl.style.height = '0px';
+      this.bottomSpacerEl.style.height = '0px';
+      return;
+    }
+
+    const first = mountedPageIndices[0];
+    const last = mountedPageIndices[mountedPageIndices.length - 1];
+    const n = this.virtualHeights.length;
+    const clampedFirst = Math.max(0, Math.min(first, Math.max(0, n - 1)));
+    const clampedLast = Math.max(0, Math.min(last, Math.max(0, n - 1)));
+
+    const top = this.topOfIndex(clampedFirst);
+    const bottom = this.topOfIndex(n) - this.topOfIndex(clampedLast + 1) - this.virtualGap;
+    this.topSpacerEl.style.height = `${Math.max(0, Math.floor(top))}px`;
+    this.bottomSpacerEl.style.height = `${Math.max(0, Math.floor(bottom))}px`;
+  }
+
+  private clearGapSpacers(): void {
+    for (const el of this.virtualGapSpacers) {
+      el.remove();
+    }
+    this.virtualGapSpacers = [];
   }
 
   private renderHorizontal(layout: Layout, mount: HTMLElement): void {
@@ -1271,6 +1348,7 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.page);
     applyStyles(el, pageStyles(width, height, this.getEffectivePageStyles()));
+    el.dataset.layoutEpoch = String(this.layoutEpoch);
 
     // Render per-page ruler if enabled
     if (this.options.ruler?.enabled) {
@@ -1546,6 +1624,7 @@ export class DomPainter {
     const pageEl = state.element;
     applyStyles(pageEl, pageStyles(pageSize.w, pageSize.h, this.getEffectivePageStyles()));
     pageEl.dataset.pageNumber = String(page.number);
+    pageEl.dataset.layoutEpoch = String(this.layoutEpoch);
     // pageIndex is already set during creation and doesn't change during patch
 
     const existing = new Map(state.fragments.map((frag) => [frag.key, frag]));
@@ -1615,6 +1694,7 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.page);
     applyStyles(el, pageStyles(pageSize.w, pageSize.h, this.getEffectivePageStyles()));
+    el.dataset.layoutEpoch = String(this.layoutEpoch);
 
     const contextBase: FragmentRenderContext = {
       pageNumber: page.number,
@@ -3469,6 +3549,7 @@ export class DomPainter {
 
     if (run.pmStart != null) elem.dataset.pmStart = String(run.pmStart);
     if (run.pmEnd != null) elem.dataset.pmEnd = String(run.pmEnd);
+    elem.dataset.layoutEpoch = String(this.layoutEpoch);
     if (trackedConfig) {
       this.applyTrackedChangeDecorations(elem, run, trackedConfig);
     }
@@ -3614,6 +3695,7 @@ export class DomPainter {
     if (run.pmEnd != null) {
       img.dataset.pmEnd = String(run.pmEnd);
     }
+    img.dataset.layoutEpoch = String(this.layoutEpoch);
 
     // Apply SDT metadata
     this.applySdtDataset(img, run.sdt);
@@ -3662,6 +3744,7 @@ export class DomPainter {
       hidden.style.display = 'none';
       if (run.pmStart != null) hidden.dataset.pmStart = String(run.pmStart);
       if (run.pmEnd != null) hidden.dataset.pmEnd = String(run.pmEnd);
+      hidden.dataset.layoutEpoch = String(this.layoutEpoch);
       return hidden;
     }
 
@@ -3859,6 +3942,7 @@ export class DomPainter {
     if (run.pmEnd != null) {
       annotation.dataset.pmEnd = String(run.pmEnd);
     }
+    annotation.dataset.layoutEpoch = String(this.layoutEpoch);
 
     // Apply SDT metadata
     this.applySdtDataset(annotation, run.sdt);
@@ -3892,6 +3976,7 @@ export class DomPainter {
     const el = this.doc.createElement('div');
     el.classList.add(CLASS_NAMES.line);
     applyStyles(el, lineStyles(line.lineHeight));
+    el.dataset.layoutEpoch = String(this.layoutEpoch);
     const styleId = (block.attrs as ParagraphAttrs | undefined)?.styleId;
     if (styleId) {
       el.setAttribute('styleid', styleId);
@@ -4270,6 +4355,7 @@ export class DomPainter {
           }
           if (baseRun.pmStart != null) tabEl.dataset.pmStart = String(baseRun.pmStart);
           if (baseRun.pmEnd != null) tabEl.dataset.pmEnd = String(baseRun.pmEnd);
+          tabEl.dataset.layoutEpoch = String(this.layoutEpoch);
           el.appendChild(tabEl);
 
           // Update cumulativeX to where the next content begins
@@ -4454,6 +4540,7 @@ export class DomPainter {
           }
           if (run.pmStart != null) tabEl.dataset.pmStart = String(run.pmStart);
           if (run.pmEnd != null) tabEl.dataset.pmEnd = String(run.pmEnd);
+          tabEl.dataset.layoutEpoch = String(this.layoutEpoch);
 
           el.appendChild(tabEl);
           return;
@@ -4471,6 +4558,7 @@ export class DomPainter {
               // Create new wrapper for this SDT group
               currentInlineSdtWrapper = this.doc.createElement('span');
               currentInlineSdtWrapper.className = DOM_CLASS_NAMES.INLINE_SDT_WRAPPER;
+              currentInlineSdtWrapper.dataset.layoutEpoch = String(this.layoutEpoch);
               currentInlineSdtId = runSdtId;
               // Apply SDT metadata to wrapper
               this.applySdtDataset(currentInlineSdtWrapper, runSdt);
@@ -4600,6 +4688,7 @@ export class DomPainter {
     el.style.top = `${fragment.y}px`;
     el.style.width = `${fragment.width}px`;
     el.dataset.blockId = fragment.blockId;
+    el.dataset.layoutEpoch = String(this.layoutEpoch);
 
     if (fragment.kind === 'para') {
       // Assert PM positions are present for paragraph fragments
@@ -5540,141 +5629,6 @@ export const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
   }
 
   return result;
-};
-
-type LinePmRange = { pmStart?: number; pmEnd?: number };
-
-const computeLinePmRange = (block: ParagraphBlock, line: Line): LinePmRange => {
-  let pmStart: number | undefined;
-  let pmEnd: number | undefined;
-
-  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
-    const run = block.runs[runIndex];
-    if (!run) continue;
-
-    // FIXED: ImageRun handling - images are treated as single units (length = 1)
-    if (run.kind === 'image') {
-      const runPmStart = run.pmStart ?? null;
-      const runPmEnd = run.pmEnd ?? null;
-
-      if (runPmStart == null || runPmEnd == null) {
-        continue;
-      }
-
-      if (pmStart == null) {
-        pmStart = runPmStart;
-      }
-      pmEnd = runPmEnd;
-
-      // Early exit if this is the last run
-      if (runIndex === line.toRun) {
-        break;
-      }
-      continue;
-    }
-
-    // LineBreakRun handling - similar to image runs, treated as atomic units
-    if (run.kind === 'lineBreak') {
-      const runPmStart = run.pmStart ?? null;
-      const runPmEnd = run.pmEnd ?? null;
-
-      if (runPmStart == null || runPmEnd == null) {
-        continue;
-      }
-
-      if (pmStart == null) {
-        pmStart = runPmStart;
-      }
-      pmEnd = runPmEnd;
-
-      // Early exit if this is the last run
-      if (runIndex === line.toRun) {
-        break;
-      }
-      continue;
-    }
-
-    // BreakRun handling - similar to image and lineBreak runs, treated as atomic units
-    if (run.kind === 'break') {
-      const runPmStart = run.pmStart ?? null;
-      const runPmEnd = run.pmEnd ?? null;
-
-      if (runPmStart == null || runPmEnd == null) {
-        continue;
-      }
-
-      if (pmStart == null) {
-        pmStart = runPmStart;
-      }
-      pmEnd = runPmEnd;
-
-      // Early exit if this is the last run
-      if (runIndex === line.toRun) {
-        break;
-      }
-      continue;
-    }
-
-    // TabRun handling - tabs are atomic units
-    if (run.kind === 'tab') {
-      const runPmStart = run.pmStart ?? null;
-      const runPmEnd = run.pmEnd ?? null;
-
-      if (runPmStart == null || runPmEnd == null) {
-        continue;
-      }
-
-      if (pmStart == null) {
-        pmStart = runPmStart;
-      }
-      pmEnd = runPmEnd;
-
-      // Early exit if this is the last run
-      if (runIndex === line.toRun) {
-        break;
-      }
-      continue;
-    }
-
-    // At this point, run must be TextRun (has .text property)
-    if (!('text' in run)) {
-      continue;
-    }
-
-    const text = run.text ?? '';
-    const runLength = text.length;
-    const runPmStart = run.pmStart ?? null;
-
-    // FIX: Always calculate effectivePmEnd from text length, not from potentially stale pmEnd.
-    // The run's pmEnd can become stale after PM transactions modify text content (especially in tables),
-    // causing content truncation when Math.min caps the range.
-    const effectivePmEnd = runPmStart != null ? runPmStart + runLength : null;
-
-    if (runPmStart == null || effectivePmEnd == null) {
-      continue;
-    }
-
-    const isFirstRun = runIndex === line.fromRun;
-    const isLastRun = runIndex === line.toRun;
-    const startOffset = isFirstRun ? line.fromChar : 0;
-    const endOffset = isLastRun ? line.toChar : runLength;
-
-    const sliceStart = runPmStart + startOffset;
-    // FIX: Removed Math.min cap that was causing truncation with stale pmEnd values.
-    const sliceEnd = runPmStart + endOffset;
-
-    if (pmStart == null) {
-      pmStart = sliceStart;
-    }
-    pmEnd = sliceEnd;
-
-    // Early exit optimization: both boundaries are determined on the last run
-    if (isLastRun) {
-      break;
-    }
-  }
-
-  return { pmStart, pmEnd };
 };
 
 const applyStyles = (el: HTMLElement, styles: Partial<CSSStyleDeclaration>): void => {

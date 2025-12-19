@@ -51,9 +51,13 @@ function getMeasurementContext(): CanvasRenderingContext2D | null {
   }
 
   measurementCanvas = document.createElement('canvas');
-  measurementCtx = measurementCanvas.getContext('2d');
+  try {
+    measurementCtx = measurementCanvas.getContext('2d');
+  } catch {
+    measurementCtx = null;
+  }
 
-  if (!measurementCtx) {
+  if (!measurementCtx && process.env.NODE_ENV !== 'test') {
     console.warn('[text-measurement] Failed to create 2D context');
   }
 
@@ -178,7 +182,6 @@ const getJustifyAdjustment = (
   const lastRun = block.runs[lastRunIndex];
   const derivedIsLastLine = line.toRun >= lastRunIndex;
   const derivedEndsWithLineBreak = lastRun ? lastRun.kind === 'lineBreak' : false;
-
   // Determine if justify should be applied using shared logic
   const shouldJustify = shouldApplyJustify({
     alignment,

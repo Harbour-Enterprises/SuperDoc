@@ -1409,6 +1409,20 @@ describe('buildPositionMap', () => {
     expect(map.get(hardBreakNode)).toEqual({ start: 2, end: 3 });
   });
 
+  it('supports custom atom node types', () => {
+    const customAtomNode = { type: 'customAtom' };
+    const textNode = { type: 'text', text: 'Hi' };
+    const paraNode = {
+      type: 'paragraph',
+      content: [customAtomNode, textNode],
+    };
+
+    const map = buildPositionMap(paraNode, { atomNodeTypes: ['customAtom'] });
+
+    expect(map.get(customAtomNode)).toEqual({ start: 1, end: 2 });
+    expect(map.get(textNode)).toEqual({ start: 2, end: 4 });
+  });
+
   it('handles passthroughInline and bookmarkEnd as atomic inline types', () => {
     const textNode = { type: 'text', text: 'Hello' };
     const passthroughNode = { type: 'passthroughInline', attrs: {} };
