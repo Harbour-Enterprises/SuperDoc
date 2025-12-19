@@ -11,7 +11,7 @@ import { EditorState } from 'prosemirror-state';
 describe('Search highlight control', () => {
   describe('Basic highlight control', () => {
     it('should highlight matches by default when no options provided', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -24,7 +24,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test');
 
@@ -46,7 +46,7 @@ describe('Search highlight control', () => {
     });
 
     it('should highlight matches when highlight option is explicitly true', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -59,7 +59,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: true });
 
@@ -81,7 +81,7 @@ describe('Search highlight control', () => {
     });
 
     it('should not add CSS classes when highlight option is false', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -94,7 +94,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: false });
 
@@ -117,7 +117,7 @@ describe('Search highlight control', () => {
     });
 
     it('should still return match positions when highlight is false', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -130,7 +130,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: false });
 
@@ -148,7 +148,7 @@ describe('Search highlight control', () => {
 
   describe('Regex search with highlight control', () => {
     it('should find regex matches without highlighting when highlight is false', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -161,7 +161,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search(/\w+@\w+\.\w+/i, { highlight: false });
 
@@ -179,7 +179,7 @@ describe('Search highlight control', () => {
     });
 
     it('should highlight regex matches when highlight is true', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -192,7 +192,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search(/\w+@\w+\.\w+/i, { highlight: true });
 
@@ -212,7 +212,7 @@ describe('Search highlight control', () => {
 
   describe('Complex document structures with highlight control', () => {
     it('should handle highlight control with multiple run nodes', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -231,7 +231,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: false });
 
@@ -250,7 +250,7 @@ describe('Search highlight control', () => {
     });
 
     it('should handle highlight control with bookmark nodes', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run, bookmarkStart, bookmarkEnd } = editor.schema.nodes;
@@ -267,7 +267,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: false });
 
@@ -287,7 +287,7 @@ describe('Search highlight control', () => {
 
   describe('Edge cases and validation', () => {
     it('should default to highlight: true when options is null', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -298,7 +298,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', null);
 
@@ -314,7 +314,7 @@ describe('Search highlight control', () => {
     });
 
     it('should default to highlight: true when options is undefined', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -325,7 +325,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', undefined);
 
@@ -341,7 +341,7 @@ describe('Search highlight control', () => {
     });
 
     it('should throw error when options is a string', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -352,7 +352,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         expect(() => {
           editor.commands.search('test', 'invalid');
@@ -366,7 +366,7 @@ describe('Search highlight control', () => {
     });
 
     it('should throw error when options is a number', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -377,7 +377,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         expect(() => {
           editor.commands.search('test', 123);
@@ -391,7 +391,7 @@ describe('Search highlight control', () => {
     });
 
     it('should throw error when options is an array', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -402,7 +402,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         expect(() => {
           editor.commands.search('test', []);
@@ -416,7 +416,7 @@ describe('Search highlight control', () => {
     });
 
     it('should default to highlight: true when highlight property is not a boolean', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -427,7 +427,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         // Test with string value
         const matches1 = editor.commands.search('test', { highlight: 'yes' });
@@ -457,7 +457,7 @@ describe('Search highlight control', () => {
 
   describe('State persistence', () => {
     it('should preserve highlight setting across document changes', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -470,7 +470,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         // Search without highlighting
         editor.commands.search('test', { highlight: false });
@@ -498,7 +498,7 @@ describe('Search highlight control', () => {
     });
 
     it('should preserve highlight setting across selection changes', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -511,7 +511,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         // Search without highlighting
         editor.commands.search('test', { highlight: false });
@@ -541,7 +541,7 @@ describe('Search highlight control', () => {
     });
 
     it('should allow switching from non-highlighted to highlighted search', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -554,7 +554,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         // First search without highlighting
         editor.commands.search('test', { highlight: false });
@@ -574,7 +574,7 @@ describe('Search highlight control', () => {
     });
 
     it('should allow switching from highlighted to non-highlighted search', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -587,7 +587,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         // First search with highlighting
         editor.commands.search('test', { highlight: true });
@@ -608,7 +608,7 @@ describe('Search highlight control', () => {
 
   describe('Empty and no-match cases', () => {
     it('should handle empty search results with highlight: false', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph, run } = editor.schema.nodes;
@@ -621,7 +621,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('xyz', { highlight: false });
 
@@ -636,7 +636,7 @@ describe('Search highlight control', () => {
     });
 
     it('should handle empty document with highlight: false', () => {
-      const editor = createDocxTestEditor({ isHeadless: true });
+      const editor = createDocxTestEditor();
 
       try {
         const { doc, paragraph } = editor.schema.nodes;
@@ -647,7 +647,7 @@ describe('Search highlight control', () => {
           doc: testDoc,
           plugins: editor.state.plugins,
         });
-        editor.view.updateState(baseState);
+        editor.setState(baseState);
 
         const matches = editor.commands.search('test', { highlight: false });
 

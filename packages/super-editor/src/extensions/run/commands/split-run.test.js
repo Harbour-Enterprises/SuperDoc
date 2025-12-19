@@ -61,7 +61,7 @@ describe('splitRunToParagraph command', () => {
   const loadDoc = (json) => {
     const docNode = editor.schema.nodeFromJSON(json);
     const state = EditorState.create({ schema: editor.schema, doc: docNode });
-    editor.view.updateState(state);
+    editor.setState(state);
   };
 
   const updateSelection = (from, to = from) => {

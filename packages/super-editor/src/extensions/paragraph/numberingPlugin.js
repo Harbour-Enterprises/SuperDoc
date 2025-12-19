@@ -64,7 +64,8 @@ export function createNumberingPlugin(editor) {
      */
     appendTransaction(transactions, oldState, newState) {
       const isFromPlugin = transactions.some((tr) => tr.getMeta('orderedListSync'));
-      if (isFromPlugin || !transactions.some((tr) => tr.docChanged)) {
+      const forcePluginPass = transactions.some((tr) => tr.getMeta('forcePluginPass'));
+      if (isFromPlugin || (!forcePluginPass && !transactions.some((tr) => tr.docChanged))) {
         return null;
       }
 

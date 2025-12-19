@@ -124,7 +124,11 @@ export const getLinkedSectionEditor = (id, options, editor) => {
       // 4. Replace the old node with the new node in the parent editor
       const tr = editor.state.tr.replaceWith(pos, pos + node.nodeSize, newNode);
       tr.setMeta('fromLinkedChild', true); // Prevent feedback loop
-      editor.view.dispatch(tr);
+      const dispatch =
+        typeof editor.view?.dispatch === 'function'
+          ? editor.view.dispatch.bind(editor.view)
+          : editor.dispatch.bind(editor);
+      dispatch(tr);
     },
   });
 
@@ -146,7 +150,9 @@ export const getLinkedSectionEditor = (id, options, editor) => {
     const childTr = child.state.tr;
     childTr.setMeta('fromLinkedParent', true); // Prevent feedback loop
     childTr.replaceWith(0, child.state.doc.content.size, child.schema.nodeFromJSON(json));
-    child.view.dispatch(childTr);
+    const dispatch =
+      typeof child.view?.dispatch === 'function' ? child.view.dispatch.bind(child.view) : child.dispatch.bind(child);
+    dispatch(childTr);
   });
 
   return child;

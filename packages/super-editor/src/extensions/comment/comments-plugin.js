@@ -285,15 +285,22 @@ export const CommentsPlugin = Extension.create({
                 const threadId = attrs.commentId || attrs.importedId;
 
                 if (!onlyActiveThreadChanged) {
-                  const currentBounds = view.coordsAtPos(pos);
+                  let currentBounds;
+                  try {
+                    currentBounds = view.coordsAtPos(pos);
+                  } catch {
+                    currentBounds = null;
+                  }
 
-                  updatePosition({
-                    allCommentPositions,
-                    threadId,
-                    pos,
-                    currentBounds,
-                    node,
-                  });
+                  if (currentBounds) {
+                    updatePosition({
+                      allCommentPositions,
+                      threadId,
+                      pos,
+                      currentBounds,
+                      node,
+                    });
+                  }
                 }
 
                 const isInternal = attrs.internal;
@@ -326,15 +333,22 @@ export const CommentsPlugin = Extension.create({
 
               if (trackedChangeMark) {
                 if (!onlyActiveThreadChanged) {
-                  const currentBounds = view.coordsAtPos(pos);
+                  let currentBounds;
+                  try {
+                    currentBounds = view.coordsAtPos(pos);
+                  } catch {
+                    currentBounds = null;
+                  }
                   const { id } = trackedChangeMark.mark.attrs;
-                  updatePosition({
-                    allCommentPositions,
-                    threadId: id,
-                    pos,
-                    currentBounds,
-                    node,
-                  });
+                  if (currentBounds) {
+                    updatePosition({
+                      allCommentPositions,
+                      threadId: id,
+                      pos,
+                      currentBounds,
+                      node,
+                    });
+                  }
                 }
 
                 // Add decoration for tracked changes when activated
