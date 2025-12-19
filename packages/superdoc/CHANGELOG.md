@@ -1,3 +1,17 @@
+## [1.0.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.1...v1.0.2) (2025-12-19)
+
+
+### Reverts
+
+* Revert "fix: guard groupChanges against empty input" ([9789861](https://github.com/Harbour-Enterprises/SuperDoc/commit/97898616093baff0af04581f17efc72b5e6768f4))
+
+## [1.0.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.0...v1.0.1) (2025-12-19)
+
+
+### Bug Fixes
+
+* guard groupChanges against empty input ([69c59b2](https://github.com/Harbour-Enterprises/SuperDoc/commit/69c59b27826fe6acc0f8192aff2d8540af2d2a4b))
+
 ## [0.31.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v0.31.2...v0.31.3) (2025-11-24)
 
 ### Bug Fixes
