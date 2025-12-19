@@ -304,8 +304,9 @@ describe('SlashMenu.vue', () => {
       mockEditor.state.selection.to = 15;
       mockEditor.posAtCoords = vi.fn(() => ({ pos: 25 }));
 
+      // Find the bubble phase handler (not capture phase which has `true` as third arg)
       const contextMenuHandler = mockEditor.view.dom.addEventListener.mock.calls.find(
-        (call) => call[0] === 'contextmenu',
+        (call) => call[0] === 'contextmenu' && call[2] !== true,
       )[1];
 
       const rightClickEvent = new MouseEvent('contextmenu', { clientX: 120, clientY: 160 });
@@ -747,6 +748,156 @@ describe('SlashMenu.vue', () => {
         expect.any(Object), // props
         expect.objectContaining({ left: '100px', top: '200px' }),
       );
+    });
+  });
+
+  describe('handleRightClickCapture', () => {
+    let captureHandler;
+
+    beforeEach(() => {
+      mount(SlashMenu, { props: mockProps });
+      // Find the capture phase contextmenu listener
+      const captureCall = surfaceElementMock.addEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu' && call[2] === true,
+      );
+      captureHandler = captureCall?.[1];
+    });
+
+    it('should set __sdHandledBySlashMenu flag when editor is editable', () => {
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: false,
+        metaKey: false,
+        detail: 1,
+        button: 2,
+        clientX: 120,
+        clientY: 150,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBe(true);
+    });
+
+    it('should NOT set flag when editor is read-only', () => {
+      mockEditor.isEditable = false;
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: false,
+        metaKey: false,
+        detail: 1,
+        button: 2,
+        clientX: 120,
+        clientY: 150,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBeUndefined();
+    });
+
+    it('should NOT set flag when context menu is disabled', () => {
+      mockEditor.options = { disableContextMenu: true };
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: false,
+        metaKey: false,
+        detail: 1,
+        button: 2,
+        clientX: 120,
+        clientY: 150,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBeUndefined();
+    });
+
+    it('should NOT set flag when Ctrl key is pressed (bypass condition)', () => {
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: true,
+        metaKey: false,
+        detail: 1,
+        button: 2,
+        clientX: 120,
+        clientY: 150,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBeUndefined();
+    });
+
+    it('should NOT set flag when Meta key is pressed (bypass condition)', () => {
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: false,
+        metaKey: true,
+        detail: 1,
+        button: 2,
+        clientX: 120,
+        clientY: 150,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBeUndefined();
+    });
+
+    it('should NOT set flag for keyboard invocation (bypass condition)', () => {
+      const event = {
+        type: 'contextmenu',
+        ctrlKey: false,
+        metaKey: false,
+        detail: 0,
+        button: 0,
+        clientX: 0,
+        clientY: 0,
+        preventDefault: vi.fn(),
+      };
+
+      captureHandler(event);
+
+      expect(event.__sdHandledBySlashMenu).toBeUndefined();
+    });
+
+    it('should handle errors gracefully and log warning', () => {
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      // Create an event that will cause an error by making shouldBypassContextMenu throw
+      const event = {
+        type: 'contextmenu',
+        get ctrlKey() {
+          throw new Error('Test error');
+        },
+        preventDefault: vi.fn(),
+      };
+
+      // Should not throw, error should be caught
+      expect(() => captureHandler(event)).not.toThrow();
+      expect(warnSpy).toHaveBeenCalledWith(
+        '[SlashMenu] Error in capture phase context menu handler:',
+        expect.any(Error),
+      );
+
+      warnSpy.mockRestore();
+    });
+
+    it('should cleanup capture listener on unmount', () => {
+      const wrapper = mount(SlashMenu, { props: mockProps });
+
+      wrapper.unmount();
+
+      // Verify the capture listener was removed (check for contextmenu with capture flag)
+      const removeCall = surfaceElementMock.removeEventListener.mock.calls.find(
+        (call) => call[0] === 'contextmenu' && call[2] === true,
+      );
+      expect(removeCall).toBeDefined();
     });
   });
 });
