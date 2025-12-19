@@ -22,7 +22,7 @@ describe('wp:anchor translator', () => {
     expect(config.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
     expect(typeof config.encode).toBe('function');
     expect(typeof config.decode).toBe('function');
-    expect(config.attributes).toHaveLength(4);
+    expect(config.attributes).toHaveLength(12);
   });
 
   it('builds NodeTranslator instance', () => {
@@ -31,9 +31,22 @@ describe('wp:anchor translator', () => {
     expect(translator.sdNodeOrKeyName).toEqual(['image', 'shapeGroup', 'vectorShape', 'contentBlock']);
   });
 
-  it('creates attribute handlers for distT/distB/distL/distR', () => {
+  it('creates attribute handlers for all attributes', () => {
     const names = config.attributes.map((a) => a.xmlName);
-    expect(names).toEqual(['distT', 'distB', 'distL', 'distR']);
+    expect(names).toEqual([
+      'distT',
+      'distB',
+      'distL',
+      'distR',
+      'allowOverlap',
+      'behindDoc',
+      'layoutInCell',
+      'locked',
+      'relativeHeight',
+      'simplePos',
+      'wp14:anchorId',
+      'wp14:editId',
+    ]);
   });
 
   describe('encode', () => {

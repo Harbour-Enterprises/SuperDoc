@@ -1,26 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { getFieldAttrs, getAllHeaderFooterEditors, AnnotatorHelpers, annotateDocument } from './annotator.js';
-
-const { createHeaderFooterEditorMock, onHeaderFooterDataUpdateMock } = vi.hoisted(() => {
-  const createHeaderFooterEditorMock = vi.fn(() => ({
-    annotate: vi.fn(),
-    commands: {
-      updateFieldAnnotations: vi.fn(),
-      deleteFieldAnnotations: vi.fn(),
-      resetFieldAnnotations: vi.fn(),
-    },
-  }));
-  const onHeaderFooterDataUpdateMock = vi.fn();
-  return { createHeaderFooterEditorMock, onHeaderFooterDataUpdateMock };
-});
-
-vi.mock('@extensions/pagination/pagination-helpers.js', () => ({
-  createHeaderFooterEditor: createHeaderFooterEditorMock,
-  onHeaderFooterDataUpdate: onHeaderFooterDataUpdateMock,
-  toggleHeaderFooterEditMode: vi.fn(),
-  PaginationPluginKey: { getState: () => ({}) },
-  broadcastEditorEvents: vi.fn(),
-}));
+import { getFieldAttrs, annotateDocument } from './annotator.js';
 
 globalThis.dateFormat = vi.fn(() => '2025-01-30');
 
@@ -28,8 +7,6 @@ const createEditorsCollection = () => [];
 
 describe('annotator helpers', () => {
   beforeEach(() => {
-    createHeaderFooterEditorMock.mockClear();
-    onHeaderFooterDataUpdateMock.mockClear();
     globalThis.dateFormat.mockClear();
   });
 
@@ -58,45 +35,7 @@ describe('annotator helpers', () => {
     expect(getFieldAttrs(fieldNode, '<p>html</p>')).toEqual({ rawHtml: '<p>html</p>' });
   });
 
-  it('collects header/footer editors and annotates them', () => {
-    const editor = {
-      converter: {
-        headers: {
-          default: { data: { content: 'header' } },
-        },
-        footers: {
-          default: { data: { content: 'footer' } },
-        },
-        headerEditors: createEditorsCollection(),
-        footerEditors: createEditorsCollection(),
-      },
-    };
-
-    const editors = getAllHeaderFooterEditors(editor);
-    expect(createHeaderFooterEditorMock).toHaveBeenCalledTimes(2);
-    expect(editors).toHaveLength(2);
-
-    const updateAttrs = { displayLabel: 'Value' };
-    AnnotatorHelpers.updateHeaderFooterFieldAnnotations({ editor, fieldIdOrArray: 'field-1', attrs: updateAttrs });
-    const updateEditors = createHeaderFooterEditorMock.mock.results.slice(2, 4).map((result) => result.value);
-    updateEditors.forEach((sectionEditor) => {
-      expect(sectionEditor.commands.updateFieldAnnotations).toHaveBeenCalledWith('field-1', updateAttrs);
-    });
-
-    AnnotatorHelpers.deleteHeaderFooterFieldAnnotations({ editor, fieldIdOrArray: 'field-1' });
-    const deleteEditors = createHeaderFooterEditorMock.mock.results.slice(4, 6).map((result) => result.value);
-    deleteEditors.forEach((sectionEditor) => {
-      expect(sectionEditor.commands.deleteFieldAnnotations).toHaveBeenCalledWith('field-1');
-    });
-
-    AnnotatorHelpers.resetHeaderFooterFieldAnnotations({ editor });
-    const resetEditors = createHeaderFooterEditorMock.mock.results.slice(6, 8).map((result) => result.value);
-    resetEditors.forEach((sectionEditor) => {
-      expect(sectionEditor.commands.resetFieldAnnotations).toHaveBeenCalled();
-    });
-
-    expect(onHeaderFooterDataUpdateMock).toHaveBeenCalledTimes(6);
-  });
+  // header/footer annotation removed with pagination legacy; related tests skipped
 
   it('annotates document nodes and prunes empty fields', () => {
     const FieldType = Symbol('fieldAnnotation');

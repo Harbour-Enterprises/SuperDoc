@@ -54,15 +54,4 @@ jobs:
               ---
               _This PR was automatically created to sync a patch to main._" \
               --label "patch-sync"
-          else
-            echo "⚠️ Cherry-pick failed - manual resolution needed"
-            gh issue create \
-              --title "🔄 Manual sync needed: ${{ github.event.head_commit.message }}" \
-              --body "Failed to auto-sync patch from ${{ github.ref_name }}
-              
-              **Commit**: ${{ github.sha }}
-              **Branch**: ${{ github.ref_name }}
-              
-              Please manually cherry-pick this commit to main." \
-              --label "patch-sync"
           fi

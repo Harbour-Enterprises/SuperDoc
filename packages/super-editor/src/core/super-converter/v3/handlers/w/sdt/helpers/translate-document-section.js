@@ -24,7 +24,7 @@ export function translateDocumentSection(params) {
     description: attrs.description,
   });
 
-  const sdtPr = generateSdtPrTagForDocumentSection(attrs.id, attrs.title, exportedTag);
+  const sdtPr = generateSdtPrTagForDocumentSection(attrs.id, attrs.title, exportedTag, attrs.sdtPr);
 
   // If the section is locked, we add the lock tag
   const { isLocked } = attrs;
@@ -52,30 +52,41 @@ export function translateDocumentSection(params) {
  * @param {string} id - The unique identifier for the section.
  * @param {string} title - The title of the section.
  * @param {string} tag - The tag containing section metadata.
+ * @param {Object} sdtPr - The original sdtPr element for passthrough.
  * @returns {Object} The sdtPr tag object.
  */
-export const generateSdtPrTagForDocumentSection = (id, title, tag) => {
+export const generateSdtPrTagForDocumentSection = (id, title, tag, sdtPr) => {
+  const coreElements = [
+    {
+      name: 'w:id',
+      attributes: {
+        'w:val': id,
+      },
+    },
+    {
+      name: 'w:alias',
+      attributes: {
+        'w:val': title,
+      },
+    },
+    {
+      name: 'w:tag',
+      attributes: {
+        'w:val': tag,
+      },
+    },
+  ];
+
+  // Passthrough: preserve any sdtPr elements not explicitly managed
+  // Explicitly managed: w:id, w:alias, w:tag, w:lock (lock is added separately based on isLocked attr)
+  if (sdtPr?.elements && Array.isArray(sdtPr.elements)) {
+    const elementsToExclude = ['w:id', 'w:alias', 'w:tag', 'w:lock'];
+    const passthroughElements = sdtPr.elements.filter((el) => el && el.name && !elementsToExclude.includes(el.name));
+    coreElements.push(...passthroughElements);
+  }
+
   return {
     name: 'w:sdtPr',
-    elements: [
-      {
-        name: 'w:id',
-        attributes: {
-          'w:val': id,
-        },
-      },
-      {
-        name: 'w:alias',
-        attributes: {
-          'w:val': title,
-        },
-      },
-      {
-        name: 'w:tag',
-        attributes: {
-          'w:val': tag,
-        },
-      },
-    ],
+    elements: coreElements,
   };
 };

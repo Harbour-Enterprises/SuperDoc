@@ -1,4 +1,5 @@
-// @ts-check
+// @ts-nocheck
+
 import { Extension } from '@core/Extension.js';
 import { search, SearchQuery, setSearchState, getMatchHighlights } from './prosemirror-search-patched.js';
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
@@ -36,6 +37,7 @@ const isRegExp = (value) => Object.prototype.toString.call(value) === '[object R
  * @snippetPath /snippets/extensions/search.mdx
  */
 export const Search = Extension.create({
+  // @ts-expect-error - Storage type mismatch will be fixed in TS migration
   addStorage() {
     return {
       /**

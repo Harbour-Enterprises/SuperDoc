@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { Schema } from 'prosemirror-model';
+import { Schema } from '@core/Schema.js';
 import { EditorState, TextSelection, NodeSelection } from 'prosemirror-state';
 import * as listHelpers from './list-numbering-helpers.js';
+import { Paragraph } from '@extensions/paragraph/paragraph.js';
+import { Document } from '@extensions/document/document.js';
+import { Text } from '@extensions/text/text.js';
+import { OxmlNode, Attribute } from '@core/index.js';
 
 // Mock the external dependencies
 vi.mock('@core/super-converter/v2/importer/listImporter.js', () => ({
@@ -38,14 +42,10 @@ describe('getListDefinitionDetails', () => {
         },
         convertedXml: '<mock>xml</mock>',
       },
-      schema: {
-        nodes: {
-          orderedList: { name: 'orderedList' },
-          bulletList: { name: 'bulletList' },
-        },
-      },
       emit: vi.fn(), // Add mock emit function
     };
+
+    mockEditor.schema = Schema.createSchemaByExtensions([Document, Paragraph, Text], mockEditor);
   });
 
   afterEach(() => {
@@ -292,6 +292,8 @@ describe('getListDefinitionDetails', () => {
         lvlText: null,
         listNumberingType: null,
         customFormat: null,
+        justification: null,
+        suffix: null,
         abstract: null,
         abstractId: 'nonexistent', // The function correctly returns the abstractId even when abstract is not found
       });
@@ -327,6 +329,8 @@ describe('getListDefinitionDetails', () => {
         start: null,
         numFmt: null,
         lvlText: null,
+        suffix: null,
+        justification: null,
         listNumberingType: null,
         customFormat: null,
         abstract: mockAbstracts['abstract1'],
@@ -659,6 +663,8 @@ describe('getListDefinitionDetails', () => {
         start: null,
         numFmt: null,
         lvlText: null,
+        justification: null,
+        suffix: null,
         listNumberingType: null,
         customFormat: null,
         abstract: null,
@@ -887,49 +893,7 @@ describe('createSchemaOrderedListNode', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     vi.clearAllMocks();
-
-    schema = new Schema({
-      nodes: {
-        doc: { content: 'block+' },
-        text: { group: 'inline' },
-        paragraph: {
-          group: 'block',
-          content: 'inline*',
-          toDOM: () => ['p', 0],
-          parseDOM: [{ tag: 'p' }],
-        },
-        listItem: {
-          content: 'paragraph',
-          toDOM: () => ['li', 0],
-          parseDOM: [{ tag: 'li' }],
-        },
-        orderedList: {
-          group: 'block',
-          content: 'listItem+',
-          attrs: {
-            'list-style-type': { default: 'decimal' },
-            listId: { default: 0 },
-            order: { default: 0 },
-          },
-          toDOM: () => ['ol', 0],
-          parseDOM: [{ tag: 'ol' }],
-        },
-        bulletList: {
-          group: 'block',
-          content: 'listItem+',
-          attrs: {
-            'list-style-type': { default: 'bullet' },
-            listId: { default: 0 },
-          },
-          toDOM: () => ['ul', 0],
-          parseDOM: [{ tag: 'ul' }],
-        },
-      },
-      marks: {},
-    });
-
     editor = {
-      schema,
       converter: {
         numbering: {
           definitions: {
@@ -972,55 +936,25 @@ describe('createSchemaOrderedListNode', () => {
         convertedXml: '<mock/>',
       },
     };
+    schema = Schema.createSchemaByExtensions([Document, Paragraph, Text], editor);
+
+    editor.schema = schema;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
+  const makeContentJSON = (text) => schema.text(text).toJSON();
 
-  const makeContentJSON = (text) => schema.node('paragraph', null, [schema.text(text)]).toJSON();
-
-  it('returns an ordered list node when listType is orderedList', () => {
+  it('correctly creates a list', () => {
     const orderedNode = ListHelpers.createSchemaOrderedListNode({
       level: 0,
       numId: 10,
-      listType: 'orderedList',
       editor,
-      listLevel: [1],
       contentNode: makeContentJSON('item'),
     });
-
-    expect(orderedNode.type.name).toBe('orderedList');
-    expect(orderedNode.attrs['list-style-type']).toBe('decimal');
-    expect(orderedNode.attrs.order).toBe(0);
-  });
-
-  it('returns a bullet list node when listType is bulletList', () => {
-    const bulletNode = ListHelpers.createSchemaOrderedListNode({
-      level: 0,
-      numId: 11,
-      listType: 'bulletList',
-      editor,
-      listLevel: [1],
-      contentNode: makeContentJSON('bullet item'),
-    });
-
-    expect(bulletNode.type.name).toBe('bulletList');
-    expect(bulletNode.attrs['list-style-type']).toBe('bullet');
-    expect(bulletNode.attrs.order).toBeUndefined();
-  });
-
-  it('supports passing listType as a NodeType', () => {
-    const bulletNode = ListHelpers.createSchemaOrderedListNode({
-      level: 0,
-      numId: 11,
-      listType: schema.nodes.bulletList,
-      editor,
-      listLevel: [1],
-      contentNode: makeContentJSON('node type bullet'),
-    });
-
-    expect(bulletNode.type.name).toBe('bulletList');
+    expect(orderedNode.type.name).toBe('paragraph');
+    expect(orderedNode.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 10, ilvl: 0 } });
   });
 });
 
@@ -1036,17 +970,18 @@ describe('createNewList', () => {
   let createSchemaOrderedListNodeSpy;
 
   const makeStateWithParagraph = () => {
-    const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('hello')])]);
+    const doc = schema.node('doc', null, [
+      schema.node('paragraph', { paragraphProperties: {} }, [schema.text('hello')]),
+    ]);
     const sel = TextSelection.create(doc, 2); // inside text
     return EditorState.create({ doc, selection: sel, schema });
   };
 
-  const makeStateWithOrderedListNodeSelection = () => {
-    const innerPara = schema.node('paragraph', null, [schema.text('x')]);
-    const listItem = schema.node('listItem', null, innerPara);
-    const olist = schema.node('orderedList', { 'list-style-type': 'decimal', listId: 99, order: 0 }, [listItem]);
-    const doc = schema.node('doc', null, [olist]);
-    // Select the orderedList node itself
+  const makeStateWithWrapperNodeSelection = () => {
+    const innerPara = schema.node('paragraph', { paragraphProperties: {} }, [schema.text('x')]);
+    const wrapper = schema.node('wrapperNode', {}, [innerPara]);
+    const doc = schema.node('doc', null, [wrapper]);
+    // Select the wrapper node itself
     const sel = NodeSelection.create(doc, 1);
     return EditorState.create({ doc, selection: sel, schema });
   };
@@ -1054,53 +989,22 @@ describe('createNewList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Minimal, valid list schema: *orderedList is a block node*
-    schema = new Schema({
-      nodes: {
-        doc: { content: 'block+' },
-        text: { group: 'inline' },
-        paragraph: {
-          group: 'block',
-          content: 'inline*',
-          toDOM() {
-            return ['p', 0];
-          },
-          parseDOM: [{ tag: 'p' }],
-        },
-        listItem: {
-          // listItem is not directly under doc, only under orderedList
-          content: 'paragraph',
-          toDOM() {
-            return ['li', 0];
-          },
-          parseDOM: [{ tag: 'li' }],
-        },
-        orderedList: {
-          // <-- The crucial fix
-          group: 'block',
-          content: 'listItem+',
-          attrs: {
-            'list-style-type': { default: 'decimal' },
-            listId: { default: 1 },
-            order: { default: 0 },
-          },
-          toDOM() {
-            return ['ol', 0];
-          },
-          parseDOM: [{ tag: 'ol' }],
-        },
-      },
-      marks: {},
-    });
-
     editor = {
-      schema,
       emit: vi.fn(),
       converter: {
         numbering: { definitions: {}, abstracts: {} },
         convertedXml: '<mock/>',
       },
     };
+    const Wrapper = OxmlNode.create({
+      name: 'wrapperNode',
+      group: 'block',
+      content: 'paragraph+',
+      inline: false,
+    });
+    schema = Schema.createSchemaByExtensions([Document, Wrapper, Paragraph, Text], editor);
+
+    editor.schema = schema;
 
     // Keep list ID/definition logic mocked (unit test scope)
     getNewListIdSpy = vi.spyOn(ListHelpers, 'getNewListId').mockReturnValue(1);
@@ -1121,7 +1025,7 @@ describe('createNewList', () => {
   });
 
   describe('Basic behavior', () => {
-    it('creates a new list, replaces the paragraph, and places caret inside the new list item', () => {
+    it('creates a new list by modifying the paragraph', () => {
       const state = makeStateWithParagraph();
       const tr = state.tr;
 
@@ -1131,31 +1035,18 @@ describe('createNewList', () => {
       expect(getNewListIdSpy).toHaveBeenCalledWith(editor);
       expect(generateNewListDefinitionSpy).toHaveBeenCalledWith({
         numId: 1,
-        listType: editor.schema.nodes.orderedList,
+        listType: 'orderedList',
         editor,
       });
-      expect(createSchemaOrderedListNodeSpy).toHaveBeenCalled();
 
       const first = tr.doc.firstChild;
       expect(first).toBeTruthy();
-      expect(first.type.name).toBe('orderedList');
-
-      const li = first.firstChild;
-      expect(li.type.name).toBe('listItem');
-
-      const innerPara = li.firstChild;
-      expect(innerPara.type.name).toBe('paragraph');
-      expect(innerPara.textContent).toBe('hello');
-
-      // Caret should be *inside* the inserted paragraph
-      const $from = tr.selection.$from;
-      expect($from.parent.type.name).toBe('paragraph');
-      expect($from.node(-1).type.name).toBe('listItem');
-      expect($from.node(-2).type.name).toBe('orderedList');
+      expect(first.type.name).toBe('paragraph');
+      expect(first.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 1, ilvl: 0 } });
     });
 
     it('returns false (no-op) when selection parent is not a paragraph', () => {
-      const state = makeStateWithOrderedListNodeSelection();
+      const state = makeStateWithWrapperNodeSelection();
       const tr = state.tr;
 
       const ok = createNewList({ listType: 'orderedList', tr, editor });
@@ -1170,25 +1061,13 @@ describe('createNewList', () => {
       expect(tr.steps.length).toBe(0);
       expect(tr.doc.eq(state.doc)).toBe(true);
     });
-
-    it('accepts listType as NodeType as well as string', () => {
-      const state = makeStateWithParagraph();
-      const tr = state.tr;
-
-      const ok = createNewList({ listType: editor.schema.nodes.orderedList, tr, editor });
-      expect(ok).toBe(true);
-
-      expect(generateNewListDefinitionSpy).toHaveBeenCalledWith({
-        numId: 1,
-        listType: editor.schema.nodes.orderedList,
-        editor,
-      });
-    });
   });
 
   describe('Integration-ish sanity (minimal)', () => {
     it('preserves inline content/marks via contentNode JSON round-trip', () => {
-      const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text('abc 123')])]);
+      const doc = schema.node('doc', null, [
+        schema.node('paragraph', { paragraphProperties: {} }, [schema.text('abc 123')]),
+      ]);
       const sel = TextSelection.create(doc, 3);
       const state = EditorState.create({ doc, selection: sel, schema });
       const tr = state.tr;
@@ -1197,139 +1076,9 @@ describe('createNewList', () => {
       expect(ok).toBe(true);
 
       const ol = tr.doc.firstChild;
-      expect(ol.type.name).toBe('orderedList');
-      const para = ol.firstChild.firstChild;
-      expect(para.type.name).toBe('paragraph');
-      expect(para.textContent).toBe('abc 123');
+      expect(ol.type.name).toBe('paragraph');
+      expect(ol.attrs.paragraphProperties).toEqual({ numberingProperties: { numId: 1, ilvl: 0 } });
+      expect(ol.textContent).toBe('abc 123');
     });
-  });
-});
-
-import { setCaretInsideFirstTextblockOfInsertedAt } from './list-numbering-helpers.js';
-
-describe('setCaretInsideFirstTextblockOfInsertedAt', () => {
-  /** @type {import('prosemirror-model').Schema} */
-  let schema;
-
-  beforeEach(() => {
-    // Minimal valid schema for lists + a dummy non-textblock block
-    schema = new Schema({
-      nodes: {
-        doc: { content: 'block+' },
-        text: { group: 'inline' },
-        paragraph: {
-          group: 'block',
-          content: 'inline*',
-          toDOM: () => ['p', 0],
-          parseDOM: [{ tag: 'p' }],
-        },
-        listItem: {
-          content: 'paragraph',
-          toDOM: () => ['li', 0],
-          parseDOM: [{ tag: 'li' }],
-        },
-        orderedList: {
-          group: 'block',
-          content: 'listItem+',
-          attrs: {
-            'list-style-type': { default: 'decimal' },
-            listId: { default: 1 },
-            order: { default: 0 },
-          },
-          toDOM: () => ['ol', 0],
-          parseDOM: [{ tag: 'ol' }],
-        },
-        // A non-textblock container to exercise the "no descendant textblock" fallback
-        box: {
-          group: 'block',
-          content: '', // cannot contain textblocks
-          defining: true,
-          toDOM: () => ['div', { 'data-box': '1' }],
-          parseDOM: [{ tag: 'div[data-box]' }],
-        },
-      },
-      marks: {},
-    });
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  const makeParagraphState = (text = 'hello') => {
-    const doc = schema.node('doc', null, [schema.node('paragraph', null, [schema.text(text)])]);
-    const sel = TextSelection.create(doc, 2); // inside the paragraph
-    return EditorState.create({ doc, selection: sel, schema });
-  };
-
-  it('moves the caret inside the first textblock of the inserted container (orderedList -> listItem -> paragraph)', () => {
-    const state = makeParagraphState('hello');
-    const tr = state.tr;
-
-    // Replacement region = the paragraph at selection depth
-    const { $from } = tr.selection;
-    const depth = $from.depth;
-    const replaceFrom = $from.before(depth);
-    const replaceTo = $from.after(depth);
-
-    // Create the container we "inserted"
-    const para = schema.node('paragraph', null, [schema.text('hello')]);
-    const li = schema.node('listItem', null, para);
-    const ol = schema.node('orderedList', { 'list-style-type': 'decimal', listId: 42, order: 0 }, [li]);
-
-    // Do the actual replacement
-    const startBefore = replaceFrom;
-    tr.replaceWith(replaceFrom, replaceTo, ol);
-
-    // Now call the helper to position the caret
-    setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore);
-
-    // Assert: caret is inside the inserted paragraph (not at boundary)
-    const $pos = tr.selection.$from;
-    expect($pos.parent.type.name).toBe('paragraph');
-    expect($pos.node(-1).type.name).toBe('listItem');
-    expect($pos.node(-2).type.name).toBe('orderedList');
-
-    // Optional: at start of textblock (pos equals first char inside paragraph)
-    // (we can’t assert exact number reliably across schemas, but offset should be >= 1)
-    expect($pos.parentOffset).toBeGreaterThanOrEqual(0);
-  });
-
-  it('falls back near the boundary when the mapped position has no container (nodeAfter === null)', () => {
-    const state = makeParagraphState('hello');
-    const tr = state.tr;
-
-    // We won’t insert anything; we pass a startBefore that maps to a spot without nodeAfter
-    // A safe way: map to the last position in doc where nodeAfter is null (end of doc)
-    const startBefore = tr.doc.content.size - 1;
-
-    // Call the helper; it should not throw and should set a near selection
-    setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore);
-
-    // Selection should be inside the doc and not null
-    const sel = tr.selection;
-    expect(sel).toBeTruthy();
-    expect(sel.from).toBeGreaterThanOrEqual(0);
-    expect(sel.to).toBeLessThanOrEqual(tr.doc.content.size);
-  });
-
-  it('falls back to near(containerStart + 1) when the container has no textblock descendants', () => {
-    const state = makeParagraphState('hello');
-    const tr = state.tr;
-
-    const { $from } = tr.selection;
-    const depth = $from.depth;
-    const replaceFrom = $from.before(depth);
-    const replaceTo = $from.after(depth);
-    const startBefore = replaceFrom;
-
-    const box = schema.node('box');
-    tr.replaceWith(replaceFrom, replaceTo, box);
-
-    setCaretInsideFirstTextblockOfInsertedAt(tr, startBefore);
-
-    const pos = tr.selection.from;
-    expect(pos).toBeGreaterThanOrEqual(0);
-    expect(pos).toBeLessThanOrEqual(tr.doc.content.size);
   });
 });

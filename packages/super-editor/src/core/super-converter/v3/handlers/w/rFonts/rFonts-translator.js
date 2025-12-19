@@ -1,81 +1,40 @@
-// @ts-check
 import { NodeTranslator } from '@translator';
-import validXmlAttributes from './attributes/index.js';
-
-/** @type {import('@translator').XmlNodeName} */
-const XML_NODE_NAME = 'w:rFonts';
-
-/** @type {import('@translator').SuperDocNodeOrKeyName} */
-const SD_ATTR_KEY = 'fontFamily';
-
-/**
- * Encode the w:rFonts element.
- * - Preserve all provided attributes (e.g., w:eastAsia, w:ascii, w:hAnsi, w:cs) so export has full fidelity.
- * - If w:eastAsia is present and truthy, also map it to w:val as a convenience; otherwise omit w:val.
- * @param {import('@translator').SCEncoderConfig} params
- * @returns {import('@translator').SCEncoderResult}
- */
-const encode = (params, encodedAttrs = {}) => {
-  const { nodes } = params;
-  const node = nodes?.[0];
-  const sourceAttrs = node?.attributes || {};
-
-  const attributes = {};
-
-  const setAttr = (xmlName, sdName) => {
-    if (encodedAttrs[sdName] !== undefined && encodedAttrs[sdName] !== null) {
-      attributes[xmlName] = encodedAttrs[sdName];
-    } else if (sourceAttrs[xmlName] !== undefined) {
-      attributes[xmlName] = sourceAttrs[xmlName];
-    }
-  };
-
-  setAttr('w:eastAsia', 'eastAsia');
-  setAttr('w:ascii', 'ascii');
-  setAttr('w:hAnsi', 'hAnsi');
-  setAttr('w:cs', 'cs');
-  setAttr('w:val', 'value');
-
-  // Preserve any other existing attributes on the source node that we didn't explicitly manage
-  Object.keys(sourceAttrs).forEach((key) => {
-    if (attributes[key] === undefined) attributes[key] = sourceAttrs[key];
-  });
-
-  if (attributes['w:val'] === undefined && attributes['w:eastAsia']) {
-    attributes['w:val'] = attributes['w:eastAsia'];
-  }
-
-  if (attributes['w:val'] === undefined) delete attributes['w:val'];
-
-  if (params.inlineDocumentFonts) {
-    // Right now we only support 'w:ascii'
-    const font = attributes['w:ascii'];
-    if (font) {
-      if (!params.inlineDocumentFonts.includes(font)) {
-        params.inlineDocumentFonts.push(font);
-      }
-    }
-  }
-
-  return {
-    type: 'attr',
-    xmlName: XML_NODE_NAME,
-    sdNodeOrKeyName: SD_ATTR_KEY,
-    attributes,
-  };
-};
-
-/** @type {import('@translator').NodeTranslatorConfig} */
-const config = {
-  xmlName: XML_NODE_NAME,
-  sdNodeOrKeyName: SD_ATTR_KEY,
-  type: NodeTranslator.translatorTypes.ATTRIBUTE,
-  encode,
-  attributes: validXmlAttributes,
-};
+import { createAttributeHandler } from '@converter/v3/handlers/utils';
 
 /**
  * The NodeTranslator instance for the w:rFonts element.
  * @type {import('@translator').NodeTranslator}
+ * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 291
  */
-export const translator = NodeTranslator.from(config);
+export const translator = NodeTranslator.from({
+  xmlName: 'w:rFonts',
+  sdNodeOrKeyName: 'fontFamily',
+  attributes: [
+    createAttributeHandler('w:hint'),
+    createAttributeHandler('w:ascii'),
+    createAttributeHandler('w:hAnsi'),
+    createAttributeHandler('w:eastAsia'),
+    createAttributeHandler('w:cs'),
+    createAttributeHandler('w:val'),
+    createAttributeHandler('w:asciiTheme'),
+    createAttributeHandler('w:hAnsiTheme'),
+    createAttributeHandler('w:eastAsiaTheme'),
+    createAttributeHandler('w:cstheme'),
+  ],
+  encode: (params, encodedAttrs) => {
+    if (params.inlineDocumentFonts) {
+      // Right now we only support 'w:ascii'
+      const font = encodedAttrs['ascii'];
+      if (font) {
+        if (!params.inlineDocumentFonts.includes(font)) {
+          params.inlineDocumentFonts.push(font);
+        }
+      }
+    }
+    return encodedAttrs;
+  },
+  decode: function ({ node }) {
+    const decodedAttrs = this.decodeAttributes({ node: { ...node, attrs: node.attrs['fontFamily'] || {} } });
+    return Object.keys(decodedAttrs).length > 0 ? { attributes: decodedAttrs } : undefined;
+  },
+});

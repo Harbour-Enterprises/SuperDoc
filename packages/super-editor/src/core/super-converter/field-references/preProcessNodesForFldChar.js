@@ -2,6 +2,7 @@
  * @typedef {import('../v2/types/index.js').OpenXmlNode} OpenXmlNode
  */
 import { getInstructionPreProcessor } from './fld-preprocessors';
+import { carbonCopy } from '@core/utilities/carbonCopy.js';
 /**
  * @typedef {object} FldCharProcessResult
  * @property {OpenXmlNode[]} processedNodes - The list of nodes after processing.
@@ -26,6 +27,7 @@ import { getInstructionPreProcessor } from './fld-preprocessors';
 export const preProcessNodesForFldChar = (nodes = [], docx) => {
   const processedNodes = [];
   let collectedNodesStack = [];
+  let rawCollectedNodesStack = [];
   let currentFieldStack = [];
   let unpairedEnd = null;
   let collecting = false;
@@ -37,14 +39,17 @@ export const preProcessNodesForFldChar = (nodes = [], docx) => {
   const finalizeField = () => {
     if (collecting) {
       const collectedNodes = collectedNodesStack.pop().filter((n) => n !== null);
+      const rawCollectedNodes = rawCollectedNodesStack.pop().filter((n) => n !== null);
       const currentField = currentFieldStack.pop();
-      const combined = _processCombinedNodesForFldChar(collectedNodes, currentField.instrText.trim(), docx);
+      const combinedResult = _processCombinedNodesForFldChar(collectedNodes, currentField.instrText.trim(), docx);
+      const outputNodes = combinedResult.handled ? combinedResult.nodes : rawCollectedNodes;
       if (collectedNodesStack.length === 0) {
         // We have completed a top-level field, add the combined nodes to the output.
-        processedNodes.push(...combined);
+        processedNodes.push(...outputNodes);
       } else {
         // We are inside another field, so add the combined nodes to the parent collection.
-        collectedNodesStack[collectedNodesStack.length - 1].push(...combined);
+        collectedNodesStack[collectedNodesStack.length - 1].push(...outputNodes);
+        rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(...outputNodes);
       }
     } else {
       // An unmatched 'end' indicates a field from a parent node is closing.
@@ -56,25 +61,34 @@ export const preProcessNodesForFldChar = (nodes = [], docx) => {
     const fldCharEl = node.elements?.find((el) => el.name === 'w:fldChar');
     const fldType = fldCharEl?.attributes?.['w:fldCharType'];
     const instrTextEl = node.elements?.find((el) => el.name === 'w:instrText');
+    const rawNode = carbonCopy(node);
     collecting = collectedNodesStack.length > 0;
 
     if (fldType === 'begin') {
-      collectedNodesStack.push([null]); // We won't actually collect the 'begin' node itself.
+      collectedNodesStack.push([]);
+      rawCollectedNodesStack.push([rawNode]);
       currentFieldStack.push({ instrText: '' });
       continue;
     }
 
     // If collecting, aggregate instruction text.
     if (instrTextEl && collecting && currentFieldStack.length > 0) {
+      rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
       currentFieldStack[currentFieldStack.length - 1].instrText += (instrTextEl.elements?.[0]?.text || '') + ' ';
       // We can ignore the 'fldChar' nodes
       continue;
     }
 
     if (fldType === 'end') {
+      if (collecting) {
+        rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
+      }
       finalizeField();
       continue;
     } else if (fldType === 'separate') {
+      if (collecting) {
+        rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
+      }
       // We can ignore the 'fldChar' nodes
       continue;
     }
@@ -92,20 +106,24 @@ export const preProcessNodesForFldChar = (nodes = [], docx) => {
 
           // The current node should be added to the collected nodes
           collectedNodesStack.push([node]);
+          rawCollectedNodesStack.push([rawNode]);
         });
       } else if (childResult.unpairedEnd) {
         // A field from this level or higher ended in the children.
         collectedNodesStack[collectedNodesStack.length - 1].push(node);
+        rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
         finalizeField();
       } else if (collecting) {
         // This node is part of a field being collected at this level.
         collectedNodesStack[collectedNodesStack.length - 1].push(node);
+        rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
       } else {
         // This node is not part of any field.
         processedNodes.push(node);
       }
     } else if (collecting) {
       collectedNodesStack[collectedNodesStack.length - 1].push(node);
+      rawCollectedNodesStack[rawCollectedNodesStack.length - 1].push(rawNode);
     } else {
       processedNodes.push(node);
     }
@@ -139,8 +157,7 @@ const _processCombinedNodesForFldChar = (nodesToCombine = [], instrText, docx) =
   const instructionType = instrText.trim().split(' ')[0];
   const instructionPreProcessor = getInstructionPreProcessor(instructionType);
   if (instructionPreProcessor) {
-    return instructionPreProcessor(nodesToCombine, instrText, docx);
-  } else {
-    return nodesToCombine;
+    return { nodes: instructionPreProcessor(nodesToCombine, instrText, docx), handled: true };
   }
+  return { nodes: nodesToCombine, handled: false };
 };

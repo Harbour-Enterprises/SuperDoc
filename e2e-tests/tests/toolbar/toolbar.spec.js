@@ -4,7 +4,7 @@ import { ptToPx, sleep } from '../helpers.js';
 test.describe('toolbar', () => {
   test.describe('custom buttons', () => {
     test('should work with custom buttons', async ({ page }) => {
-      await page.goto('http://localhost:4173/?includeCustomButton=true');
+      await page.goto('http://localhost:4173/?includeCustomButton=true&layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -19,7 +19,7 @@ test.describe('toolbar', () => {
       await lastButton.click();
       await page.keyboard.type('Hello');
 
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.getByText('Hello', { exact: true });
       const customAttribute = await hello.getAttribute('data-custom-id');
       expect(customAttribute).not.toBeNull();
     });
@@ -49,13 +49,13 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.ProseMirror').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).fontFamily)).toBe('Georgia');
     });
 
     test('should add text with selected font size', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -77,13 +77,12 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is 16px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontSize)).toBe(ptToPx(18));
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-size', ptToPx(18));
     });
 
     test('should add text with bold mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -102,12 +101,12 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is bold
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add text with italic mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -126,12 +125,12 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is italic
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe('italic');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-style', 'italic');
     });
 
     test('should add text with underline mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -150,13 +149,13 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('underline');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add text with strikethrough mark', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -175,13 +174,13 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('line-through');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add text with selected color', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -201,13 +200,12 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is red
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).color)).toBe('rgb(210, 0, 63)');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('color', 'rgb(210, 0, 63)');
     });
 
     test('should add text with selected highlight color', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -229,15 +227,14 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Ensure the text is highlighted
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('background-color', 'rgb(210, 0, 63)');
     });
   });
 
   test.describe('select text and apply toolbar item', () => {
     test('should add bold mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -250,7 +247,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -259,11 +256,12 @@ test.describe('toolbar', () => {
       await boldButton.click();
 
       // Ensure the text is bold
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add italic mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -276,7 +274,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -285,13 +283,12 @@ test.describe('toolbar', () => {
       await italicButton.click();
 
       // Ensure the text is italic
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe(
-        'italic',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-style', 'italic');
     });
 
     test('should add underline mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -304,7 +301,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      const helloText = await superEditor.getByText('Hello');
+      const helloText = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       await helloText.click({
         clickCount: 2,
       });
@@ -314,15 +311,13 @@ test.describe('toolbar', () => {
       await underlineButton.click();
 
       // Ensure the text is underlined
-      const hello = await superEditor.locator('u').first();
-      expect(hello).toBeVisible();
-      expect(await hello.innerText()).toEqual('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('underline');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add strikethrough mark to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -335,7 +330,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      const helloText = await superEditor.getByText('Hello');
+      const helloText = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       await helloText.click({
         clickCount: 2,
       });
@@ -345,15 +340,13 @@ test.describe('toolbar', () => {
       await strikethroughButton.click();
 
       // Ensure the text is strikethrough
-      const hello = await superEditor.locator('s').first();
-      expect(hello).toBeVisible();
-      expect(await hello.innerText()).toEqual('Hello');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe('line-through');
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe('solid');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
     test('should add color to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -366,7 +359,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -378,13 +371,13 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="red"]').click();
 
       // Ensure the text is red
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
       expect(await hello.evaluate((el) => window.getComputedStyle(el).color)).toBe('rgb(210, 0, 63)');
     });
 
     test('should add highlight color to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -397,7 +390,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -412,14 +405,14 @@ test.describe('toolbar', () => {
       await superEditor.click();
 
       // Ensure the text is highlighted
-      const hello = await superEditor.getByText('Hello');
+      const hello = await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true });
       expect(hello).toBeVisible();
 
       expect(await hello.evaluate((el) => window.getComputedStyle(el).backgroundColor)).toBe('rgb(210, 0, 63)');
     });
 
     test('should add font size to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -432,7 +425,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -444,13 +437,12 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Font size - 18"]').click();
 
       // Ensure the text is 18px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontSize)).toBe(ptToPx(18));
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-size', ptToPx(18));
     });
 
     test('should add .5 font size to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -463,7 +455,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -474,16 +466,15 @@ test.describe('toolbar', () => {
       await fontSizeInput.press('Enter');
 
       // Ensure the text is 18px
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize))).toBeCloseTo(
-        parseFloat(ptToPx(18.5)),
-        1,
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(async () => {
+        const value = await hello.evaluate((el) => parseFloat(window.getComputedStyle(el).fontSize));
+        expect(value).toBeCloseTo(parseFloat(ptToPx(18.5)), 1);
+      }).toPass();
     });
 
     test('should add font family to selected text', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -496,7 +487,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -508,15 +499,17 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Font family - Arial"]').click();
 
       // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
-      expect(await hello.evaluate((el) => window.getComputedStyle(el).fontFamily)).toBe('Arial');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(async () => {
+        const family = await hello.evaluate((el) => window.getComputedStyle(el).fontFamily);
+        expect(family).toContain('Arial');
+      }).toPass();
     });
   });
 
   test.describe('shortcuts', () => {
     test('should add bold mark to selected text with mod + b', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -529,7 +522,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -537,11 +530,12 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+B');
 
       // Ensure the text is bold
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontWeight)).toBe('700');
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('font-weight', '700');
     });
 
     test('should add italic mark to selected text with mod + i', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -554,7 +548,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -562,13 +556,19 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+I');
 
       // Ensure the text is italic
-      expect(await superEditor.getByText('Hello').evaluate((el) => window.getComputedStyle(el).fontStyle)).toBe(
-        'italic',
-      );
+      await sleep(500);
+      expect(
+        await superEditor
+          .locator('.superdoc-layout')
+          .getByText('Hello', { exact: true })
+          .evaluate((el) => {
+            return window.getComputedStyle(el).fontStyle;
+          }),
+      ).toBe('italic');
     });
 
     test('should add underline mark to selected text with mod + u', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -582,7 +582,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -590,17 +590,13 @@ test.describe('toolbar', () => {
       await page.keyboard.press('ControlOrMeta+U');
 
       // Ensure the text is underlined
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe(
-        'underline',
-      );
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe(
-        'solid',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'underline');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
 
-    test('should add strikethrough mark to selected text with mod + s', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+    test('should add strikethrough mark to selected text with mod + x', async ({ page }) => {
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -614,27 +610,23 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
       // Apply the strikethrough mark
-      await page.keyboard.press('ControlOrMeta+Shift+S');
+      await page.keyboard.press('ControlOrMeta+Shift+X');
 
       // Ensure the text is strikethrough (computed style)
-      const hello = await superEditor.getByText('Hello');
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationLine)).toBe(
-        'line-through',
-      );
-      expect(await hello.getByText('Hello').evaluate((el) => window.getComputedStyle(el).textDecorationStyle)).toBe(
-        'solid',
-      );
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toHaveCSS('text-decoration-line', 'line-through');
+      await expect(hello).toHaveCSS('text-decoration-style', 'solid');
     });
   });
 
   test.describe('toolbar state', () => {
     test('should show correct font family when font family is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -647,7 +639,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -662,7 +654,7 @@ test.describe('toolbar', () => {
       await sleep(500);
 
       // Click back on the text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -671,7 +663,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show correct font size when font size is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -684,7 +676,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -699,7 +691,7 @@ test.describe('toolbar', () => {
       await sleep(500);
 
       // Click back on the text
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -709,7 +701,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when bold mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -722,7 +714,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -731,7 +723,7 @@ test.describe('toolbar', () => {
       await boldButton.click();
 
       // Click back on the bold text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -744,7 +736,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when italic mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -757,7 +749,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -766,7 +758,7 @@ test.describe('toolbar', () => {
       await italicButton.click();
 
       // Click back on the italic text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -780,7 +772,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when underline mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -793,7 +785,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -802,7 +794,7 @@ test.describe('toolbar', () => {
       await underlineButton.click();
 
       // Click back on the underline text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -816,7 +808,7 @@ test.describe('toolbar', () => {
     });
 
     test('should be highlighted when strikethrough mark is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -829,7 +821,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -838,7 +830,7 @@ test.describe('toolbar', () => {
       await strikethroughButton.click();
 
       // Click back on the strikethrough text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar to update
       await sleep(500);
@@ -852,7 +844,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show the correct color when color is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -865,7 +857,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -882,7 +874,7 @@ test.describe('toolbar', () => {
     });
 
     test('should show the correct color when highlight is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -895,7 +887,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -925,7 +917,7 @@ test.describe('toolbar', () => {
     test('should add text with linked style', async ({ page }) => {
       const heading2Styles = HEADING2_STYLES;
 
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -945,32 +937,33 @@ test.describe('toolbar', () => {
 
       // Type "Hello"
       await page.keyboard.type('Hello');
-      await page.keyboard.press('Enter');
 
-      // Ensure the text is Arial
-      const hello = await superEditor.getByText('Hello');
-      expect(hello).toBeVisible();
+      // Wait for layout to render styled text
+      await page.waitForSelector('.superdoc-layout [styleid="Heading2"]', { timeout: 10000 });
+      const hello = await page.locator('.superdoc-layout').getByText('Hello', { exact: true });
+      await expect(hello).toBeVisible();
 
-      const parentP = hello.locator('..');
-      const styleAttribute = await parentP.getAttribute('styleid');
-      expect(styleAttribute).toBe('Heading2');
+      await expect(async () => {
+        const styles = await hello.evaluate((el) => {
+          const computed = window.getComputedStyle(el);
+          const nearestStyleNode = el.closest('[styleid]');
+          return {
+            color: computed.color,
+            fontSize: computed.fontSize,
+            fontFamily: computed.fontFamily,
+            styleId: nearestStyleNode ? nearestStyleNode.getAttribute('styleid') : null,
+          };
+        });
 
-      const styles = await hello.evaluate((el) => {
-        const computed = window.getComputedStyle(el);
-        return {
-          color: computed.color,
-          fontSize: computed.fontSize,
-          fontFamily: computed.fontFamily,
-        };
-      });
-
-      expect(styles.color).toBe(heading2Styles.color);
-      expect(styles.fontFamily).toBe(heading2Styles.fontFamily);
-      expect(styles.fontSize).toBe(heading2Styles.fontSize);
+        expect(styles.styleId).toBe('Heading2');
+        expect(styles.color).toBe(heading2Styles.color);
+        expect(styles.fontFamily).toContain('Aptos Display');
+        expect(styles.fontSize).toBe(heading2Styles.fontSize);
+      }).toPass();
     });
 
     test('should show correct label when linked style is applied', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -983,7 +976,7 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Double click on the text "Hello" to select it
-      await superEditor.getByText('Hello').click({
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({
         clickCount: 2,
       });
 
@@ -995,7 +988,7 @@ test.describe('toolbar', () => {
       await page.locator('div[aria-label="Linked style - Heading2"]').click();
 
       // Click back on the text
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
 
       // Wait for the toolbar button text to update and verify
       const styleButtonText = styleButton.getByText('heading 2');
@@ -1003,7 +996,7 @@ test.describe('toolbar', () => {
     });
 
     test('should reset label to "format text" when style is deselected', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -1015,29 +1008,29 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Hello');
 
       // Select the text and apply Heading2 style
-      await superEditor.getByText('Hello').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({ clickCount: 2 });
 
       const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
       await styleButton.click();
       await page.locator('div[aria-label="Linked style - Heading2"]').click();
 
       // Verify heading 2 label is shown
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
       await expect(styleButton.getByText('heading 2')).toBeVisible({ timeout: 2000 });
 
       // Select the text again and remove the style by applying "Normal"
-      await superEditor.getByText('Hello').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click({ clickCount: 2 });
       await styleButton.click();
       await page.locator('div[aria-label="Linked style - Normal"]').click();
 
       // Click on the text and verify label resets
-      await superEditor.getByText('Hello').click();
+      await superEditor.locator('.superdoc-layout').getByText('Hello', { exact: true }).click();
       const formatTextLabel = styleButton.getByText('format text', { exact: false });
       await expect(formatTextLabel).toBeVisible({ timeout: 2000 });
     });
 
     test('should navigate through styles with keyboard', async ({ page }) => {
-      await page.goto('http://localhost:4173/');
+      await page.goto('http://localhost:4173/?layout=1');
       await page.waitForSelector('div.super-editor');
 
       const superEditor = page.locator('div.super-editor').first();
@@ -1049,24 +1042,24 @@ test.describe('toolbar', () => {
       await page.keyboard.type('Test');
 
       // Select text and open linked styles dropdown
-      await superEditor.getByText('Test').click({ clickCount: 2 });
+      await superEditor.locator('.superdoc-layout').getByText('Test', { exact: true }).click({ clickCount: 2 });
 
       const styleButton = page.locator('div[data-item="btn-linkedStyles"]');
       await styleButton.click();
 
       // Verify dropdown is open and first item is focused
-      const firstStyle = page.locator('div[aria-label="Linked style - Normal"]');
+      const firstStyle = page.locator('div[aria-label="Linked style - Heading1"]');
       await expect(firstStyle).toBeVisible();
       await expect(firstStyle).toBeFocused({ timeout: 1000 });
 
-      // Navigate down with arrow key
+      // Navigate down again
       await page.keyboard.press('ArrowDown');
-      const secondStyle = page.locator('div[aria-label="Linked style - Heading1"]');
+      const secondStyle = page.locator('div[aria-label="Linked style - Heading2"]');
       await expect(secondStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate down again
       await page.keyboard.press('ArrowDown');
-      const thirdStyle = page.locator('div[aria-label="Linked style - Heading2"]');
+      const thirdStyle = page.locator('div[aria-label="Linked style - Heading3"]');
       await expect(thirdStyle).toBeFocused({ timeout: 1000 });
 
       // Navigate back up
@@ -1077,9 +1070,60 @@ test.describe('toolbar', () => {
       await page.keyboard.press('Enter');
 
       // Verify the style was applied
-      await superEditor.getByText('Test').click();
-      const styleButtonText = styleButton.getByText('heading 1');
+      await superEditor.locator('.superdoc-layout').getByText('Test', { exact: true }).click();
+      await page.waitForSelector('.superdoc-layout [styleid="Heading2"]', { timeout: 10000 });
+      const styleButtonText = styleButton.getByText('heading 2');
       await expect(styleButtonText).toBeVisible({ timeout: 2000 });
+    });
+  });
+
+  test.describe('dropdown closing behavior', () => {
+    test('should close font family dropdown with Escape', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Open font family dropdown
+      const fontButton = await page.locator('div[data-item="btn-fontFamily"]');
+      await fontButton.click();
+
+      // Verify dropdown is open
+      const dropdownItem = page.locator('div[aria-label="Font family - Georgia"]');
+      await expect(dropdownItem).toBeVisible();
+
+      // Press Escape
+      await page.keyboard.press('Escape');
+
+      // Verify dropdown is closed
+      await expect(dropdownItem).not.toBeVisible();
+    });
+
+    test('should close color dropdown when clicking outside', async ({ page }) => {
+      await page.goto('http://localhost:4173/');
+      await page.waitForSelector('div.super-editor');
+
+      const superEditor = page.locator('div.super-editor').first();
+      await expect(superEditor).toBeVisible({
+        timeout: 1_000,
+      });
+
+      // Open color dropdown
+      const colorButton = await page.locator('div[data-item="btn-color"]');
+      await colorButton.click();
+
+      // Verify dropdown is open
+      const colorItem = page.locator('div[aria-label="red"]');
+      await expect(colorItem).toBeVisible();
+
+      // Click outside the dropdown
+      await colorButton.click();
+
+      // Verify dropdown is closed
+      await expect(colorItem).not.toBeVisible();
     });
   });
 });

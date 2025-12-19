@@ -316,32 +316,7 @@ describe('SuperDoc core', () => {
     expect(instance.ydoc).toBeDefined();
   });
 
-  it('toggles pagination across editors', async () => {
-    const { superdocStore } = createAppHarness();
-    const togglePagination = vi.fn();
-    superdocStore.documents = [
-      {
-        type: DOCX,
-        getEditor: () => ({ commands: { togglePagination } }),
-      },
-    ];
-
-    const instance = new SuperDoc({
-      selector: '#host',
-      document: 'https://example.com/doc.docx',
-      documents: [],
-      modules: { comments: {}, toolbar: {} },
-      colors: ['red'],
-      user: { name: 'Jane', email: 'jane@example.com' },
-      onException: vi.fn(),
-      pagination: false,
-    });
-    await flushMicrotasks();
-
-    instance.togglePagination();
-    expect(instance.config.pagination).toBe(true);
-    expect(togglePagination).toHaveBeenCalled();
-  });
+  // pagination legacy removed; togglePagination test removed
 
   it('broadcasts ready only when all editors resolved', async () => {
     const { superdocStore } = createAppHarness();
@@ -552,6 +527,7 @@ describe('SuperDoc core', () => {
       removeComments,
       restoreComments,
       getEditor: vi.fn(() => ({ setDocumentMode })),
+      getPresentationEditor: vi.fn(() => null),
     };
     superdocStore.documents = [docStub];
 

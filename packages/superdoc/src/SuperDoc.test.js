@@ -10,6 +10,9 @@ import { CommentMarkName } from '../../super-editor/src/extensions/comment/comme
 
 const isRef = (value) => value && typeof value === 'object' && 'value' in value;
 
+// Mock state for PresentationEditor
+const mockState = { instances: new Map() };
+
 vi.mock('pinia', async () => {
   const actual = await vi.importActual('pinia');
   return {
@@ -98,9 +101,21 @@ const AiLayerStub = stubComponent('AiLayer');
 const PdfViewerStub = stubComponent('PdfViewer');
 const HtmlViewerStub = stubComponent('HtmlViewer');
 
+// Mock @harbour-enterprises/super-editor with stubs and PresentationEditor class
 vi.mock('@harbour-enterprises/super-editor', () => ({
   SuperEditor: SuperEditorStub,
   AIWriter: AIWriterStub,
+  PresentationEditor: class PresentationEditorMock {
+    static getInstance(documentId) {
+      return mockState.instances.get(documentId);
+    }
+
+    static setGlobalZoom(zoom) {
+      mockState.instances.forEach((instance) => {
+        instance?.setZoom?.(zoom);
+      });
+    }
+  },
 }));
 
 vi.mock('./components/PdfViewer/PdfViewer.vue', () => ({
@@ -132,6 +147,17 @@ vi.mock('@superdoc/components/CommentsLayer/CommentsLayer.vue', () => ({
 }));
 
 vi.mock('naive-ui', () => ({
+  NConfigProvider: defineComponent({
+    name: 'NConfigProvider',
+    props: {
+      abstract: Boolean,
+      preflightStyleDisabled: Boolean,
+      styleMountTarget: Object,
+    },
+    setup(_, { slots }) {
+      return () => slots.default?.();
+    },
+  }),
   NMessageProvider: defineComponent({
     name: 'NMessageProvider',
     setup(_, { slots }) {
@@ -248,12 +274,12 @@ const createSuperdocStub = () => {
   return {
     config: {
       modules: { comments: {}, ai: {}, toolbar: {}, pdf: {} },
-      pagination: false,
       isDebug: false,
       documentMode: 'editing',
       role: 'editor',
       suppressDefaultDocxStyles: false,
       disableContextMenu: false,
+      layoutEngineOptions: {},
     },
     activeEditor: null,
     toolbar,
@@ -267,6 +293,8 @@ const createSuperdocStub = () => {
     lockSuperdoc: vi.fn(),
     emit: vi.fn(),
     listeners: vi.fn(),
+    captureLayoutPipelineEvent: vi.fn(),
+    canPerformPermission: vi.fn(() => true),
   };
 };
 
@@ -335,6 +363,19 @@ describe('SuperDoc.vue', () => {
     useSelectionMock.mockClear();
     useAiMock.mockClear();
     useSelectedTextMock.mockClear();
+    mockState.instances.clear();
+
+    // Set up default mock presentation editor instances for common document IDs
+    const mockPresentationEditor = {
+      getSelectionBounds: vi.fn(() => null),
+      getCommentBounds: vi.fn((positions) => positions),
+      getRangeRects: vi.fn(() => []),
+      getPages: vi.fn(() => []),
+      getLayoutError: vi.fn(() => null),
+      setZoom: vi.fn(),
+    };
+    mockState.instances.set('doc-1', mockPresentationEditor);
+
     if (!window.matchMedia) {
       window.matchMedia = vi.fn().mockReturnValue({
         matches: false,
@@ -561,4 +602,38 @@ describe('SuperDoc.vue', () => {
     expect(wrapper.vm.showCommentsSidebar).toBe(true);
     expect(wrapper.find('.floating-comments').exists()).toBe(true);
   });
+
+  it('does not crash when selectionUpdate carries stale positions after new file insert', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      view: {
+        coordsAtPos: vi.fn((pos) => {
+          if (pos > 5) {
+            throw new RangeError('Position out of range');
+          }
+          return { top: pos, bottom: pos + 10, left: 0, right: 0 };
+        }),
+        state: { selection: { $from: { pos: 1 }, $to: { pos: 1 }, empty: false } },
+      },
+      getPageStyles: vi.fn(() => ({ pageMargins: {} })),
+    };
+
+    const triggerSelectionUpdate = () =>
+      options.onSelectionUpdate({
+        editor: editorMock,
+        // Simulate a stale transaction selection that is past the new doc length
+        transaction: { selection: { $from: { pos: 10 }, $to: { pos: 10 } } },
+      });
+
+    expect(triggerSelectionUpdate).not.toThrow();
+  });
+
+  // Note: The handlePresentationEditorReady test was removed because that function
+  // no longer exists. PresentationEditor now registers itself automatically in the
+  // constructor and manages zoom/layout data internally.
 });

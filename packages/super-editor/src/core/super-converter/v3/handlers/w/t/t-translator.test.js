@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 import { config, translator } from './t-translator.js';
 import { NodeTranslator } from '@translator';
-import { getTextNodeForExport } from '@converter/exporter.js';
+import { getTextNodeForExport } from '@converter/v3/handlers/w/t/helpers/translate-text-node.js';
 import { translator as wDelTranslator } from '@converter/v3/handlers/w/del/index.js';
 import { translator as wInsTranslator } from '@converter/v3/handlers/w/ins/index.js';
 import { translator as wHyperlinkTranslator } from '@converter/v3/handlers/w/hyperlink/index.js';
 
 // Mocks
-vi.mock('@converter/exporter.js', () => ({
+vi.mock('@converter/v3/handlers/w/t/helpers/translate-text-node.js', () => ({
   getTextNodeForExport: vi.fn(),
 }));
 
@@ -55,6 +55,24 @@ describe('w:t translator', () => {
         attrs: { type: 'text', attributes: {} },
         marks: [],
       });
+    });
+
+    it('preserves non-breaking spaces (U+00A0) used for alignment', () => {
+      // Word uses NBSP for intentional spacing/alignment and doesn't add xml:space="preserve"
+      const nbsp = '\u00A0';
+      const params = {
+        extraParams: {
+          node: {
+            elements: [{ text: `${nbsp} ${nbsp} ${nbsp} Address: ` }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      const result = config.encode(params);
+      // NBSP should be preserved, only trailing regular space is trimmed
+      expect(result.text).toBe(`${nbsp} ${nbsp} ${nbsp} Address:`);
     });
 
     it('preserves whitespace when xml:space="preserve"', () => {

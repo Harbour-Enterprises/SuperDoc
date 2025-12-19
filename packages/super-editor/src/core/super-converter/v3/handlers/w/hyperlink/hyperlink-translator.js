@@ -34,8 +34,9 @@ const validXmlAttributes = [
   {
     xmlName: 'w:history',
     sdName: 'history',
-    encode: (attributes) => attributes['w:history'] === '1' || attributes['w:history'] === 'true',
-    decode: (attributes) => (attributes['history'] ? '1' : '0'),
+    encode: (attributes) =>
+      attributes['w:history'] == null ? null : attributes['w:history'] === '1' || attributes['w:history'] === 'true',
+    decode: (attributes) => (attributes['history'] == null ? null : attributes['history'] ? '1' : '0'),
   },
   _createAttributeHandler('w:tooltip', 'tooltip'),
   _createAttributeHandler('r:id', 'rId'),
@@ -120,7 +121,6 @@ function decode(params) {
     } else {
       linkNode.attrs.marksAsAttrs = linkNode.attrs.marksAsAttrs.filter((m) => m.type !== 'link');
     }
-    // @ts-ignore
     const outputNode = exportSchemaToJson({ ...params, node: linkNode });
     if (outputNode) {
       if (outputNode instanceof Array) contentNodes.push(...outputNode);
@@ -158,13 +158,13 @@ function _addNewLinkRelationship(params, link) {
     type: 'element',
     name: 'Relationship',
     attributes: {
-      Id: id,
+      Id: `rId${id}`,
       Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink',
       Target: link,
       TargetMode: 'External',
     },
   });
-  return id;
+  return `rId${id}`;
 }
 
 /** @type {import('@translator').NodeTranslatorConfig} */

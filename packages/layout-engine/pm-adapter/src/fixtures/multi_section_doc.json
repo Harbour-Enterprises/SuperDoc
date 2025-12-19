@@ -1,0 +1,744 @@
+{
+  "type": "doc",
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Section 1: Introduction",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Calibri, Arial, sans-serif",
+                    "fontSize": "14pt",
+                    "color": "#365F91"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "0E2DD171",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {
+          "styleId": "Heading1"
+        },
+        "styleId": "Heading1",
+        "keepLines": true,
+        "keepNext": true,
+        "spacing": {
+          "after": 0,
+          "line": 276,
+          "lineRule": "auto",
+          "before": 480
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "0E2DD171",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "This is the first section of the document. It uses the default layout (single column).",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, Times New Roman, serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "0EC898BF",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "0EC898BF",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "40988FCF",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00CE7B12",
+        "paragraphProperties": {
+          "sectPr": {
+            "type": "element",
+            "name": "w:sectPr",
+            "attributes": {
+              "w:rsidR": "00CE7B12"
+            },
+            "elements": [
+              {
+                "type": "element",
+                "name": "w:pgSz",
+                "attributes": {
+                  "w:w": "12240",
+                  "w:h": "15840"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:pgMar",
+                "attributes": {
+                  "w:top": "1440",
+                  "w:right": "1800",
+                  "w:bottom": "1440",
+                  "w:left": "1800",
+                  "w:header": "720",
+                  "w:footer": "720",
+                  "w:gutter": "0"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:cols",
+                "attributes": {
+                  "w:space": "720"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:docGrid",
+                "attributes": {
+                  "w:linePitch": "360"
+                }
+              }
+            ]
+          }
+        },
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00CE7B12",
+        "pageBreakSource": "sectPr",
+        "paraId": "40988FCF",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Section 2: Two-Column Layout",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Calibri, Arial, sans-serif",
+                    "fontSize": "14pt",
+                    "color": "#365F91"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "37D1C96C",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {
+          "styleId": "Heading1"
+        },
+        "styleId": "Heading1",
+        "keepLines": true,
+        "keepNext": true,
+        "spacing": {
+          "after": 0,
+          "line": 276,
+          "lineRule": "auto",
+          "before": 480
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "37D1C96C",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "This section is formatted into two columns. This allows content to flow side by side, which is useful for articles or reports.",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, Times New Roman, serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "06290A2E",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "06290A2E",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "6F78474C",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00CE7B12",
+        "paragraphProperties": {
+          "sectPr": {
+            "type": "element",
+            "name": "w:sectPr",
+            "attributes": {
+              "w:rsidR": "00CE7B12"
+            },
+            "elements": [
+              {
+                "type": "element",
+                "name": "w:pgSz",
+                "attributes": {
+                  "w:w": "12240",
+                  "w:h": "15840"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:pgMar",
+                "attributes": {
+                  "w:top": "1440",
+                  "w:right": "1800",
+                  "w:bottom": "1440",
+                  "w:left": "1800",
+                  "w:header": "720",
+                  "w:footer": "720",
+                  "w:gutter": "0"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:cols",
+                "attributes": {
+                  "w:num": "2",
+                  "w:space": "720"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:docGrid",
+                "attributes": {
+                  "w:linePitch": "360"
+                }
+              }
+            ]
+          }
+        },
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00CE7B12",
+        "pageBreakSource": "sectPr",
+        "paraId": "6F78474C",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Section 3: Single Column Again",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Calibri, Arial, sans-serif",
+                    "fontSize": "14pt",
+                    "color": "#365F91"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "74541E79",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {
+          "styleId": "Heading1"
+        },
+        "styleId": "Heading1",
+        "keepLines": true,
+        "keepNext": true,
+        "spacing": {
+          "after": 0,
+          "line": 276,
+          "lineRule": "auto",
+          "before": 480
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "74541E79",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "We have switched back to a single column layout for detailed explanations and data.",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, Times New Roman, serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "5A220F80",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "5A220F80",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [],
+      "attrs": {
+        "w14:paraId": "67B991F7",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00CE7B12",
+        "paragraphProperties": {
+          "sectPr": {
+            "type": "element",
+            "name": "w:sectPr",
+            "attributes": {
+              "w:rsidR": "00CE7B12"
+            },
+            "elements": [
+              {
+                "type": "element",
+                "name": "w:pgSz",
+                "attributes": {
+                  "w:w": "12240",
+                  "w:h": "15840"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:pgMar",
+                "attributes": {
+                  "w:top": "1440",
+                  "w:right": "1800",
+                  "w:bottom": "1440",
+                  "w:left": "1800",
+                  "w:header": "720",
+                  "w:footer": "720",
+                  "w:gutter": "0"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:cols",
+                "attributes": {
+                  "w:space": "720"
+                }
+              },
+              {
+                "type": "element",
+                "name": "w:docGrid",
+                "attributes": {
+                  "w:linePitch": "360"
+                }
+              }
+            ]
+          }
+        },
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00CE7B12",
+        "pageBreakSource": "sectPr",
+        "paraId": "67B991F7",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "Section 4: Landscape Layout",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "bold",
+                  "attrs": {
+                    "value": true
+                  }
+                },
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Calibri, Arial, sans-serif",
+                    "fontSize": "14pt",
+                    "color": "#365F91"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          },
+          "marks": [
+            {
+              "type": "textStyle",
+              "attrs": {}
+            }
+          ]
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "5521A338",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {
+          "styleId": "Heading1"
+        },
+        "styleId": "Heading1",
+        "keepLines": true,
+        "keepNext": true,
+        "spacing": {
+          "after": 0,
+          "line": 276,
+          "lineRule": "auto",
+          "before": 480
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "5521A338",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "run",
+          "content": [
+            {
+              "type": "text",
+              "text": "This final section is in landscape orientation, which is ideal for wide tables or charts.",
+              "attrs": {
+                "type": "element",
+                "attributes": {}
+              },
+              "marks": [
+                {
+                  "type": "textStyle",
+                  "attrs": {
+                    "fontFamily": "Cambria, Times New Roman, serif",
+                    "fontSize": "11pt"
+                  }
+                }
+              ]
+            }
+          ],
+          "attrs": {
+            "runProperties": {}
+          }
+        }
+      ],
+      "attrs": {
+        "w14:paraId": "067F8A2B",
+        "w14:textId": "77777777",
+        "w:rsidR": "00CE7B12",
+        "w:rsidRDefault": "00000000",
+        "paragraphProperties": {},
+        "spacing": {
+          "after": 200,
+          "line": 276,
+          "lineRule": "auto"
+        },
+        "rsidRDefault": "00000000",
+        "paraId": "067F8A2B",
+        "textId": "77777777",
+        "rsidR": "00CE7B12"
+      },
+      "marks": []
+    }
+  ],
+  "attrs": {
+    "attributes": {
+      "xmlns:wpc": "http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas",
+      "xmlns:cx": "http://schemas.microsoft.com/office/drawing/2014/chartex",
+      "xmlns:cx1": "http://schemas.microsoft.com/office/drawing/2015/9/8/chartex",
+      "xmlns:cx2": "http://schemas.microsoft.com/office/drawing/2015/10/21/chartex",
+      "xmlns:cx3": "http://schemas.microsoft.com/office/drawing/2016/5/9/chartex",
+      "xmlns:cx4": "http://schemas.microsoft.com/office/drawing/2016/5/10/chartex",
+      "xmlns:cx5": "http://schemas.microsoft.com/office/drawing/2016/5/11/chartex",
+      "xmlns:cx6": "http://schemas.microsoft.com/office/drawing/2016/5/12/chartex",
+      "xmlns:cx7": "http://schemas.microsoft.com/office/drawing/2016/5/13/chartex",
+      "xmlns:cx8": "http://schemas.microsoft.com/office/drawing/2016/5/14/chartex",
+      "xmlns:mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
+      "xmlns:aink": "http://schemas.microsoft.com/office/drawing/2016/ink",
+      "xmlns:am3d": "http://schemas.microsoft.com/office/drawing/2017/model3d",
+      "xmlns:o": "urn:schemas-microsoft-com:office:office",
+      "xmlns:oel": "http://schemas.microsoft.com/office/2019/extlst",
+      "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+      "xmlns:m": "http://schemas.openxmlformats.org/officeDocument/2006/math",
+      "xmlns:v": "urn:schemas-microsoft-com:vml",
+      "xmlns:wp14": "http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing",
+      "xmlns:wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
+      "xmlns:w10": "urn:schemas-microsoft-com:office:word",
+      "xmlns:w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
+      "xmlns:w14": "http://schemas.microsoft.com/office/word/2010/wordml",
+      "xmlns:w15": "http://schemas.microsoft.com/office/word/2012/wordml",
+      "xmlns:w16cex": "http://schemas.microsoft.com/office/word/2018/wordml/cex",
+      "xmlns:w16cid": "http://schemas.microsoft.com/office/word/2016/wordml/cid",
+      "xmlns:w16": "http://schemas.microsoft.com/office/word/2018/wordml",
+      "xmlns:w16du": "http://schemas.microsoft.com/office/word/2023/wordml/word16du",
+      "xmlns:w16sdtdh": "http://schemas.microsoft.com/office/word/2020/wordml/sdtdatahash",
+      "xmlns:w16sdtfl": "http://schemas.microsoft.com/office/word/2024/wordml/sdtformatlock",
+      "xmlns:w16se": "http://schemas.microsoft.com/office/word/2015/wordml/symex",
+      "xmlns:wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+      "xmlns:wpi": "http://schemas.microsoft.com/office/word/2010/wordprocessingInk",
+      "xmlns:wne": "http://schemas.microsoft.com/office/word/2006/wordml",
+      "xmlns:wps": "http://schemas.microsoft.com/office/word/2010/wordprocessingShape",
+      "mc:Ignorable": "w14 w15 w16se w16cid w16 w16cex w16sdtdh w16sdtfl w16du wp14"
+    },
+    "bodySectPr": {
+      "type": "element",
+      "name": "w:sectPr",
+      "attributes": {
+        "w:rsidR": "00CE7B12",
+        "w:rsidSect": "00034616"
+      },
+      "elements": [
+        {
+          "type": "element",
+          "name": "w:pgSz",
+          "attributes": {
+            "w:w": "15840",
+            "w:h": "12240"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:pgMar",
+          "attributes": {
+            "w:top": "1440",
+            "w:right": "1800",
+            "w:bottom": "1440",
+            "w:left": "1800",
+            "w:header": "720",
+            "w:footer": "720",
+            "w:gutter": "0"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:cols",
+          "attributes": {
+            "w:space": "720"
+          }
+        },
+        {
+          "type": "element",
+          "name": "w:docGrid",
+          "attributes": {
+            "w:linePitch": "360"
+          }
+        }
+      ]
+    }
+  }
+}

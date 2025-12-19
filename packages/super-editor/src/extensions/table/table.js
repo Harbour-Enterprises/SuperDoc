@@ -1,4 +1,5 @@
-// @ts-check
+// @ts-nocheck
+
 /**
  * Theme color options
  * @typedef { "dark1" | "light1" | "dark2" | "light2" | "accent1" | "accent2" | "accent3" | "accent4" | "accent5" | "accent6" | "hyperlink" | "followedHyperlink" | "none" | "background1" | "text1" | "background2" | "text2" } ThemeColor
@@ -116,7 +117,7 @@
  * @property {TableMeasurement} [tableWidth] - Table width
  * @property {FloatingTableProperties} [floatingTableProperties] - Floating table properties
  * @property {TableBorders} [borders] - Table border configuration
- * @proerty {TableCellMargins} [cellMargins] - Cell margin configuration
+ * @property {TableCellMargins} [cellMargins] - Cell margin configuration
  * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
  */
 
@@ -176,8 +177,8 @@ import { createTable } from './tableHelpers/createTable.js';
 import { createColGroup } from './tableHelpers/createColGroup.js';
 import { deleteTableWhenSelected } from './tableHelpers/deleteTableWhenSelected.js';
 import { isInTable } from '@helpers/isInTable.js';
-import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { createCellBorders } from '../table-cell/helpers/createCellBorders.js';
+import { createTableBorders } from './tableHelpers/createTableBorders.js';
 import { findParentNode } from '@helpers/findParentNode.js';
 import { TextSelection } from 'prosemirror-state';
 import { isCellSelection } from './tableHelpers/isCellSelection.js';
@@ -270,6 +271,17 @@ import {
  */
 
 /**
+ * @typedef {Object} TableNodeAttributes
+ * @property {TableProperties} tableProperties
+ * @property {TableGrid} grid
+ */
+
+/**
+ * @typedef {Node} TableNode
+ * @property {TableNodeAttributes} attrs
+ */
+
+/**
  * @module Table
  * @sidebarTitle Table
  * @snippetPath /snippets/extensions/table.mdx
@@ -304,16 +316,6 @@ export const Table = Node.create({
 
   addAttributes() {
     return {
-      /* tableWidth: {
-        renderDOM: ({ tableWidth }) => {
-          if (!tableWidth) return {};
-          const { width, type = 'auto' } = tableWidth;
-          return { 
-            style: `width: ${width}px` 
-          };
-        },
-      }, */
-
       /**
        * @private
        * @category Attribute
@@ -335,6 +337,7 @@ export const Table = Node.create({
       tableIndent: {
         renderDOM: ({ tableIndent }) => {
           if (!tableIndent) return {};
+          // @ts-expect-error - tableIndent is known to be an object at runtime
           const { width } = tableIndent;
           let style = '';
           if (width) style += `margin-left: ${width}px`;
@@ -352,6 +355,7 @@ export const Table = Node.create({
         default: {},
         renderDOM({ borders }) {
           if (!borders) return {};
+
           const style = Object.entries(borders).reduce((acc, [key, { size, color }]) => {
             return `${acc}border-${key}: ${Math.ceil(size)}px solid ${color || 'black'};`;
           }, '');
@@ -428,7 +432,12 @@ export const Table = Node.create({
        * @see {@link https://ecma-international.org/publications-and-standards/standards/ecma-376/} "Fundamentals And Markup Language Reference", page 371-483
        */
       tableProperties: {
-        default: null,
+        default: {
+          tableWidth: {
+            value: null,
+            type: 'auto',
+          },
+        },
         rendered: false,
       },
 
@@ -439,6 +448,16 @@ export const Table = Node.create({
        */
       grid: {
         default: null,
+        rendered: false,
+      },
+
+      /**
+       * @category Attribute
+       * @param {boolean} [userEdited] - Flag indicating user has manually resized columns
+       * Used by pm-adapter to prioritize user edits over original OOXML grid
+       */
+      userEdited: {
+        default: false,
         rendered: false,
       },
     };
@@ -455,11 +474,10 @@ export const Table = Node.create({
       style: tableWidth ? `width: ${tableWidth}` : `min-width: ${tableMinWidth}`,
     });
 
-    const table = ['table', attrs, colgroup, ['tbody', 0]];
-
-    return table;
+    return ['table', attrs, colgroup, ['tbody', 0]];
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**
@@ -529,7 +547,11 @@ export const Table = Node.create({
           const node = createTable(editor.schema, rows, cols, withHeaderRow);
 
           if (dispatch) {
-            const offset = tr.selection.from + 1;
+            let offset = tr.selection.$from.end() + 1;
+            if (tr.selection.$from.parent?.type?.name === 'run') {
+              // If in a run, we need to insert after the parent paragraph
+              offset = tr.selection.$from.after(tr.selection.$from.depth - 1);
+            }
             tr.replaceSelectionWith(node)
               .scrollIntoView()
               .setSelection(TextSelection.near(tr.doc.resolve(offset)));
@@ -1088,7 +1110,7 @@ export const Table = Node.create({
             if (['tableCell', 'tableHeader'].includes(node.type.name)) {
               tr.setNodeMarkup(pos, undefined, {
                 ...node.attrs,
-                borders: createCellBorders({ size: 0 }),
+                borders: createCellBorders({ size: 0, space: 0, val: 'none', color: 'auto' }),
               });
             }
           });
@@ -1097,6 +1119,13 @@ export const Table = Node.create({
           tr.setNodeMarkup(table.pos, undefined, {
             ...table.node.attrs,
             borders: createTableBorders({ size: 0 }),
+            // TODO: This works around the issue that table borders are duplicated between
+            // the attributes of the table and the tableProperties attribute.
+            // This can be removed when the redundancy is eliminated.
+            tableProperties: {
+              ...table.node.attrs.tableProperties,
+              borders: createTableBorders({ size: 0, space: 0, val: 'none', color: 'auto' }),
+            },
           });
 
           return true;
@@ -1130,9 +1159,16 @@ export const Table = Node.create({
       ...(resizable
         ? [
             columnResizing({
-              handleWidth: this.options.handleWidth,
+              // Disable PM's visual handles (custom overlay handles resizing)
+              // Set to 0 to prevent PM from rendering its own resize handles
+              // while keeping transaction helpers and constraint logic
+              // @ts-expect-error - Options types will be fixed in TS migration
+              handleWidth: 0,
+              // @ts-expect-error - Options types will be fixed in TS migration
               cellMinWidth: this.options.cellMinWidth,
+              // @ts-expect-error - Options types will be fixed in TS migration
               defaultCellMinWidth: this.options.cellMinWidth,
+              // @ts-expect-error - Options types will be fixed in TS migration
               lastColumnResizable: this.options.lastColumnResizable,
               View: createTableView({
                 editor: this.editor,
@@ -1142,6 +1178,7 @@ export const Table = Node.create({
         : []),
 
       tableEditing({
+        // @ts-expect-error - Options types will be fixed in TS migration
         allowTableNodeSelection: this.options.allowTableNodeSelection,
       }),
     ];
@@ -1182,8 +1219,7 @@ function getCellType({ node, state }) {
  */
 function copyCellAttrs(node) {
   // Exclude colspan, rowspan and colwidth attrs.
-  // eslint-disable-next-line no-unused-vars
-  const { colspan, rowspan, colwidth, ...attrs } = node.attrs;
+  const { colspan: _colspan, rowspan: _rowspan, colwidth: _colwidth, ...attrs } = node.attrs;
   return attrs;
 }
 

@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Generate token
         id: generate_token
@@ -41,10 +41,17 @@ jobs:
           cache: npm
           registry-url: 'https://registry.npmjs.org'
 
+      - name: Cache apt packages
+        uses: actions/cache@v4
+        with:
+          path: ~/apt-cache
+          key: apt-canvas-${{ runner.os }}-v1
+
       - name: Install canvas system dependencies
         run: |
+          mkdir -p ~/apt-cache
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y -o Dir::Cache::Archives="$HOME/apt-cache" \
             build-essential \
             libcairo2-dev \
             libpango1.0-dev \
@@ -60,14 +67,12 @@ jobs:
         run: npm run build
 
       - name: Release
-        id: semantic
         env:
           GITHUB_TOKEN: ${{ steps.generate_token.outputs.token }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          npx semantic-release
-          echo "released=$?" >> $GITHUB_OUTPUT
+          LINEAR_TOKEN: ${{ secrets.LINEAR_TOKEN }}
+        run: npx semantic-release
 
       # Sync stable back to main after stable release
       # - name: Sync stable to main
