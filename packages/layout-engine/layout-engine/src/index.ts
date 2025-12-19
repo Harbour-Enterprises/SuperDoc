@@ -871,6 +871,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         activeBottomMargin = Math.max(margins.bottom, requiredBottomMargin);
         pendingBottomMargin = activeBottomMargin;
       }
+      if (block.margins?.left !== undefined) {
+        const leftMargin = Math.max(0, block.margins.left);
+        activeLeftMargin = leftMargin;
+        pendingLeftMargin = leftMargin;
+      }
+      if (block.margins?.right !== undefined) {
+        const rightMargin = Math.max(0, block.margins.right);
+        activeRightMargin = rightMargin;
+        pendingRightMargin = rightMargin;
+      }
       if (block.columns) {
         activeColumns = { count: block.columns.count, gap: block.columns.gap };
         pendingColumns = null; // Clear pending since we applied directly

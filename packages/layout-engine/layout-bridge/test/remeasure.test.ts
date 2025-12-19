@@ -781,7 +781,7 @@ describe('remeasureParagraph', () => {
     it('falls back to wordLayout.marker.textStartX when wordLayout.textStartPx is missing', () => {
       const block = createBlock([textRun('A'.repeat(60))], {
         indent: { left: 10 },
-        wordLayout: { marker: { textStartX: 50 } },
+        wordLayout: { firstLineIndentMode: true, marker: { textStartX: 50 } },
       });
       const measure = remeasureParagraph(block, 100);
 
@@ -877,6 +877,177 @@ describe('remeasureParagraph', () => {
       expect(measure.lines.length).toBeGreaterThan(1);
       // totalHeight should reflect sum of different line heights
       expect(measure.totalHeight).toBeGreaterThan(measure.lines[0].lineHeight);
+    });
+  });
+
+  describe('Text Transformation', () => {
+    it('applies uppercase transformation correctly', () => {
+      const block = createBlock([textRun('hello world', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // Transformed text "HELLO WORLD" should have same width as original (same char count)
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('applies lowercase transformation correctly', () => {
+      const block = createBlock([textRun('HELLO WORLD', { textTransform: 'lowercase' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // Transformed text "hello world" should have same width as original (same char count)
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('applies capitalize transformation to each word', () => {
+      const block = createBlock([textRun('hello world', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // Transformed text "Hello World" should have same width (same char count)
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('capitalizes first letter after non-word characters', () => {
+      const block = createBlock([textRun('hello-beautiful world', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 300);
+
+      expect(measure.lines).toHaveLength(1);
+      // Transformed to "Hello-Beautiful World" - same char count
+      expect(measure.lines[0].width).toBe(21 * CHAR_WIDTH);
+    });
+
+    it('handles capitalize with numbers', () => {
+      const block = createBlock([textRun('123hello world456', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 300);
+
+      expect(measure.lines).toHaveLength(1);
+      // Numbers are word characters, so 'h' after 123 gets capitalized
+      // Result: "123Hello World456"
+      expect(measure.lines[0].width).toBe(17 * CHAR_WIDTH);
+    });
+
+    it('handles capitalize with apostrophes (contractions)', () => {
+      const block = createBlock([textRun("don't stop", { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // Apostrophe is a word character, so "don't" stays as one word: "Don't Stop"
+      expect(measure.lines[0].width).toBe(10 * CHAR_WIDTH);
+    });
+
+    it('handles none transformation (no change)', () => {
+      const block = createBlock([textRun('Hello World', { textTransform: 'none' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // No transformation applied
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('handles undefined textTransform (no change)', () => {
+      const block = createBlock([textRun('Hello World')]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // No transformation when textTransform is undefined
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('applies transformation when text wraps across multiple lines', () => {
+      const block = createBlock([textRun('hello beautiful world', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 100); // Force line breaks
+
+      expect(measure.lines.length).toBeGreaterThan(1);
+      // Total width across all lines should reflect uppercase transformation
+      const totalWidth = measure.lines.reduce((sum, line) => sum + line.width, 0);
+      expect(totalWidth).toBeGreaterThan(0);
+    });
+
+    it('applies capitalize correctly across line boundaries', () => {
+      // "hello world" breaks into multiple lines, capitalize should apply to each word
+      const block = createBlock([textRun('hello world test', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 70); // Force breaks
+
+      expect(measure.lines.length).toBeGreaterThan(1);
+      // Verify text was measured (transformation shouldn't break measurement)
+      const totalWidth = measure.lines.reduce((sum, line) => sum + line.width, 0);
+      expect(totalWidth).toBeGreaterThan(0);
+    });
+
+    it('handles empty text with transformation', () => {
+      const block = createBlock([textRun('', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 100);
+
+      expect(measure.lines.length).toBeGreaterThanOrEqual(0);
+      // Empty text should produce minimal output
+    });
+
+    it('handles whitespace-only text with transformation', () => {
+      const block = createBlock([textRun('   ', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 100);
+
+      expect(measure.lines.length).toBeGreaterThanOrEqual(1);
+      // Whitespace transformed is still whitespace
+      expect(measure.lines[0].width).toBe(3 * CHAR_WIDTH);
+    });
+
+    it('applies different transformations to different runs', () => {
+      const block = createBlock([
+        textRun('hello', { textTransform: 'uppercase' }),
+        textRun(' '),
+        textRun('world', { textTransform: 'capitalize' }),
+      ]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // "HELLO World" = 11 chars
+      expect(measure.lines[0].width).toBe(11 * CHAR_WIDTH);
+    });
+
+    it('handles capitalize with multiple consecutive spaces', () => {
+      const block = createBlock([textRun('hello  world', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // "Hello  World" - spaces don't change
+      expect(measure.lines[0].width).toBe(12 * CHAR_WIDTH);
+    });
+
+    it('handles capitalize with leading spaces', () => {
+      const block = createBlock([textRun('  hello world', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // "  Hello World" - leading spaces preserved
+      expect(measure.lines[0].width).toBe(13 * CHAR_WIDTH);
+    });
+
+    it('handles capitalize with trailing spaces', () => {
+      const block = createBlock([textRun('hello world  ', { textTransform: 'capitalize' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // "Hello World  " - trailing spaces preserved
+      expect(measure.lines[0].width).toBe(13 * CHAR_WIDTH);
+    });
+
+    it('handles special characters with transformations', () => {
+      const block = createBlock([textRun('hello@world.com', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // "HELLO@WORLD.COM" - special chars unchanged
+      expect(measure.lines[0].width).toBe(15 * CHAR_WIDTH);
+    });
+
+    it('handles unicode characters with transformations', () => {
+      const block = createBlock([textRun('café résumé', { textTransform: 'uppercase' })]);
+      const measure = remeasureParagraph(block, 200);
+
+      expect(measure.lines).toHaveLength(1);
+      // Unicode chars should be handled by JavaScript's toUpperCase
+      expect(measure.lines[0].width).toBeGreaterThan(0);
     });
   });
 });

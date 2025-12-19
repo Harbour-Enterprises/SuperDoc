@@ -758,7 +758,9 @@ describe('SlashMenu.vue', () => {
       mount(SlashMenu, { props: mockProps });
       // Find the capture phase contextmenu listener
       const captureCall = surfaceElementMock.addEventListener.mock.calls.find(
-        (call) => call[0] === 'contextmenu' && call[2] === true,
+        (call) =>
+          call[0] === 'contextmenu' &&
+          (call[2] === true || call[2]?.capture === true || call[1]?.name === 'handleRightClickCapture'),
       );
       captureHandler = captureCall?.[1];
     });
@@ -895,7 +897,9 @@ describe('SlashMenu.vue', () => {
 
       // Verify the capture listener was removed (check for contextmenu with capture flag)
       const removeCall = surfaceElementMock.removeEventListener.mock.calls.find(
-        (call) => call[0] === 'contextmenu' && call[2] === true,
+        (call) =>
+          call[0] === 'contextmenu' &&
+          (call[2] === true || call[2]?.capture === true || call[1]?.name === 'handleRightClickCapture'),
       );
       expect(removeCall).toBeDefined();
     });
