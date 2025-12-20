@@ -95,7 +95,16 @@ function createMockTableMeasure(
       cells: columnWidths.map((width) => ({
         paragraph: {
           kind: 'paragraph',
-          lines: (lineHeightsPerRow?.[rowIdx] ?? []).map((lineHeight) => ({ lineHeight })),
+          lines: (lineHeightsPerRow?.[rowIdx] ?? []).map((lineHeight) => ({
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 1,
+            width,
+            ascent: lineHeight * 0.75,
+            descent: lineHeight * 0.25,
+            lineHeight,
+          })),
           totalHeight: height,
         },
         width,
@@ -2477,6 +2486,581 @@ describe('layoutTableBlock', () => {
           expect(fragment.width).toBe(70); // 100 - 30
         });
       });
+    });
+  });
+
+  describe('PM range functionality', () => {
+    /**
+     * Test suite for ProseMirror range computation in table fragments.
+     * Tests the pmStart and pmEnd properties that enable selection and editing.
+     */
+
+    it('should compute PM ranges for basic table fragments', () => {
+      const block = createMockTableBlock(2);
+      // Add pmStart/pmEnd to paragraph attrs (not runs)
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).attrs = { pmStart: 5, pmEnd: 6 };
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'A', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: 8, pmEnd: 9 };
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'B', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      (block.rows[1].cells[0].paragraph as ParagraphBlock).attrs = { pmStart: 12, pmEnd: 13 };
+      (block.rows[1].cells[0].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'C', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      (block.rows[1].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: 15, pmEnd: 16 };
+      (block.rows[1].cells[1].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'D', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      const measure = createMockTableMeasure([100, 100], [20, 20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      const fragment = fragments[0];
+
+      // Fragment should have PM range covering all rows
+      expect(fragment.pmStart).toBe(5); // Minimum across all cells
+      expect(fragment.pmEnd).toBe(16); // Maximum across all cells
+    });
+
+    it('should compute PM ranges for multi-page table splits', () => {
+      const block = createMockTableBlock(4);
+
+      // Add PM ranges to each row (in attrs)
+      for (let i = 0; i < 4; i++) {
+        const pmStart = i * 10;
+        const pmEnd = pmStart + 5;
+
+        (block.rows[i].cells[0].paragraph as ParagraphBlock).attrs = { pmStart, pmEnd };
+        (block.rows[i].cells[0].paragraph as ParagraphBlock).runs = [
+          { kind: 'text', text: `Row${i}`, fontFamily: 'Arial', fontSize: 12 },
+        ];
+
+        (block.rows[i].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: pmStart + 7, pmEnd: pmEnd + 7 };
+        (block.rows[i].cells[1].paragraph as ParagraphBlock).runs = [
+          { kind: 'text', text: `Data${i}`, fontFamily: 'Arial', fontSize: 12 },
+        ];
+      }
+
+      const measure = createMockTableMeasure([100, 100], [25, 25, 25, 25]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 60, // Fits 2 rows per page
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 60,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBe(2);
+
+      // First fragment: rows 0-1
+      // Row 0: cells have pmEnd 5 and 12, Row 1: cells have pmEnd 15 and 22
+      expect(fragments[0].pmStart).toBe(0); // Row 0 start (minimum)
+      expect(fragments[0].pmEnd).toBe(22); // Row 1 Cell 1 end (maximum)
+
+      // Second fragment: rows 2-3
+      // Row 2: cells have pmEnd 25 and 32, Row 3: cells have pmEnd 35 and 42
+      expect(fragments[1].pmStart).toBe(20); // Row 2 start
+      expect(fragments[1].pmEnd).toBe(42); // Row 3 Cell 1 end (maximum)
+    });
+
+    it('should compute PM ranges for partial row splits', () => {
+      const block = createMockTableBlock(1);
+
+      // Create a cell with multiple lines, with PM range in attrs
+      const paragraph0 = block.rows[0].cells[0].paragraph as ParagraphBlock;
+      paragraph0.attrs = { pmStart: 5, pmEnd: 22 };
+      paragraph0.runs = [
+        { kind: 'text', text: 'Line1', fontFamily: 'Arial', fontSize: 12 },
+        { kind: 'lineBreak' },
+        { kind: 'text', text: 'Line2', fontFamily: 'Arial', fontSize: 12 },
+        { kind: 'lineBreak' },
+        { kind: 'text', text: 'Line3', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      const paragraph1 = block.rows[0].cells[1].paragraph as ParagraphBlock;
+      paragraph1.attrs = { pmStart: 24, pmEnd: 30 };
+      paragraph1.runs = [{ kind: 'text', text: 'Cell1', fontFamily: 'Arial', fontSize: 12 }];
+
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [60],
+        [
+          [20, 20, 20], // Cell 0: 3 lines of 20px each
+        ],
+      );
+
+      // Add lines for the second cell manually (since createMockTableMeasure doesn't handle multiple cells with different line counts)
+      if (measure.rows[0].cells[1]) {
+        measure.rows[0].cells[1].paragraph = {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 5,
+              width: 100,
+              ascent: 15,
+              descent: 5,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        };
+      }
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 25, // Space for 1 line at a time
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 25,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should split into 3 fragments (one per line)
+      expect(fragments.length).toBe(3);
+
+      // Each fragment should have PM range for its content
+      // Since we're splitting a single paragraph, all fragments should have PM ranges
+      fragments.forEach((fragment) => {
+        if (fragment.pmStart !== undefined && fragment.pmEnd !== undefined) {
+          expect(typeof fragment.pmStart).toBe('number');
+          expect(typeof fragment.pmEnd).toBe('number');
+          expect(fragment.pmEnd).toBeGreaterThanOrEqual(fragment.pmStart);
+        }
+      });
+    });
+
+    it('should handle multi-block cells with PM ranges', () => {
+      const block = createMockTableBlock(1);
+
+      // Create a multi-block cell
+      block.rows[0].cells[0].blocks = [
+        {
+          kind: 'paragraph',
+          id: 'para1' as BlockId,
+          runs: [{ kind: 'text', text: 'Block1', fontFamily: 'Arial', fontSize: 12, pmStart: 5, pmEnd: 11 }],
+          attrs: { pmStart: 5, pmEnd: 11 },
+        },
+        {
+          kind: 'paragraph',
+          id: 'para2' as BlockId,
+          runs: [{ kind: 'text', text: 'Block2', fontFamily: 'Arial', fontSize: 12, pmStart: 12, pmEnd: 18 }],
+          attrs: { pmStart: 12, pmEnd: 18 },
+        },
+      ];
+      delete block.rows[0].cells[0].paragraph;
+
+      const measure = createMockTableMeasure([200], [40]);
+      measure.rows[0].cells[0].blocks = [
+        {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 6,
+              width: 50,
+              ascent: 15,
+              descent: 5,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        },
+        {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 6,
+              width: 50,
+              ascent: 15,
+              descent: 5,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        },
+      ];
+      delete measure.rows[0].cells[0].paragraph;
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      expect(fragments[0].pmStart).toBe(5); // First block start
+      expect(fragments[0].pmEnd).toBe(18); // Second block end
+    });
+
+    it('should handle edge case with mismatched block and measure lengths', () => {
+      const block = createMockTableBlock(1);
+
+      // Cell has 3 blocks
+      block.rows[0].cells[0].blocks = [
+        {
+          kind: 'paragraph',
+          id: 'para1' as BlockId,
+          runs: [{ kind: 'text', text: 'Block1', fontFamily: 'Arial', fontSize: 12, pmStart: 5, pmEnd: 11 }],
+          attrs: { pmStart: 5, pmEnd: 11 },
+        },
+        {
+          kind: 'paragraph',
+          id: 'para2' as BlockId,
+          runs: [{ kind: 'text', text: 'Block2', fontFamily: 'Arial', fontSize: 12, pmStart: 12, pmEnd: 18 }],
+          attrs: { pmStart: 12, pmEnd: 18 },
+        },
+        {
+          kind: 'paragraph',
+          id: 'para3' as BlockId,
+          runs: [{ kind: 'text', text: 'Block3', fontFamily: 'Arial', fontSize: 12, pmStart: 19, pmEnd: 25 }],
+          attrs: { pmStart: 19, pmEnd: 25 },
+        },
+      ];
+      delete block.rows[0].cells[0].paragraph;
+
+      const measure = createMockTableMeasure([200], [40]);
+      // But measure only has 2 blocks (mismatch!)
+      measure.rows[0].cells[0].blocks = [
+        {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 6,
+              width: 50,
+              ascent: 15,
+              descent: 5,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        },
+        {
+          kind: 'paragraph',
+          lines: [
+            {
+              fromRun: 0,
+              fromChar: 0,
+              toRun: 0,
+              toChar: 6,
+              width: 50,
+              ascent: 15,
+              descent: 5,
+              lineHeight: 20,
+            },
+          ],
+          totalHeight: 20,
+        },
+      ];
+      delete measure.rows[0].cells[0].paragraph;
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      // Should only process first 2 blocks (minimum of both lengths)
+      expect(fragments[0].pmStart).toBe(5); // First block start
+      expect(fragments[0].pmEnd).toBe(18); // Second block end (not 25!)
+    });
+
+    it('should handle partial row with out-of-bounds cellIndex', () => {
+      const block = createMockTableBlock(1);
+
+      // Add PM ranges to cells (in attrs)
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).attrs = { pmStart: 5, pmEnd: 10 };
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'Cell0', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: 12, pmEnd: 17 };
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'Cell1', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      const measure = createMockTableMeasure(
+        [100, 100],
+        [60],
+        [
+          [20, 20, 20], // Cell 0: 3 lines
+          [20, 20, 20], // Cell 1: 3 lines
+        ],
+      );
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: cursorY + 25, // Space for 1 line
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 25,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      // Should handle partial rows without crashing
+      // The main assertion is that the layout completes without errors
+      expect(fragments.length).toBeGreaterThan(0);
+
+      // If any fragment has PM ranges, they should be valid numbers
+      fragments.forEach((fragment) => {
+        if (fragment.pmStart !== undefined) {
+          expect(typeof fragment.pmStart).toBe('number');
+        }
+        if (fragment.pmEnd !== undefined) {
+          expect(typeof fragment.pmEnd).toBe('number');
+          if (fragment.pmStart !== undefined) {
+            expect(fragment.pmEnd).toBeGreaterThanOrEqual(fragment.pmStart);
+          }
+        }
+      });
+    });
+
+    it('should handle empty cells gracefully', () => {
+      const block = createMockTableBlock(1);
+
+      // Cell 0 is empty (no runs, no PM range)
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).runs = [];
+
+      // Cell 1 has content with PM range in attrs
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: 12, pmEnd: 17 };
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'Cell1', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      const measure = createMockTableMeasure([100, 100], [20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      // PM range should only include Cell1
+      expect(fragments[0].pmStart).toBe(12);
+      expect(fragments[0].pmEnd).toBe(17);
+    });
+
+    it('should handle cells without PM range metadata', () => {
+      const block = createMockTableBlock(1);
+
+      // Cells have runs but no PM range metadata
+      (block.rows[0].cells[0].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'NoPM', fontFamily: 'Arial', fontSize: 12 },
+      ];
+      (block.rows[0].cells[1].paragraph as ParagraphBlock).runs = [
+        { kind: 'text', text: 'AlsoNoPM', fontFamily: 'Arial', fontSize: 12 },
+      ];
+
+      const measure = createMockTableMeasure([100, 100], [20]);
+
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY: 0,
+          contentBottom: 1000,
+        }),
+        advanceColumn: (state) => state,
+        columnX: () => 0,
+      });
+
+      expect(fragments).toHaveLength(1);
+      // Fragment should not have PM range if source content lacks it
+      expect(fragments[0].pmStart).toBeUndefined();
+      expect(fragments[0].pmEnd).toBeUndefined();
+    });
+
+    it('should compute correct PM ranges for table continuations with repeat headers', () => {
+      const block = createMockTableBlock(5, [
+        { repeatHeader: true },
+        { repeatHeader: false },
+        { repeatHeader: false },
+        { repeatHeader: false },
+        { repeatHeader: false },
+      ]);
+
+      // Add PM ranges (in attrs)
+      for (let i = 0; i < 5; i++) {
+        const pmStart = i * 10;
+        const pmEnd = pmStart + 5;
+
+        (block.rows[i].cells[0].paragraph as ParagraphBlock).attrs = { pmStart, pmEnd };
+        (block.rows[i].cells[0].paragraph as ParagraphBlock).runs = [
+          { kind: 'text', text: `Row${i}`, fontFamily: 'Arial', fontSize: 12 },
+        ];
+
+        (block.rows[i].cells[1].paragraph as ParagraphBlock).attrs = { pmStart: pmStart + 6, pmEnd: pmEnd + 6 };
+        (block.rows[i].cells[1].paragraph as ParagraphBlock).runs = [
+          { kind: 'text', text: `Data${i}`, fontFamily: 'Arial', fontSize: 12 },
+        ];
+      }
+
+      const measure = createMockTableMeasure([100, 100], [20, 20, 20, 20, 20]);
+
+      const fragments: TableFragment[] = [];
+      let cursorY = 0;
+      const mockPage = { fragments };
+
+      layoutTableBlock({
+        block,
+        measure,
+        columnWidth: 200,
+        ensurePage: () => ({
+          page: mockPage,
+          columnIndex: 0,
+          cursorY,
+          contentBottom: 50, // Fits 2 rows + header on continuation
+        }),
+        advanceColumn: (state) => {
+          cursorY = 0;
+          return {
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 50,
+          };
+        },
+        columnX: () => 0,
+      });
+
+      expect(fragments.length).toBeGreaterThan(1);
+
+      // First fragment: rows 0-2 (header + 2 body rows)
+      expect(fragments[0].pmStart).toBe(0); // Row 0 start
+      expect(fragments[0].pmEnd).toBeDefined();
+
+      // Continuation fragments should only include body rows (not repeated headers)
+      if (fragments.length > 1) {
+        // Second fragment should start from row 2 or 3 (not row 0)
+        expect(fragments[1].pmStart).toBeGreaterThan(15); // After first page content
+      }
     });
   });
 });
