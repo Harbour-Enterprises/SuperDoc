@@ -826,6 +826,299 @@ describe('SlashMenu extension', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
+
+  describe('scroll offset handling in containing blocks', () => {
+    let testContainer;
+
+    beforeEach(() => {
+      testContainer = document.createElement('div');
+      testContainer.id = 'test-container-for-scroll';
+      document.body.appendChild(testContainer);
+    });
+
+    afterEach(() => {
+      if (testContainer && testContainer.parentNode) {
+        testContainer.parentNode.removeChild(testContainer);
+      }
+      testContainer = null;
+    });
+
+    it('should adjust menu position for scrollLeft offset in containing block', () => {
+      const baseDoc = doc(p());
+      const initialSelection = TextSelection.create(baseDoc, 1);
+      let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
+
+      // Create a real DOM element that will be a containing block (needs transform)
+      const containingBlock = document.createElement('div');
+      containingBlock.style.transform = 'translateX(0)'; // Makes it a containing block
+      containingBlock.style.position = 'relative';
+      containingBlock.scrollLeft = 50;
+      containingBlock.scrollTop = 0;
+      testContainer.appendChild(containingBlock);
+
+      const mockSurface = document.createElement('div');
+      containingBlock.appendChild(mockSurface);
+
+      // Mock getBoundingClientRect for containing block
+      vi.spyOn(containingBlock, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100 });
+
+      const editor = {
+        options: { element: mockSurface },
+        emit: vi.fn(),
+        view: null,
+      };
+
+      const [plugin] = SlashMenu.config.addPmPlugins.call({ editor });
+      state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection, plugins: [plugin] });
+
+      const view = {
+        state,
+        dispatch: vi.fn((tr) => {
+          state = state.apply(tr);
+          view.state = state;
+        }),
+        dom: mockSurface,
+      };
+
+      editor.view = view;
+
+      // Open menu with context menu positioning
+      view.dispatch(
+        view.state.tr.setMeta(SlashMenuPluginKey, {
+          type: 'open',
+          clientX: 150,
+          clientY: 200,
+          pos: 1,
+        }),
+      );
+
+      const pluginState = SlashMenuPluginKey.getState(view.state);
+      expect(pluginState.open).toBe(true);
+
+      // Position should be adjusted for containing block position AND scroll offset
+      // Expected: clientX (150) - containingBlock.left (100) + scrollLeft (50) + offset (10) = 110px
+      expect(pluginState.menuPosition.left).toBe('110px');
+    });
+
+    it('should adjust menu position for scrollTop offset in containing block', () => {
+      const baseDoc = doc(p());
+      const initialSelection = TextSelection.create(baseDoc, 1);
+      let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
+
+      const containingBlock = document.createElement('div');
+      containingBlock.style.transform = 'translateX(0)';
+      containingBlock.style.position = 'relative';
+      containingBlock.scrollLeft = 0;
+      containingBlock.scrollTop = 75;
+      testContainer.appendChild(containingBlock);
+
+      const mockSurface = document.createElement('div');
+      containingBlock.appendChild(mockSurface);
+
+      vi.spyOn(containingBlock, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100 });
+
+      const editor = {
+        options: { element: mockSurface },
+        emit: vi.fn(),
+        view: null,
+      };
+
+      const [plugin] = SlashMenu.config.addPmPlugins.call({ editor });
+      state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection, plugins: [plugin] });
+
+      const view = {
+        state,
+        dispatch: vi.fn((tr) => {
+          state = state.apply(tr);
+          view.state = state;
+        }),
+        dom: mockSurface,
+      };
+
+      editor.view = view;
+
+      view.dispatch(
+        view.state.tr.setMeta(SlashMenuPluginKey, {
+          type: 'open',
+          clientX: 150,
+          clientY: 200,
+          pos: 1,
+        }),
+      );
+
+      const pluginState = SlashMenuPluginKey.getState(view.state);
+      expect(pluginState.open).toBe(true);
+
+      // Expected: clientY (200) - containingBlock.top (100) + scrollTop (75) + offset (10) = 185px
+      expect(pluginState.menuPosition.top).toBe('185px');
+    });
+
+    it('should adjust menu position for both scrollLeft and scrollTop in containing block', () => {
+      const baseDoc = doc(p());
+      const initialSelection = TextSelection.create(baseDoc, 1);
+      let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
+
+      const containingBlock = document.createElement('div');
+      containingBlock.style.transform = 'translateX(0)';
+      containingBlock.style.position = 'relative';
+      containingBlock.scrollLeft = 30;
+      containingBlock.scrollTop = 45;
+      testContainer.appendChild(containingBlock);
+
+      const mockSurface = document.createElement('div');
+      containingBlock.appendChild(mockSurface);
+
+      vi.spyOn(containingBlock, 'getBoundingClientRect').mockReturnValue({ left: 50, top: 60 });
+
+      const editor = {
+        options: { element: mockSurface },
+        emit: vi.fn(),
+        view: null,
+      };
+
+      const [plugin] = SlashMenu.config.addPmPlugins.call({ editor });
+      state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection, plugins: [plugin] });
+
+      const view = {
+        state,
+        dispatch: vi.fn((tr) => {
+          state = state.apply(tr);
+          view.state = state;
+        }),
+        dom: mockSurface,
+      };
+
+      editor.view = view;
+
+      view.dispatch(
+        view.state.tr.setMeta(SlashMenuPluginKey, {
+          type: 'open',
+          clientX: 180,
+          clientY: 220,
+          pos: 1,
+        }),
+      );
+
+      const pluginState = SlashMenuPluginKey.getState(view.state);
+      expect(pluginState.open).toBe(true);
+
+      // Left: clientX (180) - containingBlock.left (50) + scrollLeft (30) + offset (10) = 170px
+      expect(pluginState.menuPosition.left).toBe('170px');
+      // Top: clientY (220) - containingBlock.top (60) + scrollTop (45) + offset (10) = 215px
+      expect(pluginState.menuPosition.top).toBe('215px');
+    });
+
+    it('should handle containing block with zero scroll offsets', () => {
+      const baseDoc = doc(p());
+      const initialSelection = TextSelection.create(baseDoc, 1);
+      let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
+
+      const containingBlock = document.createElement('div');
+      containingBlock.style.transform = 'translateX(0)';
+      containingBlock.style.position = 'relative';
+      containingBlock.scrollLeft = 0;
+      containingBlock.scrollTop = 0;
+      testContainer.appendChild(containingBlock);
+
+      const mockSurface = document.createElement('div');
+      containingBlock.appendChild(mockSurface);
+
+      vi.spyOn(containingBlock, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100 });
+
+      const editor = {
+        options: { element: mockSurface },
+        emit: vi.fn(),
+        view: null,
+      };
+
+      const [plugin] = SlashMenu.config.addPmPlugins.call({ editor });
+      state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection, plugins: [plugin] });
+
+      const view = {
+        state,
+        dispatch: vi.fn((tr) => {
+          state = state.apply(tr);
+          view.state = state;
+        }),
+        dom: mockSurface,
+      };
+
+      editor.view = view;
+
+      view.dispatch(
+        view.state.tr.setMeta(SlashMenuPluginKey, {
+          type: 'open',
+          clientX: 150,
+          clientY: 200,
+          pos: 1,
+        }),
+      );
+
+      const pluginState = SlashMenuPluginKey.getState(view.state);
+      expect(pluginState.open).toBe(true);
+
+      // With no scroll offsets, only containingBlock position and menu offset are applied
+      // Left: clientX (150) - containingBlock.left (100) + 0 + offset (10) = 60px
+      expect(pluginState.menuPosition.left).toBe('60px');
+      // Top: clientY (200) - containingBlock.top (100) + 0 + offset (10) = 110px
+      expect(pluginState.menuPosition.top).toBe('110px');
+    });
+
+    it('should handle null/undefined scroll offsets gracefully', () => {
+      const baseDoc = doc(p());
+      const initialSelection = TextSelection.create(baseDoc, 1);
+      let state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection });
+
+      const containingBlock = document.createElement('div');
+      containingBlock.style.transform = 'translateX(0)';
+      containingBlock.style.position = 'relative';
+      // Explicitly set to falsy values (browser would normally return 0, but we're testing the || 0 fallback)
+      Object.defineProperty(containingBlock, 'scrollLeft', { value: null, writable: true });
+      Object.defineProperty(containingBlock, 'scrollTop', { value: undefined, writable: true });
+      testContainer.appendChild(containingBlock);
+
+      const mockSurface = document.createElement('div');
+      containingBlock.appendChild(mockSurface);
+
+      vi.spyOn(containingBlock, 'getBoundingClientRect').mockReturnValue({ left: 100, top: 100 });
+
+      const editor = {
+        options: { element: mockSurface },
+        emit: vi.fn(),
+        view: null,
+      };
+
+      const [plugin] = SlashMenu.config.addPmPlugins.call({ editor });
+      state = EditorState.create({ schema, doc: baseDoc, selection: initialSelection, plugins: [plugin] });
+
+      const view = {
+        state,
+        dispatch: vi.fn((tr) => {
+          state = state.apply(tr);
+          view.state = state;
+        }),
+        dom: mockSurface,
+      };
+
+      editor.view = view;
+
+      view.dispatch(
+        view.state.tr.setMeta(SlashMenuPluginKey, {
+          type: 'open',
+          clientX: 150,
+          clientY: 200,
+          pos: 1,
+        }),
+      );
+
+      const pluginState = SlashMenuPluginKey.getState(view.state);
+      expect(pluginState.open).toBe(true);
+
+      // Should treat null/undefined as 0
+      expect(pluginState.menuPosition.left).toBe('60px');
+      expect(pluginState.menuPosition.top).toBe('110px');
+    });
+  });
 });
 
 describe('findContainingBlockAncestor', () => {
