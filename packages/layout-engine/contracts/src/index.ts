@@ -1477,6 +1477,8 @@ export type TableFragment = {
   repeatHeaderCount?: number;
   partialRow?: PartialRowInfo;
   metadata?: TableFragmentMetadata;
+  pmStart?: number;
+  pmEnd?: number;
 };
 
 export type ImageFragment = {
