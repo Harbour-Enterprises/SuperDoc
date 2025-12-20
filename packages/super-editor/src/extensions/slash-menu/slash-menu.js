@@ -259,6 +259,29 @@ export const SlashMenu = Extension.create({
                   const cbRect = containingBlock.getBoundingClientRect();
                   left -= cbRect.left;
                   top -= cbRect.top;
+
+                  /**
+                   * Scroll offset adjustment for containing blocks.
+                   *
+                   * When a containing block is scrollable, position:fixed behaves like position:absolute
+                   * relative to the containing block's border box, NOT its scrolled content area.
+                   * This means fixed-position elements move with the scroll container's content.
+                   *
+                   * To position the menu correctly at the visual click location, we must add the
+                   * containing block's scroll offsets (scrollLeft and scrollTop) to our calculated
+                   * position. This compensates for the content being scrolled away from the border box.
+                   *
+                   * Example: If the containing block is scrolled 100px to the right (scrollLeft = 100),
+                   * and we want the menu at visual position 150px from the left edge of the containing
+                   * block, we need to set left = 250px (150 + 100) so that when the content shifts
+                   * 100px left due to the scroll, the menu appears at the correct visual position.
+                   *
+                   * Edge cases handled:
+                   * - scrollLeft/scrollTop may be null or undefined on some elements, so we use || 0
+                   * - scrollLeft/scrollTop are always 0 for non-scrollable containers
+                   */
+                  left += containingBlock.scrollLeft || 0;
+                  top += containingBlock.scrollTop || 0;
                 } catch (error) {
                   console.warn('SlashMenu: Failed to adjust for containing block', error);
                 }

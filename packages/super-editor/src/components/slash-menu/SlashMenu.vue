@@ -8,6 +8,7 @@ import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
 import { SLASH_MENU_HANDLED_FLAG } from './event-flags.js';
+import { isMacOS } from '../../core/utilities/isMacOS.js';
 
 const props = defineProps({
   editor: {
@@ -75,11 +76,31 @@ const filteredSections = computed(() => {
   ];
 });
 
+/**
+ * Watch for menu open/close state changes and manage search input focus.
+ *
+ * When the menu opens, automatically focuses the hidden search input to enable
+ * immediate keyboard interaction (search filtering and navigation). Uses the
+ * preventScroll option to avoid unwanted scrolling behavior.
+ *
+ * The preventScroll option is critical because:
+ * - The search input is positioned off-screen (opacity: 0, height: 0)
+ * - Without preventScroll, browsers may scroll parent containers to bring the
+ *   focused element into view, causing jarring page jumps
+ * - This ensures the menu appears at the cursor position without disrupting
+ *   the user's viewport
+ *
+ * @param {boolean} open - The new value of isOpen (true when menu opens, false when closed)
+ * @returns {void}
+ */
 watch(isOpen, (open) => {
   if (open) {
     nextTick(() => {
       if (searchInput.value) {
-        searchInput.value.focus();
+        // Use preventScroll to avoid scrolling the page when focusing the search input.
+        // Without this, the browser may scroll parent containers to bring the input into view,
+        // which causes unwanted page jumps when opening the context menu.
+        searchInput.value.focus({ preventScroll: true });
       }
     });
   }
@@ -211,11 +232,21 @@ const handleGlobalKeyDown = (event) => {
  * Handle clicks outside the menu to close it.
  * Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
  * call event.preventDefault() which suppresses mousedown events.
- * @param {PointerEvent|MouseEvent} event
+ * @param {PointerEvent|MouseEvent} event - The pointer or mouse event
+ * @returns {void}
  */
 const handleGlobalOutsideClick = (event) => {
   if (isOpen.value && menuRef.value && !menuRef.value.contains(event.target)) {
-    moveCursorToMouseEvent(event, props.editor);
+    // Only move cursor for left-clicks (button === 0).
+    // For right-clicks (button === 2), preserve the current selection/cursor
+    // because the contextmenu handler will open a new menu at the click position.
+    // Also skip Ctrl+Click on Mac, which triggers contextmenu but reports button=0.
+    const isCtrlClickOnMac = event.ctrlKey && isMacOS();
+    const isLeftClick = event.button === 0 && !isCtrlClickOnMac;
+
+    if (isLeftClick) {
+      moveCursorToMouseEvent(event, props.editor);
+    }
     closeMenu({ restoreCursor: false });
   }
 };

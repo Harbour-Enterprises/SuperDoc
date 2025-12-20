@@ -2888,9 +2888,18 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #handlePointerDown = (event: PointerEvent) => {
+    // Return early for non-left clicks (right-click, middle-click)
     if (event.button !== 0) {
       return;
     }
+
+    // On Mac, Ctrl+Click triggers the context menu but reports button=0.
+    // Treat it like a right-click: preserve selection and let the contextmenu handler take over.
+    // This prevents the selection from being destroyed when user Ctrl+clicks on selected text.
+    if (event.ctrlKey && navigator.platform.includes('Mac')) {
+      return;
+    }
+
     this.#pendingMarginClick = null;
 
     // Check if clicking on a draggable field annotation - if so, don't preventDefault
