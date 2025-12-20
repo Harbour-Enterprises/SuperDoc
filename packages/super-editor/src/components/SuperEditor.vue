@@ -18,6 +18,7 @@ import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import { isHeadless } from '@/utils/headless-helpers.js';
+import { isMacOS } from '@/core/utilities/isMacOS.js';
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -750,7 +751,31 @@ onMounted(() => {
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
 });
 
+/**
+ * Handle mouse down events in the editor margin area.
+ * Moves the cursor to the clicked location for normal left-clicks, but preserves
+ * the current selection for right-clicks and context menu triggers.
+ *
+ * This prevents unwanted cursor movement when the user is trying to open a context menu:
+ * - Right-clicks (button !== 0) are ignored because they open the context menu
+ * - Ctrl+Click on Mac is ignored because it triggers the context menu (even though button === 0)
+ * - Clicks directly on the ProseMirror content area are ignored (handled by ProseMirror itself)
+ *
+ * For normal left-clicks on margin areas, delegates to onMarginClickCursorChange which
+ * positions the cursor at the appropriate location based on the click coordinates.
+ *
+ * @param {MouseEvent} event - The mousedown event from the margin click
+ * @returns {void}
+ */
 const handleMarginClick = (event) => {
+  // Skip right-clicks - don't move cursor when user is trying to open context menu
+  if (event.button !== 0) {
+    return;
+  }
+  // On Mac, Ctrl+Click triggers context menu but reports button=0
+  if (event.ctrlKey && isMacOS()) {
+    return;
+  }
   if (event.target.classList.contains('ProseMirror')) return;
 
   onMarginClickCursorChange(event, activeEditor.value);

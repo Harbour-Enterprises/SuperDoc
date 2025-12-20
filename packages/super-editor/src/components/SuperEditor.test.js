@@ -356,4 +356,250 @@ describe('SuperEditor.vue', () => {
 
     wrapper.unmount();
   });
+
+  describe('handleMarginClick', () => {
+    it('should ignore right-clicks (button !== 0)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-margin-test',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+      expect(editorWrapper.exists()).toBe(true);
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event manually (vue-test-utils doesn't allow setting target)
+      const mockEvent = {
+        button: 2, // Right-click
+        ctrlKey: false,
+        target: targetDiv,
+      };
+
+      // Trigger the event directly via the DOM element
+      const mousedownEvent = new MouseEvent('mousedown', mockEvent);
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called for right-clicks
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should ignore Ctrl+Click on Mac (contextmenu trigger)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-mac-ctrl-click',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      // Mock Mac platform
+      const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+      Object.defineProperty(navigator, 'platform', {
+        value: 'MacIntel',
+        configurable: true,
+      });
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for Ctrl+Click on Mac
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: true, // Ctrl key pressed (triggers context menu on Mac)
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called for Ctrl+Click on Mac
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      // Restore platform
+      if (originalPlatform) {
+        Object.defineProperty(navigator, 'platform', originalPlatform);
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should process normal left-clicks (button = 0, no ctrlKey)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-left-click',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for normal left-click
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: false, // No Ctrl key
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should be called for normal left-clicks
+      expect(onMarginClickCursorChangeMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle Windows platform correctly (Ctrl+Click should process)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-windows',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      // Mock Windows platform
+      const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+      Object.defineProperty(navigator, 'platform', {
+        value: 'Win32',
+        configurable: true,
+      });
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for Ctrl+Click on Windows
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: true, // Ctrl key (should process on Windows)
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should be called on Windows even with Ctrl
+      expect(onMarginClickCursorChangeMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+
+      // Restore platform
+      if (originalPlatform) {
+        Object.defineProperty(navigator, 'platform', originalPlatform);
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should ignore clicks on ProseMirror element', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-prosemirror',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      const proseMirrorDiv = document.createElement('div');
+      proseMirrorDiv.classList.add('ProseMirror');
+
+      // Create mock event for click on ProseMirror element
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0,
+        ctrlKey: false,
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: proseMirrorDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called when clicking ProseMirror element
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+  });
 });
