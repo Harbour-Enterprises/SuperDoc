@@ -1672,6 +1672,33 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   };
 }
 
+/**
+ * Lays out header or footer content within specified dimensional constraints.
+ *
+ * This function positions blocks (paragraphs, images, drawings) within a header or footer region,
+ * handling page-relative anchor transformations and computing the actual height required by
+ * visible content. Headers and footers are rendered within the content box but may contain
+ * page-relative anchored objects that need coordinate transformation.
+ *
+ * @param blocks - The flow blocks to layout (paragraphs, images, drawings, etc.)
+ * @param measures - Corresponding measurements for each block (must match blocks.length)
+ * @param constraints - Dimensional constraints including width, height, and optional margins
+ *
+ * @returns A HeaderFooterLayout containing:
+ *   - pages: Array of laid-out pages with positioned fragments
+ *   - height: The actual height consumed by visible content
+ *
+ * @throws {Error} If blocks and measures arrays have different lengths
+ * @throws {Error} If width or height constraints are not positive finite numbers
+ *
+ * Special handling for behindDoc anchored fragments:
+ * - Anchored images/drawings with behindDoc=true are decorative background elements
+ * - These fragments are excluded from height calculations if they fall outside a reasonable
+ *   overflow range (4x the header/footer height or 192pt, whichever is larger)
+ * - This prevents decorative elements with extreme offsets from inflating header/footer margins
+ * - behindDoc fragments within the overflow range are still included to handle modest positioning
+ * - All behindDoc fragments are still rendered in the layout; they're only excluded from height
+ */
 export function layoutHeaderFooter(
   blocks: FlowBlock[],
   measures: Measure[],
@@ -1690,6 +1717,11 @@ export function layoutHeaderFooter(
   if (!Number.isFinite(height) || height <= 0) {
     throw new Error('layoutHeaderFooter: height must be positive');
   }
+
+  // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
+  const maxBehindDocOverflow = Math.max(192, height * 4);
+  const minBehindDocY = -maxBehindDocOverflow;
+  const maxBehindDocY = height + maxBehindDocOverflow;
 
   // Transform page-relative anchor offsets to content-relative for correct positioning
   // Headers/footers are rendered within the content box, but page-relative anchors
@@ -1737,6 +1769,25 @@ export function layoutHeaderFooter(
       if (idx == null) continue;
       const block = blocks[idx];
       const measure = measures[idx];
+
+      // Exclude behindDoc anchored fragments with extreme offsets from height calculations.
+      // Decorative background images/drawings in headers/footers should not inflate margins.
+      // Fragments are still rendered in the layout; we only skip them when computing total height.
+      // We allow modest overflow (within maxBehindDocOverflow) to handle reasonable positioning.
+      const isAnchoredFragment =
+        (fragment.kind === 'image' || fragment.kind === 'drawing') && fragment.isAnchored === true;
+      if (isAnchoredFragment) {
+        // Runtime validation: ensure block.kind matches fragment.kind before type assertion
+        if (block.kind !== 'image' && block.kind !== 'drawing') {
+          throw new Error(
+            `Type mismatch: fragment kind is ${fragment.kind} but block kind is ${block.kind} for block ${block.id}`,
+          );
+        }
+        const anchoredBlock = block as ImageBlock | DrawingBlock;
+        if (anchoredBlock.anchor?.behindDoc && (fragment.y < minBehindDocY || fragment.y > maxBehindDocY)) {
+          continue;
+        }
+      }
 
       if (fragment.y < minY) minY = fragment.y;
       let bottom = fragment.y;
