@@ -2062,6 +2062,76 @@ describe('layoutHeaderFooter', () => {
     expect(layout.pages[0].fragments[0]).toMatchObject({ kind: 'image', height: 40 });
   });
 
+  it('ignores far-away behindDoc anchored fragments when computing height', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 1000,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 60,
+    });
+
+    expect(layout.height).toBeCloseTo(15);
+  });
+
+  it('includes near behindDoc anchored fragments when computing height', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: -20,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 60,
+    });
+
+    expect(layout.height).toBeGreaterThan(15);
+  });
+
   it('transforms page-relative anchor offsets by subtracting left margin', () => {
     // An anchored image with hRelativeFrom='page' and offsetH=545 (absolute from page left)
     // When left margin is 107, the image should be positioned at 545-107=438 within the header
@@ -2186,6 +2256,204 @@ describe('layoutHeaderFooter', () => {
     expect(imageFragment).toBeDefined();
     // margin-relative anchors should not be transformed - offsetH stays at 50
     expect(imageFragment!.x).toBe(50);
+  });
+
+  it('ignores behindDoc DrawingBlock with extreme offset when computing height', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const drawingBlock: FlowBlock = {
+      kind: 'drawing',
+      id: 'drawing-1',
+      drawingKind: 'vectorShape',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 2000, // Extreme offset beyond overflow threshold
+      },
+      shape: {
+        type: 'Rectangle',
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const drawingMeasure: Measure = {
+      kind: 'drawing',
+      drawingKind: 'vectorShape',
+      width: 100,
+      height: 50,
+      scale: 1,
+      naturalWidth: 100,
+      naturalHeight: 50,
+      geometry: { width: 100, height: 50, rotation: 0, flipH: false, flipV: false },
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, drawingBlock], [paragraphMeasure, drawingMeasure], {
+      width: 200,
+      height: 60,
+    });
+
+    // Height should only include paragraph, not the extreme behindDoc drawing
+    expect(layout.height).toBeCloseTo(15);
+  });
+
+  it('includes non-behindDoc anchored fragments in height calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: false, // NOT behindDoc - should be included in height
+        offsetV: 20,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 100,
+    });
+
+    // Height should include both paragraph and the anchored image
+    // Image is at offsetV=20 with height 40, so bottom is at 60
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(60, 0);
+  });
+
+  it('returns minimal height when header contains only behindDoc fragments with extreme offsets', () => {
+    const imageBlock1: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: -5000, // Extreme negative offset
+      },
+    };
+    const imageBlock2: FlowBlock = {
+      kind: 'image',
+      id: 'img-2',
+      src: 'data:image/png;base64,yyy',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 3000, // Extreme positive offset
+      },
+    };
+    const imageMeasure1: Measure = {
+      kind: 'image',
+      width: 100,
+      height: 50,
+    };
+    const imageMeasure2: Measure = {
+      kind: 'image',
+      width: 100,
+      height: 50,
+    };
+
+    const layout = layoutHeaderFooter([imageBlock1, imageBlock2], [imageMeasure1, imageMeasure2], {
+      width: 200,
+      height: 60,
+    });
+
+    // Both images have extreme offsets and behindDoc=true, so height should be 0
+    expect(layout.height).toBe(0);
+  });
+
+  it('includes behindDoc fragments within overflow range alongside regular content', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const behindDocImage1: FlowBlock = {
+      kind: 'image',
+      id: 'img-behind-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 5, // Within overflow range - should be included
+      },
+    };
+    const behindDocImage2: FlowBlock = {
+      kind: 'image',
+      id: 'img-behind-2',
+      src: 'data:image/png;base64,yyy',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 5000, // Extreme offset - should be excluded
+      },
+    };
+    const regularImage: FlowBlock = {
+      kind: 'image',
+      id: 'img-regular',
+      src: 'data:image/png;base64,zzz',
+      anchor: {
+        isAnchored: true,
+        behindDoc: false,
+        offsetV: 25,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure1: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 30,
+    };
+    const imageMeasure2: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 30,
+    };
+    const imageMeasure3: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 35,
+    };
+
+    const layout = layoutHeaderFooter(
+      [paragraphBlock, behindDocImage1, behindDocImage2, regularImage],
+      [paragraphMeasure, imageMeasure1, imageMeasure2, imageMeasure3],
+      {
+        width: 200,
+        height: 100,
+      },
+    );
+
+    // Height should include:
+    // - paragraph (15)
+    // - behindDocImage1 at y=5, height=30, bottom=35 (within overflow range)
+    // - regularImage at y=25, height=35, bottom=60
+    // - behindDocImage2 excluded (extreme offset)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(60, 0);
   });
 });
 
