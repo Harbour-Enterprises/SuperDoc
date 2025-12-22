@@ -840,9 +840,9 @@ export class PresentationEditor extends EventEmitter {
     const normalizedEditorProps = {
       ...(editorOptions.editorProps ?? {}),
       editable: () => {
-        // Hidden editor respects documentMode for plugin compatibility
-        // but remains visually/interactively inert (handled by hidden container CSS)
-        return this.#documentMode !== 'viewing';
+        // Hidden editor respects documentMode for plugin compatibility,
+        // but permission islands may temporarily re-enable editing.
+        return !this.#isViewLocked();
       },
     };
     try {
@@ -2840,7 +2840,7 @@ export class PresentationEditor extends EventEmitter {
       win as Window,
       this.#visibleHost,
       () => this.#getActiveDomTarget(),
-      () => this.#documentMode !== 'viewing',
+      () => !this.#isViewLocked(),
     );
     this.#inputBridge.bind();
   }
@@ -3967,7 +3967,7 @@ export class PresentationEditor extends EventEmitter {
       this.#dragUsedPageNotMountedFallback = false;
       return;
     }
-    if (this.#session.mode !== 'body' || this.#documentMode === 'viewing') {
+    if (this.#session.mode !== 'body' || this.#isViewLocked()) {
       this.#dragLastPointer = null;
       this.#dragLastRawHit = null;
       this.#dragUsedPageNotMountedFallback = false;
@@ -4469,7 +4469,7 @@ export class PresentationEditor extends EventEmitter {
     }
 
     // In viewing mode, don't render caret or selection highlights
-    if (this.#documentMode === 'viewing') {
+    if (this.#isViewLocked()) {
       try {
         this.#localSelectionLayer.innerHTML = '';
       } catch (error) {
@@ -5407,7 +5407,7 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #validateHeaderFooterEditPermission(): { allowed: boolean; reason?: string } {
-    if (this.#documentMode === 'viewing') {
+    if (this.#isViewLocked()) {
       return { allowed: false, reason: 'documentMode' };
     }
     if (!this.#editor.isEditable) {
@@ -6330,5 +6330,19 @@ export class PresentationEditor extends EventEmitter {
     this.#errorBanner?.remove();
     this.#errorBanner = null;
     this.#errorBannerMessage = null;
+  }
+
+  /**
+   * Determines whether the current viewing mode should block edits.
+   * When documentMode is viewing but the active editor has been toggled
+   * back to editable (e.g. permission ranges), we treat the view as editable.
+   */
+  #isViewLocked(): boolean {
+    if (this.#documentMode !== 'viewing') return false;
+    const hasPermissionOverride = Boolean(
+      (this.#editor as Editor & { storage?: Record<string, any> })?.storage?.permissionRanges?.hasAllowedRanges,
+    );
+    if (hasPermissionOverride) return false;
+    return !this.#editor?.isEditable;
   }
 }
