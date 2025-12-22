@@ -15,7 +15,6 @@ const SD_NODE_NAME = 'permStart';
  * @returns {import('@translator').SCEncoderResult}
  */
 const encode = (params, encodedAttrs = {}) => {
-  console.log('[debug] params:', params, encodedAttrs);
   return {
     type: 'permStart',
     attrs: encodedAttrs,
@@ -34,7 +33,6 @@ const decode = (params, decodedAttrs = {}) => {
     elements: [],
   };
 
-  console.log('[debug] decodedAttrs:', decodedAttrs);
   if (decodedAttrs && Object.keys(decodedAttrs).length) {
     result.attributes = decodedAttrs;
   }
