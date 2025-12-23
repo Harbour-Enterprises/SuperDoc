@@ -1,3 +1,10 @@
+## [1.0.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.3...v1.0.4) (2025-12-23)
+
+
+### Bug Fixes
+
+* underline off ([#1584](https://github.com/Harbour-Enterprises/SuperDoc/issues/1584)) ([535add9](https://github.com/Harbour-Enterprises/SuperDoc/commit/535add901ef138097c8d88d7ebf301c8bc007fe6))
+
 ## [1.0.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.2...v1.0.3) (2025-12-23)
 
 
