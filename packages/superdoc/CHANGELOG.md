@@ -1,3 +1,14 @@
+## [1.0.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.2...v1.0.3) (2025-12-23)
+
+
+### Bug Fixes
+
+* header/footer collapsing from image placement ([#1575](https://github.com/Harbour-Enterprises/SuperDoc/issues/1575)) ([1ca9165](https://github.com/Harbour-Enterprises/SuperDoc/commit/1ca91659205b3cfd200f8b11c8a4ade143a452d7))
+* margins with multi column sections, text wrapping in sections ([#1571](https://github.com/Harbour-Enterprises/SuperDoc/issues/1571)) ([d3ee276](https://github.com/Harbour-Enterprises/SuperDoc/commit/d3ee276301ee92bed4f2d9434e5f0163ea840a28))
+* right click ([#1574](https://github.com/Harbour-Enterprises/SuperDoc/issues/1574)) ([cf870c4](https://github.com/Harbour-Enterprises/SuperDoc/commit/cf870c48db9bd5a662850ed0bf1d2c7e87ab9a90))
+* right click context ([#1572](https://github.com/Harbour-Enterprises/SuperDoc/issues/1572)) ([9afaba9](https://github.com/Harbour-Enterprises/SuperDoc/commit/9afaba9301fb27d2411707eacd6aee44d3b52809))
+* selections in tables ([#1573](https://github.com/Harbour-Enterprises/SuperDoc/issues/1573)) ([888ea49](https://github.com/Harbour-Enterprises/SuperDoc/commit/888ea4967fd6e4ac3bfa378ba6ce87bcc5f1ba48))
+
 ## [1.0.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.1...v1.0.2) (2025-12-19)
 
 
