@@ -104,6 +104,174 @@ describe('w:t translator', () => {
       expect(result.text).toBe('foobar');
     });
 
+    it('preserves whitespace when document has xml:space="preserve"', () => {
+      const params = {
+        converter: {
+          documentAttributes: { 'xml:space': 'preserve' },
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      const result = config.encode(params);
+      expect(result.text).toBe('  Hello  ');
+    });
+
+    it('preserves whitespace-only text with document-level xml:space', () => {
+      const params = {
+        converter: {
+          documentAttributes: { 'xml:space': 'preserve' },
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '[[sdspace]] [[sdspace]]' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      const result = config.encode(params);
+      expect(result.text).toBe(' ');
+    });
+
+    it('element-level xml:space takes precedence over document-level', () => {
+      const params = {
+        converter: {
+          documentAttributes: { 'xml:space': 'preserve' },
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Element-level xml:space="default" should override document-level "preserve"
+      const result = config.encode(params, { xmlSpace: 'default' });
+      expect(result.text).toBe('Hello');
+    });
+
+    it('node attributes xml:space takes precedence over document-level', () => {
+      const params = {
+        converter: {
+          documentAttributes: { 'xml:space': 'preserve' },
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: { 'xml:space': 'default' },
+          },
+        },
+      };
+
+      // Node-level xml:space="default" should override document-level "preserve"
+      const result = config.encode(params);
+      expect(result.text).toBe('Hello');
+    });
+
+    it('handles undefined params.converter gracefully', () => {
+      const params = {
+        converter: undefined,
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Should default to trimming whitespace when no converter is available
+      const result = config.encode(params);
+      expect(result).toBeTruthy();
+      expect(result.text).toBe('Hello');
+    });
+
+    it('handles null params.converter gracefully', () => {
+      const params = {
+        converter: null,
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Should default to trimming whitespace when converter is null
+      const result = config.encode(params);
+      expect(result).toBeTruthy();
+      expect(result.text).toBe('Hello');
+    });
+
+    it('handles null documentAttributes gracefully', () => {
+      const params = {
+        converter: {
+          documentAttributes: null,
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Should default to trimming whitespace when documentAttributes is null
+      const result = config.encode(params);
+      expect(result).toBeTruthy();
+      expect(result.text).toBe('Hello');
+    });
+
+    it('handles undefined documentAttributes gracefully', () => {
+      const params = {
+        converter: {
+          documentAttributes: undefined,
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Should default to trimming whitespace when documentAttributes is undefined
+      const result = config.encode(params);
+      expect(result).toBeTruthy();
+      expect(result.text).toBe('Hello');
+    });
+
+    it('handles converter without documentAttributes property gracefully', () => {
+      const params = {
+        converter: {},
+        extraParams: {
+          node: {
+            elements: [{ text: '  Hello  ' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Should default to trimming whitespace when documentAttributes doesn't exist
+      const result = config.encode(params);
+      expect(result).toBeTruthy();
+      expect(result.text).toBe('Hello');
+    });
+
     it('returns a space for empty element with xml:space="preserve"', () => {
       const params = {
         extraParams: {
