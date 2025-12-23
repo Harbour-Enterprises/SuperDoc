@@ -270,9 +270,49 @@ class SuperConverter {
     this.resolveDocumentGuid();
   }
 
+  /**
+   * Parses XML content into JSON format while preserving whitespace-only text runs.
+   *
+   * This method wraps xml-js's xml2json parser with additional preprocessing to prevent
+   * the parser from dropping whitespace-only content in <w:t> and <w:delText> elements.
+   * This is critical for correctly handling documents that rely on document-level
+   * xml:space="preserve" rather than per-element attributes, which is common in
+   * PDF-to-DOCX converted documents.
+   *
+   * The whitespace preservation strategy:
+   * 1. Before parsing, wraps whitespace-only content with [[sdspace]] placeholders
+   * 2. xml-js parser preserves the placeholder-wrapped text
+   * 3. During text node processing (t-translator.js), placeholders are removed
+   *
+   * @param {string} xml - The XML string to parse
+   * @returns {Object} The parsed JSON representation of the XML document
+   *
+   * @example
+   * // Handles whitespace-only text runs
+   * const xml = '<w:t> </w:t>';
+   * const result = parseXmlToJson(xml);
+   * // Result preserves the space: { elements: [{ text: '[[sdspace]] [[sdspace]]' }] }
+   *
+   * @example
+   * // Handles elements with attributes
+   * const xml = '<w:t xml:space="preserve">  text  </w:t>';
+   * const result = parseXmlToJson(xml);
+   * // Preserves content and attributes
+   *
+   * @example
+   * // Handles both w:t and w:delText elements
+   * const xml = '<w:delText> </w:delText>';
+   * const result = parseXmlToJson(xml);
+   * // Preserves whitespace in deleted text
+   */
   parseXmlToJson(xml) {
-    // We need to preserve nodes with xml:space="preserve" and only have empty spaces
-    const newXml = xml.replace(/(<w:t xml:space="preserve">)(\s+)(<\/w:t>)/g, '$1[[sdspace]]$2[[sdspace]]$3');
+    // Preserve whitespace-only text runs so xml-js doesn't drop them during parsing.
+    // This handles both <w:t> and <w:delText> elements, with or without attributes.
+    // Documents may rely on document-level xml:space="preserve" rather than per-element attributes.
+    const newXml = xml.replace(
+      /(<w:(?:t|delText)(?:\s[^>]*)?>)(\s+)(<\/w:(?:t|delText)>)/g,
+      '$1[[sdspace]]$2[[sdspace]]$3',
+    );
     return JSON.parse(xmljs.xml2json(newXml, null, 2));
   }
 
