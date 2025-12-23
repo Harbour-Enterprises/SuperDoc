@@ -140,6 +140,44 @@ describe('w:t translator', () => {
       expect(result.text).toBe(' ');
     });
 
+    it('drops whitespace-only text when xml:space is not preserve', () => {
+      const params = {
+        converter: {
+          documentAttributes: {}, // No xml:space="preserve"
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '[[sdspace]] [[sdspace]]' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // Without xml:space="preserve", whitespace-only runs should be dropped
+      const result = config.encode(params);
+      expect(result).toBeNull();
+    });
+
+    it('drops whitespace-only text when xml:space is explicitly default', () => {
+      const params = {
+        converter: {
+          documentAttributes: { 'xml:space': 'default' },
+        },
+        extraParams: {
+          node: {
+            elements: [{ text: '[[sdspace]] [[sdspace]]' }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      // With xml:space="default", whitespace-only runs should be dropped
+      const result = config.encode(params);
+      expect(result).toBeNull();
+    });
+
     it('element-level xml:space takes precedence over document-level', () => {
       const params = {
         converter: {

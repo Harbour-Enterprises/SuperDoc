@@ -67,6 +67,14 @@ const encode = (params, encodedAttrs = {}) => {
     // Now that we've preserved the whitespace through the parsing stage and applied appropriate
     // trimming rules above, we remove the placeholders to restore the original content.
     text = text.replace(/\[\[sdspace\]\]/g, '');
+
+    // If the text is whitespace-only after placeholder removal and xml:space != 'preserve',
+    // drop the node entirely. This prevents creating empty/whitespace text nodes that ProseMirror
+    // may treat as invalid. The placeholder was only needed to prevent xml-js from dropping
+    // the node during parsing - but if xml:space doesn't require preservation, we should drop it.
+    if (xmlSpace !== 'preserve' && typeof text === 'string' && !text.trim()) {
+      return null;
+    }
   } else if (!elements.length && encodedAttrs.xmlSpace === 'preserve') {
     // Word sometimes will have an empty text node with a space attribute, in that case it should be a space
     text = ' ';
