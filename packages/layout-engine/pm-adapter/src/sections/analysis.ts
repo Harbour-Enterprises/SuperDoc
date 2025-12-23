@@ -12,6 +12,13 @@ import { extractSectionData } from './extraction.js';
 import { isSectPrElement, hasSectPr, getSectPrFromNode } from './breaks.js';
 
 /**
+ * Default margin value (in pixels) for header/footer when not explicitly specified.
+ * This ensures header/footer margins have a valid numeric value when page margins
+ * are present but header/footer margins are undefined.
+ */
+const DEFAULT_HEADER_FOOTER_MARGIN_PX = 0;
+
+/**
  * Determines if a section break should be ignored during section range analysis.
  *
  * A section break is ignored if:
@@ -85,6 +92,16 @@ export function findParagraphsWithSectPr(doc: PMNode): {
 /**
  * Build section ranges from paragraphs with sectPr using Word's "end-tagged" semantics.
  *
+ * Creates a margins object when ANY margin property is defined (header, footer, top, right, bottom, or left).
+ * This handles documents that specify page margins without header/footer margins.
+ *
+ * When margins object is created:
+ * - header/footer default to DEFAULT_HEADER_FOOTER_MARGIN_PX (0) when not specified
+ * - page margins (top/right/bottom/left) remain undefined when not specified
+ *
+ * When margins object is null:
+ * - No margin properties were specified in the sectPr
+ *
  * @param paragraphs - Array of paragraphs containing sectPr elements
  * @param hasBodySectPr - Whether the document has a body-level sectPr
  * @returns Array of section ranges
@@ -104,22 +121,31 @@ export function buildSectionRangesFromParagraphs(
     if (!sectionData) return;
 
     const sectPr = getSectPrFromNode(item.node);
+    // Check if ANY margin property is defined (not just header/footer)
+    // Some documents specify page margins (top/right/bottom/left) without header/footer margins
+    const hasAnyMargin =
+      sectionData.headerPx != null ||
+      sectionData.footerPx != null ||
+      sectionData.topPx != null ||
+      sectionData.rightPx != null ||
+      sectionData.bottomPx != null ||
+      sectionData.leftPx != null;
+
     const range: SectionRange = {
       sectionIndex: idx,
       startParagraphIndex: currentStart,
       endParagraphIndex: item.index,
       sectPr,
-      margins:
-        sectionData.headerPx != null || sectionData.footerPx != null
-          ? {
-              header: sectionData.headerPx ?? 0,
-              footer: sectionData.footerPx ?? 0,
-              top: sectionData.topPx,
-              right: sectionData.rightPx,
-              bottom: sectionData.bottomPx,
-              left: sectionData.leftPx,
-            }
-          : null,
+      margins: hasAnyMargin
+        ? {
+            header: sectionData.headerPx ?? DEFAULT_HEADER_FOOTER_MARGIN_PX,
+            footer: sectionData.footerPx ?? DEFAULT_HEADER_FOOTER_MARGIN_PX,
+            top: sectionData.topPx,
+            right: sectionData.rightPx,
+            bottom: sectionData.bottomPx,
+            left: sectionData.leftPx,
+          }
+        : null,
       pageSize: sectionData.pageSizePx ?? null,
       orientation: sectionData.orientation ?? null,
       columns: sectionData.columnsPx ?? null,
@@ -187,22 +213,31 @@ export function createFinalSectionFromBodySectPr(
   const bodySectionData = extractSectionData(tempNode);
   if (!bodySectionData) return null;
 
+  // Check if ANY margin property is defined (not just header/footer)
+  // Some documents specify page margins (top/right/bottom/left) without header/footer margins
+  const hasAnyMargin =
+    bodySectionData.headerPx != null ||
+    bodySectionData.footerPx != null ||
+    bodySectionData.topPx != null ||
+    bodySectionData.rightPx != null ||
+    bodySectionData.bottomPx != null ||
+    bodySectionData.leftPx != null;
+
   return {
     sectionIndex,
     startParagraphIndex: currentStart,
     endParagraphIndex: totalParagraphs - 1,
     sectPr: bodySectPr,
-    margins:
-      bodySectionData.headerPx != null || bodySectionData.footerPx != null
-        ? {
-            header: bodySectionData.headerPx ?? 0,
-            footer: bodySectionData.footerPx ?? 0,
-            top: bodySectionData.topPx,
-            right: bodySectionData.rightPx,
-            bottom: bodySectionData.bottomPx,
-            left: bodySectionData.leftPx,
-          }
-        : null,
+    margins: hasAnyMargin
+      ? {
+          header: bodySectionData.headerPx ?? DEFAULT_HEADER_FOOTER_MARGIN_PX,
+          footer: bodySectionData.footerPx ?? DEFAULT_HEADER_FOOTER_MARGIN_PX,
+          top: bodySectionData.topPx,
+          right: bodySectionData.rightPx,
+          bottom: bodySectionData.bottomPx,
+          left: bodySectionData.leftPx,
+        }
+      : null,
     pageSize: bodySectionData.pageSizePx ?? null,
     orientation: bodySectionData.orientation ?? null,
     columns: bodySectionData.columnsPx ?? null,
