@@ -1595,6 +1595,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
             charPosInRun = wordEndWithSpace;
             currentLine.spaceCount += 1;
+            // Fix: Also update the segment to include the trailing space character.
+            // Without this, the segment excludes the space even though the line includes it,
+            // causing the space to not be rendered.
+            if (currentLine.segments?.[0]) {
+              currentLine.segments[0].toChar = wordEndWithSpace;
+              currentLine.segments[0].width += spaceWidth;
+            }
           } else {
             // Do not count trailing space at line end
             // but still advance char index to skip over the space for subsequent words
@@ -1677,6 +1684,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
             charPosInRun = wordEndWithSpace;
             currentLine.spaceCount += 1;
+            // Fix: Also update the segment to include the trailing space character.
+            // Without this, the segment excludes the space even though the line includes it,
+            // causing the space to not be rendered.
+            if (currentLine.segments?.[0]) {
+              currentLine.segments[0].toChar = wordEndWithSpace;
+              currentLine.segments[0].width += spaceWidth;
+            }
           } else {
             // Skip the space in character indexing even if we don't render it
             charPosInRun = wordEndWithSpace;
