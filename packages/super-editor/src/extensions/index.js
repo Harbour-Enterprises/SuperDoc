@@ -69,6 +69,10 @@ import { Search } from './search/index.js';
 import { NodeResizer } from './noderesizer/index.js';
 import { CustomSelection } from './custom-selection/index.js';
 
+// Permissions
+import { PermStart } from './perm-start/index.js';
+import { PermEnd } from './perm-end/index.js';
+
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
 
@@ -182,6 +186,8 @@ const getStarterExtensions = () => {
     TextTransform,
     VectorShape,
     ShapeGroup,
+    PermStart,
+    PermEnd,
     PassthroughInline,
     PassthroughBlock,
   ];
