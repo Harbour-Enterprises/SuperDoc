@@ -1411,6 +1411,67 @@ describe('measureBlock', () => {
         expect(tabRun.leader).toBe('dot');
       }
     });
+
+    it('preserves trailing spaces after tabs when line breaks', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Before',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 6,
+            pmEnd: 7,
+          },
+          {
+            text: 'Word Next',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use narrow width to force line break after "Word "
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // Should have multiple lines due to narrow width
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // Find the line containing "Word " (the text after the tab)
+      const lineWithWord = measure.lines.find((line) => {
+        return line.segments?.some((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+      });
+
+      expect(lineWithWord).toBeDefined();
+
+      if (lineWithWord) {
+        // The segment should include the trailing space after "Word"
+        const wordSegment = lineWithWord.segments?.find((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+
+        expect(wordSegment).toBeDefined();
+
+        if (wordSegment) {
+          const run = block.runs[wordSegment.runIndex];
+          if (run.kind !== 'tab' && 'text' in run) {
+            const segmentText = run.text.substring(wordSegment.fromChar, wordSegment.toChar);
+            // The segment should include "Word " (with trailing space)
+            expect(segmentText).toBe('Word ');
+          }
+        }
+      }
+    });
   });
 
   describe('space-only runs', () => {
