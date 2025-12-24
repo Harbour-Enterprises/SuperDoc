@@ -25,6 +25,7 @@ import { isList } from '@core/commands/list-helpers';
 import { calculateResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 import { twipsToLines } from '@converter/helpers';
 import { parseSizeUnit } from '@core/utilities';
+import { getNumberingIcon } from './numbering-icon-map.js';
 
 /**
  * @typedef {function(CommandItem): void} CommandCallback
@@ -197,6 +198,7 @@ export class SuperToolbar extends EventEmitter {
     this.superdoc = config.superdoc;
     this.role = config.role || 'editor';
     this.toolbarContainer = null;
+    this.selectedNumberingType = 'decimal'; // Store selected numbering type for list creation
 
     if (this.config.editor) {
       this.config.mode = this.config.editor.options.mode;
@@ -937,6 +939,28 @@ export class SuperToolbar extends EventEmitter {
           item.activate();
         } else if (item.name.value === 'numberedlist' && numberingType !== 'bullet') {
           item.activate();
+          // Detect exact format from numberingType and markerText
+          const markerText = listParent.attrs.listRendering.markerText;
+          const exactFormat = this.detectNumberingFormat(numberingType, markerText);
+          // Update icon based on exact format
+          this.updateNumberedListIcon(item, exactFormat);
+          // Store this as the selected type for future lists
+          this.selectedNumberingType = exactFormat;
+        } else if (item.name.value === 'numberedlisttype' && numberingType !== 'bullet') {
+          // Detect exact format and activate numbering type dropdown
+          const markerText = listParent.attrs.listRendering.markerText;
+          const exactFormat = this.detectNumberingFormat(numberingType, markerText);
+          item.activate({ numberingType: exactFormat });
+        }
+      } else {
+        // When not in a list, update the numbered list button icon to show the stored preference
+        if (item.name.value === 'numberedlist') {
+          this.updateNumberedListIcon(item, this.selectedNumberingType);
+        }
+        // Always enable the numbering type dropdown to allow changing the default
+        if (item.name.value === 'numberedlisttype') {
+          // Don't activate (no highlight), but update based on stored preference
+          item.deactivate();
         }
       }
 
@@ -949,6 +973,59 @@ export class SuperToolbar extends EventEmitter {
         }
       }
     });
+  }
+
+  /**
+   * Detect the exact numbering format from numberingType and markerText
+   * @param {string} numberingType - The Word numFmt value (decimal, lowerLetter, etc.)
+   * @param {string} markerText - The actual rendered marker text (e.g., "1.", "1)", "1", "a)")
+   * @returns {string} The format key (decimalPlain, decimal, decimalParen, etc.)
+   */
+  detectNumberingFormat(numberingType, markerText) {
+    if (!numberingType || !markerText) {
+      return 'decimal';
+    }
+
+    // Remove the counter value to get just the suffix pattern
+    // For example: "1." -> ".", "1)" -> ")", "1" -> "", "a." -> ".", "I." -> "."
+    const pattern = markerText.replace(/^[0-9]+|^[a-z]+|^[A-Z]+|^[ivxlcdm]+|^[IVXLCDM]+/, '');
+
+    switch (numberingType) {
+      case 'decimal':
+        if (pattern === '') return 'decimalPlain';
+        if (pattern === '.') return 'decimal';
+        if (pattern === ')') return 'decimalParen';
+        return 'decimal';
+
+      case 'lowerLetter':
+        if (pattern === '.') return 'lowerLetter';
+        if (pattern === ')') return 'letterParen';
+        return 'lowerLetter';
+
+      case 'upperLetter':
+        return 'upperLetter';
+
+      case 'lowerRoman':
+        return 'lowerRoman';
+
+      case 'upperRoman':
+        return 'upperRoman';
+
+      default:
+        return 'decimal';
+    }
+  }
+
+  /**
+   * Update the numbered list button icon based on the current numbering type
+   * @param {Object} item - The toolbar item to update
+   * @param {string} numberingType - The current numbering type
+   */
+  updateNumberedListIcon(item, numberingType) {
+    const icon = getNumberingIcon(numberingType);
+    if (item.icon && item.icon.value !== icon) {
+      item.icon.value = icon;
+    }
   }
 
   /**

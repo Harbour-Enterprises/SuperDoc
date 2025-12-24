@@ -4,9 +4,10 @@ import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 import { getResolvedParagraphProperties } from '@extensions/paragraph/resolvedPropertiesCache.js';
 import { isVisuallyEmptyParagraph } from './removeNumberingProperties.js';
 import { TextSelection } from 'prosemirror-state';
+import { getFormatConfig } from '@helpers/numbering-format-config.js';
 
 export const toggleList =
-  (listType) =>
+  (listType, numberingFormat = null) =>
   ({ editor, state, tr, dispatch }) => {
     // 1. Find first paragraph in selection that is a list of the same type
     let predicate;
@@ -87,7 +88,27 @@ export const toggleList =
       // If list paragraph was not found, create a new list definition and apply it to all paragraphs in selection
       mode = 'create';
       const numId = ListHelpers.getNewListId(editor);
-      ListHelpers.generateNewListDefinition({ numId: Number(numId), listType, editor });
+
+      // Use the provided numbering format or default settings
+      if (listType === 'orderedList' && numberingFormat) {
+        const formatConfig = getFormatConfig(numberingFormat);
+        if (formatConfig) {
+          ListHelpers.generateNewListDefinition({
+            numId: Number(numId),
+            listType,
+            level: '0',
+            start: '1',
+            text: formatConfig.lvlText,
+            fmt: formatConfig.fmt,
+            editor,
+          });
+        } else {
+          ListHelpers.generateNewListDefinition({ numId: Number(numId), listType, editor });
+        }
+      } else {
+        ListHelpers.generateNewListDefinition({ numId: Number(numId), listType, editor });
+      }
+
       sharedNumberingProperties = {
         numId: Number(numId),
         ilvl: 0,

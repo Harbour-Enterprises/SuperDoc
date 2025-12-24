@@ -56,6 +56,7 @@ export * from './increaseListIndent.js';
 export * from './decreaseListIndent.js';
 export * from './changeListLevel.js';
 export * from './removeNumberingProperties.js';
+export * from './changeListNumberingType.js';
 
 // Selection
 export * from './restoreSelection.js';
