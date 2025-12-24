@@ -95,9 +95,9 @@ describe('w:drawing translator', () => {
   });
 
   describe('decode', () => {
-    it('delegates to wp:anchor when node.attrs.isAnchor is true', () => {
+    it('wraps valid wp:anchor child in w:drawing when node.attrs.isAnchor is true', () => {
       const params = { node: { type: 'element', attrs: { isAnchor: true } } };
-      anchorTranslatorMock.decode.mockReturnValue({ decoded: 'anchor' });
+      anchorTranslatorMock.decode.mockReturnValue({ name: 'wp:anchor', decoded: 'anchor' });
 
       const result = translator.decode(params);
 
@@ -105,16 +105,36 @@ describe('w:drawing translator', () => {
       expect(wrapTextInRun).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'w:drawing',
-          elements: [{ decoded: 'anchor' }],
+          elements: [expect.objectContaining({ name: 'wp:anchor', decoded: 'anchor' })],
         }),
         [],
       );
-      expect(result).toEqual({ wrapped: { name: 'w:drawing', elements: [{ decoded: 'anchor' }] } });
+      expect(result).toEqual({
+        wrapped: {
+          name: 'w:drawing',
+          elements: [expect.objectContaining({ name: 'wp:anchor', decoded: 'anchor' })],
+        },
+      });
     });
 
-    it('delegates to wp:inline when node.attrs.isAnchor is false', () => {
+    it('returns child as-is (no wrap) when anchor child is not a drawing node', () => {
+      const params = { node: { type: 'element', attrs: { isAnchor: true } } };
+      // Simulate fallback returning a text run
+      anchorTranslatorMock.decode.mockReturnValue({
+        name: 'w:r',
+        elements: [{ name: 'w:t', elements: [{ text: 'x' }] }],
+      });
+
+      const result = translator.decode(params);
+
+      expect(anchorTranslatorMock.decode).toHaveBeenCalledWith(params);
+      expect(wrapTextInRun).not.toHaveBeenCalled();
+      expect(result).toEqual({ name: 'w:r', elements: [{ name: 'w:t', elements: [{ text: 'x' }] }] });
+    });
+
+    it('wraps valid wp:inline child in w:drawing when node.attrs.isAnchor is false', () => {
       const params = { node: { type: 'element', attrs: { isAnchor: false } } };
-      inlineTranslatorMock.decode.mockReturnValue({ decoded: 'inline' });
+      inlineTranslatorMock.decode.mockReturnValue({ name: 'wp:inline', decoded: 'inline' });
 
       const result = translator.decode(params);
 
@@ -122,11 +142,31 @@ describe('w:drawing translator', () => {
       expect(wrapTextInRun).toHaveBeenCalledWith(
         expect.objectContaining({
           name: 'w:drawing',
-          elements: [{ decoded: 'inline' }],
+          elements: [expect.objectContaining({ name: 'wp:inline', decoded: 'inline' })],
         }),
         [],
       );
-      expect(result).toEqual({ wrapped: { name: 'w:drawing', elements: [{ decoded: 'inline' }] } });
+      expect(result).toEqual({
+        wrapped: {
+          name: 'w:drawing',
+          elements: [expect.objectContaining({ name: 'wp:inline', decoded: 'inline' })],
+        },
+      });
+    });
+
+    it('returns child as-is (no wrap) when inline child is not a drawing node', () => {
+      const params = { node: { type: 'element', attrs: { isAnchor: false } } };
+      // Simulate fallback returning a text run
+      inlineTranslatorMock.decode.mockReturnValue({
+        name: 'w:r',
+        elements: [{ name: 'w:t', elements: [{ text: 'y' }] }],
+      });
+
+      const result = translator.decode(params);
+
+      expect(inlineTranslatorMock.decode).toHaveBeenCalledWith(params);
+      expect(wrapTextInRun).not.toHaveBeenCalled();
+      expect(result).toEqual({ name: 'w:r', elements: [{ name: 'w:t', elements: [{ text: 'y' }] }] });
     });
 
     it('returns null if node is missing', () => {
