@@ -100,6 +100,7 @@ function createHocuspocusProvider({ config, user, documentId, socket, superdocIn
     name: documentId,
     token: config.token || '',
     preserveConnection: false,
+    parameters: config.params,
     onAuthenticationFailed: () => onAuthenticationFailed(documentId),
     onConnect: () => onConnect(superdocInstance, documentId),
     onDisconnect: () => onDisconnect(superdocInstance, documentId),
