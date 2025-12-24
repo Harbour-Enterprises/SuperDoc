@@ -4,10 +4,13 @@
     "version": "0.0.1",
     "type": "module",
     "scripts": {
-        "dev": "vite"
+        "dev": "vite",
+        "build": "vite build",
+        "preview": "vite preview",
+        "deploy": "npm update superdoc && npm run build && wrangler pages deploy dist --branch=main"
     },
     "dependencies": {
-        "superdoc": "0.20.0-next.13",
+        "superdoc": "next",
         "vue": "^3.5.13"
     },
     "devDependencies": {
