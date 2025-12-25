@@ -150,7 +150,7 @@ describe('cursor-helpers', () => {
         left: '250px', // 350 - 100
         top: '265px', // 450 - 200 + 15
       });
-      expect(popoverControls.props).toMatchObject({ 
+      expect(popoverControls.props).toMatchObject({
         showInput: true,
         editor: expect.any(Object),
       });

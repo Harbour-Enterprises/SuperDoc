@@ -124,8 +124,7 @@ export const TabNode = Node.create({
             nextDecorations = nextDecorations.add(newState.doc, paragraphDecorations);
           });
 
-          // Mark ranges for post-DOM-update recalculation
-          return { decorations, revision: revision + 1 };
+          return { decorations: nextDecorations, revision: revision + 1 };
         },
       },
       props: {
