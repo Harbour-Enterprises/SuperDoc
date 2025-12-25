@@ -82,6 +82,12 @@ export const TabNode = Node.create({
           return { decorations: initialDecorations, revision: 0 };
         },
         apply(tr, { decorations, revision }, _oldState, newState) {
+          // Check if this transaction has a meta update for our plugin
+          const meta = tr.getMeta(tabPlugin);
+          if (meta) {
+            return meta;
+          }
+
           const currentDecorations =
             decorations && decorations.map ? decorations.map(tr.mapping, tr.doc) : DecorationSet.empty;
 

@@ -150,7 +150,12 @@ describe('cursor-helpers', () => {
         left: '250px', // 350 - 100
         top: '265px', // 450 - 200 + 15
       });
-      expect(popoverControls.props).toEqual({ showInput: true });
+      expect(popoverControls.props).toMatchObject({
+        showInput: true,
+        editor: expect.any(Object),
+      });
+      expect(typeof popoverControls.props.closePopover).toBe('function');
+      expect(typeof popoverControls.props.goToAnchor).toBe('function');
       expect(popoverControls.visible).toBe(true);
     });
 

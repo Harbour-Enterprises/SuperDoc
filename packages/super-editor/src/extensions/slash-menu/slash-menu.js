@@ -1,5 +1,6 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
+import { createPositionTrackerPlugin, PositionTrackerPluginKey } from '@components/slash-menu/position-tracker.js';
 import { getSurfaceRelativePoint } from '../../core/helpers/editorSurface.js';
 
 /**
@@ -296,6 +297,12 @@ export const SlashMenu = Extension.create({
                 top: `${top + offsetY}px`,
               };
 
+              // Track the position so it persists across collaborative edits
+              if (meta.pos !== undefined && meta.pos !== null) {
+                // Set tracking on the same transaction
+                tr.setMeta(PositionTrackerPluginKey, { command: 'track', pos: meta.pos });
+              }
+
               // Update state
               const newState = {
                 ...value,
@@ -315,6 +322,9 @@ export const SlashMenu = Extension.create({
             }
 
             case 'close': {
+              // Clear the tracked position
+              tr.setMeta(PositionTrackerPluginKey, { command: 'clear' });
+
               editor.emit('slashMenu:close');
               return ensureStateShape({ ...value, open: false, anchorPos: null });
             }
@@ -442,6 +452,10 @@ export const SlashMenu = Extension.create({
       },
     });
 
-    return [slashMenuPlugin];
+    // Create position tracker plugin
+    const positionTrackerPlugin = createPositionTrackerPlugin();
+
+    // If we are in headless mode, do not add the plugins
+    return this.editor.options.isHeadless ? [] : [slashMenuPlugin, positionTrackerPlugin];
   },
 });

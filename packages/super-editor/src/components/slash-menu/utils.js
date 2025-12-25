@@ -1,5 +1,6 @@
 import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { tableActionsOptions } from './constants.js';
+import { isList } from '../../core/commands/list-helpers/is-list.js';
 import { markRaw } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { yUndoPluginKey } from 'y-prosemirror';
@@ -120,6 +121,8 @@ export async function getEditorContext(editor, event) {
   const isInSectionNode =
     structureFromResolvedPos?.isInSectionNode ??
     selectionHasNodeOrMark(state, 'documentSection', { requireEnds: true });
+  const isInToc = structureFromResolvedPos?.isInToc ?? false;
+  const tocNode = structureFromResolvedPos?.tocNode ?? null;
   const currentNodeType = node?.type?.name || null;
 
   const activeMarks = [];
@@ -185,6 +188,8 @@ export async function getEditorContext(editor, event) {
     isInTable,
     isInList,
     isInSectionNode,
+    isInToc,
+    tocNode,
     currentNodeType,
     activeMarks,
     isTrackedChange,
@@ -297,9 +302,12 @@ function selectionIncludesListParagraph(state) {
 function getStructureFromResolvedPos(state, pos) {
   try {
     const $pos = state.doc.resolve(pos);
+
     let isInList = false;
     let isInTable = false;
     let isInSectionNode = false;
+    let isInToc = false;
+    let tocNode = null;
 
     for (let depth = $pos.depth; depth > 0; depth--) {
       const node = $pos.node(depth);
@@ -309,6 +317,7 @@ function getStructureFromResolvedPos(state, pos) {
         isInList = true;
       }
 
+      // ProseMirror table structure typically includes tableRow/tableCell, so check those too
       if (!isInTable && (name === 'table' || name === 'tableRow' || name === 'tableCell' || name === 'tableHeader')) {
         isInTable = true;
       }
@@ -317,7 +326,29 @@ function getStructureFromResolvedPos(state, pos) {
         isInSectionNode = true;
       }
 
-      if (isInList && isInTable && isInSectionNode) {
+      // Check for TOC nodes
+      if (!isInToc && (name === 'tableOfContents' || name === 'documentPartObject')) {
+        // Check if it's a TOC (documentPartObject with docPartGallery='Table of Contents')
+        if (name === 'tableOfContents' || node.attrs?.docPartGallery === 'Table of Contents') {
+          isInToc = true;
+          tocNode = node;
+        }
+      }
+
+      // Also check for TOC paragraphs by their attributes or style
+      if (!isInToc && name === 'paragraph') {
+        const styleId = node.attrs?.paragraphProperties?.styleId;
+        const isTocEntry = node.attrs?.isTocEntry === true;
+        const hasSdtToc = node.attrs?.sdt?.gallery === 'Table of Contents' || node.attrs?.sdt?.type === 'docPartObject';
+
+        // Check if it's a TOC paragraph by style or attributes
+        if (isTocEntry || hasSdtToc || (styleId && /^TOC\d*|TOCHeading$/i.test(styleId))) {
+          isInToc = true;
+          tocNode = node;
+        }
+      }
+
+      if (isInList && isInTable && isInSectionNode && isInToc) {
         break;
       }
     }
@@ -326,6 +357,8 @@ function getStructureFromResolvedPos(state, pos) {
       isInTable,
       isInList,
       isInSectionNode,
+      isInToc,
+      tocNode,
     };
   } catch (error) {
     console.warn('[SlashMenu] Unable to resolve position for structural context:', error);

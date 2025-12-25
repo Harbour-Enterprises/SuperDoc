@@ -1,6 +1,7 @@
 // @ts-nocheck
 
 import { Node, Attribute } from '@core/index.js';
+import { TextSelection } from 'prosemirror-state';
 
 /**
  * Bookmark configuration
@@ -103,7 +104,7 @@ export const BookmarkStart = Node.create({
        */
       goToBookmark:
         (name) =>
-        ({ editor, tr }) => {
+        ({ editor, tr, dispatch }) => {
           const { doc } = tr;
           let targetPos = null;
 
@@ -114,8 +115,11 @@ export const BookmarkStart = Node.create({
             }
           });
 
-          if (targetPos !== null) {
-            editor.commands.focus(targetPos);
+          if (targetPos !== null && dispatch) {
+            const selection = TextSelection.create(doc, targetPos);
+            tr.setSelection(selection).scrollIntoView();
+            dispatch(tr);
+            editor.view.focus();
             return true;
           }
           return false;
