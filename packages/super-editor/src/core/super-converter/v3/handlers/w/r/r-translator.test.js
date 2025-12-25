@@ -19,6 +19,7 @@ describe('w:r r-translator (node)', () => {
     const params = {
       nodes: [runNode],
       nodeListHandler: { handler: vi.fn(() => [fakeChild]) },
+      docx: {},
     };
     const out = translator.encode(params);
 
@@ -27,7 +28,7 @@ describe('w:r r-translator (node)', () => {
     expect(out.content[0]).toMatchObject({ type: 'text', text: 'Hello' });
   });
 
-  it('converts w:b run property into a bold mark and omits it from runProperties', () => {
+  it('converts w:b run property into a bold mark', () => {
     const boldRun = {
       name: 'w:r',
       elements: [
@@ -49,13 +50,13 @@ describe('w:r r-translator (node)', () => {
             .filter(Boolean),
         ),
       },
+      docx: {},
     };
 
     const node = translator.encode(params);
     expect(node.type).toBe('run');
     const child = node.content[0];
     expect(child.marks?.some((mark) => mark.type === 'bold')).toBe(true);
-    expect(node.attrs?.runProperties).toBeUndefined();
   });
 
   it('collects font and size info into a textStyle mark', () => {
@@ -85,6 +86,7 @@ describe('w:r r-translator (node)', () => {
             .filter(Boolean),
         ),
       },
+      docx: {},
     };
 
     const node = translator.encode(params);
@@ -113,6 +115,7 @@ describe('w:r r-translator (node)', () => {
           { type: 'text', text: 'Right', marks: [] },
         ]),
       },
+      docx: {},
     };
 
     const result = translator.encode(params);
@@ -122,5 +125,75 @@ describe('w:r r-translator (node)', () => {
     expect(result.content[0].type).toBe('text');
     expect(result.content[1]).toMatchObject({ type: 'tab', attrs: { val: 'start' } });
     expect(result.content[2].type).toBe('text');
+  });
+
+  it('does not wrap a comment range start and end in a run node', () => {
+    const params = {
+      node: {
+        type: 'run',
+        attrs: {
+          runProperties: [
+            {
+              xmlName: 'w:rtl',
+              attributes: {
+                'w:val': '0',
+              },
+            },
+          ],
+          rsidR: '00000000',
+          rsidRPr: '00000000',
+          rsidDel: '00000000',
+        },
+        content: [
+          {
+            type: 'commentRangeStart',
+            attrs: {
+              'w:id': 'id1',
+              internal: false,
+            },
+          },
+          {
+            type: 'commentRangeEnd',
+            attrs: {
+              'w:id': 'id1',
+            },
+          },
+        ],
+      },
+      comments: [{ commentId: 'id1' }],
+      exportedCommentDefs: [{}],
+      commentsExportType: 'external',
+    };
+
+    const result = translator.decode(params);
+
+    const commentRangeStart = result.find((el) => el.name === 'w:commentRangeStart');
+    const commentRangeEnd = result.find((el) => el.name === 'w:commentRangeEnd');
+
+    expect(commentRangeStart).toBeDefined();
+    expect(commentRangeEnd).toBeDefined();
+
+    expect(commentRangeStart).toEqual(
+      expect.objectContaining({
+        name: 'w:commentRangeStart',
+        attributes: {
+          'w:id': '0',
+          'w:rsidDel': '00000000',
+          'w:rsidR': '00000000',
+          'w:rsidRPr': '00000000',
+        },
+      }),
+    );
+    expect(commentRangeEnd).toEqual(
+      expect.objectContaining({
+        name: 'w:commentRangeEnd',
+        attributes: {
+          'w:id': '0',
+          'w:rsidDel': '00000000',
+          'w:rsidR': '00000000',
+          'w:rsidRPr': '00000000',
+        },
+      }),
+    );
   });
 });

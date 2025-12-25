@@ -1,4 +1,5 @@
-// @ts-check
+// @ts-nocheck
+
 import { Node, Attribute } from '@core/index.js';
 import { TextSelection } from 'prosemirror-state';
 
@@ -67,6 +68,7 @@ export const BookmarkStart = Node.create({
     return ['a', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes)];
   },
 
+  // @ts-expect-error - Command signatures will be fixed in TS migration
   addCommands() {
     return {
       /**

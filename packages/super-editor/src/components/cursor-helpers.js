@@ -1,5 +1,6 @@
 import { TextSelection } from 'prosemirror-state';
 import LinkInput from './toolbar/LinkInput.vue';
+import { getEditorSurfaceElement } from '../core/helpers/editorSurface.js';
 
 /**
  * Calculates cursor position based on margin click event
@@ -54,11 +55,14 @@ export const onMarginClickCursorChange = (event, editor) => {
  */
 export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
   if (!editor) return;
+  const state = editor.state;
+  if (!state) return;
 
+  const surface = getEditorSurfaceElement(editor);
+  if (!surface) return;
   // Check if the selection has a parent node of a given type
-  if (selectionHasNodeOrMark(editor.view.state, 'link', { requireEnds: true })) {
+  if (selectionHasNodeOrMark(state, 'link', { requireEnds: true })) {
     // Get the link href from the current selection
-    const { state } = editor.view;
     const { schema, selection } = state;
     const linkMark = schema.marks.link;
     let href = '';
@@ -88,10 +92,11 @@ export const checkNodeSpecificClicks = (editor, event, popoverControls) => {
 
     // Show popover with link input
     popoverControls.component = LinkInput;
-    // Calculate the position of the popover relative to the editor
+    const surfaceRect = surface.getBoundingClientRect();
+    if (!surfaceRect) return;
     popoverControls.position = {
-      left: `${event.clientX - editor.element.getBoundingClientRect().left}px`,
-      top: `${event.clientY - editor.element.getBoundingClientRect().top + 15}px`,
+      left: `${event.clientX - surfaceRect.left}px`,
+      top: `${event.clientY - surfaceRect.top + 15}px`,
     };
     popoverControls.props = {
       editor,
@@ -202,12 +207,17 @@ export function selectionHasNodeOrMark(state, name, options = {}) {
  * @param {Object} editor - The editor instance
  */
 export function moveCursorToMouseEvent(event, editor) {
-  const { view } = editor;
+  if (!editor) return;
+  const state = editor.state;
+  if (!state) return;
+
   const coords = { left: event.clientX, top: event.clientY };
-  const pos = view.posAtCoords(coords)?.pos;
-  if (typeof pos === 'number') {
-    const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, pos));
-    view.dispatch(tr);
-    view.focus();
+  const result = editor.posAtCoords?.(coords);
+  if (typeof result?.pos === 'number') {
+    const tr = state.tr.setSelection(TextSelection.create(state.doc, result.pos));
+    if (typeof editor.dispatch === 'function') {
+      editor.dispatch(tr);
+    }
+    editor.focus?.();
   }
 }

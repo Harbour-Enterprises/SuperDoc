@@ -1,0 +1,20 @@
+{
+  "name": "@superdoc/measuring-dom",
+  "version": "0.0.0",
+  "description": "DOM-based block measurer for the SuperDoc layout pipeline.",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@superdoc/contracts": "*",
+    "@superdoc/common": "*",
+    "@superdoc/geometry-utils": "*"
+  }
+}

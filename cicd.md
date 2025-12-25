@@ -7,7 +7,7 @@
 
 SuperDoc implements a streamlined dual-track release strategy with fully automated versioning:
 
-- **@next channel**: Pre-release versions from `main` branch
+- **@next channel**: Pre-release versions from `main` while we build toward v1
 - **@latest channel**: Stable versions from `stable` branch
 - **@X.x channels**: Patch releases for maintenance branches
 
@@ -130,7 +130,7 @@ main (next) → stable (latest) → X.x (maintenance)
 ```
 main (1.0.0-next.1) → merge to stable → 1.0.0 (@latest)
          ↓                                    ↓
-    1.1.0-next.1                        (if needed)
+    1.1.0-next.1                         (if needed)
          ↓                               create 1.0.x
     continues...                         → 1.0.1, 1.0.2...
 ```
@@ -166,7 +166,7 @@ Version bumps are automatic based on commit messages:
 
 1. Create feature branch from main
 2. Open PR → triggers validation
-3. Merge to main → releases `1.1.0-next.1`
+3. Merge to main → releases `1.1.0-beta.1`
 
 ### Scenario 2: Creating Stable Release
 

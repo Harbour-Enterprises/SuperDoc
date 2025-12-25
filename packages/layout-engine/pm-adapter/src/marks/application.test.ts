@@ -1,0 +1,1270 @@
+/**
+ * Tests for Mark Application Module
+ */
+
+import { describe, it, expect } from 'vitest';
+import {
+  normalizeRunMarkList,
+  pickTrackedChangeKind,
+  buildTrackedChangeMetaFromMark,
+  selectTrackedChangeMeta,
+  trackedChangesCompatible,
+  collectTrackedChangeFromMarks,
+  normalizeUnderlineStyle,
+  applyTextStyleMark,
+  applyMarksToRun,
+  extractDataAttributes,
+  TRACK_INSERT_MARK,
+  TRACK_DELETE_MARK,
+  TRACK_FORMAT_MARK,
+} from './application.js';
+import { ptToPx } from '../utilities.js';
+import type { TextRun, PMMark, TrackedChangeMeta } from '../types.js';
+
+describe('mark application', () => {
+  describe('normalizeRunMarkList', () => {
+    it('returns undefined for null/undefined value', () => {
+      expect(normalizeRunMarkList(null)).toBeUndefined();
+      expect(normalizeRunMarkList(undefined)).toBeUndefined();
+    });
+
+    it('parses valid JSON string with mark array', () => {
+      const json = JSON.stringify([{ type: 'bold' }, { type: 'italic', attrs: { color: 'red' } }]);
+      const result = normalizeRunMarkList(json);
+
+      expect(result).toHaveLength(2);
+      expect(result?.[0]).toEqual({ type: 'bold' });
+      expect(result?.[1]).toEqual({ type: 'italic', attrs: { color: 'red' } });
+    });
+
+    it('returns undefined for non-array JSON', () => {
+      const json = JSON.stringify({ type: 'bold' });
+      expect(normalizeRunMarkList(json)).toBeUndefined();
+    });
+
+    it('returns undefined for invalid JSON string', () => {
+      expect(normalizeRunMarkList('{ invalid json')).toBeUndefined();
+    });
+
+    it('accepts array value directly', () => {
+      const marks = [{ type: 'bold' }, { type: 'italic', attrs: { color: 'blue' } }];
+      const result = normalizeRunMarkList(marks);
+
+      expect(result).toHaveLength(2);
+      expect(result?.[0]).toEqual({ type: 'bold' });
+      expect(result?.[1]).toEqual({ type: 'italic', attrs: { color: 'blue' } });
+    });
+
+    it('filters out entries without type field', () => {
+      const marks = [{ type: 'bold' }, { attrs: { color: 'red' } }, { type: 'italic' }];
+      const result = normalizeRunMarkList(marks);
+
+      expect(result).toHaveLength(2);
+      expect(result?.[0].type).toBe('bold');
+      expect(result?.[1].type).toBe('italic');
+    });
+
+    it('filters out non-object entries', () => {
+      const marks = [{ type: 'bold' }, 'invalid', null, { type: 'italic' }];
+      const result = normalizeRunMarkList(marks);
+
+      expect(result).toHaveLength(2);
+      expect(result?.[0].type).toBe('bold');
+      expect(result?.[1].type).toBe('italic');
+    });
+
+    it('returns undefined for JSON exceeding max length', () => {
+      const largeJson = JSON.stringify(Array(3000).fill({ type: 'bold' }));
+      expect(normalizeRunMarkList(largeJson)).toBeUndefined();
+    });
+
+    it('returns undefined for array exceeding max length', () => {
+      const largeArray = Array(150).fill({ type: 'bold' });
+      expect(normalizeRunMarkList(largeArray)).toBeUndefined();
+    });
+
+    it('returns undefined for deeply nested objects', () => {
+      const deepObj = {
+        type: 'test',
+        attrs: {
+          a: { b: { c: { d: { e: { f: { g: 'too deep' } } } } } },
+        },
+      };
+      expect(normalizeRunMarkList([deepObj])).toBeUndefined();
+    });
+
+    it('returns undefined for empty array', () => {
+      expect(normalizeRunMarkList([])).toBeUndefined();
+    });
+
+    it('preserves attrs for valid marks', () => {
+      const marks = [
+        {
+          type: 'color',
+          attrs: { value: 'red', hex: '#FF0000' },
+        },
+      ];
+      const result = normalizeRunMarkList(marks);
+
+      expect(result?.[0].attrs).toEqual({ value: 'red', hex: '#FF0000' });
+    });
+  });
+
+  describe('pickTrackedChangeKind', () => {
+    it('returns "insert" for trackInsert mark', () => {
+      expect(pickTrackedChangeKind(TRACK_INSERT_MARK)).toBe('insert');
+    });
+
+    it('returns "delete" for trackDelete mark', () => {
+      expect(pickTrackedChangeKind(TRACK_DELETE_MARK)).toBe('delete');
+    });
+
+    it('returns "format" for trackFormat mark', () => {
+      expect(pickTrackedChangeKind(TRACK_FORMAT_MARK)).toBe('format');
+    });
+
+    it('returns undefined for unknown mark type', () => {
+      expect(pickTrackedChangeKind('bold')).toBeUndefined();
+      expect(pickTrackedChangeKind('italic')).toBeUndefined();
+      expect(pickTrackedChangeKind('unknown')).toBeUndefined();
+    });
+  });
+
+  describe('buildTrackedChangeMetaFromMark', () => {
+    it('returns undefined for non-tracked change marks', () => {
+      const mark: PMMark = { type: 'bold' };
+      expect(buildTrackedChangeMetaFromMark(mark)).toBeUndefined();
+    });
+
+    it('builds insert metadata from trackInsert mark', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+        attrs: {
+          id: 'insert-1',
+          author: 'John Doe',
+          authorEmail: 'john@example.com',
+          date: '2024-01-15',
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.kind).toBe('insert');
+      expect(result?.id).toBe('insert-1');
+      expect(result?.author).toBe('John Doe');
+      expect(result?.authorEmail).toBe('john@example.com');
+      expect(result?.date).toBe('2024-01-15');
+    });
+
+    it('builds delete metadata from trackDelete mark', () => {
+      const mark: PMMark = {
+        type: TRACK_DELETE_MARK,
+        attrs: {
+          id: 'delete-1',
+          author: 'Jane Smith',
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.kind).toBe('delete');
+      expect(result?.id).toBe('delete-1');
+      expect(result?.author).toBe('Jane Smith');
+    });
+
+    it('builds format metadata with before/after marks', () => {
+      const beforeMarks = [{ type: 'bold' }];
+      const afterMarks = [{ type: 'italic' }];
+
+      const mark: PMMark = {
+        type: TRACK_FORMAT_MARK,
+        attrs: {
+          id: 'format-1',
+          author: 'Editor',
+          before: JSON.stringify(beforeMarks),
+          after: JSON.stringify(afterMarks),
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.kind).toBe('format');
+      expect(result?.id).toBe('format-1');
+      expect(result?.before).toEqual(beforeMarks);
+      expect(result?.after).toEqual(afterMarks);
+    });
+
+    it('generates unique ID when id is missing', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+        attrs: {
+          authorEmail: 'john@example.com',
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.id).toBeDefined();
+      expect(result?.id).toMatch(/^insert-john@example\.com-unknown-/);
+    });
+
+    it('ignores empty string id and generates unique one', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+        attrs: {
+          id: '',
+          author: 'John',
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.id).toBeDefined();
+      expect(result?.id).not.toBe('');
+    });
+
+    it('ignores non-string author attributes', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+        attrs: {
+          id: 'test-1',
+          author: 123,
+          authorEmail: true,
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.author).toBeUndefined();
+      expect(result?.authorEmail).toBeUndefined();
+    });
+
+    it('includes authorImage when provided', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+        attrs: {
+          id: 'test-1',
+          authorImage: 'https://example.com/avatar.jpg',
+        },
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.authorImage).toBe('https://example.com/avatar.jpg');
+    });
+
+    it('handles mark without attrs', () => {
+      const mark: PMMark = {
+        type: TRACK_INSERT_MARK,
+      };
+
+      const result = buildTrackedChangeMetaFromMark(mark);
+
+      expect(result?.kind).toBe('insert');
+      expect(result?.id).toBeDefined();
+    });
+  });
+
+  describe('selectTrackedChangeMeta', () => {
+    it('returns next when existing is undefined', () => {
+      const next: TrackedChangeMeta = {
+        kind: 'insert',
+        id: 'insert-1',
+      };
+
+      expect(selectTrackedChangeMeta(undefined, next)).toBe(next);
+    });
+
+    it('prioritizes insert over format', () => {
+      const existing: TrackedChangeMeta = {
+        kind: 'format',
+        id: 'format-1',
+      };
+      const next: TrackedChangeMeta = {
+        kind: 'insert',
+        id: 'insert-1',
+      };
+
+      const result = selectTrackedChangeMeta(existing, next);
+
+      expect(result).toBe(next);
+      expect(result.kind).toBe('insert');
+    });
+
+    it('prioritizes delete over format', () => {
+      const existing: TrackedChangeMeta = {
+        kind: 'format',
+        id: 'format-1',
+      };
+      const next: TrackedChangeMeta = {
+        kind: 'delete',
+        id: 'delete-1',
+      };
+
+      const result = selectTrackedChangeMeta(existing, next);
+
+      expect(result).toBe(next);
+      expect(result.kind).toBe('delete');
+    });
+
+    it('keeps existing when both are format', () => {
+      const existing: TrackedChangeMeta = {
+        kind: 'format',
+        id: 'format-1',
+      };
+      const next: TrackedChangeMeta = {
+        kind: 'format',
+        id: 'format-2',
+      };
+
+      const result = selectTrackedChangeMeta(existing, next);
+
+      expect(result).toBe(existing);
+    });
+
+    it('keeps existing when next has lower priority', () => {
+      const existing: TrackedChangeMeta = {
+        kind: 'insert',
+        id: 'insert-1',
+      };
+      const next: TrackedChangeMeta = {
+        kind: 'format',
+        id: 'format-1',
+      };
+
+      const result = selectTrackedChangeMeta(existing, next);
+
+      expect(result).toBe(existing);
+    });
+  });
+
+  describe('trackedChangesCompatible', () => {
+    it('returns true when both runs have no tracked changes', () => {
+      const a: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const b: TextRun = { text: 'World', fontFamily: 'Arial', fontSize: 12 };
+
+      expect(trackedChangesCompatible(a, b)).toBe(true);
+    });
+
+    it('returns false when only one run has tracked changes', () => {
+      const a: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: { kind: 'insert', id: 'insert-1' },
+      };
+      const b: TextRun = { text: 'World', fontFamily: 'Arial', fontSize: 12 };
+
+      expect(trackedChangesCompatible(a, b)).toBe(false);
+    });
+
+    it('returns true when both have same kind and id', () => {
+      const meta: TrackedChangeMeta = { kind: 'insert', id: 'insert-1' };
+      const a: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: meta,
+      };
+      const b: TextRun = {
+        text: 'World',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: meta,
+      };
+
+      expect(trackedChangesCompatible(a, b)).toBe(true);
+    });
+
+    it('returns false when kind differs', () => {
+      const a: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: { kind: 'insert', id: 'change-1' },
+      };
+      const b: TextRun = {
+        text: 'World',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: { kind: 'delete', id: 'change-1' },
+      };
+
+      expect(trackedChangesCompatible(a, b)).toBe(false);
+    });
+
+    it('returns false when id differs', () => {
+      const a: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: { kind: 'insert', id: 'insert-1' },
+      };
+      const b: TextRun = {
+        text: 'World',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        trackedChange: { kind: 'insert', id: 'insert-2' },
+      };
+
+      expect(trackedChangesCompatible(a, b)).toBe(false);
+    });
+  });
+
+  describe('collectTrackedChangeFromMarks', () => {
+    it('returns undefined for null/undefined marks', () => {
+      expect(collectTrackedChangeFromMarks(null as never)).toBeUndefined();
+      expect(collectTrackedChangeFromMarks(undefined)).toBeUndefined();
+    });
+
+    it('returns undefined for empty marks array', () => {
+      expect(collectTrackedChangeFromMarks([])).toBeUndefined();
+    });
+
+    it('returns single tracked change from array with one tracked mark', () => {
+      const marks: PMMark[] = [
+        {
+          type: TRACK_INSERT_MARK,
+          attrs: { id: 'insert-1', author: 'John' },
+        },
+      ];
+
+      const result = collectTrackedChangeFromMarks(marks);
+
+      expect(result?.kind).toBe('insert');
+      expect(result?.author).toBe('John');
+    });
+
+    it('ignores non-tracked change marks', () => {
+      const marks: PMMark[] = [
+        { type: 'bold' },
+        {
+          type: TRACK_INSERT_MARK,
+          attrs: { id: 'insert-1' },
+        },
+        { type: 'italic' },
+      ];
+
+      const result = collectTrackedChangeFromMarks(marks);
+
+      expect(result?.kind).toBe('insert');
+      expect(result?.id).toBe('insert-1');
+    });
+
+    it('prioritizes higher-priority tracked changes', () => {
+      const marks: PMMark[] = [
+        {
+          type: TRACK_FORMAT_MARK,
+          attrs: { id: 'format-1' },
+        },
+        {
+          type: TRACK_INSERT_MARK,
+          attrs: { id: 'insert-1' },
+        },
+      ];
+
+      const result = collectTrackedChangeFromMarks(marks);
+
+      expect(result?.kind).toBe('insert');
+    });
+
+    it('handles multiple tracked change marks and selects highest priority', () => {
+      const marks: PMMark[] = [
+        {
+          type: TRACK_DELETE_MARK,
+          attrs: { id: 'delete-1' },
+        },
+        {
+          type: TRACK_FORMAT_MARK,
+          attrs: { id: 'format-1' },
+        },
+      ];
+
+      const result = collectTrackedChangeFromMarks(marks);
+
+      expect(result?.kind).toBe('delete');
+    });
+  });
+
+  describe('normalizeUnderlineStyle', () => {
+    it('returns "double" for double style', () => {
+      expect(normalizeUnderlineStyle('double')).toBe('double');
+    });
+
+    it('returns "dotted" for dotted style', () => {
+      expect(normalizeUnderlineStyle('dotted')).toBe('dotted');
+    });
+
+    it('returns "dashed" for dashed style', () => {
+      expect(normalizeUnderlineStyle('dashed')).toBe('dashed');
+    });
+
+    it('returns "wavy" for wavy style', () => {
+      expect(normalizeUnderlineStyle('wavy')).toBe('wavy');
+    });
+
+    it('returns undefined for explicit off values', () => {
+      expect(normalizeUnderlineStyle('none')).toBeUndefined();
+      expect(normalizeUnderlineStyle('0')).toBeUndefined();
+      expect(normalizeUnderlineStyle('false')).toBeUndefined();
+      expect(normalizeUnderlineStyle('off')).toBeUndefined();
+      expect(normalizeUnderlineStyle(0)).toBeUndefined();
+      expect(normalizeUnderlineStyle(false)).toBeUndefined();
+    });
+
+    it('returns "single" for undefined/null (default)', () => {
+      expect(normalizeUnderlineStyle(null)).toBe('single');
+      expect(normalizeUnderlineStyle(undefined)).toBe('single');
+    });
+
+    it('returns "single" for unknown underline types', () => {
+      expect(normalizeUnderlineStyle('words')).toBe('single');
+      expect(normalizeUnderlineStyle('thick')).toBe('single');
+      expect(normalizeUnderlineStyle('unknown')).toBe('single');
+      expect(normalizeUnderlineStyle(123)).toBe('single');
+    });
+
+    it('handles case-insensitive off values', () => {
+      expect(normalizeUnderlineStyle('NONE')).toBeUndefined();
+      expect(normalizeUnderlineStyle('False')).toBeUndefined();
+      expect(normalizeUnderlineStyle('OFF')).toBeUndefined();
+      expect(normalizeUnderlineStyle('Double')).toBe('double');
+      expect(normalizeUnderlineStyle('WAVY')).toBe('wavy');
+    });
+  });
+
+  describe('applyTextStyleMark', () => {
+    it('applies color to run', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { color: 'FF0000' });
+
+      expect(run.color).toBe('#FF0000');
+    });
+
+    it('ignores invalid color values', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { color: 'invalid-color' });
+
+      // normalizeColor will attempt to parse invalid colors but may still set them
+      expect(run.color).toBe('#invalid-color');
+    });
+
+    it('applies fontFamily to run', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontFamily: 'Times New Roman' });
+
+      expect(run.fontFamily).toBe('Times New Roman');
+    });
+
+    it('ignores empty fontFamily', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const original = run.fontFamily;
+      applyTextStyleMark(run, { fontFamily: '   ' });
+
+      expect(run.fontFamily).toBe(original);
+    });
+
+    it('applies fontSize to run', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: 16 });
+
+      expect(run.fontSize).toBe(16);
+    });
+
+    it('ignores invalid fontSize values', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: 'large' });
+
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('converts pt fontSize strings to px', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '16pt' });
+
+      expect(run.fontSize).toBeCloseTo(ptToPx(16)!);
+    });
+
+    it('applies fontSize from string with px units', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '24px' });
+
+      expect(run.fontSize).toBe(24);
+    });
+
+    it('handles empty string fontSize', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles whitespace-only string fontSize', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '   ' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles string with unit prefix', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: 'pt12' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles negative fontSize strings', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '-5pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles zero fontSize string', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '0pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles fontSize below minimum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '0.5px' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles fontSize at minimum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1pt' });
+      expect(run.fontSize).toBeCloseTo(ptToPx(1)!);
+    });
+
+    it('handles fontSize at maximum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1000px' });
+      expect(run.fontSize).toBe(1000);
+    });
+
+    it('handles fontSize above maximum boundary', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '1001pt' });
+      expect(run.fontSize).toBe(12);
+    });
+
+    it('handles decimal fontSize with units', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '12.5pt' });
+      expect(run.fontSize).toBeCloseTo(ptToPx(12.5)!);
+    });
+
+    it('handles fontSize string with leading whitespace', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { fontSize: '  16pt' });
+      expect(run.fontSize).toBeCloseTo(ptToPx(16)!);
+    });
+
+    it('applies letterSpacing to run', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, { letterSpacing: 2 });
+
+      expect(run.letterSpacing).toBe(2);
+    });
+
+    it('applies multiple style attributes', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyTextStyleMark(run, {
+        color: '0000FF',
+        fontFamily: 'Courier',
+        fontSize: 14,
+        letterSpacing: 1.5,
+      });
+
+      expect(run.color).toBe('#0000FF');
+      expect(run.fontFamily).toBe('Courier');
+      expect(run.fontSize).toBe(14);
+      expect(run.letterSpacing).toBe(1.5);
+    });
+
+    describe('textTransform extraction', () => {
+      it('applies uppercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('applies lowercase textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'lowercase' });
+
+        expect(run.textTransform).toBe('lowercase');
+      });
+
+      it('applies capitalize textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'capitalize' });
+
+        expect(run.textTransform).toBe('capitalize');
+      });
+
+      it('applies none textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'none' });
+
+        expect(run.textTransform).toBe('none');
+      });
+
+      it('filters out invalid textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'invalid' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores non-string textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 123 });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores null textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: null });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores undefined textTransform values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: undefined });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('ignores empty string textTransform', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: '' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects UPPERCASE)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'UPPERCASE' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('is case-sensitive (rejects Capitalize)', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: 'Capitalize' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects values with whitespace', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ' uppercase ' });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects boolean values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: true });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects object values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: { value: 'uppercase' } });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('rejects array values', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, { textTransform: ['uppercase'] });
+
+        expect(run.textTransform).toBeUndefined();
+      });
+
+      it('works together with other style properties', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+        applyTextStyleMark(run, {
+          color: 'FF0000',
+          fontFamily: 'Courier',
+          fontSize: 16,
+          textTransform: 'uppercase',
+        });
+
+        expect(run.color).toBe('#FF0000');
+        expect(run.fontFamily).toBe('Courier');
+        expect(run.fontSize).toBe(16);
+        expect(run.textTransform).toBe('uppercase');
+      });
+
+      it('overwrites existing textTransform value', () => {
+        const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, textTransform: 'lowercase' };
+        applyTextStyleMark(run, { textTransform: 'uppercase' });
+
+        expect(run.textTransform).toBe('uppercase');
+      });
+    });
+  });
+
+  describe('applyMarksToRun', () => {
+    it('applies bold mark', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'bold' }]);
+
+      expect(run.bold).toBe(true);
+    });
+
+    it('honors explicit bold off values', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, bold: true };
+      applyMarksToRun(run, [{ type: 'bold', attrs: { value: 'off' } }]);
+
+      expect(run.bold).toBeUndefined();
+    });
+
+    it('applies italic mark', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'italic' }]);
+
+      expect(run.italic).toBe(true);
+    });
+
+    it('honors explicit italic off values', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, italic: true };
+      applyMarksToRun(run, [{ type: 'italic', attrs: { value: 0 } }]);
+
+      expect(run.italic).toBeUndefined();
+    });
+
+    it('applies strike mark', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'strike' }]);
+
+      expect(run.strike).toBe(true);
+    });
+
+    it('honors explicit strike off values', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12, strike: true };
+      applyMarksToRun(run, [{ type: 'strike', attrs: { value: false } }]);
+
+      expect(run.strike).toBeUndefined();
+    });
+
+    it('applies highlight mark', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'highlight', attrs: { color: 'FFFF00' } }]);
+
+      expect(run.highlight).toBe('#FFFF00');
+    });
+
+    it('applies comment mark metadata', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'commentMark', attrs: { commentId: 'c-1', internal: true } }]);
+
+      expect(run.comments).toEqual([{ commentId: 'c-1', internal: true }]);
+    });
+
+    it('dedupes comment annotations by id/importedId', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        { type: 'comment', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+        { type: 'commentMark', attrs: { commentId: 'c-1', importedId: 'imp-1' } },
+      ]);
+
+      expect(run.comments).toHaveLength(1);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', importedId: 'imp-1', internal: false });
+    });
+
+    it('applies underline mark with default style', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'underline', attrs: {} }]);
+
+      expect(run.underline?.style).toBe('single');
+    });
+
+    it('applies underline mark with custom style', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'underline', attrs: { underlineType: 'double' } }]);
+
+      expect(run.underline?.style).toBe('double');
+    });
+
+    it('applies underline mark with color', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'underline', attrs: { color: 'FF0000' } }]);
+
+      expect(run.underline?.color).toBe('#FF0000');
+    });
+
+    it('clears underline when underline mark is explicit none', () => {
+      const run: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        underline: { style: 'single' },
+      };
+      applyMarksToRun(run, [{ type: 'underline', attrs: { underlineType: 'none' } }]);
+
+      expect(run.underline).toBeUndefined();
+    });
+
+    it('applies textStyle mark', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        {
+          type: 'textStyle',
+          attrs: { color: '0000FF', fontSize: 14 },
+        },
+      ]);
+
+      expect(run.color).toBe('#0000FF');
+      expect(run.fontSize).toBe(14);
+    });
+
+    it('applies tracked change marks', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        {
+          type: TRACK_INSERT_MARK,
+          attrs: { id: 'insert-1', author: 'John' },
+        },
+      ]);
+
+      expect(run.trackedChange?.kind).toBe('insert');
+      expect(run.trackedChange?.author).toBe('John');
+    });
+
+    it('applies link mark with enableRichHyperlinks disabled', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'link', attrs: { href: 'https://example.com' } }], { enableRichHyperlinks: false });
+
+      expect(run.link?.href).toBe('https://example.com');
+    });
+
+    it('applies multiple marks', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'bold' }, { type: 'italic' }, { type: 'textStyle', attrs: { color: 'FF0000' } }]);
+
+      expect(run.bold).toBe(true);
+      expect(run.italic).toBe(true);
+      expect(run.color).toBe('#FF0000');
+    });
+
+    it('prioritizes tracked changes correctly', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [
+        {
+          type: TRACK_FORMAT_MARK,
+          attrs: { id: 'format-1' },
+        },
+        {
+          type: TRACK_INSERT_MARK,
+          attrs: { id: 'insert-1' },
+        },
+      ]);
+
+      // Insert should take priority over format
+      expect(run.trackedChange?.kind).toBe('insert');
+    });
+
+    it('ignores unknown mark types', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'unknownMark' as never }]);
+
+      // Run should remain unchanged
+      expect(run.bold).toBeUndefined();
+      expect(run.italic).toBeUndefined();
+    });
+
+    it('uses default hyperlink config when not provided', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, [{ type: 'link', attrs: { href: 'https://example.com' } }]);
+
+      expect(run.link?.href).toBe('https://example.com');
+    });
+
+    it('handles empty marks array', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      applyMarksToRun(run, []);
+
+      expect(run.bold).toBeUndefined();
+      expect(run.italic).toBeUndefined();
+    });
+
+    it('preserves existing run properties when applying marks', () => {
+      const run: TextRun = {
+        text: 'Hello',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        bold: false,
+      };
+      applyMarksToRun(run, [{ type: 'italic' }]);
+
+      expect(run.text).toBe('Hello');
+      expect(run.fontFamily).toBe('Arial');
+      expect(run.fontSize).toBe(12);
+      expect(run.italic).toBe(true);
+    });
+  });
+
+  describe('extractDataAttributes', () => {
+    describe('Happy path', () => {
+      it('extracts valid data-* attributes with string values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+          'data-category': 'example',
+        });
+      });
+
+      it('converts number values to strings', () => {
+        const attrs = {
+          'data-id': 123,
+          'data-count': 456,
+          'data-score': 3.14,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-count': '456',
+          'data-score': '3.14',
+        });
+      });
+
+      it('converts boolean values to strings', () => {
+        const attrs = {
+          'data-active': true,
+          'data-disabled': false,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-active': 'true',
+          'data-disabled': 'false',
+        });
+      });
+    });
+
+    describe('Edge cases', () => {
+      it('returns undefined for undefined input', () => {
+        const result = extractDataAttributes(undefined);
+        expect(result).toBeUndefined();
+      });
+
+      it('returns undefined for empty object', () => {
+        const result = extractDataAttributes({});
+        expect(result).toBeUndefined();
+      });
+
+      it('returns undefined when no data-* attributes exist', () => {
+        const attrs = {
+          id: '123',
+          class: 'test',
+          style: 'color: red',
+        };
+
+        const result = extractDataAttributes(attrs);
+        expect(result).toBeUndefined();
+      });
+
+      it('filters out non-data-* attributes', () => {
+        const attrs = {
+          id: '123',
+          class: 'test',
+          'data-id': 'valid',
+          style: 'color: red',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': 'valid',
+        });
+      });
+
+      it('filters out null values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-null': null,
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out undefined values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-undefined': undefined,
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out object values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-object': { nested: 'value' },
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('filters out array values', () => {
+        const attrs = {
+          'data-id': '123',
+          'data-array': [1, 2, 3],
+          'data-name': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-id': '123',
+          'data-name': 'test',
+        });
+      });
+
+      it('handles case-insensitive data- prefix matching', () => {
+        const attrs = {
+          'DATA-ID': '123',
+          'Data-Name': 'test',
+          'dAtA-MiXeD': 'value',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'DATA-ID': '123',
+          'Data-Name': 'test',
+          'dAtA-MiXeD': 'value',
+        });
+      });
+    });
+
+    describe('Security limits (DoS protection)', () => {
+      it('enforces MAX_DATA_ATTR_COUNT limit (50)', () => {
+        const attrs: Record<string, unknown> = {};
+        // Create 60 data attributes (exceeds limit of 50)
+        for (let i = 0; i < 60; i++) {
+          attrs[`data-attr-${i}`] = `value-${i}`;
+        }
+
+        const result = extractDataAttributes(attrs);
+
+        // Should stop at 50 attributes
+        expect(Object.keys(result!).length).toBe(50);
+      });
+
+      it('enforces MAX_DATA_ATTR_VALUE_LENGTH limit (1000)', () => {
+        const longValue = 'a'.repeat(1001);
+        const attrs = {
+          'data-long': longValue,
+          'data-valid': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        // Long value should be filtered out
+        expect(result).toEqual({
+          'data-valid': 'test',
+        });
+      });
+
+      it('enforces MAX_DATA_ATTR_NAME_LENGTH limit (100)', () => {
+        const longKey = 'data-' + 'a'.repeat(100);
+        const attrs: Record<string, unknown> = {
+          [longKey]: 'value',
+          'data-valid': 'test',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        // Long key should be filtered out
+        expect(result).toEqual({
+          'data-valid': 'test',
+        });
+      });
+
+      it('accepts value at exactly MAX_DATA_ATTR_VALUE_LENGTH', () => {
+        const exactLengthValue = 'a'.repeat(1000);
+        const attrs = {
+          'data-exact': exactLengthValue,
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-exact': exactLengthValue,
+        });
+      });
+
+      it('accepts name at exactly MAX_DATA_ATTR_NAME_LENGTH', () => {
+        // 100 characters including 'data-' prefix
+        const exactLengthKey = 'data-' + 'a'.repeat(95);
+        const attrs: Record<string, unknown> = {
+          [exactLengthKey]: 'value',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          [exactLengthKey]: 'value',
+        });
+      });
+
+      it('handles mixed valid and invalid attributes with limits', () => {
+        const longValue = 'a'.repeat(1001);
+        const longKey = 'data-' + 'b'.repeat(100);
+        const attrs: Record<string, unknown> = {
+          'data-valid1': 'value1',
+          'data-long-value': longValue,
+          [longKey]: 'value',
+          'data-valid2': 'value2',
+          'data-null': null,
+          'data-object': { nested: true },
+          'data-valid3': 'value3',
+        };
+
+        const result = extractDataAttributes(attrs);
+
+        expect(result).toEqual({
+          'data-valid1': 'value1',
+          'data-valid2': 'value2',
+          'data-valid3': 'value3',
+        });
+      });
+    });
+  });
+});

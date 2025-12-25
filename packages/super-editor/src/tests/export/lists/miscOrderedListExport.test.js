@@ -67,7 +67,7 @@ describe('[custom_list1.docx] interrupted ordered list tests', async () => {
 
   it('exports custom list definition correctly', () => {
     const firstList = body.elements[0];
-    const firstListPprList = firstList.elements.filter((n) => (n.name = 'w:pPr' && n.elements.length));
+    const firstListPprList = firstList.elements.filter((n) => n.name === 'w:pPr' && n.elements.length);
     const firstListPpr = firstListPprList[0];
     expect(firstListPpr.elements.length).toBe(5);
 

@@ -55,11 +55,7 @@ describe('w:tcPr translator', () => {
         tcFitText: true,
         vAlign: 'center',
         hideMark: true,
-        headers: {
-          attributes: [{ header: 'h1' }],
-          sdNodeOrKeyName: 'headers',
-          xmlName: 'w:headers',
-        },
+        headers: [{ header: 'h1' }],
       });
     });
 
@@ -72,7 +68,6 @@ describe('w:tcPr translator', () => {
               { name: 'w:cnfStyle', attributes: {} },
               { name: 'w:tcW', attributes: {} },
               { name: 'w:gridSpan', attributes: {} },
-              { name: 'w:vMerge', attributes: {} },
               { name: 'w:tcBorders', elements: [] },
               { name: 'w:shd', attributes: {} },
               { name: 'w:tcMar', elements: [] },
@@ -89,7 +84,6 @@ describe('w:tcPr translator', () => {
       expect(attributes.cnfStyle).toBeUndefined();
       expect(attributes.cellWidth).toBeUndefined();
       expect(attributes.gridSpan).toBeUndefined();
-      expect(attributes.vMerge).toBeUndefined();
       expect(attributes.borders).toBeUndefined();
       expect(attributes.shading).toBeUndefined();
       expect(attributes.noWrap).toBeUndefined();
@@ -98,7 +92,7 @@ describe('w:tcPr translator', () => {
       expect(attributes.tcFitText).toBeUndefined();
       expect(attributes.vAlign).toBeUndefined();
       expect(attributes.hideMark).toBeUndefined();
-      expect(attributes.headers.attributes).toEqual([]);
+      expect(attributes.headers).toEqual([]);
     });
   });
 
@@ -166,15 +160,13 @@ describe('w:tcPr translator', () => {
     it('handles missing tableCellProperties object', () => {
       const params = { node: { attrs: {} } };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tcPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
 
     it('handles empty tableCellProperties object', () => {
       const params = { node: { attrs: { tableCellProperties: {} } } };
       const result = translator.decode(params);
-      expect(result.name).toBe('w:tcPr');
-      expect(result.elements).toEqual([]);
+      expect(result).toBeUndefined();
     });
   });
 
@@ -200,13 +192,7 @@ describe('w:tcPr translator', () => {
       const encodeParams = { nodes: [decodedResult] };
       const encodedResult = translator.encode(encodeParams);
 
-      const expectedHeaders = {
-        attributes: [{ header: 'h1' }],
-        sdNodeOrKeyName: 'headers',
-        xmlName: 'w:headers',
-      };
-
-      expect(encodedResult).toEqual({ ...tableCellProperties, headers: expectedHeaders });
+      expect(encodedResult).toEqual(tableCellProperties);
     });
   });
 });

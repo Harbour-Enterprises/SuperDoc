@@ -12,6 +12,7 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 4 : undefined,
+  captureGitInfo: { commit: false, diff: false },
   reporter: [['json', { outputFile: 'test-results/playwright-report.json' }]],
   use: {
     trace: 'off',

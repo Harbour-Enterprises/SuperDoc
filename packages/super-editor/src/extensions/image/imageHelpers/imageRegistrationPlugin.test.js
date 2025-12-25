@@ -4,7 +4,12 @@ vi.mock('@extensions/image/imageHelpers/startImageUpload.js', () => ({
   addImageRelationship: vi.fn(() => null),
 }));
 
-import { handleNodePath } from './imageRegistrationPlugin.js';
+import { handleNodePath, needsImageRegistration } from './imageRegistrationPlugin.js';
+
+const createImageNode = (attrs = {}) => ({
+  type: { name: 'image' },
+  attrs,
+});
 
 const createStateStub = () => ({
   tr: {
@@ -21,6 +26,28 @@ const createEditorStub = () => ({
   options: {
     mode: 'docx',
   },
+});
+
+describe('needsImageRegistration', () => {
+  it('skips images that already live in word/media', () => {
+    const node = createImageNode({ src: 'word/media/image1.png' });
+    expect(needsImageRegistration(node)).toBe(false);
+  });
+
+  it('skips processed data URI images that carry original metadata', () => {
+    const node = createImageNode({
+      src: 'data:image/svg+xml;base64,AAA',
+      originalExtension: 'emf',
+      originalSrc: 'word/media/image1.emf',
+      rId: 'rId5',
+    });
+    expect(needsImageRegistration(node)).toBe(false);
+  });
+
+  it('requires registration for fresh data URI images without metadata', () => {
+    const node = createImageNode({ src: 'data:image/png;base64,AAA' });
+    expect(needsImageRegistration(node)).toBe(true);
+  });
 });
 
 describe('handleNodePath', () => {

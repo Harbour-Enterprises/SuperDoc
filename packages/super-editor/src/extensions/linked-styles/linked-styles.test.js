@@ -1,6 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NodeSelection, TextSelection } from 'prosemirror-state';
-import { LinkedStylesPluginKey } from './plugin.js';
 import { initTestEditor, loadTestDataForEditorTests } from '../../tests/helpers/helpers.js';
 
 const findParagraphInfo = (doc, paragraphIndex) => {
@@ -43,6 +42,7 @@ const toggleLinkedStyleCommand = (editor, style, nodeType = 'paragraph') =>
   editor.chain().toggleLinkedStyle(style, nodeType).run();
 
 const setStyleByIdCommand = (editor, styleId) => editor.chain().setStyleById(styleId).run();
+const getParagraphProps = (node) => node.attrs.paragraphProperties || {};
 
 describe('LinkedStyles Extension', () => {
   const filename = 'paragraph_spacing_missing.docx';
@@ -63,7 +63,7 @@ describe('LinkedStyles Extension', () => {
 
         expect(result).toBe(true);
         const firstParagraph = findParagraphInfo(editor.state.doc, 0);
-        expect(firstParagraph.node.attrs.styleId).toBe('Heading1');
+        expect(getParagraphProps(firstParagraph.node).styleId).toBe('Heading1');
       });
     });
 
@@ -74,7 +74,7 @@ describe('LinkedStyles Extension', () => {
 
         expect(result).toBe(false);
         const firstParagraph = findParagraphInfo(editor.state.doc, 0);
-        expect(firstParagraph.node.attrs.styleId).toBe(null);
+        expect(getParagraphProps(firstParagraph.node).styleId).toBeUndefined();
       });
 
       it('should apply style when no style is currently set', () => {
@@ -83,20 +83,20 @@ describe('LinkedStyles Extension', () => {
 
         expect(applied).toBe(true);
         const firstParagraph = findParagraphInfo(editor.state.doc, 0);
-        expect(firstParagraph.node.attrs.styleId).toBe(headingStyle.id);
+        expect(getParagraphProps(firstParagraph.node).styleId).toBe(headingStyle.id);
       });
 
       it('should remove style when the same style is already applied', () => {
         selectParagraph(editor.view, 1); // Select "Second paragraph"
         toggleLinkedStyleCommand(editor, headingStyle);
         let secondParagraph = findParagraphInfo(editor.state.doc, 1);
-        expect(secondParagraph.node.attrs.styleId).toBe(headingStyle.id);
+        expect(getParagraphProps(secondParagraph.node).styleId).toBe(headingStyle.id);
 
         selectParagraph(editor.view, 1);
         const toggledOff = toggleLinkedStyleCommand(editor, headingStyle);
         expect(toggledOff).toBe(true);
         secondParagraph = findParagraphInfo(editor.state.doc, 1);
-        expect(secondParagraph.node.attrs.styleId).toBe(null);
+        expect(getParagraphProps(secondParagraph.node).styleId).toBe(null);
       });
 
       it('should apply new style when a different style is already applied', () => {
@@ -105,21 +105,13 @@ describe('LinkedStyles Extension', () => {
         selectParagraph(editor.view, 1); // Select "Second paragraph"
         toggleLinkedStyleCommand(editor, alternateStyle);
         let secondParagraph = findParagraphInfo(editor.state.doc, 1);
-        expect(secondParagraph.node.attrs.styleId).toBe(alternateStyle.id);
+        expect(getParagraphProps(secondParagraph.node).styleId).toBe(alternateStyle.id);
 
         selectParagraph(editor.view, 1);
         const switched = toggleLinkedStyleCommand(editor, headingStyle);
         expect(switched).toBe(true);
         secondParagraph = findParagraphInfo(editor.state.doc, 1);
-        expect(secondParagraph.node.attrs.styleId).toBe('Heading1');
-      });
-
-      it('should return false if no node of the specified type can be found', () => {
-        selectParagraph(editor.view, 0); // Select "First paragraph"
-
-        const result = editor.commands.toggleLinkedStyle(headingStyle, 'non-existent-type');
-
-        expect(result).toBe(false);
+        expect(getParagraphProps(secondParagraph.node).styleId).toBe('Heading1');
       });
     });
 
@@ -131,7 +123,7 @@ describe('LinkedStyles Extension', () => {
 
         expect(result).toBe(true);
         const firstParagraph = findParagraphInfo(editor.state.doc, 0);
-        expect(firstParagraph.node.attrs.styleId).toBe('Heading1');
+        expect(getParagraphProps(firstParagraph.node).styleId).toBe('Heading1');
       });
 
       it('should return false if styleId is not found', () => {
@@ -141,7 +133,7 @@ describe('LinkedStyles Extension', () => {
 
         expect(result).toBe(false);
         const firstParagraph = findParagraphInfo(editor.state.doc, 0);
-        expect(firstParagraph.node.attrs.styleId).toBe(null);
+        expect(getParagraphProps(firstParagraph.node).styleId).toBeUndefined();
       });
     });
   });
