@@ -673,6 +673,7 @@ export class PresentationEditor extends EventEmitter {
     this.#visibleHost = options.element;
     this.#visibleHost.innerHTML = '';
     this.#visibleHost.classList.add('presentation-editor');
+    this.#syncDocumentModeClass();
     if (!this.#visibleHost.hasAttribute('tabindex')) {
       this.#visibleHost.tabIndex = 0;
     }
@@ -1325,12 +1326,18 @@ export class PresentationEditor extends EventEmitter {
     }
     this.#documentMode = mode;
     this.#editor.setDocumentMode(mode);
+    this.#syncDocumentModeClass();
     this.#syncHiddenEditorA11yAttributes();
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
     if (trackedChangesChanged) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
+  }
+
+  #syncDocumentModeClass() {
+    if (!this.#visibleHost) return;
+    this.#visibleHost.classList.toggle('presentation-editor--viewing', this.#documentMode === 'viewing');
   }
 
   /**
@@ -3854,6 +3861,10 @@ export class PresentationEditor extends EventEmitter {
       this.#clearHoverRegion();
       return;
     }
+    if (this.#documentMode === 'viewing') {
+      this.#clearHoverRegion();
+      return;
+    }
     const region = this.#hitTestHeaderFooterRegion(normalized.x, normalized.y);
     if (!region) {
       this.#clearHoverRegion();
@@ -5806,6 +5817,10 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #renderHoverRegion(region: HeaderFooterRegion) {
+    if (this.#documentMode === 'viewing') {
+      this.#clearHoverRegion();
+      return;
+    }
     if (!this.#hoverOverlay || !this.#hoverTooltip) return;
     const coords = this.#convertPageLocalToOverlayCoords(region.pageIndex, region.localX, region.localY);
     if (!coords) {
