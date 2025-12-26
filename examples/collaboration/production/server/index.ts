@@ -36,6 +36,7 @@ const SuperDocCollaboration = new CollaborationBuilder()
   .onLoad((async (params) => {
     try {
       const state = await loadDocument(params.documentId);
+      // Returns null for new documents - client should use isNewFile: true with DOCX data
       return state;
     } catch(error) {
       const err = new Error('Failed to load document: ' + error);
@@ -63,6 +64,13 @@ const SuperDocCollaboration = new CollaborationBuilder()
 /** Health check endpoint */
 fastify.get('/health', async (request, reply) => {
   return { status: 'ok', timestamp: new Date().toISOString() };
+});
+
+/** Check if a document exists (for first-time initialization) */
+fastify.get('/doc/:documentId/exists', async (request, reply) => {
+  const { documentId } = request.params as { documentId: string };
+  const state = await loadDocument(documentId);
+  return { exists: state !== null };
 });
 
 /** Generate user info endpoint */

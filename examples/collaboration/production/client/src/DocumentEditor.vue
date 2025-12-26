@@ -115,12 +115,27 @@ const init = async () => {
   const hideToolbar = route.query['hide-toolbar'] === 'true';
   showToolbar.value = !hideToolbar;
 
+  // Check if this is a new document (no existing Yjs state on server)
+  const existsResponse = await fetch(`${apiUrl}/doc/${documentId}/exists`);
+  const { exists } = await existsResponse.json();
+
+  // For new documents, load the default DOCX to initialize collaboration state
+  let docxData = null;
+  if (!exists) {
+    console.log('New document - loading default DOCX for initialization');
+    const response = await fetch(defaultDocument);
+    docxData = await response.arrayBuffer();
+  }
+
   const config = {
     selector: '#superdoc',
     document: {
       id: documentId,
       type: 'docx',
-      isNewFile: false,
+      // isNewFile: true tells SuperDoc to use the provided data to initialize Yjs state
+      // This is required for new documents because collaboration ignores data by default
+      isNewFile: !exists,
+      data: docxData,
     },
     pagination: true,
     colors: ['#a11134', '#2a7e34', '#b29d11', '#2f4597', '#ab5b22'],
@@ -137,33 +152,11 @@ const init = async () => {
       console.log('SuperDoc is ready', event);
       const editor = event.superdoc.activeEditor;
       console.log('Active editor:', editor);
-      
+
       // Set up media observer for collaboration
       const ydoc = event.superdoc.ydoc;
       if (ydoc && editor) {
         setupMediaObserver(ydoc, editor);
-      }
-    },
-    onEditorCreate: async (event) => {
-      // load default doc if current doc is blank
-      const { editor } = event;
-
-      if (!editor?.state) return;
-      const textContent = editor.state.doc.textContent;
-
-      // Check if document is empty (no content or only whitespace)
-      const isEmpty = !textContent || textContent.trim().length === 0;
-      if (!isEmpty) return;
-
-      try {
-        // Fetch and load default.docx
-        const response = await fetch(defaultDocument);
-        const blob = await response.blob();
-        const file = new File([blob], 'default.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-
-        await editor.replaceFile(file);
-      } catch (error) {
-        console.error('Error loading default content:', error);
       }
     },
     onContentError: ({ error, documentId, file }) => {
