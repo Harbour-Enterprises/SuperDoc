@@ -24,7 +24,7 @@ This example demonstrates:
 **Client**: Vue 3 application with SuperDoc editor and Y.js WebSocket provider
 **Server**: Fastify server with WebSocket support for Y.js synchronization
 
-**Note**: This example does not persist documents. All collaboration is in-memory and ephemeral. Documents reset when the server restarts.
+**Note**: This example uses in-memory storage. Documents persist during the server session but reset when the server restarts. See [server/storage.ts](server/storage.ts) for the storage interface.
 
 ## Quick Start
 
@@ -88,6 +88,32 @@ collaboration-in-production/
 2. Server manages document state and broadcasts updates to all connected clients
 3. Y.js handles CRDT-based conflict resolution automatically
 4. Changes propagate in real-time to all connected clients
+
+### First-Time Document Initialization
+
+When collaboration is enabled, SuperDoc ignores the `documents[].data` property by default. This prevents sync conflicts where multiple users might broadcast their local file and overwrite each other.
+
+For new documents (no existing Yjs state), use `isNewFile: true`:
+
+```javascript
+// Check if document exists on server
+const { exists } = await fetch(`/doc/${documentId}/exists`).then(r => r.json());
+
+const config = {
+  document: {
+    id: documentId,
+    data: exists ? null : docxArrayBuffer,  // Provide DOCX for new documents
+    isNewFile: !exists,                      // Enables DOCX → Yjs conversion
+  },
+  modules: { collaboration: { url: wsUrl } }
+};
+```
+
+The flow:
+1. Server's `onLoad` returns `null` for new documents
+2. Client detects this and sets `isNewFile: true` with DOCX data
+3. SuperDoc converts the DOCX to Yjs state
+4. The state syncs to all connected clients and persists on auto-save
 
 ## Extending This Example
 
