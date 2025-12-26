@@ -47,6 +47,117 @@ export const getCommentPositionsById = (commentId, doc) => {
 };
 
 /**
+ * Collect all inline-node segments that have a comment mark for a given comment ID.
+ * This returns the raw segments (per inline node) rather than merged contiguous ranges.
+ *
+ * @param {string} commentId The comment ID to match
+ * @param {import('prosemirror-model').Node} doc The ProseMirror document
+ * @returns {Array<{from:number,to:number,attrs:Object}>} Segments containing mark attrs
+ */
+const getCommentMarkSegmentsById = (commentId, doc) => {
+  const segments = [];
+
+  doc.descendants((node, pos) => {
+    if (!node.isInline) return;
+    const commentMark = node.marks?.find(
+      (mark) => mark.type.name === CommentMarkName && mark.attrs?.commentId === commentId,
+    );
+    if (!commentMark) return;
+
+    segments.push({
+      from: pos,
+      to: pos + node.nodeSize,
+      attrs: commentMark.attrs || {},
+    });
+  });
+
+  return segments;
+};
+
+/**
+ * Convert raw mark segments into merged contiguous ranges.
+ * A single commentId can appear in multiple disjoint ranges (e.g. if content is split),
+ * so this returns both the raw segments and the merged ranges.
+ *
+ * @param {string} commentId The comment ID to match
+ * @param {import('prosemirror-model').Node} doc The ProseMirror document
+ * @returns {{segments:Array<{from:number,to:number,attrs:Object}>,ranges:Array<{from:number,to:number,internal:boolean}>}}
+ */
+const getCommentMarkRangesById = (commentId, doc) => {
+  const segments = getCommentMarkSegmentsById(commentId, doc);
+  if (!segments.length) return { segments, ranges: [] };
+
+  const ranges = [];
+  let active = null;
+
+  segments.forEach((seg) => {
+    if (!active) {
+      active = {
+        from: seg.from,
+        to: seg.to,
+        internal: !!seg.attrs?.internal,
+      };
+      return;
+    }
+
+    if (seg.from <= active.to) {
+      active.to = Math.max(active.to, seg.to);
+      return;
+    }
+
+    ranges.push(active);
+    active = {
+      from: seg.from,
+      to: seg.to,
+      internal: !!seg.attrs?.internal,
+    };
+  });
+
+  if (active) ranges.push(active);
+  return { segments, ranges };
+};
+
+/**
+ * Resolve a comment by removing its mark(s) and inserting commentRangeStart/commentRangeEnd
+ * anchor nodes around the same text ranges, so the comment becomes hidden but its anchors
+ * are preserved for later export/re-import.
+ *
+ * @param {Object} param0
+ * @param {string} param0.commentId The comment ID
+ * @param {import('prosemirror-state').EditorState} param0.state The current editor state
+ * @param {import('prosemirror-state').Transaction} param0.tr The current transaction
+ * @param {Function} param0.dispatch The dispatch function
+ * @returns {boolean} True if the comment mark existed and was processed
+ */
+export const resolveCommentById = ({ commentId, state, tr, dispatch }) => {
+  const { schema } = state;
+  const markType = schema.marks?.[CommentMarkName];
+  if (!markType) return false;
+
+  const { segments, ranges } = getCommentMarkRangesById(commentId, state.doc);
+  if (!segments.length) return false;
+
+  segments.forEach(({ from, to, attrs }) => {
+    tr.removeMark(from, to, markType.create(attrs));
+  });
+
+  const startType = schema.nodes?.commentRangeStart;
+  const endType = schema.nodes?.commentRangeEnd;
+  if (startType && endType) {
+    ranges
+      .slice()
+      .sort((a, b) => b.from - a.from)
+      .forEach(({ from, to, internal }) => {
+        tr.insert(to, endType.create({ 'w:id': commentId }));
+        tr.insert(from, startType.create({ 'w:id': commentId, internal }));
+      });
+  }
+
+  dispatch(tr);
+  return true;
+};
+
+/**
  * Prepare comments for export by converting the marks back to commentRange nodes
  * This function handles both Word format (via commentsExtended.xml) and Google Docs format
  * (via nested comment ranges). For threaded comments from Google Docs, it maintains the
@@ -212,6 +323,7 @@ export const getPreparedComment = (attrs) => {
 export const prepareCommentsForImport = (doc, tr, schema, converter) => {
   const toMark = [];
   const toDelete = [];
+  const toUpdate = [];
 
   doc.descendants((node, pos) => {
     const { type } = node;
@@ -223,10 +335,11 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
       converter,
       importedId: node.attrs['w:id'],
     });
+    const isDone = !!matchingImportedComment?.isDone;
 
     // If the node is a commentRangeStart, record it so we can place a mark once we find the end.
     if (type.name === 'commentRangeStart') {
-      if (!matchingImportedComment?.isDone) {
+      if (!isDone) {
         toMark.push({
           commentId: resolvedCommentId,
           importedId,
@@ -242,13 +355,35 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
         importedId,
       });
 
-      // We'll remove this node from the final doc
-      toDelete.push({ start: pos, end: pos + 1 });
+      if (isDone) {
+        toUpdate.push({
+          pos,
+          attrs: {
+            ...node.attrs,
+            'w:id': resolvedCommentId,
+            internal,
+          },
+        });
+      } else {
+        // We'll remove this node from the final doc
+        toDelete.push({ start: pos, end: pos + 1 });
+      }
     }
 
     // When we reach the commentRangeEnd, add a mark spanning from start to current pos,
     // then mark it for deletion as well.
     else if (type.name === 'commentRangeEnd') {
+      if (isDone) {
+        toUpdate.push({
+          pos,
+          attrs: {
+            ...node.attrs,
+            'w:id': resolvedCommentId,
+          },
+        });
+        return;
+      }
+
       const itemToMark = toMark.find((p) => p.importedId === importedId);
       if (!itemToMark) return; // No matching start? just skip
 
@@ -268,6 +403,16 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
       toDelete.push({ start: pos, end: pos + 1 });
     }
   });
+
+  // Update (but do not remove) comment range nodes for done comments.
+  // We keep them so resolved comments still have anchor positions in the document.
+  if (typeof tr.setNodeMarkup === 'function') {
+    toUpdate
+      .sort((a, b) => b.pos - a.pos)
+      .forEach(({ pos, attrs }) => {
+        tr.setNodeMarkup(pos, undefined, attrs);
+      });
+  }
 
   // Sort descending so deletions don't mess up positions
   toDelete

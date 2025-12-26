@@ -270,6 +270,46 @@ describe('comment helpers', () => {
     expect(remainingCommentNodes).toHaveLength(0);
   });
 
+  it('keeps comment range nodes for done comments (no mark)', () => {
+    const schema = createCommentSchema();
+    const doc = schema.nodes.doc.create(null, [
+      schema.nodes.paragraph.create(null, [
+        schema.nodes.commentRangeStart.create({ 'w:id': 'import-1', internal: false }),
+        schema.text('Hello'),
+        schema.nodes.commentRangeEnd.create({ 'w:id': 'import-1', internal: false }),
+      ]),
+    ]);
+
+    const state = EditorState.create({ schema, doc });
+    const tr = state.tr;
+
+    prepareCommentsForImport(state.doc, tr, schema, {
+      comments: [{ importedId: 'import-1', commentId: 'comment-1', isDone: true, isInternal: false }],
+    });
+
+    const applied = state.apply(tr);
+
+    const marks = [];
+    const commentNodes = [];
+
+    applied.doc.descendants((node) => {
+      node.marks.forEach((mark) => {
+        if (mark.type === schema.marks[CommentMarkName]) {
+          marks.push(mark.attrs.commentId);
+        }
+      });
+      if (node.type.name === 'commentRangeStart' || node.type.name === 'commentRangeEnd') {
+        commentNodes.push({ type: node.type.name, id: node.attrs['w:id'] });
+      }
+    });
+
+    expect(marks).toEqual([]);
+    expect(commentNodes).toEqual([
+      { type: 'commentRangeStart', id: 'comment-1' },
+      { type: 'commentRangeEnd', id: 'comment-1' },
+    ]);
+  });
+
   it('returns prepared comment attrs', () => {
     expect(getPreparedComment({ commentId: '123', internal: true })).toEqual({ 'w:id': '123', internal: true });
   });
@@ -383,6 +423,36 @@ describe('comments plugin commands', () => {
     const applied = state.apply(tr);
     const marks = applied.doc.nodeAt(1).marks;
     expect(marks).toHaveLength(0);
+  });
+
+  it('resolves a comment by replacing the mark with range nodes', () => {
+    const { commands, state, schema } = setup();
+    const tr = state.tr;
+    const dispatch = vi.fn();
+
+    const result = commands.resolveComment({ commentId: 'comment-1' })({ tr, dispatch, state });
+
+    expect(result).toBe(true);
+    expect(dispatch).toHaveBeenCalledWith(tr);
+
+    const applied = state.apply(tr);
+    const remainingMarks = [];
+    const commentNodes = [];
+
+    applied.doc.descendants((node) => {
+      node.marks.forEach((mark) => {
+        if (mark.type === schema.marks[CommentMarkName]) remainingMarks.push(mark.attrs.commentId);
+      });
+      if (node.type.name === 'commentRangeStart' || node.type.name === 'commentRangeEnd') {
+        commentNodes.push({ type: node.type.name, id: node.attrs['w:id'] });
+      }
+    });
+
+    expect(remainingMarks).toEqual([]);
+    expect(commentNodes).toEqual([
+      { type: 'commentRangeStart', id: 'comment-1' },
+      { type: 'commentRangeEnd', id: 'comment-1' },
+    ]);
   });
 
   it('sets active comment meta', () => {
