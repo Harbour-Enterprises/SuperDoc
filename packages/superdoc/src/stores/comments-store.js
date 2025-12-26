@@ -529,12 +529,10 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const convertHtmlToSchema = (commentHTML) => {
-    const div = document.createElement('div');
-    div.innerHTML = commentHTML;
     const editor = new Editor({
       mode: 'text',
       isHeadless: true,
-      content: div,
+      content: commentHTML,
       extensions: getRichTextExtensions(),
     });
     return editor.getJSON().content[0];
