@@ -243,7 +243,7 @@ describe('CommentsPlugin commands', () => {
       view.state = currentState;
     });
 
-    const spy = vi.spyOn(CommentHelpers, 'removeCommentsById');
+    const spy = vi.spyOn(CommentHelpers, 'resolveCommentById');
 
     const command = commands.resolveComment({ commentId: 'c-4' });
     const tr = currentState.tr;
