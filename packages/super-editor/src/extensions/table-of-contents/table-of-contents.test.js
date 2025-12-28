@@ -3,18 +3,6 @@ import { EditorState, TextSelection } from 'prosemirror-state';
 import { Schema } from 'prosemirror-model';
 import { TableOfContents } from './table-of-contents.js';
 
-// Mock pagination plugin
-vi.mock('@extensions/pagination/pagination-helpers.js', () => ({
-  PaginationPluginKey: {
-    getState: vi.fn(() => ({
-      isEnabled: true,
-      decorations: {
-        find: vi.fn(() => [{ from: 0 }, { from: 100 }, { from: 200 }]),
-      },
-    })),
-  },
-}));
-
 describe('TableOfContents Extension', () => {
   let schema;
 
@@ -29,7 +17,9 @@ describe('TableOfContents Extension', () => {
           group: 'block',
           content: 'inline*',
           attrs: {
-            styleId: { default: null },
+            paragraphProperties: {
+              default: {},
+            },
             isTocEntry: { default: false },
           },
           parseDOM: [{ tag: 'p' }],
@@ -104,8 +94,14 @@ describe('TableOfContents Extension', () => {
   describe('deleteTableOfContents', () => {
     it('should delete standalone tableOfContents node', () => {
       const tocNode = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Table of Contents')),
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Heading 1')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOCHeading' } },
+          schema.text('Table of Contents'),
+        ),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Heading 1'),
+        ),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
@@ -121,6 +117,14 @@ describe('TableOfContents Extension', () => {
       // Mock editor
       const editor = {
         view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 50 }],
+            },
+          ]),
+        },
       };
 
       // Get the command function
@@ -145,7 +149,10 @@ describe('TableOfContents Extension', () => {
 
     it('should delete documentPartObject wrapping TOC', () => {
       const tocNode = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Entry')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Entry'),
+        ),
       ]);
 
       const docPartObj = schema.nodes.documentPartObject.create({ docPartGallery: 'Table of Contents' }, [
@@ -163,7 +170,17 @@ describe('TableOfContents Extension', () => {
       const selection = TextSelection.create(docNode, 12); // Inside TOC
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const deleteCommand = commands.deleteTableOfContents();
@@ -182,7 +199,17 @@ describe('TableOfContents Extension', () => {
       const selection = TextSelection.create(docNode, 5);
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 50 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const deleteCommand = commands.deleteTableOfContents();
@@ -196,7 +223,10 @@ describe('TableOfContents Extension', () => {
 
     it('should delete TOC at specified position', () => {
       const tocNode = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Entry')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Entry'),
+        ),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
@@ -207,7 +237,17 @@ describe('TableOfContents Extension', () => {
 
       const state = EditorState.create({ schema, doc: docNode });
 
-      const editor = { view: { state } };
+      const editor = {
+        view: { state },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const deleteCommand = commands.deleteTableOfContents({ pos: 10 });
@@ -226,14 +266,26 @@ describe('TableOfContents Extension', () => {
       const bookmark2 = schema.nodes.bookmarkStart.create({ name: '_Toc456' });
 
       const existingToc = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Table of Contents')),
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Old Entry')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOCHeading' } },
+          schema.text('Table of Contents'),
+        ),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Old Entry'),
+        ),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         existingToc,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, [bookmark1, schema.text('Chapter 1')]),
-        schema.nodes.paragraph.create({ styleId: 'Heading2' }, [bookmark2, schema.text('Section 1.1')]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [
+          bookmark1,
+          schema.text('Chapter 1'),
+        ]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading2' } }, [
+          bookmark2,
+          schema.text('Section 1.1'),
+        ]),
         schema.nodes.paragraph.create({}, schema.text('Body text')),
       ]);
 
@@ -241,7 +293,21 @@ describe('TableOfContents Extension', () => {
       const selection = TextSelection.create(docNode, 5); // Inside TOC
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+            {
+              number: 2,
+              fragments: [{ pmStart: 100, pmEnd: 200 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -261,24 +327,37 @@ describe('TableOfContents Extension', () => {
       const bookmark = schema.nodes.bookmarkStart.create({ name: '_Toc789' });
 
       const tocNode = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Old')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Old'),
+        ),
       ]);
 
       const docPartObj = schema.nodes.documentPartObject.create({ docPartGallery: 'Table of Contents' }, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Table of Contents')),
         tocNode,
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Normal' } }, schema.text('Other')),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         docPartObj,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, [bookmark, schema.text('New Heading')]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [bookmark, schema.text('New')]),
       ]);
 
       const state = EditorState.create({ schema, doc: docNode });
-      const selection = TextSelection.create(docNode, 15); // Inside TOC
+      const selection = TextSelection.create(docNode, 12); // Inside TOC
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -294,19 +373,32 @@ describe('TableOfContents Extension', () => {
       const bookmark = schema.nodes.bookmarkStart.create({ name: '_Toc100' });
 
       const existingToc = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Contents')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'TOCHeading' } }, schema.text('Contents')),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         existingToc,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, [bookmark, schema.text('Introduction')]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [
+          bookmark,
+          schema.text('Chapter'),
+        ]),
       ]);
 
       const state = EditorState.create({ schema, doc: docNode });
-      const selection = TextSelection.create(docNode, 5);
+      const selection = TextSelection.create(docNode, 5); // Inside TOC
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -321,19 +413,29 @@ describe('TableOfContents Extension', () => {
 
     it('should handle headings without bookmarks', () => {
       const existingToc = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Contents')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'TOCHeading' } }, schema.text('Contents')),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         existingToc,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, schema.text('No Bookmark')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, schema.text('No Bookmark')),
       ]);
 
       const state = EditorState.create({ schema, doc: docNode });
       const selection = TextSelection.create(docNode, 5);
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -349,10 +451,28 @@ describe('TableOfContents Extension', () => {
       const docNode = schema.nodes.doc.create({}, [schema.nodes.paragraph.create({}, schema.text('No TOC here'))]);
 
       const state = EditorState.create({ schema, doc: docNode });
-      const selection = TextSelection.create(docNode, 5);
+      const selection = TextSelection.create(docNode, 5); // Inside TOC
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 50 }],
+            },
+            {
+              number: 2,
+              fragments: [{ pmStart: 50, pmEnd: 100 }],
+            },
+            {
+              number: 3,
+              fragments: [{ pmStart: 100, pmEnd: 150 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -366,18 +486,31 @@ describe('TableOfContents Extension', () => {
 
     it('should update TOC at specified position', () => {
       const existingToc = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOC1', isTocEntry: true }, schema.text('Old')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'TOC1' }, isTocEntry: true },
+          schema.text('Old'),
+        ),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         schema.nodes.paragraph.create({}, schema.text('Before')),
         existingToc,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, schema.text('New Heading')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, schema.text('New Heading')),
       ]);
 
       const state = EditorState.create({ schema, doc: docNode });
 
-      const editor = { view: { state } };
+      const editor = {
+        view: { state },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 100 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents({ pos: 10 });
@@ -391,22 +524,43 @@ describe('TableOfContents Extension', () => {
 
     it('should handle multiple heading levels correctly', () => {
       const existingToc = schema.nodes.tableOfContents.create({}, [
-        schema.nodes.paragraph.create({ styleId: 'TOCHeading' }, schema.text('Contents')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'TOCHeading' } }, schema.text('Contents')),
       ]);
 
       const docNode = schema.nodes.doc.create({}, [
         existingToc,
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, schema.text('Chapter 1')),
-        schema.nodes.paragraph.create({ styleId: 'Heading2' }, schema.text('Section 1.1')),
-        schema.nodes.paragraph.create({ styleId: 'Heading3' }, schema.text('Subsection 1.1.1')),
-        schema.nodes.paragraph.create({ styleId: 'Heading1' }, schema.text('Chapter 2')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, schema.text('Chapter 1')),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading2' } }, schema.text('Section 1.1')),
+        schema.nodes.paragraph.create(
+          { paragraphProperties: { styleId: 'Heading3' } },
+          schema.text('Subsection 1.1.1'),
+        ),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, schema.text('Chapter 2')),
       ]);
 
       const state = EditorState.create({ schema, doc: docNode });
       const selection = TextSelection.create(docNode, 5);
       const stateWithSelection = state.apply(state.tr.setSelection(selection));
 
-      const editor = { view: { state: stateWithSelection } };
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 50 }],
+            },
+            {
+              number: 2,
+              fragments: [{ pmStart: 50, pmEnd: 100 }],
+            },
+            {
+              number: 3,
+              fragments: [{ pmStart: 100, pmEnd: 150 }],
+            },
+          ]),
+        },
+      };
       const commandContext = { editor, options: TableOfContents.options };
       const commands = TableOfContents.config.addCommands.call(commandContext);
       const updateCommand = commands.updateTableOfContents();
@@ -416,6 +570,106 @@ describe('TableOfContents Extension', () => {
 
       expect(result).toBe(true);
       expect(dispatch).toHaveBeenCalled();
+    });
+
+    it('should assign correct page numbers from layout engine', () => {
+      const bookmark1 = schema.nodes.bookmarkStart.create({ name: '_Toc1' });
+      const bookmark2 = schema.nodes.bookmarkStart.create({ name: '_Toc2' });
+      const bookmark3 = schema.nodes.bookmarkStart.create({ name: '_Toc3' });
+
+      const existingToc = schema.nodes.tableOfContents.create({}, [
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'TOCHeading' } }, schema.text('Contents')),
+      ]);
+
+      const docNode = schema.nodes.doc.create({}, [
+        existingToc,
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [
+          bookmark1,
+          schema.text('First'),
+        ]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [
+          bookmark2,
+          schema.text('Second'),
+        ]),
+        schema.nodes.paragraph.create({ paragraphProperties: { styleId: 'Heading1' } }, [
+          bookmark3,
+          schema.text('Third'),
+        ]),
+      ]);
+
+      const state = EditorState.create({ schema, doc: docNode });
+      const selection = TextSelection.create(docNode, 5);
+      const stateWithSelection = state.apply(state.tr.setSelection(selection));
+
+      // Mock layout engine with headings on different pages
+      // Document structure: TOC (0-10), First (12-20), Second (21-30), Third (31-40)
+      const editor = {
+        view: { state: stateWithSelection },
+        presentationEditor: {
+          getPages: vi.fn(() => [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 20 }], // TOC and first heading
+            },
+            {
+              number: 2,
+              fragments: [{ pmStart: 21, pmEnd: 30 }], // Second heading
+            },
+            {
+              number: 3,
+              fragments: [{ pmStart: 31, pmEnd: 100 }], // Third heading
+            },
+          ]),
+        },
+      };
+      const commandContext = { editor, options: TableOfContents.options };
+      const commands = TableOfContents.config.addCommands.call(commandContext);
+      const updateCommand = commands.updateTableOfContents();
+
+      const dispatch = vi.fn();
+      const result = updateCommand({ state: stateWithSelection, tr: stateWithSelection.tr, dispatch, editor });
+
+      expect(result).toBe(true);
+      expect(dispatch).toHaveBeenCalled();
+
+      const tr = dispatch.mock.calls[0][0];
+      const updatedDoc = tr.doc;
+
+      // Find the updated TOC node
+      let tocNode = null;
+      updatedDoc.descendants((node) => {
+        if (node.type.name === 'tableOfContents' && !tocNode) {
+          tocNode = node;
+          return false;
+        }
+      });
+
+      expect(tocNode).toBeTruthy();
+
+      // Debug: log the TOC node structure
+      // Check that TOC entries have the correct page numbers
+      const tocEntries = [];
+      tocNode.descendants((node) => {
+        if (node.type.name === 'paragraph' && node.attrs?.isTocEntry) {
+          tocEntries.push(node.textContent);
+        }
+      });
+
+      // Should have 3 TOC entries (one for each heading)
+      expect(tocEntries).toHaveLength(3);
+
+      // Page numbers should be at the end of each entry after the tab
+      expect(tocEntries[0]).toBeDefined();
+      expect(tocEntries[0]).toContain('First');
+      expect(tocEntries[0]).toContain('1'); // First heading is on page 1
+
+      expect(tocEntries[1]).toBeDefined();
+      expect(tocEntries[1]).toContain('Second');
+      expect(tocEntries[1]).toContain('2'); // Second heading is on page 2
+
+      expect(tocEntries[2]).toBeDefined();
+      expect(tocEntries[2]).toContain('Third');
+      expect(tocEntries[2]).toContain('3'); // Third heading is on page 3
     });
   });
 });

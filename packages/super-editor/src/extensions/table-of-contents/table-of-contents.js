@@ -1,47 +1,74 @@
 import { Node, Attribute } from '@core/index.js';
-import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.js';
 
 /**
- * Get the page number for a given document position based on pagination decorations
- * @param {Object} state - Editor state
+ * Get the page number for a given document position based on layout engine pages
+ * @param {Object} editor - Editor instance
  * @param {number} pos - Document position
  * @returns {number} Page number (1-indexed)
  */
-function getPageNumberForPosition(state, pos) {
-  const paginationState = PaginationPluginKey.getState(state);
-  // If pagination is not enabled, return 1
-  if (!paginationState?.isEnabled) {
+function getPageNumberForPosition(editor, pos) {
+  // Get pages from the layout engine via PresentationEditor
+  const pages = editor?.presentationEditor?.getPages?.();
+
+  if (!pages || pages.length === 0) {
     return 1;
   }
 
-  const decorationSet = paginationState.decorations;
-  if (!decorationSet) {
-    return 1;
-  }
-
-  // Get all decorations from the document using DecorationSet.find()
-  // Count unique page break positions before this position
-  // Multiple decorations can exist at the same position (spacer, header, footer)
-  // so we count unique positions, not decorations
-  const pageBreakPositions = Array.from(
-    new Set(decorationSet.find(0, state.doc.content.size).map((decoration) => decoration.from)),
-  ).sort((a, b) => a - b);
-
-  let pageNumber = 0;
-
-  for (const pageBreakPos of pageBreakPositions) {
-    // Skip if this decoration is after our target position
-    if (pageBreakPos > pos) {
-      break;
+  // Find the page that contains this position by checking fragments
+  for (const page of pages) {
+    if (!page.fragments) {
+      continue;
     }
 
-    // Count unique page break positions
-    if (pageBreakPos <= pos) {
-      pageNumber += 1;
+    // Check if any fragment on this page contains the position
+    for (const fragment of page.fragments) {
+      const pmStart = fragment.pmStart;
+      const pmEnd = fragment.pmEnd;
+
+      // If the fragment has ProseMirror range and contains our position
+      if (pmStart !== undefined && pmEnd !== undefined) {
+        if (pos >= pmStart && pos <= pmEnd) {
+          return page.number;
+        }
+      }
     }
   }
 
-  return pageNumber;
+  // If position is not found in any fragment, find the nearest page
+  // This handles positions between content blocks or in special nodes
+  let closestPage = pages[0];
+  let closestDistance = Infinity;
+
+  for (const page of pages) {
+    if (!page.fragments || page.fragments.length === 0) {
+      continue;
+    }
+
+    for (const fragment of page.fragments) {
+      const pmStart = fragment.pmStart;
+      const pmEnd = fragment.pmEnd;
+
+      if (pmStart !== undefined && pmEnd !== undefined) {
+        // Calculate distance to this fragment
+        let distance;
+        if (pos < pmStart) {
+          distance = pmStart - pos;
+        } else if (pos > pmEnd) {
+          distance = pos - pmEnd;
+        } else {
+          // Position is within fragment (should have been caught above)
+          return page.number;
+        }
+
+        if (distance < closestDistance) {
+          closestDistance = distance;
+          closestPage = page;
+        }
+      }
+    }
+  }
+
+  return closestPage.number;
 }
 
 export const TableOfContents = Node.create({
@@ -225,8 +252,8 @@ export const TableOfContents = Node.create({
                   }
                 });
 
-                // Get page number from pagination system
-                const pageNumber = getPageNumberForPosition(state, pos);
+                // Get page number from layout engine
+                const pageNumber = getPageNumberForPosition(editor, pos);
 
                 headings.push({ level, text, pos, bookmarkName, pageNumber });
               }
