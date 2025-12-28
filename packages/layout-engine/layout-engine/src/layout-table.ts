@@ -8,8 +8,10 @@ import type {
   TableRow,
   PartialRowInfo,
   ParagraphMeasure,
+  ParagraphBlock,
 } from '@superdoc/contracts';
 import type { PageState } from './paginator.js';
+import { computeFragmentPmRange, extractBlockPmRange } from './layout-utils.js';
 
 export type TableLayoutContext = {
   block: TableBlock;
@@ -371,6 +373,311 @@ function getCellTotalLines(cell: TableRowMeasure['cells'][number]): number {
 }
 
 /**
+ * ProseMirror range representing a contiguous span of document positions.
+ *
+ * Used to track which portion of the ProseMirror document a table fragment
+ * corresponds to, enabling accurate selection and editing of table content.
+ *
+ * @property pmStart - Absolute ProseMirror position (inclusive) where the range begins
+ * @property pmEnd - Absolute ProseMirror position (exclusive) where the range ends
+ */
+type PmRange = { pmStart?: number; pmEnd?: number };
+
+/**
+ * Merge a source PmRange into a target PmRange, expanding the target to include the source.
+ *
+ * This function performs a union operation on two ranges by taking the minimum start
+ * position and maximum end position. It handles undefined values gracefully, treating
+ * them as unbounded in that direction.
+ *
+ * The target range is mutated in place for efficiency during aggregation of multiple ranges.
+ *
+ * @param target - The range to be expanded (mutated in place)
+ * @param range - The source range to merge into the target
+ *
+ * @example
+ * ```typescript
+ * const target: PmRange = { pmStart: 10, pmEnd: 20 };
+ * const range: PmRange = { pmStart: 15, pmEnd: 25 };
+ * mergePmRange(target, range);
+ * // target is now { pmStart: 10, pmEnd: 25 }
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Handles undefined values
+ * const target: PmRange = {};
+ * const range: PmRange = { pmStart: 5, pmEnd: 10 };
+ * mergePmRange(target, range);
+ * // target is now { pmStart: 5, pmEnd: 10 }
+ * ```
+ */
+function mergePmRange(target: PmRange, range: PmRange): void {
+  if (typeof range.pmStart === 'number') {
+    target.pmStart = target.pmStart == null ? range.pmStart : Math.min(target.pmStart, range.pmStart);
+  }
+  if (typeof range.pmEnd === 'number') {
+    target.pmEnd = target.pmEnd == null ? range.pmEnd : Math.max(target.pmEnd, range.pmEnd);
+  }
+}
+
+/**
+ * Compute the ProseMirror range for a subset of lines within a table cell.
+ *
+ * Table cells can contain multiple blocks (paragraphs, images, etc.). This function
+ * calculates which portion of the cell's content falls within the specified line range,
+ * accounting for multi-block cells by accumulating line counts across blocks.
+ *
+ * Edge cases handled:
+ * - Undefined cell or cellMeasure: Returns empty range
+ * - Mismatched block counts: Uses minimum of both arrays to avoid out-of-bounds errors
+ * - Lines spanning multiple blocks: Correctly maps global line indices to block-local indices
+ * - Non-paragraph blocks: Includes their full PM range if within the line range
+ *
+ * @param cell - The table cell block data containing content blocks
+ * @param cellMeasure - The measured cell data containing line information
+ * @param fromLine - Starting line index (inclusive, 0-based) across all blocks in the cell
+ * @param toLine - Ending line index (exclusive) across all blocks in the cell
+ * @returns PmRange covering the specified lines, or empty range if cell is invalid
+ *
+ * @remarks
+ * When cellBlocks.length !== blockMeasures.length, the function uses the minimum of both
+ * lengths to prevent array access errors. This mismatch can occur during incremental
+ * updates or measurement failures. The function gracefully handles this by processing
+ * only the valid overlapping blocks.
+ *
+ * @example
+ * ```typescript
+ * // Single-block cell with 3 lines, requesting lines 0-2
+ * const cell = { paragraph: { kind: 'paragraph', runs: [...] } };
+ * const cellMeasure = { paragraph: { kind: 'paragraph', lines: [{...}, {...}, {...}] } };
+ * const range = computeCellPmRange(cell, cellMeasure, 0, 2);
+ * // range covers lines 0-1 (exclusive end)
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Multi-block cell with lines spanning blocks
+ * const cell = { blocks: [para1, para2] }; // para1 has 3 lines, para2 has 2 lines
+ * const cellMeasure = { blocks: [measure1, measure2] };
+ * const range = computeCellPmRange(cell, cellMeasure, 2, 4);
+ * // range covers line 2 from para1 and line 0 from para2
+ * ```
+ */
+function computeCellPmRange(
+  cell: TableRow['cells'][number] | undefined,
+  cellMeasure: TableRowMeasure['cells'][number] | undefined,
+  fromLine: number,
+  toLine: number,
+): PmRange {
+  const range: PmRange = {};
+  if (!cell || !cellMeasure) return range;
+
+  const cellBlocks = cell.blocks ?? (cell.paragraph ? [cell.paragraph] : []);
+  const blockMeasures = cellMeasure.blocks ?? (cellMeasure.paragraph ? [cellMeasure.paragraph] : []);
+
+  // Use minimum length to handle mismatched data gracefully
+  // This can occur during incremental updates or if measurement fails for some blocks
+  const maxBlocks = Math.min(cellBlocks.length, blockMeasures.length);
+
+  let cumulativeLineCount = 0;
+  for (let i = 0; i < maxBlocks; i++) {
+    const block = cellBlocks[i];
+    const blockMeasure = blockMeasures[i];
+
+    if (blockMeasure.kind === 'paragraph' && block?.kind === 'paragraph') {
+      const paraMeasure = blockMeasure as ParagraphMeasure;
+      const lines = paraMeasure.lines;
+      const blockLineCount = lines?.length ?? 0;
+      const blockStartGlobal = cumulativeLineCount;
+      const blockEndGlobal = cumulativeLineCount + blockLineCount;
+
+      const localFrom = Math.max(fromLine, blockStartGlobal) - blockStartGlobal;
+      const localTo = Math.min(toLine, blockEndGlobal) - blockStartGlobal;
+
+      if (lines && lines.length > 0 && localFrom < localTo) {
+        // Use line-level PM range computation when lines are available
+        mergePmRange(range, computeFragmentPmRange(block as ParagraphBlock, lines, localFrom, localTo));
+      } else {
+        // Fallback to block-level PM range when no lines or no overlap
+        // This handles cases where the paragraph has PM range in attrs but no line data
+        mergePmRange(range, extractBlockPmRange(block as { attrs?: Record<string, unknown> }));
+      }
+
+      cumulativeLineCount += blockLineCount;
+      continue;
+    }
+
+    mergePmRange(range, extractBlockPmRange(block as { attrs?: Record<string, unknown> }));
+  }
+
+  return range;
+}
+
+/**
+ * Compute the ProseMirror range for a table fragment spanning multiple rows.
+ *
+ * Aggregates PM ranges from all cells within the fragment, handling both full rows
+ * and partial row splits (mid-row page breaks). For partial rows, consults the
+ * partialRow metadata to determine which lines to include from each cell.
+ *
+ * Edge cases handled:
+ * - Missing row or rowMeasure data: Skips invalid rows
+ * - Mismatched cell counts: Uses minimum of both arrays
+ * - Partial row with out-of-bounds cellIndex: Validates array access before reading fromLineByCell/toLineByCell
+ * - Invalid line indices: Clamps to valid range and ensures toLine >= fromLine
+ * - Empty cells (no lines): Gracefully handles totalLines = 0
+ *
+ * @param block - The table block containing row and cell data
+ * @param measure - The table measurements containing cell line information
+ * @param fromRow - Starting row index (inclusive, 0-based)
+ * @param toRow - Ending row index (exclusive)
+ * @param partialRow - Optional partial row metadata for mid-row splits
+ * @returns Aggregated PmRange covering all included content
+ *
+ * @remarks
+ * Partial row handling: When a row is split across pages, partialRow specifies
+ * which lines to include from each cell via fromLineByCell and toLineByCell arrays.
+ * These arrays are indexed by cellIndex. If cellIndex exceeds the array bounds,
+ * the function defaults to including all lines (0 to totalLines), preventing errors.
+ *
+ * Line index validation: The function clamps fromLine and toLine to [0, totalLines]
+ * and ensures toLine >= fromLine. This handles edge cases where partialRow metadata
+ * contains invalid indices (e.g., from corrupt state or race conditions).
+ *
+ * @example
+ * ```typescript
+ * // Full table fragment (rows 0-2)
+ * const range = computeTableFragmentPmRange(block, measure, 0, 2);
+ * // range covers all content in rows 0 and 1
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Partial row fragment (row 1, lines 2-5 from each cell)
+ * const partialRow = {
+ *   rowIndex: 1,
+ *   fromLineByCell: [2, 2],
+ *   toLineByCell: [5, 5],
+ *   isFirstPart: false,
+ *   isLastPart: false,
+ *   partialHeight: 60
+ * };
+ * const range = computeTableFragmentPmRange(block, measure, 1, 2, partialRow);
+ * // range covers only lines 2-4 (exclusive end) from each cell in row 1
+ * ```
+ */
+function computeTableFragmentPmRange(
+  block: TableBlock,
+  measure: TableMeasure,
+  fromRow: number,
+  toRow: number,
+  partialRow?: PartialRowInfo,
+): PmRange {
+  const range: PmRange = {};
+
+  for (let rowIndex = fromRow; rowIndex < toRow; rowIndex++) {
+    const row = block.rows[rowIndex];
+    const rowMeasure = measure.rows[rowIndex];
+    if (!row || !rowMeasure) continue;
+
+    const isPartial = partialRow?.rowIndex === rowIndex;
+    const cellCount = Math.min(row.cells.length, rowMeasure.cells.length);
+
+    for (let cellIndex = 0; cellIndex < cellCount; cellIndex++) {
+      const cell = row.cells[cellIndex];
+      const cellMeasure = rowMeasure.cells[cellIndex];
+      if (!cell || !cellMeasure) continue;
+
+      const totalLines = getCellTotalLines(cellMeasure);
+      let fromLine = 0;
+      let toLine = totalLines;
+
+      if (isPartial) {
+        // Validate cellIndex is within bounds before accessing arrays
+        // This prevents errors when partialRow metadata is inconsistent with actual cell count
+        const hasValidFromLineByCell = partialRow?.fromLineByCell && cellIndex < partialRow.fromLineByCell.length;
+        const hasValidToLineByCell = partialRow?.toLineByCell && cellIndex < partialRow.toLineByCell.length;
+
+        if (hasValidFromLineByCell) {
+          const rawFrom = partialRow.fromLineByCell[cellIndex];
+          if (typeof rawFrom === 'number' && rawFrom >= 0) {
+            fromLine = rawFrom;
+          }
+        }
+
+        if (hasValidToLineByCell) {
+          const rawTo = partialRow.toLineByCell[cellIndex];
+          if (typeof rawTo === 'number') {
+            toLine = rawTo === -1 ? totalLines : rawTo;
+          }
+        }
+      }
+
+      // Clamp line indices to valid range
+      fromLine = Math.max(0, Math.min(fromLine, totalLines));
+      toLine = Math.max(0, Math.min(toLine, totalLines));
+      if (toLine < fromLine) {
+        toLine = fromLine;
+      }
+
+      mergePmRange(range, computeCellPmRange(cell, cellMeasure, fromLine, toLine));
+    }
+  }
+
+  return range;
+}
+
+/**
+ * Apply computed ProseMirror range to a table fragment.
+ *
+ * Mutates the fragment by setting its pmStart and pmEnd properties based on the
+ * content it contains. This enables the overlay component to map fragment coordinates
+ * back to ProseMirror document positions for selection and editing.
+ *
+ * The function computes the range by aggregating PM positions from all cells within
+ * the fragment's row range, handling both full rows and partial row splits.
+ *
+ * @param fragment - The table fragment to annotate with PM range (mutated in place)
+ * @param block - The table block containing row and cell data
+ * @param measure - The table measurements containing cell line information
+ *
+ * @remarks
+ * This function is called for every table fragment created during layout, including:
+ * - Single-page tables (one fragment covering all rows)
+ * - Multi-page tables (multiple fragments with row ranges)
+ * - Partial row fragments (fragments with mid-row page breaks)
+ *
+ * The computed range is inclusive for pmStart and exclusive for pmEnd, matching
+ * ProseMirror's position semantics.
+ *
+ * @example
+ * ```typescript
+ * const fragment: TableFragment = {
+ *   kind: 'table',
+ *   blockId: 'table-1',
+ *   fromRow: 0,
+ *   toRow: 3,
+ *   x: 0,
+ *   y: 0,
+ *   width: 400,
+ *   height: 150
+ * };
+ * applyTableFragmentPmRange(fragment, block, measure);
+ * // fragment now has pmStart and pmEnd set based on rows 0-2 content
+ * ```
+ */
+function applyTableFragmentPmRange(fragment: TableFragment, block: TableBlock, measure: TableMeasure): void {
+  const range = computeTableFragmentPmRange(block, measure, fragment.fromRow, fragment.toRow, fragment.partialRow);
+  if (range.pmStart != null) {
+    fragment.pmStart = range.pmStart;
+  }
+  if (range.pmEnd != null) {
+    fragment.pmEnd = range.pmEnd;
+  }
+}
+
+/**
  * Compute partial row split information for rows that don't fit.
  *
  * When a row exceeds the available height and cantSplit is not set,
@@ -680,6 +987,7 @@ function layoutMonolithicTable(context: TableLayoutContext): void {
     height,
     metadata,
   };
+  applyTableFragmentPmRange(fragment, context.block, context.measure);
   state.page.fragments.push(fragment);
   state.cursorY += height;
 }
@@ -817,6 +1125,7 @@ export function layoutTableBlock({
       height,
       metadata,
     };
+    applyTableFragmentPmRange(fragment, block, measure);
     state.page.fragments.push(fragment);
     state.cursorY += height;
     return;
@@ -905,6 +1214,7 @@ export function layoutTableBlock({
           metadata: generateFragmentMetadata(measure, rowIndex, rowIndex + 1, repeatHeaderCount),
         };
 
+        applyTableFragmentPmRange(fragment, block, measure);
         state.page.fragments.push(fragment);
         state.cursorY += fragmentHeight;
       }
@@ -969,6 +1279,7 @@ export function layoutTableBlock({
         metadata: generateFragmentMetadata(measure, bodyStartRow, forcedEndRow, repeatHeaderCount),
       };
 
+      applyTableFragmentPmRange(fragment, block, measure);
       state.page.fragments.push(fragment);
       state.cursorY += fragmentHeight;
       pendingPartialRow = forcedPartialRow;
@@ -1011,6 +1322,7 @@ export function layoutTableBlock({
       metadata: generateFragmentMetadata(measure, bodyStartRow, endRow, repeatHeaderCount),
     };
 
+    applyTableFragmentPmRange(fragment, block, measure);
     state.page.fragments.push(fragment);
     state.cursorY += fragmentHeight;
 
@@ -1042,7 +1354,7 @@ export function createAnchoredTableFragment(
     coordinateSystem: 'fragment',
   };
 
-  return {
+  const fragment: TableFragment = {
     kind: 'table',
     blockId: block.id,
     fromRow: 0,
@@ -1053,4 +1365,6 @@ export function createAnchoredTableFragment(
     height: measure.totalHeight ?? 0,
     metadata,
   };
+  applyTableFragmentPmRange(fragment, block, measure);
+  return fragment;
 }

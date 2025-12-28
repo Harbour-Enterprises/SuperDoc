@@ -13,6 +13,7 @@ import type {
   ParagraphBlock,
   ParagraphMeasure,
 } from '@superdoc/contracts';
+import { computeLinePmRange as computeLinePmRangeUnified } from '@superdoc/contracts';
 import { charOffsetToPm, findCharacterAtX, measureCharacterX } from './text-measurement.js';
 import { clickToPositionDom } from './dom-mapping.js';
 import {
@@ -194,6 +195,7 @@ export type FragmentHit = {
 
 export type PositionHit = {
   pos: number;
+  layoutEpoch: number;
   blockId: string;
   pageIndex: number;
   column: number;
@@ -785,6 +787,36 @@ export const hitTestTableFragment = (
  * }
  * ```
  */
+const readLayoutEpochFromDom = (domContainer: HTMLElement, clientX: number, clientY: number): number | null => {
+  const doc = domContainer.ownerDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!doc || typeof doc.elementsFromPoint !== 'function') {
+    return null;
+  }
+
+  let hitChain: Element[] = [];
+  try {
+    hitChain = doc.elementsFromPoint(clientX, clientY) ?? [];
+  } catch {
+    return null;
+  }
+
+  let latestEpoch: number | null = null;
+  for (const el of hitChain) {
+    if (!(el instanceof HTMLElement)) continue;
+    if (!domContainer.contains(el)) continue;
+    const raw = el.dataset.layoutEpoch;
+    if (raw == null) continue;
+    const epoch = Number(raw);
+    if (!Number.isFinite(epoch)) continue;
+    // Pick the newest epoch in the hit chain to avoid stale descendants blocking mapping.
+    if (latestEpoch == null || epoch > latestEpoch) {
+      latestEpoch = epoch;
+    }
+  }
+
+  return latestEpoch;
+};
+
 export function clickToPosition(
   layout: Layout,
   blocks: FlowBlock[],
@@ -796,6 +828,7 @@ export function clickToPosition(
   geometryHelper?: import('./page-geometry-helper').PageGeometryHelper,
 ): PositionHit | null {
   clickMappingTelemetry.total++;
+  const layoutEpoch = layout.layoutEpoch ?? 0;
 
   logClickStage('log', 'entry', {
     point: containerPoint,
@@ -807,6 +840,7 @@ export function clickToPosition(
   if (domContainer != null && clientX != null && clientY != null) {
     logClickStage('log', 'dom-attempt', { trying: 'DOM-based mapping' });
     const domPos = clickToPositionDom(domContainer, clientX, clientY);
+    const domLayoutEpoch = readLayoutEpochFromDom(domContainer, clientX, clientY) ?? layoutEpoch;
 
     if (domPos != null) {
       logPositionDebug({
@@ -857,7 +891,7 @@ export function clickToPosition(
                 lineIndex,
                 usedMethod: 'DOM',
               });
-              return { pos: domPos, blockId, pageIndex, column, lineIndex };
+              return { pos: domPos, layoutEpoch: domLayoutEpoch, blockId, pageIndex, column, lineIndex };
             }
           }
         }
@@ -869,7 +903,7 @@ export function clickToPosition(
         usedMethod: 'DOM',
         note: 'position found but fragment not located',
       });
-      return { pos: domPos, blockId: '', pageIndex: 0, column: 0, lineIndex: -1 };
+      return { pos: domPos, layoutEpoch: domLayoutEpoch, blockId: '', pageIndex: 0, column: 0, lineIndex: -1 };
     }
 
     logClickStage('log', 'dom-fallback', { reason: 'DOM mapping returned null, trying geometry' });
@@ -901,49 +935,62 @@ export function clickToPosition(
 
   let fragmentHit = hitTestFragment(layout, pageHit, blocks, measures, pageRelativePoint);
 
-  // If no fragment was hit (e.g., whitespace), snap to nearest fragment on the page
+  // If no fragment was hit (e.g., whitespace), snap to nearest hit-testable fragment on the page.
   if (!fragmentHit) {
     const page = pageHit.page;
-    // Include all fragment types (para, drawing, image, table) for snap-to-nearest logic
     const fragments = page.fragments.filter(
       (f: Fragment | undefined): f is Fragment => f != null && typeof f === 'object',
     );
-    if (fragments.length > 0) {
-      let nearest: Fragment | null = null;
-      let nearestDist = Infinity;
-      for (const frag of fragments) {
-        const top = frag.y;
-        const bottom = frag.y + frag.height;
-        let dist: number;
-        if (pageRelativePoint.y < top) {
-          dist = top - pageRelativePoint.y;
-        } else if (pageRelativePoint.y > bottom) {
-          dist = pageRelativePoint.y - bottom;
-        } else {
-          dist = 0;
-        }
-        if (dist < nearestDist) {
-          nearestDist = dist;
-          nearest = frag;
-        }
+    let nearestHit: FragmentHit | null = null;
+    let nearestDist = Infinity;
+
+    for (const frag of fragments) {
+      const isPara = frag.kind === 'para';
+      const isAtomic = isAtomicFragment(frag);
+      if (!isPara && !isAtomic) continue;
+
+      const blockIndex = findBlockIndexByFragmentId(blocks, frag.blockId);
+      if (blockIndex === -1) continue;
+      const block = blocks[blockIndex];
+      const measure = measures[blockIndex];
+      if (!block || !measure) continue;
+
+      let fragHeight = 0;
+      if (isAtomic) {
+        fragHeight = frag.height;
+      } else if (isPara && block.kind === 'paragraph' && measure.kind === 'paragraph') {
+        fragHeight = measure.lines
+          .slice(frag.fromLine, frag.toLine)
+          .reduce((sum: number, line: Line) => sum + line.lineHeight, 0);
+      } else {
+        continue;
       }
-      if (nearest) {
-        const blockIndex = findBlockIndexByFragmentId(blocks, nearest.blockId);
-        if (blockIndex !== -1) {
-          const block = blocks[blockIndex];
-          const measure = measures[blockIndex];
-          if (block && measure) {
-            fragmentHit = {
-              fragment: nearest,
-              block,
-              measure,
-              pageIndex: pageHit.pageIndex,
-              pageY: 0,
-            };
-          }
-        }
+
+      const top = frag.y;
+      const bottom = frag.y + fragHeight;
+      let dist: number;
+      if (pageRelativePoint.y < top) {
+        dist = top - pageRelativePoint.y;
+      } else if (pageRelativePoint.y > bottom) {
+        dist = pageRelativePoint.y - bottom;
+      } else {
+        dist = 0;
+      }
+
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        const pageY = Math.max(0, Math.min(pageRelativePoint.y - top, fragHeight));
+        nearestHit = {
+          fragment: frag,
+          block,
+          measure,
+          pageIndex: pageHit.pageIndex,
+          pageY,
+        };
       }
     }
+
+    fragmentHit = nearestHit;
   }
 
   if (fragmentHit) {
@@ -980,10 +1027,14 @@ export function clickToPosition(
         );
       }
 
-      // List items are rendered with left alignment in the DOM regardless of paragraph alignment
+      // List items use textAlign: 'left' in the DOM for non-justify alignments.
+      // For justify, the DOM uses textAlign: 'left' but applies word-spacing for actual justify effect.
+      // We only override alignment for list items when NOT justified, so justify caret positioning works correctly.
       const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
       const isListItem = markerWidth > 0;
-      const alignmentOverride = isListItem ? 'left' : undefined;
+      const paraAlignment = block.attrs?.alignment;
+      const isJustified = paraAlignment === 'justify' || paraAlignment === 'both';
+      const alignmentOverride = isListItem && !isJustified ? 'left' : undefined;
 
       const pos = mapPointToPm(block, line, pageRelativePoint.x - fragment.x, isRTL, availableWidth, alignmentOverride);
       if (pos == null) {
@@ -1020,6 +1071,7 @@ export function clickToPosition(
 
       return {
         pos,
+        layoutEpoch,
         blockId: fragment.blockId,
         pageIndex,
         column,
@@ -1052,6 +1104,7 @@ export function clickToPosition(
 
       return {
         pos,
+        layoutEpoch,
         blockId: fragment.blockId,
         pageIndex,
         column: determineColumn(layout, fragment.x),
@@ -1088,10 +1141,13 @@ export function clickToPosition(
         );
       }
 
-      // List items in table cells are also rendered with left alignment
+      // List items in table cells use textAlign: 'left' in the DOM for non-justify alignments.
+      // For justify, we don't override so justify caret positioning works correctly.
       const cellMarkerWidth = cellMeasure.marker?.markerWidth ?? 0;
       const isListItem = cellMarkerWidth > 0;
-      const alignmentOverride = isListItem ? 'left' : undefined;
+      const cellAlignment = cellBlock.attrs?.alignment;
+      const isJustified = cellAlignment === 'justify' || cellAlignment === 'both';
+      const alignmentOverride = isListItem && !isJustified ? 'left' : undefined;
 
       const pos = mapPointToPm(cellBlock, line, localX, isRTL, availableWidth, alignmentOverride);
 
@@ -1108,6 +1164,7 @@ export function clickToPosition(
 
         return {
           pos,
+          layoutEpoch,
           blockId: tableHit.fragment.blockId,
           pageIndex,
           column: determineColumn(layout, tableHit.fragment.x),
@@ -1131,6 +1188,7 @@ export function clickToPosition(
 
       return {
         pos: firstRun.pmStart,
+        layoutEpoch,
         blockId: tableHit.fragment.blockId,
         pageIndex,
         column: determineColumn(layout, tableHit.fragment.x),
@@ -1173,6 +1231,7 @@ export function clickToPosition(
 
     return {
       pos,
+      layoutEpoch,
       blockId: fragment.blockId,
       pageIndex,
       column: determineColumn(layout, fragment.x),
@@ -1414,9 +1473,11 @@ export function selectionToRects(
           // Detect list items by checking for marker presence
           const markerWidth = fragment.markerWidth ?? measure.marker?.markerWidth ?? 0;
           const isListItemFlag = isListItem(markerWidth, block);
-          // List items are always rendered with left alignment in the DOM (painter forces textAlign: 'left'),
-          // regardless of the paragraph's alignment attribute. Pass 'left' override to match DOM rendering.
-          const alignmentOverride = isListItemFlag ? 'left' : undefined;
+          // List items use textAlign: 'left' in the DOM for non-justify alignments.
+          // For justify, we don't override so justify selection rectangles are calculated correctly.
+          const blockAlignment = block.attrs?.alignment;
+          const isJustified = blockAlignment === 'justify' || blockAlignment === 'both';
+          const alignmentOverride = isListItemFlag && !isJustified ? 'left' : undefined;
           const startX = mapPmToX(block, line, charOffsetFrom, fragment.width, alignmentOverride);
           const endX = mapPmToX(block, line, charOffsetTo, fragment.width, alignmentOverride);
 
@@ -1908,68 +1969,7 @@ export function findLinesIntersectingRange(
  * @see pmPosToCharOffset - Related function that skips empty runs during character offset calculation
  */
 export function computeLinePmRange(block: FlowBlock, line: Line): { pmStart?: number; pmEnd?: number } {
-  if (block.kind !== 'paragraph') return {};
-
-  let pmStart: number | undefined;
-  let pmEnd: number | undefined;
-
-  for (let runIndex = line.fromRun; runIndex <= line.toRun; runIndex += 1) {
-    const run = block.runs[runIndex];
-    if (!run) continue;
-
-    const text =
-      'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
-        ? ''
-        : (run.text ?? '');
-    const runLength = text.length;
-    const runPmStart = run.pmStart ?? null;
-    const runPmEnd = run.pmEnd ?? (runPmStart != null ? runPmStart + runLength : null);
-
-    if (runPmStart == null || runPmEnd == null) continue;
-
-    // Runtime validation: warn about invalid PM positions that indicate data corruption
-    if (!Number.isFinite(runPmStart) || runPmStart < 0) {
-      console.warn(
-        `[computeLinePmRange] Invalid runPmStart (${runPmStart}) in block ${block.id}, run ${runIndex}. ` +
-          `This may indicate layout data corruption. Expected a non-negative finite number.`,
-      );
-    }
-    if (!Number.isFinite(runPmEnd) || runPmEnd < 0) {
-      console.warn(
-        `[computeLinePmRange] Invalid runPmEnd (${runPmEnd}) in block ${block.id}, run ${runIndex}. ` +
-          `This may indicate layout data corruption. Expected a non-negative finite number.`,
-      );
-    }
-
-    // Empty runs still carry caret information via their PM positions.
-    // Preserve those positions so zero-width lines (e.g., empty table cells)
-    // expose pmStart/pmEnd for cursor hit testing.
-    // This is intentional behavior for SD-1108 - DO NOT remove.
-    // NOTE: pmPosToCharOffset skips empty runs because they contribute no pixels,
-    // but we preserve them here for spatial operations like click-to-position.
-    if (runLength === 0) {
-      if (pmStart == null) {
-        pmStart = runPmStart;
-      }
-      pmEnd = runPmEnd;
-      continue;
-    }
-
-    const isFirstRun = runIndex === line.fromRun;
-    const isLastRun = runIndex === line.toRun;
-    const startOffset = isFirstRun ? line.fromChar : 0;
-    const endOffset = isLastRun ? line.toChar : runLength;
-
-    const sliceStart = runPmStart + startOffset;
-    const sliceEnd = Math.min(runPmStart + endOffset, runPmEnd);
-
-    if (pmStart == null) {
-      pmStart = sliceStart;
-    }
-    pmEnd = sliceEnd;
-  }
-
-  return { pmStart, pmEnd };
+  return computeLinePmRangeUnified(block, line);
 }
 
 /**

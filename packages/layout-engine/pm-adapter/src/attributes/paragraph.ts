@@ -969,6 +969,41 @@ export const computeWordLayoutForParagraph = (
   }
 };
 
+const normalizeWordLayoutForIndent = (
+  wordLayout: WordParagraphLayoutOutput,
+  paragraphIndent: ParagraphIndent | undefined,
+): WordParagraphLayoutOutput => {
+  const resolvedIndent = wordLayout.resolvedIndent ?? paragraphIndent ?? {};
+  const indentLeft = isFiniteNumber(resolvedIndent.left) ? resolvedIndent.left : 0;
+  const firstLine = isFiniteNumber(resolvedIndent.firstLine) ? resolvedIndent.firstLine : 0;
+  const hanging = isFiniteNumber(resolvedIndent.hanging) ? resolvedIndent.hanging : 0;
+  const shouldFirstLineIndentMode = firstLine > 0 && !hanging;
+
+  if (wordLayout.firstLineIndentMode === true && !shouldFirstLineIndentMode) {
+    wordLayout.firstLineIndentMode = false;
+  }
+
+  if (wordLayout.firstLineIndentMode === true) {
+    if (isFiniteNumber(wordLayout.textStartPx)) {
+      if (
+        wordLayout.marker &&
+        (!isFiniteNumber(wordLayout.marker.textStartX) || wordLayout.marker.textStartX !== wordLayout.textStartPx)
+      ) {
+        wordLayout.marker.textStartX = wordLayout.textStartPx;
+      }
+    } else if (wordLayout.marker && isFiniteNumber(wordLayout.marker.textStartX)) {
+      wordLayout.textStartPx = wordLayout.marker.textStartX;
+    }
+  } else {
+    wordLayout.textStartPx = indentLeft;
+    if (wordLayout.marker) {
+      wordLayout.marker.textStartX = indentLeft;
+    }
+  }
+
+  return wordLayout;
+};
+
 /**
  * Compute paragraph attributes from PM node, resolving styles and handling BiDi text.
  * This is the main function for converting PM paragraph attributes to layout engine format.
@@ -1157,6 +1192,7 @@ export const computeParagraphAttrs = (
   const paragraphAlignment =
     typeof paragraphProps.justification === 'string' ? normalizeAlignment(paragraphProps.justification) : undefined;
   const styleAlignment = hydrated?.alignment ? normalizeAlignment(hydrated.alignment) : undefined;
+
   if (bidi && adjustRightInd) {
     paragraphAttrs.alignment = 'right';
   } else if (explicitAlignment) {
@@ -1170,7 +1206,7 @@ export const computeParagraphAttrs = (
   } else if (styleAlignment) {
     paragraphAttrs.alignment = styleAlignment;
   } else if (computed.paragraph.alignment) {
-    paragraphAttrs.alignment = computed.paragraph.alignment;
+    paragraphAttrs.alignment = normalizeAlignment(computed.paragraph.alignment);
   }
 
   const spacingPx = spacingPtToPx(spacing, normalizedSpacing);
@@ -1194,6 +1230,12 @@ export const computeParagraphAttrs = (
    * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
    * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
    * 3. attrs.contextualSpacing - Top-level attribute
+   * 4. hydrated.contextualSpacing - Value resolved from paragraph style chain
+   *
+   * The hydrated fallback (priority 4) is critical for style-defined contextualSpacing,
+   * such as the ListBullet style which defines w:contextualSpacing to suppress spacing
+   * between consecutive list items of the same style ("Don't add space between paragraphs
+   * of the same style" in MS Word).
    *
    * OOXML Boolean Handling:
    * - Supports multiple representations: true, 1, '1', 'true', 'on'
@@ -1203,7 +1245,8 @@ export const computeParagraphAttrs = (
   const contextualSpacingValue =
     normalizedSpacing?.contextualSpacing ??
     safeGetProperty(paragraphProps, 'contextualSpacing') ??
-    safeGetProperty(attrs, 'contextualSpacing');
+    safeGetProperty(attrs, 'contextualSpacing') ??
+    hydrated?.contextualSpacing;
 
   if (contextualSpacingValue != null) {
     // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')
@@ -1576,8 +1619,11 @@ export const computeParagraphAttrs = (
     // so first-line wrapping in columns has the correct width.
     if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
           firstLineIndentMode: true,
@@ -1590,14 +1636,13 @@ export const computeParagraphAttrs = (
     // the numbering indent has a firstLine value, set a minimal textStartPx to
     // match the resolved first-line indent. This guards against cases where
     // word-layout computation omits textStart for levels without left/hanging.
-    if (
-      wordLayout &&
-      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
-      enrichedNumberingProps.resolvedLevelIndent
-    ) {
+    if (wordLayout && !Number.isFinite(wordLayout.textStartPx) && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           ...wordLayout,
           firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
@@ -1618,6 +1663,7 @@ export const computeParagraphAttrs = (
           wordLayout.marker.suffix = listRendering.suffix;
         }
       }
+      wordLayout = normalizeWordLayoutForIndent(wordLayout, paragraphAttrs.indent);
       paragraphAttrs.wordLayout = wordLayout;
     }
 

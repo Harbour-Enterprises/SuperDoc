@@ -1,15 +1,34 @@
 {
   "name": "@superdoc-dev/ai",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "AI integration package for SuperDoc",
+  "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
     "lint": "eslint src --ext .ts",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "npm run build",
+    "version:next": "npm version prerelease --preid=next --no-git-tag-version",
+    "version:beta": "npm version prerelease --preid=beta --no-git-tag-version",
+    "version:patch": "npm version patch --no-git-tag-version",
+    "version:minor": "npm version minor --no-git-tag-version",
+    "version:major": "npm version major --no-git-tag-version",
+    "publish:next": "npm run build && npm run test && npm publish --tag next --access public",
+    "publish:beta": "npm run build && npm run test && npm publish --tag beta --access public",
+    "publish:latest": "npm run build && npm run test && npm publish --tag latest --access public",
+    "release:next": "npm run version:next && npm run publish:next",
+    "release:beta": "npm run version:beta && npm run publish:beta",
+    "info": "npm view @superdoc-dev/ai dist-tags && npm view @superdoc-dev/ai versions"
   },
   "keywords": [
     "superdoc",
@@ -25,7 +44,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "*"
+    "superdoc": "1.0.0-next.1"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -35,7 +54,7 @@
     "prosemirror-model": "^1.25.2",
     "prosemirror-state": "^1.4.3",
     "prosemirror-view": "^1.33.8",
-    "superdoc": "^0.28.0",
+    "superdoc": "^1.0.0-next.1",
     "tsup": "^8.5.1",
     "typescript": "^5.0.0",
     "vitest": "^3.2.4"

@@ -945,3 +945,143 @@ describe('SuperConverter Document GUID', () => {
     });
   });
 });
+
+describe('XML whitespace preservation', () => {
+  it('preserves whitespace-only w:t runs without xml:space attribute', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xml:space="preserve">
+        <w:body>
+          <w:p><w:r><w:t> </w:t></w:r><w:r><w:t>Word</w:t></w:r></w:p>
+        </w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+    const doc = converter.convertedXml['word/document.xml'];
+
+    // Find all w:t nodes
+    const textNodes = [];
+    const collectTextNodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.name === 'w:t') textNodes.push(node);
+      if (Array.isArray(node.elements)) node.elements.forEach(collectTextNodes);
+    };
+    collectTextNodes(doc.elements?.[0]);
+
+    // The whitespace-only node should have [[sdspace]] placeholders
+    const placeholderNode = textNodes.find((node) => node.elements?.[0]?.text?.includes('[[sdspace]]'));
+    expect(placeholderNode).toBeTruthy();
+  });
+
+  it('preserves whitespace-only w:delText runs', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p><w:del><w:r><w:delText> </w:delText></w:r></w:del></w:p>
+        </w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+    const doc = converter.convertedXml['word/document.xml'];
+
+    // Find all w:delText nodes
+    const textNodes = [];
+    const collectTextNodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.name === 'w:delText') textNodes.push(node);
+      if (Array.isArray(node.elements)) node.elements.forEach(collectTextNodes);
+    };
+    collectTextNodes(doc.elements?.[0]);
+
+    // The whitespace-only node should have [[sdspace]] placeholders
+    const placeholderNode = textNodes.find((node) => node.elements?.[0]?.text?.includes('[[sdspace]]'));
+    expect(placeholderNode).toBeTruthy();
+  });
+
+  it('captures document-level xml:space attribute', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xml:space="preserve">
+        <w:body><w:p><w:r><w:t>Test</w:t></w:r></w:p></w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+
+    expect(converter.documentAttributes?.['xml:space']).toBe('preserve');
+  });
+
+  it('does not corrupt literal [[sdspace]] in document content', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p><w:r><w:t>This text contains [[sdspace]] literal placeholder</w:t></w:r></w:p>
+        </w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+    const doc = converter.convertedXml['word/document.xml'];
+
+    // Find the text node
+    const textNodes = [];
+    const collectTextNodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.name === 'w:t') textNodes.push(node);
+      if (Array.isArray(node.elements)) node.elements.forEach(collectTextNodes);
+    };
+    collectTextNodes(doc.elements?.[0]);
+
+    // The literal [[sdspace]] should still be present in the parsed JSON
+    // (it will be removed during text node processing in t-translator)
+    const textNode = textNodes[0];
+    expect(textNode.elements[0].text).toBe('This text contains [[sdspace]] literal placeholder');
+  });
+
+  it('handles w:t elements with attributes correctly', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p><w:r><w:t xml:space="preserve"> </w:t></w:r></w:p>
+        </w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+    const doc = converter.convertedXml['word/document.xml'];
+
+    // Find the text node with attributes
+    const textNodes = [];
+    const collectTextNodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.name === 'w:t') textNodes.push(node);
+      if (Array.isArray(node.elements)) node.elements.forEach(collectTextNodes);
+    };
+    collectTextNodes(doc.elements?.[0]);
+
+    const textNode = textNodes[0];
+    expect(textNode.attributes?.['xml:space']).toBe('preserve');
+    expect(textNode.elements[0].text).toContain('[[sdspace]]');
+  });
+
+  it('handles multiple w:t elements with mixed attributes', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:body>
+          <w:p>
+            <w:r><w:t>Normal text</w:t></w:r>
+            <w:r><w:t xml:space="preserve"> </w:t></w:r>
+            <w:r><w:t xml:space="default">Trimmed text  </w:t></w:r>
+          </w:p>
+        </w:body>
+      </w:document>`;
+    const converter = new SuperConverter({ docx: [{ name: 'word/document.xml', content: xml }] });
+    const doc = converter.convertedXml['word/document.xml'];
+
+    // Find all text nodes
+    const textNodes = [];
+    const collectTextNodes = (node) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.name === 'w:t') textNodes.push(node);
+      if (Array.isArray(node.elements)) node.elements.forEach(collectTextNodes);
+    };
+    collectTextNodes(doc.elements?.[0]);
+
+    expect(textNodes.length).toBe(3);
+    expect(textNodes[0].elements[0].text).toBe('Normal text');
+    expect(textNodes[1].attributes?.['xml:space']).toBe('preserve');
+    expect(textNodes[1].elements[0].text).toContain('[[sdspace]]');
+    expect(textNodes[2].attributes?.['xml:space']).toBe('default');
+    expect(textNodes[2].elements[0].text).toBe('Trimmed text  ');
+  });
+});

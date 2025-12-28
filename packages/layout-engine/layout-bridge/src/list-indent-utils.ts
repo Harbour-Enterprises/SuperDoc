@@ -1,4 +1,6 @@
 import type { ParagraphBlock, ParagraphIndent, WordLayoutConfig } from '@superdoc/contracts';
+import { LIST_MARKER_GAP } from '@superdoc/common/layout-constants';
+import { resolveListTextStartPx, type MinimalWordLayout } from '@superdoc/common/list-marker-utils';
 
 /**
  * Utilities for list item detection and text indent calculation.
@@ -72,8 +74,9 @@ export function isListItem(markerWidth: number, block: ParagraphBlock | undefine
   }
 
   const wordLayout = getWordLayoutConfig(block);
-  const hasListAttrs =
-    block.attrs?.listItem != null || block.attrs?.numberingProperties != null || wordLayout?.marker != null;
+  const rawAttrs = block.attrs as unknown as Record<string, unknown> | undefined;
+  const hasListItemAttr = rawAttrs?.listItem != null;
+  const hasListAttrs = hasListItemAttr || block.attrs?.numberingProperties != null || wordLayout?.marker != null;
 
   if (hasListAttrs) {
     return true;
@@ -230,11 +233,18 @@ export function calculateTextStartIndent(params: TextIndentCalculationParams): n
   let indentAdjust = paraIndentLeft;
 
   if (isListItem && isFirstLine && isFirstLineIndentMode) {
-    // First-line indent mode: text starts at textStartPx (after marker + tab)
+    // First-line indent mode: text starts after marker + tab/space, following painter rules.
+    const resolvedTextStart = resolveListTextStartPx(
+      wordLayout as MinimalWordLayout | undefined,
+      paraIndentLeft,
+      Math.max(firstLineIndent, 0),
+      Math.max(hangingIndent, 0),
+      () => markerWidth, // Use provided markerWidth since we don't have canvas access here
+    );
     const textStartFallback = paraIndentLeft + Math.max(firstLineIndent, 0) + markerWidth;
     indentAdjust =
-      typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
-        ? wordLayout.textStartPx
+      typeof resolvedTextStart === 'number' && Number.isFinite(resolvedTextStart)
+        ? resolvedTextStart
         : textStartFallback;
   } else if (isFirstLine && !isListItem) {
     // Non-list paragraph: apply first-line offset on the first line

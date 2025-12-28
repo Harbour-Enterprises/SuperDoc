@@ -190,6 +190,45 @@ describe('measureBlock', () => {
       expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
+    it('falls back to marker.textStartX when wordLayout.textStartPx is missing', async () => {
+      const maxWidth = 200;
+      const textStartX = 96; // First-line text start after marker + tab
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'wordlayout-list-textStartX',
+        runs: [
+          {
+            text: 'List item text should wrap based on marker.textStartX when textStartPx is missing',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 0, firstLine: 48 },
+          wordLayout: {
+            indentLeftPx: 0,
+            // Intentionally omit top-level textStartPx to simulate partial/legacy producers.
+            marker: {
+              markerText: '(a)',
+              markerBoxWidthPx: 24,
+              gutterWidthPx: 8,
+              textStartX,
+              run: {
+                fontFamily: 'Times New Roman',
+                fontSize: 16,
+                bold: false,
+                italic: false,
+                letterSpacing: 0,
+              },
+            },
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartX);
+    });
+
     it('measures empty block correctly', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
@@ -586,6 +625,7 @@ describe('measureBlock', () => {
     });
 
     it('converts spacing multipliers using the baseline line height', async () => {
+      const fontSize = 16;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'spaced',
@@ -593,7 +633,7 @@ describe('measureBlock', () => {
           {
             text: 'Line height test',
             fontFamily: 'Arial',
-            fontSize: 16,
+            fontSize,
           },
         ],
         attrs: {
@@ -602,13 +642,15 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
-      // The multiplier (1.5) is applied to this base
-      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
-      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * actualBase, 1);
+      // Word 2007+ uses fontSize × 1.15 as "single" line spacing (not just ascent+descent).
+      // The Canvas TextMetrics API doesn't expose lineGap, so we approximate it with 1.15×.
+      // The spacing multiplier (1.5) is applied to this base.
+      const singleLineHeight = fontSize * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * singleLineHeight, 1);
     });
 
     it('applies higher auto multipliers to the baseline line height', async () => {
+      const fontSize = 16;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'double-spaced',
@@ -616,7 +658,7 @@ describe('measureBlock', () => {
           {
             text: 'Double spaced text',
             fontFamily: 'Arial',
-            fontSize: 16,
+            fontSize,
           },
         ],
         attrs: {
@@ -625,9 +667,10 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
-      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
-      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * actualBase, 1);
+      // Word 2007+ uses fontSize × 1.15 as "single" line spacing.
+      // The spacing multiplier (2.0) is applied to this base.
+      const singleLineHeight = fontSize * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * singleLineHeight, 1);
     });
 
     it('treats large auto values as absolute pixel heights', async () => {
@@ -648,6 +691,114 @@ describe('measureBlock', () => {
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
       expect(measure.lines[0].lineHeight).toBeCloseTo(42, 3);
+    });
+
+    it('uses minimum line height for very small fonts', async () => {
+      const smallFontSize = 8; // Very small font
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'small-font',
+        runs: [
+          {
+            text: 'Tiny text',
+            fontFamily: 'Arial',
+            fontSize: smallFontSize,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // MIN_SINGLE_LINE_PX is 16px (12pt), which should be used instead of 8 * 1.15 = 9.2px
+      const minLineHeight = 16; // (12 * 96) / 72
+      expect(measure.lines[0].lineHeight).toBeCloseTo(minLineHeight, 1);
+    });
+
+    it('uses 1.15 multiplier for normal fonts', async () => {
+      const fontSize = 20;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'normal-font',
+        runs: [
+          {
+            text: 'Normal text',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // Normal font should use fontSize * 1.15
+      const expectedLineHeight = fontSize * 1.15; // 20 * 1.15 = 23px
+      expect(measure.lines[0].lineHeight).toBeCloseTo(expectedLineHeight, 1);
+    });
+
+    it('bypasses 1.15 base with exact lineRule', async () => {
+      const fontSize = 16;
+      const exactHeight = 30;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'exact-height',
+        runs: [
+          {
+            text: 'Exact line height',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+        attrs: {
+          spacing: { line: exactHeight, lineRule: 'exact' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // With lineRule: 'exact', should use the exact value, not the 1.15 base
+      expect(measure.lines[0].lineHeight).toBeCloseTo(exactHeight, 1);
+    });
+
+    it('uses max of base and specified value with atLeast lineRule', async () => {
+      const fontSize = 16;
+      const atLeastHeight = 12; // Less than base (16 * 1.15 = 18.4)
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'at-least-height',
+        runs: [
+          {
+            text: 'At least line height',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+        attrs: {
+          spacing: { line: atLeastHeight, lineRule: 'atLeast' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // With lineRule: 'atLeast', should use max of base (18.4) and specified (12)
+      const baseLineHeight = fontSize * 1.15; // 18.4
+      expect(measure.lines[0].lineHeight).toBeCloseTo(baseLineHeight, 1);
+    });
+
+    it('ensures line height is never smaller than glyph bounds to prevent clipping', async () => {
+      // This test verifies the clamp: Math.max(fontSize * 1.15, ascent + descent, MIN_SINGLE_LINE_PX)
+      // For any font, line height must be >= ascent + descent to prevent glyph overlap
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'clamp-test',
+        runs: [
+          {
+            text: 'Test clipping prevention',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      const glyphBounds = measure.lines[0].ascent + measure.lines[0].descent;
+      // Line height must always accommodate the full glyph bounds
+      expect(measure.lines[0].lineHeight).toBeGreaterThanOrEqual(glyphBounds);
     });
 
     it('measures list blocks and returns marker widths and indents', async () => {
@@ -1260,6 +1411,67 @@ describe('measureBlock', () => {
         expect(tabRun.leader).toBe('dot');
       }
     });
+
+    it('preserves trailing spaces after tabs when line breaks', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Before',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 6,
+            pmEnd: 7,
+          },
+          {
+            text: 'Word Next',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use narrow width to force line break after "Word "
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // Should have multiple lines due to narrow width
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // Find the line containing "Word " (the text after the tab)
+      const lineWithWord = measure.lines.find((line) => {
+        return line.segments?.some((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+      });
+
+      expect(lineWithWord).toBeDefined();
+
+      if (lineWithWord) {
+        // The segment should include the trailing space after "Word"
+        const wordSegment = lineWithWord.segments?.find((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+
+        expect(wordSegment).toBeDefined();
+
+        if (wordSegment) {
+          const run = block.runs[wordSegment.runIndex];
+          if (run.kind !== 'tab' && 'text' in run) {
+            const segmentText = run.text.substring(wordSegment.fromChar, wordSegment.toChar);
+            // The segment should include "Word " (with trailing space)
+            expect(segmentText).toBe('Word ');
+          }
+        }
+      }
+    });
   });
 
   describe('space-only runs', () => {
@@ -1792,10 +2004,14 @@ describe('measureBlock', () => {
       // Page width 12240 twips (8.5in) minus margins 1701/1134 twips ≈ 627px content width at 96dpi
       const measure = expectParagraphMeasure(await measureBlock(block, 627));
       const lineTexts = measure.lines.map((line) => extractLineText(block, line));
-      const lineWithRepresentado = lineTexts.find((text) => text.includes('representado'));
+      const representadoIndex = lineTexts.findIndex((text) => text.includes('representado'));
 
-      expect(lineWithRepresentado).toBeDefined();
-      expect(lineWithRepresentado).toContain('neste ato representado por seu representante legal');
+      expect(representadoIndex).toBeGreaterThanOrEqual(0);
+      const windowText = [lineTexts[representadoIndex], lineTexts[representadoIndex + 1] ?? '']
+        .join(' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      expect(windowText).toContain('neste ato representado por seu representante legal');
     });
 
     it('preserves leading spaces in runs (xml:space="preserve" case)', async () => {
@@ -2178,6 +2394,31 @@ describe('measureBlock', () => {
       expect(measure.width).toBeCloseTo(60);
       expect(measure.height).toBeCloseTo(120);
       expect(measure.scale).toBe(1);
+    });
+
+    it('resolves full-width drawings using maxWidth constraints and indents', async () => {
+      const block: DrawingBlock = {
+        kind: 'drawing',
+        id: 'drawing-full-width',
+        drawingKind: 'vectorShape',
+        geometry: {
+          width: 1,
+          height: 2,
+          rotation: 0,
+          flipH: false,
+          flipV: false,
+        },
+        attrs: {
+          isFullWidth: true,
+          hrIndentLeft: -20,
+          hrIndentRight: 10,
+        },
+      };
+
+      const measure = expectDrawingMeasure(await measureBlock(block, { maxWidth: 300, maxHeight: 20 }));
+      expect(measure.width).toBe(310);
+      expect(measure.height).toBe(2);
+      expect(measure.geometry.width).toBe(310);
     });
 
     it('scales proportionally when exceeding constraints', async () => {

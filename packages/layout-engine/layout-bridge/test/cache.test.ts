@@ -401,7 +401,11 @@ describe('MeasureCache', () => {
       expect(cache.get(table2, 800, 600)).toBeUndefined();
     });
 
-    it('handles whitespace normalization in table cells', () => {
+    it('distinguishes different whitespace counts in table cells', () => {
+      // REGRESSION TEST (PR #1551): Previously whitespace was normalized with /\s+/g
+      // causing "Hello   World" and "Hello World" to incorrectly share cache despite
+      // having different text widths when rendered.
+      // Multiple spaces affect text width, so they MUST produce different cache keys
       const table1: TableBlock = {
         kind: 'table',
         id: 'table-whitespace',
@@ -442,8 +446,190 @@ describe('MeasureCache', () => {
       };
 
       cache.set(table1, 800, 600, { totalHeight: 50 });
-      // Whitespace normalization should treat these as the same
-      expect(cache.get(table2, 800, 600)).toEqual({ totalHeight: 50 });
+      // Different whitespace counts affect text width, so they should NOT share cache
+      expect(cache.get(table2, 800, 600)).toBeUndefined();
+    });
+
+    describe('comprehensive whitespace edge cases', () => {
+      it('distinguishes leading whitespace in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-leading-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: ' Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-leading-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Leading whitespace should produce different cache key
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('distinguishes trailing whitespace in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-trailing-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello ', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-trailing-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Trailing whitespace should produce different cache key
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('distinguishes tabs vs spaces in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-tab-vs-space',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello\tWorld', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-tab-vs-space',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'Hello World', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Tabs vs spaces should produce different cache key
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
+
+      it('distinguishes empty string vs whitespace-only in table cells', () => {
+        const table1: TableBlock = {
+          kind: 'table',
+          id: 'table-empty-vs-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: '', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+        const table2: TableBlock = {
+          kind: 'table',
+          id: 'table-empty-vs-ws',
+          rows: [
+            {
+              id: 'row-0',
+              cells: [
+                {
+                  id: 'cell-0',
+                  paragraph: {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: ' ', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                },
+              ],
+            },
+          ],
+        };
+
+        cache.set(table1, 800, 600, { totalHeight: 50 });
+        // Empty string vs whitespace-only should produce different cache key
+        expect(cache.get(table2, 800, 600)).toBeUndefined();
+      });
     });
 
     it('handles mixed multi-block and legacy cells', () => {

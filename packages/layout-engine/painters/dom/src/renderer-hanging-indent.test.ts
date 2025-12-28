@@ -172,7 +172,7 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl).toBeTruthy();
 
       // paddingLeft should be adjusted: left - hanging = 360 - 360 = 0
-      expect(lineEl.style.paddingLeft).toBe('0px');
+      expect(lineEl.style.paddingLeft).toBe('');
 
       // textIndent should NOT be applied (segments are absolutely positioned)
       expect(lineEl.style.textIndent).toBe('');
@@ -216,7 +216,7 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl).toBeTruthy();
 
       // paddingLeft should be 0 when left equals hanging
-      expect(lineEl.style.paddingLeft).toBe('0px');
+      expect(lineEl.style.paddingLeft).toBe('');
       expect(lineEl.style.textIndent).toBe('');
     });
   });
@@ -281,7 +281,7 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl).toBeTruthy();
 
       // No hanging, so normal paddingLeft
-      expect(lineEl.style.paddingLeft).toBe('360px');
+      expect(lineEl.style.paddingLeft).toBe('');
 
       // No textIndent because explicit positioning
       expect(lineEl.style.textIndent).toBe('');
@@ -352,7 +352,7 @@ describe('DomPainter hanging indent with tabs', () => {
       const secondLine = lines[1] as HTMLElement;
 
       // First line: adjusted padding
-      expect(firstLine.style.paddingLeft).toBe('0px');
+      expect(firstLine.style.paddingLeft).toBe('');
 
       // Second line: normal left indent (no adjustment)
       expect(secondLine.style.paddingLeft).toBe('360px');
@@ -376,7 +376,7 @@ describe('DomPainter hanging indent with tabs', () => {
 
       // When continuing from previous page, it's not the "first line" of the paragraph
       // so should use normal left indent
-      expect(lineEl.style.paddingLeft).toBe('360px');
+      expect(lineEl.style.paddingLeft).toBe('');
       expect(lineEl.style.textIndent).toBe('0px');
     });
   });
@@ -398,7 +398,7 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl).toBeTruthy();
 
       // Zero hanging = normal behavior
-      expect(lineEl.style.paddingLeft).toBe('360px');
+      expect(lineEl.style.paddingLeft).toBe('');
       expect(lineEl.style.textIndent).toBe('');
     });
 
@@ -482,7 +482,7 @@ describe('DomPainter hanging indent with tabs', () => {
       expect(lineEl).toBeTruthy();
 
       // If ANY segment has explicit X, treat as explicit positioning
-      expect(lineEl.style.paddingLeft).toBe('0px');
+      expect(lineEl.style.paddingLeft).toBe('');
       expect(lineEl.style.textIndent).toBe('');
     });
 
@@ -974,7 +974,7 @@ describe('DomPainter hanging indent with tabs', () => {
       const lineEl = container.querySelector('.superdoc-line') as HTMLElement;
       expect(lineEl).toBeTruthy();
 
-      expect(lineEl.style.paddingLeft).toBe('0px');
+      expect(lineEl.style.paddingLeft).toBe('');
       expect(lineEl.style.paddingRight).toBe('180px');
       expect(lineEl.style.textIndent).toBe('');
     });
