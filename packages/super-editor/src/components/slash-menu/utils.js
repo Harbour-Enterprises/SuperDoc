@@ -1,6 +1,5 @@
 import { selectionHasNodeOrMark } from '../cursor-helpers.js';
 import { tableActionsOptions } from './constants.js';
-import { isList } from '../../core/commands/list-helpers/is-list.js';
 import { markRaw } from 'vue';
 import { undoDepth, redoDepth } from 'prosemirror-history';
 import { yUndoPluginKey } from 'y-prosemirror';

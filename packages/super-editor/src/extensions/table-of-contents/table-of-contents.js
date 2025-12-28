@@ -9,7 +9,6 @@ import { PaginationPluginKey } from '@extensions/pagination/pagination-helpers.j
  */
 function getPageNumberForPosition(state, pos) {
   const paginationState = PaginationPluginKey.getState(state);
-
   // If pagination is not enabled, return 1
   if (!paginationState?.isEnabled) {
     return 1;
@@ -124,12 +123,12 @@ export const TableOfContents = Node.create({
             const node = $searchPos.node(depth);
             // Check for documentPartObject first (outer wrapper)
             if (node.type.name === 'documentPartObject' && node.attrs?.docPartGallery === 'Table of Contents') {
-              tocNodeInfo = { node, pos: $searchPos.before(depth), depth };
+              tocNodeInfo = { node, pos: $searchPos.before(depth) };
               break;
             }
             // Only check for standalone tableOfContents if no documentPartObject found
             if (node.type.name === 'tableOfContents') {
-              tocNodeInfo = { node, pos: $searchPos.before(depth), depth };
+              tocNodeInfo = { node, pos: $searchPos.before(depth) };
               // Don't break yet - continue searching for documentPartObject at higher depth
             }
           }
@@ -169,28 +168,36 @@ export const TableOfContents = Node.create({
 
           // Find the TOC node starting from the search position
           let tocNodeInfo = null;
-          let isDocPartObject = false;
-          let innerTocNode = null;
 
           for (let depth = $searchPos.depth; depth > 0; depth--) {
+            if (tocNodeInfo) {
+              break;
+            }
             const node = $searchPos.node(depth);
             // Check for documentPartObject first (outer wrapper)
             if (node.type.name === 'documentPartObject' && node.attrs?.docPartGallery === 'Table of Contents') {
-              tocNodeInfo = { node, pos: $searchPos.before(depth), depth };
-              isDocPartObject = true;
               // Find the inner tableOfContents node
-              node.descendants((child) => {
-                if (!innerTocNode && child.type.name === 'tableOfContents') {
-                  innerTocNode = child;
+              const outerTocPos = $searchPos.before(depth) + 1;
+              node.descendants((child, pos) => {
+                if (tocNodeInfo) {
+                  // Already found.
+                  return false;
+                }
+                if (child.type.name === 'tableOfContents') {
+                  tocNodeInfo = {
+                    node: child,
+                    pos: outerTocPos + pos,
+                    depth,
+                  };
                   return false; // Stop searching
                 }
               });
               break;
             }
-            // Only check for standalone tableOfContents if no documentPartObject found
+            // Alternatively check for tableOfContents node.
             if (node.type.name === 'tableOfContents') {
               tocNodeInfo = { node, pos: $searchPos.before(depth), depth };
-              // Don't break - keep looking for documentPartObject
+              break;
             }
           }
 
@@ -203,7 +210,7 @@ export const TableOfContents = Node.create({
           currentDoc.descendants((node, pos) => {
             if (node.type.name === 'paragraph') {
               // Fix: Check attrs.styleId instead of attrs.paragraphProperties.styleId
-              const styleId = node.attrs?.styleId;
+              const styleId = node.attrs?.paragraphProperties?.styleId;
               if (styleId && /^Heading(\d)$/.test(styleId)) {
                 const level = parseInt(styleId.match(/^Heading(\d)$/)[1]);
                 // Get text directly from the current document node
@@ -270,47 +277,21 @@ export const TableOfContents = Node.create({
 
               return schema.nodes.paragraph.create(
                 {
-                  styleId: `TOC${heading.level}`,
+                  paragraphProperties: {
+                    styleId: `TOC${heading.level}`,
+                  },
                   isTocEntry: true,
                 },
                 content,
               );
             });
 
-            if (isDocPartObject) {
-              // Always create a fresh TOC title paragraph (don't reuse to avoid duplicates)
-              const tocTitleNode = schema.nodes.paragraph.create(
-                {
-                  styleId: 'TOCHeading',
-                },
-                schema.text('Table of Contents'),
-              );
+            // Use the inner TOC node's attributes if available, otherwise use empty object
+            const tocAttrs = tocNodeInfo.node.attrs || {};
 
-              // Use the inner TOC node's attributes if available, otherwise use empty object
-              const tocAttrs = innerTocNode?.attrs || {};
-
-              // Create new tableOfContents with ONLY the entries (no title inside)
-              const newTocContent = schema.nodes.tableOfContents.create(tocAttrs, tocEntries);
-
-              // Create documentPartObject with title as first child, TOC as second
-              const newDocPartObject = schema.nodes.documentPartObject.create(node.attrs, [
-                tocTitleNode,
-                newTocContent,
-              ]);
-
-              tr.replaceWith(pos, pos + node.nodeSize, newDocPartObject);
-            } else {
-              // If it's just a standalone tableOfContents node, include title inside
-              const tocTitleNode = schema.nodes.paragraph.create(
-                {
-                  styleId: 'TOCHeading',
-                },
-                schema.text('Table of Contents'),
-              );
-
-              const newTocNode = schema.nodes.tableOfContents.create(node.attrs, [tocTitleNode, ...tocEntries]);
-              tr.replaceWith(pos, pos + node.nodeSize, newTocNode);
-            }
+            // Create new inner tableOfcontents
+            const newInnerToc = schema.nodes.tableOfContents.create(tocAttrs, tocEntries);
+            tr.replaceWith(tocNodeInfo.pos, tocNodeInfo.pos + tocNodeInfo.node.nodeSize, newInnerToc);
 
             // Trigger pagination update on the same transaction
             // This ensures decorations are properly mapped and page numbers are recalculated
