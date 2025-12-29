@@ -5,7 +5,7 @@ test.describe('image resizer', () => {
     test.setTimeout(30_000);
 
     await page.goto('http://localhost:4173/?layout=1');
-    await page.locator('input[type="file"]').setInputFiles('./test-data/basic-documents/image-resizer.docx');
+    await page.locator('input[type="file"]').setInputFiles('./test-data/image-documents/image-resizer.docx');
     await page.waitForSelector('div.super-editor');
     await expect(page.locator('div.super-editor').first()).toBeVisible();
 
