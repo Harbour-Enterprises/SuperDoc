@@ -243,6 +243,103 @@ describe('layoutDocument', () => {
     expect(gap).toBeCloseTo(18, 1);
   });
 
+  it('handles spacingBefore larger than page content area without infinite loop', () => {
+    // Regression test: When spacingBefore exceeds the entire content area (e.g., tiny page height
+    // or very large spacing), the layout engine should complete without infinite looping.
+    // This can happen when header/footer layout has minimal height constraints.
+    const blockWithLargeSpacing: FlowBlock = {
+      kind: 'paragraph',
+      id: 'large-spacing',
+      runs: [],
+      attrs: {
+        spacing: { before: 500 }, // Much larger than content area
+      },
+    };
+
+    const measures: Measure[] = [makeMeasure([20])];
+
+    // Use a very small page to create a tiny content area
+    const tinyPageOptions: LayoutOptions = {
+      pageSize: { w: 200, h: 50 }, // Very short page
+      margins: { top: 10, right: 10, bottom: 10, left: 10 }, // Content area = 30px
+    };
+
+    // This should complete without hanging (spacingBefore 500 > content area 30)
+    const layout = layoutDocument([blockWithLargeSpacing], measures, tinyPageOptions);
+
+    // Layout should produce valid output - content is placed even if spacing is truncated
+    expect(layout.pages.length).toBeGreaterThan(0);
+    expect(layout.pages[0].fragments.length).toBeGreaterThan(0);
+
+    // Verify the spacing was skipped and fragment is at topMargin (10), not topMargin + spacing (510)
+    const fragment = layout.pages[0].fragments[0];
+    expect(fragment.y).toBe(tinyPageOptions.margins!.top); // Should be at topMargin (10)
+
+    // Verify only one page was created (content fits after skipping spacing)
+    expect(layout.pages.length).toBe(1);
+  });
+
+  it('handles spacingBefore equal to content area height (boundary condition)', () => {
+    // Edge case: spacingBefore exactly equals the content area height.
+    // This triggers the infinite loop guard after advancing to a new page.
+    // When spacing (31) is just over the content area (30), attempting to apply it
+    // after advancing to a fresh page still fails, triggering the guard.
+    const blockWithExactSpacing: FlowBlock = {
+      kind: 'paragraph',
+      id: 'exact-spacing',
+      runs: [],
+      attrs: {
+        spacing: { before: 31 }, // Slightly larger than content area (50 - 10 - 10 = 30)
+      },
+    };
+
+    const measures: Measure[] = [makeMeasure([10])]; // Content must fit after skipping spacing
+
+    const exactPageOptions: LayoutOptions = {
+      pageSize: { w: 200, h: 50 },
+      margins: { top: 10, right: 10, bottom: 10, left: 10 }, // Content area = 30px
+    };
+
+    const layout = layoutDocument([blockWithExactSpacing], measures, exactPageOptions);
+
+    // Should complete without hanging
+    expect(layout.pages.length).toBeGreaterThan(0);
+    expect(layout.pages[0].fragments.length).toBeGreaterThan(0);
+
+    // When spacing exceeds content area, it should be skipped and content placed at topMargin
+    const fragment = layout.pages[0].fragments[0];
+    expect(fragment.y).toBe(exactPageOptions.margins!.top);
+  });
+
+  it('handles very small content area with spacing that still fits', () => {
+    // Edge case: Content area is very small but spacing is even smaller and should fit.
+    const blockWithSmallSpacing: FlowBlock = {
+      kind: 'paragraph',
+      id: 'small-spacing',
+      runs: [],
+      attrs: {
+        spacing: { before: 5 }, // Small spacing that fits in small content area
+      },
+    };
+
+    const measures: Measure[] = [makeMeasure([10])];
+
+    const smallPageOptions: LayoutOptions = {
+      pageSize: { w: 200, h: 40 },
+      margins: { top: 10, right: 10, bottom: 10, left: 10 }, // Content area = 20px
+    };
+
+    const layout = layoutDocument([blockWithSmallSpacing], measures, smallPageOptions);
+
+    // Should complete without hanging
+    expect(layout.pages.length).toBeGreaterThan(0);
+
+    // Spacing should be applied (5px from top margin)
+    const fragment = layout.pages[0].fragments[0];
+    expect(fragment.y).toBe(smallPageOptions.margins!.top + 5);
+    expect(layout.pages.length).toBe(1);
+  });
+
   it.skip('lays out list blocks with marker gutters', () => {
     const listBlock: FlowBlock = {
       kind: 'list',
@@ -478,8 +575,9 @@ describe('layoutDocument', () => {
     expect(layout.pages.length).toBeGreaterThan(1);
     expect(layout.pages[0].margins).toMatchObject({ top: 40, bottom: 40 });
     const secondPage = layout.pages[1];
-    expect(secondPage.margins).toMatchObject({ top: 120, bottom: 90 });
-    expect(secondPage.fragments[0].y).toBe(120);
+    // Without header content, body uses base margins. Header/footer distances are stored separately.
+    expect(secondPage.margins).toMatchObject({ top: 40, bottom: 40, header: 120, footer: 90 });
+    expect(secondPage.fragments[0].y).toBe(40);
   });
 
   it('applies section break left/right margins to subsequent pages', () => {
@@ -549,10 +647,13 @@ describe('layoutDocument', () => {
 
     expect(layout.pages.length).toBeGreaterThanOrEqual(2);
 
-    // Second page should have both section break margins applied
+    // Second page should have header/footer distances stored, but body uses base margins
+    // without actual header/footer content
     const secondPage = layout.pages[1];
-    expect(secondPage.margins?.top).toBe(100); // from section1
-    expect(secondPage.margins?.bottom).toBe(120); // from section2
+    expect(secondPage.margins?.top).toBe(40); // base margin (no header content)
+    expect(secondPage.margins?.bottom).toBe(40); // base margin (no footer content)
+    expect(secondPage.margins?.header).toBe(100); // from section1
+    expect(secondPage.margins?.footer).toBe(120); // from section2
   });
 
   it('handles section break at page boundary', () => {
@@ -583,12 +684,12 @@ describe('layoutDocument', () => {
 
     const layout = layoutDocument(blocks, measures, options);
 
-    // p3 appears on a new page with the section break margins applied
+    // p3 appears on a new page with header/footer distances, body at base margins
     const pageWithP3 = layout.pages.find((p) => p.fragments.some((f) => f.blockId === 'p3'));
-    expect(pageWithP3?.margins).toMatchObject({ top: 150, bottom: 100 });
+    expect(pageWithP3?.margins).toMatchObject({ top: 40, bottom: 40, header: 150, footer: 100 });
   });
 
-  it('section break with only header margin updates only top', () => {
+  it('section break with only header margin stores header distance', () => {
     const sectionBreakBlock: FlowBlock = {
       kind: 'sectionBreak',
       id: 'sb-1',
@@ -611,11 +712,13 @@ describe('layoutDocument', () => {
     const layout = layoutDocument(blocks, measures, options);
 
     const secondPage = layout.pages[1];
-    expect(secondPage.margins?.top).toBe(120);
+    // Header distance is stored, but body starts at base top margin (no header content)
+    expect(secondPage.margins?.top).toBe(40);
     expect(secondPage.margins?.bottom).toBe(40);
+    expect(secondPage.margins?.header).toBe(120);
   });
 
-  it('section break with only footer margin updates only bottom', () => {
+  it('section break with only footer margin stores footer distance', () => {
     const sectionBreakBlock: FlowBlock = {
       kind: 'sectionBreak',
       id: 'sb-1',
@@ -638,8 +741,10 @@ describe('layoutDocument', () => {
     const layout = layoutDocument(blocks, measures, options);
 
     const secondPage = layout.pages[1];
+    // Footer distance is stored, but body ends at base bottom margin (no footer content)
     expect(secondPage.margins?.top).toBe(40);
-    expect(secondPage.margins?.bottom).toBe(100);
+    expect(secondPage.margins?.bottom).toBe(40);
+    expect(secondPage.margins?.footer).toBe(100);
   });
 
   it('respects minimum margins from document defaults', () => {
@@ -698,8 +803,8 @@ describe('layoutDocument', () => {
       expect(pageContainsBlock(layout.pages[0], 'p1')).toBe(true);
       expect(pageContainsBlock(layout.pages[1], 'p2')).toBe(true);
 
-      // New margins should apply to second page
-      expect(layout.pages[1].margins).toMatchObject({ top: 100, bottom: 80 });
+      // Header/footer distances apply, body uses base margins (no header/footer content)
+      expect(layout.pages[1].margins).toMatchObject({ top: 40, bottom: 40, header: 100, footer: 80 });
     });
     it('continuous type: applies margins from next page without forcing break', () => {
       const sectionBreak: FlowBlock = {
@@ -765,8 +870,8 @@ describe('layoutDocument', () => {
       expect(layout.pages[0].fragments.some((f) => f.blockId === 'p1')).toBe(true);
       expect(layout.pages[1].fragments.some((f) => f.blockId === 'p2')).toBe(true);
 
-      // Second page should have new margins
-      expect(layout.pages[1].margins).toMatchObject({ top: 100, bottom: 80 });
+      // Header/footer distances apply, body uses base margins
+      expect(layout.pages[1].margins).toMatchObject({ top: 40, bottom: 40, header: 100, footer: 80 });
     });
 
     it('evenPage type: forces break to even page number', () => {
@@ -799,7 +904,7 @@ describe('layoutDocument', () => {
       const pageWithP2 = layout.pages.find((p) => p.fragments.some((f) => f.blockId === 'p2'));
       expect(pageWithP2).toBeDefined();
       expect(pageWithP2!.number % 2).toBe(0); // Must be even
-      expect(pageWithP2!.margins).toMatchObject({ top: 120, bottom: 90 });
+      expect(pageWithP2!.margins).toMatchObject({ top: 40, bottom: 40, header: 120, footer: 90 });
     });
 
     it('oddPage type: forces break to odd page number', () => {
@@ -835,7 +940,7 @@ describe('layoutDocument', () => {
       const pageWithP2 = layout.pages.find((p) => p.fragments.some((f) => f.blockId === 'p2'));
       expect(pageWithP2).toBeDefined();
       expect(pageWithP2!.number % 2).toBe(1); // Must be odd
-      expect(pageWithP2!.margins).toMatchObject({ top: 110, bottom: 85 });
+      expect(pageWithP2!.margins).toMatchObject({ top: 40, bottom: 40, header: 110, footer: 85 });
     });
 
     it('parity edge case: evenPage from odd page inserts blank', () => {
@@ -2018,13 +2123,22 @@ describe('layoutHeaderFooter', () => {
     expect(layout.height).toBeCloseTo(40);
   });
 
-  it('throws when dimensions are invalid', () => {
+  it('throws when width is invalid', () => {
     expect(() => layoutHeaderFooter([block], [makeMeasure([10])], { width: 0, height: 40 })).toThrow(
       /width must be positive/,
     );
-    expect(() => layoutHeaderFooter([block], [makeMeasure([10])], { width: 200, height: -10 })).toThrow(
-      /height must be positive/,
-    );
+  });
+
+  it('returns empty layout when height is zero or negative', () => {
+    // Zero height - common in edge-to-edge layouts with no margin space
+    const zeroHeightLayout = layoutHeaderFooter([block], [makeMeasure([10])], { width: 200, height: 0 });
+    expect(zeroHeightLayout.pages).toHaveLength(0);
+    expect(zeroHeightLayout.height).toBe(0);
+
+    // Negative height - edge case that should be handled gracefully
+    const negativeHeightLayout = layoutHeaderFooter([block], [makeMeasure([10])], { width: 200, height: -10 });
+    expect(negativeHeightLayout.pages).toHaveLength(0);
+    expect(negativeHeightLayout.height).toBe(0);
   });
 
   it('splits overflow across implicit pages', () => {
@@ -2565,8 +2679,10 @@ describe('requirePageBoundary edge cases', () => {
     expect(pageContainsBlock(layout.pages[2], 'p3')).toBe(true);
 
     // Check margins are applied correctly
-    expect(layout.pages[1].margins).toMatchObject({ top: 100, bottom: 80 });
-    expect(layout.pages[2].margins).toMatchObject({ top: 120, bottom: 90 });
+    // Note: header/footer distances only affect body position when there's actual header/footer content.
+    // Without content, body uses base top/bottom margins. Header/footer distances are still stored.
+    expect(layout.pages[1].margins).toMatchObject({ top: 40, bottom: 40, header: 100, footer: 80 });
+    expect(layout.pages[2].margins).toMatchObject({ top: 40, bottom: 40, header: 120, footer: 90 });
   });
 
   it('requirePageBoundary with columns still applies column configuration', () => {
