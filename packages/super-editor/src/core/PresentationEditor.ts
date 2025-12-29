@@ -4671,8 +4671,19 @@ export class PresentationEditor extends EventEmitter {
     // Available footer space is from footerMargin to bottomMargin
     const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
 
-    // Use the larger of the two as the constraint height, with a minimum of 1
-    const height = Math.max(headerContentSpace, footerContentSpace, 1);
+    // Use the larger of the two as the constraint height.
+    // When headerMargin >= topMargin (or footerMargin >= bottomMargin), the calculated
+    // space is 0, which would cause layout to fail. In this case, use the header/footer
+    // distance as a fallback, allowing content to extend into the body area (matching Word behavior).
+    // Minimum of 48px ensures at least one line of text can be laid out.
+    const MIN_HEADER_FOOTER_HEIGHT = 48;
+    const height = Math.max(
+      headerContentSpace,
+      footerContentSpace,
+      headerMargin || MIN_HEADER_FOOTER_HEIGHT,
+      footerMargin || MIN_HEADER_FOOTER_HEIGHT,
+      MIN_HEADER_FOOTER_HEIGHT,
+    );
     return {
       width: measurementWidth,
       height,
