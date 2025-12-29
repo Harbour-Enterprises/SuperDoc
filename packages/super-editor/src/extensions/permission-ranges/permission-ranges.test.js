@@ -94,18 +94,125 @@ describe('PermissionRanges extension', () => {
 
     const lockedPos = findTextPos(instance.state.doc, 'Locked');
     expect(lockedPos).toBeGreaterThan(0);
-    const setLockedSelection = instance.state.tr.setSelection(TextSelection.create(instance.state.doc, lockedPos));
-    instance.view.dispatch(setLockedSelection);
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, lockedPos)));
     const lockedTr = instance.state.tr.insertText('X', lockedPos, lockedPos);
     instance.view.dispatch(lockedTr);
     expect(instance.state.doc.toJSON()).toEqual(initialJson);
 
     const editablePos = findTextPos(instance.state.doc, 'Editable');
     expect(editablePos).toBeGreaterThan(0);
-    const setEditableSelection = instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos));
-    instance.view.dispatch(setEditableSelection);
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos)));
     const allowedTr = instance.state.tr.insertText('Y', editablePos, editablePos);
     instance.view.dispatch(allowedTr);
     expect(instance.state.doc.textBetween(editablePos, editablePos + 2)).toContain('Y');
+  });
+
+  it('reconstructs permEnd nodes removed while deleting at the range boundary', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editableText = 'Editable section. ';
+    const editablePos = findTextPos(instance.state.doc, editableText);
+    expect(editablePos).toBeGreaterThan(0);
+
+    let permEndPos = null;
+    let permEndSize = null;
+    instance.state.doc.descendants((node, pos) => {
+      if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
+        permEndPos = pos;
+        permEndSize = node.nodeSize;
+        return false;
+      }
+      return undefined;
+    });
+    expect(permEndPos).toBeGreaterThan(0);
+    expect(permEndSize).toBeGreaterThan(0);
+
+    const lastEditableCharPos = editablePos + editableText.length - 1;
+    const deleteTr = instance.state.tr.delete(lastEditableCharPos, permEndPos + permEndSize);
+    instance.view.dispatch(deleteTr);
+
+    let permEndCount = 0;
+    instance.state.doc.descendants((node) => {
+      if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
+        permEndCount += 1;
+      }
+      return undefined;
+    });
+
+    expect(permEndCount).toBe(1);
+  });
+
+  it('reconstructs permStart nodes deleted at the range boundary', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editablePos = findTextPos(instance.state.doc, 'Editable');
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos)));
+
+    let permStartPos = null;
+    let permStartSize = null;
+    instance.state.doc.descendants((node, pos) => {
+      if (node.type?.name === 'permStart' && node.attrs?.id === '1') {
+        permStartPos = pos;
+        permStartSize = node.nodeSize;
+        return false;
+      }
+      return undefined;
+    });
+    expect(permStartPos).toBeGreaterThan(0);
+    expect(permStartSize).toBeGreaterThan(0);
+
+    const deleteTr = instance.state.tr.delete(permStartPos, permStartPos + permStartSize + 1);
+    instance.view.dispatch(deleteTr);
+
+    let permStartCount = 0;
+    instance.state.doc.descendants((node) => {
+      if (node.type?.name === 'permStart' && node.attrs?.id === '1') {
+        permStartCount += 1;
+      }
+      return undefined;
+    });
+    expect(permStartCount).toBe(1);
+
+    const entireText = instance.state.doc.textContent;
+    expect(entireText).not.toContain('Editable section. Locked section.');
+    expect(entireText).toContain('ditable section. Locked section.');
+  });
+
+  it('restores both markers after deleting the entire editable section', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editablePos = findTextPos(instance.state.doc, 'Editable');
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos)));
+    let permStartPos = null;
+    let permEndPos = null;
+    let permEndSize = null;
+    instance.state.doc.descendants((node, pos) => {
+      if (node.type?.name === 'permStart' && node.attrs?.id === '1') {
+        permStartPos = pos;
+      }
+      if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
+        permEndPos = pos;
+        permEndSize = node.nodeSize;
+      }
+      return undefined;
+    });
+
+    expect(permStartPos).toBeGreaterThan(0);
+    expect(permEndPos).toBeGreaterThan(0);
+    const deleteTr = instance.state.tr.delete(permStartPos, permEndPos + permEndSize);
+    instance.view.dispatch(deleteTr);
+
+    let startCount = 0;
+    let endCount = 0;
+    instance.state.doc.descendants((node) => {
+      if (node.type?.name === 'permStart' && node.attrs?.id === '1') {
+        startCount += 1;
+      }
+      if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
+        endCount += 1;
+      }
+      return undefined;
+    });
+
+    expect(startCount).toBe(1);
+    expect(endCount).toBe(1);
+    expect(instance.state.doc.textContent.trim()).toBe('Locked section.');
   });
 });
