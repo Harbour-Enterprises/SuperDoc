@@ -4593,9 +4593,14 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    if (this.#session.mode !== 'body') {
+      overlay.innerHTML = '';
+      return;
+    }
+
     const permissionStorage = (this.#editor as Editor & { storage?: Record<string, any> })?.storage?.permissionRanges;
     const ranges: Array<{ from: number; to: number }> = permissionStorage?.ranges ?? [];
-    const shouldRender = this.#documentMode === 'viewing' && ranges.length > 0;
+    const shouldRender = ranges.length > 0;
 
     if (!shouldRender) {
       overlay.innerHTML = '';

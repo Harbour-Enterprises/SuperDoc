@@ -267,7 +267,10 @@ export const PermissionRanges = Extension.create({
 
         props: {
           decorations(state) {
-            const decorations = PERMISSION_PLUGIN_KEY.getState(state).ranges.map(({ from, to }) => {
+            const pluginState = PERMISSION_PLUGIN_KEY.getState(state);
+            if (!pluginState?.ranges?.length) return null;
+
+            const decorations = pluginState.ranges.map(({ from, to }) => {
               const attrs = {};
               if (options.highlightClass) {
                 attrs.class = options.highlightClass;
