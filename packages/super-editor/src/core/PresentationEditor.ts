@@ -563,6 +563,7 @@ export class PresentationEditor extends EventEmitter {
   #viewportHost: HTMLElement;
   #painterHost: HTMLElement;
   #selectionOverlay: HTMLElement;
+  #permissionOverlay: HTMLElement | null = null;
   #hiddenHost: HTMLElement;
   #layoutOptions: LayoutEngineOptions;
   #layoutState: LayoutState = { blocks: [], measures: [], layout: null, bookmarks: new Map() };
@@ -741,6 +742,17 @@ export class PresentationEditor extends EventEmitter {
     });
     this.#domIndexObserverManager.setup();
     this.#selectionSync.on('render', () => this.#updateSelection());
+    this.#selectionSync.on('render', () => this.#updatePermissionOverlay());
+
+    this.#permissionOverlay = doc.createElement('div');
+    this.#permissionOverlay.className = 'presentation-editor__permission-overlay';
+    Object.assign(this.#permissionOverlay.style, {
+      position: 'absolute',
+      inset: '0',
+      pointerEvents: 'none',
+      zIndex: '5',
+    });
+    this.#viewportHost.appendChild(this.#permissionOverlay);
 
     // Create dual-layer overlay structure
     // Container holds both remote (below) and local (above) layers
@@ -1331,6 +1343,7 @@ export class PresentationEditor extends EventEmitter {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
+    this.#updatePermissionOverlay();
   }
 
   /**
@@ -4367,6 +4380,7 @@ export class PresentationEditor extends EventEmitter {
       this.#epochMapper.onLayoutComplete(layoutEpoch);
       this.#selectionSync.onLayoutComplete(layoutEpoch);
       layoutCompleted = true;
+      this.#updatePermissionOverlay();
 
       // Reset error state on successful layout
       this.#layoutError = null;
@@ -4571,6 +4585,75 @@ export class PresentationEditor extends EventEmitter {
         console.warn('[PresentationEditor] Failed to render selection rects:', error);
       }
     }
+  }
+
+  #updatePermissionOverlay() {
+    const overlay = this.#permissionOverlay;
+    if (!overlay) {
+      return;
+    }
+
+    const permissionStorage = (this.#editor as Editor & { storage?: Record<string, any> })?.storage?.permissionRanges;
+    const ranges: Array<{ from: number; to: number }> = permissionStorage?.ranges ?? [];
+    const shouldRender = this.#documentMode === 'viewing' && ranges.length > 0;
+
+    if (!shouldRender) {
+      overlay.innerHTML = '';
+      return;
+    }
+
+    const layout = this.#layoutState.layout;
+    if (!layout) {
+      overlay.innerHTML = '';
+      return;
+    }
+
+    const docEpoch = this.#epochMapper.getCurrentEpoch();
+    if (this.#layoutEpoch < docEpoch) {
+      return;
+    }
+
+    const pageHeight = this.#getBodyPageHeight();
+    const pageGap = layout.pageGap ?? this.#getEffectivePageGap();
+    const fragment = overlay.ownerDocument?.createDocumentFragment();
+    if (!fragment) {
+      overlay.innerHTML = '';
+      return;
+    }
+
+    ranges.forEach(({ from, to }) => {
+      const rects = this.#computeSelectionRectsFromDom(from, to);
+      if (!rects?.length) {
+        return;
+      }
+      rects.forEach((rect) => {
+        const pageLocalY = rect.y - rect.pageIndex * (pageHeight + pageGap);
+        const coords = this.#convertPageLocalToOverlayCoords(rect.pageIndex, rect.x, pageLocalY);
+        if (!coords) {
+          return;
+        }
+        const highlight = overlay.ownerDocument?.createElement('div');
+        if (!highlight) {
+          return;
+        }
+        highlight.className = 'presentation-editor__permission-highlight';
+        Object.assign(highlight.style, {
+          position: 'absolute',
+          left: `${coords.x}px`,
+          top: `${coords.y}px`,
+          width: `${Math.max(1, rect.width)}px`,
+          height: `${Math.max(1, rect.height)}px`,
+          borderRadius: '2px',
+          pointerEvents: 'none',
+          backgroundColor: 'rgba(255, 234, 138, 0.5)',
+          boxShadow: 'inset 0 0 0 1px rgba(224, 176, 0, 0.35)',
+        });
+        fragment.appendChild(highlight);
+      });
+    });
+
+    overlay.innerHTML = '';
+    overlay.appendChild(fragment);
   }
 
   #resolveLayoutOptions(blocks: FlowBlock[] | undefined, sectionMetadata: SectionMetadata[]) {
