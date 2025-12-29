@@ -4667,23 +4667,39 @@ export class PresentationEditor extends EventEmitter {
     // measurement width for all content.
     const measurementWidth = bodyContentWidth;
 
-    // Compute available space for header/footer content.
-    // In OOXML, margins.header is the distance from page top to header top,
-    // and margins.top is the distance from page top to body content.
-    // The actual header content space is: top margin - header margin.
-    // Similarly for footer: bottom margin - footer margin.
+    // Header/footer content renders at its natural height.
+    // In Word's model:
+    // - Headers start at headerDistance from page top, footers at footerDistance from page bottom
+    // - Content renders at natural height and can extend into the body area if needed
+    // - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
+    //
+    // The constraint height determines how much space is available before layout pagination.
+    // We use the margin distances (headerMargin, footerMargin) as the constraint because:
+    // 1. This gives headers/footers their natural rendering space
+    // 2. When headerMargin == topMargin (e.g., Word's "Narrow" margins), this still provides
+    //    reasonable space instead of 0px
+    // 3. The soundness fix in layout-paragraph.ts handles edge cases where content spacing
+    //    exceeds this constraint
+    // 4. Keeping the constraint reasonable ensures behindDoc images with large offsets are
+    //    correctly excluded from height calculations (see layoutHeaderFooter's maxBehindDocOverflow)
     const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
     const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
     const headerMargin = margins.header ?? 0;
     const footerMargin = margins.footer ?? 0;
-
-    // Available header space is from headerMargin to topMargin
     const headerContentSpace = Math.max(marginTop - headerMargin, 0);
-    // Available footer space is from footerMargin to bottomMargin
     const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
 
-    // Use the larger of the two as the constraint height, with a minimum of 1
-    const height = Math.max(headerContentSpace, footerContentSpace, 1);
+    // Use the larger of content space or margin distance.
+    // If all margins are 0 (edge-to-edge layout), height will be 0 and layoutHeaderFooter
+    // will return an empty layout, which is the correct behavior.
+    const height = Math.max(
+      headerContentSpace,
+      footerContentSpace,
+      headerMargin,
+      footerMargin,
+      marginTop,
+      marginBottom,
+    );
     return {
       width: measurementWidth,
       height,
@@ -4911,14 +4927,18 @@ export class PresentationEditor extends EventEmitter {
     const totalHeight = pageHeight ?? pageSize.h;
 
     // MS Word positioning:
-    // - Header: starts at headerMargin from page top, can extend down to topMargin
+    // - Header: ALWAYS starts at headerMargin (headerDistance) from page top
     // - Footer: ends at footerMargin from page bottom, can extend up to bottomMargin
+    // Word keeps header at headerDistance regardless of topMargin value.
+    // Even for zero-margin docs, the header content starts at headerDistance from page top.
     if (kind === 'header') {
       const headerMargin = margins.header ?? 0;
       const topMargin = margins.top ?? DEFAULT_MARGINS.top ?? 0;
       // Height is the space available for header (between headerMargin and topMargin)
       const height = Math.max(topMargin - headerMargin, 1);
-      return { x: left, width, height, offset: headerMargin };
+      // Header always starts at headerDistance from page top, matching Word behavior
+      const offset = headerMargin;
+      return { x: left, width, height, offset };
     } else {
       const footerMargin = margins.footer ?? 0;
       const bottomMargin = margins.bottom ?? DEFAULT_MARGINS.bottom ?? 0;

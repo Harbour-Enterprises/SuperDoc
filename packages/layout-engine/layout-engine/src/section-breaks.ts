@@ -81,19 +81,24 @@ export function scheduleSectionBreak(
   // Helper to calculate required top margin that accounts for header content height
   const calcRequiredTopMargin = (headerDistance: number, baseTop: number): number => {
     if (maxHeaderContentHeight > 0) {
-      // Body must start at least at headerDistance + headerContentHeight
+      // Word always positions header at headerDistance from page top.
+      // Body must start at headerDistance + headerContentHeight (where header content ends).
+      // This matches Word behavior regardless of baseTop (even for zero-margin docs).
       return Math.max(baseTop, headerDistance + maxHeaderContentHeight);
     }
-    return Math.max(baseTop, headerDistance);
+    // Without header content, body starts at baseTop (no headerDistance consideration)
+    return baseTop;
   };
 
   // Helper to calculate required bottom margin that accounts for footer content height
   const calcRequiredBottomMargin = (footerDistance: number, baseBottom: number): number => {
     if (maxFooterContentHeight > 0) {
-      // Body must end at least at footerDistance + footerContentHeight from page bottom
+      // Word always positions footer at footerDistance from page bottom.
+      // Body must end at footerDistance + footerContentHeight from page bottom.
       return Math.max(baseBottom, footerDistance + maxFooterContentHeight);
     }
-    return Math.max(baseBottom, footerDistance);
+    // Without footer content, body ends at baseBottom (no footerDistance consideration)
+    return baseBottom;
   };
 
   // Special handling for first section break (appears before any content)
