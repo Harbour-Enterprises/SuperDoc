@@ -23,24 +23,10 @@ export const PermEnd = Node.create({
   addAttributes() {
     return {
       id: {
-        default: '',
-        parseDOM: (elem) => elem.getAttribute('data-id'),
-        renderDOM: (attrs) => {
-          if (!attrs.id) return {};
-          return {
-            'data-id': attrs.id,
-          };
-        },
+        default: null,
       },
       edGrp: {
-        default: '',
-        parseDOM: (elem) => elem.getAttribute('data-ed-grp'),
-        renderDOM: (attrs) => {
-          if (!attrs.edGrp) return {};
-          return {
-            'data-ed-grp': attrs.edGrp,
-          };
-        },
+        default: null,
       },
     };
   },
