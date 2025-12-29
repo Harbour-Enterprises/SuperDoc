@@ -4671,8 +4671,19 @@ export class PresentationEditor extends EventEmitter {
     // Available footer space is from footerMargin to bottomMargin
     const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
 
-    // Use the larger of the two as the constraint height, with a minimum of 1
-    const height = Math.max(headerContentSpace, footerContentSpace, 1);
+    // Minimum height for header/footer layout to prevent infinite page creation
+    // when margins are configured such that header/footer space is minimal or zero
+    // (e.g., Word's "Narrow" margins where headerDistance = topMargin = 720 twips)
+    const MIN_HEADER_FOOTER_HEIGHT = 48;
+
+    // Use the larger of the two as the constraint height, ensuring a reasonable minimum
+    const height = Math.max(
+      headerContentSpace,
+      footerContentSpace,
+      headerMargin || MIN_HEADER_FOOTER_HEIGHT,
+      footerMargin || MIN_HEADER_FOOTER_HEIGHT,
+      MIN_HEADER_FOOTER_HEIGHT,
+    );
     return {
       width: measurementWidth,
       height,
