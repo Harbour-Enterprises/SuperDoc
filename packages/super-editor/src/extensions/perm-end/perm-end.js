@@ -20,10 +20,6 @@ export const PermEnd = Node.create({
     return ['span', { style: 'display: none;' }];
   },
 
-  parseDOM() {
-    return [{ tag: 'span' }];
-  },
-
   addAttributes() {
     return {
       id: {
