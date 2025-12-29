@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { EditorState } from 'prosemirror-state';
-import { EditorView } from 'prosemirror-view';
 import { Schema } from 'prosemirror-model';
 import {
   createPositionTrackerPlugin,
