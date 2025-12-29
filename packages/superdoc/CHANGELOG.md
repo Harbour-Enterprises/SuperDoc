@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.5...v1.1.0) (2025-12-29)
+
+
+### Features
+
+* enhance presentation editor viewing mode styles and functionality ([#1596](https://github.com/Harbour-Enterprises/SuperDoc/issues/1596)) ([88ac831](https://github.com/Harbour-Enterprises/SuperDoc/commit/88ac831e249d2abef7a6f578ebfbd7bb67ceaac9))
+
 ## [1.0.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.4...v1.0.5) (2025-12-29)
 
 
