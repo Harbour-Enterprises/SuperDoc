@@ -30,91 +30,91 @@ describe('applyBorder', () => {
 
   it('should apply border with single style (converts to solid)', () => {
     const border: BorderSpec = { style: 'single', width: 2, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     // Browsers may normalize colors to rgb() format
     expect(element.style.borderTop).toMatch(/2px solid (#FF0000|rgb\(255,\s*0,\s*0\))/i);
   });
 
   it('should apply border with double style', () => {
     const border: BorderSpec = { style: 'double', width: 2, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/2px double (#FF0000|rgb\(255,\s*0,\s*0\))/i);
   });
 
   it('should apply border with dashed style', () => {
     const border: BorderSpec = { style: 'dashed', width: 1, color: '#00FF00' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/1px dashed (#00FF00|rgb\(0,\s*255,\s*0\))/i);
   });
 
   it('should apply border with dotted style', () => {
     const border: BorderSpec = { style: 'dotted', width: 1, color: '#0000FF' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/1px dotted (#0000FF|rgb\(0,\s*0,\s*255\))/i);
   });
 
   it('should convert triple to solid CSS', () => {
     const border: BorderSpec = { style: 'triple', width: 2, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/2px solid (#FF0000|rgb\(255,\s*0,\s*0\))/i);
   });
 
   it('should handle thick border with width multiplier', () => {
     const border: BorderSpec = { style: 'thick', width: 1, color: '#000000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     // Thick borders use max(width * 2, 3)
     expect(element.style.borderTop).toMatch(/3px solid (#000000|rgb\(0,\s*0,\s*0\))/i);
   });
 
   it('should handle thick border with larger width', () => {
     const border: BorderSpec = { style: 'thick', width: 3, color: '#000000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/6px solid (#000000|rgb\(0,\s*0,\s*0\))/i);
   });
 
   it('should set border to none for none style', () => {
     const border: BorderSpec = { style: 'none', width: 2, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     // Setting border to 'none' results in empty string or 'none' depending on browser
     expect(element.style.borderTop === 'none' || element.style.borderTop === '').toBe(true);
   });
 
   it('should set border to none for zero width', () => {
     const border: BorderSpec = { style: 'single', width: 0, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     // Setting border to 'none' results in empty string or 'none' depending on browser
     expect(element.style.borderTop === 'none' || element.style.borderTop === '').toBe(true);
   });
 
   it('should sanitize invalid hex color to black', () => {
     const border: BorderSpec = { style: 'single', width: 1, color: 'invalid' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/1px solid (#000000|rgb\(0,\s*0,\s*0\))/i);
   });
 
   it('should default width to 1 if missing', () => {
     const border: BorderSpec = { style: 'single', color: '#FF0000' };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/1px solid (#FF0000|rgb\(255,\s*0,\s*0\))/i);
   });
 
   it('should default color to black if missing', () => {
     const border: BorderSpec = { style: 'single', width: 2 };
-    applyBorder(element, 'Top', border);
+    applyBorder(element, 'top', border);
     expect(element.style.borderTop).toMatch(/2px solid (#000000|rgb\(0,\s*0,\s*0\))/i);
   });
 
   it('should do nothing if border is undefined', () => {
-    applyBorder(element, 'Top', undefined);
+    applyBorder(element, 'top', undefined);
     expect(element.style.borderTop).toBe('');
   });
 
   it('should apply to all four sides', () => {
     const border: BorderSpec = { style: 'single', width: 1, color: '#FF0000' };
-    applyBorder(element, 'Top', border);
-    applyBorder(element, 'Right', border);
-    applyBorder(element, 'Bottom', border);
-    applyBorder(element, 'Left', border);
+    applyBorder(element, 'top', border);
+    applyBorder(element, 'right', border);
+    applyBorder(element, 'bottom', border);
+    applyBorder(element, 'left', border);
     const pattern = /1px solid (#FF0000|rgb\(255,\s*0,\s*0\))/i;
     expect(element.style.borderTop).toMatch(pattern);
     expect(element.style.borderRight).toMatch(pattern);
