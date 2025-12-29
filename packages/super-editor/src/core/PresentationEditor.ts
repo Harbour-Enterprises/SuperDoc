@@ -4216,7 +4216,7 @@ export class PresentationEditor extends EventEmitter {
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
         const result = toFlowBlocks(docJson, {
-          mediaFiles: this.#options.mediaFiles as Record<string, string> | undefined,
+          mediaFiles: this.#editor?.storage?.image?.media as Record<string, string> | undefined,
           emitSectionBreaks: true,
           sectionMetadata,
           trackedChangesMode: this.#trackedChangesMode,
