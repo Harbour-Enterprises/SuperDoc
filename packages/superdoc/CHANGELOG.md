@@ -1,3 +1,10 @@
+## [1.0.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.4...v1.0.5) (2025-12-29)
+
+
+### Bug Fixes
+
+* receives media from storage image media ([#1609](https://github.com/Harbour-Enterprises/SuperDoc/issues/1609)) ([bee06ec](https://github.com/Harbour-Enterprises/SuperDoc/commit/bee06ecffd28d89c178aab185e73730b91805e98))
+
 ## [1.0.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.3...v1.0.4) (2025-12-23)
 
 
