@@ -86,7 +86,7 @@ export const applyBorder = (
   }
 
   const style = borderStyleToCSS(border.style);
-  const width = border.width ?? 1;
+  const width = border.width ?? 1; // TODO: Is there a reason this is different from the default border weight in defaultTableCellAttrs.borders?
   const color = border.color ?? '#000000';
   const safeColor = isValidHexColor(color) ? color : '#000000';
   const actualWidth = border.style === 'thick' ? Math.max(width * 2, 3) : width;

@@ -144,6 +144,7 @@ export const TableCell = Node.create({
       },
 
       cellMargins: {
+        // TODO: apply eighthPointsToPixels conversion for borders
         renderDOM({ cellMargins, borders }) {
           if (!cellMargins) return {};
           const sides = ['top', 'right', 'bottom', 'left'];
@@ -162,6 +163,7 @@ export const TableCell = Node.create({
         },
       },
 
+      // TODO: apply eighthPointsToPixels conversion for borders
       borders: {
         default: () => createCellBorders(),
         renderDOM({ borders }) {

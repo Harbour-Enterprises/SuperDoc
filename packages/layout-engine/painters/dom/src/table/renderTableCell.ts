@@ -9,6 +9,8 @@ import type {
   TableBlock,
   TableMeasure,
 } from '@superdoc/contracts';
+import { defaultTableCell } from '@superdoc/contracts';
+import { getBorderWidth } from '@superdoc/measuring-dom';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 import { toCssFontFamily } from '@superdoc/font-utils';
@@ -216,6 +218,8 @@ type TableCellRenderDependencies = {
   fromLine?: number;
   /** Ending line index for partial row rendering (exclusive), -1 means render to end */
   toLine?: number;
+  /** Maximum top border for the row, used to add extra padding to the cell */
+  rowBorderTop: number;
 };
 
 /**
@@ -297,21 +301,21 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
     applySdtDataset,
     fromLine,
     toLine,
+    rowBorderTop,
   } = deps;
 
-  const attrs = cell?.attrs;
-  const padding = attrs?.padding || { top: 2, left: 4, right: 4, bottom: 2 };
-  const paddingLeft = padding.left ?? 4;
-  const paddingTop = padding.top ?? 2;
-  const paddingRight = padding.right ?? 4;
-  const paddingBottom = padding.bottom ?? 2;
+  const paddingTop =
+    (cell?.attrs?.padding?.top ?? defaultTableCell.attrs.padding.top) + rowBorderTop - getBorderWidth(borders?.top);
+  const paddingBottom = cell?.attrs?.padding?.bottom ?? defaultTableCell.attrs.padding.bottom;
+  const paddingLeft = cell?.attrs?.padding?.left ?? defaultTableCell.attrs.padding.left;
+  const paddingRight = cell?.attrs?.padding?.right ?? defaultTableCell.attrs.padding.right;
 
   const cellEl = doc.createElement('div');
   cellEl.style.position = 'absolute';
   cellEl.style.left = `${x}px`;
   cellEl.style.top = `${y}px`;
   cellEl.style.width = `${cellMeasure.width}px`;
-  cellEl.style.height = `${rowHeight}px`;
+  cellEl.style.height = `${rowHeight + getBorderWidth(borders?.bottom)}px`;
   cellEl.style.boxSizing = 'border-box';
   // Cell clips all overflow - no scrollbars, content just gets clipped at boundaries
   cellEl.style.overflow = 'hidden';
