@@ -513,6 +513,9 @@ importers:
 
   packages/layout-engine/layout-bridge:
     dependencies:
+      '@superdoc/common':
+        specifier: workspace:*
+        version: link:../../../shared/common
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../contracts

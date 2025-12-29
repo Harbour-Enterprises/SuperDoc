@@ -21,6 +21,7 @@
     "dev": "tsup src/index.ts --format esm --watch"
   },
   "dependencies": {
+    "@superdoc/common": "workspace:*",
     "@superdoc/contracts": "workspace:*",
     "@superdoc/layout-engine": "workspace:*",
     "@superdoc/measuring-dom": "workspace:*",
