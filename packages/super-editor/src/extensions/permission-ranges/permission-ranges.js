@@ -182,7 +182,6 @@ export const PermissionRanges = Extension.create({
 
   addOptions() {
     return {
-      highlightClass: 'sd-permission-allowed',
       highlightStyle:
         'background-color: rgba(255, 234, 138, 0.8); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(224, 176, 0, 0.3);',
     };
@@ -331,9 +330,6 @@ export const PermissionRanges = Extension.create({
 
             const decorations = pluginState.ranges.map(({ from, to }) => {
               const attrs = {};
-              if (options.highlightClass) {
-                attrs.class = options.highlightClass;
-              }
               if (options.highlightStyle) {
                 attrs.style = options.highlightStyle;
               }
