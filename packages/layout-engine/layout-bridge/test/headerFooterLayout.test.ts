@@ -52,6 +52,23 @@ describe('layoutHeaderFooterWithCache', () => {
     expect(measureBlock).toHaveBeenCalledTimes(1);
   });
 
+  it('handles minimal constraint height gracefully', async () => {
+    // Regression test: When headerDistance = topMargin (e.g., Word's "Narrow" margins),
+    // the calculated content space is 0, which previously caused infinite page creation.
+    // Layout should still complete without infinite loops even with tiny height constraint.
+    const sections = { default: [makeBlock('a')] };
+    const measureBlock = vi.fn(async () => makeMeasure(20));
+
+    // Simulate edge case where constraint height is very small (1px)
+    const result = await layoutHeaderFooterWithCache(sections, { width: 400, height: 1 }, measureBlock);
+
+    // Should produce a valid result even with tiny height constraint
+    expect(result.default).toBeDefined();
+    expect(result.default?.layout.pages).toBeDefined();
+    // Content exceeds height, so it may span multiple pages, but should not be infinite
+    expect(result.default?.layout.pages.length).toBeLessThan(100);
+  });
+
   describe('integration test', () => {
     it('full pipeline: PM JSON with page tokens → FlowBlocks → Measures → Layout', async () => {
       // 1. Create PM JSON with page number tokens (simulates header/footer from SuperConverter)
