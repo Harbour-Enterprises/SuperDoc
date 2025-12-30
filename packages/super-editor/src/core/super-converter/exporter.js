@@ -19,6 +19,8 @@ import {
   commentRangeStartTranslator as wCommentRangeStartTranslator,
   commentRangeEndTranslator as wCommentRangeEndTranslator,
 } from './v3/handlers/w/commentRange/index.js';
+import { translator as wPermStartTranslator } from './v3/handlers/w/perm-start/index.js';
+import { translator as wPermEndTranslator } from './v3/handlers/w/perm-end/index.js';
 import { translator as sdPageReferenceTranslator } from '@converter/v3/handlers/sd/pageReference';
 import { translator as sdTableOfContentsTranslator } from '@converter/v3/handlers/sd/tableOfContents';
 import { translator as sdAutoPageNumberTranslator } from '@converter/v3/handlers/sd/autoPageNumber';
@@ -168,6 +170,8 @@ export function exportSchemaToJson(params) {
     hardBreak: wBrNodeTranslator,
     commentRangeStart: wCommentRangeStartTranslator,
     commentRangeEnd: wCommentRangeEndTranslator,
+    permStart: wPermStartTranslator,
+    permEnd: wPermEndTranslator,
     commentReference: () => null,
     shapeContainer: pictTranslator,
     shapeTextbox: pictTranslator,
@@ -197,7 +201,6 @@ export function exportSchemaToJson(params) {
     console.error('No translation function found for node type:', type);
     return null;
   }
-
   // Call the handler for this node type
   return handler(params);
 }
