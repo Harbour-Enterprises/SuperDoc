@@ -97,17 +97,16 @@ export const Search = Extension.create({
 
           const firstMatch = decorations[0];
 
+          editor.view.focus();
+          const tr = state.tr
+            .setSelection(TextSelection.create(state.doc, firstMatch.from, firstMatch.to))
+            .scrollIntoView();
+          if (dispatch) dispatch(tr);
+
           const presentationEditor = editor.presentationEditor;
           if (presentationEditor && typeof presentationEditor.scrollToPosition === 'function') {
             const didScroll = presentationEditor.scrollToPosition(firstMatch.from, { block: 'center' });
-            if (didScroll) {
-              editor.view.focus();
-              const tr = state.tr
-                .setSelection(TextSelection.create(state.doc, firstMatch.from, firstMatch.to))
-                .scrollIntoView();
-              dispatch(tr);
-              return true;
-            }
+            if (didScroll) return true;
           }
 
           const domPos = editor.view.domAtPos(firstMatch.from);
@@ -204,7 +203,7 @@ export const Search = Extension.create({
 
           editor.view.focus();
           const tr = state.tr.setSelection(TextSelection.create(state.doc, from, to)).scrollIntoView();
-          dispatch(tr);
+          if (dispatch) dispatch(tr);
 
           const presentationEditor = editor.presentationEditor;
           if (presentationEditor && typeof presentationEditor.scrollToPosition === 'function') {
