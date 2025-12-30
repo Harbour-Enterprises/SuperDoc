@@ -30,7 +30,7 @@ a {
 
 .presentation-editor__permission-highlight {
   border-radius: 2px;
-  background-color: rgba(255, 236, 155, 0.55);
+  background-color: rgba(199, 200, 217, 0.55);
 }
 
 @keyframes superdoc-caret-blink {
