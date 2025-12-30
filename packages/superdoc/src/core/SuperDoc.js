@@ -185,6 +185,7 @@ export class SuperDoc extends EventEmitter {
 
     // Check if destroy() was called while we were initializing
     if (this.#destroyed) {
+      this.#cleanupCollaboration();
       return;
     }
 
@@ -1004,19 +1005,10 @@ export class SuperDoc extends EventEmitter {
   }
 
   /**
-   * Destroy the superdoc instance
+   * Clean up collaboration resources (providers, ydocs, sockets)
    * @returns {void}
    */
-  destroy() {
-    // Mark as destroyed early to prevent in-flight init from mounting
-    this.#destroyed = true;
-
-    if (!this.app) {
-      return;
-    }
-
-    this.#log('[superdoc] Unmounting app');
-
+  #cleanupCollaboration() {
     this.config.socket?.cancelWebsocketRetry();
     this.config.socket?.disconnect();
     this.config.socket?.destroy();
@@ -1026,14 +1018,27 @@ export class SuperDoc extends EventEmitter {
     this.provider?.destroy();
 
     this.config.documents.forEach((doc) => {
-      if (doc.provider) {
-        doc.provider.disconnect();
-        doc.provider.destroy();
-      }
-
-      // Destroy the ydoc
+      doc.provider?.disconnect();
+      doc.provider?.destroy();
       doc.ydoc?.destroy();
     });
+  }
+
+  /**
+   * Destroy the superdoc instance
+   * @returns {void}
+   */
+  destroy() {
+    // Mark as destroyed early to prevent in-flight init from mounting
+    this.#destroyed = true;
+
+    this.#cleanupCollaboration();
+
+    if (!this.app) {
+      return;
+    }
+
+    this.#log('[superdoc] Unmounting app');
 
     this.superdocStore.reset();
 
