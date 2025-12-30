@@ -5,14 +5,12 @@ import {
   createZip,
   Extensions,
   registeredHandlers,
-} from '@harbour-enterprises/super-editor';
-import {
   helpers as superEditorHelpers,
   fieldAnnotationHelpers,
   trackChangesHelpers,
   AnnotatorHelpers,
   SectionHelpers,
-} from '@harbour-enterprises/super-editor';
+} from '@superdoc/super-editor';
 import { DOCX, PDF, HTML, getFileObject, compareVersions } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 

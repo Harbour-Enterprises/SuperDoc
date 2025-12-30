@@ -1,9 +1,11 @@
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import vue from '@vitejs/plugin-vue'
 
 import { version as superdocVersion } from '../superdoc/package.json';
+import sourceResolve from '../../vite.sourceResolve'
 
 export default defineConfig(({ mode }) => {
   const plugins = [vue()];
@@ -21,6 +23,7 @@ export default defineConfig(({ mode }) => {
       testTimeout: 20000,
       hookTimeout: 10000,
       exclude: [
+        ...configDefaults.exclude,
         '**/*.spec.js',
       ],
       coverage: {
@@ -44,15 +47,6 @@ export default defineConfig(({ mode }) => {
         'yjs',
         'tippy.js',
         '@floating-ui/dom',
-        // Layout engine packages (use source, not pre-bundled)
-        '@superdoc/pm-adapter',
-        '@superdoc/layout-bridge',
-        '@superdoc/painter-dom',
-        '@superdoc/contracts',
-        '@superdoc/style-engine',
-        '@superdoc/measuring-dom',
-        '@superdoc/geometry-utils',
-        '@superdoc/word-layout',
       ]
     },
     build: {
@@ -104,32 +98,15 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
     },
     resolve: {
-      alias: {
-        // IMPORTANT: @superdoc/common must point to source, not dist
-        '@superdoc/common': fileURLToPath(new URL('../../shared/common', import.meta.url)),
-        '@superdoc/url-validation': fileURLToPath(new URL('../../shared/url-validation', import.meta.url)),
-        '@': fileURLToPath(new URL('./src', import.meta.url)),
-        '@core': fileURLToPath(new URL('./src/core', import.meta.url)),
-        '@extensions': fileURLToPath(new URL('./src/extensions', import.meta.url)),
-        '@features': fileURLToPath(new URL('./src/features', import.meta.url)),
-        '@components': fileURLToPath(new URL('./src/components', import.meta.url)),
-        '@helpers': fileURLToPath(new URL('./src/core/helpers', import.meta.url)),
-        '@packages': fileURLToPath(new URL('../', import.meta.url)),
-        '@converter': fileURLToPath(new URL('./src/core/super-converter', import.meta.url)),
-        '@tests': fileURLToPath(new URL('./src/tests', import.meta.url)),
-        '@translator': fileURLToPath(new URL('./src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
-        '@superdoc/preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
-        // Layout engine packages
-        '@superdoc/contracts': fileURLToPath(new URL('../layout-engine/contracts/src', import.meta.url)),
-        '@superdoc/pm-adapter': fileURLToPath(new URL('../layout-engine/pm-adapter/src', import.meta.url)),
-        '@superdoc/layout-bridge': fileURLToPath(new URL('../layout-engine/layout-bridge/src', import.meta.url)),
-        '@superdoc/painter-dom': fileURLToPath(new URL('../layout-engine/painters/dom/src', import.meta.url)),
-        '@superdoc/style-engine': fileURLToPath(new URL('../layout-engine/style-engine/src', import.meta.url)),
-        '@superdoc/measuring-dom': fileURLToPath(new URL('../layout-engine/measuring/dom/src', import.meta.url)),
-        '@superdoc/geometry-utils': fileURLToPath(new URL('../layout-engine/geometry-utils/src', import.meta.url)),
-        '@superdoc/word-layout': fileURLToPath(new URL('../word-layout/src', import.meta.url)),
-      },
+      ...sourceResolve,
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+    },
+    environments: {
+      ssr: {
+        resolve: {
+          conditions: ['source'],
+        },
+      },
     },
     css: {
       postcss: './postcss.config.cjs',

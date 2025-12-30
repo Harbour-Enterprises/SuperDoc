@@ -1,6 +1,6 @@
 <script setup>
 import { storeToRefs } from 'pinia';
-import { SuperInput } from '@harbour-enterprises/super-editor';
+import { SuperInput } from '@superdoc/super-editor';
 import { useSuperdocStore } from '@stores/superdoc-store';
 import { useCommentsStore } from '@stores/comments-store';
 import CommentHeader from './CommentHeader.vue';

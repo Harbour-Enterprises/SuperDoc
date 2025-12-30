@@ -1230,6 +1230,12 @@ export const computeParagraphAttrs = (
    * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
    * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
    * 3. attrs.contextualSpacing - Top-level attribute
+   * 4. hydrated.contextualSpacing - Value resolved from paragraph style chain
+   *
+   * The hydrated fallback (priority 4) is critical for style-defined contextualSpacing,
+   * such as the ListBullet style which defines w:contextualSpacing to suppress spacing
+   * between consecutive list items of the same style ("Don't add space between paragraphs
+   * of the same style" in MS Word).
    *
    * OOXML Boolean Handling:
    * - Supports multiple representations: true, 1, '1', 'true', 'on'
@@ -1239,7 +1245,8 @@ export const computeParagraphAttrs = (
   const contextualSpacingValue =
     normalizedSpacing?.contextualSpacing ??
     safeGetProperty(paragraphProps, 'contextualSpacing') ??
-    safeGetProperty(attrs, 'contextualSpacing');
+    safeGetProperty(attrs, 'contextualSpacing') ??
+    hydrated?.contextualSpacing;
 
   if (contextualSpacingValue != null) {
     // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')

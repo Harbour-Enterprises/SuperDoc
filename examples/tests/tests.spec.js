@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
 import testConfig from './test-config.js';
 const PORT = 5173;
-const foldersToTest = testConfig.include;
 
-foldersToTest.forEach(({name}, i) => {
+testConfig.packages.forEach((packagePath, i) => {
+  const name = packagePath.replace(/.*\//, '');
   test.describe(name, () => {
     test('should open the main page', async ({ page }) => {
     // Should open the main page

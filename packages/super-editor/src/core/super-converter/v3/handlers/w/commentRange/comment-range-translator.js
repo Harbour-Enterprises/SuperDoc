@@ -40,9 +40,6 @@ const decode = (params) => {
   const isInternal = parentComment?.isInternal || originalComment.isInternal;
   if (commentsExportType === 'external' && isInternal) return;
 
-  const isResolved = !!originalComment.resolvedTime;
-  if (isResolved) return;
-
   if (node.type !== 'commentRangeStart' && node.type !== 'commentRangeEnd') {
     return;
   }

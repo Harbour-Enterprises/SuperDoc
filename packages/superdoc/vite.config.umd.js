@@ -16,6 +16,7 @@ export default defineConfig(({ command }) => {
     resolve: {
       alias: getAliases(isDev),
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+      conditions: ['source'],
     },
     build: {
       emptyOutDir: false,

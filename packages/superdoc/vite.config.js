@@ -1,12 +1,15 @@
 import path from 'path';
 import copy from 'rollup-plugin-copy'
+import dts from 'vite-plugin-dts'
 import { defineConfig } from 'vite'
+import { configDefaults } from 'vitest/config'
 import { fileURLToPath, URL } from 'node:url';
 import { nodePolyfills } from 'vite-plugin-node-polyfills';
 import { visualizer } from 'rollup-plugin-visualizer';
 import vue from '@vitejs/plugin-vue'
 
 import { version } from './package.json';
+import sourceResolve from '../../vite.sourceResolve';
 
 const visualizerConfig = {
   filename: './dist/bundle-analysis.html',
@@ -16,46 +19,29 @@ const visualizerConfig = {
   open: true
 }
 
-export const getAliases = (isDev) => {
-  const aliases = {
-    // IMPORTANT: Specific @superdoc/* package aliases must come BEFORE the generic '@superdoc'
-    // to avoid partial matches swallowing them.
-    '@superdoc/common': path.resolve(__dirname, '../../shared/common'),
+export const getAliases = (_isDev) => {
+  const aliases = [
+    // NOTE: There are a number of packages named "@superdoc/PACKAGE", but we also alias
+    // "@superdoc" to the src directory of the superdoc package. This is error-prone and
+    // should be changed, e.g. by renaming the src alias to "@superdoc/superdoc".
+    //
+    // Until then, the alias for "./src" is a regexp that matches any imports starting
+    // with "@superdoc/" that don't also match one of the known packages.
+    //
+    // Also note: this regexp is duplicated in packages/ai/vitest.config.mjs
+
+    {
+      find: /^@superdoc\/(?!common|contracts|geometry-utils|pm-adapter|layout-engine|layout-bridge|painter-dom|painter-pdf|style-engine|measuring-dom|word-layout|url-validation|preset-geometry|super-editor|locale-utils|font-utils)(.*)/,
+      replacement: path.resolve(__dirname, './src/$1'),
+    },
 
     // Workspace packages (source paths for dev)
-    '@superdoc/contracts': path.resolve(__dirname, '../layout-engine/contracts/src/index.ts'),
-    '@superdoc/geometry-utils': path.resolve(__dirname, '../layout-engine/geometry-utils/src/index.ts'),
-    '@superdoc/pm-adapter': path.resolve(__dirname, '../layout-engine/pm-adapter/src/index.ts'),
-    '@superdoc/layout-bridge': path.resolve(__dirname, '../layout-engine/layout-bridge/src/index.ts'),
-    '@superdoc/painter-dom': path.resolve(__dirname, '../layout-engine/painters/dom/src/index.ts'),
-    '@superdoc/painter-pdf': path.resolve(__dirname, '../layout-engine/painters/pdf/src/index.ts'),
-    '@superdoc/style-engine': path.resolve(__dirname, '../layout-engine/style-engine/src/index.ts'),
-    '@superdoc/measuring-dom': fileURLToPath(new URL('../layout-engine/measuring/dom/src', import.meta.url)),
-    '@superdoc/word-layout': path.resolve(__dirname, '../word-layout/src/index.ts'),
-    '@superdoc/url-validation': path.resolve(__dirname, '../../shared/url-validation/index.js'),
-    '@superdoc/preset-geometry': fileURLToPath(new URL('../preset-geometry/index.js', import.meta.url)),
-
-    // Generic @superdoc app alias LAST to avoid masking specific package aliases above
-    '@superdoc': fileURLToPath(new URL('./src', import.meta.url)),
-    '@stores': fileURLToPath(new URL('./src/stores', import.meta.url)),
-    '@packages': fileURLToPath(new URL('../', import.meta.url)),
-    // (rest below)
+    { find: '@stores', replacement: fileURLToPath(new URL('./src/stores', import.meta.url)) },
 
     // Super Editor aliases
-    '@': fileURLToPath(new URL('../super-editor/src', import.meta.url)),
-    '@core': fileURLToPath(new URL('../super-editor/src/core', import.meta.url)),
-    '@extensions': fileURLToPath(new URL('../super-editor/src/extensions', import.meta.url)),
-    '@features': fileURLToPath(new URL('../super-editor/src/features', import.meta.url)),
-    '@components': fileURLToPath(new URL('../super-editor/src/components', import.meta.url)),
-    '@helpers': fileURLToPath(new URL('../super-editor/src/core/helpers', import.meta.url)),
-    '@converter': fileURLToPath(new URL('../super-editor/src/core/super-converter', import.meta.url)),
-    '@tests': fileURLToPath(new URL('../super-editor/src/tests', import.meta.url)),
-    '@translator': fileURLToPath(new URL('../super-editor/src/core/super-converter/v3/node-translator/index.js', import.meta.url)),
-  };
-
-  if (isDev) {
-    aliases['@harbour-enterprises/super-editor'] = path.resolve(__dirname, '../super-editor/src');
-  }
+    { find: '@', replacement: '@superdoc/super-editor' },
+    ...sourceResolve.alias,
+  ];
 
   return aliases;
 };
@@ -65,14 +51,11 @@ export const getAliases = (isDev) => {
 export default defineConfig(({ mode, command}) => {
   const plugins = [
     vue(),
+    dts(),
     copy({
       targets: [
-        {
-          src: path.resolve(__dirname, '../super-editor/dist/*'),
-          dest: 'dist/super-editor',
-        },
         { 
-          src: path.resolve(__dirname, '../../node_modules/pdfjs-dist/web/images/*'), 
+          src: 'node_modules/pdfjs-dist/web/images/*',
           dest: 'dist/images',
         },
       ],
@@ -100,6 +83,7 @@ export default defineConfig(({ mode, command}) => {
       testTimeout: 20000,
       hookTimeout: 10000,
       exclude: [
+        ...configDefaults.exclude,
         '**/*.spec.js',
       ],
     },
@@ -117,11 +101,13 @@ export default defineConfig(({ mode, command}) => {
         input: {
           'superdoc': 'src/index.js',
           'super-editor': 'src/super-editor.js',
+          'super-editor/docx-zipper': '@core/DocxZipper',
+          'super-editor/converter': '@core/super-converter/SuperConverter',
+          'super-editor/file-zipper': '@core/super-converter/zipper.js',
         },
         external: [
           'yjs',
           '@hocuspocus/provider',
-          'vite-plugin-node-polyfills',
           'pdfjs-dist',
           'pdfjs-dist/build/pdf.mjs',
           'pdfjs-dist/legacy/build/pdf.mjs',
@@ -159,16 +145,6 @@ export default defineConfig(({ mode, command}) => {
     },
     optimizeDeps: {
       include: ['yjs', '@hocuspocus/provider'],
-      exclude: [
-        // Layout engine packages (use source, not pre-bundled)
-        '@superdoc/pm-adapter',
-        '@superdoc/layout-bridge',
-        '@superdoc/painter-dom',
-        '@superdoc/contracts',
-        '@superdoc/style-engine',
-        '@superdoc/measuring-dom',
-        '@superdoc/word-layout',
-      ],
       esbuildOptions: {
         target: 'es2020',
       },
@@ -176,6 +152,7 @@ export default defineConfig(({ mode, command}) => {
     resolve: {
       alias: getAliases(isDev),
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
+      conditions: ['source'],
     },
     css: {
       postcss: './postcss.config.mjs',
