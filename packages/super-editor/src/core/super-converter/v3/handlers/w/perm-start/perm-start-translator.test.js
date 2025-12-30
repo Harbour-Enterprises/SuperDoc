@@ -34,8 +34,8 @@ describe('w:permStart translator', () => {
         id: '3',
         edGrp: 'everyone',
         ed: 'alice@example.com',
-        colFirst: '0',
-        colLast: '2',
+        colFirst: 0,
+        colLast: 2,
       },
     });
   });
@@ -70,7 +70,7 @@ describe('w:permStart translator', () => {
           id: '11',
           ed: 'gabriel@example.com',
           edGrp: 'contributors',
-          colFirst: '1',
+          colFirst: 1,
         },
       },
     };
