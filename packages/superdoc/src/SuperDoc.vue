@@ -1,6 +1,6 @@
 <script setup>
 import '@superdoc/common/styles/common-styles.css';
-import '@harbour-enterprises/super-editor/style.css';
+import '@superdoc/super-editor/style.css';
 
 import { superdocIcons } from './icons.js';
 //prettier-ignore
@@ -28,7 +28,7 @@ import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
 import { DOCX, PDF, HTML } from '@superdoc/common';
-import { SuperEditor, AIWriter, PresentationEditor } from '@harbour-enterprises/super-editor';
+import { SuperEditor, AIWriter, PresentationEditor } from '@superdoc/super-editor';
 import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
 import AiLayer from './components/AiLayer/AiLayer.vue';

@@ -76,15 +76,5 @@ export interface Toolbar {
 /**
  * Re-export commonly used types
  */
-export type { OxmlNodeConfig, OxmlNode } from '../OxmlNode.js';
-
-export type {
-  User,
-  FieldValue,
-  DocxNode,
-  DocxFileEntry,
-  EditorOptions,
-  PermissionParams,
-  EditorExtension,
-  CollaborationProvider,
-} from './EditorConfig.js';
+export type * from '../OxmlNode.js';
+export type * from './EditorConfig.js';

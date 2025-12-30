@@ -13,10 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@superdoc/contracts": "*"
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/font-utils": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^5.0.0",
-    "vitest": "^1.0.0"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }
