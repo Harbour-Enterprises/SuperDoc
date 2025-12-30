@@ -40,6 +40,9 @@ export class SuperDoc extends EventEmitter {
   /** @type {Array<string>} */
   static allowedTypes = [DOCX, PDF, HTML];
 
+  /** @type {boolean} */
+  #destroyed = false;
+
   /** @type {string} */
   version;
 
@@ -179,6 +182,11 @@ export class SuperDoc extends EventEmitter {
 
     // Initialize collaboration if configured
     await this.#initCollaboration(this.config.modules);
+
+    // Check if destroy() was called while we were initializing
+    if (this.#destroyed) {
+      return;
+    }
 
     // Apply csp nonce if provided
     if (this.config.cspNonce) this.#patchNaiveUIStyles();
@@ -1000,6 +1008,9 @@ export class SuperDoc extends EventEmitter {
    * @returns {void}
    */
   destroy() {
+    // Mark as destroyed early to prevent in-flight init from mounting
+    this.#destroyed = true;
+
     if (!this.app) {
       return;
     }
