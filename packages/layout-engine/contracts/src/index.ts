@@ -446,10 +446,10 @@ export type CompleteTableCellAttrs = DeepRequired<TableCellAttrs>;
 
 export const defaultTableCellAttrs: DeepReadonly<CompleteTableCellAttrs> = {
   borders: {
-    top: { style: 'single', width: 0.5, color: 'auto', space: 0 },
-    right: { style: 'single', width: 0.5, color: 'auto', space: 0 },
-    bottom: { style: 'single', width: 0.5, color: 'auto', space: 0 },
-    left: { style: 'single', width: 0.5, color: 'auto', space: 0 },
+    top: { style: 'single', width: 1, color: 'auto', space: 0 },
+    right: { style: 'single', width: 1, color: 'auto', space: 0 },
+    bottom: { style: 'single', width: 1, color: 'auto', space: 0 },
+    left: { style: 'single', width: 1, color: 'auto', space: 0 },
   },
   padding: {
     top: 2,
