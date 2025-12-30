@@ -4614,6 +4614,8 @@ export class PresentationEditor extends EventEmitter {
     }
 
     const docEpoch = this.#epochMapper.getCurrentEpoch();
+    // The visible layout DOM does not match the current document state.
+    // Avoid rendering a "best effort" permission overlay that would drift.
     if (this.#layoutEpoch < docEpoch) {
       return;
     }
@@ -4650,8 +4652,7 @@ export class PresentationEditor extends EventEmitter {
           height: `${Math.max(1, rect.height)}px`,
           borderRadius: '2px',
           pointerEvents: 'none',
-          backgroundColor: 'rgba(255, 234, 138, 0.5)',
-          boxShadow: 'inset 0 0 0 1px rgba(224, 176, 0, 0.35)',
+          zIndex: 1,
         });
         fragment.appendChild(highlight);
       });

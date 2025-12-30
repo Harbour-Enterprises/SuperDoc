@@ -215,4 +215,37 @@ describe('PermissionRanges extension', () => {
     expect(endCount).toBe(1);
     expect(instance.state.doc.textContent.trim()).toBe('Locked section.');
   });
+
+  it('allows inserting a newline inside the permission range', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editablePos = findTextPos(instance.state.doc, 'Editable');
+    expect(editablePos).toBeGreaterThan(0);
+    const splitPos = editablePos + 'Editable'.length;
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, splitPos)));
+    const splitTr = instance.state.tr.split(splitPos);
+    instance.view.dispatch(splitTr);
+    const paragraphCount = instance.state.doc.childCount;
+    expect(paragraphCount).toBeGreaterThan(1);
+  });
+
+  it('allows inserting a newline at the start of the permission range', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editablePos = findTextPos(instance.state.doc, 'Editable');
+    expect(editablePos).toBeGreaterThan(0);
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos)));
+    const splitTr = instance.state.tr.split(editablePos);
+    instance.view.dispatch(splitTr);
+    expect(instance.state.doc.childCount).toBeGreaterThan(1);
+  });
+
+  it('allows inserting a newline at the end of the permission range', () => {
+    const instance = createEditor(docWithPermissionRange);
+    const editablePos = findTextPos(instance.state.doc, 'Editable section. ');
+    expect(editablePos).toBeGreaterThan(0);
+    const splitPos = editablePos + 'Editable section. '.length;
+    instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, splitPos)));
+    const splitTr = instance.state.tr.split(splitPos);
+    instance.view.dispatch(splitTr);
+    expect(instance.state.doc.childCount).toBeGreaterThan(1);
+  });
 });

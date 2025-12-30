@@ -1,5 +1,4 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Mapping } from 'prosemirror-transform';
 import { Extension } from '@core/Extension.js';
 
@@ -180,13 +179,6 @@ const isSelectionAllowed = (state, allowedRanges) => {
 export const PermissionRanges = Extension.create({
   name: 'permissionRanges',
 
-  addOptions() {
-    return {
-      highlightStyle:
-        'background-color: rgba(255, 234, 138, 0.8); border-radius: 2px; box-shadow: inset 0 0 0 1px rgba(224, 176, 0, 0.3);',
-    };
-  },
-
   addStorage() {
     return {
       ranges: [],
@@ -196,11 +188,10 @@ export const PermissionRanges = Extension.create({
 
   addPmPlugins() {
     const editor = this.editor;
-    const options = this.options;
     const storage = this.storage;
     let originalSetDocumentMode = null;
 
-    const maybeToggleEditable = (hasAllowedRanges) => {
+    const toggleEditableIfAllowed = (hasAllowedRanges) => {
       storage.hasAllowedRanges = Boolean(hasAllowedRanges);
       if (!editor || editor.isDestroyed) return;
       if (editor.options.documentMode !== 'viewing') return;
@@ -219,7 +210,7 @@ export const PermissionRanges = Extension.create({
         if (!state) return;
         const pluginState = PERMISSION_PLUGIN_KEY.getState(state);
         if (pluginState) {
-          maybeToggleEditable(pluginState.hasAllowedRanges);
+          toggleEditableIfAllowed(pluginState.hasAllowedRanges);
         }
       };
     }
@@ -231,7 +222,7 @@ export const PermissionRanges = Extension.create({
           init(_, state) {
             const permissionState = buildPermissionState(state.doc);
             storage.ranges = permissionState.ranges;
-            maybeToggleEditable(permissionState.hasAllowedRanges);
+            toggleEditableIfAllowed(permissionState.hasAllowedRanges);
             return permissionState;
           },
 
@@ -242,7 +233,7 @@ export const PermissionRanges = Extension.create({
               storage.ranges = permissionState.ranges;
             }
 
-            maybeToggleEditable(permissionState.hasAllowedRanges);
+            toggleEditableIfAllowed(permissionState.hasAllowedRanges);
             return permissionState;
           },
         },
@@ -275,7 +266,6 @@ export const PermissionRanges = Extension.create({
             mappingToNew.appendMapping(tr.mapping);
           });
 
-          /** @type {Array<{ pos: number, nodeType: import('prosemirror-model').NodeType, attrs: any, priority: number }>} */
           const pendingInsertions = [];
 
           oldMarkers.forEach((marker, id) => {
@@ -323,23 +313,6 @@ export const PermissionRanges = Extension.create({
           return tr.docChanged ? tr : null;
         },
 
-        props: {
-          decorations(state) {
-            const pluginState = PERMISSION_PLUGIN_KEY.getState(state);
-            if (!pluginState?.ranges?.length) return null;
-
-            const decorations = pluginState.ranges.map(({ from, to }) => {
-              const attrs = {};
-              if (options.highlightStyle) {
-                attrs.style = options.highlightStyle;
-              }
-              return Decoration.inline(from, to, attrs);
-            });
-
-            return DecorationSet.create(state.doc, decorations);
-          },
-        },
-
         filterTransaction(tr, state) {
           if (!tr.docChanged) return true;
           if (!editor || editor.options.documentMode !== 'viewing') return true;
@@ -356,10 +329,12 @@ export const PermissionRanges = Extension.create({
           const permEndType = state.schema.nodes['permEnd'];
           if (!permStartType || !permEndType) return true;
 
-          return changedRanges.every((range) => {
+          const allRangesAllowed = changedRanges.every((range) => {
             const trimmed = trimPermissionMarkersFromRange(state.doc, range, permStartType, permEndType);
             return isRangeAllowed(trimmed, pluginState.ranges);
           });
+
+          return allRangesAllowed;
         },
       }),
     ];
