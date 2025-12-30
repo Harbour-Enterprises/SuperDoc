@@ -1,13 +1,13 @@
 // @ts-check
-
+import { parseInteger, integerToString } from '../../../utils.js';
 /**
  * Encoder for the 'w:colFirst' attribute on the <w:permStart> element.
  * Maps to the 'colFirst' attribute in SuperDoc.
  * @param {Object} attributes
- * @returns {string|undefined}
+ * @returns {number|undefined}
  */
 export const encode = (attributes) => {
-  return attributes['w:colFirst'];
+  return parseInteger(attributes['w:colFirst']);
 };
 
 /**
@@ -17,7 +17,7 @@ export const encode = (attributes) => {
  * @returns {string|undefined}
  */
 export const decode = (attrs) => {
-  return attrs.colFirst;
+  return integerToString(attrs.colFirst);
 };
 
 /** @type {import('@translator').AttrConfig} */

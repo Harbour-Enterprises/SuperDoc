@@ -1,14 +1,13 @@
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
+import { removeCommentsById, resolveCommentById, getHighlightColor, translateFormatChangesToEnglish } from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
 
 // Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
 import { comments_module_events } from '@superdoc/common';
-import { translateFormatChangesToEnglish } from './comments-helpers.js';
 import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -126,7 +125,7 @@ export const CommentsPlugin = Extension.create({
         ({ commentId }) =>
         ({ tr, dispatch, state }) => {
           tr.setMeta(CommentsPluginKey, { event: 'update' });
-          removeCommentsById({ commentId, state, tr, dispatch });
+          return resolveCommentById({ commentId, state, tr, dispatch });
         },
       setCursorById:
         (id) =>

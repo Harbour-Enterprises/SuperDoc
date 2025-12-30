@@ -8,8 +8,8 @@ import {
   trackChangesHelpers,
   TrackChangesBasePluginKey,
   CommentsPluginKey,
-} from '@harbour-enterprises/super-editor';
-import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
+  getRichTextExtensions,
+} from '@superdoc/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { groupChanges } from '../helpers/group-changes.js';
 
@@ -529,12 +529,10 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const convertHtmlToSchema = (commentHTML) => {
-    const div = document.createElement('div');
-    div.innerHTML = commentHTML;
     const editor = new Editor({
       mode: 'text',
       isHeadless: true,
-      content: div,
+      content: commentHTML,
       extensions: getRichTextExtensions(),
     });
     return editor.getJSON().content[0];

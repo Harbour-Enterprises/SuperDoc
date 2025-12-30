@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { FlowBlock, ParagraphBlock, SectionMetadata } from '@superdoc/contracts';
-import type { HeaderFooterConstraints } from '../../layout-engine/src/index';
+import type { HeaderFooterConstraints } from '../../layout-engine';
 import {
   computeHeaderFooterContentHash,
   computeSectionMetadataHash,

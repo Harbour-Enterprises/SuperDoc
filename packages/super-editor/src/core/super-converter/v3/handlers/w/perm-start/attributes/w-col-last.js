@@ -1,13 +1,13 @@
 // @ts-check
-
+import { parseInteger, integerToString } from '../../../utils.js';
 /**
  * Encoder for the 'w:colLast' attribute on the <w:permStart> element.
  * Maps to the 'colLast' attribute in SuperDoc.
  * @param {Object} attributes
- * @returns {string|undefined}
+ * @returns {number|undefined}
  */
 export const encode = (attributes) => {
-  return attributes['w:colLast'];
+  return parseInteger(attributes['w:colLast']);
 };
 
 /**
@@ -17,7 +17,7 @@ export const encode = (attributes) => {
  * @returns {string|undefined}
  */
 export const decode = (attrs) => {
-  return attrs.colLast;
+  return integerToString(attrs.colLast);
 };
 
 /** @type {import('@translator').AttrConfig} */

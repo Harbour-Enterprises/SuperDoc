@@ -440,6 +440,24 @@ const SDT_CONTAINER_STYLES = `
   display: block;
 }
 
+/* Viewing mode: remove structured content affordances */
+.presentation-editor--viewing .superdoc-structured-content-block,
+.presentation-editor--viewing .superdoc-structured-content-inline {
+  background: none;
+  border: none;
+  padding: 0;
+}
+
+.presentation-editor--viewing .superdoc-structured-content-inline:hover {
+  background: none;
+  border: none;
+}
+
+.presentation-editor--viewing .superdoc-structured-content__label,
+.presentation-editor--viewing .superdoc-structured-content-inline__label {
+  display: none !important;
+}
+
 /* Print mode: hide visual styling for SDT containers */
 @media print {
   .superdoc-document-section,

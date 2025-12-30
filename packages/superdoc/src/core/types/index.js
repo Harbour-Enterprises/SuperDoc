@@ -70,7 +70,7 @@
  * @property {boolean} [slashMenu.includeDefaultItems] Whether to include default menu items
  */
 
-/** @typedef {import('@harbour-enterprises/super-editor').Editor} Editor */
+/** @typedef {import('@superdoc/super-editor').Editor} Editor */
 /** @typedef {import('../SuperDoc.js').SuperDoc} SuperDoc */
 
 /**
@@ -124,12 +124,10 @@
  * @property {string} [uiDisplayFallbackFont='Arial, Helvetica, sans-serif'] The font-family to use for all SuperDoc UI surfaces
  *   (toolbar, comments UI, dropdowns, tooltips, etc.). This ensures consistent typography across the entire application
  *   and helps match your application's design system. The value should be a valid CSS font-family string.
- *   @example
- *   // Use system fonts
- *   uiDisplayFallbackFont: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
- *   @example
- *   // Use a custom font
- *   uiDisplayFallbackFont: '"Inter", Arial, sans-serif'
+ *   Example (system fonts):
+ *     uiDisplayFallbackFont: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+ *   Example (custom font):
+ *     uiDisplayFallbackFont: '"Inter", Arial, sans-serif'
  * @property {boolean} [isDev] Whether the SuperDoc is in development mode
  * @property {TelemetryConfig} [telemetry] Telemetry configuration
  * @property {Object} [layoutEngineOptions] Layout engine overrides passed through to PresentationEditor (page size, margins, virtualization, zoom, debug label, etc.)

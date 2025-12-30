@@ -4,9 +4,7 @@
   "private": true,
   "description": "Minimal collaboration example with SuperDoc and Y.js",
   "scripts": {
-    "install:all": "npm install --prefix server && npm install --prefix client",
-    "dev": "concurrently \"npm run dev --prefix server\" \"npm run dev --prefix client\" --names \"server,client\" --prefix-colors \"blue,green\"",
-    "postinstall": "npm run install:all"
+    "dev": "concurrently \"pnpm run dev --prefix server\" \"pnpm run dev --prefix client\" --names \"server,client\" --prefix-colors \"blue,green\""
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

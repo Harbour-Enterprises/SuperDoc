@@ -477,19 +477,56 @@ export const collectTrackedChangeFromMarks = (marks?: PMMark[]): TrackedChangeMe
 
 /**
  * Normalizes underline style value from PM mark attributes.
- * Returns a valid UnderlineStyle, or undefined only for explicit 'none'.
+ * Returns a valid UnderlineStyle, or undefined for explicit off values.
  * Missing/undefined values default to 'single' (presence of underline mark implies underline).
  *
  * @param value - Unknown value from mark attributes that should be an underline style
- * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), or undefined if explicitly 'none'
+ * @returns A valid UnderlineStyle ('single', 'double', 'dotted', 'dashed', 'wavy'), or undefined if explicitly disabled
+ *
+ * @remarks
+ * Handles multiple value types:
+ * - Strings: Recognizes specific underline styles ('double', 'dotted', etc.) and off values ('none', '0', 'false', 'off')
+ * - Numbers: 0 returns undefined (off), any other number returns 'single'
+ * - Booleans: false returns undefined (off), true returns 'single'
+ * - undefined/null: Returns 'single' (default)
+ * - Empty/whitespace strings: Returns 'single' (default)
+ *
+ * @example
+ * ```typescript
+ * normalizeUnderlineStyle('double');    // 'double'
+ * normalizeUnderlineStyle('none');      // undefined
+ * normalizeUnderlineStyle(false);       // undefined
+ * normalizeUnderlineStyle(0);           // undefined
+ * normalizeUnderlineStyle(undefined);   // 'single'
+ * normalizeUnderlineStyle(123);         // 'single'
+ * normalizeUnderlineStyle('custom');    // 'single'
+ * ```
  */
 export const normalizeUnderlineStyle = (value: unknown): UnderlineStyle | undefined => {
-  // Return undefined only for explicitly "none" - this means "no underline"
-  if (value === 'none') {
-    return undefined;
+  if (value === undefined || value === null) {
+    return 'single';
   }
-  if (value === 'double' || value === 'dotted' || value === 'dashed' || value === 'wavy') {
-    return value;
+  if (typeof value === 'boolean') {
+    return value ? 'single' : undefined;
+  }
+  if (typeof value === 'number') {
+    // Treat 0 as explicitly "off", any other number as "on" with default 'single' style
+    return value === 0 ? undefined : 'single';
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    // Empty string defaults to 'single' because the presence of an underline mark
+    // itself implies underline should be applied, even if the value is missing/empty
+    if (!normalized) {
+      return 'single';
+    }
+    if (normalized === 'none' || normalized === '0' || normalized === 'false' || normalized === 'off') {
+      return undefined;
+    }
+    if (normalized === 'double' || normalized === 'dotted' || normalized === 'dashed' || normalized === 'wavy') {
+      return normalized;
+    }
+    return 'single';
   }
   // Default to 'single' for missing values or other underline types (e.g., 'single', 'words', 'thick', etc.)
   // The presence of an underline mark implies underline should be applied
@@ -763,13 +800,22 @@ export const applyMarksToRun = (
           break;
         }
         case 'underline': {
-          const style = normalizeUnderlineStyle(mark.attrs?.underlineType);
+          // Check multiple attribute names for underline value:
+          // - underlineType: Primary attribute name (current schema)
+          // - value: Legacy attribute name from older schemas
+          // - underline: Alternative attribute name for consistency with other marks
+          // - style: Fallback for Word import compatibility
+          const underlineValue =
+            mark.attrs?.underlineType ?? mark.attrs?.value ?? mark.attrs?.underline ?? mark.attrs?.style;
+          const style = normalizeUnderlineStyle(underlineValue);
           if (style) {
             const underlineColor = resolveColorFromAttributes(mark.attrs ?? {}, themeColors);
             run.underline = {
               style,
               color: underlineColor ?? run.underline?.color,
             };
+          } else if (underlineValue !== undefined && underlineValue !== null) {
+            delete run.underline;
           }
           break;
         }

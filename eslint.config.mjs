@@ -1,10 +1,13 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettierConfig from 'eslint-config-prettier';
+import { importX } from 'eslint-plugin-import-x';
 
 export default [
   js.configs.recommended,
   ...tseslint.configs.recommended,
+  importX.flatConfigs.recommended,
+  importX.flatConfigs.typescript,
   prettierConfig,
   {
     ignores: [
@@ -110,6 +113,28 @@ export default [
       // Keep as warnings to address gradually
       'no-unsafe-optional-chaining': 'warn', // Important but not critical
       'no-unused-private-class-members': 'warn', // Clean up when refactoring
+
+      // Prevent imports across package boundaries
+      'import-x/no-relative-packages': [
+        'error',
+        {
+          // Allow importing top-level vitest.baseConfig and vite.sourceResolve
+          ignore: [
+            '^.*/vitest.baseConfig$',
+            '^.*/vite.sourceResolve$',
+          ],
+        }
+      ],
+
+      'import-x/no-unresolved': [
+        'error',
+        {
+          // Temporarily all "@"-prefixed imports. This should likely be changed to use https://github.com/pzmosquito/eslint-import-resolver-vite to properly resolve these aliases
+          ignore: [
+            '^@.*$',
+          ],
+        }
+      ]
     },
   },
   // TypeScript-specific configuration

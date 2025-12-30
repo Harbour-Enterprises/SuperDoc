@@ -12,7 +12,7 @@
  * Typography Approximations (v0.1.0):
  * - ascent ≈ fontSize * 0.8 (baseline to top)
  * - descent ≈ fontSize * 0.2 (baseline to bottom)
- * - lineHeight = fontSize * 1.2 (standard leading)
+ * - lineHeight = fontSize * 1.15 (Word 2007+ "single" line spacing)
  *
  * These are documented heuristics; we can swap in precise font metrics later
  * if needed via libraries like opentype.js.
@@ -69,7 +69,7 @@ import {
 } from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
-import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 export { installNodeCanvasPolyfill } from './setup.js';
 import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
 import { getFontMetrics, clearFontMetricsCache, type FontInfo } from './fontMetricsCache.js';
@@ -286,11 +286,61 @@ function measureText(
 const MIN_SINGLE_LINE_PX = (12 * 96) / 72; // 240 twips = 12pt
 
 /**
- * Safety margin added to line height to prevent text clipping at the edges.
- * This accounts for sub-pixel rendering differences between measurement and display.
+ * Word 2007+ default line spacing multiplier for "single" line spacing.
+ *
+ * Microsoft Word changed its line spacing algorithm in Word 2007 to use 1.15× font size
+ * as the baseline for "single" line spacing, rather than just using ascent + descent.
+ * This provides more breathing room and matches the industry standard for readability.
+ *
+ * For example, 12pt (16px) font: 16 × 1.15 = 18.4px line height.
+ *
+ * Reference: Word 2007+ line spacing behavior
  */
-const LINE_HEIGHT_SAFETY_MARGIN_PX = 1;
+const WORD_SINGLE_LINE_SPACING_MULTIPLIER = 1.15;
 
+/**
+ * Calculate typography metrics for a given font size.
+ *
+ * This function computes the ascent, descent, and line height values needed for text layout.
+ *
+ * **Ascent/Descent Calculation:**
+ * When fontInfo is provided, uses actual Canvas TextMetrics API to get precise
+ * ascent/descent values from actualBoundingBoxAscent/Descent. This prevents
+ * text clipping that occurs when using hardcoded approximations (0.8/0.2 ratios)
+ * which don't account for font-specific glyph heights.
+ *
+ * Falls back to approximations (0.8/0.2) only when:
+ * - fontInfo is not provided (empty paragraphs)
+ * - Browser doesn't support actualBoundingBox* metrics (legacy browsers)
+ *
+ * **Line Height Calculation:**
+ * Uses Word 2007+'s default "single" line spacing of fontSize × 1.15 as the base.
+ * This base is then modified by paragraph spacing rules (lineRule: auto/exact/atLeast).
+ * A minimum of MIN_SINGLE_LINE_PX (16px = 12pt) is enforced to prevent illegible text.
+ *
+ * The 1.15 multiplier provides consistent spacing that matches Word's behavior and
+ * accounts for the line gap that Canvas TextMetrics doesn't expose directly.
+ *
+ * @param fontSize - The font size in pixels
+ * @param spacing - Optional paragraph spacing configuration (lineRule, line value)
+ * @param fontInfo - Optional font information for precise Canvas-based measurements
+ * @returns Object containing ascent, descent, and lineHeight in pixels
+ *
+ * @example
+ * // Basic usage with 16px font
+ * const metrics = calculateTypographyMetrics(16);
+ * // Returns: { ascent: ~12.8, descent: ~3.2, lineHeight: 18.4 }
+ *
+ * @example
+ * // With 1.5 line spacing multiplier
+ * const metrics = calculateTypographyMetrics(16, { line: 1.5, lineRule: 'auto' });
+ * // Returns: { ascent: ~12.8, descent: ~3.2, lineHeight: 27.6 } // 16 × 1.15 × 1.5
+ *
+ * @example
+ * // With exact line height override
+ * const metrics = calculateTypographyMetrics(16, { line: 24, lineRule: 'exact' });
+ * // Returns: { ascent: ~12.8, descent: ~3.2, lineHeight: 24 }
+ */
 function calculateTypographyMetrics(
   fontSize: number,
   spacing?: ParagraphSpacing,
@@ -315,8 +365,13 @@ function calculateTypographyMetrics(
     descent = roundValue(fontSize * 0.2);
   }
 
-  // Add safety margin to prevent edge clipping from sub-pixel rendering differences
-  const baseLineHeight = Math.max(ascent + descent + LINE_HEIGHT_SAFETY_MARGIN_PX, MIN_SINGLE_LINE_PX);
+  // Calculate base line height using Word's default 1.15 line spacing multiplier.
+  // Word 2007+ uses 1.15× font size as "single" line spacing, not just ascent+descent.
+  // The Canvas TextMetrics API doesn't expose lineGap, so we use this multiplier.
+  // For 12pt (16px) font: 16 * 1.15 = 18.4px - matches Word exactly.
+  // Also clamp to actual glyph bounds (ascent + descent) to prevent overlap/clipping
+  // for fonts with unusually tall glyphs that exceed the 1.15 multiplier.
+  const baseLineHeight = Math.max(fontSize * WORD_SINGLE_LINE_SPACING_MULTIPLIER, ascent + descent, MIN_SINGLE_LINE_PX);
   const lineHeight = roundValue(resolveLineHeight(spacing, baseLineHeight));
 
   return {
@@ -1540,6 +1595,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
             charPosInRun = wordEndWithSpace;
             currentLine.spaceCount += 1;
+            // Fix: Also update the segment to include the trailing space character.
+            // Without this, the segment excludes the space even though the line includes it,
+            // causing the space to not be rendered.
+            if (currentLine.segments?.[0]) {
+              currentLine.segments[0].toChar = wordEndWithSpace;
+              currentLine.segments[0].width += spaceWidth;
+            }
           } else {
             // Do not count trailing space at line end
             // but still advance char index to skip over the space for subsequent words
@@ -1622,6 +1684,13 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
             charPosInRun = wordEndWithSpace;
             currentLine.spaceCount += 1;
+            // Fix: Also update the segment to include the trailing space character.
+            // Without this, the segment excludes the space even though the line includes it,
+            // causing the space to not be rendered.
+            if (currentLine.segments?.[0]) {
+              currentLine.segments[0].toChar = wordEndWithSpace;
+              currentLine.segments[0].width += spaceWidth;
+            }
           } else {
             // Skip the space in character indexing even if we don't render it
             charPosInRun = wordEndWithSpace;
@@ -2770,7 +2839,7 @@ const measureDropCap = (
 
   // Calculate height based on the number of lines the drop cap should span
   // This uses the base line height calculation from the paragraph's spacing
-  const baseLineHeight = resolveLineHeight(spacing, run.fontSize * 1.2);
+  const baseLineHeight = resolveLineHeight(spacing, run.fontSize * WORD_SINGLE_LINE_SPACING_MULTIPLIER);
   const height = roundValue(baseLineHeight * lines);
 
   return {

@@ -1,5 +1,5 @@
 import type { ParagraphAttrs, ParagraphIndent, ParagraphSpacing } from '@superdoc/contracts';
-import { resolveParagraphProperties } from '@converter/styles.js';
+import { resolveParagraphProperties } from '@superdoc/super-editor/converter/internal/styles.js';
 import type { PMNode } from '../types.js';
 import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 import { hasParagraphStyleContext } from '../converter-context.js';
@@ -15,6 +15,60 @@ const EMPTY_NUMBERING_CONTEXT: ConverterNumberingContext = {
   abstracts: {},
 };
 
+/**
+ * Result of hydrating paragraph attributes from style resolution.
+ *
+ * Contains paragraph-level formatting properties resolved from the style cascade,
+ * including document defaults and paragraph style definitions.
+ *
+ * @property resolved - Complete resolved paragraph properties from style engine
+ * @property spacing - Paragraph spacing (before, after, line) in OOXML units
+ * @property indent - Paragraph indentation (left, right, firstLine, hanging) in OOXML units
+ * @property borders - Paragraph border definitions (top, right, bottom, left)
+ * @property shading - Paragraph background shading and fill color
+ * @property alignment - Paragraph text alignment (left, right, center, justify)
+ * @property tabStops - Custom tab stop definitions
+ * @property keepLines - Keep all lines of paragraph together (prevent pagination splits)
+ * @property keepNext - Keep paragraph with next paragraph (prevent page break between)
+ * @property numberingProperties - Numbering/list properties (numId, ilvl, etc.)
+ * @property contextualSpacing - Contextual spacing flag from OOXML w:contextualSpacing.
+ *
+ * ## contextualSpacing Property
+ *
+ * Implements MS Word's "Don't add space between paragraphs of the same style" setting
+ * (OOXML w:contextualSpacing element). When true, spacing before/after is suppressed
+ * between consecutive paragraphs that share the same paragraph style.
+ *
+ * **Common Usage:**
+ * - ListBullet and ListNumber styles typically define contextualSpacing=true
+ * - Prevents excessive spacing between consecutive list items
+ * - Maintains spacing between list items and non-list paragraphs
+ *
+ * **OOXML Structure:**
+ * In OOXML, w:contextualSpacing is a sibling to w:spacing, not nested within it:
+ * ```xml
+ * <w:pPr>
+ *   <w:spacing w:before="200" w:after="200"/>
+ *   <w:contextualSpacing/>  <!-- boolean on/off element -->
+ * </w:pPr>
+ * ```
+ *
+ * **Fallback Priority in computeParagraphAttrs:**
+ * 1. normalizedSpacing.contextualSpacing - From spacing XML element
+ * 2. paragraphProps.contextualSpacing - Direct pPr property
+ * 3. attrs.contextualSpacing - ProseMirror node attributes
+ * 4. hydrated.contextualSpacing - From style resolution (this property)
+ *
+ * @example
+ * ```typescript
+ * // Style resolution for ListBullet with contextualSpacing
+ * const hydrated: ParagraphStyleHydration = {
+ *   spacing: { before: 0, after: 0 },
+ *   indent: { left: 720, hanging: 360 },
+ *   contextualSpacing: true, // Suppress spacing between same-style paragraphs
+ * };
+ * ```
+ */
 export type ParagraphStyleHydration = {
   resolved?: ResolvedParagraphProperties;
   spacing?: ParagraphSpacing;
@@ -26,6 +80,7 @@ export type ParagraphStyleHydration = {
   keepLines?: boolean;
   keepNext?: boolean;
   numberingProperties?: Record<string, unknown>;
+  contextualSpacing?: boolean;
 };
 
 /**
@@ -112,6 +167,12 @@ export const hydrateParagraphStyleAttrs = (
     keepLines?: boolean;
     keepNext?: boolean;
     outlineLvl?: number;
+    /**
+     * Contextual spacing from style resolution.
+     * In OOXML, w:contextualSpacing is a sibling to w:spacing, not nested within it.
+     * When true, spacing is suppressed between paragraphs of the same style.
+     */
+    contextualSpacing?: boolean;
   };
   const resolvedExtended = resolved as ExtendedResolvedProps;
   const resolvedAsRecord = resolved as Record<string, unknown>;
@@ -180,6 +241,9 @@ export const hydrateParagraphStyleAttrs = (
     keepLines: resolvedExtended.keepLines,
     keepNext: resolvedExtended.keepNext,
     numberingProperties: cloneIfObject(resolvedAsRecord.numberingProperties) as Record<string, unknown> | undefined,
+    // Extract contextualSpacing from style resolution - this is a sibling to spacing in OOXML,
+    // not nested within it. When true, suppresses spacing between paragraphs of the same style.
+    contextualSpacing: resolvedExtended.contextualSpacing,
   };
   return hydrated;
 };

@@ -7,7 +7,7 @@ describe('w:permEnd translator', () => {
     expect(config.xmlName).toBe('w:permEnd');
     expect(config.sdNodeOrKeyName).toBe('permEnd');
     expect(config.type).toBe(NodeTranslator.translatorTypes.NODE);
-    expect(config.attributes).toHaveLength(1);
+    expect(config.attributes).toHaveLength(2);
   });
 
   it('encodes OOXML to SuperDoc', () => {
@@ -17,6 +17,7 @@ describe('w:permEnd translator', () => {
           name: 'w:permEnd',
           attributes: {
             'w:id': '3',
+            'w:displacedByCustomXml': 'prev',
           },
         },
       ],
@@ -28,6 +29,7 @@ describe('w:permEnd translator', () => {
       type: 'permEnd',
       attrs: {
         id: '3',
+        displacedByCustomXml: 'prev',
       },
     });
   });
@@ -38,6 +40,7 @@ describe('w:permEnd translator', () => {
         type: 'permEnd',
         attrs: {
           id: '5',
+          displacedByCustomXml: 'prev',
         },
       },
     };
@@ -49,6 +52,7 @@ describe('w:permEnd translator', () => {
       elements: [],
       attributes: {
         'w:id': '5',
+        'w:displacedByCustomXml': 'prev',
       },
     });
   });
@@ -59,6 +63,7 @@ describe('w:permEnd translator', () => {
       elements: [],
       attributes: {
         'w:id': '9',
+        'w:displacedByCustomXml': 'prev',
       },
     };
 
