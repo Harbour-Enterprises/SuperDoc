@@ -28,6 +28,9 @@ export const PermEnd = Node.create({
       edGrp: {
         default: null,
       },
+      displacedByCustomXml: {
+        default: null,
+      },
     };
   },
 });
