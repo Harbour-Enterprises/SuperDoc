@@ -13,8 +13,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@superdoc/contracts": "workspace:*",
-    "@superdoc/font-utils": "workspace:*"
+    "@superdoc/contracts": "workspace:*"
   },
   "devDependencies": {
     "vitest": "catalog:"
