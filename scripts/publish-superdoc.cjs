@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 const { execFileSync } = require('node:child_process');
 const {
-  cpSync,
   existsSync,
   mkdtempSync,
   readFileSync,
@@ -20,16 +19,19 @@ const run = (command, args, cwd) => {
   execFileSync(command, args, { stdio: 'inherit', cwd });
 };
 
+const runCapture = (command, args, cwd) => {
+  return execFileSync(command, args, { cwd, encoding: 'utf8' }).trim();
+};
+
 const isVersionPublished = (packageName, version) => {
   try {
     execFileSync(
-      'npm',
+      'pnpm',
       ['view', `${packageName}@${version}`, 'version', '--registry', defaultRegistry],
       { stdio: 'pipe' }
     );
     return true;
   } catch (error) {
-    // npm returns exit code 1 when a version is not found
     if (error.status === 1) {
       return false;
     }
@@ -57,34 +59,34 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
 
   if (isVersionPublished(scopedName, packageJson.version)) {
     logger.log(`${scopedName}@${packageJson.version} already published, ensuring dist-tag "${distTag}" and skipping.`);
-    run('npm', ['dist-tag', 'add', `${scopedName}@${packageJson.version}`, distTag], rootDir);
+    run('pnpm', ['dist-tag', 'add', `${scopedName}@${packageJson.version}`, distTag], rootDir);
     return;
   }
 
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'superdoc-publish-'));
   try {
-    const scopedPackageJson = {
-      ...packageJson,
-      name: scopedName,
-      publishConfig: {
-        ...(packageJson.publishConfig || {}),
-        access: 'public'
-      },
-      readme: 'README.md'
+    // Pack from workspace - pnpm resolves catalog: and workspace: refs automatically
+    logger.log('Packing superdoc (pnpm resolves workspace/catalog refs)...');
+    const tarball = runCapture('pnpm', ['pack', '--pack-destination', tempDir], superdocDir);
+    const tarballPath = path.join(tempDir, tarball);
+
+    // Extract the tarball
+    run('tar', ['-xzf', tarballPath, '-C', tempDir], tempDir);
+    rmSync(tarballPath);
+
+    // Modify package.json to use scoped name
+    const extractedDir = path.join(tempDir, 'package');
+    const extractedPkgPath = path.join(extractedDir, 'package.json');
+    const extractedPkg = JSON.parse(readFileSync(extractedPkgPath, 'utf8'));
+    extractedPkg.name = scopedName;
+    extractedPkg.publishConfig = {
+      ...(extractedPkg.publishConfig || {}),
+      access: 'public'
     };
-
-    writeFileSync(path.join(tempDir, 'package.json'), `${JSON.stringify(scopedPackageJson, null, 2)}\n`);
-
-    const distSource = path.join(superdocDir, 'dist');
-    cpSync(distSource, path.join(tempDir, 'dist'), { recursive: true });
-
-    const readmeSource = path.join(superdocDir, 'README.md');
-    if (existsSync(readmeSource)) {
-      cpSync(readmeSource, path.join(tempDir, 'README.md'));
-    }
+    writeFileSync(extractedPkgPath, `${JSON.stringify(extractedPkg, null, 2)}\n`);
 
     logger.log(`Publishing @harbour-enterprises/superdoc with dist-tag "${distTag}"...`);
-    run('pnpm', ['publish', '--access', 'public', '--tag', distTag, '--no-git-checks'], tempDir);
+    run('pnpm', ['publish', '--access', 'public', '--tag', distTag, '--no-git-checks'], extractedDir);
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
@@ -98,7 +100,7 @@ const publishPackages = ({
 } = {}) => {
   if (build) {
     logger.log('Building packages...');
-    run('npm', ['run', 'build'], rootDir);
+    run('pnpm', ['run', 'build'], rootDir);
   }
 
   const packageJson = ensurePackageJson();
@@ -107,7 +109,7 @@ const publishPackages = ({
   if (publishUnscoped) {
     if (isVersionPublished(packageJson.name, packageJson.version)) {
       logger.log(`superdoc@${packageJson.version} already published, ensuring dist-tag "${distTag}" and skipping.`);
-      run('npm', ['dist-tag', 'add', `${packageJson.name}@${packageJson.version}`, distTag], rootDir);
+      run('pnpm', ['dist-tag', 'add', `${packageJson.name}@${packageJson.version}`, distTag], rootDir);
     } else {
       logger.log(`Publishing superdoc with dist-tag "${distTag}"...`);
       run('pnpm', ['publish', '--access', 'public', '--tag', distTag, '--no-git-checks'], superdocDir);
