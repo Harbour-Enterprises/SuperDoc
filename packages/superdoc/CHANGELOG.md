@@ -1,3 +1,10 @@
+## [1.1.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.1...v1.1.2) (2025-12-31)
+
+
+### Bug Fixes
+
+* add destroyed to flag to abort init [stable] ([#1617](https://github.com/Harbour-Enterprises/SuperDoc/issues/1617)) ([337b452](https://github.com/Harbour-Enterprises/SuperDoc/commit/337b4520d0e6e68da50855e6e5dd6f476df2ebd0))
+
 ## [1.1.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.0...v1.1.1) (2025-12-29)
 
 
