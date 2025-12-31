@@ -307,23 +307,24 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   const paddingTop =
     (cell?.attrs?.padding?.top ?? defaultTableCell.attrs.padding.top) + rowBorderTop - getBorderWidth(borders?.top);
   const paddingBottom = cell?.attrs?.padding?.bottom ?? defaultTableCell.attrs.padding.bottom;
-  const paddingLeft = cell?.attrs?.padding?.left ?? defaultTableCell.attrs.padding.left;
+  const paddingLeft =
+    (cell?.attrs?.padding?.left ?? defaultTableCell.attrs.padding.left) - getBorderWidth(borders?.left) / 2;
   const paddingRight = cell?.attrs?.padding?.right ?? defaultTableCell.attrs.padding.right;
 
   const cellEl = doc.createElement('div');
   cellEl.style.position = 'absolute';
-  cellEl.style.left = `${x}px`;
+  cellEl.style.left = `${x - getBorderWidth(borders?.left) / 2}px`;
   cellEl.style.top = `${y}px`;
-  cellEl.style.width = `${cellMeasure.width}px`;
+  cellEl.style.width = `${cellMeasure.width + getBorderWidth(borders?.left) / 2 + getBorderWidth(borders?.right) / 2}px`;
   cellEl.style.height = `${rowHeight + getBorderWidth(borders?.bottom)}px`;
   cellEl.style.boxSizing = 'border-box';
   // Cell clips all overflow - no scrollbars, content just gets clipped at boundaries
   cellEl.style.overflow = 'hidden';
   // Apply padding directly to cell so content is positioned correctly
-  cellEl.style.paddingLeft = `${paddingLeft}px`;
-  cellEl.style.paddingTop = `${paddingTop}px`;
-  cellEl.style.paddingRight = `${paddingRight}px`;
-  cellEl.style.paddingBottom = `${paddingBottom}px`;
+  cellEl.style.paddingLeft = `${Math.max(0, paddingLeft)}px`;
+  cellEl.style.paddingTop = `${Math.max(0, paddingTop)}px`;
+  cellEl.style.paddingRight = `${Math.max(0, paddingRight)}px`;
+  cellEl.style.paddingBottom = `${Math.max(paddingBottom, 0)}px`;
 
   if (borders) {
     applyCellBorders(cellEl, borders);

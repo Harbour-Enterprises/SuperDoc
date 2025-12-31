@@ -1,4 +1,5 @@
 import type {
+  CellBorders,
   DrawingBlock,
   Line,
   ParagraphBlock,
@@ -239,7 +240,7 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     // - If continuesFromPrev=true: draw TOP border (table's top border) to close the top
     // - If continuesOnNext=true: draw BOTTOM border (table's bottom border) to close the bottom
     // This means both fragments at a split have their edge borders drawn.
-    let resolvedBorders;
+    let resolvedBorders: CellBorders | undefined;
     if (hasBordersAttribute && !hasExplicitBorders) {
       // Cell explicitly has borders={} meaning "no borders"
       // TODO: Is this actually accurate? Shouldn't borders={} mean "don't override any borders"?
@@ -258,15 +259,13 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
 
       resolvedBorders = {
         // For top: use cell's if defined, otherwise use table's top border for first row OR continuation
-        top: treatAsFirstRow ? (cellBordersAttr?.top ?? borderValueToSpec(tableBorders?.top)) : undefined,
+        top: borderValueToSpec(cellBordersAttr?.top ?? (treatAsFirstRow ? tableBorders?.top : undefined)),
         // For bottom: use cell's if defined, otherwise use table's bottom border for last row OR before continuation
-        bottom: cellBordersAttr?.bottom ?? borderValueToSpec(treatAsLastRow ? tableBorders?.bottom : undefined),
+        bottom: borderValueToSpec(cellBordersAttr?.bottom ?? (treatAsLastRow ? tableBorders?.bottom : undefined)),
         // For left: use cell's if defined, otherwise use table's left for first col
-        left: isFirstCol
-          ? (cellBordersAttr?.left ?? borderValueToSpec(isFirstCol ? tableBorders?.left : tableBorders?.insideV))
-          : undefined,
+        left: borderValueToSpec(cellBordersAttr?.left ?? (isFirstCol ? tableBorders?.left : undefined)),
         // For right: use cell's if defined, otherwise use table's right for last col only
-        right: cellBordersAttr?.right ?? borderValueToSpec(isLastCol ? tableBorders?.right : undefined),
+        right: borderValueToSpec(cellBordersAttr?.right ?? (isLastCol ? tableBorders?.right : undefined)),
       };
     }
 
