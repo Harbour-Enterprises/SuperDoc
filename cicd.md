@@ -31,9 +31,9 @@ main (next) → stable (latest) → X.x (maintenance)
 
 ### Core Workflows
 
-#### 1. PR Validation (`pr-validation.yml`)
+#### 1. Commit Validation (`commit-validation.yml`)
 
-**Triggers**: All pull requests
+**Triggers**: All pushes
 
 **Checks**:
 
@@ -44,7 +44,7 @@ main (next) → stable (latest) → X.x (maintenance)
 - Visual regression tests
 - E2E tests (main branch only)
 
-**Required to pass before merge**.
+**Required to pass before PR merge**.
 
 #### 2. Release (`release.yml`)
 
