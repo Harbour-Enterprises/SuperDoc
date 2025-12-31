@@ -30,7 +30,13 @@ import { trackedTransaction } from '@extensions/track-changes/trackChangesHelper
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
 import { CommentsPluginKey } from '@extensions/comment/comments-plugin.js';
 import { getNecessaryMigrations } from '@core/migrations/index.js';
-import { getRichTextExtensions } from '../extensions/index.js';
+import { getStarterExtensions, getRichTextExtensions } from '../extensions/index.js';
+import {
+  InvalidStateError,
+  NoSourcePathError,
+  FileSystemNotAvailableError,
+  DocumentLoadError,
+} from './errors/index.js';
 import { AnnotatorHelpers } from '@helpers/annotator.js';
 import { prepareCommentsForExport, prepareCommentsForImport } from '@extensions/comment/comments-helpers.js';
 import DocxZipper from '@core/DocxZipper.js';
@@ -63,6 +69,81 @@ declare const version: string | undefined;
 interface ImageStorage {
   media: Record<string, unknown>;
 }
+
+/**
+ * Editor lifecycle state.
+ *
+ * State machine:
+ * ```
+ * initialized -> documentLoading -> ready <-> saving
+ *                                     |
+ *                                     v
+ *                                  closed -> documentLoading -> ready
+ *                                     |
+ *                                     v
+ *                                 destroyed
+ * ```
+ */
+export type EditorLifecycleState = 'initialized' | 'documentLoading' | 'ready' | 'saving' | 'closed' | 'destroyed';
+
+/**
+ * Options for opening a document.
+ */
+export interface OpenOptions {
+  /** Document mode ('docx', 'text', 'html') */
+  mode?: 'docx' | 'text' | 'html';
+
+  /** HTML content to initialize with (for text/html mode) */
+  html?: string;
+
+  /** Markdown content to initialize with */
+  markdown?: string;
+
+  /** JSON content to initialize with */
+  json?: ProseMirrorJSON | null;
+
+  /** Whether comments are enabled */
+  isCommentsEnabled?: boolean;
+
+  /** Prevent default styles from being applied in docx mode */
+  suppressDefaultDocxStyles?: boolean;
+
+  /** Document mode ('editing', 'viewing', 'suggesting') */
+  documentMode?: 'editing' | 'viewing' | 'suggesting';
+
+  /** Pre-parsed docx content (for when document is already loaded) */
+  content?: unknown;
+
+  /** Media files from docx */
+  mediaFiles?: Record<string, unknown>;
+
+  /** Font data from docx */
+  fonts?: Record<string, unknown>;
+}
+
+/**
+ * Options for saving a document.
+ */
+export interface SaveOptions {
+  /** Whether this is the final document version */
+  isFinalDoc?: boolean;
+
+  /** Comment export type */
+  commentsType?: string;
+
+  /** Comments to include in export */
+  comments?: Array<{ id: string; [key: string]: unknown }>;
+
+  /** Highlight color for fields */
+  fieldsHighlightColor?: string | null;
+}
+
+/**
+ * Options for exporting a document.
+ * Currently identical to SaveOptions, but may be extended in the future
+ * with format-specific options (e.g., format?: 'docx' | 'json' | 'xml').
+ */
+export type ExportOptions = SaveOptions;
 
 /**
  * Main editor class that manages document state, extensions, and user interactions
@@ -108,6 +189,18 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Whether the editor instance has been destroyed.
    */
   #isDestroyed = false;
+
+  /**
+   * Editor lifecycle state.
+   * Tracks the current phase of the editor's document lifecycle.
+   */
+  #editorLifecycleState: EditorLifecycleState = 'initialized';
+
+  /**
+   * Source path of the currently opened document.
+   * Set when opening from a file path, null when opening from Blob/Buffer or blank.
+   */
+  #sourcePath: string | null = null;
 
   /**
    * Active PresentationEditor instance when layout mode is enabled.
@@ -234,8 +327,29 @@ export class Editor extends EventEmitter<EditorEventMap> {
   };
 
   /**
-   * Create a new Editor instance
+   * Create a new Editor instance.
+   *
+   * **Legacy mode (backward compatible):**
+   * When `content` or `fileSource` is provided, the editor initializes synchronously
+   * with the document loaded immediately. This preserves existing behavior where
+   * `editor.view` is available right after construction.
+   *
+   * **New mode (document lifecycle API):**
+   * When no `content` or `fileSource` is provided, only core services (extensions,
+   * commands, schema) are initialized. Call `editor.open()` to load a document.
+   *
    * @param options - Editor configuration options
+   *
+   * @example
+   * ```typescript
+   * // Legacy mode (still works)
+   * const editor = new Editor({ content: docx, element: el });
+   * console.log(editor.view.state.doc); // Works immediately
+   *
+   * // New mode
+   * const editor = new Editor({ element: el });
+   * await editor.open('/path/to/doc.docx');
+   * ```
    */
   constructor(options: Partial<EditorOptions>) {
     super();
@@ -277,20 +391,33 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.setOptions(resolvedOptions);
     this.#renderer = resolvedOptions.renderer ?? (domAvailable ? new ProseMirrorRenderer() : null);
 
-    const modes: Record<string, () => void> = {
-      docx: () => this.#init(),
-      text: () => this.#initRichText(),
-      html: () => this.#initRichText(),
-      default: () => {
-        console.log('Not implemented.');
-      },
-    };
-
-    const initMode = modes[this.options.mode!] ?? modes.default;
-
     const { setHighContrastMode } = useHighContrastMode();
     this.setHighContrastMode = setHighContrastMode;
-    initMode();
+
+    // New API mode: only when explicitly requested via deferDocumentLoad option
+    // This preserves 100% backward compatibility - the original editor ALWAYS created a view
+    const useNewApiMode = resolvedOptions.deferDocumentLoad === true;
+
+    if (useNewApiMode) {
+      // NEW MODE: Initialize core only, wait for open()
+      // This is opt-in to ensure zero breaking changes
+      this.#initCore();
+      this.#editorLifecycleState = 'initialized';
+    } else {
+      // LEGACY MODE (default): Exact current behavior - synchronous, view created immediately
+      const modes: Record<string, () => void> = {
+        docx: () => this.#init(),
+        text: () => this.#initRichText(),
+        html: () => this.#initRichText(),
+        default: () => {
+          console.log('Not implemented.');
+        },
+      };
+
+      const initMode = modes[this.options.mode!] ?? modes.default;
+      initMode();
+      this.#editorLifecycleState = 'ready';
+    }
   }
 
   /**
@@ -324,6 +451,378 @@ export class Editor extends EventEmitter<EditorEventMap> {
       if (this.isDestroyed) return;
       this.emit('create', { editor: this });
     }, 0);
+  }
+
+  /**
+   * Assert that the editor is in one of the allowed states.
+   * Throws InvalidStateError if not.
+   */
+  #assertState(...allowed: EditorLifecycleState[]): void {
+    if (!allowed.includes(this.#editorLifecycleState)) {
+      throw new InvalidStateError(
+        `Invalid operation: editor is in '${this.#editorLifecycleState}' state, expected one of: ${allowed.join(', ')}`,
+      );
+    }
+  }
+
+  /**
+   * Wraps an async operation with state transitions for safe lifecycle management.
+   *
+   * This method ensures atomic state transitions during async operations:
+   * 1. Sets state to `during` before executing the operation
+   * 2. On success: sets state to `success` and returns the operation result
+   * 3. On error: sets state to `failure` and re-throws the error
+   *
+   * This prevents race conditions and ensures the editor is always in a valid state,
+   * even when operations fail.
+   *
+   * @template T - The return type of the operation
+   * @param during - State to set while the operation is running
+   * @param success - State to set if the operation succeeds
+   * @param failure - State to set if the operation fails
+   * @param operation - Async operation to execute
+   * @returns Promise resolving to the operation's return value
+   * @throws Re-throws any error from the operation after setting failure state
+   *
+   * @example
+   * ```typescript
+   * // Used internally for save operations:
+   * await this.#withState('saving', 'ready', 'ready', async () => {
+   *   const data = await this.exportDocument();
+   *   await this.#writeToPath(path, data);
+   * });
+   * ```
+   */
+  async #withState<T>(
+    during: EditorLifecycleState,
+    success: EditorLifecycleState,
+    failure: EditorLifecycleState,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    this.#editorLifecycleState = during;
+    try {
+      const result = await operation();
+      this.#editorLifecycleState = success;
+      return result;
+    } catch (error) {
+      this.#editorLifecycleState = failure;
+      throw error;
+    }
+  }
+
+  /**
+   * Initialize core editor services for new lifecycle API mode.
+   *
+   * When `deferDocumentLoad: true` is set, this method initializes only the
+   * document-independent components:
+   * - Extension service (loads and configures all extensions)
+   * - Command service (registers all editor commands)
+   * - ProseMirror schema (derived from extensions, reusable across documents)
+   *
+   * These services are created once during construction and reused when opening
+   * different documents via the `open()` method. This enables efficient document
+   * switching without recreating the entire editor infrastructure.
+   *
+   * Called exclusively from the constructor when `deferDocumentLoad` is true.
+   *
+   * @remarks
+   * This is part of the new lifecycle API that separates editor initialization
+   * from document loading. The schema and extensions remain constant while
+   * documents can be opened, closed, and reopened.
+   *
+   * @see #loadDocument - Loads document-specific state after core initialization
+   */
+  #initCore(): void {
+    // Apply default extensions if none provided
+    if (!this.options.extensions?.length) {
+      this.options.extensions = this.options.mode === 'docx' ? getStarterExtensions() : getRichTextExtensions();
+    }
+
+    this.#createExtensionService();
+    this.#createCommandService();
+    this.#createSchema();
+
+    // Register event listeners once during core init (not per-document)
+    this.#registerEventListeners();
+  }
+
+  /**
+   * Register all event listeners from options.
+   *
+   * Called once during core initialization. These listeners persist across
+   * document open/close cycles since the callbacks are set at construction time.
+   */
+  #registerEventListeners(): void {
+    this.on('create', this.options.onCreate!);
+    this.on('update', this.options.onUpdate!);
+    this.on('selectionUpdate', this.options.onSelectionUpdate!);
+    this.on('transaction', this.options.onTransaction!);
+    this.on('focus', this.#onFocus.bind(this));
+    this.on('blur', this.options.onBlur!);
+    this.on('destroy', this.options.onDestroy!);
+    this.on('trackedChangesUpdate', this.options.onTrackedChangesUpdate!);
+    this.on('commentsLoaded', this.options.onCommentsLoaded!);
+    this.on('commentClick', this.options.onCommentClicked!);
+    this.on('commentsUpdate', this.options.onCommentsUpdate!);
+    this.on('locked', this.options.onDocumentLocked!);
+    this.on('collaborationReady', this.#onCollaborationReady.bind(this));
+    this.on('comment-positions', this.options.onCommentLocationsUpdate!);
+    this.on('list-definitions-change', this.options.onListDefinitionsChange!);
+    this.on('fonts-resolved', this.options.onFontsResolved!);
+    this.on('exception', this.options.onException!);
+  }
+
+  /**
+   * Load a document into the editor from various source types.
+   *
+   * This method handles the complete document loading pipeline:
+   * 1. **Source resolution**: Determines source type (path/File/Blob/Buffer/blank)
+   * 2. **Content loading**:
+   *    - String path: Reads file from disk (Node.js) or fetches URL (browser)
+   *    - File/Blob: Extracts docx archive data
+   *    - Buffer: Processes binary data (Node.js)
+   *    - undefined/null: Creates blank document
+   * 3. **Document initialization**: Creates converter, media, fonts, initial state
+   * 4. **View mounting**: Attaches ProseMirror view (unless headless)
+   * 5. **Event wiring**: Connects all lifecycle event handlers
+   *
+   * Called by `open()` after state validation, wrapped in `#withState()` for
+   * atomic state transitions.
+   *
+   * @param source - Document source:
+   *   - `string`: File path (Node.js reads from disk, browser fetches as URL)
+   *   - `File | Blob`: Browser file object or blob
+   *   - `Buffer`: Node.js buffer containing docx data
+   *   - `undefined | null`: Creates a blank document
+   * @param options - Document-level options (mode, comments, styles, etc.)
+   * @returns Promise that resolves when document is fully loaded and ready
+   * @throws {DocumentLoadError} If any step of document loading fails. The error
+   *   wraps the underlying cause for debugging.
+   *
+   * @remarks
+   * - Sets `#sourcePath` for path-based sources (enables `save()`)
+   * - Sets `#sourcePath = null` for Blob/Buffer sources (requires `saveTo()`)
+   * - In browser, string paths are treated as URLs to fetch
+   * - In Node.js, string paths are read from the filesystem
+   *
+   * @see open - Public API that calls this method
+   * @see #unloadDocument - Cleanup counterpart that reverses this process
+   */
+  async #loadDocument(source?: string | File | Blob | Buffer, options?: OpenOptions): Promise<void> {
+    try {
+      // Merge options with defaults
+      const resolvedMode = options?.mode ?? this.options.mode ?? 'docx';
+      const resolvedOptions = {
+        ...this.options,
+        mode: resolvedMode,
+        isCommentsEnabled: options?.isCommentsEnabled ?? this.options.isCommentsEnabled,
+        suppressDefaultDocxStyles: options?.suppressDefaultDocxStyles ?? this.options.suppressDefaultDocxStyles,
+        documentMode: options?.documentMode ?? this.options.documentMode ?? 'editing',
+        html: options?.html,
+        markdown: options?.markdown,
+        jsonOverride: options?.json ?? null,
+      };
+
+      // Determine source type and load XML data
+      if (typeof source === 'string') {
+        // Node.js: read file from path
+        if (typeof process !== 'undefined' && process.versions?.node) {
+          // Dynamic require to avoid bundler issues
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const fs = require('fs') as typeof import('fs');
+          const buffer = fs.readFileSync(source);
+          const [docx, _media, mediaFiles, fonts] = (await Editor.loadXmlData(buffer, true))!;
+          resolvedOptions.content = docx;
+          resolvedOptions.mediaFiles = mediaFiles;
+          resolvedOptions.fonts = fonts;
+          resolvedOptions.fileSource = buffer;
+          this.#sourcePath = source;
+        } else {
+          // Browser: fetch the file
+          const response = await fetch(source);
+          const blob = await response.blob();
+          const [docx, _media, mediaFiles, fonts] = (await Editor.loadXmlData(blob))!;
+          resolvedOptions.content = docx;
+          resolvedOptions.mediaFiles = mediaFiles;
+          resolvedOptions.fonts = fonts;
+          resolvedOptions.fileSource = blob;
+          // In browser, path is just a suggested filename
+          this.#sourcePath = source.split('/').pop() || null;
+        }
+      } else if (source != null && typeof source === 'object') {
+        // File, Blob, Buffer, or ArrayBuffer-like object
+        // Check for Buffer in Node.js (Buffer.isBuffer is more reliable than instanceof)
+        const isNodeBuffer = typeof Buffer !== 'undefined' && (Buffer.isBuffer(source) || source instanceof Buffer);
+        const isBlob = typeof Blob !== 'undefined' && source instanceof Blob;
+        const isArrayBuffer = source instanceof ArrayBuffer;
+        const hasArrayBuffer = typeof source === 'object' && 'buffer' in source && source.buffer instanceof ArrayBuffer;
+
+        if (isNodeBuffer || isBlob || isArrayBuffer || hasArrayBuffer) {
+          const [docx, _media, mediaFiles, fonts] = (await Editor.loadXmlData(
+            source as File | Blob | Buffer,
+            isNodeBuffer,
+          ))!;
+          resolvedOptions.content = docx;
+          resolvedOptions.mediaFiles = mediaFiles;
+          resolvedOptions.fonts = fonts;
+          resolvedOptions.fileSource = source as File | Blob | Buffer;
+          this.#sourcePath = null;
+        } else {
+          // Unknown object type - try to load it anyway
+          const [docx, _media, mediaFiles, fonts] = (await Editor.loadXmlData(source as File | Blob | Buffer, false))!;
+          resolvedOptions.content = docx;
+          resolvedOptions.mediaFiles = mediaFiles;
+          resolvedOptions.fonts = fonts;
+          resolvedOptions.fileSource = source as File | Blob | Buffer;
+          this.#sourcePath = null;
+        }
+      } else {
+        // Blank document (source is undefined or null)
+        // Use pre-parsed content from options if provided, otherwise create minimal structure
+        resolvedOptions.content = options?.content ?? [];
+        resolvedOptions.mediaFiles = options?.mediaFiles ?? {};
+        resolvedOptions.fonts = options?.fonts ?? {};
+        resolvedOptions.fileSource = null;
+        resolvedOptions.isNewFile = !options?.content; // Only mark as new if no content provided
+        this.#sourcePath = null;
+      }
+
+      // Update options
+      this.setOptions(resolvedOptions);
+
+      // Create converter
+      this.#createConverter();
+
+      // Initialize media
+      this.#initMedia();
+
+      // Initialize fonts (if not headless)
+      const shouldMountRenderer = this.#shouldMountRenderer();
+      if (shouldMountRenderer) {
+        this.#initContainerElement(this.options);
+        this.#initFonts();
+      }
+
+      // Create initial state
+      this.#createInitialState({ includePlugins: !shouldMountRenderer });
+
+      // In headless mode, run synthetic transaction pass
+      if (!shouldMountRenderer) {
+        const tr = this.state.tr.setMeta('forcePluginPass', true).setMeta('addToHistory', false);
+        this.#dispatchTransaction(tr);
+      }
+
+      // Mount if not headless
+      if (shouldMountRenderer) {
+        this.mount(this.options.element!);
+        this.#configureStateWithExtensionPlugins();
+      }
+
+      // Emit create event
+      if (!shouldMountRenderer) {
+        this.#emitCreateAsync();
+      }
+
+      // Initialize default styles (if not headless)
+      if (shouldMountRenderer) {
+        this.initDefaultStyles();
+        this.#checkFonts();
+      }
+
+      // Migrate lists if needed
+      const shouldMigrateListsOnInit = Boolean(
+        this.options.markdown ||
+          this.options.html ||
+          this.options.loadFromSchema ||
+          this.options.jsonOverride ||
+          this.options.mode === 'html' ||
+          this.options.mode === 'text',
+      );
+      if (shouldMigrateListsOnInit) {
+        this.migrateListsToV2();
+      }
+
+      // Set document mode
+      this.setDocumentMode(this.options.documentMode!, 'init');
+
+      // Initialize collaboration data for new files
+      this.initializeCollaborationData();
+
+      // Initialize comments
+      if (!this.options.ydoc && !this.options.isChildEditor) {
+        this.#initComments();
+      }
+
+      // Initialize dev tools and copy handler
+      if (shouldMountRenderer) {
+        this.#initDevTools();
+        this.#registerCopyHandler();
+      }
+    } catch (error) {
+      const err = error instanceof Error ? error : new Error(String(error));
+      throw new DocumentLoadError(`Failed to load document: ${err.message}`, err);
+    }
+  }
+
+  /**
+   * Unload the current document and clean up all document-specific resources.
+   *
+   * This method performs a complete cleanup of document state while preserving
+   * the core editor services (schema, extensions, commands) for reuse:
+   *
+   * **Resources cleaned up:**
+   * - ProseMirror view (unmounted from DOM)
+   * - Header/footer editors (destroyed)
+   * - Document converter instance
+   * - Media references and image storage
+   * - Source path reference
+   * - Document-specific options (content, fileSource, initialState)
+   * - ProseMirror editor state
+   *
+   * **Resources preserved:**
+   * - ProseMirror schema
+   * - Extension service and registered extensions
+   * - Command service and registered commands
+   * - Event listeners (registered once during core init, reused across documents)
+   *
+   * After cleanup, the editor transitions to 'closed' state and can be reopened
+   * with a new document via `open()`.
+   *
+   * Called by `close()` after emitting the `documentClose` event.
+   *
+   * @remarks
+   * This is a critical part of the document lifecycle API that enables efficient
+   * document switching. By preserving schema and extensions, we avoid expensive
+   * reinitialization when opening multiple documents sequentially.
+   *
+   * @see close - Public API that calls this method
+   * @see #loadDocument - Counterpart method that loads document resources
+   */
+  #unloadDocument(): void {
+    // Unmount the view
+    this.unmount();
+
+    // Destroy header/footer editors
+    this.destroyHeaderFooterEditors();
+
+    // Reset converter
+    this.converter = undefined!;
+
+    // Clear media references
+    if (this.storage.image) {
+      (this.storage.image as ImageStorage).media = {};
+    }
+
+    // Clear source path
+    this.#sourcePath = null;
+
+    // Clear document-specific state
+    this.options.initialState = null;
+    this.options.content = '';
+    this.options.fileSource = null;
+
+    // Reset internal state
+    this._state = undefined!;
   }
 
   /**
@@ -532,6 +1031,27 @@ export class Editor extends EventEmitter<EditorEventMap> {
   }
 
   /**
+   * Get the current editor lifecycle state.
+   *
+   * @returns The current lifecycle state ('initialized', 'documentLoading', 'ready', 'saving', 'closed', 'destroyed')
+   */
+  get lifecycleState(): EditorLifecycleState {
+    return this.#editorLifecycleState;
+  }
+
+  /**
+   * Get the source path of the currently opened document.
+   *
+   * Returns the file path if the document was opened from a path (Node.js),
+   * or null if opened from a Blob/Buffer or created as a blank document.
+   *
+   * In browsers, this is only a suggested filename, not an actual filesystem path.
+   */
+  get sourcePath(): string | null {
+    return this.#sourcePath;
+  }
+
+  /**
    * Replace the editor state entirely.
    *
    * Use this method when you need to set a completely new EditorState
@@ -643,7 +1163,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     // Viewing mode: Not editable, no tracked changes, no comments
     if (cleanedMode === 'viewing') {
-      this.commands.toggleTrackChangesShowOriginal();
+      this.commands.toggleTrackChangesShowOriginal?.();
       this.setEditable(false, false);
       this.setOptions({ documentMode: 'viewing' });
       if (pm) pm.classList.add('view-mode');
@@ -651,17 +1171,17 @@ export class Editor extends EventEmitter<EditorEventMap> {
 
     // Suggesting: Editable, tracked changes plugin enabled, comments
     else if (cleanedMode === 'suggesting') {
-      this.commands.disableTrackChangesShowOriginal();
-      this.commands.enableTrackChanges();
+      this.commands.disableTrackChangesShowOriginal?.();
+      this.commands.enableTrackChanges?.();
       this.setOptions({ documentMode: 'suggesting' });
       this.setEditable(true, false);
       if (pm) pm.classList.remove('view-mode');
     }
 
-    // Editing: Editable, tracked changes plguin disabled, comments
+    // Editing: Editable, tracked changes plugin disabled, comments
     else if (cleanedMode === 'editing') {
-      this.commands.disableTrackChangesShowOriginal();
-      this.commands.disableTrackChanges();
+      this.commands.disableTrackChangesShowOriginal?.();
+      this.commands.disableTrackChanges?.();
       this.setEditable(true, false);
       this.setOptions({ documentMode: 'editing' });
       if (pm) pm.classList.remove('view-mode');
@@ -1988,10 +2508,328 @@ export class Editor extends EventEmitter<EditorEventMap> {
     }
   }
 
+  // ============================================================================
+  // Document Lifecycle API
+  // ============================================================================
+
+  /**
+   * Open a document in the editor.
+   *
+   * @param source - Document source:
+   *   - `string` - File path (Node.js reads from disk, browser fetches URL)
+   *   - `File | Blob` - Browser file object
+   *   - `Buffer` - Node.js buffer
+   *   - `undefined` - Creates a blank document
+   * @param options - Document options (mode, comments, etc.)
+   * @returns Promise that resolves when document is loaded
+   *
+   * @throws {InvalidStateError} If editor is not in 'initialized' or 'closed' state
+   * @throws {DocumentLoadError} If document loading fails
+   *
+   * @example
+   * ```typescript
+   * const editor = new Editor({ element: myDiv });
+   *
+   * // Open from file path (Node.js)
+   * await editor.open('/path/to/document.docx');
+   *
+   * // Open from File object (browser)
+   * await editor.open(fileInput.files[0]);
+   *
+   * // Open blank document
+   * await editor.open();
+   *
+   * // Open with options
+   * await editor.open('/path/to/doc.docx', { isCommentsEnabled: true });
+   * ```
+   */
+  async open(source?: string | File | Blob | Buffer, options?: OpenOptions): Promise<void> {
+    this.#assertState('initialized', 'closed');
+
+    await this.#withState('documentLoading', 'ready', 'closed', async () => {
+      await this.#loadDocument(source, options);
+    });
+
+    this.emit('documentOpen', { editor: this, sourcePath: this.#sourcePath });
+  }
+
+  /**
+   * Static factory method for one-liner document opening.
+   * Creates an Editor instance and opens the document in one call.
+   *
+   * Smart defaults enable minimal configuration:
+   * - No element/selector → headless mode
+   * - No extensions → uses getStarterExtensions() for docx, getRichTextExtensions() for text/html
+   * - No mode → defaults to 'docx'
+   *
+   * @param source - Document source (path, File, Blob, Buffer, or undefined for blank)
+   * @param config - Combined editor and document options (all optional)
+   * @returns Promise resolving to the ready Editor instance
+   *
+   * @example
+   * ```typescript
+   * // Minimal headless usage - just works!
+   * const editor = await Editor.open('/path/to/doc.docx');
+   *
+   * // With options
+   * const editor = await Editor.open('/path/to/doc.docx', {
+   *   isCommentsEnabled: true,
+   * });
+   *
+   * // With UI element (automatically not headless)
+   * const editor = await Editor.open('/path/to/doc.docx', {
+   *   element: document.getElementById('editor'),
+   * });
+   *
+   * // Blank document
+   * const editor = await Editor.open();
+   * ```
+   */
+  static async open(
+    source?: string | File | Blob | Buffer,
+    config?: Partial<EditorOptions> & OpenOptions,
+  ): Promise<Editor> {
+    // Apply smart defaults
+    const hasElement = config?.element != null || config?.selector != null;
+    const resolvedConfig: Partial<EditorOptions> = {
+      mode: 'docx',
+      isHeadless: !hasElement,
+      ...config,
+    };
+
+    // Separate editor-level config from document-level options
+    const {
+      // OpenOptions (document-level)
+      html,
+      markdown,
+      isCommentsEnabled,
+      suppressDefaultDocxStyles,
+      documentMode,
+      content,
+      mediaFiles,
+      fonts,
+      // Everything else is EditorOptions
+      ...editorConfig
+    } = resolvedConfig;
+
+    const openOptions: OpenOptions = {
+      mode: resolvedConfig.mode as 'docx' | 'text' | 'html',
+      html,
+      markdown,
+      isCommentsEnabled,
+      suppressDefaultDocxStyles,
+      documentMode: documentMode as 'editing' | 'viewing' | 'suggesting' | undefined,
+      content,
+      mediaFiles,
+      fonts,
+    };
+
+    // Use new API mode for static factory
+    const editor = new Editor({ ...editorConfig, deferDocumentLoad: true });
+    await editor.open(source, openOptions);
+    return editor;
+  }
+
+  /**
+   * Close the current document.
+   *
+   * This unloads the document but keeps the editor instance alive.
+   * The editor can be reused by calling `open()` again.
+   *
+   * This method is idempotent - calling it when already closed is a no-op.
+   *
+   * @example
+   * ```typescript
+   * await editor.open('/doc1.docx');
+   * // ... work with document ...
+   * editor.close();
+   *
+   * await editor.open('/doc2.docx');  // Reuse the same editor
+   * ```
+   */
+  close(): void {
+    // Idempotent: calling close() when already closed is a no-op
+    if (this.#editorLifecycleState === 'closed' || this.#editorLifecycleState === 'initialized') {
+      return;
+    }
+
+    if (this.#editorLifecycleState === 'destroyed') {
+      return;
+    }
+
+    this.#assertState('ready');
+    this.emit('documentClose', { editor: this });
+    this.#unloadDocument();
+    this.#editorLifecycleState = 'closed';
+  }
+
+  /**
+   * Save the document to the original source path.
+   *
+   * Only works if the document was opened from a file path.
+   * If opened from Blob/Buffer or created blank, use `saveTo()` or `exportDocument()`.
+   *
+   * @param options - Save options (comments, final doc, etc.)
+   * @throws {InvalidStateError} If editor is not in 'ready' state
+   * @throws {NoSourcePathError} If no source path is available
+   * @throws {FileSystemNotAvailableError} If file system access is not available
+   *
+   * @example
+   * ```typescript
+   * const editor = await Editor.open('/path/to/doc.docx');
+   * // ... make changes ...
+   * await editor.save();  // Saves back to /path/to/doc.docx
+   * ```
+   */
+  async save(options?: SaveOptions): Promise<void> {
+    this.#assertState('ready');
+
+    if (!this.#sourcePath) {
+      throw new NoSourcePathError('No source path. Use saveTo(path) or exportDocument() instead.');
+    }
+
+    await this.#withState('saving', 'ready', 'ready', async () => {
+      const data = await this.exportDocument(options);
+      await this.#writeToPath(this.#sourcePath!, data);
+    });
+  }
+
+  /**
+   * Save the document to a specific path.
+   *
+   * Updates the source path to the new location after saving.
+   *
+   * @param path - File path to save to
+   * @param options - Save options
+   * @throws {InvalidStateError} If editor is not in 'ready' state
+   * @throws {FileSystemNotAvailableError} If file system access is not available
+   *
+   * @example
+   * ```typescript
+   * const editor = await Editor.open(blobData);  // No source path
+   * await editor.saveTo('/path/to/new-doc.docx');
+   * await editor.save();  // Now saves to /path/to/new-doc.docx
+   * ```
+   */
+  async saveTo(path: string, options?: SaveOptions): Promise<void> {
+    this.#assertState('ready');
+
+    await this.#withState('saving', 'ready', 'ready', async () => {
+      const data = await this.exportDocument(options);
+      await this.#writeToPath(path, data);
+      this.#sourcePath = path;
+    });
+  }
+
+  /**
+   * Export the document as a Blob or Buffer.
+   *
+   * This is a convenience wrapper around `exportDocx()` that returns
+   * the document data without writing to a file.
+   *
+   * @param options - Export options
+   * @returns Promise resolving to Blob (browser) or Buffer (Node.js)
+   * @throws {InvalidStateError} If editor is not in 'ready' state
+   *
+   * @example
+   * ```typescript
+   * const blob = await editor.exportDocument();
+   *
+   * // Create download link in browser
+   * const url = URL.createObjectURL(blob);
+   * const a = document.createElement('a');
+   * a.href = url;
+   * a.download = 'document.docx';
+   * a.click();
+   * ```
+   */
+  async exportDocument(options?: ExportOptions): Promise<Blob | Buffer> {
+    // Allow exporting from 'ready' or 'saving' state (saving calls exportDocument internally)
+    this.#assertState('ready', 'saving');
+
+    const result = await this.exportDocx({
+      isFinalDoc: options?.isFinalDoc,
+      commentsType: options?.commentsType,
+      comments: options?.comments,
+      fieldsHighlightColor: options?.fieldsHighlightColor,
+    });
+
+    return result as Blob | Buffer;
+  }
+
+  /**
+   * Writes document data to a file path.
+   *
+   * **Browser behavior:**
+   * In browsers, the `path` parameter is only used as a suggested filename.
+   * The File System Access API shows a save dialog and the user chooses the actual location.
+   *
+   * **Node.js behavior:**
+   * The path is an actual filesystem path, written directly.
+   */
+  async #writeToPath(path: string, data: Blob | Buffer): Promise<void> {
+    // Detect Node.js environment more reliably
+    const isNode =
+      typeof globalThis !== 'undefined' &&
+      typeof globalThis.process !== 'undefined' &&
+      globalThis.process.versions?.node != null;
+
+    // Also check for Buffer which is Node.js specific
+    const hasNodeBuffer = typeof Buffer !== 'undefined' && typeof Buffer.isBuffer === 'function';
+
+    if (isNode || hasNodeBuffer) {
+      try {
+        // Dynamic require to avoid bundler issues
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const fs = require('fs') as typeof import('fs');
+        const buffer = Buffer.isBuffer(data) ? data : Buffer.from(await (data as Blob).arrayBuffer());
+        fs.writeFileSync(path, buffer);
+        return;
+      } catch {
+        // Fall through to browser methods if require fails
+      }
+    }
+
+    // Browser with File System Access API
+    // NOTE: path is only used as suggestedName; user picks actual location via dialog
+    if (typeof window !== 'undefined' && 'showSaveFilePicker' in window) {
+      const handle = await (
+        window as Window & { showSaveFilePicker: (options: unknown) => Promise<FileSystemFileHandle> }
+      ).showSaveFilePicker({
+        suggestedName: path.split('/').pop() || 'document.docx',
+        types: [
+          {
+            description: 'Word Document',
+            accept: { 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['.docx'] },
+          },
+        ],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(data);
+      await writable.close();
+      return;
+    }
+
+    // Browser without File System Access API
+    throw new FileSystemNotAvailableError(
+      'File System Access API not available. Use exportDocument() to get the document data and handle the download manually.',
+    );
+  }
+
   /**
    * Destroy the editor and clean up resources
    */
   destroy(): void {
+    // Close document if open
+    if (this.#editorLifecycleState === 'ready') {
+      this.close();
+    }
+
+    // Already destroyed - idempotent
+    if (this.#editorLifecycleState === 'destroyed') {
+      return;
+    }
+
     this.#isDestroyed = true;
     this.emit('destroy');
 
@@ -2000,6 +2838,13 @@ export class Editor extends EventEmitter<EditorEventMap> {
     this.destroyHeaderFooterEditors();
     this.#endCollaboration();
     this.removeAllListeners();
+
+    // Clear references
+    this.extensionService = undefined!;
+    this.schema = undefined!;
+    this.#commandService = undefined!;
+
+    this.#editorLifecycleState = 'destroyed';
   }
 
   destroyHeaderFooterEditors(): void {
