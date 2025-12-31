@@ -67,8 +67,14 @@ const publishScopedMirror = (packageJson, distTag, logger = console) => {
   try {
     // Pack from workspace - pnpm resolves catalog: and workspace: refs automatically
     logger.log('Packing superdoc (pnpm resolves workspace/catalog refs)...');
-    const tarball = runCapture('pnpm', ['pack', '--pack-destination', tempDir], superdocDir);
-    const tarballPath = path.join(tempDir, tarball);
+    const packOutput = runCapture('pnpm', ['pack', '--pack-destination', tempDir], superdocDir);
+    // pnpm pack outputs multiple lines; extract the .tgz filename
+    const tarballLine = packOutput.split('\n').find(line => line.endsWith('.tgz'));
+    if (!tarballLine) {
+      throw new Error(`Could not find .tgz in pnpm pack output:\n${packOutput}`);
+    }
+    // tarballLine may be full path or just filename
+    const tarballPath = tarballLine.startsWith('/') ? tarballLine : path.join(tempDir, tarballLine);
 
     // Extract the tarball
     run('tar', ['-xzf', tarballPath, '-C', tempDir], tempDir);
