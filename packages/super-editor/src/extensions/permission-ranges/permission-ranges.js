@@ -4,6 +4,37 @@ import { Extension } from '@core/Extension.js';
 
 const PERMISSION_PLUGIN_KEY = new PluginKey('permissionRanges');
 const EVERYONE_GROUP = 'everyone';
+const EMPTY_IDENTIFIER_SET = Object.freeze(new Set());
+
+const normalizeIdentifier = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+const buildAllowedIdentifierSet = (editor) => {
+  const email = normalizeIdentifier(editor?.options?.user?.email);
+  console.log('email', email);
+  if (!email) {
+    return EMPTY_IDENTIFIER_SET;
+  }
+  const [localPart, domain] = email.split('@');
+  if (!localPart || !domain) {
+    return EMPTY_IDENTIFIER_SET;
+  }
+  const formatted = `${domain}\\${localPart}`;
+  return formatted ? new Set([formatted]) : EMPTY_IDENTIFIER_SET;
+};
+
+const isEveryoneGroup = (value) => normalizeIdentifier(value) === EVERYONE_GROUP;
+
+const isRangeAllowedForUser = (attrs, allowedIdentifiers) => {
+  if (!attrs) return false;
+  if (isEveryoneGroup(attrs.edGrp)) {
+    return true;
+  }
+  if (!allowedIdentifiers?.size) {
+    return false;
+  }
+  const normalizedEd = normalizeIdentifier(attrs.ed);
+  return normalizedEd && allowedIdentifiers.has(normalizedEd);
+};
 
 /**
  * Generates the identifier used to match permStart/permEnd pairs.
@@ -18,7 +49,7 @@ const getPermissionNodeId = (node, pos, fallbackPrefix) => String(node.attrs?.id
  * @param {import('prosemirror-model').Node} doc
  * @returns {{ ranges: Array<{ id: string, from: number, to: number }>, hasAllowedRanges: boolean }}
  */
-const buildPermissionState = (doc) => {
+const buildPermissionState = (doc, allowedIdentifiers = EMPTY_IDENTIFIER_SET) => {
   const ranges = [];
   /** @type {Map<string, { from: number, attrs: any }>} */
   const openRanges = new Map();
@@ -36,7 +67,7 @@ const buildPermissionState = (doc) => {
     if (node.type?.name === 'permEnd') {
       const id = getPermissionNodeId(node, pos, 'permEnd');
       const start = openRanges.get(id);
-      if (start && start.attrs?.edGrp === EVERYONE_GROUP) {
+      if (start && isRangeAllowedForUser(start.attrs, allowedIdentifiers)) {
         const to = Math.max(pos, start.from);
         if (to > start.from) {
           ranges.push({
@@ -190,6 +221,7 @@ export const PermissionRanges = Extension.create({
     const editor = this.editor;
     const storage = this.storage;
     let originalSetDocumentMode = null;
+    const getAllowedIdentifiers = () => buildAllowedIdentifierSet(editor);
 
     const toggleEditableIfAllowed = (hasAllowedRanges) => {
       storage.hasAllowedRanges = Boolean(hasAllowedRanges);
@@ -220,7 +252,7 @@ export const PermissionRanges = Extension.create({
         key: PERMISSION_PLUGIN_KEY,
         state: {
           init(_, state) {
-            const permissionState = buildPermissionState(state.doc);
+            const permissionState = buildPermissionState(state.doc, getAllowedIdentifiers());
             storage.ranges = permissionState.ranges;
             toggleEditableIfAllowed(permissionState.hasAllowedRanges);
             return permissionState;
@@ -229,7 +261,7 @@ export const PermissionRanges = Extension.create({
           apply(tr, value, _oldState, newState) {
             let permissionState = value;
             if (tr.docChanged) {
-              permissionState = buildPermissionState(newState.doc);
+              permissionState = buildPermissionState(newState.doc, getAllowedIdentifiers());
               storage.ranges = permissionState.ranges;
             }
 

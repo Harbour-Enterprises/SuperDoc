@@ -30,6 +30,21 @@ const docWithoutPermissionRange = {
   ],
 };
 
+const docWithUserSpecificPermission = {
+  type: 'doc',
+  content: [
+    {
+      type: 'paragraph',
+      content: [
+        { type: 'permStart', attrs: { id: '42', ed: 'superdoc.dev\\gabriel' } },
+        { type: 'text', text: 'User specific section. ' },
+        { type: 'permEnd', attrs: { id: '42', ed: 'superdoc.dev\\gabriel' } },
+        { type: 'text', text: 'Locked section.' },
+      ],
+    },
+  ],
+};
+
 const findTextPos = (doc, searchText) => {
   let found = null;
   doc.descendants((node, pos) => {
@@ -64,12 +79,13 @@ describe('PermissionRanges extension', () => {
     debugSpy?.mockRestore();
   });
 
-  const createEditor = (content) => {
+  const createEditor = (content, extraOptions = {}) => {
     editor = new Editor({
       extensions: getStarterExtensions(),
       jsonOverride: content,
       loadFromSchema: true,
       documentMode: VIEWING_MODE,
+      ...extraOptions,
     });
     return editor;
   };
@@ -247,5 +263,21 @@ describe('PermissionRanges extension', () => {
     const splitTr = instance.state.tr.split(splitPos);
     instance.view.dispatch(splitTr);
     expect(instance.state.doc.childCount).toBeGreaterThan(1);
+  });
+
+  it('allows editing ranges assigned to the current user via w:ed attribute', () => {
+    const instance = createEditor(docWithUserSpecificPermission, {
+      user: { name: 'Gabriel', email: 'gabriel@superdoc.dev' },
+    });
+    expect(instance.isEditable).toBe(true);
+    expect(instance.storage.permissionRanges?.ranges?.length).toBeGreaterThan(0);
+  });
+
+  it('blocks w:ed ranges when the current user does not match', () => {
+    const instance = createEditor(docWithUserSpecificPermission, {
+      user: { name: 'Viewer', email: 'viewer@example.com' },
+    });
+    expect(instance.isEditable).toBe(false);
+    expect(instance.storage.permissionRanges?.ranges?.length ?? 0).toBe(0);
   });
 });
