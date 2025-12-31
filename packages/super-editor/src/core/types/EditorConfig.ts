@@ -340,4 +340,17 @@ export interface EditorOptions {
 
   /** Host-provided permission hook */
   permissionResolver?: ((params: PermissionParams) => boolean | undefined) | null;
+
+  /**
+   * When true, defers document initialization until open() is called.
+   * This enables the new document lifecycle API where:
+   * - Constructor only initializes core services (extensions, schema)
+   * - open() loads the document
+   * - close() unloads the document
+   * - Editor instance can be reused for multiple documents
+   *
+   * Default is false for backward compatibility.
+   * The static Editor.open() factory sets this automatically.
+   */
+  deferDocumentLoad?: boolean;
 }
