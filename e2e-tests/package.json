@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "docker build -t playwright -f Dockerfile ..",
-    "build:nocache": "docker build --pull --no-cache -t playwright .",
+    "build:nocache": "docker build --pull --no-cache -t playwright -f Dockerfile ..",
     "update-screenshots": "pnpm run build && docker run -e PLAYWRIGHT_ARGS='--update-snapshots' --rm  -v ./test-results:/app/e2e-tests/test-results -v ./tests/visuals:/app/e2e-tests/tests/visuals -ti playwright",
     "update-screenshots:layout": "LAYOUT_ENGINE=1 playwright test tests/visuals/layout-engine.spec.js --update-snapshots=all",
     "update-screenshots:layout:docker": "pnpm run build && docker run --rm --cpus=4 --memory=8gb -e LAYOUT_ENGINE=1 -e PLAYWRIGHT_ARGS='tests/visuals/layout-engine.spec.js --update-snapshots=all' -v ./test-results:/app/e2e-tests/test-results -v ./tests:/app/e2e-tests/tests -ti playwright",
