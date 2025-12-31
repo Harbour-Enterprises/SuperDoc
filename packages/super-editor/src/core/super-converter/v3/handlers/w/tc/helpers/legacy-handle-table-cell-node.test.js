@@ -137,7 +137,7 @@ describe('legacy-handle-table-cell-node', () => {
 
     // borders merged: inline bottom overrides; left set to none inherits from row with val=none
     expect(out.attrs.borders.bottom.color).toBe('#FF0000');
-    expect(out.attrs.borders.bottom.size).toBeCloseTo(4, 3);
+    expect(out.attrs.borders.bottom.size).toBeCloseTo(24, 3);
     expect(out.attrs.borders.left.val).toBe('none');
     // untouched right comes from rowBorders
     expect(out.attrs.borders.right).toEqual(rowBorders.right);
