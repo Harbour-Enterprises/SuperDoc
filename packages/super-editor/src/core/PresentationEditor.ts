@@ -2161,6 +2161,65 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Scroll the visible host so a given document position is brought into view.
+   *
+   * This is primarily used by commands like search navigation when running in
+   * PresentationEditor mode, where ProseMirror's `scrollIntoView()` operates on the
+   * hidden editor and does not affect the rendered viewport.
+   *
+   * @param pos - Document position in the active editor to scroll to
+   * @param options - Scrolling options
+   * @param options.block - Alignment within the viewport ('start' | 'center' | 'end' | 'nearest')
+   * @param options.behavior - Scroll behavior ('auto' | 'smooth')
+   * @returns True if the position could be mapped and scrolling was applied
+   */
+  scrollToPosition(
+    pos: number,
+    options: { block?: 'start' | 'center' | 'end' | 'nearest'; behavior?: ScrollBehavior } = {},
+  ): boolean {
+    const activeEditor = this.getActiveEditor();
+    const doc = activeEditor?.state?.doc;
+    if (!doc) return false;
+    if (!Number.isFinite(pos)) return false;
+
+    const clampedPos = Math.max(0, Math.min(pos, doc.content.size));
+
+    const behavior = options.behavior ?? 'auto';
+    const block = options.block ?? 'center';
+
+    // Use a DOM marker + scrollIntoView so the browser finds the correct scroll container
+    // (window, parent overflow container, etc.) without us guessing.
+    const layout = this.#layoutState.layout;
+
+    if (layout && this.#session.mode === 'body') {
+      let pageIndex: number | null = null;
+      for (let idx = 0; idx < layout.pages.length; idx++) {
+        const page = layout.pages[idx];
+        for (const fragment of page.fragments) {
+          const frag = fragment as { pmStart?: number; pmEnd?: number };
+          if (frag.pmStart != null && frag.pmEnd != null && clampedPos >= frag.pmStart && clampedPos <= frag.pmEnd) {
+            pageIndex = idx;
+            break;
+          }
+        }
+        if (pageIndex != null) break;
+      }
+
+      if (pageIndex != null) {
+        const pageEl = getPageElementByIndex(this.#viewportHost, pageIndex);
+        if (pageEl) {
+          pageEl.scrollIntoView({ block, inline: 'nearest', behavior });
+          return true;
+        }
+      }
+
+      return false;
+    } else {
+      return false;
+    }
+  }
+
+  /**
    * Get document position from viewport coordinates (header/footer-aware).
    *
    * This method maps viewport coordinates to document positions while respecting
