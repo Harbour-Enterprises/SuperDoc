@@ -192,7 +192,7 @@ describe('PermissionRanges extension', () => {
     expect(entireText).toContain('ditable section. Locked section.');
   });
 
-  it('restores both markers after deleting the entire editable section', () => {
+  it('restores both tags after deleting the entire editable section', () => {
     const instance = createEditor(docWithPermissionRange);
     const editablePos = findTextPos(instance.state.doc, 'Editable');
     instance.view.dispatch(instance.state.tr.setSelection(TextSelection.create(instance.state.doc, editablePos)));
