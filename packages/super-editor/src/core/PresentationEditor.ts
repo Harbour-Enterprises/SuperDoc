@@ -2519,6 +2519,23 @@ export class PresentationEditor extends EventEmitter {
       event: 'collaborationReady',
       handler: handleCollaborationReady as (...args: unknown[]) => void,
     });
+
+    // Handle remote header/footer changes from collaborators (SD-1358)
+    const handleRemoteHeaderFooterChanged = (payload: {
+      type: 'header' | 'footer';
+      sectionId: string;
+      content: unknown;
+    }) => {
+      this.#headerFooterAdapter?.invalidate(payload.sectionId);
+      this.#headerFooterManager?.refresh();
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    };
+    this.#editor.on('remoteHeaderFooterChanged', handleRemoteHeaderFooterChanged);
+    this.#editorListeners.push({
+      event: 'remoteHeaderFooterChanged',
+      handler: handleRemoteHeaderFooterChanged as (...args: unknown[]) => void,
+    });
   }
 
   /**
