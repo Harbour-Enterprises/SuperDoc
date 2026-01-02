@@ -854,7 +854,7 @@ export class PresentationEditor extends EventEmitter {
       ...(editorOptions.editorProps ?? {}),
       editable: () => {
         // Hidden editor respects documentMode for plugin compatibility,
-        // but permission islands may temporarily re-enable editing.
+        // but permission ranges may temporarily re-enable editing.
         return !this.#isViewLocked();
       },
     };
