@@ -10,7 +10,6 @@ const normalizeIdentifier = (value) => (typeof value === 'string' ? value.trim()
 
 const buildAllowedIdentifierSet = (editor) => {
   const email = normalizeIdentifier(editor?.options?.user?.email);
-  console.log('email', email);
   if (!email) {
     return EMPTY_IDENTIFIER_SET;
   }
@@ -224,7 +223,6 @@ export const PermissionRanges = Extension.create({
     const getAllowedIdentifiers = () => buildAllowedIdentifierSet(editor);
 
     const toggleEditableIfAllowed = (hasAllowedRanges) => {
-      storage.hasAllowedRanges = Boolean(hasAllowedRanges);
       if (!editor || editor.isDestroyed) return;
       if (editor.options.documentMode !== 'viewing') return;
       if (hasAllowedRanges && !editor.isEditable) {
@@ -232,6 +230,15 @@ export const PermissionRanges = Extension.create({
       } else if (!hasAllowedRanges && editor.isEditable) {
         editor.setEditable(false, false);
       }
+    };
+    const updateEditableState = (hasAllowedRanges) => {
+      const nextValue = Boolean(hasAllowedRanges);
+      const previousValue = storage.hasAllowedRanges;
+      storage.hasAllowedRanges = nextValue;
+      if (previousValue === nextValue) {
+        return;
+      }
+      toggleEditableIfAllowed(nextValue);
     };
 
     if (editor && typeof editor.setDocumentMode === 'function') {
@@ -254,7 +261,7 @@ export const PermissionRanges = Extension.create({
           init(_, state) {
             const permissionState = buildPermissionState(state.doc, getAllowedIdentifiers());
             storage.ranges = permissionState.ranges;
-            toggleEditableIfAllowed(permissionState.hasAllowedRanges);
+            updateEditableState(permissionState.hasAllowedRanges);
             return permissionState;
           },
 
@@ -263,9 +270,8 @@ export const PermissionRanges = Extension.create({
             if (tr.docChanged) {
               permissionState = buildPermissionState(newState.doc, getAllowedIdentifiers());
               storage.ranges = permissionState.ranges;
+              updateEditableState(permissionState.hasAllowedRanges);
             }
-
-            toggleEditableIfAllowed(permissionState.hasAllowedRanges);
             return permissionState;
           },
         },
@@ -350,7 +356,7 @@ export const PermissionRanges = Extension.create({
           if (!editor || editor.options.documentMode !== 'viewing') return true;
           const pluginState = PERMISSION_PLUGIN_KEY.getState(state);
           if (!pluginState?.hasAllowedRanges) {
-            return false;
+            return true;
           }
           const changedRanges = collectChangedRanges(tr);
           if (!isSelectionAllowed(state, pluginState.ranges)) {
