@@ -286,6 +286,7 @@ export const PermissionRanges = Extension.create({
           };
         },
 
+        // Appends transactions to the document to ensure permission ranges are updated.
         appendTransaction(transactions, oldState, newState) {
           if (!transactions.some((tr) => tr.docChanged)) return null;
 
@@ -351,6 +352,7 @@ export const PermissionRanges = Extension.create({
           return tr.docChanged ? tr : null;
         },
 
+        // Filters transactions to ensure only allowed edits are applied.
         filterTransaction(tr, state) {
           if (!tr.docChanged) return true;
           if (!editor || editor.options.documentMode !== 'viewing') return true;
