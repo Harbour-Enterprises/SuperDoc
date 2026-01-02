@@ -21,6 +21,8 @@ concurrency:
 
 jobs:
   release:
+    # TEMPORARILY DISABLED - re-enable after main/stable branch cleanup
+    if: false
     runs-on: ubuntu-24.04
     steps:
       - name: Generate token

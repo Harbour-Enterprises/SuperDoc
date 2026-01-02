@@ -45,16 +45,8 @@ describe('insertContentAt', () => {
     vi.restoreAllMocks();
   });
 
-  it('inserts plain text via tr.insertText when given a simple string', () => {
+  it('inserts plain text via tr.insertText when given a simple string (fast path, no DOM)', () => {
     const value = 'Hello world';
-    // Return a proper Node (has `type`) so isFragment(...) === false
-    createNodeFromContent.mockImplementation(() => ({
-      type: { name: 'text' },
-      isText: true,
-      isBlock: false,
-      marks: [],
-      check: vi.fn(),
-    }));
 
     const tr = makeTr();
     const editor = makeEditor();
@@ -63,7 +55,8 @@ describe('insertContentAt', () => {
     const result = cmd({ tr, dispatch: true, editor });
 
     expect(result).toBe(true);
-    expect(createNodeFromContent).toHaveBeenCalled();
+    // Plain text uses fast path - no HTML parsing needed
+    expect(createNodeFromContent).not.toHaveBeenCalled();
     expect(tr.insertText).toHaveBeenCalledWith('Hello world', 5, 5);
     expect(tr.replaceWith).not.toHaveBeenCalled();
     expect(selectionToInsertionEnd).toHaveBeenCalledWith(tr, tr.steps.length - 1, -1);

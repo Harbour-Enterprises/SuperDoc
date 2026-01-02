@@ -596,6 +596,9 @@ importers:
       '@superdoc/contracts':
         specifier: workspace:*
         version: link:../../contracts
+      '@superdoc/font-utils':
+        specifier: workspace:*
+        version: link:../../../../shared/font-utils
     devDependencies:
       vitest:
         specifier: 'catalog:'

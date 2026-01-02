@@ -518,6 +518,65 @@ describe('SuperDoc core', () => {
     expect(instance.listenerCount('ready')).toBe(0);
   });
 
+  it('prevents app mounting if destroy is called during async init', async () => {
+    const { app } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+
+    // Call destroy BEFORE async init completes
+    instance.destroy();
+
+    // Wait for any pending init to complete
+    await flushMicrotasks();
+
+    // App should not have been mounted because destroy() set #destroyed = true
+    expect(app.mount).not.toHaveBeenCalled();
+  });
+
+  it('cleans up collaboration resources if destroy is called during async init', async () => {
+    const { app } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: {
+        comments: {},
+        toolbar: {},
+        collaboration: { providerType: 'hocuspocus', url: 'wss://example.com' },
+      },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+
+    // Call destroy BEFORE async init completes
+    instance.destroy();
+
+    // Wait for any pending init to complete
+    await flushMicrotasks();
+
+    // App should not have been mounted
+    expect(app.mount).not.toHaveBeenCalled();
+
+    // Collaboration resources should still be cleaned up
+    expect(instance.provider.disconnect).toHaveBeenCalled();
+    expect(instance.provider.destroy).toHaveBeenCalled();
+    instance.config.documents.forEach((doc) => {
+      expect(doc.provider.disconnect).toHaveBeenCalled();
+      expect(doc.provider.destroy).toHaveBeenCalled();
+      expect(doc.ydoc.destroy).toHaveBeenCalled();
+    });
+  });
+
   it('removes comments in viewing mode and restores them when returning to editing', async () => {
     const { superdocStore } = createAppHarness();
     const removeComments = vi.fn();

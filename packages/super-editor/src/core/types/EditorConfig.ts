@@ -4,6 +4,7 @@ import type { Editor } from '../Editor.js';
 import type { Extension } from '../Extension.js';
 import type { Node as EditorNode } from '../Node.js';
 import type { Mark as EditorMark } from '../Mark.js';
+import type { EditorRenderer } from '../renderers/EditorRenderer.js';
 import type {
   FontsResolvedPayload,
   Comment,
@@ -112,6 +113,9 @@ export interface EditorOptions {
   /** Whether the editor is running in headless mode */
   isHeadless?: boolean;
 
+  /** Optional Document instance for HTML/Markdown import/export in headless environments (e.g. JSDOM) */
+  document?: Document | null;
+
   /** Mock document for testing */
   mockDocument?: Document | null;
 
@@ -204,6 +208,9 @@ export interface EditorOptions {
 
   /** Whether to skip creating the ProseMirror view (layout mode) */
   skipViewCreation?: boolean;
+
+  /** Optional renderer implementation (defaults to ProseMirrorRenderer in DOM environments) */
+  renderer?: EditorRenderer | null;
 
   /** Numbering configuration */
   numbering?: Record<string, unknown>;
@@ -333,4 +340,17 @@ export interface EditorOptions {
 
   /** Host-provided permission hook */
   permissionResolver?: ((params: PermissionParams) => boolean | undefined) | null;
+
+  /**
+   * When true, defers document initialization until open() is called.
+   * This enables the new document lifecycle API where:
+   * - Constructor only initializes core services (extensions, schema)
+   * - open() loads the document
+   * - close() unloads the document
+   * - Editor instance can be reused for multiple documents
+   *
+   * Default is false for backward compatibility.
+   * The static Editor.open() factory sets this automatically.
+   */
+  deferDocumentLoad?: boolean;
 }

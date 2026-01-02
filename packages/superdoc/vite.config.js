@@ -38,6 +38,19 @@ export const getAliases = (_isDev) => {
     // Workspace packages (source paths for dev)
     { find: '@stores', replacement: fileURLToPath(new URL('./src/stores', import.meta.url)) },
 
+    // Force super-editor to resolve from source (not dist) so builds always use latest code
+    { find: '@superdoc/super-editor/docx-zipper', replacement: path.resolve(__dirname, '../super-editor/src/core/DocxZipper.js') },
+    { find: '@superdoc/super-editor/toolbar', replacement: path.resolve(__dirname, '../super-editor/src/components/toolbar/Toolbar.vue') },
+    { find: '@superdoc/super-editor/file-zipper', replacement: path.resolve(__dirname, '../super-editor/src/core/super-converter/zipper.js') },
+    { find: '@superdoc/super-editor/converter/internal', replacement: path.resolve(__dirname, '../super-editor/src/core/super-converter') },
+    { find: '@superdoc/super-editor/converter', replacement: path.resolve(__dirname, '../super-editor/src/core/super-converter/SuperConverter.js') },
+    { find: '@superdoc/super-editor/editor', replacement: path.resolve(__dirname, '../super-editor/src/core/Editor.ts') },
+    { find: '@superdoc/super-editor/super-input', replacement: path.resolve(__dirname, '../super-editor/src/components/SuperInput.vue') },
+    { find: '@superdoc/super-editor/ai-writer', replacement: path.resolve(__dirname, '../super-editor/src/core/components/AIWriter.vue') },
+    { find: '@superdoc/super-editor/style.css', replacement: path.resolve(__dirname, '../super-editor/src/style.css') },
+    { find: '@superdoc/super-editor/presentation-editor', replacement: path.resolve(__dirname, '../super-editor/src/index.js') },
+    { find: '@superdoc/super-editor', replacement: path.resolve(__dirname, '../super-editor/src/index.js') },
+
     // Super Editor aliases
     { find: '@', replacement: '@superdoc/super-editor' },
     ...sourceResolve.alias,

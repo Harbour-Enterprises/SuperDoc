@@ -151,7 +151,7 @@ export function findParagraphContext($pos, cache, helpers) {
 }
 
 export function extractParagraphContext(node, startPos, helpers, depth = 0) {
-  const paragraphProperties = getResolvedParagraphProperties(node);
+  const paragraphProperties = getResolvedParagraphProperties(node) ?? {};
   // Map OOXML alignment values to internal values (for RTL support)
   const alignmentAliases = { left: 'start', right: 'end' };
   let tabStops = [];
