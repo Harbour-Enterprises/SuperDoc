@@ -1601,7 +1601,7 @@ export const computeParagraphAttrs = (
     // Do NOT set hardcoded defaults here - let computeWordLayoutForParagraph use
     // style-engine fallback to resolve from paragraph style (matching MS Word behavior)
     if (!enrichedNumberingProps.resolvedMarkerRpr) {
-      const numbering = computed.numbering as Record<string, unknown> | undefined;
+      const numbering = computed.numbering as unknown as Record<string, unknown> | undefined;
       if (numbering && typeof numbering.marker === 'object' && numbering.marker !== null) {
         const marker = numbering.marker as Record<string, unknown>;
         if (typeof marker.run === 'object' && marker.run !== null) {

@@ -64,7 +64,10 @@ export const getAliases = (_isDev) => {
 export default defineConfig(({ mode, command}) => {
   const plugins = [
     vue(),
-    dts(),
+    dts({
+      include: ['src/**/*', '../super-editor/src/**/*'],
+      outDir: 'dist',
+    }),
     copy({
       targets: [
         { 

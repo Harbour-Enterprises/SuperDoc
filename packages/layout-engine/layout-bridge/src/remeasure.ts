@@ -8,8 +8,13 @@ import type {
   ParagraphIndent,
 } from '@superdoc/contracts';
 import { Engines } from '@superdoc/contracts';
+// @ts-expect-error - Module may not have type declarations
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
-import { LIST_MARKER_GAP, SPACE_SUFFIX_GAP_PX, DEFAULT_TAB_INTERVAL_PX } from '@superdoc/common/layout-constants';
+import {
+  LIST_MARKER_GAP as _LIST_MARKER_GAP,
+  SPACE_SUFFIX_GAP_PX as _SPACE_SUFFIX_GAP_PX,
+  DEFAULT_TAB_INTERVAL_PX as _DEFAULT_TAB_INTERVAL_PX,
+} from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 
 /**

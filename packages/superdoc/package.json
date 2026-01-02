@@ -30,7 +30,7 @@
       "import": "./dist/super-editor/docx-zipper.es.js"
     },
     "./super-editor": {
-      "types": "./dist/super-editor/index.d.ts",
+      "types": "./dist/super-editor/src/index.d.ts",
       "import": "./dist/super-editor.es.js",
       "require": "./dist/super-editor.cjs"
     },

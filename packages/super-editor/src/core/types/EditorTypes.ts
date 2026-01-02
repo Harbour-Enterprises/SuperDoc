@@ -34,7 +34,27 @@ export interface EditorNodeStorage {
 export type ExtensionStorage = Record<string, unknown>;
 
 /**
+ * ProseMirror JSON mark structure
+ */
+export interface ProseMirrorJSONMark {
+  type: string;
+  attrs?: Record<string, unknown>;
+}
+
+/**
+ * ProseMirror JSON node structure
+ */
+export interface ProseMirrorJSONNode {
+  type: string;
+  content?: ProseMirrorJSONNode[];
+  attrs?: Record<string, unknown>;
+  marks?: ProseMirrorJSONMark[];
+  text?: string;
+}
+
+/**
  * ProseMirror JSON document structure
+ * @deprecated Use ProseMirrorJSONNode instead. This alias remains for compatibility.
  */
 export interface ProseMirrorJSON {
   type: string;
