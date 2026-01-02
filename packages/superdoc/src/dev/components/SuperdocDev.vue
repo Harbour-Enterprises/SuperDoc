@@ -9,7 +9,7 @@ import { getFileObject } from '@superdoc/common';
 import { createPdfPainter } from '@superdoc/painter-pdf';
 import BasicUpload from '@superdoc/common/components/BasicUpload.vue';
 import SuperdocLogo from './superdoc-logo.webp?url';
-import { fieldAnnotationHelpers } from '@superdoc/super-editor';
+import { Editor, fieldAnnotationHelpers, getStarterExtensions } from '@superdoc/super-editor';
 import { toolbarIcons } from '../../../../super-editor/src/components/toolbar/toolbarIcons';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 import * as pdfjsLib from 'pdfjs-dist/build/pdf.mjs';
@@ -30,6 +30,7 @@ const title = ref('initial title');
 const currentFile = ref(null);
 const commentsPanel = ref(null);
 const showCommentsPanel = ref(true);
+const compareInput = ref(null);
 
 const urlParams = new URLSearchParams(window.location.search);
 const isInternal = urlParams.has('internal');
@@ -91,6 +92,56 @@ const handleNewFile = async (file) => {
   nextTick(() => {
     init();
   });
+};
+
+/**
+ * Triggers the compare file picker.
+ * @returns {void}
+ */
+const handleCompareClick = () => {
+  compareInput.value?.click?.();
+};
+
+/**
+ * Loads a comparison DOCX file, computes diffs, and replays tracked changes.
+ * @param {Event} event
+ * @returns {Promise<void>}
+ */
+const handleCompareFile = async (event) => {
+  const file = event?.target?.files?.[0];
+  if (!file) return;
+  event.target.value = '';
+
+  const editor = activeEditor.value;
+  if (!editor) return;
+
+  let compareEditor = null;
+  try {
+    const [docx, media, mediaFiles, fonts] = (await Editor.loadXmlData(file)) || [];
+    if (!docx) return;
+
+    compareEditor = new Editor({
+      isHeadless: true,
+      skipViewCreation: true,
+      extensions: getStarterExtensions(),
+      documentId: `compare-${Date.now()}`,
+      content: docx,
+      mode: 'docx',
+      media,
+      mediaFiles,
+      fonts,
+      annotations: true,
+    });
+
+    const compareDoc = compareEditor.state.doc;
+    const compareComments = compareEditor.converter?.comments ?? [];
+    const diff = editor.commands.compareDocuments(compareDoc, compareComments);
+    const userToApply = editor.options?.user ?? user;
+    const tr = editor.commands.replayDifferences(diff, { user: userToApply, applyTrackedChanges: true });
+    editor.view.dispatch(tr);
+  } finally {
+    compareEditor?.destroy?.();
+  }
 };
 
 /**
@@ -635,6 +686,16 @@ if (scrollTestMode.value) {
                 </button>
               </div>
             </div>
+            <div class="dev-app__compare-control">
+              <button class="dev-app__header-export-btn" @click="handleCompareClick">Compare documents</button>
+              <input
+                ref="compareInput"
+                class="dev-app__compare-input"
+                type="file"
+                accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                @change="handleCompareFile"
+              />
+            </div>
             <button class="dev-app__header-export-btn" @click="toggleLayoutEngine">
               Turn Layout Engine {{ useLayoutEngine ? 'off' : 'on' }} (reloads)
             </button>
@@ -1038,6 +1099,15 @@ if (scrollTestMode.value) {
 .dev-app__dropdown-item:hover {
   background: rgba(148, 163, 184, 0.12);
   border-color: rgba(148, 163, 184, 0.25);
+}
+
+.dev-app__compare-control {
+  display: inline-flex;
+  align-items: center;
+}
+
+.dev-app__compare-input {
+  display: none;
 }
 
 .dev-app__main {
