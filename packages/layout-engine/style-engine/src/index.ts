@@ -2,7 +2,7 @@
  * @superdoc/style-engine
  *
  * Resolves OOXML styles to normalized ComputedStyle objects that engines can consume.
- * This module owns the cascade rules (defaults → styles → numbering → direct formatting).
+ * This module owns the cascade rules (defaults -> styles -> numbering -> direct formatting).
  *
  * Tab Stops:
  * - Passes through OOXML TabStop values unchanged (positions in twips, val: start/end/etc.)
@@ -11,6 +11,23 @@
  */
 
 import { toCssFontFamily } from '@superdoc/font-utils';
+
+// Re-export cascade utilities - these are the SINGLE SOURCE OF TRUTH for property merging
+export {
+  combineProperties,
+  combineRunProperties,
+  applyInlineOverrides,
+  resolveFontSizeWithFallback,
+  orderDefaultsAndNormal,
+  combineIndentProperties,
+  createFirstLineIndentHandler,
+  isValidFontSize,
+  INLINE_OVERRIDE_PROPERTIES,
+  DEFAULT_FONT_SIZE_HALF_POINTS,
+  type PropertyObject,
+  type SpecialHandler,
+  type CombinePropertiesOptions,
+} from './cascade.js';
 import type {
   TabStop,
   FieldAnnotationMetadata,
@@ -311,7 +328,7 @@ export function resolveNumbering(numId: string, level: number, context: StyleCon
  * Resolves style for a table cell's content.
  *
  * Note: This is a placeholder implementation that returns document defaults.
- * Full table cascade (tblPr → trPr → tcPr → pPr) will be implemented in a future phase.
+ * Full table cascade (tblPr -> trPr -> tcPr -> pPr) will be implemented in a future phase.
  *
  * @param table - Table element (reserved for future use)
  * @param row - Row index (reserved for future use)

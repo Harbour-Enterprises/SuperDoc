@@ -36,6 +36,10 @@ vi.mock('../attributes/index.js', () => ({
   computeParagraphAttrs: vi.fn(),
   cloneParagraphAttrs: vi.fn(),
   hasPageBreakBefore: vi.fn(),
+  buildStyleNodeFromAttrs: vi.fn(() => ({})),
+  normalizeParagraphSpacing: vi.fn(),
+  normalizeParagraphIndent: vi.fn(),
+  normalizePxIndent: vi.fn(),
 }));
 
 vi.mock('../sdt/index.js', () => ({
@@ -53,6 +57,12 @@ vi.mock('../tracked-changes.js', () => ({
   shouldHideTrackedNode: vi.fn(),
   annotateBlockWithTrackedChange: vi.fn(),
   applyTrackedChangesModeToRuns: vi.fn(),
+}));
+
+vi.mock('../attributes/paragraph-styles.js', () => ({
+  hydrateParagraphStyleAttrs: vi.fn(),
+  hydrateCharacterStyleAttrs: vi.fn(),
+  hydrateMarkerStyleAttrs: vi.fn(),
 }));
 
 // Import mocked functions
