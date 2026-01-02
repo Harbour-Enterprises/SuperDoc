@@ -6528,10 +6528,9 @@ export class PresentationEditor extends EventEmitter {
    */
   #isViewLocked(): boolean {
     if (this.#documentMode !== 'viewing') return false;
-    const hasPermissionOverride = Boolean(
-      (this.#editor as Editor & { storage?: Record<string, any> })?.storage?.permissionRanges?.hasAllowedRanges,
-    );
+    const hasPermissionOverride = !!(this.#editor as Editor & { storage?: Record<string, any> })?.storage
+      ?.permissionRanges?.hasAllowedRanges;
     if (hasPermissionOverride) return false;
-    return !this.#editor?.isEditable;
+    return this.#documentMode === 'viewing';
   }
 }
