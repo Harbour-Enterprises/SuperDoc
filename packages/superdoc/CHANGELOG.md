@@ -1,3 +1,10 @@
+## [1.1.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.2...v1.1.3) (2026-01-02)
+
+
+### Bug Fixes
+
+* sd type export ([68a4362](https://github.com/Harbour-Enterprises/SuperDoc/commit/68a43624037a1968db9aae370560dd475cf0e1df))
+
 ## [1.1.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.1...v1.1.2) (2025-12-31)
 
 
