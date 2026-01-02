@@ -42,15 +42,20 @@ const createYDocStub = ({ docxValue, hasDocx = true } = {}) => {
   const metas = createYMap(initialMetaEntries);
   if (!hasDocx) metas.store.delete('docx');
   const media = createYMap();
+  const headerFooterJson = createYMap();
   const listeners = {};
   return {
     getXmlFragment: vi.fn(() => ({ fragment: true })),
-    getMap: vi.fn((name) => (name === 'meta' ? metas : media)),
+    getMap: vi.fn((name) => {
+      if (name === 'meta') return metas;
+      if (name === 'headerFooterJson') return headerFooterJson;
+      return media;
+    }),
     on: vi.fn((event, handler) => {
       listeners[event] = handler;
     }),
     transact: vi.fn((fn, meta) => fn(meta)),
-    _maps: { metas, media },
+    _maps: { metas, media, headerFooterJson },
     _listeners: listeners,
   };
 };
