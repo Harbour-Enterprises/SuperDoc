@@ -52,7 +52,7 @@ const findTextPos = (doc, searchText) => {
       found = pos;
       return false;
     }
-    return undefined;
+    return;
   });
   return found;
 };
@@ -70,7 +70,7 @@ describe('PermissionRanges extension', () => {
 
   afterEach(() => {
     editor?.destroy();
-    editor = undefined;
+    editor = null;
     if (originalMatchMedia) {
       window.matchMedia = originalMatchMedia;
     } else {
@@ -137,7 +137,7 @@ describe('PermissionRanges extension', () => {
         permEndSize = node.nodeSize;
         return false;
       }
-      return undefined;
+      return;
     });
     expect(permEndPos).toBeGreaterThan(0);
     expect(permEndSize).toBeGreaterThan(0);
@@ -151,7 +151,7 @@ describe('PermissionRanges extension', () => {
       if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
         permEndCount += 1;
       }
-      return undefined;
+      return;
     });
 
     expect(permEndCount).toBe(1);
@@ -170,7 +170,7 @@ describe('PermissionRanges extension', () => {
         permStartSize = node.nodeSize;
         return false;
       }
-      return undefined;
+      return;
     });
     expect(permStartPos).toBeGreaterThan(0);
     expect(permStartSize).toBeGreaterThan(0);
@@ -183,7 +183,7 @@ describe('PermissionRanges extension', () => {
       if (node.type?.name === 'permStart' && node.attrs?.id === '1') {
         permStartCount += 1;
       }
-      return undefined;
+      return;
     });
     expect(permStartCount).toBe(1);
 
@@ -207,7 +207,7 @@ describe('PermissionRanges extension', () => {
         permEndPos = pos;
         permEndSize = node.nodeSize;
       }
-      return undefined;
+      return;
     });
 
     expect(permStartPos).toBeGreaterThan(0);
@@ -224,7 +224,7 @@ describe('PermissionRanges extension', () => {
       if (node.type?.name === 'permEnd' && node.attrs?.id === '1') {
         endCount += 1;
       }
-      return undefined;
+      return;
     });
 
     expect(startCount).toBe(1);
