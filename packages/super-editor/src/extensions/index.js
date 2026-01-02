@@ -183,6 +183,7 @@ const getStarterExtensions = () => {
     ShapeGroup,
     PassthroughInline,
     PassthroughBlock,
+    Diffing,
   ];
 };
 
