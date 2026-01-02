@@ -4598,6 +4598,12 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  /**
+   * Updates the permission overlay (w:permStart/w:permEnd) to match the current editor permission ranges.
+   *
+   * This method is called after layout completes to ensure permission overlay
+   * is based on stable permission ranges data.
+   */
   #updatePermissionOverlay() {
     const overlay = this.#permissionOverlay;
     if (!overlay) {
