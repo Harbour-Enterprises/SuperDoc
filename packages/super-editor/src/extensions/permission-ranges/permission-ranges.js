@@ -90,15 +90,15 @@ const buildPermissionState = (doc, allowedIdentifiers = EMPTY_IDENTIFIER_SET) =>
 };
 
 /**
- * Collects permStart/permEnd markers keyed by id.
+ * Collects permStart/permEnd tags keyed by id.
  * @param {import('prosemirror-model').Node} doc
  * @param {import('prosemirror-model').NodeType} permStartType
  * @param {import('prosemirror-model').NodeType} permEndType
  * @returns {Map<string, { start?: { pos: number, attrs: any }, end?: { pos: number, attrs: any } }>}
  */
-const collectPermissionMarkers = (doc, permStartType, permEndType) => {
+const collectPermissionTags = (doc, permStartType, permEndType) => {
   /** @type {Map<string, { start?: { pos: number, attrs: any }, end?: { pos: number, attrs: any } }>} */
-  const markers = new Map();
+  const tags = new Map();
 
   doc.descendants((node, pos) => {
     if (node.type !== permStartType && node.type !== permEndType) {
@@ -109,16 +109,16 @@ const collectPermissionMarkers = (doc, permStartType, permEndType) => {
       return;
     }
 
-    const entry = markers.get(id) ?? {};
+    const entry = tags.get(id) ?? {};
     if (node.type === permStartType) {
       entry.start = { pos, attrs: node.attrs ?? {} };
     } else if (node.type === permEndType) {
       entry.end = { pos, attrs: node.attrs ?? {} };
     }
-    markers.set(id, entry);
+    tags.set(id, entry);
   });
 
-  return markers;
+  return tags;
 };
 
 const clampPosition = (pos, size) => {
@@ -129,7 +129,7 @@ const clampPosition = (pos, size) => {
 };
 
 /**
- * Removes leading/trailing perm markers from a changed range so edits that touch
+ * Removes leading/trailing perm tags from a changed range so edits that touch
  * permStart/permEnd boundaries can still be evaluated against allowed content.
  * @param {import('prosemirror-model').Node} doc
  * @param {{ from: number, to: number }} range
@@ -137,7 +137,7 @@ const clampPosition = (pos, size) => {
  * @param {import('prosemirror-model').NodeType} permEndType
  * @returns {{ from: number, to: number }}
  */
-const trimPermissionMarkersFromRange = (doc, range, permStartType, permEndType) => {
+const trimPermissionTagsFromRange = (doc, range, permStartType, permEndType) => {
   let from = range.from;
   let to = range.to;
 
@@ -294,11 +294,11 @@ export const PermissionRanges = Extension.create({
           const permEndType = newState.schema.nodes['permEnd'];
           if (!permStartType || !permEndType) return null;
 
-          const oldMarkers = collectPermissionMarkers(oldState.doc, permStartType, permEndType);
-          if (!oldMarkers.size) {
+          const oldTags = collectPermissionTags(oldState.doc, permStartType, permEndType);
+          if (!oldTags.size) {
             return null;
           }
-          const newMarkers = collectPermissionMarkers(newState.doc, permStartType, permEndType);
+          const newTags = collectPermissionTags(newState.doc, permStartType, permEndType);
 
           const mappingToNew = new Mapping();
           transactions.forEach((tr) => {
@@ -307,23 +307,23 @@ export const PermissionRanges = Extension.create({
 
           const pendingInsertions = [];
 
-          oldMarkers.forEach((marker, id) => {
-            const current = newMarkers.get(id);
-            if (marker.start && !current?.start) {
-              const mapped = mappingToNew.mapResult(marker.start.pos, -1);
+          oldTags.forEach((tag, id) => {
+            const current = newTags.get(id);
+            if (tag.start && !current?.start) {
+              const mapped = mappingToNew.mapResult(tag.start.pos, -1);
               pendingInsertions.push({
                 pos: mapped.pos,
                 nodeType: permStartType,
-                attrs: marker.start.attrs,
+                attrs: tag.start.attrs,
                 priority: 0,
               });
             }
-            if (marker.end && !current?.end) {
-              const mapped = mappingToNew.mapResult(marker.end.pos, 1);
+            if (tag.end && !current?.end) {
+              const mapped = mappingToNew.mapResult(tag.end.pos, 1);
               pendingInsertions.push({
                 pos: mapped.pos,
                 nodeType: permEndType,
-                attrs: marker.end.attrs,
+                attrs: tag.end.attrs,
                 priority: 1,
               });
             }
@@ -370,7 +370,7 @@ export const PermissionRanges = Extension.create({
           if (!permStartType || !permEndType) return true;
 
           const allRangesAllowed = changedRanges.every((range) => {
-            const trimmed = trimPermissionMarkersFromRange(state.doc, range, permStartType, permEndType);
+            const trimmed = trimPermissionTagsFromRange(state.doc, range, permStartType, permEndType);
             return isRangeAllowed(trimmed, pluginState.ranges);
           });
 
