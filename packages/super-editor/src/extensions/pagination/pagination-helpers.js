@@ -333,7 +333,7 @@ export const onHeaderFooterDataUpdate = async ({ editor, transaction }, mainEdit
     mainEditor.converter.headerFooterModified = true;
   }
 
-  // Push header/footer JSON to Yjs for real-time sync with collaborators (SD-1358)
+  // Push header/footer JSON to Yjs for real-time sync with collaborators
   pushHeaderFooterToYjs(mainEditor, type, sectionId, updatedData);
 
   await updateYdocDocxData(mainEditor);

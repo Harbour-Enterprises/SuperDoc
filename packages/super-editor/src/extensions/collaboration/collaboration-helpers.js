@@ -64,7 +64,7 @@ export const updateYdocDocxData = async (editor, ydoc) => {
   }
 };
 
-// Header/footer real-time sync (SD-1358)
+// Header/footer real-time sync
 // Current approach: last-writer-wins with full JSON replacement.
 // Future: CRDT-based sync (like y-prosemirror) for character-level merging.
 let isApplyingRemoteChanges = false;

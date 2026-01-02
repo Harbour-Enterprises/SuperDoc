@@ -2520,7 +2520,7 @@ export class PresentationEditor extends EventEmitter {
       handler: handleCollaborationReady as (...args: unknown[]) => void,
     });
 
-    // Handle remote header/footer changes from collaborators (SD-1358)
+    // Handle remote header/footer changes from collaborators
     const handleRemoteHeaderFooterChanged = (payload: {
       type: 'header' | 'footer';
       sectionId: string;

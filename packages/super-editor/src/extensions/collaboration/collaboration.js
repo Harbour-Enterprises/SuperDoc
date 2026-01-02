@@ -40,7 +40,7 @@ export const Collaboration = Extension.create({
       });
     });
 
-    // Observer for remote header/footer JSON changes (SD-1358)
+    // Observer for remote header/footer JSON changes
     const headerFooterMap = this.options.ydoc.getMap('headerFooterJson');
     headerFooterMap.observe((event) => {
       // Only process remote changes (not our own)
