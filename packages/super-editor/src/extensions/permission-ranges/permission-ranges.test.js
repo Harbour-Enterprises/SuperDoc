@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { TextSelection } from 'prosemirror-state';
+
 import { Editor } from '@core/index.js';
 import { getStarterExtensions } from '@extensions/index.js';
-import { TextSelection } from 'prosemirror-state';
 
 const VIEWING_MODE = 'viewing';
 
@@ -64,7 +65,9 @@ describe('PermissionRanges extension', () => {
 
   beforeEach(() => {
     originalMatchMedia = window.matchMedia;
-    window.matchMedia = window.matchMedia || vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn() });
+    window.matchMedia =
+      window.matchMedia ||
+      vi.fn().mockReturnValue({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() });
     debugSpy = vi.spyOn(console, 'debug').mockImplementation(() => {});
   });
 
