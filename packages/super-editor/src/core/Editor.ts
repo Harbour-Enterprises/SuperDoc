@@ -1397,7 +1397,8 @@ export class Editor extends EventEmitter<EditorEventMap> {
     let state: EditorState;
     try {
       const trackChangesState = TrackChangesBasePluginKey.getState(this.view.state);
-      const isTrackChangesActive = trackChangesState?.isTrackChangesActive ?? false;
+      const isTrackChangesActive =
+        (trackChangesState?.isTrackChangesActive ?? false) || (transaction.getMeta('trackChanges') ?? false);
 
       const tr = isTrackChangesActive
         ? trackedTransaction({
