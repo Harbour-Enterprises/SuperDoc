@@ -1257,13 +1257,14 @@ export class PresentationEditor extends EventEmitter {
    * Get the current zoom level.
    *
    * The zoom level is a multiplier that controls the visual scale of the document.
-   * This value is applied via CSS transform: scale() on the #viewportHost element,
-   * which ensures consistent scaling between rendered content and overlay elements
-   * (selections, cursors, interactive handles).
+   * Zoom is applied via CSS transform: scale() on the content elements (#painterHost
+   * and #selectionOverlay), with the viewport dimensions (#viewportHost) set to the
+   * scaled size to ensure proper scroll behavior.
    *
    * Relationship to Centralized Zoom Architecture:
    * - PresentationEditor is the SINGLE SOURCE OF TRUTH for zoom state
-   * - Zoom is applied internally via transform: scale() on #viewportHost
+   * - Zoom is applied internally via transform: scale() on #painterHost and #selectionOverlay
+   * - The #viewportHost dimensions are set to scaled values for proper scroll container behavior
    * - External components (toolbar, UI controls) should use setZoom() to modify zoom
    * - The zoom value is used throughout the system for coordinate transformations
    *
@@ -2327,6 +2328,7 @@ export class PresentationEditor extends EventEmitter {
     }
     this.#layoutOptions.zoom = zoom;
     this.#applyZoom();
+    this.emit('zoomChange', { zoom });
     this.#scheduleSelectionUpdate();
     // Trigger cursor updates on zoom changes
     if (this.#remoteCursorState.size > 0) {
@@ -4448,6 +4450,9 @@ export class PresentationEditor extends EventEmitter {
       this.#layoutErrorState = 'healthy';
       this.#dismissErrorBanner();
 
+      // Update viewport dimensions after layout (page count may have changed)
+      this.#applyZoom();
+
       const metrics = createLayoutMetricsFromHelper(perf, startMark, layout, blocks);
       const payload = { layout, blocks, measures, metrics };
       this.emit('layoutUpdated', payload);
@@ -5914,7 +5919,7 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.display = 'block';
     this.#hoverOverlay.style.left = `${coords.x}px`;
     this.#hoverOverlay.style.top = `${coords.y}px`;
-    // Width and height are in layout space - the transform on #viewportHost handles scaling
+    // Width and height are in layout space - the transform on #selectionOverlay handles scaling
     this.#hoverOverlay.style.width = `${region.width}px`;
     this.#hoverOverlay.style.height = `${region.height}px`;
 
@@ -5927,7 +5932,7 @@ export class PresentationEditor extends EventEmitter {
     // This prevents clipping for headers at the top of the page
     const tooltipHeight = 24; // Approximate tooltip height
     const spaceAbove = coords.y;
-    // Height is in layout space - the transform on #viewportHost handles scaling
+    // Height is in layout space - the transform on #selectionOverlay handles scaling
     const regionHeight = region.height;
     const tooltipY =
       spaceAbove < tooltipHeight + 4
@@ -6096,16 +6101,85 @@ export class PresentationEditor extends EventEmitter {
   }
 
   #applyZoom() {
-    // Apply zoom via transform: scale() on #viewportHost.
-    // This is the SINGLE source of zoom - the toolbar no longer applies CSS zoom on .layers.
+    // Apply zoom by scaling the children (#painterHost and #selectionOverlay) and
+    // setting the viewport dimensions to the scaled size.
     //
-    // By applying transform on #viewportHost (which contains BOTH #painterHost AND #selectionOverlay),
-    // both the rendered content and selection overlays scale together automatically.
-    // This eliminates coordinate system mismatches that occurred when zoom was applied
-    // externally on a parent element that didn't contain the selection overlay.
+    // CSS transform: scale() only affects visual rendering, NOT layout box dimensions.
+    // Previously, transform was applied to #viewportHost which caused the parent scroll
+    // container to not see the scaled size, resulting in clipping at high zoom levels.
+    //
+    // The new approach:
+    // 1. Apply transform: scale(zoom) to #painterHost and #selectionOverlay (visual scaling)
+    // 2. Set #viewportHost width/height to scaled dimensions (layout box scaling)
+    // This ensures both visual rendering AND scroll container dimensions are correct.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    this.#viewportHost.style.transformOrigin = 'top left';
-    this.#viewportHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+    // Get unscaled document dimensions
+    const pageWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    const pageHeight = this.#getBodyPageHeight();
+
+    // Guard: Ensure layout state is initialized before accessing pages array
+    // During early initialization, layout may not be ready yet - use safe defaults
+    const pages = this.#layoutState.layout?.pages;
+    if (!pages || !Array.isArray(pages)) {
+      // Layout not ready yet - use minimal defaults to prevent errors
+      const pageCount = 1;
+      const pageGap = this.#getEffectivePageGap();
+      const totalHeight = pageHeight * pageCount;
+
+      const scaledWidth = pageWidth * zoom;
+      const scaledHeight = totalHeight * zoom;
+
+      // Set viewport and painter dimensions with defaults
+      this.#viewportHost.style.width = `${scaledWidth}px`;
+      this.#viewportHost.style.minWidth = `${scaledWidth}px`;
+      this.#viewportHost.style.minHeight = `${scaledHeight}px`;
+      this.#viewportHost.style.transform = '';
+
+      this.#painterHost.style.width = `${pageWidth}px`;
+      this.#painterHost.style.minHeight = `${totalHeight}px`;
+      this.#painterHost.style.transformOrigin = 'top left';
+      this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+      this.#selectionOverlay.style.width = `${pageWidth}px`;
+      this.#selectionOverlay.style.height = `${totalHeight}px`;
+      this.#selectionOverlay.style.transformOrigin = 'top left';
+      this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+      return;
+    }
+
+    const pageCount = pages.length;
+    const pageGap = this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap();
+    const totalHeight = pageHeight * pageCount + pageGap * Math.max(0, pageCount - 1);
+
+    // Zoom implementation:
+    // 1. #viewportHost has SCALED dimensions (pageWidth * zoom) for proper scroll container sizing
+    // 2. #painterHost has UNSCALED dimensions with transform: scale(zoom) applied
+    // 3. When scaled, #painterHost visually fills #viewportHost exactly
+    //
+    // This ensures the scroll container sees the correct scaled content size while
+    // the transform provides visual scaling.
+    const scaledWidth = pageWidth * zoom;
+    const scaledHeight = totalHeight * zoom;
+
+    // Set viewport to scaled dimensions for scroll container
+    this.#viewportHost.style.width = `${scaledWidth}px`;
+    this.#viewportHost.style.minWidth = `${scaledWidth}px`;
+    this.#viewportHost.style.minHeight = `${scaledHeight}px`;
+    this.#viewportHost.style.transform = '';
+
+    // Set painterHost to UNSCALED dimensions and apply transform
+    // This way: 816px * scale(1.5) = 1224px visual = matches viewport
+    this.#painterHost.style.width = `${pageWidth}px`;
+    this.#painterHost.style.minHeight = `${totalHeight}px`;
+    this.#painterHost.style.transformOrigin = 'top left';
+    this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+    // Selection overlay also scales - set to unscaled dimensions
+    this.#selectionOverlay.style.width = `${pageWidth}px`;
+    this.#selectionOverlay.style.height = `${totalHeight}px`;
+    this.#selectionOverlay.style.transformOrigin = 'top left';
+    this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
   }
 
   /**
@@ -6114,7 +6188,7 @@ export class PresentationEditor extends EventEmitter {
    * Transforms coordinates from page-local space (x, y relative to a specific page)
    * to overlay-space coordinates (absolute position within the stacked page layout).
    * The returned coordinates are in layout space (unscaled logical pixels), not screen
-   * space - the CSS transform: scale() on #viewportHost handles zoom scaling.
+   * space - the CSS transform: scale() on #painterHost and #selectionOverlay handles zoom scaling.
    *
    * Pages are rendered vertically stacked at y = pageIndex * pageHeight, so the
    * conversion involves:

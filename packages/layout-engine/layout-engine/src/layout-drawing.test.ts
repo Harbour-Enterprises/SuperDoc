@@ -26,17 +26,19 @@ describe('layoutDrawingBlock', () => {
     ...overrides,
   });
 
-  const createMockDrawingBlock = (overrides: Partial<DrawingBlock> = {}): DrawingBlock => ({
-    kind: 'drawing',
-    id: 'test-drawing-1',
-    drawingKind: 'vectorShape',
-    geometry: createMockGeometry(),
-    attrs: {
-      pmStart: 10,
-      pmEnd: 11,
-    },
-    ...overrides,
-  });
+  const createMockDrawingBlock = (overrides: Partial<DrawingBlock> = {}): DrawingBlock => {
+    const base = {
+      kind: 'drawing' as const,
+      id: 'test-drawing-1',
+      drawingKind: 'vectorShape' as const,
+      geometry: createMockGeometry(),
+      attrs: {
+        pmStart: 10,
+        pmEnd: 11,
+      },
+    };
+    return { ...base, ...overrides } as DrawingBlock;
+  };
 
   const createMockMeasure = (overrides: Partial<DrawingMeasure> = {}): DrawingMeasure => ({
     kind: 'drawing',
@@ -67,6 +69,9 @@ describe('layoutDrawingBlock', () => {
       cursorY: 100,
       topMargin: 50,
       contentBottom: 750,
+      constraintBoundaries: [],
+      activeConstraintIndex: -1,
+      trailingSpacing: 0,
       ...overrides,
     }) as MockPageState;
 

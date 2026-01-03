@@ -68,7 +68,7 @@ describe('anchors', () => {
       const block: DrawingBlock = {
         kind: 'drawing',
         id: 'drawing-1',
-        drawingType: 'vectorShape',
+        drawingKind: 'vectorShape',
         anchor: {
           isAnchored: true,
           vRelativeFrom: 'page',
@@ -81,7 +81,7 @@ describe('anchors', () => {
       const block: DrawingBlock = {
         kind: 'drawing',
         id: 'drawing-2',
-        drawingType: 'vectorShape',
+        drawingKind: 'vectorShape',
         anchor: {
           isAnchored: true,
           vRelativeFrom: 'paragraph',
@@ -281,6 +281,7 @@ describe('anchors', () => {
         {
           kind: 'paragraph',
           lines: [],
+          totalHeight: 0,
         },
         {
           kind: 'image',
@@ -304,7 +305,7 @@ describe('anchors', () => {
         {
           kind: 'drawing',
           id: 'drawing-1',
-          drawingType: 'vectorShape',
+          drawingKind: 'vectorShape',
           anchor: {
             isAnchored: true,
             vRelativeFrom: 'page',
@@ -363,6 +364,7 @@ describe('anchors', () => {
         {
           kind: 'paragraph',
           lines: [],
+          totalHeight: 0,
         },
       ];
 
@@ -571,6 +573,7 @@ describe('anchors', () => {
         {
           kind: 'paragraph',
           lines: [],
+          totalHeight: 0,
         },
         {
           kind: 'image',
@@ -602,7 +605,7 @@ describe('anchors', () => {
         {
           kind: 'drawing',
           id: 'drawing-1',
-          drawingType: 'vectorShape',
+          drawingKind: 'vectorShape',
           anchor: {
             isAnchored: true,
             vRelativeFrom: 'paragraph',
@@ -613,6 +616,7 @@ describe('anchors', () => {
         {
           kind: 'paragraph',
           lines: [],
+          totalHeight: 0,
         },
         {
           kind: 'drawing',
@@ -728,11 +732,11 @@ describe('anchors', () => {
         },
       ];
       const measures: Measure[] = [
-        { kind: 'paragraph', lines: [] },
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
         { kind: 'image', width: 100, height: 100 } as ImageMeasure,
-        { kind: 'paragraph', lines: [] },
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
         { kind: 'image', width: 200, height: 150 } as ImageMeasure,
-        { kind: 'paragraph', lines: [] },
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
       ];
 
       const result = collectAnchoredDrawings(blocks, measures);
@@ -765,8 +769,8 @@ describe('anchors', () => {
         } as ImageBlock,
       ];
       const measures: Measure[] = [
-        { kind: 'paragraph', lines: [] },
-        { kind: 'paragraph', lines: [] }, // Wrong measure type
+        { kind: 'paragraph', lines: [], totalHeight: 0 },
+        { kind: 'paragraph', lines: [], totalHeight: 0 }, // Wrong measure type
       ];
 
       const result = collectAnchoredDrawings(blocks, measures);
