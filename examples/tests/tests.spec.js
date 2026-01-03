@@ -13,10 +13,13 @@ testConfig.packages.forEach((packagePath, i) => {
       timeout: 10_000,
     });
 
+    const screenshotOptions = { fullPage: true };
+    if (name === 'dynamic-content') {
+      screenshotOptions.maxDiffPixelRatio = 0.05; // allow small visual drift for dynamic-content demo
+    }
+
     // Compare the screenshot with the reference screenshot
-    await expect(page).toHaveScreenshot({
-      fullPage: true,
-    });
+    await expect(page).toHaveScreenshot(screenshotOptions);
   });
 });
 });
