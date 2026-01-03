@@ -356,16 +356,22 @@ describe('PresentationEditor - Zoom Functionality', () => {
       });
     });
 
-    it('should apply transform on viewport host when zoom is set', () => {
+    it('should apply transform on painter host when zoom is set', () => {
       editor.setZoom(1.5);
 
       // Verify zoom was updated via the getter
       expect(editor.zoom).toBe(1.5);
 
-      // Verify transform is applied to the viewport element
+      // Verify transform is applied to the painter host (not viewport)
+      // The new architecture applies transform to painterHost (.presentation-editor__pages)
+      // while viewport gets scaled dimensions instead
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      expect(painterHost?.style.transform).toBe('scale(1.5)');
+      expect(painterHost?.style.transformOrigin).toBe('top left');
+
+      // Viewport should NOT have transform (it has scaled dimensions instead)
       const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
-      expect(viewportHost?.style.transform).toBe('scale(1.5)');
-      expect(viewportHost?.style.transformOrigin).toBe('top left');
+      expect(viewportHost?.style.transform).toBe('');
     });
 
     it('should clear transform when zoom is set to 1', () => {
@@ -375,8 +381,8 @@ describe('PresentationEditor - Zoom Functionality', () => {
       editor.setZoom(1);
       expect(editor.zoom).toBe(1);
 
-      const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
-      expect(viewportHost?.style.transform).toBe('');
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      expect(painterHost?.style.transform).toBe('');
     });
 
     it('should throw TypeError when zoom is not a number', () => {
@@ -588,6 +594,179 @@ describe('PresentationEditor - Zoom Functionality', () => {
       // Note: Negative client coords are valid when elements are above/left of viewport
       expect(result?.x).toBe(-150); // (-50 - 100) / 1
       expect(result?.y).toBe(-75); // (-25 - 50) / 1
+    });
+  });
+
+  describe('zoomChange event', () => {
+    beforeEach(() => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        pageSize: { w: 612, h: 792 },
+      });
+    });
+
+    it('should emit zoomChange event when setZoom is called', () => {
+      const listener = vi.fn();
+      editor.on('zoomChange', listener);
+
+      editor.setZoom(1.5);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(listener).toHaveBeenCalledWith({ zoom: 1.5 });
+    });
+
+    it('should emit zoomChange event with correct value for multiple zoom changes', () => {
+      const listener = vi.fn();
+      editor.on('zoomChange', listener);
+
+      editor.setZoom(1.5);
+      editor.setZoom(2);
+      editor.setZoom(0.75);
+
+      expect(listener).toHaveBeenCalledTimes(3);
+      expect(listener).toHaveBeenNthCalledWith(1, { zoom: 1.5 });
+      expect(listener).toHaveBeenNthCalledWith(2, { zoom: 2 });
+      expect(listener).toHaveBeenNthCalledWith(3, { zoom: 0.75 });
+    });
+
+    it('should allow removing zoomChange listener with off()', () => {
+      const listener = vi.fn();
+      editor.on('zoomChange', listener);
+
+      editor.setZoom(1.5);
+      expect(listener).toHaveBeenCalledTimes(1);
+
+      editor.off('zoomChange', listener);
+
+      editor.setZoom(2);
+      // Should still be 1 call (not 2)
+      expect(listener).toHaveBeenCalledTimes(1);
+    });
+
+    it('should support multiple zoomChange listeners', () => {
+      const listener1 = vi.fn();
+      const listener2 = vi.fn();
+      editor.on('zoomChange', listener1);
+      editor.on('zoomChange', listener2);
+
+      editor.setZoom(1.5);
+
+      expect(listener1).toHaveBeenCalledWith({ zoom: 1.5 });
+      expect(listener2).toHaveBeenCalledWith({ zoom: 1.5 });
+    });
+  });
+
+  describe('applyZoom viewport dimensions', () => {
+    beforeEach(() => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc',
+        pageSize: { w: 612, h: 792 },
+      });
+    });
+
+    it('should set viewport dimensions based on zoom', () => {
+      editor.setZoom(1.5);
+
+      const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      // At zoom 1.5, viewport width should be pageWidth * 1.5
+      // Default page width is 612 points = 612px in layout space
+      expect(viewportHost?.style.width).toBe('918px'); // 612 * 1.5
+      expect(viewportHost?.style.minWidth).toBe('918px');
+    });
+
+    it('should apply transform to painterHost not viewportHost', () => {
+      editor.setZoom(1.5);
+
+      const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+      // viewportHost should NOT have transform (it has scaled dimensions instead)
+      expect(viewportHost?.style.transform).toBe('');
+
+      // painterHost SHOULD have transform
+      expect(painterHost?.style.transform).toBe('scale(1.5)');
+      expect(painterHost?.style.transformOrigin).toBe('top left');
+    });
+
+    it('should apply transform to selectionOverlay', () => {
+      editor.setZoom(2);
+
+      const selectionOverlay = container.querySelector('.presentation-editor__selection-overlay') as HTMLElement;
+
+      expect(selectionOverlay?.style.transform).toBe('scale(2)');
+      expect(selectionOverlay?.style.transformOrigin).toBe('top left');
+    });
+
+    it('should clear transforms when zoom is 1', () => {
+      // First set a non-1 zoom
+      editor.setZoom(1.5);
+
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      expect(painterHost?.style.transform).toBe('scale(1.5)');
+
+      // Then set zoom back to 1
+      editor.setZoom(1);
+
+      expect(painterHost?.style.transform).toBe('');
+    });
+
+    it('should set painterHost to unscaled dimensions', () => {
+      editor.setZoom(2);
+
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+      // painterHost should have unscaled page width (612px)
+      // The transform: scale(2) visually doubles it to match viewport
+      expect(painterHost?.style.width).toBe('612px');
+    });
+
+    it('should size viewport and overlays across all pages in horizontal layout', async () => {
+      vi.useFakeTimers();
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [
+            { number: 1, size: { w: 612, h: 792 }, fragments: [] },
+            { number: 2, size: { w: 612, h: 792 }, fragments: [] },
+          ],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      try {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc',
+          pageSize: { w: 612, h: 792 },
+        });
+
+        editor.setLayoutMode('horizontal');
+
+        await vi.runAllTimersAsync();
+
+        editor.setZoom(1.5);
+
+        const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+        const selectionOverlay = container.querySelector('.presentation-editor__selection-overlay') as HTMLElement;
+
+        // totalWidth = (612 * 2) + 20 (default horizontal gap) = 1244
+        // scaledWidth = 1244 * 1.5 = 1866
+        expect(viewportHost?.style.width).toBe('1866px');
+        expect(viewportHost?.style.minWidth).toBe('1866px');
+        expect(viewportHost?.style.minHeight).toBe('1188px'); // 792 * 1.5
+
+        expect(painterHost?.style.width).toBe('1244px');
+        expect(painterHost?.style.minHeight).toBe('792px');
+        expect(painterHost?.style.transform).toBe('scale(1.5)');
+
+        expect(selectionOverlay?.style.width).toBe('1244px');
+        expect(selectionOverlay?.style.height).toBe('792px');
+        expect(selectionOverlay?.style.transform).toBe('scale(1.5)');
+      } finally {
+        vi.useRealTimers();
+      }
     });
   });
 });

@@ -66,6 +66,18 @@ const contextMenuDisabled = computed(() => {
  */
 const rulersVisible = ref(Boolean(props.options.rulers));
 
+/**
+ * Current zoom level from PresentationEditor.
+ * Used to scale the container min-width to accommodate zoomed content.
+ */
+const currentZoom = ref(1);
+
+/**
+ * Reference to the zoomChange event handler for cleanup.
+ * Stored to ensure proper removal in onBeforeUnmount to prevent memory leaks.
+ */
+let zoomChangeHandler = null;
+
 // Watch for changes in options.rulers with deep option to catch nested changes
 watch(
   () => props.options,
@@ -80,6 +92,36 @@ watch(
   },
   { immediate: true, deep: true },
 );
+
+/**
+ * Computed style for the container that scales min-width based on zoom.
+ * Uses the actual page width from the editor when available, falling back to 8.5in (letter size).
+ */
+const containerStyle = computed(() => {
+  // Try to get actual page width from editor
+  let baseWidth = 8.5 * 96; // Default: 8.5 inches at 96 DPI = 816px (letter size)
+
+  const ed = editor.value;
+  if (ed && 'getPageStyles' in ed && typeof ed.getPageStyles === 'function') {
+    const styles = ed.getPageStyles();
+    // Validate that pageSize exists and width is a positive number
+    if (
+      styles &&
+      typeof styles === 'object' &&
+      styles.pageSize &&
+      typeof styles.pageSize === 'object' &&
+      typeof styles.pageSize.width === 'number' &&
+      styles.pageSize.width > 0
+    ) {
+      baseWidth = styles.pageSize.width * 96; // width is in inches
+    }
+  }
+
+  const scaledWidth = baseWidth * currentZoom.value;
+  return {
+    minWidth: `${scaledWidth}px`,
+  };
+});
 
 const message = useMessage();
 
@@ -664,6 +706,17 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
         }
       }
     });
+
+    // Listen for zoom changes to update container sizing
+    zoomChangeHandler = ({ zoom }) => {
+      currentZoom.value = zoom;
+    };
+    presentationEditor.on('zoomChange', zoomChangeHandler);
+
+    // Initialize zoom from current state
+    if (typeof presentationEditor.zoom === 'number') {
+      currentZoom.value = presentationEditor.zoom;
+    }
   }
 
   editor.value.on('paginationUpdate', () => {
@@ -802,13 +855,20 @@ const handleMarginChange = ({ side, value }) => {
 onBeforeUnmount(() => {
   stopPolling();
   clearSelectedImage();
+
+  // Clean up zoomChange listener if it exists
+  if (editor.value instanceof PresentationEditor && zoomChangeHandler) {
+    editor.value.off('zoomChange', zoomChangeHandler);
+    zoomChangeHandler = null;
+  }
+
   editor.value?.destroy();
   editor.value = null;
 });
 </script>
 
 <template>
-  <div class="super-editor-container">
+  <div class="super-editor-container" :style="containerStyle">
     <!-- Ruler: teleport to external container if specified, otherwise render inline -->
     <Teleport v-if="options.rulerContainer && rulersVisible && !!activeEditor" :to="options.rulerContainer">
       <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
@@ -903,7 +963,7 @@ onBeforeUnmount(() => {
 .super-editor-container {
   width: auto;
   height: auto;
-  min-width: 8in;
+  /* min-width is controlled via inline style (containerStyle) to scale with zoom */
   min-height: 11in;
   position: relative;
   display: flex;

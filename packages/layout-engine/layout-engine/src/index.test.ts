@@ -214,7 +214,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(16, 1);
   });
@@ -238,7 +239,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(18, 1);
   });
@@ -1484,6 +1486,7 @@ describe('layoutDocument', () => {
           kind: 'sectionBreak',
           id: 'first',
           type: 'continuous',
+          margins: {},
           attrs: { source: 'sectPr', isFirstSection: true },
         } as FlowBlock,
         firstPara,
@@ -1494,6 +1497,7 @@ describe('layoutDocument', () => {
           id: 'second',
           type: 'continuous',
           columns: { count: 2, gap: 48 },
+          margins: {},
           attrs: { source: 'sectPr' },
         } as FlowBlock,
         thirdPara,
@@ -2382,14 +2386,13 @@ describe('layoutHeaderFooter', () => {
       kind: 'drawing',
       id: 'drawing-1',
       drawingKind: 'vectorShape',
+      geometry: { width: 100, height: 50 },
       anchor: {
         isAnchored: true,
         behindDoc: true,
         offsetV: 2000, // Extreme offset beyond overflow threshold
       },
-      shape: {
-        type: 'Rectangle',
-      },
+      shapeKind: 'Rectangle',
     };
     const paragraphMeasure: Measure = {
       kind: 'paragraph',
