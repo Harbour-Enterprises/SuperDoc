@@ -65,6 +65,7 @@ export default defineConfig(({ mode }) => {
         ],
         input: {
           'super-editor': 'src/index.js',
+          'types': 'src/types.ts',
           'editor': '@core/Editor',
           'converter': '@core/super-converter/SuperConverter',
           'docx-zipper': '@core/DocxZipper',

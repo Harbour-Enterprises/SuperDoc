@@ -1,5 +1,5 @@
 import type { EditorState, Transaction } from 'prosemirror-state';
-import type { EditorView as PmEditorView, EditorViewProps } from 'prosemirror-view';
+import type { EditorView as PmEditorView, EditorProps } from 'prosemirror-view';
 import type { Editor } from '../Editor.js';
 import type { EditorOptions } from '../types/EditorConfig.js';
 
@@ -21,7 +21,7 @@ export type EditorRendererAttachParams = {
   /** Callback function to handle transaction dispatching */
   dispatchTransaction: (transaction: Transaction) => void;
   /** Optional click handler for the editor view */
-  handleClick?: EditorViewProps['handleClick'];
+  handleClick?: EditorProps['handleClick'];
 };
 
 /**

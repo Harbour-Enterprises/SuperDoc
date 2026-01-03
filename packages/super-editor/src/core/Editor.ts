@@ -679,7 +679,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
       } else {
         // Blank document (source is undefined or null)
         // Use pre-parsed content from options if provided, otherwise create minimal structure
-        resolvedOptions.content = options?.content ?? [];
+        resolvedOptions.content = (options?.content ?? []) as string | Record<string, unknown> | DocxFileEntry[];
         resolvedOptions.mediaFiles = options?.mediaFiles ?? {};
         resolvedOptions.fonts = options?.fonts ?? {};
         resolvedOptions.fileSource = null;
@@ -991,11 +991,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
     // Set up minimal navigator for Node.js environments
     if (typeof navigator === 'undefined') {
       // Create a minimal navigator object with required properties
-      const minimalNavigator = {
+      // @ts-expect-error - Partial navigator object for headless mode
+      (global as typeof globalThis & { navigator?: unknown }).navigator = {
         platform: 'node',
         userAgent: 'Node.js',
       };
-      (global as typeof globalThis & { navigator?: typeof minimalNavigator }).navigator = minimalNavigator;
     }
 
     // Deprecation warnings for legacy mock options
@@ -1601,7 +1601,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
    * Set the document version
    */
   static setDocumentVersion(doc: DocxFileEntry[], version: string): string {
-    return SuperConverter.setStoredSuperdocVersion(doc, version) ?? version;
+    const result = SuperConverter.setStoredSuperdocVersion(doc, version);
+    if (typeof result === 'string') {
+      return result;
+    }
+    return version;
   }
 
   /**
@@ -2805,7 +2809,7 @@ export class Editor extends EventEmitter<EditorEventMap> {
         ],
       });
       const writable = await handle.createWritable();
-      await writable.write(data);
+      await writable.write(data as Blob);
       await writable.close();
       return;
     }

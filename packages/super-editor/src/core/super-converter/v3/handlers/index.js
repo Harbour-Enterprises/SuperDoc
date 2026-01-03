@@ -309,6 +309,7 @@ const translatorList = Array.from(
 
 const additionalHandlers = Object.freeze(
   translatorList.reduce((acc, translator) => {
+    if (typeof translator === 'function') return acc;
     const key = translator?.xmlName;
     if (!key) return acc;
     acc[key] = translator;

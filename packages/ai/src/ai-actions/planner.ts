@@ -8,13 +8,17 @@ import type {
   SuperDocInstance,
   AIUser,
   AIActionsCallbacks,
+  PlannerContextSnapshot,
+  BuilderPlanResult,
 } from '../shared';
 import { SuperDoc } from 'superdoc';
 import { createAIProvider, isAIProvider } from './providers';
 import type { AIProviderInput } from './providers';
-import { parseJSON, validateInput, getErrorMessage, isPlainObject } from '../shared';
-import { Logger } from '../shared/logger';
 import {
+  parseJSON,
+  validateInput,
+  getErrorMessage,
+  isPlainObject,
   DEFAULT_CONTEXT_LENGTH,
   TRUNCATION_HEAD_RATIO,
   MAX_PLAN_STEPS,
@@ -23,7 +27,7 @@ import {
   ERROR_MESSAGES,
   PROGRESS_MESSAGES,
 } from '../shared';
-import type { PlannerContextSnapshot, BuilderPlanResult } from '../shared';
+import { Logger } from '../shared/logger';
 import { extractSelection, getDocumentText, isEditorReady } from './editor';
 import { createToolRegistry, getToolDescriptions } from './tools';
 import { buildAIPlannerSystemPrompt } from '../shared/prompts';

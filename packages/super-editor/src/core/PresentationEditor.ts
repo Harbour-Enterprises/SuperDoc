@@ -74,7 +74,7 @@ import {
   getBucketRepresentative,
   buildMultiSectionIdentifier,
   getHeaderFooterTypeForSection,
-  layoutHeaderFooterWithCache,
+  layoutHeaderFooterWithCache as _layoutHeaderFooterWithCache,
   PageGeometryHelper,
 } from '@superdoc/layout-bridge';
 import type {
@@ -98,7 +98,7 @@ import type {
   TrackedChangesMode,
   Fragment,
 } from '@superdoc/contracts';
-import { extractHeaderFooterSpace } from '@superdoc/contracts';
+import { extractHeaderFooterSpace as _extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
 
 // Comment and tracked change mark names (inline to avoid missing declaration files)
@@ -3377,7 +3377,12 @@ export class PresentationEditor extends EventEmitter {
         mapped: mapped
           ? mapped.ok
             ? { ok: true, pos: mapped.pos, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
-            : { ok: false, reason: mapped.reason, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
+            : {
+                ok: false,
+                reason: (mapped as { ok: false; reason: string }).reason,
+                fromEpoch: mapped.fromEpoch,
+                toEpoch: mapped.toEpoch,
+              }
           : null,
         hit: hit ? { pos: hit.pos, pageIndex: hit.pageIndex, layoutEpoch: hit.layoutEpoch } : null,
       })}`,
@@ -3785,7 +3790,7 @@ export class PresentationEditor extends EventEmitter {
             },
             mapped: {
               ok: false,
-              reason: mappedHead.reason,
+              reason: (mappedHead as { ok: false; reason: string }).reason,
               fromEpoch: mappedHead.fromEpoch,
               toEpoch: mappedHead.toEpoch,
             },
@@ -4286,7 +4291,7 @@ export class PresentationEditor extends EventEmitter {
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
         const result = toFlowBlocks(docJson, {
-          mediaFiles: this.#editor?.storage?.image?.media as Record<string, string> | undefined,
+          mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
           sectionMetadata,
           trackedChangesMode: this.#trackedChangesMode,

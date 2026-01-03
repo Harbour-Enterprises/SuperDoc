@@ -7,7 +7,8 @@ import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-trans
 import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
 import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import { resolveRunProperties, encodeMarksFromRPr } from '@converter/styles.js';
+// @ts-expect-error - resolveRunProperties is exported but TypeScript may not recognize it
+import { encodeMarksFromRPr, resolveRunProperties } from '../../../../styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -34,7 +35,8 @@ const encode = (params, encodedAttrs = {}) => {
   const resolvedRunProperties = resolveRunProperties(params, runProperties ?? {}, paragraphProperties);
 
   // Parsing marks from run properties
-  const marks = encodeMarksFromRPr(resolvedRunProperties, params?.docx) || [];
+  const marksResult = encodeMarksFromRPr(resolvedRunProperties, params?.docx);
+  const marks = Array.isArray(marksResult) ? marksResult : [];
   const rPrChange = rPrNode?.elements?.find((el) => el.name === 'w:rPrChange');
   const styleChangeMarks = handleStyleChangeMarksV2(rPrChange, marks, params) || [];
 
@@ -50,7 +52,7 @@ const encode = (params, encodedAttrs = {}) => {
   const content = nodeListHandler?.handler(childParams) || [];
 
   // Applying marks to child nodes
-  const contentWithRunMarks = content.map((child) => {
+  const contentWithRunMarks = (Array.isArray(content) ? content : []).map((child) => {
     if (!child || typeof child !== 'object') return child;
 
     // Preserve existing marks on child nodes

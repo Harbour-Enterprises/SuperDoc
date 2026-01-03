@@ -580,7 +580,7 @@ export function encodeMarksFromRPr(runProperties, docx) {
         const eastAsiaFamily = value['eastAsia'];
 
         if (eastAsiaFamily) {
-          const eastAsiaCss = SuperConverter.toCssFontFamily(eastAsiaFamily, docx);
+          const eastAsiaCss = getFontFamilyValue({ 'w:ascii': eastAsiaFamily }, docx);
           if (!fontFamily || eastAsiaCss !== textStyleAttrs.fontFamily) {
             textStyleAttrs.eastAsiaFontFamily = eastAsiaCss;
           }
@@ -861,7 +861,7 @@ export function encodeCSSFromRPr(runProperties, docx) {
         }
         const eastAsiaFamily = value['eastAsia'];
         if (eastAsiaFamily) {
-          const eastAsiaCss = SuperConverter.toCssFontFamily(eastAsiaFamily, docx);
+          const eastAsiaCss = getFontFamilyValue({ 'w:ascii': eastAsiaFamily }, docx);
           if (eastAsiaCss && (!fontFamily || eastAsiaCss !== fontFamily)) {
             css['font-family'] = css['font-family'] || eastAsiaCss;
           }
@@ -1033,6 +1033,7 @@ function getFontFamilyValue(attributes, docx) {
 
   if (!resolved) return null;
 
+  // @ts-expect-error - toCssFontFamily is a static method on SuperConverter
   return SuperConverter.toCssFontFamily(resolved, docx);
 }
 
