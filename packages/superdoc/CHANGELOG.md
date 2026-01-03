@@ -1,3 +1,17 @@
+# [1.2.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.3...v1.2.0-next.4) (2026-01-03)
+
+
+### Bug Fixes
+
+* add destroyed to flag to abort init ([#1616](https://github.com/Harbour-Enterprises/SuperDoc/issues/1616)) ([4b5fa87](https://github.com/Harbour-Enterprises/SuperDoc/commit/4b5fa871549a0a1ae721df82f430a1434fd6140f))
+* scrollToPosition in PresentationEditor ([#1604](https://github.com/Harbour-Enterprises/SuperDoc/issues/1604)) ([47a93a2](https://github.com/Harbour-Enterprises/SuperDoc/commit/47a93a26dacd436b21581646b4bc77209500ff85))
+* tests ([#1625](https://github.com/Harbour-Enterprises/SuperDoc/issues/1625)) ([93c4437](https://github.com/Harbour-Enterprises/SuperDoc/commit/93c4437672f60c14f281bc85d6ef4212d2342481))
+
+
+### Features
+
+* add commands and node types, fix Editor type ([#1624](https://github.com/Harbour-Enterprises/SuperDoc/issues/1624)) ([658a792](https://github.com/Harbour-Enterprises/SuperDoc/commit/658a7921584da6fcd955836dbfc40716b2a8bee2))
+
 # [1.2.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.2...v1.2.0-next.3) (2025-12-31)
 
 
