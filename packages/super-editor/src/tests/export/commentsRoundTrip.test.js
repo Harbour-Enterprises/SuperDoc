@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { importCommentData } from '@converter/v2/importer/documentCommentsImporter.js';
+import { Editor, getRichTextExtensions } from '@harbour-enterprises/super-editor';
 
 const extractNodeText = (node) => {
   if (!node) return '';
@@ -84,5 +85,51 @@ describe('Google Docs comments import/export round trip', () => {
     } finally {
       editor.destroy();
     }
+  });
+});
+
+describe('New comment HTML to schema conversion', () => {
+  /**
+   * Regression test for issue where new comments lost their text content
+   * during export. The bug was in convertHtmlToSchema passing a DOM element
+   * to Editor instead of the HTML string directly.
+   */
+  it('preserves text content when converting comment HTML to schema', () => {
+    const commentHTML = '<p>test comment</p>';
+
+    const editor = new Editor({
+      mode: 'text',
+      isHeadless: true,
+      content: commentHTML,
+      extensions: getRichTextExtensions(),
+    });
+
+    const result = editor.getJSON();
+    const paragraph = result.content[0];
+
+    expect(paragraph).toBeDefined();
+    expect(paragraph.type).toBe('paragraph');
+    expect(paragraph.content).toBeDefined();
+    expect(paragraph.content.length).toBeGreaterThan(0);
+
+    const textContent = extractNodeText(paragraph);
+    expect(textContent).toBe('test comment');
+  });
+
+  it('preserves formatted text content', () => {
+    const commentHTML = '<p><strong>bold</strong> and <em>italic</em></p>';
+
+    const editor = new Editor({
+      mode: 'text',
+      isHeadless: true,
+      content: commentHTML,
+      extensions: getRichTextExtensions(),
+    });
+
+    const result = editor.getJSON();
+    const paragraph = result.content[0];
+
+    const textContent = extractNodeText(paragraph);
+    expect(textContent).toBe('bold and italic');
   });
 });
