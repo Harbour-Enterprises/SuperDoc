@@ -21,14 +21,16 @@ export function getAtomNodeTypes(schema: Schema | null | undefined): string[] {
 
   const types: string[] = [];
   try {
-    schema.nodes.forEach((nodeType, name) => {
+    // schema.nodes is a record/object mapping node names to NodeType instances
+    for (const name in schema.nodes) {
       if (name === 'text') {
-        return;
+        continue;
       }
-      if (nodeType.isAtom || nodeType.isLeaf) {
+      const nodeType = schema.nodes[name];
+      if (nodeType && (nodeType.isAtom || nodeType.isLeaf)) {
         types.push(name);
       }
-    });
+    }
   } catch {
     return [];
   }

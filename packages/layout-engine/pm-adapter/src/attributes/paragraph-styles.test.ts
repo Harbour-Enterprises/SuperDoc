@@ -1,10 +1,10 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
-import * as converterStyles from '@converter/styles.js';
+import * as converterStyles from '@superdoc/super-editor/converter/internal/styles.js';
 
 // Mock the external super-converter module that's imported by paragraph-styles.ts
 // This module is part of super-editor package and not available in pm-adapter tests
-vi.mock('@converter/styles.js');
+vi.mock('@superdoc/super-editor/converter/internal/styles.js');
 
 describe('hydrateParagraphStyleAttrs', () => {
   beforeEach(() => {
@@ -259,6 +259,98 @@ describe('hydrateParagraphStyleAttrs', () => {
         before: 100,
         after: 100,
       });
+    });
+  });
+
+  describe('contextualSpacing extraction', () => {
+    it('extracts contextualSpacing=true from resolved paragraph properties', () => {
+      vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+        spacing: { before: 100, after: 100 },
+        contextualSpacing: true,
+      });
+
+      const para = { attrs: { styleId: 'ListBullet' } } as never;
+      const result = hydrateParagraphStyleAttrs(para, {
+        docx: {},
+        numbering: {},
+      });
+
+      expect(result?.contextualSpacing).toBe(true);
+    });
+
+    it('extracts contextualSpacing=false from resolved paragraph properties', () => {
+      vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+        spacing: { before: 100, after: 100 },
+        contextualSpacing: false,
+      });
+
+      const para = { attrs: { styleId: 'Normal' } } as never;
+      const result = hydrateParagraphStyleAttrs(para, {
+        docx: {},
+        numbering: {},
+      });
+
+      expect(result?.contextualSpacing).toBe(false);
+    });
+
+    it('omits contextualSpacing when not present in resolved properties', () => {
+      vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+        spacing: { before: 100, after: 100 },
+        // No contextualSpacing property
+      });
+
+      const para = { attrs: { styleId: 'Heading1' } } as never;
+      const result = hydrateParagraphStyleAttrs(para, {
+        docx: {},
+        numbering: {},
+      });
+
+      expect(result?.contextualSpacing).toBeUndefined();
+    });
+
+    it('includes contextualSpacing in hydration result alongside other properties', () => {
+      vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+        spacing: { before: 240, after: 120 },
+        indent: { left: 720 },
+        contextualSpacing: true,
+        keepLines: true,
+        justification: 'left',
+      });
+
+      const para = { attrs: { styleId: 'ListBullet' } } as never;
+      const result = hydrateParagraphStyleAttrs(para, {
+        docx: {},
+        numbering: {},
+      });
+
+      expect(result).toEqual(
+        expect.objectContaining({
+          spacing: { before: 240, after: 120 },
+          indent: { left: 720 },
+          contextualSpacing: true,
+          keepLines: true,
+          alignment: 'left',
+        }),
+      );
+    });
+
+    it('handles contextualSpacing from style cascade (ListBullet style example)', () => {
+      // ListBullet style typically defines contextualSpacing to suppress spacing
+      // between consecutive list items of the same style
+      vi.mocked(converterStyles.resolveParagraphProperties).mockReturnValue({
+        spacing: { before: 0, after: 0 },
+        indent: { left: 720, hanging: 360 },
+        contextualSpacing: true, // "Don't add space between paragraphs of the same style"
+      });
+
+      const para = { attrs: { styleId: 'ListBullet' } } as never;
+      const result = hydrateParagraphStyleAttrs(para, {
+        docx: {},
+        numbering: {},
+      });
+
+      expect(result?.contextualSpacing).toBe(true);
+      expect(result?.spacing).toEqual({ before: 0, after: 0 });
     });
   });
 });

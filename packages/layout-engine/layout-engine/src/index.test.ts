@@ -214,7 +214,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(16, 1);
   });
@@ -238,7 +239,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(18, 1);
   });
@@ -1484,6 +1486,7 @@ describe('layoutDocument', () => {
           kind: 'sectionBreak',
           id: 'first',
           type: 'continuous',
+          margins: {},
           attrs: { source: 'sectPr', isFirstSection: true },
         } as FlowBlock,
         firstPara,
@@ -1494,6 +1497,7 @@ describe('layoutDocument', () => {
           id: 'second',
           type: 'continuous',
           columns: { count: 2, gap: 48 },
+          margins: {},
           attrs: { source: 'sectPr' },
         } as FlowBlock,
         thirdPara,
@@ -2382,14 +2386,13 @@ describe('layoutHeaderFooter', () => {
       kind: 'drawing',
       id: 'drawing-1',
       drawingKind: 'vectorShape',
+      geometry: { width: 100, height: 50 },
       anchor: {
         isAnchored: true,
         behindDoc: true,
         offsetV: 2000, // Extreme offset beyond overflow threshold
       },
-      shape: {
-        type: 'Rectangle',
-      },
+      shapeKind: 'Rectangle',
     };
     const paragraphMeasure: Measure = {
       kind: 'paragraph',
@@ -2568,6 +2571,280 @@ describe('layoutHeaderFooter', () => {
     // - behindDocImage2 excluded (extreme offset)
     expect(layout.height).toBeGreaterThan(15);
     expect(layout.height).toBeCloseTo(60, 0);
+  });
+
+  it('excludes extreme behindDoc offsets from height when overflowBaseHeight provided', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 1500, // Extreme offset beyond 4x overflowBaseHeight (4*50=200)
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 60,
+      overflowBaseHeight: 50, // Overflow threshold = max(192, 50*4) = 200
+    });
+
+    // Image at offsetV=1500 is beyond maxBehindDocY (60 + 200 = 260), so excluded
+    expect(layout.height).toBeCloseTo(15);
+  });
+
+  it('includes moderate behindDoc offsets in height calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 100, // Moderate offset within 4x overflowBaseHeight
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 250,
+      overflowBaseHeight: 50, // Overflow threshold = max(192, 50*4) = 200
+    });
+
+    // Image at offsetV=100, height=40, bottom=140 is within maxBehindDocY (250 + 200 = 450)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(140, 0);
+  });
+
+  it('falls back to full height when overflowBaseHeight undefined', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 500, // Would be extreme with overflowBaseHeight=50, but not without it
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 600,
+      // No overflowBaseHeight - uses full height (600) for overflow calculation
+    });
+
+    // Without overflowBaseHeight, overflow threshold = max(192, 600*4) = 2400
+    // Image at offsetV=500, height=40, bottom=540 is within maxBehindDocY (600 + 2400 = 3000)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(540, 0);
+  });
+
+  it('handles zero overflowBaseHeight by using height for overflow calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 300,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 100,
+      overflowBaseHeight: 0, // Zero value - should fall back to height
+    });
+
+    // overflowBaseHeight=0 is not > 0, so falls back to height (100)
+    // Overflow threshold = max(192, 100*4) = 400
+    // Image at offsetV=300, height=40, bottom=340 is within maxBehindDocY (100 + 400 = 500)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(340, 0);
+  });
+
+  it('handles negative overflowBaseHeight by using height for overflow calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 150,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 80,
+      overflowBaseHeight: -10, // Negative value - should fall back to height
+    });
+
+    // overflowBaseHeight=-10 is not > 0, so falls back to height (80)
+    // Overflow threshold = max(192, 80*4) = 320
+    // Image at offsetV=150, height=40, bottom=190 is within maxBehindDocY (80 + 320 = 400)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(190, 0);
+  });
+
+  it('handles NaN overflowBaseHeight by using height for overflow calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 250,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 100,
+      overflowBaseHeight: NaN, // NaN value - should fall back to height
+    });
+
+    // overflowBaseHeight=NaN is not finite, so falls back to height (100)
+    // Overflow threshold = max(192, 100*4) = 400
+    // Image at offsetV=250, height=40, bottom=290 is within maxBehindDocY (100 + 400 = 500)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(290, 0);
+  });
+
+  it('handles Infinity overflowBaseHeight by using height for overflow calculation', () => {
+    const paragraphBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'para-1',
+      runs: [{ text: 'Header text', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 12 }],
+    };
+    const imageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'img-1',
+      src: 'data:image/png;base64,xxx',
+      anchor: {
+        isAnchored: true,
+        behindDoc: true,
+        offsetV: 180,
+      },
+    };
+    const paragraphMeasure: Measure = {
+      kind: 'paragraph',
+      lines: [{ fromRun: 0, fromChar: 0, toRun: 0, toChar: 11, width: 80, ascent: 12, descent: 3, lineHeight: 15 }],
+      totalHeight: 15,
+    };
+    const imageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 40,
+    };
+
+    const layout = layoutHeaderFooter([paragraphBlock, imageBlock], [paragraphMeasure, imageMeasure], {
+      width: 200,
+      height: 90,
+      overflowBaseHeight: Infinity, // Infinity value - should fall back to height
+    });
+
+    // overflowBaseHeight=Infinity is not finite, so falls back to height (90)
+    // Overflow threshold = max(192, 90*4) = 360
+    // Image at offsetV=180, height=40, bottom=220 is within maxBehindDocY (90 + 360 = 450)
+    expect(layout.height).toBeGreaterThan(15);
+    expect(layout.height).toBeCloseTo(220, 0);
   });
 });
 

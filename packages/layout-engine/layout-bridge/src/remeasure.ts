@@ -9,7 +9,11 @@ import type {
 } from '@superdoc/contracts';
 import { Engines } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
-import { LIST_MARKER_GAP, SPACE_SUFFIX_GAP_PX, DEFAULT_TAB_INTERVAL_PX } from '@superdoc/common/layout-constants';
+import {
+  LIST_MARKER_GAP as _LIST_MARKER_GAP,
+  SPACE_SUFFIX_GAP_PX as _SPACE_SUFFIX_GAP_PX,
+  DEFAULT_TAB_INTERVAL_PX as _DEFAULT_TAB_INTERVAL_PX,
+} from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 
 /**
@@ -235,7 +239,7 @@ const capitalizeText = (text: string, fullText?: string, startOffset?: number): 
  */
 const applyTextTransform = (
   text: string,
-  transform: Run['textTransform'] | undefined,
+  transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none' | undefined,
   fullText?: string,
   startOffset?: number,
 ): string => {
@@ -486,7 +490,9 @@ const getNextTabStopPx = (
 function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): number {
   const context = getCtx();
   const fullText = runText(run);
-  const text = applyTextTransform(fullText.slice(fromChar, toChar), run.textTransform, fullText, fromChar);
+  // Only TextRun and TabRun have textTransform property (via RunMarks)
+  const transform = isTextRun(run) ? run.textTransform : undefined;
+  const text = applyTextTransform(fullText.slice(fromChar, toChar), transform, fullText, fromChar);
   if (!context) {
     // Fallback: simple proportional width (approximate)
     // When canvas context is unavailable (e.g., server-side rendering),

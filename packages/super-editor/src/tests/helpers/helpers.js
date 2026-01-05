@@ -118,8 +118,8 @@ export const initTestEditor = (options = {}) => {
     documentId: 'test',
     role: 'editor',
     documentMode: 'editing',
-    isHeadless: true,
     element: defaultElement,
+    suppressDefaultDocxStyles: true,
     extensions: getStarterExtensions(),
     users: [],
     onCreate: (...args) => {
@@ -134,9 +134,7 @@ export const initTestEditor = (options = {}) => {
 
   return {
     editor,
-    get dispatch() {
-      return editor.view?.dispatch;
-    },
+    dispatch: editor.dispatch.bind(editor),
   };
 };
 
@@ -147,7 +145,5 @@ export const initTestEditor = (options = {}) => {
  * @returns {Transaction} A new transaction instance
  */
 export const getNewTransaction = (editor) => {
-  const { view } = editor;
-  const { state, dispatch } = view;
-  return state.tr;
+  return editor.state.tr;
 };

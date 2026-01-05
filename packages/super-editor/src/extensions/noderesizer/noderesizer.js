@@ -1,7 +1,7 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { Decoration, DecorationSet } from 'prosemirror-view';
 import { Extension } from '@core/Extension.js';
-import { applyStyleIsolationClass } from '@/utils/styleIsolation.js';
+import { applyStyleIsolationClass } from '@utils/styleIsolation.js';
 
 /**
  * Configuration options for NodeResizer
@@ -117,7 +117,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
       // Add scroll handler to update handle positions during scroll
       scrollHandler = () => {
         if (currentWrapper && resizeContainer) {
-          updateHandlePositions(currentWrapper.firstElementChild);
+          updateHandlePositions(currentWrapper);
         }
       };
 
@@ -196,7 +196,7 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
     // Position the container relative to the resizable element
     applyStyleIsolationClass(resizeContainer);
     document.body.appendChild(resizeContainer);
-    updateHandlePositions(wrapper.firstElementChild);
+    updateHandlePositions(wrapper);
   }
 
   function hideResizeHandles() {

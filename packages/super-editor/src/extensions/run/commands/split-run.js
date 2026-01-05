@@ -8,13 +8,22 @@ import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
  * @returns {import('@core/commands/types').Command}
  */
 export const splitRunToParagraph = () => (props) => {
-  const { state, view, tr } = props;
+  const { state, view, tr, editor } = props;
   const { $from, empty } = state.selection;
   if (!empty) return false;
   if ($from.parent.type.name !== 'run') return false;
 
+  // Resolve the dispatch function from view (preferred) or editor (headless fallback)
+  let dispatchTransaction = null;
+  if (view?.dispatch) {
+    dispatchTransaction = view.dispatch.bind(view);
+  } else if (editor?.dispatch) {
+    dispatchTransaction = editor.dispatch.bind(editor);
+  }
+  if (!dispatchTransaction) return false;
+
   const handled = splitBlockPatch(state, (transaction) => {
-    view.dispatch(transaction);
+    dispatchTransaction(transaction);
   });
 
   if (handled) {

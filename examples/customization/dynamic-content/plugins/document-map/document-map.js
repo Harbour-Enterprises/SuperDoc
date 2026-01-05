@@ -92,38 +92,14 @@ export const DocumentMapExtension = Extensions.Extension.create({
    * See https://prosemirror.net/docs/ref/#state.Plugin_System
    */
   addPmPlugins() {
-    let hasInitialized = false;
     const editor = this.editor;
-    const ContentMapPLugin = new Extensions.Plugin({
+    const ContentMapPlugin = new Extensions.Plugin({
       key: ContentMapPluginKey,
       state: {
+        // Plugin init should be pure - just return initial state, no side effects.
+        // View-dependent initialization belongs in the `view` callback below.
         init(_, state) {
-          // Initialize the document map with the current state.
-          // Collect all paragraph nodes with content.
-          const initialPositions = [];
-          state.doc.descendants((node, pos) => {
-            if (node.type.name === 'paragraph' && node.content.size > 0) {
-              initialPositions.push({ pos, node });
-            }
-          });
-
-          // Add custom IDs to each node so we can track them.
-          const { dispatch } = editor.view;
-          const { tr: newTr } = state;
-          initialPositions.forEach(({ node, pos }) => {
-            const newAttrs = {
-              ...node.attrs,
-              extraAttrs: {
-                customTrackingId: `custom-id-${pos}`,
-              }
-            }
-            newTr.setNodeMarkup(pos, undefined, newAttrs);
-          });
-
-          dispatch(newTr);
           const initialDocMap = createMap(state, null);
-          editor.emit('document-map-update', initialDocMap);
-
           return {
             hasInitialized: false,
             docMap: initialDocMap,
@@ -153,8 +129,44 @@ export const DocumentMapExtension = Extensions.Extension.create({
           return pluginState;
         },
       },
+      // ProseMirror's `view` callback is the correct place for view-dependent initialization.
+      // It's called once when the view is created, with the view instance available.
+      view(editorView) {
+        // Add custom tracking IDs to paragraph nodes
+        const state = editorView.state;
+        const initialPositions = [];
+        state.doc.descendants((node, pos) => {
+          if (node.type.name === 'paragraph' && node.content.size > 0) {
+            initialPositions.push({ pos, node });
+          }
+        });
+
+        if (initialPositions.length > 0) {
+          const tr = state.tr;
+          initialPositions.forEach(({ node, pos }) => {
+            const newAttrs = {
+              ...node.attrs,
+              extraAttrs: {
+                customTrackingId: `custom-id-${pos}`,
+              }
+            };
+            tr.setNodeMarkup(pos, undefined, newAttrs);
+          });
+          editorView.dispatch(tr);
+        }
+
+        // Emit the initial document map after IDs are set
+        const docMap = createMap(editorView.state, null);
+        editor.emit('document-map-update', docMap);
+
+        // Return update/destroy handlers (required by ProseMirror)
+        return {
+          update() {},
+          destroy() {},
+        };
+      },
     });
-    return [ContentMapPLugin];
+    return [ContentMapPlugin];
   },
 });
 

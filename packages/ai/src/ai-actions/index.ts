@@ -11,8 +11,7 @@ import type {
 } from '../shared';
 import { AIActionsService } from './services';
 import { createAIProvider, isAIProvider } from './providers';
-import { ERROR_MESSAGES, MAX_PROMPT_LENGTH } from '../shared';
-import { validateInput, getErrorMessage } from '../shared';
+import { ERROR_MESSAGES, MAX_PROMPT_LENGTH, validateInput, getErrorMessage } from '../shared';
 import { Logger } from '../shared/logger';
 import { extractSelectionText, getDocumentText, isEditorReady } from './editor';
 import { AIPlanner } from './planner';

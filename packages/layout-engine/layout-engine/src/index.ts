@@ -103,6 +103,12 @@ export type HeaderFooterConstraints = {
   pageWidth?: number;
   /** Page margins for page-relative anchor positioning */
   margins?: { left: number; right: number };
+  /**
+   * Optional base height used to bound behindDoc overflow handling.
+   * When provided, decorative assets far outside the header/footer band
+   * won't inflate layout height.
+   */
+  overflowBaseHeight?: number;
 };
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter portrait in px (8.5in × 11in @ 72dpi)
@@ -1378,7 +1384,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         paraBlock.runs.length === 0 ||
         (paraBlock.runs.length === 1 &&
           (!paraBlock.runs[0].kind || paraBlock.runs[0].kind === 'text') &&
-          (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
+          (!(paraBlock.runs[0] as { text?: string }).text || (paraBlock.runs[0] as { text?: string }).text === ''));
 
       if (isEmpty) {
         // Check if previous block was pageBreak and next block is sectionBreak
@@ -1724,7 +1730,15 @@ export function layoutHeaderFooter(
   }
 
   // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
-  const maxBehindDocOverflow = Math.max(192, height * 4);
+  // Use a bounded base height so decorative assets far outside the header/footer band
+  // don't inflate layout height. Fallback to full height when no base is provided.
+  const overflowBase =
+    typeof constraints.overflowBaseHeight === 'number' &&
+    Number.isFinite(constraints.overflowBaseHeight) &&
+    constraints.overflowBaseHeight > 0
+      ? constraints.overflowBaseHeight
+      : height;
+  const maxBehindDocOverflow = Math.max(192, overflowBase * 4);
   const minBehindDocY = -maxBehindDocOverflow;
   const maxBehindDocY = height + maxBehindDocOverflow;
 
