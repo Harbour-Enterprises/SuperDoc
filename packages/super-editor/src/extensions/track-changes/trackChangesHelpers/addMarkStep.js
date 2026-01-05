@@ -64,13 +64,13 @@ export const addMarkStep = ({ state, step, newTr, doc, user, date }) => {
           ];
         }
       } else {
-        // before = [];
         before = node.marks.map((mark) => ({
           type: mark.type.name,
           attrs: { ...mark.attrs },
         }));
 
         after = [
+          ...before,
           {
             type: step.mark.type.name,
             attrs: { ...step.mark.attrs },
