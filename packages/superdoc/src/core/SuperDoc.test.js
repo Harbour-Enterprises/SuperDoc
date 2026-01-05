@@ -41,7 +41,7 @@ class MockToolbar {
 
 const createZipMock = vi.fn(async (blobs, names) => ({ zip: true, blobs, names }));
 
-vi.mock('@harbour-enterprises/super-editor', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   SuperToolbar: MockToolbar,
   createZip: createZipMock,
 }));
@@ -316,32 +316,7 @@ describe('SuperDoc core', () => {
     expect(instance.ydoc).toBeDefined();
   });
 
-  it('toggles pagination across editors', async () => {
-    const { superdocStore } = createAppHarness();
-    const togglePagination = vi.fn();
-    superdocStore.documents = [
-      {
-        type: DOCX,
-        getEditor: () => ({ commands: { togglePagination } }),
-      },
-    ];
-
-    const instance = new SuperDoc({
-      selector: '#host',
-      document: 'https://example.com/doc.docx',
-      documents: [],
-      modules: { comments: {}, toolbar: {} },
-      colors: ['red'],
-      user: { name: 'Jane', email: 'jane@example.com' },
-      onException: vi.fn(),
-      pagination: false,
-    });
-    await flushMicrotasks();
-
-    instance.togglePagination();
-    expect(instance.config.pagination).toBe(true);
-    expect(togglePagination).toHaveBeenCalled();
-  });
+  // pagination legacy removed; togglePagination test removed
 
   it('broadcasts ready only when all editors resolved', async () => {
     const { superdocStore } = createAppHarness();
@@ -543,6 +518,65 @@ describe('SuperDoc core', () => {
     expect(instance.listenerCount('ready')).toBe(0);
   });
 
+  it('prevents app mounting if destroy is called during async init', async () => {
+    const { app } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+
+    // Call destroy BEFORE async init completes
+    instance.destroy();
+
+    // Wait for any pending init to complete
+    await flushMicrotasks();
+
+    // App should not have been mounted because destroy() set #destroyed = true
+    expect(app.mount).not.toHaveBeenCalled();
+  });
+
+  it('cleans up collaboration resources if destroy is called during async init', async () => {
+    const { app } = createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: {
+        comments: {},
+        toolbar: {},
+        collaboration: { providerType: 'hocuspocus', url: 'wss://example.com' },
+      },
+      colors: [],
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+
+    // Call destroy BEFORE async init completes
+    instance.destroy();
+
+    // Wait for any pending init to complete
+    await flushMicrotasks();
+
+    // App should not have been mounted
+    expect(app.mount).not.toHaveBeenCalled();
+
+    // Collaboration resources should still be cleaned up
+    expect(instance.provider.disconnect).toHaveBeenCalled();
+    expect(instance.provider.destroy).toHaveBeenCalled();
+    instance.config.documents.forEach((doc) => {
+      expect(doc.provider.disconnect).toHaveBeenCalled();
+      expect(doc.provider.destroy).toHaveBeenCalled();
+      expect(doc.ydoc.destroy).toHaveBeenCalled();
+    });
+  });
+
   it('removes comments in viewing mode and restores them when returning to editing', async () => {
     const { superdocStore } = createAppHarness();
     const removeComments = vi.fn();
@@ -552,6 +586,7 @@ describe('SuperDoc core', () => {
       removeComments,
       restoreComments,
       getEditor: vi.fn(() => ({ setDocumentMode })),
+      getPresentationEditor: vi.fn(() => null),
     };
     superdocStore.documents = [docStub];
 

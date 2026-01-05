@@ -40,9 +40,6 @@ const decode = (params) => {
   const isInternal = parentComment?.isInternal || originalComment.isInternal;
   if (commentsExportType === 'external' && isInternal) return;
 
-  const isResolved = !!originalComment.resolvedTime;
-  if (isResolved) return;
-
   if (node.type !== 'commentRangeStart' && node.type !== 'commentRangeEnd') {
     return;
   }
@@ -77,14 +74,26 @@ const getCommentSchema = (type, commentIndex) => {
   };
 };
 
-const getConfig = (type) => ({
-  xmlName: `${XML_NODE_NAME}${type}`,
-  sdNodeOrKeyName: `${SD_NODE_NAME}${type}`,
-  type: NodeTranslator.translatorTypes.NODE,
-  encode: () => {},
-  decode,
-  attributes: [idAttrConfig],
-});
+const getConfig = (type) => {
+  const sdName = `${SD_NODE_NAME}${type}`;
+  const isStart = type === 'Start';
+  return {
+    xmlName: `${XML_NODE_NAME}${type}`,
+    sdNodeOrKeyName: sdName,
+    type: NodeTranslator.translatorTypes.NODE,
+    encode: ({ nodes }) => {
+      const node = nodes?.[0];
+      if (!node) return undefined;
+      const attrs = node.attributes ? { ...node.attributes } : {};
+      return {
+        type: isStart ? 'commentRangeStart' : 'commentRangeEnd',
+        attrs,
+      };
+    },
+    decode,
+    attributes: [idAttrConfig],
+  };
+};
 
 export const commentRangeStartTranslator = NodeTranslator.from(getConfig('Start'));
 export const commentRangeEndTranslator = NodeTranslator.from(getConfig('End'));

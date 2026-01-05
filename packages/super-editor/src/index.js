@@ -1,4 +1,14 @@
 import './style.css';
+
+// Load type augmentations (side-effect import for command/attribute types)
+import './extensions/types/index.js';
+
+// Type guard functions and extension helpers
+import { isNodeType, assertNodeType } from './core/types/NodeAttributesMap.js';
+import { isMarkType } from './core/types/MarkAttributesMap.js';
+import { defineNode } from './core/defineNode.js';
+import { defineMark } from './core/defineMark.js';
+
 import { SuperConverter } from './core/super-converter/SuperConverter';
 import { getMarksFromSelection } from './core/helpers/getMarksFromSelection.js';
 import { getActiveFormatting } from './core/helpers/getActiveFormatting.js';
@@ -6,6 +16,7 @@ import { getStarterExtensions, getRichTextExtensions } from './extensions/index.
 import { SuperToolbar } from './components/toolbar/super-toolbar.js';
 import { DocxZipper, helpers } from './core/index.js';
 import { Editor } from './core/Editor.js';
+import { PresentationEditor } from './core/PresentationEditor.js';
 import { createZip } from './core/super-converter/zipper.js';
 import { getAllowedImageDimensions } from './extensions/image/imageHelpers/processUploadedImage.js';
 import { Node, Attribute } from '@core/index.js';
@@ -55,6 +66,7 @@ export {
   DocxZipper,
   SuperToolbar,
   Editor,
+  PresentationEditor,
 
   // Components
   SuperEditor,
@@ -82,4 +94,11 @@ export {
   Extensions,
   TrackChangesBasePluginKey,
   CommentsPluginKey,
+
+  // Type guards and extension helpers
+  isNodeType,
+  assertNodeType,
+  isMarkType,
+  defineNode,
+  defineMark,
 };

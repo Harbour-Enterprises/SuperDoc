@@ -1,15 +1,18 @@
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { removeCommentsById, getHighlightColor } from './comments-helpers.js';
+import {
+  removeCommentsById,
+  resolveCommentById,
+  getHighlightColor,
+  translateFormatChangesToEnglish,
+} from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
-import { PaginationPluginKey } from '../pagination/pagination-helpers.js';
 
 // Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
 import { comments_module_events } from '@superdoc/common';
-import { translateFormatChangesToEnglish } from './comments-helpers.js';
 import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -127,7 +130,7 @@ export const CommentsPlugin = Extension.create({
         ({ commentId }) =>
         ({ tr, dispatch, state }) => {
           tr.setMeta(CommentsPluginKey, { event: 'update' });
-          removeCommentsById({ commentId, state, tr, dispatch });
+          return resolveCommentById({ commentId, state, tr, dispatch });
         },
       setCursorById:
         (id) =>
@@ -145,7 +148,7 @@ export const CommentsPlugin = Extension.create({
 
   addPmPlugins() {
     const editor = this.editor;
-    let shouldUpdate;
+    let shouldUpdate = true;
 
     if (editor.options.isHeadless) return [];
 
@@ -167,10 +170,6 @@ export const CommentsPlugin = Extension.create({
         },
 
         apply(tr, pluginState, _, newEditorState) {
-          const paginationMeta = tr.getMeta(PaginationPluginKey);
-          const isPaginationInit = paginationMeta?.isReadyToInit;
-          if (isPaginationInit) shouldUpdate = true;
-
           const meta = tr.getMeta(CommentsPluginKey);
           const { type } = meta || {};
 
@@ -186,7 +185,7 @@ export const CommentsPlugin = Extension.create({
             };
           }
 
-          if (!isPaginationInit && !shouldUpdate && meta && meta.decorations) {
+          if (meta && meta.decorations) {
             return {
               ...pluginState,
               decorations: meta.decorations,
@@ -278,7 +277,8 @@ export const CommentsPlugin = Extension.create({
             shouldUpdate = false;
 
             const decorations = [];
-            const allCommentPositions = onlyActiveThreadChanged ? prevAllCommentPositions : {};
+            // Always rebuild positions fresh from the current document to avoid stale PM offsets
+            const allCommentPositions = {};
             doc.descendants((node, pos) => {
               const { marks = [] } = node;
               const commentMarks = marks.filter((mark) => mark.type.name === CommentMarkName);
@@ -289,15 +289,22 @@ export const CommentsPlugin = Extension.create({
                 const threadId = attrs.commentId || attrs.importedId;
 
                 if (!onlyActiveThreadChanged) {
-                  const currentBounds = view.coordsAtPos(pos);
+                  let currentBounds;
+                  try {
+                    currentBounds = view.coordsAtPos(pos);
+                  } catch {
+                    currentBounds = null;
+                  }
 
-                  updatePosition({
-                    allCommentPositions,
-                    threadId,
-                    pos,
-                    currentBounds,
-                    node,
-                  });
+                  if (currentBounds) {
+                    updatePosition({
+                      allCommentPositions,
+                      threadId,
+                      pos,
+                      currentBounds,
+                      node,
+                    });
+                  }
                 }
 
                 const isInternal = attrs.internal;
@@ -330,15 +337,22 @@ export const CommentsPlugin = Extension.create({
 
               if (trackedChangeMark) {
                 if (!onlyActiveThreadChanged) {
-                  const currentBounds = view.coordsAtPos(pos);
+                  let currentBounds;
+                  try {
+                    currentBounds = view.coordsAtPos(pos);
+                  } catch {
+                    currentBounds = null;
+                  }
                   const { id } = trackedChangeMark.mark.attrs;
-                  updatePosition({
-                    allCommentPositions,
-                    threadId: id,
-                    pos,
-                    currentBounds,
-                    node,
-                  });
+                  if (currentBounds) {
+                    updatePosition({
+                      allCommentPositions,
+                      threadId: id,
+                      pos,
+                      currentBounds,
+                      node,
+                    });
+                  }
                 }
 
                 // Add decoration for tracked changes when activated

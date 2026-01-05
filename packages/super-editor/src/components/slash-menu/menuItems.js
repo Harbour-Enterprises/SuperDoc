@@ -2,7 +2,6 @@ import TableGrid from '../toolbar/TableGrid.vue';
 import AIWriter from '../toolbar/AIWriter.vue';
 import TableActions from '../toolbar/TableActions.vue';
 import LinkInput from '../toolbar/LinkInput.vue';
-import { handleClipboardPaste } from '../../core/InputRule.js';
 import { TEXTS, ICONS, TRIGGERS } from './constants.js';
 import { isTrackedChangeActionAllowed } from '@extensions/track-changes/permission-helpers.js';
 
@@ -38,12 +37,14 @@ const shouldShowItem = (item, context) => {
   // If item has a custom showWhen function, use it
   if (typeof item.showWhen === 'function') {
     try {
-      return item.showWhen(context);
+      return Boolean(item.showWhen(context));
     } catch (error) {
       console.warn('[SlashMenu] showWhen error for item', item.id, ':', error);
       return false;
     }
   }
+  // Items without showWhen are always shown
+  return true;
 };
 
 const canPerformTrackedChange = (context, action) => {
@@ -158,9 +159,9 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           action: (editor) => {
             editor.commands.createDocumentSection();
           },
-          showWhen: (context) => {
-            const { trigger } = context;
-            return trigger === TRIGGERS.click;
+          // TODO: Temporarily disabled - restore original: `return trigger === TRIGGERS.click;`
+          showWhen: () => {
+            return false;
           },
         },
         {
@@ -229,7 +230,7 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           icon: ICONS.cut,
           isDefault: true,
           action: (editor) => {
-            editor.view.focus();
+            editor.focus?.();
             document.execCommand('cut');
           },
           showWhen: (context) => {
@@ -243,7 +244,7 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           icon: ICONS.copy,
           isDefault: true,
           action: (editor) => {
-            editor.view.focus();
+            editor.focus?.();
             document.execCommand('copy');
           },
           showWhen: (context) => {
@@ -256,47 +257,23 @@ export function getItems(context, customItems = [], includeDefaultItems = true) 
           label: TEXTS.paste,
           icon: ICONS.paste,
           isDefault: true,
-          action: async (editor) => {
-            try {
-              const clipboardItems = await navigator.clipboard.read();
-              let html = '';
-              let text = '';
-
-              for (const item of clipboardItems) {
-                if (!html && item.types.includes('text/html')) {
-                  html = await (await item.getType('text/html')).text();
-                }
-                if (!text && item.types.includes('text/plain')) {
-                  text = await (await item.getType('text/plain')).text();
-                }
+          action: (editor) => {
+            // Use execCommand('paste') - triggers native paste without permission prompt
+            // This works because it's triggered by user interaction (clicking the menu item)
+            const editorDom = editor.view?.dom;
+            if (editorDom) {
+              editorDom.focus();
+              // execCommand paste is allowed when triggered by user action
+              const success = document.execCommand('paste');
+              if (!success) {
+                console.warn('[Paste] execCommand paste failed - clipboard may be empty or inaccessible');
               }
-
-              const handled = handleClipboardPaste({ editor, view: editor.view }, html);
-
-              if (!handled) {
-                const dataTransfer = new DataTransfer();
-                if (html) dataTransfer.setData('text/html', html);
-                if (text) dataTransfer.setData('text/plain', text);
-
-                const event = new ClipboardEvent('paste', {
-                  clipboardData: dataTransfer,
-                  bubbles: true,
-                  cancelable: true,
-                });
-                editor.view.dom.dispatchEvent(event);
-              }
-            } catch (error) {
-              console.warn('Failed to paste:', error);
             }
           },
           showWhen: (context) => {
-            const { trigger, clipboardContent } = context;
+            const { trigger } = context;
             const allowedTriggers = [TRIGGERS.click, TRIGGERS.slash];
-
-            const hasContent =
-              clipboardContent?.hasContent || clipboardContent?.size > 0 || clipboardContent?.content?.size > 0;
-
-            return allowedTriggers.includes(trigger) && hasContent;
+            return allowedTriggers.includes(trigger);
           },
         },
       ],

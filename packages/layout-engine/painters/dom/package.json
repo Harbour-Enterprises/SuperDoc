@@ -1,0 +1,28 @@
+{
+  "name": "@superdoc/painter-dom",
+  "version": "0.0.0",
+  "description": "DOM renderer for the SuperDoc layout engine.",
+  "type": "module",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@superdoc/contracts": "workspace:*",
+    "@superdoc/font-utils": "workspace:*",
+    "@superdoc/preset-geometry": "workspace:*",
+    "@superdoc/url-validation": "workspace:*"
+  },
+  "devDependencies": {
+    "vitest": "catalog:"
+  }
+}

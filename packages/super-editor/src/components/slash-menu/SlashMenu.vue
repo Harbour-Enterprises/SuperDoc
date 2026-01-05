@@ -4,8 +4,11 @@ import { SlashMenuPluginKey } from '../../extensions/slash-menu/slash-menu.js';
 import { getPropsByItemId } from './utils.js';
 import { shouldBypassContextMenu } from '../../utils/contextmenu-helpers.js';
 import { moveCursorToMouseEvent } from '../cursor-helpers.js';
+import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
+import { SLASH_MENU_HANDLED_FLAG } from './event-flags.js';
+import { isMacOS } from '../../core/utilities/isMacOS.js';
 
 const props = defineProps({
   editor: {
@@ -73,11 +76,31 @@ const filteredSections = computed(() => {
   ];
 });
 
+/**
+ * Watch for menu open/close state changes and manage search input focus.
+ *
+ * When the menu opens, automatically focuses the hidden search input to enable
+ * immediate keyboard interaction (search filtering and navigation). Uses the
+ * preventScroll option to avoid unwanted scrolling behavior.
+ *
+ * The preventScroll option is critical because:
+ * - The search input is positioned off-screen (opacity: 0, height: 0)
+ * - Without preventScroll, browsers may scroll parent containers to bring the
+ *   focused element into view, causing jarring page jumps
+ * - This ensures the menu appears at the cursor position without disrupting
+ *   the user's viewport
+ *
+ * @param {boolean} open - The new value of isOpen (true when menu opens, false when closed)
+ * @returns {void}
+ */
 watch(isOpen, (open) => {
   if (open) {
     nextTick(() => {
       if (searchInput.value) {
-        searchInput.value.focus();
+        // Use preventScroll to avoid scrolling the page when focusing the search input.
+        // Without this, the browser may scroll parent containers to bring the input into view,
+        // which causes unwanted page jumps when opening the context menu.
+        searchInput.value.focus({ preventScroll: true });
       }
     });
   }
@@ -166,11 +189,11 @@ const cleanupCustomItems = () => {
 
 const handleGlobalKeyDown = (event) => {
   // ESCAPE: always close popover or menu
-  if (event.key === 'Escape') {
+  if (event.key === 'Escape' && isOpen.value) {
     event.preventDefault();
     event.stopPropagation();
     closeMenu();
-    props.editor?.view?.focus();
+    props.editor?.focus?.();
     return;
   }
 
@@ -205,34 +228,113 @@ const handleGlobalKeyDown = (event) => {
   }
 };
 
+/**
+ * Handle clicks outside the menu to close it.
+ * Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
+ * call event.preventDefault() which suppresses mousedown events.
+ * @param {PointerEvent|MouseEvent} event - The pointer or mouse event
+ * @returns {void}
+ */
 const handleGlobalOutsideClick = (event) => {
   if (isOpen.value && menuRef.value && !menuRef.value.contains(event.target)) {
-    moveCursorToMouseEvent(event, props.editor);
+    // Only move cursor for left-clicks (button === 0).
+    // For right-clicks (button === 2), preserve the current selection/cursor
+    // because the contextmenu handler will open a new menu at the click position.
+    // Also skip Ctrl+Click on Mac, which triggers contextmenu but reports button=0.
+    const isCtrlClickOnMac = event.ctrlKey && isMacOS();
+    const isLeftClick = event.button === 0 && !isCtrlClickOnMac;
+
+    if (isLeftClick) {
+      moveCursorToMouseEvent(event, props.editor);
+    }
     closeMenu({ restoreCursor: false });
   }
 };
 
-const handleRightClick = async (event) => {
+/**
+ * Determines whether the SlashMenu should handle a context menu event.
+ * Checks if the editor is editable, context menu is enabled, and the event
+ * should not be bypassed (e.g., modifier keys are not pressed).
+ *
+ * @param {MouseEvent} event - The context menu event to validate
+ * @returns {boolean} true if the SlashMenu should handle the event, false otherwise
+ */
+const shouldHandleContextMenu = (event) => {
   const readOnly = !props.editor?.isEditable;
-  if (readOnly || shouldBypassContextMenu(event)) {
+  const contextMenuDisabled = props.editor?.options?.disableContextMenu;
+  const bypass = shouldBypassContextMenu(event);
+
+  return !readOnly && !contextMenuDisabled && !bypass;
+};
+
+/**
+ * Capture phase handler for context menu events that marks the event as handled by SlashMenu.
+ * This flag is used by PresentationInputBridge to skip forwarding the event to the hidden editor,
+ * preventing duplicate context menu handling.
+ *
+ * The capture phase ensures this runs before PresentationInputBridge's bubble phase handler,
+ * allowing us to set the flag before the event reaches other handlers.
+ *
+ * @param {MouseEvent} event - The context menu event in capture phase
+ */
+const handleRightClickCapture = (event) => {
+  try {
+    if (shouldHandleContextMenu(event)) {
+      event[SLASH_MENU_HANDLED_FLAG] = true;
+    }
+  } catch (error) {
+    // Prevent handler crashes from breaking the event flow
+    // Log warning but don't throw to allow other handlers to run
+    console.warn('[SlashMenu] Error in capture phase context menu handler:', error);
+  }
+};
+
+const handleRightClick = async (event) => {
+  if (!shouldHandleContextMenu(event)) {
     return;
   }
 
   event.preventDefault();
-  const context = await getEditorContext(props.editor, event);
-  currentContext.value = context; // Store context for later use
-  sections.value = getItems({ ...context, trigger: 'click' });
-  selectedId.value = flattenedItems.value[0]?.id || null;
-  searchQuery.value = '';
 
-  props.editor.view.dispatch(
-    props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-      type: 'open',
-      pos: context?.pos ?? props.editor.view.state.selection.from,
-      clientX: event.clientX,
-      clientY: event.clientY,
-    }),
-  );
+  // Update cursor position to the right-click location before opening context menu,
+  // unless the click lands inside an active selection (keep selection intact).
+  const editorState = props.editor?.state;
+  const hasRangeSelection = editorState?.selection?.from !== editorState?.selection?.to;
+  let isClickInsideSelection = false;
+
+  if (hasRangeSelection && Number.isFinite(event.clientX) && Number.isFinite(event.clientY)) {
+    const hit = props.editor?.posAtCoords?.({ left: event.clientX, top: event.clientY });
+    if (typeof hit?.pos === 'number') {
+      const { from, to } = editorState.selection;
+      isClickInsideSelection = hit.pos >= from && hit.pos <= to;
+    }
+  }
+
+  if (!isClickInsideSelection) {
+    moveCursorToMouseEvent(event, props.editor);
+  }
+
+  try {
+    const context = await getEditorContext(props.editor, event);
+    currentContext.value = context;
+    sections.value = getItems({ ...context, trigger: 'click' });
+    selectedId.value = flattenedItems.value[0]?.id || null;
+    searchQuery.value = '';
+
+    const currentState = props.editor.state;
+    if (!currentState) return;
+
+    props.editor.dispatch(
+      currentState.tr.setMeta(SlashMenuPluginKey, {
+        type: 'open',
+        pos: context?.pos ?? currentState.selection.from,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }),
+    );
+  } catch (error) {
+    console.error('[SlashMenu] Error opening context menu:', error);
+  }
 };
 
 const executeCommand = async (item) => {
@@ -243,10 +345,23 @@ const executeCommand = async (item) => {
     if (item.component) {
       const menuElement = menuRef.value;
       const componentProps = getPropsByItemId(item.id, props);
-      props.openPopover(markRaw(item.component), componentProps, {
-        left: menuPosition.value.left,
-        top: menuPosition.value.top,
-      });
+
+      // Convert viewport-relative coordinates (used by fixed-position SlashMenu)
+      // to container-relative coordinates (used by absolute-position GenericPopover)
+      let popoverPosition = { left: menuPosition.value.left, top: menuPosition.value.top };
+      if (menuElement) {
+        const menuRect = menuElement.getBoundingClientRect();
+        const container = menuElement.closest('.super-editor');
+        if (container) {
+          const containerRect = container.getBoundingClientRect();
+          popoverPosition = {
+            left: `${menuRect.left - containerRect.left}px`,
+            top: `${menuRect.top - containerRect.top}px`,
+          };
+        }
+      }
+
+      props.openPopover(markRaw(item.component), componentProps, popoverPosition);
       closeMenu({ restoreCursor: false });
     } else {
       // For paste operations, don't restore cursor
@@ -257,52 +372,55 @@ const executeCommand = async (item) => {
 };
 
 const closeMenu = (options = { restoreCursor: true }) => {
-  if (props.editor?.view) {
-    // Get plugin state to access anchorPos
-    const pluginState = SlashMenuPluginKey.getState(props.editor.view.state);
-    const anchorPos = pluginState?.anchorPos;
+  if (!props.editor) return;
+  const state = props.editor.state;
+  if (!state) return;
+  // Get plugin state to access anchorPos
+  const pluginState = SlashMenuPluginKey.getState(state);
+  const anchorPos = pluginState?.anchorPos;
 
-    // Update prosemirror state to close menu
-    props.editor.view.dispatch(
-      props.editor.view.state.tr.setMeta(SlashMenuPluginKey, {
-        type: 'close',
-      }),
+  // Update prosemirror state to close menu
+  props.editor.dispatch(state.tr.setMeta(SlashMenuPluginKey, { type: 'close' }));
+
+  // Restore cursor position and focus only if requested
+  if (options.restoreCursor && anchorPos !== null && anchorPos !== undefined) {
+    const tr = props.editor.state.tr.setSelection(
+      props.editor.state.selection.constructor.near(props.editor.state.doc.resolve(anchorPos)),
     );
-
-    // Restore cursor position and focus only if requested
-    if (options.restoreCursor && anchorPos !== null) {
-      const tr = props.editor.view.state.tr.setSelection(
-        props.editor.view.state.selection.constructor.near(props.editor.view.state.doc.resolve(anchorPos)),
-      );
-      props.editor.view.dispatch(tr);
-      props.editor.view.focus();
-    }
-
-    cleanupCustomItems();
-    currentContext.value = null;
-
-    // Update local state
-    isOpen.value = false;
-    searchQuery.value = '';
-    sections.value = [];
+    props.editor.dispatch(tr);
+    props.editor.focus?.();
   }
+
+  cleanupCustomItems();
+  currentContext.value = null;
+
+  // Update local state
+  isOpen.value = false;
+  searchQuery.value = '';
+  sections.value = [];
 };
 
 /**
  * Lifecycle hooks on mount and onBeforeUnmount
  */
+let contextMenuTarget = null;
+let slashMenuOpenHandler = null;
+let slashMenuCloseHandler = null;
+
 onMounted(() => {
   if (!props.editor) return;
 
   // Add global event listeners
+  // Use pointerdown instead of mousedown because PresentationEditor's pointer handlers
+  // call event.preventDefault() which suppresses mousedown events
   document.addEventListener('keydown', handleGlobalKeyDown);
-  document.addEventListener('mousedown', handleGlobalOutsideClick);
+  document.addEventListener('pointerdown', handleGlobalOutsideClick);
 
   // Close menu if the editor becomes read-only while it's open
   props.editor.on('update', handleEditorUpdate);
 
   // Listen for the slash menu to open
-  props.editor.on('slashMenu:open', async (event) => {
+  slashMenuOpenHandler = async (event) => {
     // Prevent opening the menu in read-only mode
     const readOnly = !props.editor?.isEditable;
     if (readOnly) return;
@@ -320,38 +438,53 @@ onMounted(() => {
       sections.value = getItems({ ...currentContext.value, trigger });
       selectedId.value = flattenedItems.value[0]?.id || null;
     }
-  });
+  };
+  props.editor.on('slashMenu:open', slashMenuOpenHandler);
 
-  props.editor.view.dom.addEventListener('contextmenu', handleRightClick);
+  // Attach context menu to the active surface (flow view.dom or presentation host)
+  contextMenuTarget = getEditorSurfaceElement(props.editor);
+  if (contextMenuTarget) {
+    contextMenuTarget.addEventListener('contextmenu', handleRightClickCapture, true);
+    contextMenuTarget.addEventListener('contextmenu', handleRightClick);
+  }
 
-  props.editor.on('slashMenu:close', () => {
+  slashMenuCloseHandler = () => {
     cleanupCustomItems();
     isOpen.value = false;
     searchQuery.value = '';
     currentContext.value = null;
-  });
+  };
+  props.editor.on('slashMenu:close', slashMenuCloseHandler);
 });
 
 // Cleanup function for event listeners
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', handleGlobalKeyDown);
-  document.removeEventListener('mousedown', handleGlobalOutsideClick);
+  document.removeEventListener('pointerdown', handleGlobalOutsideClick);
 
   cleanupCustomItems();
 
   if (props.editor) {
     try {
-      props.editor.off('slashMenu:open');
-      props.editor.off('slashMenu:close');
+      // Remove specific handlers to avoid removing other components' listeners
+      if (slashMenuOpenHandler) {
+        props.editor.off('slashMenu:open', slashMenuOpenHandler);
+      }
+      if (slashMenuCloseHandler) {
+        props.editor.off('slashMenu:close', slashMenuCloseHandler);
+      }
       props.editor.off('update', handleEditorUpdate);
-      props.editor.view.dom.removeEventListener('contextmenu', handleRightClick);
-    } catch (error) {}
+      contextMenuTarget?.removeEventListener('contextmenu', handleRightClickCapture, true);
+      contextMenuTarget?.removeEventListener('contextmenu', handleRightClick);
+    } catch (error) {
+      console.warn('[SlashMenu] Error during cleanup:', error);
+    }
   }
 });
 </script>
 
 <template>
-  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition" @mousedown.stop>
+  <div v-if="isOpen" ref="menuRef" class="slash-menu" :style="menuPosition" @pointerdown.stop>
     <!-- Hide the input visually but keep it focused for typing -->
     <input
       ref="searchInput"
@@ -387,7 +520,7 @@ onBeforeUnmount(() => {
 
 <style>
 .slash-menu {
-  position: absolute;
+  position: fixed;
   z-index: 50;
   width: 180px;
   color: #47484a;

@@ -1,27 +1,49 @@
 import { ListHelpers } from '@helpers/list-numbering-helpers.js';
 
+const removeWhitespaces = (node) => {
+  const children = node.childNodes;
+
+  for (let i = children.length - 1; i >= 0; i -= 1) {
+    const child = children[i];
+
+    if (child.nodeType === 3 && child.nodeValue && /^(\n\s\s|\n)$/.test(child.nodeValue)) {
+      node.removeChild(child);
+    } else if (child.nodeType === 1) {
+      removeWhitespaces(child);
+    }
+  }
+
+  return node;
+};
+
 /**
  * Flattens ALL lists to ensure each list contains exactly ONE list item.
  * Handles both multi-item lists and nested lists.
  */
-export function flattenListsInHtml(html, editor) {
-  // pick the right parser & Node interface
-  let parser, NodeInterface;
-  if (editor.options?.mockDocument) {
-    const win = editor.options.mockDocument.defaultView;
-    parser = new win.DOMParser();
-    NodeInterface = win.Node;
-  } else {
-    parser = new DOMParser();
-    NodeInterface = window.Node;
+export function flattenListsInHtml(html, editor, domDocument) {
+  const resolvedDocument =
+    domDocument ??
+    editor?.options?.document ??
+    editor?.options?.mockDocument ??
+    (typeof document !== 'undefined' ? document : null);
+
+  const win = resolvedDocument?.defaultView ?? (typeof window !== 'undefined' ? window : null);
+  const DOMParserConstructor = win?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
+  if (!DOMParserConstructor) {
+    console.warn(
+      '[super-editor] HTML list processing requires a DOM. Provide { document } (e.g. from JSDOM), set DOM globals, or run in a browser environment. Skipping list flattening.',
+    );
+    return html;
   }
 
-  const doc = parser.parseFromString(html, 'text/html');
+  const parser = new DOMParserConstructor();
+
+  const doc = removeWhitespaces(parser.parseFromString(html, 'text/html'));
 
   // Keep processing until all lists are flattened
   let foundList;
   while ((foundList = findListToFlatten(doc))) {
-    flattenFoundList(foundList, editor, NodeInterface);
+    flattenFoundList(foundList, editor);
   }
 
   return doc.body.innerHTML;
@@ -51,6 +73,11 @@ function findListToFlatten(doc) {
     if (nestedLists.length > 0) {
       return list;
     }
+
+    // Finally: even single-item lists should be flattened when they carry list metadata
+    if (liChildren.length === 1) {
+      return list;
+    }
   }
 
   return null;
@@ -62,7 +89,7 @@ function findListToFlatten(doc) {
  * 2. Splitting multi-item lists into single-item lists
  * 3. Extracting nested lists and processing them recursively
  */
-function flattenFoundList(listElem, editor, NodeInterface) {
+function flattenFoundList(listElem, editor) {
   const localDoc = listElem.ownerDocument;
   const tag = listElem.tagName.toLowerCase();
 
@@ -108,13 +135,31 @@ function flattenFoundList(listElem, editor, NodeInterface) {
     nestedLists.forEach((nl) => nl.parentNode.removeChild(nl));
 
     // Create a new single-item list for this li
-    const newList = createSingleItemList({ li, tag, rootNumId, level, editor, NodeInterface });
+    let listNumberingType = tag === 'ol' ? 'decimal' : 'bullet';
+    try {
+      const details = ListHelpers.getListDefinitionDetails?.({
+        numId: rootNumId,
+        level,
+        editor,
+      });
+      if (details?.listNumberingType) {
+        listNumberingType = details.listNumberingType;
+      }
+    } catch {
+      // ignore lookup failures; fallback will be used
+    }
+
+    const newList = createSingleItemList({ li, rootNumId, level, listNumberingType });
     newLists.push(newList);
 
     // Add the nested lists (they'll be processed in the next iteration)
     nestedListsData.forEach((data) => {
       // save level for next iteration because parent list is already flattened
       data.element.setAttribute('data-level', level + 1);
+      const nestedTag = data.element.tagName?.toLowerCase();
+      if (nestedTag === tag) {
+        data.element.setAttribute('data-list-id', rootNumId);
+      }
       newLists.push(data.element);
     });
   });
@@ -132,14 +177,11 @@ function flattenFoundList(listElem, editor, NodeInterface) {
 /**
  * Creates a single-item list from an <li> element
  */
-export function createSingleItemList({ li, tag, rootNumId, level, listLevel, editor, NodeInterface }) {
+export function createSingleItemList({ li, rootNumId, level, listNumberingType }) {
   const localDoc = li.ownerDocument;
-  const ELEMENT_NODE = NodeInterface.ELEMENT_NODE;
-  const TEXT_NODE = NodeInterface.TEXT_NODE;
 
   // Create new list and list item
-  const newList = localDoc.createElement(tag);
-  const newLi = localDoc.createElement('li');
+  const newItem = localDoc.createElement('p');
 
   // Copy attributes from original li (except the ones we'll set ourselves)
   Array.from(li.attributes).forEach((attr) => {
@@ -148,74 +190,64 @@ export function createSingleItemList({ li, tag, rootNumId, level, listLevel, edi
       !attr.name.startsWith('data-level') &&
       !attr.name.startsWith('data-list-')
     ) {
-      newLi.setAttribute(attr.name, attr.value);
+      newItem.setAttribute(attr.name, attr.value);
     }
   });
 
   // Set list attributes
-  newList.setAttribute('data-list-id', rootNumId);
-
-  // Set list item attributes
-  newLi.setAttribute('data-num-id', rootNumId);
-  newLi.setAttribute('data-level', String(level));
-
-  // Get numbering info
-  const { listNumberingType, lvlText } = ListHelpers.getListDefinitionDetails({
-    numId: rootNumId,
-    level,
-    editor,
-  });
-
-  newLi.setAttribute('data-num-fmt', listNumberingType);
-  newLi.setAttribute('data-lvl-text', lvlText || '');
-  newLi.setAttribute('data-list-level', JSON.stringify(listLevel || [level + 1]));
-
-  // Copy content from original li
-  Array.from(li.childNodes).forEach((node) => {
-    if (node.nodeType === ELEMENT_NODE || (node.nodeType === TEXT_NODE && node.textContent.trim())) {
-      newLi.appendChild(node.cloneNode(true));
-    }
-  });
-
-  // Handle case where li only contains text
-  if (newLi.childNodes.length === 0 || (newLi.childNodes.length === 1 && newLi.childNodes[0].nodeType === TEXT_NODE)) {
-    const textContent = newLi.textContent.trim();
-    if (textContent) {
-      newLi.innerHTML = '';
-      const p = localDoc.createElement('p');
-      p.textContent = textContent;
-      newLi.appendChild(p);
-    }
+  newItem.setAttribute('data-num-id', rootNumId);
+  newItem.setAttribute('data-level', String(level));
+  if (listNumberingType) {
+    newItem.setAttribute('data-list-numbering-type', listNumberingType);
   }
 
-  newList.appendChild(newLi);
-  return newList;
+  // Copy child nodes
+  Array.from(li.childNodes).forEach((node) => {
+    if (node.tagName === 'P') {
+      // unwrap nested <p> inside <li>
+      Array.from(node.childNodes).forEach((childNode) => {
+        newItem.appendChild(childNode.cloneNode(true));
+      });
+      return;
+    }
+    newItem.appendChild(node.cloneNode(true));
+  });
+
+  return newItem;
 }
 
 /**
  * Converts flatten lists back to normal list structure.
  */
-export function unflattenListsInHtml(html) {
-  const parser = new DOMParser();
+export function unflattenListsInHtml(html, domDocument) {
+  const win = domDocument?.defaultView ?? (typeof window !== 'undefined' ? window : null);
+  const DOMParserConstructor = win?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
+  if (!DOMParserConstructor) {
+    console.warn(
+      '[super-editor] HTML list processing requires a DOM. Provide { document } (e.g. from JSDOM), set DOM globals, or run in a browser environment. Skipping list unflattening.',
+    );
+    return html;
+  }
+
+  const parser = new DOMParserConstructor();
   const doc = parser.parseFromString(html, 'text/html');
   const allNodes = [...doc.body.children];
 
   const listSequences = [];
   let currentSequence = null;
 
-  allNodes.forEach((node, index) => {
-    const isFlattenList =
-      node.tagName && (node.tagName === 'OL' || node.tagName === 'UL') && node.hasAttribute('data-list-id');
+  allNodes.forEach((node) => {
+    const isListParagraph = node.tagName === 'P' && node.hasAttribute('data-num-id');
 
-    if (isFlattenList) {
-      const listId = node.getAttribute('data-list-id');
+    if (isListParagraph) {
+      const listId = node.getAttribute('data-num-id');
 
       if (currentSequence && currentSequence.id === listId) {
-        currentSequence.lists.push({ element: node, index });
+        currentSequence.items.push(node);
       } else {
         currentSequence = {
           id: listId,
-          lists: [{ element: node, index }],
+          items: [node],
         };
         listSequences.push(currentSequence);
       }
@@ -226,38 +258,45 @@ export function unflattenListsInHtml(html) {
 
   // Process each sequence in reverse order to avoid index issues.
   listSequences.reverse().forEach((sequence) => {
-    const sequenceLists = sequence.lists;
+    const sequenceItems = sequence.items;
 
-    if (sequenceLists.length === 0) {
+    if (sequenceItems.length === 0) {
       return;
     }
 
-    const items = sequenceLists
-      .map(({ element: list }) => {
-        const liElement = list.querySelector('li');
-        if (!liElement) return null;
+    const items = sequenceItems
+      .map((element) => {
+        const level = parseInt(element.getAttribute('data-level') || '0', 10);
+        const listNumberingType = element.getAttribute('data-list-numbering-type') || '';
+        const listLevel = parseListLevelAttribute(element.getAttribute('data-list-level'));
+
         return {
-          element: liElement,
-          level: parseInt(liElement.getAttribute('data-level') || '0'),
-          numFmt: liElement.getAttribute('data-num-fmt') || 'bullet',
-          listLevel: JSON.parse(liElement.getAttribute('data-list-level') || '[1]'),
+          element,
+          level,
+          numId: element.getAttribute('data-num-id'),
+          listNumberingType,
+          listLevel,
         };
       })
-      .filter((item) => item !== null);
+      .filter(Boolean);
 
     if (items.length === 0) {
       return;
     }
 
     const rootList = buildNestedList({ items });
-    const firstOriginalList = sequenceLists[0].element;
+    if (!rootList) {
+      return;
+    }
 
-    // Replace the first original list with the new nested structure.
-    firstOriginalList?.parentNode?.insertBefore(rootList, firstOriginalList);
+    const firstParagraph = sequenceItems[0];
 
-    // Remove all original flatten lists in this sequence.
-    sequenceLists.forEach(({ element: list }) => {
-      if (list.parentNode) list.parentNode.removeChild(list);
+    // Replace the first paragraph with the new nested structure.
+    firstParagraph?.parentNode?.insertBefore(rootList, firstParagraph);
+
+    // Remove all original list paragraphs in this sequence.
+    sequenceItems.forEach((element) => {
+      element.parentNode?.removeChild(element);
     });
   });
 
@@ -274,17 +313,21 @@ function buildNestedList({ items }) {
 
   const [rootItem] = items;
   const doc = rootItem.element.ownerDocument;
-  const isOrderedList = rootItem.numFmt && !['bullet', 'none'].includes(rootItem.numFmt);
-  const rootList = doc.createElement(isOrderedList ? 'ol' : 'ul');
+  const rootListTag = getListTagForType(rootItem.listNumberingType);
+  const rootList = doc.createElement(rootListTag);
 
-  if (isOrderedList && rootItem.listLevel?.[0] && rootItem.listLevel[0] > 1) {
-    rootList.setAttribute('start', rootItem.listLevel[0]);
+  if (rootItem.numId) {
+    rootList.setAttribute('data-list-id', rootItem.numId);
   }
+  rootList.setAttribute('data-level', String(rootItem.level ?? 0));
+
+  applyStartAttribute(rootList, rootItem.listLevel, 0);
 
   const lastLevelItem = new Map();
   items.forEach((item) => {
-    const { element: liElement, level, numFmt } = item;
-    const cleanLi = cleanListItem(liElement.cloneNode(true));
+    const { element: paragraph, level } = item;
+    const listItem = createListItemFromParagraph(paragraph);
+    const cleanLi = cleanListItem(listItem);
 
     if (level === 0) {
       rootList.append(cleanLi);
@@ -293,32 +336,111 @@ function buildNestedList({ items }) {
       const parentLi = lastLevelItem.get(level - 1);
 
       if (!parentLi) {
-        // Fallback: add to root if no parent found.
         rootList.append(cleanLi);
         lastLevelItem.set(level, cleanLi);
         return;
       }
 
-      let nestedList = null;
-      [...parentLi.children].forEach((child) => {
-        if (child.tagName && (child.tagName === 'OL' || child.tagName === 'UL')) {
-          nestedList = child;
-        }
-      });
+      const listTag = getListTagForType(item.listNumberingType);
+      let nestedList = findNestedList(parentLi, listTag);
 
       if (!nestedList) {
-        const listType = numFmt && !['bullet', 'none'].includes(numFmt) ? 'ol' : 'ul';
-        nestedList = doc.createElement(listType);
+        nestedList = doc.createElement(listTag);
+        if (item.numId) {
+          nestedList.setAttribute('data-list-id', item.numId);
+        }
         parentLi.append(nestedList);
       }
+      nestedList.setAttribute('data-level', String(level));
 
+      applyStartAttribute(nestedList, item.listLevel, level);
       nestedList.append(cleanLi);
       lastLevelItem.set(level, cleanLi);
     }
+
+    // Trim references for deeper levels if we move back up the hierarchy.
+    [...lastLevelItem.keys()].forEach((storedLevel) => {
+      if (storedLevel > level) {
+        lastLevelItem.delete(storedLevel);
+      }
+    });
   });
 
   return rootList;
 }
+
+function createListItemFromParagraph(paragraph) {
+  const doc = paragraph.ownerDocument;
+  const listItem = doc.createElement('li');
+
+  Array.from(paragraph.childNodes).forEach((node) => {
+    listItem.appendChild(node.cloneNode(true));
+  });
+
+  Array.from(paragraph.attributes).forEach((attr) => {
+    if (!LIST_METADATA_ATTRIBUTES.has(attr.name)) {
+      listItem.setAttribute(attr.name, attr.value);
+    }
+  });
+
+  return listItem;
+}
+
+function findNestedList(parentLi, listTag) {
+  const lowerTag = listTag.toLowerCase();
+  return Array.from(parentLi.children).find((child) => child.tagName && child.tagName.toLowerCase() === lowerTag);
+}
+
+function getListTagForType(listNumberingType) {
+  const type = listNumberingType?.toLowerCase();
+  if (!type || type === 'bullet' || type === 'image' || type === 'none') {
+    return 'ul';
+  }
+  return 'ol';
+}
+
+function applyStartAttribute(listNode, listLevel, level) {
+  if (!listNode || listNode.tagName?.toLowerCase() !== 'ol') {
+    return;
+  }
+
+  const startValue = getStartValueForLevel(listLevel, level);
+  if (startValue && startValue > 1 && !listNode.hasAttribute('start')) {
+    listNode.setAttribute('start', String(startValue));
+  }
+}
+
+function getStartValueForLevel(listLevel, level) {
+  if (!Array.isArray(listLevel)) {
+    return null;
+  }
+  const value = listLevel[level];
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseListLevelAttribute(raw) {
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map((value) => Number(value)) : null;
+  } catch {
+    return null;
+  }
+}
+
+const LIST_METADATA_ATTRIBUTES = new Set([
+  'data-num-id',
+  'data-level',
+  'data-num-fmt',
+  'data-lvl-text',
+  'data-list-level',
+  'data-marker-type',
+  'data-list-numbering-type',
+]);
 
 /**
  * Removes flatten attributes from list item.
@@ -331,6 +453,7 @@ function cleanListItem(listItem) {
     'data-lvl-text',
     'data-list-level',
     'data-marker-type',
+    'data-list-numbering-type',
     'aria-label',
   ];
   attrs.forEach((attr) => {

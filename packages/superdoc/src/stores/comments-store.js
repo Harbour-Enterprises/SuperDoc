@@ -8,8 +8,8 @@ import {
   trackChangesHelpers,
   TrackChangesBasePluginKey,
   CommentsPluginKey,
-} from '@harbour-enterprises/super-editor';
-import { getRichTextExtensions } from '@harbour-enterprises/super-editor';
+  getRichTextExtensions,
+} from '@superdoc/super-editor';
 import useComment from '@superdoc/components/CommentsLayer/use-comment';
 import { groupChanges } from '../helpers/group-changes.js';
 
@@ -438,7 +438,6 @@ export const useCommentsStore = defineStore('comments', () => {
       const newComment = useComment({
         fileId: documentId,
         fileType: document.type,
-        // Preserve original DOCX-schema comment JSON so exporter can reuse it
         docxCommentJSON: comment.textJson,
         commentId: comment.commentId,
         isInternal: false,
@@ -521,8 +520,9 @@ export const useCommentsStore = defineStore('comments', () => {
     commentsList.value.forEach((comment) => {
       const values = comment.getValues();
       const richText = values.commentText;
-      // Prefer the original DOCX comment JSON captured at import time (Word/Google Docs),
-      // otherwise rebuild from the stored rich-text HTML.
+      // If this comment originated from DOCX (Word or Google Docs), prefer the
+      // original DOCX-schema JSON captured at import time. Otherwise, fall back
+      // to rebuilding commentJSON from the rich-text HTML.
       const schema = values.docxCommentJSON || convertHtmlToSchema(richText);
       processedComments.push({
         ...values,
@@ -533,12 +533,10 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   const convertHtmlToSchema = (commentHTML) => {
-    const div = document.createElement('div');
-    div.innerHTML = commentHTML;
     const editor = new Editor({
       mode: 'text',
       isHeadless: true,
-      content: div,
+      content: commentHTML,
       extensions: getRichTextExtensions(),
     });
     return editor.getJSON().content[0];

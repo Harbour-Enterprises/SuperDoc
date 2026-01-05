@@ -1,10 +1,11 @@
 import { ReplaceStep } from 'prosemirror-transform';
+import { Slice } from 'prosemirror-model';
 import { markInsertion } from './markInsertion.js';
 import { markDeletion } from './markDeletion.js';
-import { findMark } from '@core/helpers/index.js';
 import { TrackDeleteMarkName } from '../constants.js';
 import { TrackChangesBasePluginKey } from '../plugins/index.js';
 import { CommentsPluginKey } from '../../comment/comments-plugin.js';
+import { findMarkPosition } from './documentHelpers.js';
 
 /**
  * Replace step.
@@ -20,54 +21,70 @@ import { CommentsPluginKey } from '../../comment/comments-plugin.js';
  * @param {number} options.originalStepIndex Original step index.
  */
 export const replaceStep = ({ state, tr, step, newTr, map, user, date, originalStep, originalStepIndex }) => {
-  const deletionMarkSchema = state.schema.marks[TrackDeleteMarkName];
-  const deletionMark = findMark(state, deletionMarkSchema, false);
-  const positionTo = deletionMark ? deletionMark.to : step.to;
+  const trTemp = state.apply(newTr).tr;
 
-  const newStep = new ReplaceStep(
-    positionTo, // We insert all the same steps, but with "from"/"to" both set to "to" in order not to delete content. Mapped as needed.
-    positionTo,
-    step.slice,
-    step.structure,
-  );
+  // Default: insert replacement after the selected range (Word-like replace behavior).
+  // If the selection ends inside an existing deletion, move insertion to after that deletion span.
+  let positionTo = step.to;
+  const probePos = Math.max(step.from, step.to - 1);
+  const deletionSpan = findMarkPosition(trTemp.doc, probePos, TrackDeleteMarkName);
+  if (deletionSpan && deletionSpan.to > positionTo) {
+    positionTo = deletionSpan.to;
+  }
+
+  const tryInsert = (slice) => {
+    const insertionStep = new ReplaceStep(positionTo, positionTo, slice, false);
+    if (trTemp.maybeStep(insertionStep).failed) return null;
+    return {
+      insertedFrom: insertionStep.from,
+      insertedTo: insertionStep.getMap().map(insertionStep.to, 1),
+    };
+  };
+
+  const insertion = tryInsert(step.slice) || tryInsert(Slice.maxOpen(step.slice.content, true));
+
+  // If we can't insert the replacement content into the temp transaction, fall back to applying the original step.
+  // This keeps user intent (content change) even if we can't represent it as tracked insert+delete.
+  if (!insertion) {
+    if (!newTr.maybeStep(step).failed) {
+      map.appendMap(step.getMap());
+    }
+    return;
+  }
+
+  const meta = {};
+  const insertedMark = markInsertion({
+    tr: trTemp,
+    from: insertion.insertedFrom,
+    to: insertion.insertedTo,
+    user,
+    date,
+  });
+
+  // Condense insertion down to a single replace step (so this tracked transaction remains a single-step insertion).
+  const trackedInsertedSlice = trTemp.doc.slice(insertion.insertedFrom, insertion.insertedTo);
+  const condensedStep = new ReplaceStep(positionTo, positionTo, trackedInsertedSlice, false);
+  if (newTr.maybeStep(condensedStep).failed) {
+    // If the condensed step can't be applied, fall back to the original step and skip deletion tracking.
+    if (!newTr.maybeStep(step).failed) {
+      map.appendMap(step.getMap());
+    }
+    return;
+  }
 
   // We didn't apply the original step in its original place. We adjust the map accordingly.
   const invertStep = originalStep.invert(tr.docs[originalStepIndex]).map(map);
   map.appendMap(invertStep.getMap());
+  const mirrorIndex = map.maps.length - 1;
+  map.appendMap(condensedStep.getMap(), mirrorIndex);
 
-  const meta = {};
-  if (newStep) {
-    const trTemp = state.apply(newTr).tr;
+  if (insertion.insertedFrom !== insertion.insertedTo) {
+    meta.insertedMark = insertedMark;
+    meta.step = condensedStep;
+  }
 
-    if (trTemp.maybeStep(newStep).failed) {
-      return;
-    }
-
-    const mappedNewStepTo = newStep.getMap().map(newStep.to);
-
-    const insertedMark = markInsertion({
-      tr: trTemp,
-      from: newStep.from,
-      to: mappedNewStepTo,
-      user,
-      date,
-    });
-
-    // We condense it down to a single replace step.
-    const condensedStep = new ReplaceStep(newStep.from, newStep.to, trTemp.doc.slice(newStep.from, mappedNewStepTo));
-
-    newTr.step(condensedStep);
-    const mirrorIndex = map.maps.length - 1;
-    map.appendMap(condensedStep.getMap(), mirrorIndex);
-
-    if (newStep.from !== mappedNewStepTo) {
-      meta.insertedMark = insertedMark;
-      meta.step = condensedStep;
-    }
-
-    if (!newTr.selection.eq(trTemp.selection)) {
-      newTr.setSelection(trTemp.selection);
-    }
+  if (!newTr.selection.eq(trTemp.selection)) {
+    newTr.setSelection(trTemp.selection);
   }
 
   if (step.from !== step.to) {

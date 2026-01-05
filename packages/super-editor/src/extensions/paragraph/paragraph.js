@@ -1,8 +1,30 @@
-import { Plugin, PluginKey } from 'prosemirror-state';
-import { Decoration, DecorationSet } from 'prosemirror-view';
 import { OxmlNode, Attribute } from '@core/index.js';
-import { getSpacingStyleString, getMarksStyle } from '@extensions/linked-styles/index.js';
-import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
+import { TextSelection } from 'prosemirror-state';
+import { ListHelpers } from '@helpers/list-numbering-helpers.js';
+import { splitBlock } from '@core/commands/splitBlock.js';
+import { removeNumberingProperties } from '@core/commands/removeNumberingProperties.js';
+import { isList } from '@core/commands/list-helpers';
+import { findParentNode } from '@helpers/index.js';
+import { InputRule } from '@core/InputRule.js';
+import { toggleList } from '@core/commands/index.js';
+import { restartNumbering } from '@core/commands/restartNumbering.js';
+import { ParagraphNodeView } from './ParagraphNodeView.js';
+import { createNumberingPlugin } from './numberingPlugin.js';
+import { createDropcapPlugin } from './dropcapPlugin.js';
+import { shouldSkipNodeView } from '../../utils/headless-helpers.js';
+import { parseAttrs } from './helpers/parseAttrs.js';
+
+/**
+ * Input rule regex that matches a bullet list marker (-, +, or *)
+ * @private
+ */
+const bulletInputRegex = /^\s*([-+*])\s$/;
+
+/**
+ * Input rule regex that matches an ordered list marker (e.g., "1. ")
+ * @private
+ */
+const orderedInputRegex = /^(\d+)\.\s$/;
 
 /**
  * Configuration options for Paragraph
@@ -16,15 +38,8 @@ import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
  * Attributes for paragraph nodes
  * @typedef {Object} ParagraphAttributes
  * @category Attributes
- * @property {Object} [spacing] - Paragraph spacing configuration
  * @property {Object} [extraAttrs={}] - Additional HTML attributes
- * @property {Array} [marksAttrs] - Text formatting marks
- * @property {Object} [indent] - Indentation settings
- * @property {Object} [borders] - Paragraph borders
  * @property {string} [class] - CSS class name
- * @property {string} [styleId] - Linked style identifier
- * @property {Object} [justify] - Text justification
- * @property {Array} [tabStops] - Tab stop positions
  * @property {string} [sdBlockId] @internal - Internal block tracking ID
  * @property {string} [paraId] @internal - Paragraph identifier
  * @property {string} [textId] @internal - Text identifier
@@ -35,11 +50,10 @@ import { getDefaultSpacing } from './helpers/getDefaultSpacing.js';
  * @property {string} [rsidDel] @internal - Deletion revision save ID
  * @property {Object} [attributes] @internal - Internal attributes storage
  * @property {string} [filename] @internal - Associated filename
- * @property {boolean} [keepLines] @internal - Keep lines together
- * @property {boolean} [keepNext] @internal - Keep with next paragraph
  * @property {Object} [paragraphProperties] @internal - Internal paragraph properties
  * @property {Object} [dropcap] @internal - Drop cap configuration
  * @property {string} [pageBreakSource] @internal - Page break source
+ * @property {Object} [sectionMargins] @internal - Section-specific header/footer margins in inches
  */
 
 /**
@@ -78,33 +92,6 @@ export const Paragraph = OxmlNode.create({
       rsidP: { rendered: false },
       rsidRPr: { rendered: false },
       rsidDel: { rendered: false },
-
-      spacing: {
-        default: getDefaultSpacing(),
-        parseDOM: (element) => {
-          // Check if this element is within imported content, if so we can assign some different
-          // default spacing which is needed to make the docx look correct
-          if (element && element.closest('[data-superdoc-import]')) {
-            return {
-              lineSpaceAfter: 11,
-              lineSpaceBefore: 0,
-              line: 1.15,
-              lineRule: 'auto',
-            };
-          }
-          return undefined;
-        },
-        renderDOM: (attrs) => {
-          const { spacing } = attrs;
-          if (!spacing) return {};
-          const spacingCopy = { ...spacing };
-          if (attrs.lineHeight) delete spacingCopy.line; // we'll get line-height from lineHeight
-          const style = getSpacingStyleString(spacingCopy);
-          if (style) return { style };
-          return {};
-        },
-      },
-
       extraAttrs: {
         default: {},
         parseDOM: (element) => {
@@ -118,77 +105,6 @@ export const Paragraph = OxmlNode.create({
           return attributes.extraAttrs || {};
         },
       },
-      marksAttrs: {
-        renderDOM: (attrs) => {
-          const { marksAttrs } = attrs;
-          if (!marksAttrs?.length) return {};
-
-          const style = getMarksStyle(marksAttrs);
-          if (style) return { style };
-          return {};
-        },
-      },
-      indent: {
-        default: null,
-        renderDOM: ({ indent }) => {
-          if (!indent) return {};
-          const { left, right, firstLine, hanging } = indent;
-          if (indent && Object.values(indent).every((v) => v === 0)) {
-            return {};
-          }
-
-          let style = '';
-          if (left) style += `margin-left: ${left}px;`;
-          if (right) style += `margin-right: ${right}px;`;
-          if (firstLine && !hanging) style += `text-indent: ${firstLine}px;`;
-          if (firstLine && hanging) style += `text-indent: ${firstLine - hanging}px;`;
-          if (!firstLine && hanging) style += `text-indent: ${-hanging}px;`;
-
-          return { style };
-        },
-      },
-      borders: {
-        default: null,
-        renderDOM: ({ borders }) => {
-          if (!borders) return {};
-
-          const sideOrder = ['top', 'right', 'bottom', 'left'];
-          const valToCss = {
-            single: 'solid',
-            dashed: 'dashed',
-            dotted: 'dotted',
-            double: 'double',
-          };
-
-          let style = '';
-          sideOrder.forEach((side) => {
-            const b = borders[side];
-            if (!b) return;
-
-            const width = b.size != null ? `${b.size}px` : '1px';
-            const cssStyle = valToCss[b.val] || 'solid';
-            const color = b.color || '#000000';
-
-            style += `border-${side}: ${width} ${cssStyle} ${color};`;
-
-            // Optionally handle space attribute (distance from text)
-            if (b.space != null && side === 'bottom') {
-              style += `padding-bottom: ${b.space}px;`;
-            }
-          });
-
-          return style ? { style } : {};
-        },
-      },
-      class: {
-        renderDOM: (attributes) => {
-          if (attributes.dropcap) {
-            return { class: `sd-editor-dropcap` };
-          }
-          return null;
-        },
-      },
-      styleId: {},
       sdBlockId: {
         default: null,
         keepOnSplit: false,
@@ -201,26 +117,19 @@ export const Paragraph = OxmlNode.create({
         rendered: false,
       },
       filename: { rendered: false },
-      keepLines: { rendered: false },
-      keepNext: { rendered: false },
       paragraphProperties: { rendered: false },
-      dropcap: { rendered: false },
       pageBreakSource: { rendered: false },
-      justify: {
-        renderDOM: ({ justify }) => {
-          const { val: jc } = justify || {};
-          if (!jc) return {};
-
-          let style = '';
-          if (jc === 'left') style += 'text-align: left;';
-          else if (jc === 'right') style += 'text-align: right;';
-          else if (jc === 'center') style += 'text-align: center;';
-          else if (jc === 'both') style += 'text-align: justify;';
-
-          return { style };
+      sectionMargins: { rendered: false },
+      listRendering: {
+        keepOnSplit: false,
+        renderDOM: ({ listRendering }) => {
+          return {
+            'data-marker-type': listRendering?.markerText,
+            'data-list-level': listRendering?.path ? JSON.stringify(listRendering.path) : null,
+            'data-list-numbering-type': listRendering?.numberingType,
+          };
         },
       },
-      tabStops: { rendered: false },
     };
   },
 
@@ -228,17 +137,7 @@ export const Paragraph = OxmlNode.create({
     return [
       {
         tag: 'p',
-        getAttrs: (node) => {
-          const { styleid, ...extraAttrs } = Array.from(node.attributes).reduce((acc, attr) => {
-            acc[attr.name] = attr.value;
-            return acc;
-          }, {});
-
-          return {
-            styleId: styleid || null,
-            extraAttrs,
-          };
-        },
+        getAttrs: parseAttrs,
       },
       {
         tag: 'div',
@@ -252,11 +151,20 @@ export const Paragraph = OxmlNode.create({
       },
       {
         tag: 'blockquote',
-        attrs: { styleId: 'BlockQuote' },
+        attrs: { paragraphProperties: { styleId: 'BlockQuote' } },
       },
       ...this.options.headingLevels.map((level) => ({
         tag: `h${level}`,
-        attrs: { level, styleId: `Heading${level}` },
+        getAttrs: (node) => {
+          let attrs = parseAttrs(node);
+          return {
+            ...attrs,
+            paragraphProperties: {
+              ...attrs.paragraphProperties,
+              styleId: `Heading${level}`,
+            },
+          };
+        },
       })),
     ];
   },
@@ -265,139 +173,121 @@ export const Paragraph = OxmlNode.create({
     return ['p', Attribute.mergeAttributes(this.options.htmlAttributes, htmlAttributes), 0];
   },
 
-  addPmPlugins() {
-    const { view } = this.editor;
-    const dropcapWidthCache = new Map();
-
-    /**
-     * Determines whether the node is a margin dropcap paragraph.
-     * @param {import('prosemirror-model').Node} node - Node to inspect.
-     * @returns {boolean} True when the paragraph uses margin dropcaps.
-     */
-    const hasDropcapParagraph = (node) => node.type.name === 'paragraph' && node.attrs.dropcap?.type === 'margin';
-
-    /**
-     * Removes cached dropcap widths that fall within the affected document range.
-     * @param {number} from - Start position of an updated range.
-     * @param {number} to - End position of an updated range.
-     * @returns {void}
-     */
-    const invalidateCacheForRange = (from, to) => {
-      for (const [pos] of dropcapWidthCache) {
-        if (pos >= from && pos <= to) {
-          dropcapWidthCache.delete(pos);
-        }
-      }
+  addNodeView() {
+    // Skip custom node view when the editor isn't using the docx pipeline (e.g. SuperInput rich text)
+    if (this.editor.options?.mode !== 'docx' || !this.editor.converter) return null;
+    if (shouldSkipNodeView(this.editor)) return null;
+    return ({ node, editor, getPos, decorations, extensionAttrs }) => {
+      return new ParagraphNodeView(node, editor, getPos, decorations, extensionAttrs);
     };
+  },
 
-    const dropcapPlugin = new Plugin({
-      name: 'dropcapPlugin',
-      key: new PluginKey('dropcapPlugin'),
-      state: {
-        init(_, state) {
-          const decorations = getDropcapDecorations(state, view, dropcapWidthCache);
-          return DecorationSet.create(state.doc, decorations);
-        },
-
-        apply(tr, oldDecorationSet, oldState, newState) {
-          if (!tr.docChanged) return oldDecorationSet;
-
-          // Early exit if no dropcaps in document
-          let hasDropcaps = false;
-          newState.doc.descendants((node) => {
-            if (hasDropcapParagraph(node)) {
-              hasDropcaps = true;
-              return false;
-            }
-          });
-
-          if (!hasDropcaps) {
-            dropcapWidthCache.clear();
-            return DecorationSet.empty;
-          }
-
-          // Check if transaction affects dropcap paragraphs
-          let affectsDropcaps = false;
-
-          tr.steps.forEach((step) => {
-            if (step.slice?.content) {
-              step.slice.content.descendants((node) => {
-                if (hasDropcapParagraph(node)) {
-                  affectsDropcaps = true;
-                  return false;
-                }
-              });
-            }
-
-            if (step.jsonID === 'replace' && step.from !== undefined && step.to !== undefined) {
-              try {
-                oldState.doc.nodesBetween(step.from, step.to, (node) => {
-                  if (hasDropcapParagraph(node)) {
-                    affectsDropcaps = true;
-                    return false;
-                  }
-                });
-              } catch {
-                affectsDropcaps = true;
-              }
-            }
-          });
-
-          if (!affectsDropcaps) {
-            return oldDecorationSet.map(tr.mapping, tr.doc);
-          }
-
-          // Invalidate cached widths for affected ranges
-          tr.steps.forEach((step) => {
-            if (step.from !== undefined && step.to !== undefined) {
-              invalidateCacheForRange(step.from, step.to);
-            }
-          });
-
-          const decorations = getDropcapDecorations(newState, view, dropcapWidthCache);
-          return DecorationSet.create(newState.doc, decorations);
-        },
+  addShortcuts() {
+    return {
+      'Mod-Shift-7': () => {
+        return this.editor.commands.toggleOrderedList();
       },
-      props: {
-        decorations(state) {
-          return this.getState(state);
-        },
+      'Mod-Shift-8': () => {
+        return this.editor.commands.toggleBulletList();
       },
-    });
+      Enter: (params) => {
+        return removeNumberingProperties({ checkType: 'empty' })({
+          ...params,
+          tr: this.editor.state.tr,
+          state: this.editor.state,
+          dispatch: this.editor.view.dispatch,
+        });
+      },
 
-    return [dropcapPlugin];
+      'Shift-Enter': () => {
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.createParagraphNear(),
+          splitBlock({
+            attrsToRemoveOverride: ['paragraphProperties.numberingProperties', 'listRendering', 'numberingProperties'],
+          }),
+        ]);
+      },
+
+      Tab: () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.increaseListIndent()]);
+      },
+
+      'Shift-Tab': () => {
+        return this.editor.commands.first(({ commands }) => [() => commands.decreaseListIndent()]);
+      },
+    };
+  },
+
+  addInputRules() {
+    return [
+      { regex: orderedInputRegex, type: 'orderedList' },
+      { regex: bulletInputRegex, type: 'bulletList' },
+    ].map(
+      ({ regex, type }) =>
+        new InputRule({
+          match: regex,
+          handler: ({ state, range }) => {
+            // Check if we're currently inside a list item
+            const parentListItem = findParentNode(isList)(state.selection);
+            if (parentListItem) {
+              // Inside a list item, do not create a new list
+              return null;
+            }
+
+            // Not inside a list item, proceed with creating new list
+            const { tr } = state;
+            tr.delete(range.from, range.to).setSelection(TextSelection.create(tr.doc, range.from));
+
+            ListHelpers.createNewList({
+              listType: type,
+              tr,
+              editor: this.editor,
+            });
+          },
+        }),
+    );
+  },
+
+  addCommands() {
+    return {
+      /**
+       * Toggle ordered list formatting
+       * @category Command
+       * @example
+       * editor.commands.toggleOrderedList()
+       * @note Converts selection to ordered list or back to paragraphs
+       */
+      toggleOrderedList: () => (params) => {
+        return toggleList('orderedList')(params);
+      },
+
+      /**
+       * Toggle a bullet list at the current selection
+       * @category Command
+       * @example
+       * // Toggle bullet list on selected text
+       * editor.commands.toggleBulletList()
+       * @note Converts selected paragraphs to list items or removes list formatting
+       */
+      toggleBulletList: () => (params) => {
+        return toggleList('bulletList')(params);
+      },
+
+      /**
+       * Restart numbering for the current list
+       * @category Command
+       * @example
+       * // Restart numbering for the current list item
+       * editor.commands.restartNumbering()
+       * @note Resets list numbering for the current list item and following items
+       */
+      restartNumbering: () => restartNumbering,
+    };
+  },
+
+  addPmPlugins() {
+    const dropcapPlugin = createDropcapPlugin(this.editor);
+    const numberingPlugin = createNumberingPlugin(this.editor);
+    return [dropcapPlugin, numberingPlugin];
   },
 });
-
-const getDropcapDecorations = (state, view, widthCache) => {
-  const decorations = [];
-
-  state.doc.descendants((node, pos) => {
-    if (node.type.name === 'paragraph') {
-      if (node.attrs.dropcap?.type === 'margin') {
-        const width = getDropcapWidth(view, pos, widthCache);
-        decorations.push(Decoration.inline(pos, pos + node.nodeSize, { style: `margin-left: -${width}px;` }));
-      }
-      return false;
-    }
-  });
-
-  return decorations;
-};
-
-function getDropcapWidth(view, pos, widthCache) {
-  if (widthCache.has(pos)) {
-    return widthCache.get(pos);
-  }
-
-  const domNode = view.nodeDOM(pos);
-  if (domNode) {
-    const range = document.createRange();
-    range.selectNodeContents(domNode);
-    const width = range.getBoundingClientRect().width;
-    widthCache.set(pos, width);
-    return width;
-  }
-
-  return 0;
-}

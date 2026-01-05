@@ -118,8 +118,10 @@ const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   return comments.map((comment) => {
     // 1. Find extended definition for additional metadata (isDone, parent)
     const extendedDef = commentEx.find((ce) => {
-      const isIncludedInCommentElements = comment.elements.some(
-        (el) => el.attrs['w14:paraId'] === ce.attributes['w15:paraId'],
+      // Check if any of the comment's elements are included in the extended comment's elements
+      // Comments might have multiple elements, so we need to check if any of them are included in the extended comments
+      const isIncludedInCommentElements = comment.elements?.some(
+        (el) => el.attrs?.['w14:paraId'] === ce.attributes['w15:paraId'],
       );
       return isIncludedInCommentElements;
     });
@@ -200,7 +202,6 @@ const extractCommentRangesFromDocument = (docx, converter) => {
       const isCommentStart = element.name === 'w:commentRangeStart';
       const isCommentEnd = element.name === 'w:commentRangeEnd';
       const isTrackedChange = element.name === 'w:ins' || element.name === 'w:del';
-      const isDeletion = element.name === 'w:del';
 
       if (isCommentStart) {
         const commentId = element.attributes?.['w:id'];

@@ -49,7 +49,6 @@ const buildDocx = ({ comments = [], extended = [], documentRanges = [] } = {}) =
     'word/comments.xml': {
       elements: [
         {
-          name: 'w:comments',
           elements: commentsElements,
         },
       ],
@@ -241,6 +240,138 @@ describe('importCommentData extended metadata', () => {
     expect(comment.isDone).toBe(false);
     expect(comment.parentCommentId).toBeUndefined();
   });
+});
+
+describe('Google Docs threading (missing commentsExtended.xml)', () => {
+  it('detects parent-child relationship from nested ranges', () => {
+    const docx = buildDocx({
+      comments: [{ id: 0, internalId: 'parent-comment-id' }, { id: 1 }],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            {
+              name: 'w:commentRangeStart',
+              attributes: { 'w:id': '0' },
+            },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Text' }] }],
+            },
+            {
+              name: 'w:commentRangeStart',
+              attributes: { 'w:id': '1' },
+            },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'More text' }] }],
+            },
+            {
+              name: 'w:commentRangeEnd',
+              attributes: { 'w:id': '1' },
+            },
+            {
+              name: 'w:commentRangeEnd',
+              attributes: { 'w:id': '0' },
+            },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    const parentComment = comments.find((c) => c.commentId === 'parent-comment-id');
+    const childComment = comments.find((c) => c.commentId !== 'parent-comment-id');
+
+    expect(parentComment).toBeDefined();
+    expect(childComment).toBeDefined();
+    expect(parentComment.parentCommentId).toBeUndefined();
+    expect(childComment.parentCommentId).toBe(parentComment.commentId);
+  });
+
+  it('handles multiple levels of nesting', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'parent-id' },
+        { id: 1, internalId: 'child-id' },
+        { id: 2, internalId: 'grandchild-id' },
+      ],
+      documentRanges: [
+        {
+          name: 'w:p',
+          elements: [
+            {
+              name: 'w:commentRangeStart',
+              attributes: { 'w:id': '0' },
+            },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Parent' }] }],
+            },
+            {
+              name: 'w:commentRangeStart',
+              attributes: { 'w:id': '1' },
+            },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Child' }] }],
+            },
+            {
+              name: 'w:commentRangeStart',
+              attributes: { 'w:id': '2' },
+            },
+            {
+              name: 'w:r',
+              elements: [{ name: 'w:t', elements: [{ type: 'text', text: 'Grandchild' }] }],
+            },
+            {
+              name: 'w:commentRangeEnd',
+              attributes: { 'w:id': '2' },
+            },
+            {
+              name: 'w:commentRangeEnd',
+              attributes: { 'w:id': '1' },
+            },
+            {
+              name: 'w:commentRangeEnd',
+              attributes: { 'w:id': '0' },
+            },
+          ],
+        },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(3);
+
+    const parent = comments.find((c) => c.commentId === 'parent-id');
+    const child = comments.find((c) => c.commentId === 'child-id');
+    const grandchild = comments.find((c) => c.commentId === 'grandchild-id');
+
+    expect(parent.parentCommentId).toBeUndefined();
+    expect(child.parentCommentId).toBe(parent.commentId);
+    expect(grandchild.parentCommentId).toBe(child.commentId);
+  });
+
+  it('returns comments unchanged when no ranges exist', () => {
+    const docx = buildDocx({
+      comments: [
+        { id: 0, internalId: 'comment-1' },
+        { id: 1, internalId: 'comment-2' },
+      ],
+      // No documentRanges provided, so no comment ranges in document.xml
+    });
+
+    const comments = importCommentData({ docx });
+    expect(comments).toHaveLength(2);
+
+    // Without ranges, no threading should be detected
+    comments.forEach((comment) => {
+      expect(comment.parentCommentId).toBeUndefined();
+    });
+  });
 
   it('generates a resolved comment when comment has at least one sub-element marked as done', () => {
     const docx = buildDocx({
@@ -264,7 +395,7 @@ describe('importCommentData extended metadata', () => {
                     {
                       type: 'element',
                       name: 'w:t',
-                      attributes: {}, // Omitted for simplicity
+                      attributes: {},
                       elements: [
                         {
                           type: 'text',
@@ -291,7 +422,7 @@ describe('importCommentData extended metadata', () => {
                     {
                       type: 'element',
                       name: 'w:t',
-                      attributes: {}, // Omitted for simplicity
+                      attributes: {},
                       elements: [
                         {
                           type: 'text',

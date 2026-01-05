@@ -17,8 +17,8 @@ describe('prepareCommentsForImport', () => {
   const schema = new Schema({
     nodes: {
       doc: { content: 'inline*' },
-      commentRangeStart: { groups: ['inline'] },
-      commentRangeEnd: { groups: ['inline'] },
+      commentRangeStart: { group: 'inline', inline: true, attrs: { 'w:id': {}, internal: { default: true } } },
+      commentRangeEnd: { group: 'inline', inline: true, attrs: { 'w:id': {} } },
       text: { group: 'inline' },
     },
   });
@@ -37,9 +37,11 @@ describe('prepareCommentsForImport', () => {
 
     const addMarkFn = vi.fn();
     const deleteFn = vi.fn();
+    const setNodeMarkupFn = vi.fn();
     const tr = {
       addMark: addMarkFn,
       delete: deleteFn,
+      setNodeMarkup: setNodeMarkupFn,
     };
 
     prepareCommentsForImport(doc, tr, schema, {});

@@ -14,12 +14,11 @@
       "@features/*": ["./src/features/*"],
       "@components/*": ["./src/components/*"],
       "@helpers/*": ["./src/core/helpers/*"],
-      "@packages/*": ["../*"],
       "@converter/*": ["./src/core/super-converter/*"],
       "@tests/*": ["./src/tests/*"],
       "@translator": ["./src/core/super-converter/v3/node-translator/"]
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.js"]
+  "exclude": ["**/*.test.js", "**/*.test.ts"]
 }

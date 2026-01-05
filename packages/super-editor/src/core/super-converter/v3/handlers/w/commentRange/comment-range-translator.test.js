@@ -63,15 +63,15 @@ describe('w:commentRangeStart and w:commentRangeEnd', () => {
       ).toBe(undefined);
     });
 
-    test('returns if comment is resolved', () => {
+    test('does not skip resolved comments', () => {
       expect(
         commentRangeStartTranslator.decode({
-          node: { attrs: { 'w:id': 'id1' } },
+          node: { type: 'commentRangeStart', attrs: { 'w:id': 'id1' } },
           comments: [{ commentId: 'id1', resolvedTime: Date.now() }],
           exportedCommentDefs: [{}],
           commentsExportType: 'external',
         }),
-      ).toBe(undefined);
+      ).toStrictEqual({ attributes: { 'w:id': '0' }, name: 'w:commentRangeStart' });
     });
 
     test('returns if node type is not commentRangeStart or commentRangeEnd', () => {

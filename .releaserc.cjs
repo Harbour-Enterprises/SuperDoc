@@ -10,8 +10,8 @@ const config = {
     },
     {
       name: 'main',
-      prerelease: 'next',
       channel: 'next',
+      prerelease: 'next',
     },
     // Maintenance branches - channel defaults to branch name
     {
@@ -25,7 +25,7 @@ const config = {
     '@semantic-release/release-notes-generator',
     // NPM plugin MUST come before git plugin - ADD pkgRoot HERE!
     [
-      '@semantic-release/npm',
+      'semantic-release-pnpm',
       {
         npmPublish: false,
         pkgRoot: 'packages/superdoc'
@@ -62,6 +62,9 @@ if (!isPrerelease) {
     },
   ])
 }
+
+// Linear integration - labels issues with version on release
+config.plugins.push(['semantic-release-linear-app', { teamKeys: ['SD'], addComment: true }])
 
 // GitHub plugin comes last
 config.plugins.push('@semantic-release/github')

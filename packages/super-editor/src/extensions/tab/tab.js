@@ -1,8 +1,9 @@
 import { Node, Attribute } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
-import { ReplaceStep, ReplaceAroundStep } from 'prosemirror-transform';
-import { getTabDecorations } from './helpers/tabDecorations.js';
+import { isHeadless } from '@utils/headless-helpers.js';
+import { createLayoutRequest, calculateTabLayout, applyLayoutResult } from './helpers/tabAdapter.js';
+import { clearAllParagraphContexts } from './helpers/paragraphContextCache.js';
 
 /**
  * Configuration options for TabNode
@@ -65,121 +66,59 @@ export const TabNode = Node.create({
   },
 
   addPmPlugins() {
+    // Skip tab plugin entirely in headless mode
+    if (isHeadless(this.editor)) {
+      return [];
+    }
+
     const { view, helpers } = this.editor;
-
-    // Helper: Merge overlapping ranges to avoid redundant recalculations
-    const mergeRanges = (ranges) => {
-      if (ranges.length === 0) return [];
-
-      const sorted = ranges.slice().sort((a, b) => a[0] - b[0]);
-      const merged = [sorted[0]];
-
-      for (let i = 1; i < sorted.length; i++) {
-        const [start, end] = sorted[i];
-        const last = merged[merged.length - 1];
-
-        if (start <= last[1]) {
-          // Overlapping - extend the last range
-          last[1] = Math.max(last[1], end);
-        } else {
-          merged.push([start, end]);
-        }
-      }
-
-      return merged;
-    };
 
     const tabPlugin = new Plugin({
       name: 'tabPlugin',
       key: new PluginKey('tabPlugin'),
       state: {
         init() {
-          return { decorations: false };
+          const initialDecorations = buildInitialDecorations(view.state.doc, view, helpers, 0);
+          return { decorations: initialDecorations, revision: 0 };
         },
-        apply(tr, { decorations }, _oldState, newState) {
-          // Initialize decorations on first call
-          if (!decorations) {
-            decorations = DecorationSet.create(newState.doc, getTabDecorations(newState.doc, view, helpers));
-            return { decorations };
-          }
+        apply(tr, { decorations, revision }, _oldState, newState) {
+          const currentDecorations =
+            decorations && decorations.map ? decorations.map(tr.mapping, tr.doc) : DecorationSet.empty;
 
           // Early return for non-document changes
           if (!tr.docChanged || tr.getMeta('blockNodeInitialUpdate')) {
-            return { decorations };
+            return { decorations: currentDecorations, revision };
           }
 
-          decorations = decorations.map(tr.mapping, tr.doc);
-
-          const rangesToRecalculate = [];
-
-          // Helper: Check if a node tree contains any tabs
-          const containsTab = (node) => node.type.name === 'tab';
-
-          tr.steps.forEach((step, index) => {
-            if (!(step instanceof ReplaceStep || step instanceof ReplaceAroundStep)) {
-              return;
-            }
-
-            let hasTabInRange = false;
-
-            // Fast check: does the inserted content contain tabs?
-            if (step.slice?.content) {
-              step.slice.content.descendants((node) => {
-                if (containsTab(node)) {
-                  hasTabInRange = true;
-                  return false; // Stop early
-                }
-              });
-            }
-
-            // If no tabs inserted, check if the affected range had tabs
-            if (!hasTabInRange) {
-              tr.docs[index].nodesBetween(step.from, step.to, (node) => {
-                if (containsTab(node)) {
-                  hasTabInRange = true;
-                  return false; // Stop early
-                }
-              });
-            }
-
-            if (!hasTabInRange) {
-              return;
-            }
-
-            // Map positions from this step to final document
-            let fromPos = step.from;
-            let toPos = step.to;
-
-            for (let i = index; i < tr.steps.length; i++) {
-              const stepMap = tr.steps[i].getMap();
-              fromPos = stepMap.map(fromPos, -1);
-              toPos = stepMap.map(toPos, 1);
-            }
-
-            const $from = newState.doc.resolve(fromPos);
-            const $to = newState.doc.resolve(toPos);
-            const start = $from.start(Math.min($from.depth, 1));
-            const end = $to.end(Math.min($to.depth, 1));
-
-            rangesToRecalculate.push([start, end]);
-          });
-
-          if (rangesToRecalculate.length === 0) {
-            return { decorations };
+          const affectedParagraphs = getAffectedParagraphStarts(tr, newState);
+          if (affectedParagraphs.size === 0) {
+            return { decorations: currentDecorations, revision };
           }
 
-          // Merge overlapping ranges
-          const mergedRanges = mergeRanges(rangesToRecalculate);
+          let nextDecorations = currentDecorations;
+          affectedParagraphs.forEach((pos) => {
+            const paragraph = newState.doc.nodeAt(pos);
+            if (!paragraph || paragraph.type.name !== 'paragraph') return;
 
-          // Recalculate decorations for merged ranges
-          mergedRanges.forEach(([start, end]) => {
-            const oldDecorations = decorations.find(start, end);
-            decorations = decorations.remove(oldDecorations);
-            const newDecorations = getTabDecorations(newState.doc, view, helpers, start, end);
-            decorations = decorations.add(newState.doc, newDecorations);
+            const from = pos;
+            const to = pos + paragraph.nodeSize;
+            const existing = nextDecorations.find(from, to);
+            if (existing?.length) {
+              nextDecorations = nextDecorations.remove(existing);
+            }
+
+            const paragraphDecorations = buildParagraphDecorations(
+              newState.doc,
+              pos + 1,
+              paragraph,
+              view,
+              helpers,
+              revision + 1,
+            );
+            nextDecorations = nextDecorations.add(newState.doc, paragraphDecorations);
           });
 
-          return { decorations };
+          return { decorations: nextDecorations, revision: revision + 1 };
         },
       },
       props: {
@@ -187,11 +126,91 @@ export const TabNode = Node.create({
           return this.getState(state).decorations;
         },
       },
+      view() {
+        return {
+          destroy() {
+            // Clear paragraph context cache on plugin destruction to prevent memory leaks
+            clearAllParagraphContexts();
+          },
+        };
+      },
     });
     return [tabPlugin];
   },
 });
 
-export const __testing__ = {
-  getTabDecorations,
-};
+function buildInitialDecorations(doc, view, helpers, revision) {
+  const decorations = [];
+  doc.descendants((node, pos) => {
+    if (node.type.name !== 'paragraph') return;
+    let hasTab = false;
+    node.descendants((child) => {
+      if (child.type.name === 'tab') {
+        hasTab = true;
+        return false;
+      }
+      return true;
+    });
+    if (!hasTab) return;
+
+    const request = createLayoutRequest(doc, pos + 1, view, helpers, revision);
+    if (!request) return;
+    const result = calculateTabLayout(request, undefined, view);
+    const paragraphDecorations = applyLayoutResult(result, node, pos);
+    decorations.push(...paragraphDecorations);
+  });
+  return DecorationSet.create(doc, decorations);
+}
+
+function buildParagraphDecorations(doc, paragraphContentPos, paragraphNode, view, helpers, revision) {
+  const request = createLayoutRequest(doc, paragraphContentPos, view, helpers, revision);
+  if (!request) return [];
+  const result = calculateTabLayout(request, undefined, view);
+  return applyLayoutResult(result, paragraphNode, paragraphContentPos - 1);
+}
+
+/**
+ * Identifies paragraphs affected by transaction steps.
+ * Recomputes all paragraphs in the affected range, relying on paragraph context caching
+ * to make this efficient. Checks mapped positions for validity to avoid invalid additions.
+ *
+ * @param {import('prosemirror-state').Transaction} tr - The transaction
+ * @param {import('prosemirror-state').EditorState} newState - The new editor state
+ * @returns {Set<number>} Set of paragraph start positions
+ */
+function getAffectedParagraphStarts(tr, newState) {
+  const affected = new Set();
+
+  tr.steps.forEach((step, index) => {
+    // Only consider steps that touch the document
+    if (step.from == null && step.to == null) return;
+
+    // Map positions through subsequent step mappings to get final positions
+    let fromPos = step.from;
+    let toPos = step.to;
+    if (typeof fromPos !== 'number' || typeof toPos !== 'number') return;
+
+    for (let i = index; i < tr.steps.length; i++) {
+      const stepMap = tr.steps[i].getMap();
+      fromPos = stepMap.map(fromPos, -1);
+      toPos = stepMap.map(toPos, 1);
+    }
+
+    // Check for invalid mapped positions (-1 indicates deleted positions)
+    if (fromPos < 0 || toPos < 0 || fromPos > newState.doc.content.size || toPos > newState.doc.content.size) {
+      return;
+    }
+
+    // Find all paragraphs in the affected range
+    // Caching makes this efficient even without tab presence checking
+    newState.doc.nodesBetween(fromPos, toPos, (node, pos) => {
+      if (node.type.name === 'paragraph') {
+        affected.add(pos);
+        return false;
+      }
+      return true;
+    });
+  });
+
+  return affected;
+}

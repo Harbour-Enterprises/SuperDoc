@@ -7,6 +7,9 @@ export * from './key-transform';
 // Event types
 export * from './event-types';
 
+// List numbering helpers
+export * from './list-numbering';
+
 // File helpers
 export * from './helpers/get-file-object';
 export * from './helpers/compare-superdoc-versions';

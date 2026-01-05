@@ -1,6 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["./src/**/*"],
   "compilerOptions": {
     "allowJs": true,
     "checkJs": false,
@@ -8,12 +7,7 @@
     "emitDeclarationOnly": true,
     "outDir": "dist",
     "declarationMap": true,
-    "skipLibCheck": true,
-    "paths": {
-      "@superdoc/common": ["../../shared/common/index.ts"],
-      "@superdoc/common/*": ["../../shared/common/*"]
-    },
-    "typeRoots": ["./node_modules/@types/*", "../../node_modules/@types/*"]
+    "skipLibCheck": true
   },
-  "exclude": ["node_modules", "dist", "**/*.test.js", "**/*.test.ts"]
+  "include": ["src"]
 }

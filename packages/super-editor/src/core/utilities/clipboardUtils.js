@@ -1,7 +1,13 @@
-// @ts-nocheck
+// @ts-check
 // clipboardUtils.js
 
 import { DOMParser } from 'prosemirror-model';
+
+/**
+ * @typedef {import('prosemirror-state').EditorState} EditorState
+ * @typedef {import('prosemirror-model').Node} ProseMirrorNode
+ * @typedef {import('prosemirror-model').Fragment} Fragment
+ */
 
 /**
  * Checks if clipboard read permission is granted and handles permission prompts.
@@ -22,7 +28,7 @@ export async function ensureClipboardPermission() {
   }
 
   try {
-    // @ts-ignore – string literal is valid at runtime; TS lib DOM typing not available in .js file
+    // @ts-expect-error - clipboard-read is valid at runtime but not in TS lib DOM typing
     const status = await navigator.permissions.query({ name: 'clipboard-read' });
 
     if (status.state === 'granted') {
@@ -50,7 +56,7 @@ export async function ensureClipboardPermission() {
  * Reads content from the system clipboard and parses it into a ProseMirror fragment.
  * Attempts to read HTML first, falling back to plain text if necessary.
  * @param {EditorState} state - The ProseMirror editor state, used for schema and parsing.
- * @returns {Promise<ProseMirrorNode|null>} A promise that resolves to a ProseMirror fragment or text node, or null if reading fails.
+ * @returns {Promise<Fragment|ProseMirrorNode|null>} A promise that resolves to a ProseMirror fragment or text node, or null if reading fails.
  */
 export async function readFromClipboard(state) {
   let html = '';

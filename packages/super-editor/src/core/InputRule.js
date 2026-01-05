@@ -1,11 +1,12 @@
 import { Plugin, PluginKey } from 'prosemirror-state';
-import { Fragment, DOMParser as PMDOMParser } from 'prosemirror-model';
+import { Fragment, DOMParser as PMDOMParser, Slice } from 'prosemirror-model';
 import { CommandService } from './CommandService.js';
 import { chainableEditorState } from './helpers/chainableEditorState.js';
 import { getHTMLFromFragment } from './helpers/getHTMLFromFragment.js';
+import { warnNoDOM } from './helpers/domWarnings.js';
 import { getTextContentFromNodes } from './helpers/getTextContentFromNodes.js';
 import { isRegExp } from './utilities/isRegExp.js';
-import { handleDocxPaste } from './inputRules/docx-paste/docx-paste.js';
+import { handleDocxPaste, wrapTextsInRuns } from './inputRules/docx-paste/docx-paste.js';
 import { flattenListsInHtml } from './inputRules/html/html-helpers.js';
 import { handleGoogleDocsHtml } from './inputRules/google-docs-paste/google-docs-paste.js';
 
@@ -150,7 +151,17 @@ export const inputRulesPlugin = ({ editor, rules }) => {
             let { text } = simulatedInputMeta;
 
             if (typeof text !== 'string') {
-              text = getHTMLFromFragment(Fragment.from(text), state.schema);
+              const domDocument =
+                editor?.options?.document ??
+                editor?.options?.mockDocument ??
+                (typeof document !== 'undefined' ? document : null);
+
+              if (!domDocument) {
+                warnNoDOM('HTML conversion for input rules');
+                return;
+              }
+
+              text = getHTMLFromFragment(Fragment.from(text), state.schema, domDocument);
             }
 
             const { from } = simulatedInputMeta;
@@ -217,7 +228,8 @@ export const inputRulesPlugin = ({ editor, rules }) => {
           return false;
         }
 
-        return handleClipboardPaste({ editor, view }, html);
+        const result = handleClipboardPaste({ editor, view }, html);
+        return result;
       },
     },
 
@@ -237,6 +249,22 @@ function isGoogleDocsHtml(html) {
 }
 
 /**
+ * Finds the first paragraph ancestor of a resolved position.
+ *
+ * @param {ResolvedPos} $from The resolved position to search from.
+ * @returns {{ node: Node | null, depth: number }} The paragraph node and its depth, or null if not found.
+ */
+function findParagraphAncestor($from) {
+  for (let d = $from.depth; d >= 0; d--) {
+    const node = $from.node(d);
+    if (node.type.name === 'paragraph') {
+      return { node, depth: d };
+    }
+  }
+  return { node: null, depth: -1 };
+}
+
+/**
  * Handle HTML paste events.
  *
  * @param {String} html The HTML string to be pasted.
@@ -248,14 +276,24 @@ export function handleHtmlPaste(html, editor, source) {
   let cleanedHtml;
   if (source === 'google-docs') cleanedHtml = handleGoogleDocsHtml(html, editor);
   else cleanedHtml = htmlHandler(html, editor);
-  const doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+
+  let doc = PMDOMParser.fromSchema(editor.schema).parse(cleanedHtml);
+
+  doc = wrapTextsInRuns(doc);
 
   const { dispatch, state } = editor.view;
-  if (!dispatch) return false;
+  if (!dispatch) {
+    return false;
+  }
 
   // Check if we're pasting into an existing paragraph
+  // Need to check ancestors since cursor might be inside a run node within a paragraph
   const { $from } = state.selection;
-  const isInParagraph = $from.parent.type.name === 'paragraph';
+
+  // Find if any ancestor is a paragraph
+  const { node: paragraphNode } = findParagraphAncestor($from);
+
+  const isInParagraph = paragraphNode !== null;
 
   // Check if the pasted content is a single paragraph
   const isSingleParagraph = doc.childCount === 1 && doc.firstChild.type.name === 'paragraph';
@@ -265,29 +303,14 @@ export function handleHtmlPaste(html, editor, source) {
     const paragraphContent = doc.firstChild.content;
     const tr = state.tr.replaceSelectionWith(paragraphContent, false);
     dispatch(tr);
-  } else if (isInParagraph && state.doc.textContent) {
-    // We're in a paragraph but pasting multiple nodes, extract content from all paragraph nodes
-    const allContent = [];
-    doc.content.forEach((node, index) => {
-      if (node.type.name === 'paragraph') {
-        // Add the paragraph content
-        allContent.push(...node.content.content);
+  } else if (isInParagraph) {
+    // For multi-paragraph paste, use replaceSelection with a proper Slice
+    // This preserves the paragraph structure instead of flattening with \n
+    // Create a slice from the doc's content (the paragraphs)
+    const slice = new Slice(doc.content, 0, 0);
 
-        // Add a line break between paragraphs (except for the last one)
-        if (index < doc.content.childCount - 1) {
-          allContent.push(editor.schema.text('\n'));
-        }
-      }
-    });
-
-    if (allContent.length > 0) {
-      const fragment = Fragment.from(allContent);
-      const tr = state.tr.replaceSelectionWith(fragment, false);
-      dispatch(tr);
-    } else {
-      // Fallback to original behavior if no paragraph content found
-      dispatch(state.tr.replaceSelectionWith(doc, true));
-    }
+    const tr = state.tr.replaceSelection(slice);
+    dispatch(tr);
   } else {
     // Use the original behavior for other cases
     dispatch(state.tr.replaceSelectionWith(doc, true));
@@ -303,10 +326,16 @@ export function handleHtmlPaste(html, editor, source) {
  * @param {Editor} editor The editor instance.
  * @returns {DocumentFragment} The processed HTML string.
  */
-export function htmlHandler(html, editor) {
-  const flatHtml = flattenListsInHtml(html, editor);
+export function htmlHandler(html, editor, domDocument) {
+  const resolvedDocument =
+    domDocument ??
+    editor?.options?.document ??
+    editor?.options?.mockDocument ??
+    (typeof document !== 'undefined' ? document : null);
+
+  const flatHtml = flattenListsInHtml(html, editor, resolvedDocument);
   const htmlWithPtSizing = convertEmToPt(flatHtml);
-  return sanitizeHtml(htmlWithPtSizing);
+  return sanitizeHtml(htmlWithPtSizing, undefined, resolvedDocument);
 }
 
 /**
@@ -344,8 +373,16 @@ export function cleanHtmlUnnecessaryTags(html) {
  * @param {string[]} forbiddenTags The list of forbidden tags to remove from the HTML.
  * @returns {DocumentFragment} The sanitized HTML as a DocumentFragment.
  */
-export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button']) {
-  const container = document.createElement('div');
+export function sanitizeHtml(html, forbiddenTags = ['meta', 'svg', 'script', 'style', 'button'], domDocument) {
+  const resolvedDocument = domDocument ?? (typeof document !== 'undefined' ? document : null);
+  if (!resolvedDocument) {
+    console.warn(
+      '[super-editor] HTML sanitization requires a DOM. Provide { document } (e.g. from JSDOM), set DOM globals, or run in a browser environment. Skipping sanitization.',
+    );
+    return null;
+  }
+
+  const container = resolvedDocument.createElement('div');
   container.innerHTML = html;
 
   const walkAndClean = (node) => {

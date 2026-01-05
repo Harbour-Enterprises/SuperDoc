@@ -1,5 +1,6 @@
 import { translateImageNode } from '@converter/v3/handlers/wp/helpers/decode-image-node-helpers.js';
 import { pixelsToEmu, objToPolygon } from '@converter/helpers.js';
+import { mergeDrawingChildren } from '@converter/v3/handlers/wp/helpers/merge-drawing-children.js';
 
 /**
  * Translates anchor image
@@ -9,18 +10,21 @@ import { pixelsToEmu, objToPolygon } from '@converter/helpers.js';
 export function translateAnchorNode(params) {
   const { attrs } = params.node;
   const anchorElements = [];
+  const useOriginalChildren = Array.isArray(attrs.originalDrawingChildren) && attrs.originalDrawingChildren.length > 0;
 
-  if (attrs.simplePos) {
+  const hasSimplePos = attrs.simplePos !== undefined || attrs.originalAttributes?.simplePos !== undefined;
+
+  if (!useOriginalChildren && hasSimplePos) {
     anchorElements.push({
       name: 'wp:simplePos',
       attributes: {
-        x: 0,
-        y: 0,
+        x: attrs.simplePos?.x ?? 0,
+        y: attrs.simplePos?.y ?? 0,
       },
     });
   }
 
-  if (attrs.anchorData) {
+  if (!useOriginalChildren && attrs.anchorData) {
     const hElements = [];
     if (attrs.marginOffset.horizontal !== undefined) {
       hElements.push({
@@ -72,28 +76,14 @@ export function translateAnchorNode(params) {
     inlineAttrs.relativeHeight = 1;
   }
 
-  if (attrs.originalAttributes?.simplePos !== undefined) {
-    inlineAttrs.simplePos = attrs.originalAttributes.simplePos;
-  } else if (attrs.simplePos !== undefined) {
-    inlineAttrs.simplePos = attrs.simplePos;
-  }
-
-  if (attrs.originalAttributes?.locked !== undefined) {
-    inlineAttrs.locked = attrs.originalAttributes.locked;
-  }
-
-  if (attrs.originalAttributes?.layoutInCell !== undefined) {
-    inlineAttrs.layoutInCell = attrs.originalAttributes.layoutInCell;
-  }
-
-  if (attrs.originalAttributes?.allowOverlap !== undefined) {
-    inlineAttrs.allowOverlap = attrs.originalAttributes.allowOverlap;
+  if (attrs.originalAttributes?.simplePos === undefined && hasSimplePos) {
+    inlineAttrs.simplePos = '1';
   }
 
   const wrapElement = {
     name: `wp:wrap${attrs.wrap?.type || 'None'}`, // Important: wp:anchor will break if no wrapping is specified. We need to use wrapNone.
   };
-  switch (attrs.wrap?.type) {
+  switch (useOriginalChildren ? undefined : attrs.wrap?.type) {
     case 'Square':
       wrapElement.attributes = {
         wrapText: attrs.wrap.attrs.wrapText,
@@ -179,9 +169,15 @@ export function translateAnchorNode(params) {
     ...nodeElements.elements.slice(effectIndex + 1),
   ];
 
+  const mergedElements = mergeDrawingChildren({
+    order: attrs.drawingChildOrder || [],
+    original: attrs.originalDrawingChildren || [],
+    generated: [...anchorElements, ...elementsWithWrap],
+  });
+
   return {
     name: 'wp:anchor',
     attributes: inlineAttrs,
-    elements: [...anchorElements, ...elementsWithWrap],
+    elements: mergedElements,
   };
 }

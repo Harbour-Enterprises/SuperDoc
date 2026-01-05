@@ -13,6 +13,7 @@ SuperDoc is a powerful document editor that brings Microsoft Word-level capabili
 
 - **Document Compatibility**: View and edit DOCX and PDF documents directly in the browser
 - **Microsoft Word Integration**: Full support for importing/exporting, advanced formatting, comments, and tracked changes
+- **Paginated Layout**: True WYSIWYG editing with accurate page rendering powered by the layout engine
 - **Real-time Collaboration**: Built-in multiplayer editing, live updates, commenting, sharing, and revision history
 - **Framework Agnostic**: Seamlessly integrates with Vue, React, or vanilla JavaScript
 - **Extensible Architecture**: Modular design makes it easy to extend and customize
@@ -69,6 +70,21 @@ SuperDoc consists of two main packages:
   cd packages/super-editor
   npm install && npm run dev
   ```
+
+## 🏗️ Architecture
+
+SuperDoc uses a **paginated-only** rendering approach powered by `PresentationEditor` and the layout engine:
+
+- **For web applications**: Use `SuperDoc` - it automatically uses `PresentationEditor` for paginated rendering
+- **For Node.js/CLI/headless environments**: Use `Editor` directly from `@superdoc/super-editor`
+
+The layout engine provides:
+- True WYSIWYG page rendering with accurate pagination
+- Support for multi-column layouts, headers, footers, and section breaks
+- Virtualization for optimal performance with large documents
+- Zoom controls and responsive page scaling
+
+**Note**: If you need a flow-mode (unpaginated) editor, use the core `Editor` class directly. SuperDoc is designed for paginated document editing.
 
 ## 📖 Documentation
 

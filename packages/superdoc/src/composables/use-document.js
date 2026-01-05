@@ -31,6 +31,10 @@ export default function useDocument(params, superdocConfig) {
   const setEditor = (ref) => (editorRef.value = ref);
   const getEditor = () => editorRef.value;
 
+  const presentationEditorRef = shallowRef(null);
+  const setPresentationEditor = (ref) => (presentationEditorRef.value = ref);
+  const getPresentationEditor = () => presentationEditorRef.value;
+
   /**
    * Initialize the mime type of the document.
    * Accepts shorthand ('docx') or full mime type ('application/vnd...').
@@ -108,6 +112,8 @@ export default function useDocument(params, superdocConfig) {
     // Actions
     setEditor,
     getEditor,
+    setPresentationEditor,
+    getPresentationEditor,
     removeComments,
     restoreComments,
     removeConversation,

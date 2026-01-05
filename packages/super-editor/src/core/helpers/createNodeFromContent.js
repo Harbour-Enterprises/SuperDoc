@@ -1,4 +1,5 @@
 import { DOMParser, Schema, Fragment } from 'prosemirror-model';
+import { htmlHandler } from '../InputRule.js';
 
 const removeWhitespaces = (node) => {
   const children = node.childNodes;
@@ -16,14 +17,21 @@ const removeWhitespaces = (node) => {
   return node;
 };
 
-export function elementFromString(value) {
+export function elementFromString(value, editor) {
   // add a wrapper to preserve leading and trailing whitespace
   const wrappedValue = `<body>${value}</body>`;
-  const html = new window.DOMParser().parseFromString(wrappedValue, 'text/html').body;
+  const html = htmlHandler(wrappedValue, editor);
+
+  // If htmlHandler returned null (no DOM available), return null
+  if (html === null) {
+    return null;
+  }
+
   return removeWhitespaces(html);
 }
 
-export function createNodeFromContent(content, schema, options) {
+export function createNodeFromContent(content, editor, options) {
+  const schema = editor.schema;
   options = {
     slice: true,
     parseOptions: {},
@@ -56,11 +64,22 @@ export function createNodeFromContent(content, schema, options) {
 
       console.warn('[super-editor warn]: Invalid content.', 'Passed value:', content, 'Error:', error);
 
-      return createNodeFromContent('', schema, options);
+      return createNodeFromContent('', editor, options);
     }
   }
 
   if (isTextContent) {
+    // Try to parse the HTML content
+    const element = elementFromString(content, editor);
+
+    // If elementFromString returned null (no DOM available), we can't parse HTML
+    if (element === null) {
+      console.warn(
+        '[super-editor] Cannot parse HTML content without a DOM. HTML insertion requires a browser environment or JSDOM. Skipping insertion.',
+      );
+      return null;
+    }
+
     // Check for invalid content
     if (options.errorOnInvalidContent) {
       let hasInvalidContent = false;
@@ -93,9 +112,9 @@ export function createNodeFromContent(content, schema, options) {
       });
 
       if (options.slice) {
-        DOMParser.fromSchema(contentCheckSchema).parseSlice(elementFromString(content), options.parseOptions);
+        DOMParser.fromSchema(contentCheckSchema).parseSlice(element, options.parseOptions);
       } else {
-        DOMParser.fromSchema(contentCheckSchema).parse(elementFromString(content), options.parseOptions);
+        DOMParser.fromSchema(contentCheckSchema).parse(element, options.parseOptions);
       }
 
       if (options.errorOnInvalidContent && hasInvalidContent) {
@@ -108,11 +127,11 @@ export function createNodeFromContent(content, schema, options) {
     const parser = DOMParser.fromSchema(schema);
 
     if (options.slice) {
-      return parser.parseSlice(elementFromString(content), options.parseOptions).content;
+      return parser.parseSlice(element, options.parseOptions).content;
     }
 
-    return parser.parse(elementFromString(content), options.parseOptions);
+    return parser.parse(element, options.parseOptions);
   }
 
-  return createNodeFromContent('', schema, options);
+  return createNodeFromContent('', editor, options);
 }

@@ -11,12 +11,7 @@ const baseParams = () => ({
   },
   nodeListHandler: {
     handler: vi.fn(),
-    handlerEntities: [
-      {
-        handlerName: 'standardNodeHandler',
-        handler: vi.fn(),
-      },
-    ],
+    handlerEntities: [],
   },
   path: [],
 });

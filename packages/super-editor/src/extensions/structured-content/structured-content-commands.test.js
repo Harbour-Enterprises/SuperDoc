@@ -22,6 +22,24 @@ function findFirstTable(doc) {
   return found;
 }
 
+/**
+ * Locate the first text node within the provided node's descendants.
+ * Needed because some plugins (e.g., run wrapping) add inline wrappers.
+ * @param {import('prosemirror-model').Node} node
+ * @returns {import('prosemirror-model').Node | null}
+ */
+function findFirstTextNode(node) {
+  let found = null;
+  node.descendants((child) => {
+    if (child.type.name === 'text') {
+      found = child;
+      return false;
+    }
+    return true;
+  });
+  return found;
+}
+
 describe('StructuredContentTableCommands', () => {
   let editor;
   let schema;
@@ -59,7 +77,7 @@ describe('StructuredContentTableCommands', () => {
     const doc = schema.nodes.doc.create(null, [block]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
@@ -105,7 +123,7 @@ describe('StructuredContentTableCommands', () => {
     const newLastRow = updatedTable.lastChild;
     const firstCell = newLastRow.firstChild;
     const blockNode = firstCell.firstChild;
-    const textNode = blockNode.firstChild;
+    const textNode = blockNode.firstChild.firstChild;
 
     expect(blockNode.type).toBe(templateBlockType);
     if (templateBlockAttrs) {
@@ -137,7 +155,7 @@ describe('updateStructuredContentById', () => {
     const doc = schema.nodes.doc.create(null, [paragraph]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
@@ -169,7 +187,8 @@ describe('updateStructuredContentById', () => {
       expect(updatedNode.textContent).toBe('New Content');
 
       // Check that the bold mark was preserved
-      const firstTextNode = updatedNode.firstChild;
+      const firstTextNode = findFirstTextNode(updatedNode);
+      expect(firstTextNode).not.toBeNull();
       expect(firstTextNode.type.name).toBe('text');
       const boldMark = schema.marks.bold || schema.marks.strong;
       if (boldMark) {
@@ -199,7 +218,8 @@ describe('updateStructuredContentById', () => {
       expect(updatedNode.textContent).toBe('New Content');
 
       // Check that no marks are present
-      const firstTextNode = updatedNode.firstChild;
+      const firstTextNode = findFirstTextNode(updatedNode);
+      expect(firstTextNode).not.toBeNull();
       expect(firstTextNode.type.name).toBe('text');
       expect(firstTextNode.marks.length).toBe(0);
     });
@@ -212,7 +232,7 @@ describe('updateStructuredContentById', () => {
       const doc = schema.nodes.doc.create(null, [paragraph]);
 
       const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-      editor.view.updateState(nextState);
+      editor.setState(nextState);
 
       const didUpdate = editor.commands.updateStructuredContentById(emptyInlineId, {
         text: 'New Content',
@@ -234,7 +254,8 @@ describe('updateStructuredContentById', () => {
       expect(updatedNode.textContent).toBe('New Content');
 
       // Should have no marks since there was no text node to copy from
-      const firstTextNode = updatedNode.firstChild;
+      const firstTextNode = findFirstTextNode(updatedNode);
+      expect(firstTextNode).not.toBeNull();
       expect(firstTextNode.type.name).toBe('text');
       expect(firstTextNode.marks.length).toBe(0);
     });
@@ -376,7 +397,7 @@ describe('updateStructuredContentByGroup', () => {
     const doc = schema.nodes.doc.create(null, [paragraph]);
 
     const nextState = EditorState.create({ schema, doc, plugins: editor.state.plugins });
-    editor.view.updateState(nextState);
+    editor.setState(nextState);
   });
 
   afterEach(() => {
@@ -409,7 +430,8 @@ describe('updateStructuredContentByGroup', () => {
       updatedNodes.forEach((node) => {
         expect(node.textContent).toBe('Updated Content');
 
-        const firstTextNode = node.firstChild;
+        const firstTextNode = findFirstTextNode(node);
+        expect(firstTextNode).not.toBeNull();
         expect(firstTextNode.type.name).toBe('text');
 
         const boldMark = schema.marks.bold || schema.marks.strong;
@@ -442,7 +464,8 @@ describe('updateStructuredContentByGroup', () => {
       updatedNodes.forEach((node) => {
         expect(node.textContent).toBe('Updated Content');
 
-        const firstTextNode = node.firstChild;
+        const firstTextNode = findFirstTextNode(node);
+        expect(firstTextNode).not.toBeNull();
         expect(firstTextNode.type.name).toBe('text');
         expect(firstTextNode.marks.length).toBe(0);
       });

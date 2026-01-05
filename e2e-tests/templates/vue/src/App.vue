@@ -5,18 +5,31 @@ import { onMounted, shallowRef } from 'vue';
 import { SuperDoc } from 'superdoc';
 
 import { CustomMark } from './custom-mark.js';
-import { nextTick } from 'process';
+import { nextTick } from 'vue';
 
 window.fileData = null;
+const useLayoutEngine = new URLSearchParams(window.location.search).get('layout') === '1';
 const superdoc = shallowRef(null);
+const hideRulerByDefault = true;
+
+const hideRulerIfNeeded = () => {
+  if (!hideRulerByDefault) return;
+  const instance = superdoc.value;
+  if (!instance?.config?.rulers) return;
+  instance.toggleRuler();
+  instance.toolbar?.updateToolbarState();
+};
+
 const init = async () => {
   if (superdoc.value) superdoc.value.destroy();
 
   const config = {
     selector: '#editor',
-    pagination: false,
+    pagination: useLayoutEngine,
+    useLayoutEngine,
     toolbar: '#toolbar',
     toolbarGroups: ['center'],
+    rulers: true, // keep the toolbar button rendered; visibility is toggled separately
     onReady,
     onTransaction,
   };
@@ -31,6 +44,7 @@ const init = async () => {
     config.editorExtensions = [CustomMark];
     config.modules = {
       toolbar: {
+        useLayoutEngine: false,
         selector: '#toolbar',
         toolbarGroups: ['center'],
         customButtons: [
@@ -91,6 +105,7 @@ const onReady = () => {
     window.editor = editor;
     window.superdoc = superdoc.value;
   });
+  hideRulerIfNeeded();
   if (window.superdocReady) {
     window.superdocReady();
   }
@@ -137,7 +152,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="example-container" data-testid="example-container">
+  <div class="example-container" :class="{ 'no-layout': !useLayoutEngine }" data-testid="example-container">
     <h1>SuperDoc: Testing template</h1>
     <input type="file" ref="fileInput" accept=".docx,.pdf,.html" @change="handleFileChange" />
     <div id="toolbar" class="my-custom-toolbar"></div>
@@ -161,5 +176,9 @@ button:hover {
 
 .hidden {
   display: none;
+}
+
+.no-layout .super-editor {
+  border: 1px solid #999;
 }
 </style>

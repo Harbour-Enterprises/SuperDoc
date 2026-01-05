@@ -7,13 +7,12 @@ const messageApi = vi.hoisted(() => ({
   success: vi.fn(),
 }));
 
-const adjustPaginationBreaksMock = vi.hoisted(() => vi.fn());
 const onMarginClickCursorChangeMock = vi.hoisted(() => vi.fn());
 const checkNodeSpecificClicksMock = vi.hoisted(() => vi.fn());
 const getFileObjectMock = vi.hoisted(() =>
   vi.fn(async () => new Blob([], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })),
 );
-const getStarterExtensionsMock = vi.hoisted(() => vi.fn(() => [{ name: 'core' }, { name: 'pagination' }]));
+const getStarterExtensionsMock = vi.hoisted(() => vi.fn(() => [{ name: 'core' }]));
 
 const EditorConstructor = vi.hoisted(() => {
   const MockEditor = vi.fn(function (options) {
@@ -37,9 +36,7 @@ vi.mock('naive-ui', () => ({
   useMessage: () => messageApi,
 }));
 
-vi.mock('./pagination-helpers.js', () => ({
-  adjustPaginationBreaks: adjustPaginationBreaksMock,
-}));
+// pagination legacy removed; no pagination helpers
 
 vi.mock('./cursor-helpers.js', () => ({
   onMarginClickCursorChange: onMarginClickCursorChangeMock,
@@ -78,7 +75,7 @@ vi.mock('@extensions/index.js', () => ({
   getStarterExtensions: getStarterExtensionsMock,
 }));
 
-vi.mock('@/index.js', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   Editor: EditorConstructor,
 }));
 
@@ -101,7 +98,7 @@ describe('SuperEditor.vue', () => {
     vi.clearAllMocks();
   });
 
-  it('initializes an editor from a provided file source and filters pagination extension', async () => {
+  it('initializes an editor from a provided file source', async () => {
     vi.useFakeTimers();
 
     EditorConstructor.loadXmlData.mockResolvedValueOnce([
@@ -117,7 +114,7 @@ describe('SuperEditor.vue', () => {
       props: {
         documentId: 'doc-1',
         fileSource,
-        options: { pagination: false, externalExtensions: [], onException },
+        options: { externalExtensions: [], onException },
       },
     });
 
@@ -134,11 +131,7 @@ describe('SuperEditor.vue', () => {
     expect(options.extensions.map((ext) => ext.name)).toEqual(['core']);
 
     const instance = getEditorInstance();
-    expect(instance.on).toHaveBeenCalledWith('paginationUpdate', expect.any(Function));
     expect(instance.on).toHaveBeenCalledWith('collaborationReady', expect.any(Function));
-
-    instance.listeners.paginationUpdate();
-    expect(adjustPaginationBreaksMock).toHaveBeenCalled();
 
     instance.listeners.collaborationReady();
     vi.runAllTimers();
@@ -174,7 +167,6 @@ describe('SuperEditor.vue', () => {
         options: {
           ydoc,
           collaborationProvider: provider,
-          pagination: true,
         },
       },
     });
@@ -347,7 +339,7 @@ describe('SuperEditor.vue', () => {
     const wrapper = mount(SuperEditor, {
       props: {
         fileSource,
-        options: { pagination: true, onException },
+        options: { onException },
       },
     });
 
@@ -363,5 +355,480 @@ describe('SuperEditor.vue', () => {
     expect(EditorConstructor).toHaveBeenCalledTimes(1);
 
     wrapper.unmount();
+  });
+
+  describe('handleMarginClick', () => {
+    it('should ignore right-clicks (button !== 0)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-margin-test',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+      expect(editorWrapper.exists()).toBe(true);
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event manually (vue-test-utils doesn't allow setting target)
+      const mockEvent = {
+        button: 2, // Right-click
+        ctrlKey: false,
+        target: targetDiv,
+      };
+
+      // Trigger the event directly via the DOM element
+      const mousedownEvent = new MouseEvent('mousedown', mockEvent);
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called for right-clicks
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should ignore Ctrl+Click on Mac (contextmenu trigger)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-mac-ctrl-click',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      // Mock Mac platform
+      const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+      Object.defineProperty(navigator, 'platform', {
+        value: 'MacIntel',
+        configurable: true,
+      });
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for Ctrl+Click on Mac
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: true, // Ctrl key pressed (triggers context menu on Mac)
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called for Ctrl+Click on Mac
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      // Restore platform
+      if (originalPlatform) {
+        Object.defineProperty(navigator, 'platform', originalPlatform);
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should process normal left-clicks (button = 0, no ctrlKey)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-left-click',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for normal left-click
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: false, // No Ctrl key
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should be called for normal left-clicks
+      expect(onMarginClickCursorChangeMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle Windows platform correctly (Ctrl+Click should process)', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-windows',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      // Mock Windows platform
+      const originalPlatform = Object.getOwnPropertyDescriptor(navigator, 'platform');
+      Object.defineProperty(navigator, 'platform', {
+        value: 'Win32',
+        configurable: true,
+      });
+
+      const targetDiv = document.createElement('div');
+      targetDiv.classList.add('test-margin-element');
+
+      // Create mock event for Ctrl+Click on Windows
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0, // Left button
+        ctrlKey: true, // Ctrl key (should process on Windows)
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: targetDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should be called on Windows even with Ctrl
+      expect(onMarginClickCursorChangeMock).toHaveBeenCalledWith(expect.any(Object), expect.any(Object));
+
+      // Restore platform
+      if (originalPlatform) {
+        Object.defineProperty(navigator, 'platform', originalPlatform);
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should ignore clicks on ProseMirror element', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-prosemirror',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const editorWrapper = wrapper.find('.super-editor');
+
+      const proseMirrorDiv = document.createElement('div');
+      proseMirrorDiv.classList.add('ProseMirror');
+
+      // Create mock event for click on ProseMirror element
+      const mousedownEvent = new MouseEvent('mousedown', {
+        button: 0,
+        ctrlKey: false,
+      });
+      Object.defineProperty(mousedownEvent, 'target', { value: proseMirrorDiv, enumerable: true });
+      editorWrapper.element.dispatchEvent(mousedownEvent);
+
+      await flushPromises();
+
+      // onMarginClickCursorChange should not be called when clicking ProseMirror element
+      expect(onMarginClickCursorChangeMock).not.toHaveBeenCalled();
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+  });
+
+  describe('zoom container sizing', () => {
+    it('should calculate container min-width based on default page size at zoom 1', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-default',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // At zoom 1 with default 8.5in page width: 8.5 * 96 = 816px
+      const container = wrapper.find('.super-editor-container');
+      expect(container.exists()).toBe(true);
+
+      // The containerStyle computed property should provide min-width
+      // Default: 8.5 * 96 * 1 = 816px
+      const style = container.element.style;
+      expect(style.minWidth).toBe('816px');
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should update container min-width when zoom changes', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-change',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom change event
+      // The initEditor function registers a zoomChange listener
+      // We need to capture and trigger it
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1.5 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 1.5 with default 8.5in page width: 8.5 * 96 * 1.5 = 1224px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1224px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should use page width from editor when available', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-custom-page-width',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Add getPageStyles to mock editor
+      instance.getPageStyles = vi.fn(() => ({
+        pageSize: { width: 11, height: 8.5 }, // Legal landscape
+        pageMargins: { left: 1, right: 1, top: 1, bottom: 1 },
+      }));
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Force recompute by triggering zoom change
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 1 with 11in page width: 11 * 96 = 1056px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1056px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should fall back to default width if getPageStyles returns invalid data', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-invalid-page-styles',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Add getPageStyles that returns invalid data
+      instance.getPageStyles = vi.fn(() => ({
+        pageSize: { width: null }, // Invalid width
+      }));
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Should fall back to default 8.5in = 816px
+      const container = wrapper.find('.super-editor-container');
+      expect(container.element.style.minWidth).toBe('816px');
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle zoom at 2x correctly', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-2x',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom to 2x
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 2 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 2 with default 8.5in page width: 8.5 * 96 * 2 = 1632px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1632px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle zoom at 0.5x correctly', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-half',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom to 0.5x
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 0.5 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 0.5 with default 8.5in page width: 8.5 * 96 * 0.5 = 408px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('408px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
   });
 });

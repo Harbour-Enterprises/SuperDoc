@@ -1,4 +1,4 @@
-import xmljs from 'xml-js';
+import * as xmljs from 'xml-js';
 import JSZip from 'jszip';
 import { getContentTypesFromXml } from './super-converter/helpers.js';
 import { ensureXmlString, isXmlLike } from './encoding-helpers.js';
@@ -49,22 +49,28 @@ class DocxZipper {
       } else if (
         (name.startsWith('word/media') && name !== 'word/media/') ||
         (zipEntry.name.startsWith('media') && zipEntry.name !== 'media/') ||
-        (name.startsWith('media') && name !== 'media/')
+        (name.startsWith('media') && name !== 'media/') ||
+        (name.startsWith('word/embeddings') && name !== 'word/embeddings/')
       ) {
-        // Media files
+        // Media and embedded binaries (charts, OLE)
         if (isNode) {
           const buffer = await zipEntry.async('nodebuffer');
           const fileBase64 = buffer.toString('base64');
           this.mediaFiles[name] = fileBase64;
         } else {
-          const blob = await zipEntry.async('blob');
-          const extension = this.getFileExtension(name);
           const fileBase64 = await zipEntry.async('base64');
-          this.mediaFiles[name] = `data:image/${extension};base64,${fileBase64}`;
-
-          const fileObj = new File([blob], name, { type: blob.type });
-          const imageUrl = URL.createObjectURL(fileObj);
-          this.media[name] = imageUrl;
+          const extension = this.getFileExtension(name)?.toLowerCase();
+          // Only build data URIs for images; keep raw base64 for other binaries (e.g., xlsx)
+          const imageTypes = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'emf', 'wmf', 'svg', 'webp']);
+          if (imageTypes.has(extension)) {
+            this.mediaFiles[name] = `data:image/${extension};base64,${fileBase64}`;
+            const blob = await zipEntry.async('blob');
+            const fileObj = new File([blob], name, { type: blob.type });
+            const imageUrl = URL.createObjectURL(fileObj);
+            this.media[name] = imageUrl;
+          } else {
+            this.mediaFiles[name] = fileBase64;
+          }
         }
       } else if (name.startsWith('word/fonts') && name !== 'word/fonts/') {
         // Font files
@@ -87,11 +93,10 @@ class DocxZipper {
    */
   async updateContentTypes(docx, media, fromJson, updatedDocs = {}) {
     const additionalPartNames = Object.keys(updatedDocs || {});
+    const imageExts = new Set(['png', 'jpg', 'jpeg', 'gif', 'bmp', 'tiff', 'emf', 'wmf', 'svg', 'webp']);
     const newMediaTypes = Object.keys(media)
-      .map((name) => {
-        return this.getFileExtension(name);
-      })
-      .filter(Boolean);
+      .map((name) => this.getFileExtension(name))
+      .filter((ext) => ext && imageExts.has(ext));
 
     const contentTypesPath = '[Content_Types].xml';
     let contentTypesXml;

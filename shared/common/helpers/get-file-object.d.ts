@@ -11,29 +11,31 @@ export type CustomMimeType = `${string}/${string}`;
 /**
  * MIME type - either a known type (with autocomplete) or a custom type
  */
-export type MimeType = KnownMimeType | (CustomMimeType & {
-    readonly __custom?: never;
-});
+export type MimeType =
+  | KnownMimeType
+  | (CustomMimeType & {
+      readonly __custom?: never;
+    });
 /**
  * Base error class for file object operations
  */
 export declare class FileObjectError extends Error {
-    readonly cause?: unknown;
-    constructor(message: string, cause?: unknown);
+  readonly cause?: unknown;
+  constructor(message: string, cause?: unknown);
 }
 /**
  * Error thrown when data URI format is invalid
  */
 export declare class InvalidDataUriError extends FileObjectError {
-    readonly uri: string;
-    constructor(uri: string);
+  readonly uri: string;
+  constructor(uri: string);
 }
 /**
  * Error thrown when network fetch fails
  */
 export declare class FetchFailedError extends FileObjectError {
-    readonly url: string;
-    constructor(url: string, cause: unknown);
+  readonly url: string;
+  constructor(url: string, cause: unknown);
 }
 /**
  * Turn a file URL into a File object
@@ -47,4 +49,3 @@ export declare class FetchFailedError extends FileObjectError {
  * @throws {FileObjectError} For other file creation errors
  */
 export declare const getFileObject: (fileUrl: string, name: string, type: MimeType) => Promise<File>;
-//# sourceMappingURL=get-file-object.d.ts.map
