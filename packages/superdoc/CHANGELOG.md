@@ -1,3 +1,13 @@
+# [1.2.0-next.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.5...v1.2.0-next.6) (2026-01-05)
+
+
+### Bug Fixes
+
+* first page multi section logic, other numbering ([#1641](https://github.com/Harbour-Enterprises/SuperDoc/issues/1641)) ([48856ea](https://github.com/Harbour-Enterprises/SuperDoc/commit/48856ea536d5f73e25b8f20a7c4476e388d2156d))
+* section pr with ruler zoom ([9464bd8](https://github.com/Harbour-Enterprises/SuperDoc/commit/9464bd877cb40e8f166c3ddad1637d3b74f5179f))
+* section start page ([#1639](https://github.com/Harbour-Enterprises/SuperDoc/issues/1639)) ([fbd71c7](https://github.com/Harbour-Enterprises/SuperDoc/commit/fbd71c755936653ae976c61d4bd6ffe110424925))
+* take justification into account when laying out tables ([#1640](https://github.com/Harbour-Enterprises/SuperDoc/issues/1640)) ([b0a4b7d](https://github.com/Harbour-Enterprises/SuperDoc/commit/b0a4b7de0e96076856b06c9e5dd388b8b3924127))
+
 # [1.2.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.4...v1.2.0-next.5) (2026-01-05)
 
 
