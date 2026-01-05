@@ -928,6 +928,7 @@ describe('analysis', () => {
         columnsPx: { count: 2, gap: 100 },
         headerRefs: { default: 'header1', first: 'headerFirst' },
         footerRefs: { default: 'footer1' },
+        numbering: { format: 'decimal', start: 5 },
       });
 
       const result = createFinalSectionFromBodySectPr(bodySectPr, 0, 10, 0);
@@ -938,6 +939,7 @@ describe('analysis', () => {
       expect(result!.columns).toEqual({ count: 2, gap: 100 });
       expect(result!.headerRefs).toEqual({ default: 'header1', first: 'headerFirst' });
       expect(result!.footerRefs).toEqual({ default: 'footer1' });
+      expect(result!.numbering).toEqual({ format: 'decimal', start: 5 });
     });
 
     it('should respect body section type from extracted data', () => {
