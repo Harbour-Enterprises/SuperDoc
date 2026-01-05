@@ -57,6 +57,7 @@ import type {
   DrawingGeometry,
   DropCapDescriptor,
 } from '@superdoc/contracts';
+import { defaultTableCell } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
 import { Engines } from '@superdoc/contracts';
 import {
@@ -73,7 +74,9 @@ import { toCssFontFamily } from '@superdoc/font-utils';
 export { installNodeCanvasPolyfill } from './setup.js';
 import { clearMeasurementCache, getMeasuredTextWidth, setCacheSize } from './measurementCache.js';
 import { getFontMetrics, clearFontMetricsCache, type FontInfo } from './fontMetricsCache.js';
+import { getBorderWidth } from './table-utils';
 
+export { getBorderWidth };
 export { clearFontMetricsCache };
 
 const { computeTabStops } = Engines;
@@ -688,6 +691,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     leaders?: Line['leaders'];
     /** Count of breakable spaces already included on this line (for justify-aware fitting) */
     spaceCount: number;
+    naturalWidth?: number;
   } | null = null;
 
   // Helper to calculate effective available width based on current line count.
@@ -865,8 +869,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     lineToTrim.width = roundValue(Math.max(0, lineToTrim.width - delta));
     lineToTrim.spaceCount = Math.max(0, lineToTrim.spaceCount - trimCount);
 
-    if ((lineToTrim as any).naturalWidth != null && typeof (lineToTrim as any).naturalWidth === 'number') {
-      (lineToTrim as any).naturalWidth = roundValue(Math.max(0, (lineToTrim as any).naturalWidth - delta));
+    if (lineToTrim.naturalWidth != undefined && typeof lineToTrim.naturalWidth === 'number') {
+      lineToTrim.naturalWidth = roundValue(Math.max(0, lineToTrim.naturalWidth - delta));
     }
   };
 
@@ -1745,7 +1749,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
                 (shouldIncludeDelimiterSpace ? ((run as TextRun).letterSpacing ?? 0) : 0);
           // Preserve natural width when compression is applied for justify calculations
           if (compressedWidth != null) {
-            (currentLine as any).naturalWidth = roundValue(totalWidthWithWord);
+            currentLine.naturalWidth = roundValue(totalWidthWithWord);
           }
           currentLine.width = roundValue(targetWidth);
           currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
@@ -2135,8 +2139,8 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
     let gridColIndex = 0; // Track position in the grid
 
     for (const cell of row.cells) {
-      const colspan = cell.colSpan ?? 1;
-      const rowspan = cell.rowSpan ?? 1;
+      const colspan = cell.colSpan ?? defaultTableCell.colSpan;
+      const rowspan = cell.rowSpan ?? defaultTableCell.rowSpan;
 
       // Skip grid columns that are occupied by rowspans from previous rows
       // before processing this cell
@@ -2159,12 +2163,14 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         }
       }
 
-      // Get cell padding for height calculation
-      const cellPadding = cell.attrs?.padding ?? { top: 2, left: 4, right: 4, bottom: 2 };
-      const paddingTop = cellPadding.top ?? 2;
-      const paddingBottom = cellPadding.bottom ?? 2;
-      const paddingLeft = cellPadding.left ?? 4;
-      const paddingRight = cellPadding.right ?? 4;
+      // Get cell padding and borders for width and height calculations
+      const paddingTop = cell.attrs?.padding?.top ?? defaultTableCell.attrs.padding.top;
+      const paddingBottom = cell.attrs?.padding?.bottom ?? defaultTableCell.attrs.padding.bottom;
+      const paddingLeft = cell.attrs?.padding?.left ?? defaultTableCell.attrs.padding.left;
+      const paddingRight = cell.attrs?.padding?.right ?? defaultTableCell.attrs.padding.right;
+
+      const borderTop = getBorderWidth(cell.attrs?.borders?.top ?? defaultTableCell.attrs.borders.top);
+      const borderBottom = getBorderWidth(cell.attrs?.borders?.bottom ?? defaultTableCell.attrs.borders.bottom);
 
       // Content width accounts for horizontal padding
       const contentWidth = Math.max(1, cellWidth - paddingLeft - paddingRight);
@@ -2184,7 +2190,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
        *
        * Height Calculation:
        * - contentHeight = sum of all block.totalHeight values
-       * - totalCellHeight = contentHeight + paddingTop + paddingBottom
+       * - totalCellHeight = contentHeight + paddingTop + paddingBottom + borderTop
        *
        * Example:
        * ```
@@ -2217,7 +2223,7 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       }
 
       // Total cell height includes vertical padding
-      const totalCellHeight = contentHeight + paddingTop + paddingBottom;
+      const totalCellHeight = contentHeight + paddingTop + paddingBottom + borderTop;
 
       cellMeasures.push({
         blocks: blockMeasures,
@@ -2228,6 +2234,8 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         gridColumnStart: gridColIndex,
         colSpan: colspan,
         rowSpan: rowspan,
+        borderTop,
+        borderBottom,
       });
 
       if (rowspan === 1) {
@@ -2247,7 +2255,12 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
       }
     }
 
-    rows.push({ cells: cellMeasures, height: 0 });
+    rows.push({
+      cells: cellMeasures,
+      height: 0,
+      borderTop: Math.max(0, ...cellMeasures.map((cm) => cm.borderTop)),
+      borderBottom: Math.max(0, ...cellMeasures.map((cm) => cm.borderBottom)),
+    });
   }
 
   const rowHeights = [...rowBaseHeights];

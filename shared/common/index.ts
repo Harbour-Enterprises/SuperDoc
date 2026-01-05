@@ -49,3 +49,6 @@ export type {
 
 // Collaboration/Awareness
 export * from './collaboration/awareness';
+
+// TypeScript utilities
+export * from './type-helpers';

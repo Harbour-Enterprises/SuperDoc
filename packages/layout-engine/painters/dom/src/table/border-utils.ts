@@ -49,6 +49,13 @@ const borderStyleToCSS = (style?: BorderStyle): string => {
 
 const isValidHexColor = (color: string): boolean => /^#[0-9A-Fa-f]{6}$/.test(color);
 
+const BORDER_CSS_ATTRS = {
+  top: 'borderTop',
+  right: 'borderRight',
+  bottom: 'borderBottom',
+  left: 'borderLeft',
+} as const;
+
 /**
  * Applies a border specification to one side of an HTML element.
  *
@@ -57,24 +64,24 @@ const isValidHexColor = (color: string): boolean => /^#[0-9A-Fa-f]{6}$/.test(col
  * and special cases like 'thick' borders which use doubled width.
  *
  * @param element - The HTML element to apply the border to
- * @param side - Which side of the element to apply the border ('Top', 'Right', 'Bottom', or 'Left')
+ * @param side - Which side of the element to apply the border ('top', 'right', 'bottom', or 'left')
  * @param border - The border specification to apply, or undefined to skip
  *
  * @example
  * ```typescript
  * const cell = document.createElement('td');
- * applyBorder(cell, 'Top', { style: 'single', width: 2, color: '#FF0000' });
+ * applyBorder(cell, 'top', { style: 'single', width: 2, color: '#FF0000' });
  * // Sets cell.style.borderTop = '2px solid #FF0000'
  * ```
  */
 export const applyBorder = (
   element: HTMLElement,
-  side: 'Top' | 'Right' | 'Bottom' | 'Left',
+  side: 'top' | 'right' | 'bottom' | 'left',
   border?: BorderSpec,
 ): void => {
   if (!border) return;
   if (border.style === 'none' || border.width === 0) {
-    element.style[`border${side}`] = 'none';
+    element.style[BORDER_CSS_ATTRS[side]] = 'none';
     return;
   }
 
@@ -83,7 +90,7 @@ export const applyBorder = (
   const color = border.color ?? '#000000';
   const safeColor = isValidHexColor(color) ? color : '#000000';
   const actualWidth = border.style === 'thick' ? Math.max(width * 2, 3) : width;
-  element.style[`border${side}`] = `${actualWidth}px ${style} ${safeColor}`;
+  element.style[BORDER_CSS_ATTRS[side]] = `${actualWidth}px ${style} ${safeColor}`;
 };
 
 /**
@@ -107,10 +114,10 @@ export const applyBorder = (
  */
 export const applyCellBorders = (element: HTMLElement, borders?: CellBorders): void => {
   if (!borders) return;
-  applyBorder(element, 'Top', borders.top);
-  applyBorder(element, 'Right', borders.right);
-  applyBorder(element, 'Bottom', borders.bottom);
-  applyBorder(element, 'Left', borders.left);
+  applyBorder(element, 'top', borders.top);
+  applyBorder(element, 'right', borders.right);
+  applyBorder(element, 'bottom', borders.bottom);
+  applyBorder(element, 'left', borders.left);
 };
 
 /**
@@ -228,10 +235,10 @@ export const createTableBorderOverlay = (
   overlay.style.pointerEvents = 'none';
   overlay.style.zIndex = '1';
 
-  applyBorder(overlay, 'Top', top);
-  applyBorder(overlay, 'Right', right);
-  applyBorder(overlay, 'Bottom', bottom);
-  applyBorder(overlay, 'Left', left);
+  applyBorder(overlay, 'top', top);
+  applyBorder(overlay, 'right', right);
+  applyBorder(overlay, 'bottom', bottom);
+  applyBorder(overlay, 'left', left);
 
   return overlay;
 };

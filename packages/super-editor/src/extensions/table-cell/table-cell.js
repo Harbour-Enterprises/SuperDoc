@@ -39,6 +39,7 @@
 
 import { Node, Attribute } from '@core/index.js';
 import { createCellBorders } from './helpers/createCellBorders.js';
+import { eighthPointsToPixels } from '@core/super-converter/helpers.js';
 
 /**
  * Cell margins configuration
@@ -152,7 +153,7 @@ export const TableCell = Node.create({
               const margin = cellMargins?.[side] ?? 0;
               const border = borders?.[side];
               // TODO: this should include table-level borders as well for the first/last cell in the row
-              const borderSize = border && border.val !== 'none' ? Math.ceil(border.size) : 0;
+              const borderSize = border && border.val !== 'none' ? Math.ceil(eighthPointsToPixels(border.size)) : 0;
 
               if (margin) return `padding-${side}: ${Math.max(0, margin - borderSize)}px;`;
               return '';
@@ -173,7 +174,7 @@ export const TableCell = Node.create({
               if (border && border.val === 'none') return `border-${side}: ${border.val};`;
               let color = border?.color || 'black';
               if (color === 'auto') color = 'black';
-              if (border) return `border-${side}: ${Math.ceil(border.size)}px solid ${color};`;
+              if (border) return `border-${side}: ${Math.ceil(eighthPointsToPixels(border.size))}px solid ${color};`;
               return '';
             })
             .join(' ');

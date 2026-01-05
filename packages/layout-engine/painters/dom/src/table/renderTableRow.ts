@@ -1,4 +1,5 @@
 import type {
+  CellBorders,
   DrawingBlock,
   Line,
   ParagraphBlock,
@@ -9,7 +10,7 @@ import type {
   TableMeasure,
 } from '@superdoc/contracts';
 import { renderTableCell } from './renderTableCell.js';
-import { resolveTableCellBorders, borderValueToSpec } from './border-utils.js';
+import { borderValueToSpec } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 
 type TableRowMeasure = TableMeasure['rows'][number];
@@ -239,11 +240,12 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
     // - If continuesFromPrev=true: draw TOP border (table's top border) to close the top
     // - If continuesOnNext=true: draw BOTTOM border (table's bottom border) to close the bottom
     // This means both fragments at a split have their edge borders drawn.
-    let resolvedBorders;
+    let resolvedBorders: CellBorders | undefined;
     if (hasBordersAttribute && !hasExplicitBorders) {
       // Cell explicitly has borders={} meaning "no borders"
+      // TODO: Is this actually accurate? Shouldn't borders={} mean "don't override any borders"?
       resolvedBorders = undefined;
-    } else if (hasExplicitBorders && tableBorders) {
+    } else {
       // Merge cell's explicit borders with table's outer borders for edge cells
       // This handles DOCX files that use right/bottom ownership model
       const isFirstRow = rowIndex === 0;
@@ -257,47 +259,14 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
 
       resolvedBorders = {
         // For top: use cell's if defined, otherwise use table's top border for first row OR continuation
-        top: cellBordersAttr.top ?? borderValueToSpec(treatAsFirstRow ? tableBorders.top : tableBorders.insideH),
+        top: borderValueToSpec(cellBordersAttr?.top ?? (treatAsFirstRow ? tableBorders?.top : undefined)),
         // For bottom: use cell's if defined, otherwise use table's bottom border for last row OR before continuation
-        bottom: cellBordersAttr.bottom ?? borderValueToSpec(treatAsLastRow ? tableBorders.bottom : undefined),
+        bottom: borderValueToSpec(cellBordersAttr?.bottom ?? (treatAsLastRow ? tableBorders?.bottom : undefined)),
         // For left: use cell's if defined, otherwise use table's left for first col
-        left: cellBordersAttr.left ?? borderValueToSpec(isFirstCol ? tableBorders.left : tableBorders.insideV),
+        left: borderValueToSpec(cellBordersAttr?.left ?? (isFirstCol ? tableBorders?.left : undefined)),
         // For right: use cell's if defined, otherwise use table's right for last col only
-        right: cellBordersAttr.right ?? borderValueToSpec(isLastCol ? tableBorders.right : undefined),
+        right: borderValueToSpec(cellBordersAttr?.right ?? (isLastCol ? tableBorders?.right : undefined)),
       };
-    } else if (hasExplicitBorders) {
-      // Cell has explicit borders but no table borders to merge with
-      // Use cell borders as-is (no table borders to add for continuations)
-      resolvedBorders = {
-        top: cellBordersAttr.top,
-        bottom: cellBordersAttr.bottom,
-        left: cellBordersAttr.left,
-        right: cellBordersAttr.right,
-      };
-    } else if (tableBorders) {
-      // For continuation handling: treat split boundaries as table edges
-      const isFirstRow = rowIndex === 0;
-      const isLastRow = rowIndex === totalRows - 1;
-      const treatAsFirstRow = isFirstRow || continuesFromPrev;
-      const treatAsLastRow = isLastRow || continuesOnNext;
-
-      // Get base borders, then override for continuations
-      const baseBorders = resolveTableCellBorders(tableBorders, rowIndex, gridColIndex, totalRows, totalCols);
-
-      if (baseBorders) {
-        resolvedBorders = {
-          // If this is a continuation (continuesFromPrev), use table's top border
-          top: treatAsFirstRow ? borderValueToSpec(tableBorders.top) : baseBorders.top,
-          // If this continues on next (continuesOnNext), use table's bottom border
-          bottom: treatAsLastRow ? borderValueToSpec(tableBorders.bottom) : baseBorders.bottom,
-          left: baseBorders.left,
-          right: baseBorders.right,
-        };
-      } else {
-        resolvedBorders = undefined;
-      }
-    } else {
-      resolvedBorders = undefined;
     }
 
     // Calculate cell height - use rowspan height if cell spans multiple rows
@@ -334,6 +303,7 @@ export const renderTableRow = (deps: TableRowRenderDependencies): void => {
       applySdtDataset,
       fromLine,
       toLine,
+      rowBorderTop: rowMeasure.borderTop,
     });
 
     container.appendChild(cellElement);
