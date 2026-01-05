@@ -265,13 +265,20 @@ export function buildMultiSectionIdentifier(
 
   // Merge converter IDs as fallbacks for dynamically created headers/footers
   // Only fill in null values - don't override existing refs from section metadata
+  // Also fall back to converter's titlePg if not set from section metadata
   if (converterIds?.headerIds) {
+    if (!identifier.titlePg && (converterIds.headerIds as { titlePg?: boolean }).titlePg) {
+      identifier.titlePg = true;
+    }
     identifier.headerIds.default = identifier.headerIds.default ?? converterIds.headerIds.default ?? null;
     identifier.headerIds.first = identifier.headerIds.first ?? converterIds.headerIds.first ?? null;
     identifier.headerIds.even = identifier.headerIds.even ?? converterIds.headerIds.even ?? null;
     identifier.headerIds.odd = identifier.headerIds.odd ?? converterIds.headerIds.odd ?? null;
   }
   if (converterIds?.footerIds) {
+    if (!identifier.titlePg && (converterIds.footerIds as { titlePg?: boolean }).titlePg) {
+      identifier.titlePg = true;
+    }
     identifier.footerIds.default = identifier.footerIds.default ?? converterIds.footerIds.default ?? null;
     identifier.footerIds.first = identifier.footerIds.first ?? converterIds.footerIds.first ?? null;
     identifier.footerIds.even = identifier.footerIds.even ?? converterIds.footerIds.even ?? null;
