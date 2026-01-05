@@ -189,19 +189,6 @@ const isRangeAllowed = (range, allowedRanges) => {
 };
 
 /**
- * Checks whether the current selection is fully contained within one of the allowed ranges.
- * @param {import('prosemirror-state').EditorState} state
- * @param {Array<{ from: number, to: number }>} allowedRanges
- */
-const isSelectionAllowed = (state, allowedRanges) => {
-  if (!allowedRanges?.length) return false;
-  const { selection } = state;
-  if (!selection) return false;
-  const { from, to } = selection;
-  return allowedRanges.some((allowed) => from >= allowed.from && to <= allowed.to);
-};
-
-/**
  * @module PermissionRanges
  * A helper extension that ensures content wrapped with w:permStart/w:permEnd and `edGrp="everyone"`
  * stays editable even when the document is in viewing mode.
@@ -361,9 +348,6 @@ export const PermissionRanges = Extension.create({
             return true;
           }
           const changedRanges = collectChangedRanges(tr);
-          if (!isSelectionAllowed(state, pluginState.ranges)) {
-            return false;
-          }
           if (!changedRanges.length) return true;
           const permStartType = state.schema.nodes['permStart'];
           const permEndType = state.schema.nodes['permEnd'];
