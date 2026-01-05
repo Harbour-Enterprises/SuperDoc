@@ -1,3 +1,13 @@
+## [1.2.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0...v1.2.1) (2026-01-05)
+
+
+### Bug Fixes
+
+* fallback to converter titlePg if no metadata ([#1612](https://github.com/Harbour-Enterprises/SuperDoc/issues/1612)) ([d5d16e9](https://github.com/Harbour-Enterprises/SuperDoc/commit/d5d16e96fab02a43a9828f7332bcdbf38c1cedbe)), closes [#1639](https://github.com/Harbour-Enterprises/SuperDoc/issues/1639)
+* first page multi section logic, other numbering ([#1641](https://github.com/Harbour-Enterprises/SuperDoc/issues/1641)) ([48856ea](https://github.com/Harbour-Enterprises/SuperDoc/commit/48856ea536d5f73e25b8f20a7c4476e388d2156d))
+* section start page ([#1639](https://github.com/Harbour-Enterprises/SuperDoc/issues/1639)) ([fbd71c7](https://github.com/Harbour-Enterprises/SuperDoc/commit/fbd71c755936653ae976c61d4bd6ffe110424925))
+* take justification into account when laying out tables ([#1640](https://github.com/Harbour-Enterprises/SuperDoc/issues/1640)) ([b0a4b7d](https://github.com/Harbour-Enterprises/SuperDoc/commit/b0a4b7de0e96076856b06c9e5dd388b8b3924127))
+
 ## [1.1.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.3...v1.1.4) (2026-01-05)
 
 
