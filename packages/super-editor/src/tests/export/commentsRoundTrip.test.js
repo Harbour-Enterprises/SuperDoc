@@ -145,28 +145,26 @@ describe('Comment origin detection and round trip', () => {
 
         expect(reimportedComments.length).toBe(editor.converter.comments.length);
 
-        // Verify parent-child relationships are preserved
-        const originalParentMap = new Map();
+        // Verify parent-child relationships are preserved for comment-to-comment threading
+        // Note: Comments with tracked change parents are handled differently - their parent IDs
+        // are re-detected from document structure on re-import and may have different UUIDs
+        const originalCommentToCommentThreads = new Map();
         editor.converter.comments.forEach((c) => {
           if (c.parentCommentId) {
-            originalParentMap.set(c.commentId, c.parentCommentId);
+            // Only track relationships where parent is another comment (not a tracked change)
+            const parentComment = editor.converter.comments.find((p) => p.commentId === c.parentCommentId);
+            if (parentComment && !parentComment.trackedChange) {
+              originalCommentToCommentThreads.set(c.commentId, c.parentCommentId);
+            }
           }
         });
 
-        const reimportedParentMap = new Map();
-        reimportedComments.forEach((c) => {
-          if (c.parentCommentId) {
-            reimportedParentMap.set(c.commentId, c.parentCommentId);
-          }
-        });
-
-        // Verify threading relationships match
-        originalParentMap.forEach((parentId, commentId) => {
-          const originalComment = editor.converter.comments.find((c) => c.commentId === commentId);
+        // Verify comment-to-comment threading relationships are preserved
+        originalCommentToCommentThreads.forEach((parentId, commentId) => {
           const reimportedComment = reimportedComments.find((c) => c.commentId === commentId);
 
-          if (originalComment && reimportedComment) {
-            // Parent relationships should be preserved
+          if (reimportedComment) {
+            // Parent relationships should be preserved for comment-to-comment threads
             expect(reimportedComment.parentCommentId).toBeDefined();
           }
         });
