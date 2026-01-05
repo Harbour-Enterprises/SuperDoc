@@ -657,6 +657,7 @@ const normalizeResolvedTabAlignment = (value: TabStop['val']): ResolvedTabStop['
     case 'end':
     case 'decimal':
     case 'bar':
+    case 'num':
       return value;
     default:
       return undefined;

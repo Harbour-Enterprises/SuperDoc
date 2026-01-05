@@ -195,6 +195,7 @@ export const normalizeTabVal = (value: unknown): TabStop['val'] | undefined => {
     case 'end':
     case 'decimal':
     case 'bar':
+    case 'num':
     case 'clear':
       return value;
     case 'left':

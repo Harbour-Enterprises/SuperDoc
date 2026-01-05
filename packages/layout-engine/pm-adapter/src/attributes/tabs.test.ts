@@ -63,6 +63,12 @@ describe('normalizeOoxmlTabs', () => {
         { val: 'end', pos: 2160 },
       ]);
     });
+
+    it('should preserve Word numbering tab alignment "num"', () => {
+      const tabs = [{ val: 'num', pos: 96 }];
+      const result = normalizeOoxmlTabs(tabs);
+      expect(result).toEqual([{ val: 'num', pos: 1440 }]);
+    });
   });
 
   describe('property name fallbacks', () => {
@@ -220,6 +226,10 @@ describe('normalizeTabVal', () => {
 
     it('should return "clear" for clear', () => {
       expect(normalizeTabVal('clear')).toBe('clear');
+    });
+
+    it('should return "num" for num', () => {
+      expect(normalizeTabVal('num')).toBe('num');
     });
   });
 

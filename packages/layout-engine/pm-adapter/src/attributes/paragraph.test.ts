@@ -1572,6 +1572,20 @@ describe('computeParagraphAttrs', () => {
       expect(result?.tabs).toBeDefined();
       expect(result?.tabs?.[0].leader).toBe('hyphen');
     });
+
+    it('should preserve Word numbering tab alignment "num"', () => {
+      const para: PMNode = {
+        attrs: {
+          tabs: [{ val: 'num', pos: 1440 }],
+        },
+      };
+      const styleContext = createStyleContext();
+
+      const result = computeParagraphAttrs(para, styleContext);
+
+      expect(result?.tabs).toBeDefined();
+      expect(result?.tabs?.[0].val).toBe('num');
+    });
   });
 
   describe('framePr edge cases and validation', () => {

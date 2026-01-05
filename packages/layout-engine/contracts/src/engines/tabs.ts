@@ -19,7 +19,7 @@ import type { ParagraphIndent } from './paragraph.js';
  * Common conversions: 720 twips = 0.5", 1440 twips = 1"
  */
 export interface TabStop {
-  val: 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'clear';
+  val: 'start' | 'end' | 'center' | 'decimal' | 'bar' | 'num' | 'clear';
   pos: number; // Twips from paragraph start (after left indent)
   leader?: 'none' | 'dot' | 'hyphen' | 'heavy' | 'underscore' | 'middleDot';
 }
