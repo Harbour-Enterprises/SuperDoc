@@ -68,6 +68,59 @@ function hasHeight(fragment: Fragment): fragment is ImageFragment | DrawingFragm
   return fragment.kind === 'image' || fragment.kind === 'drawing' || fragment.kind === 'table';
 }
 
+/**
+ * Read the paragraph spacing-before value (legacy key aware), normalized to pixels.
+ *
+ * @param block - Paragraph block to read spacing from
+ * @returns Non-negative spacing-before value in pixels
+ */
+function getParagraphSpacingBefore(block: ParagraphBlock): number {
+  const spacing = block.attrs?.spacing as Record<string, unknown> | undefined;
+  const value = spacing?.before ?? spacing?.lineSpaceBefore;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Read the paragraph spacing-after value (legacy key aware), normalized to pixels.
+ *
+ * @param block - Paragraph block to read spacing from
+ * @returns Non-negative spacing-after value in pixels
+ */
+function getParagraphSpacingAfter(block: ParagraphBlock): number {
+  const spacing = block.attrs?.spacing as Record<string, unknown> | undefined;
+  const value = spacing?.after ?? spacing?.lineSpaceAfter;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Get the layout height contribution for a measured block.
+ *
+ * @param block - Flow block associated with the measure
+ * @param measure - Measure for the block
+ * @returns Height in pixels for keep-next calculations
+ */
+function getMeasureHeight(block: FlowBlock, measure: Measure): number {
+  switch (measure.kind) {
+    case 'paragraph':
+      return measure.totalHeight;
+    case 'table':
+      return measure.totalHeight;
+    case 'list':
+      return measure.totalHeight;
+    case 'image':
+    case 'drawing':
+      return measure.height;
+    case 'sectionBreak':
+    case 'pageBreak':
+    case 'columnBreak':
+      return 0;
+    default: {
+      const _exhaustive: never = measure;
+      return block.kind === 'paragraph' ? DEFAULT_PARAGRAPH_LINE_HEIGHT_PX : 0;
+    }
+  }
+}
+
 // ConstraintBoundary and PageState now come from paginator
 
 export type LayoutOptions = {
@@ -1416,6 +1469,35 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           const tableFragment = createAnchoredTableFragment(tableBlock, tableMeasure, anchorX, anchorY);
           state.page.fragments.push(tableFragment);
           placedAnchoredTableIds.add(tableBlock.id);
+        }
+      }
+
+      if (paraBlock.attrs?.keepNext === true) {
+        const nextBlock = blocks[index + 1];
+        const nextMeasure = measures[index + 1];
+        if (
+          nextBlock &&
+          nextMeasure &&
+          nextBlock.kind !== 'sectionBreak' &&
+          nextBlock.kind !== 'pageBreak' &&
+          nextBlock.kind !== 'columnBreak'
+        ) {
+          const shouldSkipAnchoredTable = nextBlock.kind === 'table' && nextBlock.anchor?.isAnchored === true;
+          if (!shouldSkipAnchoredTable) {
+            let state = paginator.ensurePage();
+            const availableHeight = state.contentBottom - state.cursorY;
+            const spacingAfter = getParagraphSpacingAfter(paraBlock);
+            const currentHeight = getMeasureHeight(paraBlock, measure);
+            const nextHeight = getMeasureHeight(nextBlock, nextMeasure);
+            const combinedHeight =
+              nextBlock.kind === 'paragraph'
+                ? currentHeight + Math.max(spacingAfter, getParagraphSpacingBefore(nextBlock)) + nextHeight
+                : currentHeight + spacingAfter + nextHeight;
+
+            if (combinedHeight > availableHeight && state.page.fragments.length > 0) {
+              state = paginator.advanceColumn(state);
+            }
+          }
         }
       }
 
