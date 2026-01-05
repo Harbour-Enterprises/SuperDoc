@@ -43,9 +43,14 @@ export const getCommentDefinition = (comment, commentId, allComments, editor) =>
   };
 
   // Add the w15:paraIdParent attribute if the comment has a parent
+  // Note: If the parent is a tracked change (not a real Word comment), we don't set this attribute
+  // because Word doesn't recognize tracked changes as comment parents
   if (comment?.parentCommentId) {
     const parentComment = allComments.find((c) => c.commentId === comment.parentCommentId);
-    attributes['w15:paraIdParent'] = parentComment.commentParaId;
+    // Only set parent if it exists and is not a tracked change
+    if (parentComment && !parentComment.trackedChange) {
+      attributes['w15:paraIdParent'] = parentComment.commentParaId;
+    }
   }
 
   return {
@@ -180,10 +185,13 @@ export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml, ex
 
     // For Word format, always use paraIdParent for threading
     // For Google Docs, use paraIdParent if original had commentsExtended.xml
+    // Note: If the parent is a tracked change (not a real Word comment), we don't set this attribute
+    // because Word doesn't recognize tracked changes as comment parents
     const parentId = comment.parentCommentId;
     if (parentId && (exportStrategy === 'word' || comment.originalXmlStructure?.hasCommentsExtended)) {
       const parentComment = comments.find((c) => c.commentId === parentId);
-      if (parentComment) {
+      // Only set parent if it exists and is not a tracked change
+      if (parentComment && !parentComment.trackedChange) {
         attributes['w15:paraIdParent'] = parentComment.commentParaId;
       }
     }
