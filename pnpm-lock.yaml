@@ -531,6 +531,9 @@ importers:
       '@superdoc/painter-dom':
         specifier: workspace:*
         version: link:../painters/dom
+      '@superdoc/word-layout':
+        specifier: workspace:*
+        version: link:../../word-layout
     devDependencies:
       '@superdoc/pm-adapter':
         specifier: workspace:*

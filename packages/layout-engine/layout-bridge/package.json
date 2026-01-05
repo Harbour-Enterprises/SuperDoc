@@ -25,7 +25,8 @@
     "@superdoc/contracts": "workspace:*",
     "@superdoc/layout-engine": "workspace:*",
     "@superdoc/measuring-dom": "workspace:*",
-    "@superdoc/painter-dom": "workspace:*"
+    "@superdoc/painter-dom": "workspace:*",
+    "@superdoc/word-layout": "workspace:*"
   },
   "devDependencies": {
     "@superdoc/pm-adapter": "workspace:*",

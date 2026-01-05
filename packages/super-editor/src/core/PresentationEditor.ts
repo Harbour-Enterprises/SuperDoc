@@ -6215,6 +6215,20 @@ export class PresentationEditor extends EventEmitter {
     return { pageSize, margins, columns };
   }
 
+  /**
+   * Applies zoom transformation to the document viewport and painter hosts.
+   *
+   * Handles documents with varying page sizes (multi-section docs with landscape pages)
+   * by calculating actual dimensions from per-page sizes rather than assuming uniform pages.
+   *
+   * The implementation uses two key concepts:
+   * - **maxWidth/maxHeight**: Maximum dimension across all pages (for viewport sizing)
+   * - **totalWidth/totalHeight**: Sum of all page dimensions + gaps (for full document extent)
+   *
+   * Layout modes:
+   * - Vertical: Uses maxWidth for viewport width, totalHeight for scroll height
+   * - Horizontal: Uses totalWidth for viewport width, maxHeight for scroll height
+   */
   #applyZoom() {
     // Apply zoom by scaling the children (#painterHost and #selectionOverlay) and
     // setting the viewport dimensions to the scaled size.
@@ -6231,21 +6245,42 @@ export class PresentationEditor extends EventEmitter {
 
     const layoutMode = this.#layoutOptions.layoutMode ?? 'vertical';
 
-    // Get unscaled document dimensions
-    const pageWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
-    const pageHeight = this.#getBodyPageHeight();
-
+    // Calculate actual document dimensions from per-page sizes.
+    // Multi-section documents can have pages with different sizes (e.g., landscape pages).
     const pages = this.#layoutState.layout?.pages;
-    const pageCount = Array.isArray(pages) && pages.length > 0 ? pages.length : 1;
     const pageGap = this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap();
+    const defaultWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    const defaultHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+
+    let maxWidth = defaultWidth;
+    let maxHeight = defaultHeight;
+    let totalWidth = 0;
+    let totalHeight = 0;
+
+    if (Array.isArray(pages) && pages.length > 0) {
+      pages.forEach((page, index) => {
+        const pageWidth = page.size && typeof page.size.w === 'number' && page.size.w > 0 ? page.size.w : defaultWidth;
+        const pageHeight =
+          page.size && typeof page.size.h === 'number' && page.size.h > 0 ? page.size.h : defaultHeight;
+        maxWidth = Math.max(maxWidth, pageWidth);
+        maxHeight = Math.max(maxHeight, pageHeight);
+        totalWidth += pageWidth;
+        totalHeight += pageHeight;
+        if (index < pages.length - 1) {
+          totalWidth += pageGap;
+          totalHeight += pageGap;
+        }
+      });
+    } else {
+      totalWidth = defaultWidth;
+      totalHeight = defaultHeight;
+    }
 
     // Horizontal layout stacks pages in a single row, so width grows with pageCount
     if (layoutMode === 'horizontal') {
-      const totalWidth = pageWidth * pageCount + pageGap * Math.max(0, pageCount - 1);
-      const totalHeight = pageHeight;
-
+      // For horizontal: sum widths, use max height
       const scaledWidth = totalWidth * zoom;
-      const scaledHeight = totalHeight * zoom;
+      const scaledHeight = maxHeight * zoom;
 
       this.#viewportHost.style.width = `${scaledWidth}px`;
       this.#viewportHost.style.minWidth = `${scaledWidth}px`;
@@ -6253,27 +6288,26 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost.style.transform = '';
 
       this.#painterHost.style.width = `${totalWidth}px`;
-      this.#painterHost.style.minHeight = `${totalHeight}px`;
+      this.#painterHost.style.minHeight = `${maxHeight}px`;
       this.#painterHost.style.transformOrigin = 'top left';
       this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
 
       this.#selectionOverlay.style.width = `${totalWidth}px`;
-      this.#selectionOverlay.style.height = `${totalHeight}px`;
+      this.#selectionOverlay.style.height = `${maxHeight}px`;
       this.#selectionOverlay.style.transformOrigin = 'top left';
       this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
       return;
     }
 
-    const totalHeight = pageHeight * pageCount + pageGap * Math.max(0, pageCount - 1);
-
+    // Vertical layout: use max width, sum heights
     // Zoom implementation:
-    // 1. #viewportHost has SCALED dimensions (pageWidth * zoom) for proper scroll container sizing
+    // 1. #viewportHost has SCALED dimensions (maxWidth * zoom) for proper scroll container sizing
     // 2. #painterHost has UNSCALED dimensions with transform: scale(zoom) applied
     // 3. When scaled, #painterHost visually fills #viewportHost exactly
     //
     // This ensures the scroll container sees the correct scaled content size while
     // the transform provides visual scaling.
-    const scaledWidth = pageWidth * zoom;
+    const scaledWidth = maxWidth * zoom;
     const scaledHeight = totalHeight * zoom;
 
     // Set viewport to scaled dimensions for scroll container
@@ -6284,13 +6318,13 @@ export class PresentationEditor extends EventEmitter {
 
     // Set painterHost to UNSCALED dimensions and apply transform
     // This way: 816px * scale(1.5) = 1224px visual = matches viewport
-    this.#painterHost.style.width = `${pageWidth}px`;
+    this.#painterHost.style.width = `${maxWidth}px`;
     this.#painterHost.style.minHeight = `${totalHeight}px`;
     this.#painterHost.style.transformOrigin = 'top left';
     this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
 
     // Selection overlay also scales - set to unscaled dimensions
-    this.#selectionOverlay.style.width = `${pageWidth}px`;
+    this.#selectionOverlay.style.width = `${maxWidth}px`;
     this.#selectionOverlay.style.height = `${totalHeight}px`;
     this.#selectionOverlay.style.transformOrigin = 'top left';
     this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
