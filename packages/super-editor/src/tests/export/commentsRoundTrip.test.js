@@ -2,7 +2,6 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { loadTestDataForEditorTests, initTestEditor } from '@tests/helpers/helpers.js';
 import { carbonCopy } from '@core/utilities/carbonCopy.js';
 import { importCommentData } from '@converter/v2/importer/documentCommentsImporter.js';
-import { Editor, getRichTextExtensions } from '@harbour-enterprises/super-editor';
 
 const extractNodeText = (node) => {
   if (!node) return '';
