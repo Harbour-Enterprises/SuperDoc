@@ -1,7 +1,7 @@
 import { Node, Attribute } from '@core/index.js';
 import { Plugin, PluginKey } from 'prosemirror-state';
 import { DecorationSet } from 'prosemirror-view';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { isHeadless } from '@utils/headless-helpers.js';
 import { createLayoutRequest, calculateTabLayout, applyLayoutResult } from './helpers/tabAdapter.js';
 import { clearAllParagraphContexts } from './helpers/paragraphContextCache.js';
 

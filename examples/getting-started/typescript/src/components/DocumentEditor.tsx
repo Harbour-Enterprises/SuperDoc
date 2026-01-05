@@ -1,5 +1,4 @@
 import { SuperDoc, Config } from 'superdoc';
-import { Editor } from 'superdoc/super-editor'
 
 import 'superdoc/style.css';
 import { useEffect, useRef } from 'react';
@@ -36,6 +35,7 @@ const DocumentEditor = ({
     // Cleanup on unmount
     return () => {
       if (editorRef.current) {
+        editorRef.current.destroy();
         editorRef.current = null;
       }
     };

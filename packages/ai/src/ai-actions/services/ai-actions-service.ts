@@ -1,6 +1,15 @@
-import { AIProvider, Editor, Result, FoundMatch, DocumentPosition, AIMessage, stripListPrefix } from '../../shared';
+import {
+  AIProvider,
+  Editor,
+  Result,
+  FoundMatch,
+  DocumentPosition,
+  AIMessage,
+  stripListPrefix,
+  validateInput,
+  parseJSON,
+} from '../../shared';
 import { EditorAdapter } from '../editor';
-import { validateInput, parseJSON } from '../../shared';
 import { Logger } from '../../shared/logger';
 import {
   buildFindPrompt,

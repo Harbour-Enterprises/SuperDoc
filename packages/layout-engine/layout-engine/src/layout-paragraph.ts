@@ -592,6 +592,46 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
           });
         }
         if (state.cursorY + neededSpacingBefore > state.contentBottom) {
+          /**
+           * Infinite Loop Guard: Prevents layout hang when spacingBefore exceeds content area.
+           *
+           * When spacingBefore is larger than the entire available content area, the layout engine
+           * would otherwise enter an infinite loop: attempting to advance to a new page/column,
+           * finding the cursor at the top, attempting to apply spacing, finding it doesn't fit,
+           * advancing again, and repeating indefinitely.
+           *
+           * Condition checked: cursor is at or above the top margin (start of page/column).
+           * This indicates we've already advanced to a fresh page/column and the spacing
+           * still won't fit, meaning it exceeds the total content area height.
+           *
+           * Resolution: Skip the spacing entirely and proceed with content placement at the
+           * current cursor position (topMargin). This ensures layout completes successfully
+           * even with pathological spacing values.
+           *
+           * Common scenarios:
+           * - Header/footer layout with minimal height constraints
+           * - Documents with very large spacingBefore values on small pages
+           * - Edge cases where content area is smaller than spacing requirements
+           *
+           * Note on floating point precision: Epsilon comparison is not needed here because
+           * both cursorY and topMargin are derived from integer pixel margins and direct
+           * assignments (cursorY = topMargin) that occur during page/column advances.
+           * No complex floating point arithmetic is involved between assignment and comparison.
+           */
+          if (state.cursorY <= state.topMargin) {
+            if (spacingDebugEnabled) {
+              spacingDebugLog('spacingBefore exceeds page capacity, skipping', {
+                blockId: block.id,
+                requestedSpacing: neededSpacingBefore,
+                pageContentHeight: state.contentBottom - state.topMargin,
+                column: state.columnIndex,
+                page: state.page.number,
+              });
+            }
+            state.trailingSpacing = 0;
+            appliedSpacingBefore = true;
+            break;
+          }
           if (spacingDebugEnabled) {
             spacingDebugLog('spacingBefore triggers column advance', {
               blockId: block.id,

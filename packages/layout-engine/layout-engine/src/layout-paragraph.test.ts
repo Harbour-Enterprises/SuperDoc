@@ -33,7 +33,14 @@ const makeMeasure = (
   kind: 'paragraph',
   lines: lines.map((l) => makeLine(l.width, l.lineHeight, l.maxWidth)),
   totalHeight: lines.reduce((sum, l) => sum + l.lineHeight, 0),
-  marker,
+  marker: marker
+    ? {
+        markerWidth: marker.markerWidth ?? 0,
+        markerTextWidth: marker.markerTextWidth ?? 0,
+        indentLeft: 0,
+        gutterWidth: marker.gutterWidth,
+      }
+    : undefined,
 });
 
 /**
@@ -48,6 +55,8 @@ const makePageState = (): PageState => ({
   cursorY: 50,
   topMargin: 50,
   contentBottom: 750,
+  constraintBoundaries: [],
+  activeConstraintIndex: -1,
   trailingSpacing: 0,
   lastParagraphStyleId: undefined,
 });
@@ -57,12 +66,15 @@ const makePageState = (): PageState => ({
  */
 const makeFloatManager = (): FloatingObjectManager => ({
   registerDrawing: vi.fn(),
+  registerTable: vi.fn(),
+  getExclusionsForLine: vi.fn(() => []),
   computeAvailableWidth: vi.fn((lineY, lineHeight, columnWidth) => ({
     width: columnWidth,
     offsetX: 0,
   })),
+  getAllFloatsForPage: vi.fn(() => []),
   clear: vi.fn(),
-  getDrawingsForPage: vi.fn(() => []),
+  setLayoutContext: vi.fn(),
 });
 
 describe('layoutParagraphBlock - remeasurement with list markers', () => {
@@ -723,7 +735,7 @@ describe('layoutParagraphBlock - contextualSpacing', () => {
     it('handles contextualSpacing when trailingSpacing is undefined', () => {
       const pageState = makePageState();
       pageState.lastParagraphStyleId = 'Normal';
-      pageState.trailingSpacing = undefined;
+      pageState.trailingSpacing = 0;
       pageState.cursorY = 100;
 
       const ensurePage = vi.fn(() => pageState);

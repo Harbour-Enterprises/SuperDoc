@@ -75,7 +75,7 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
-import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 import {
   hashParagraphBorders,
   hashTableBorders,
@@ -1958,21 +1958,6 @@ export class DomPainter {
         // Only subtract positive paraIndentRight - negative indents already expand fragment.width
         if (index === 0 && listFirstLineMarkerTabWidth != null) {
           availableWidthOverride = fragment.width - listFirstLineMarkerTabWidth - Math.max(0, paraIndentRight);
-          if (alignment === 'justify' || alignment === 'both') {
-            console.log(
-              '[justify-debug][painter-firstline-available]',
-              JSON.stringify({
-                blockId: block.id,
-                fragmentWidth: fragment.width,
-                markerTabWidth: listFirstLineMarkerTabWidth,
-                paraIndentRight,
-                availableWidthOverride,
-                lineMaxWidth: line.maxWidth ?? null,
-                lineWidth: line.width,
-                lineNaturalWidth: line.naturalWidth ?? null,
-              }),
-            );
-          }
         }
 
         // Determine if this is the true last line of the paragraph that should skip justification.
@@ -4256,23 +4241,6 @@ export class DomPainter {
     if (spacingPerSpace !== 0) {
       // Each rendered line is its own block; relying on text-align-last is brittle, so we use word-spacing.
       el.style.wordSpacing = `${spacingPerSpace}px`;
-    }
-    if (justifyShouldApply && spacingPerSpace < 0) {
-      console.log(
-        '[justify-debug][painter-wordspacing-negative]',
-        JSON.stringify({
-          blockId: block.id,
-          lineIndex: lineIndex ?? null,
-          alignment: alignment ?? null,
-          availableWidth,
-          lineWidth,
-          lineMaxWidth: line.maxWidth ?? null,
-          lineNaturalWidth: line.naturalWidth ?? null,
-          spaceCount,
-          hasExplicitPositioning: Boolean(hasExplicitPositioning),
-          skipJustify: Boolean(skipJustify),
-        }),
-      );
     }
 
     if (hasExplicitPositioning && line.segments) {

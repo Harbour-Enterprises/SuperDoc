@@ -1,3 +1,62 @@
+# [1.2.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.4...v1.2.0-next.5) (2026-01-05)
+
+
+### Bug Fixes
+
+* headers/footers that extend past their size are clipped ([#1630](https://github.com/Harbour-Enterprises/SuperDoc/issues/1630)) ([3e689fb](https://github.com/Harbour-Enterprises/SuperDoc/commit/3e689fbbeaf156cdba6ff3a0c8dd6d2391b7d23a))
+* ruler zoom along with doc ([#1628](https://github.com/Harbour-Enterprises/SuperDoc/issues/1628)) ([0ce6c1c](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ce6c1c96c8b6da7db977387572c3e047f167aa2))
+
+# [1.2.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.3...v1.2.0-next.4) (2026-01-03)
+
+
+### Bug Fixes
+
+* add destroyed to flag to abort init ([#1616](https://github.com/Harbour-Enterprises/SuperDoc/issues/1616)) ([4b5fa87](https://github.com/Harbour-Enterprises/SuperDoc/commit/4b5fa871549a0a1ae721df82f430a1434fd6140f))
+* scrollToPosition in PresentationEditor ([#1604](https://github.com/Harbour-Enterprises/SuperDoc/issues/1604)) ([47a93a2](https://github.com/Harbour-Enterprises/SuperDoc/commit/47a93a26dacd436b21581646b4bc77209500ff85))
+* tests ([#1625](https://github.com/Harbour-Enterprises/SuperDoc/issues/1625)) ([93c4437](https://github.com/Harbour-Enterprises/SuperDoc/commit/93c4437672f60c14f281bc85d6ef4212d2342481))
+
+
+### Features
+
+* add commands and node types, fix Editor type ([#1624](https://github.com/Harbour-Enterprises/SuperDoc/issues/1624)) ([658a792](https://github.com/Harbour-Enterprises/SuperDoc/commit/658a7921584da6fcd955836dbfc40716b2a8bee2))
+
+# [1.2.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.2...v1.2.0-next.3) (2025-12-31)
+
+
+### Bug Fixes
+
+* example screenshot ([ff1149d](https://github.com/Harbour-Enterprises/SuperDoc/commit/ff1149df0ebd172bfcddaa3c52fe4958422f9c4f))
+
+# [1.2.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.1...v1.2.0-next.2) (2025-12-31)
+
+
+### Bug Fixes
+
+* pnpm publish ([a21cec6](https://github.com/Harbour-Enterprises/SuperDoc/commit/a21cec6e75bc0514c66188efc78557e0bf5d523d))
+* remove leftover log, pnpm alias fix ([961cd4a](https://github.com/Harbour-Enterprises/SuperDoc/commit/961cd4ad4a0e7189c170e64d4d8ee1656f81e578))
+* unify build, fix pnpm run dev ([5b350bf](https://github.com/Harbour-Enterprises/SuperDoc/commit/5b350bfb538033eae14335c5526401741e66b997))
+
+
+### Features
+
+* decouple Editor state from view ([#1565](https://github.com/Harbour-Enterprises/SuperDoc/issues/1565)) ([205fc65](https://github.com/Harbour-Enterprises/SuperDoc/commit/205fc659e9ee54eacc9d027d853d49b69290208f))
+* new editor open/close api ([#1620](https://github.com/Harbour-Enterprises/SuperDoc/issues/1620)) ([2ba4d6e](https://github.com/Harbour-Enterprises/SuperDoc/commit/2ba4d6ed8990088e3e97b8962aeddf1cb65f6c9b))
+
+# [1.2.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.1...v1.2.0-next.2) (2025-12-31)
+
+
+### Bug Fixes
+
+* pnpm publish ([a21cec6](https://github.com/Harbour-Enterprises/SuperDoc/commit/a21cec6e75bc0514c66188efc78557e0bf5d523d))
+* remove leftover log, pnpm alias fix ([961cd4a](https://github.com/Harbour-Enterprises/SuperDoc/commit/961cd4ad4a0e7189c170e64d4d8ee1656f81e578))
+* unify build, fix pnpm run dev ([5b350bf](https://github.com/Harbour-Enterprises/SuperDoc/commit/5b350bfb538033eae14335c5526401741e66b997))
+
+
+### Features
+
+* decouple Editor state from view ([#1565](https://github.com/Harbour-Enterprises/SuperDoc/issues/1565)) ([205fc65](https://github.com/Harbour-Enterprises/SuperDoc/commit/205fc659e9ee54eacc9d027d853d49b69290208f))
+* new editor open/close api ([#1620](https://github.com/Harbour-Enterprises/SuperDoc/issues/1620)) ([2ba4d6e](https://github.com/Harbour-Enterprises/SuperDoc/commit/2ba4d6ed8990088e3e97b8962aeddf1cb65f6c9b))
+
 ## [1.0.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.0.1...v1.0.2) (2025-12-19)
 
 

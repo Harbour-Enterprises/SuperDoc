@@ -1,4 +1,5 @@
 import { parseSizeUnit } from '../utilities/index.js';
+import { xml2js } from 'xml-js';
 
 // CSS pixels per inch; used to convert between Word's inch-based measurements and DOM pixels.
 const PIXELS_PER_INCH = 96;
@@ -293,10 +294,17 @@ const getArrayBufferFromUrl = async (input) => {
 };
 
 const getContentTypesFromXml = (contentTypesXml) => {
-  const parser = new window.DOMParser();
-  const xmlDoc = parser.parseFromString(contentTypesXml, 'text/xml');
-  const defaults = xmlDoc.querySelectorAll('Default');
-  return Array.from(defaults).map((item) => item.getAttribute('Extension'));
+  try {
+    const result = xml2js(contentTypesXml, { compact: false });
+    const types = result?.elements?.[0]?.elements || [];
+    return types
+      .filter((el) => el?.name === 'Default')
+      .map((el) => el.attributes?.Extension)
+      .filter(Boolean);
+  } catch (err) {
+    console.warn('[super-editor] Failed to parse [Content_Types].xml', err);
+    return [];
+  }
 };
 
 const DOCX_HIGHLIGHT_KEYWORD_MAP = new Map([

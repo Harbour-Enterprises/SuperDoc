@@ -17,7 +17,7 @@ vi.mock('@superdoc/helpers/use-selection', () => ({
   default: vi.fn((params) => ({ getValues: () => ({ ...params }), selectionBounds: params.selectionBounds || {} })),
 }));
 
-vi.mock('@harbour-enterprises/super-editor', () => ({
+vi.mock('@superdoc/super-editor', () => ({
   SuperInput: defineComponent({
     name: 'SuperInputStub',
     setup(_, { slots }) {

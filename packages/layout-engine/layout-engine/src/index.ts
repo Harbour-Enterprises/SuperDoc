@@ -103,6 +103,12 @@ export type HeaderFooterConstraints = {
   pageWidth?: number;
   /** Page margins for page-relative anchor positioning */
   margins?: { left: number; right: number };
+  /**
+   * Optional base height used to bound behindDoc overflow handling.
+   * When provided, decorative assets far outside the header/footer band
+   * won't inflate layout height.
+   */
+  overflowBaseHeight?: number;
 };
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter portrait in px (8.5in × 11in @ 72dpi)
@@ -301,9 +307,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     : 0;
 
   // Calculate effective top margin: ensure body content starts below header content.
-  // The header starts at headerDistance (margins.header) from the page top.
-  // Body content must start at headerDistance + actualHeaderHeight (at minimum).
-  // We take the max of the document's top margin and the header-required space.
+  // Word always positions header at headerDistance from page top, regardless of topMargin.
+  // Body content must start below headerDistance + header content height.
   const headerDistance = margins.header ?? margins.top;
   const effectiveTopMargin =
     maxHeaderContentHeight > 0 ? Math.max(margins.top, headerDistance + maxHeaderContentHeight) : margins.top;
@@ -322,9 +327,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     : 0;
 
   // Calculate effective bottom margin: ensure body content ends above footer content.
-  // The footer starts at footerDistance (margins.footer) from the page bottom.
-  // Body content must end at footerDistance + actualFooterHeight (at minimum) from page bottom.
-  // We take the max of the document's bottom margin and the footer-required space.
+  // Word always positions footer at footerDistance from page bottom, regardless of bottomMargin.
+  // Body content must end above footerDistance + footer content height.
   const footerDistance = margins.footer ?? margins.bottom;
   const effectiveBottomMargin =
     maxFooterContentHeight > 0 ? Math.max(margins.bottom, footerDistance + maxFooterContentHeight) : margins.bottom;
@@ -415,12 +419,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         next.pendingFooterDistance = footerDistance;
       }
       if (block.margins?.top !== undefined || block.margins?.header !== undefined) {
-        const requiredTop = maxHeaderContentHeight > 0 ? headerDistance + maxHeaderContentHeight : headerDistance;
+        // Word always positions header at headerDistance from page top.
+        // Body must start at headerDistance + headerContentHeight (where header content ends).
+        const requiredTop = maxHeaderContentHeight > 0 ? headerDistance + maxHeaderContentHeight : 0;
         next.activeTopMargin = Math.max(sectionTop, requiredTop);
         next.pendingTopMargin = next.activeTopMargin;
       }
       if (block.margins?.bottom !== undefined || block.margins?.footer !== undefined) {
-        const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
+        // Word always positions footer at footerDistance from page bottom.
+        // Body must end at footerDistance + footerContentHeight from page bottom.
+        const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : 0;
         next.activeBottomMargin = Math.max(sectionBottom, requiredBottom);
         next.pendingBottomMargin = next.activeBottomMargin;
       }
@@ -1376,7 +1384,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         paraBlock.runs.length === 0 ||
         (paraBlock.runs.length === 1 &&
           (!paraBlock.runs[0].kind || paraBlock.runs[0].kind === 'text') &&
-          (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
+          (!(paraBlock.runs[0] as { text?: string }).text || (paraBlock.runs[0] as { text?: string }).text === ''));
 
       if (isEmpty) {
         // Check if previous block was pageBreak and next block is sectionBreak
@@ -1714,12 +1722,23 @@ export function layoutHeaderFooter(
   if (!Number.isFinite(width) || width <= 0) {
     throw new Error('layoutHeaderFooter: width must be positive');
   }
+  // If height is zero or negative (e.g., edge-to-edge layouts with no margin space),
+  // return an empty layout instead of crashing. This handles documents with zero margins
+  // or unusual margin configurations gracefully.
   if (!Number.isFinite(height) || height <= 0) {
-    throw new Error('layoutHeaderFooter: height must be positive');
+    return { pages: [], height: 0 };
   }
 
   // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
-  const maxBehindDocOverflow = Math.max(192, height * 4);
+  // Use a bounded base height so decorative assets far outside the header/footer band
+  // don't inflate layout height. Fallback to full height when no base is provided.
+  const overflowBase =
+    typeof constraints.overflowBaseHeight === 'number' &&
+    Number.isFinite(constraints.overflowBaseHeight) &&
+    constraints.overflowBaseHeight > 0
+      ? constraints.overflowBaseHeight
+      : height;
+  const maxBehindDocOverflow = Math.max(192, overflowBase * 4);
   const minBehindDocY = -maxBehindDocOverflow;
   const maxBehindDocY = height + maxBehindDocOverflow;
 

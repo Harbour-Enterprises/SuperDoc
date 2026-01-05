@@ -77,6 +77,8 @@ import { translator as w_pBdr_translator } from './w/pBdr/pBdr-translator.js';
 import { translator as w_position_translator } from './w/position/position-translator.js';
 import { translator as w_pPr_translator } from './w/pPr/pPr-translator.js';
 import { translator as w_pStyle_translator } from './w/pStyle/pStyle-translator.js';
+import { translator as w_permEnd_translator } from './w/perm-end/perm-end-translator.js';
+import { translator as w_permStart_translator } from './w/perm-start/perm-start-translator.js';
 import { translator as w_r_translator } from './w/r/r-translator.js';
 import { translator as w_rFonts_translator } from './w/rFonts/rFonts-translator.js';
 import { translator as w_rPr_translator } from './w/rpr/rpr-translator.js';
@@ -228,6 +230,8 @@ const translatorList = Array.from(
     w_position_translator,
     w_pPr_translator,
     w_pStyle_translator,
+    w_permStart_translator,
+    w_permEnd_translator,
     w_r_translator,
     w_rFonts_translator,
     w_rPr_translator,
@@ -305,6 +309,7 @@ const translatorList = Array.from(
 
 const additionalHandlers = Object.freeze(
   translatorList.reduce((acc, translator) => {
+    if (typeof translator === 'function') return acc;
     const key = translator?.xmlName;
     if (!key) return acc;
     acc[key] = translator;
