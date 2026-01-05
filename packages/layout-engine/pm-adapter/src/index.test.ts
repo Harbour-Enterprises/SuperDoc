@@ -847,7 +847,7 @@ describe('toFlowBlocks', () => {
       expect((sectionBreaks[1] as never).attrs?.requirePageBoundary).toBeUndefined();
     });
 
-    it('does not mark requirePageBoundary when page size changes', () => {
+    it('marks requirePageBoundary when page size changes (continuous still needs a page break)', () => {
       const pmDoc: PMNode = {
         type: 'doc',
         attrs: { bodySectPr: createTestBodySectPr() },
@@ -873,7 +873,7 @@ describe('toFlowBlocks', () => {
       const { blocks } = toFlowBlocks(pmDoc, { emitSectionBreaks: true });
       const sectionBreak = getSectionBreaks(blocks).find(Boolean);
       expect(sectionBreak).toBeDefined();
-      expect((sectionBreak as never).attrs?.requirePageBoundary).toBeUndefined();
+      expect((sectionBreak as never).attrs?.requirePageBoundary).toBe(true);
     });
 
     it('does not emit duplicate section breaks when signatures are identical', () => {

@@ -247,9 +247,9 @@ export function buildMultiSectionIdentifier(
     // Track per-section titlePg from section metadata (w:titlePg element in OOXML)
     // Note: The presence of a 'first' header/footer reference does NOT mean titlePg is enabled.
     // The w:titlePg element must be present in sectPr to use first page headers/footers.
-    if (section.titlePg === true) {
-      identifier.sectionTitlePg.set(idx, true);
-    }
+    // Track per-section titlePg from section metadata (w:titlePg element in OOXML)
+    // Store explicit false so later sections don't inherit section 0's value.
+    identifier.sectionTitlePg.set(idx, section.titlePg === true);
   }
 
   // Set legacy fields from section 0 for backward compatibility
@@ -327,13 +327,18 @@ export function getHeaderFooterTypeForSection(
   const hasDefault = Boolean(ids.default);
 
   // Check titlePg for this specific section
-  const sectionTitlePg = identifier.sectionTitlePg.get(sectionIndex) ?? identifier.titlePg;
-  const titlePgEnabled = sectionTitlePg && hasFirst;
+  const sectionTitlePg = identifier.sectionTitlePg.has(sectionIndex)
+    ? identifier.sectionTitlePg.get(sectionIndex)!
+    : identifier.titlePg;
+  const titlePgEnabled = sectionTitlePg === true;
 
   // Use the section-relative page number to determine "first page" variants
   const isFirstPageOfSection = sectionPageNumber === 1;
   if (isFirstPageOfSection && titlePgEnabled) {
-    return 'first';
+    // If no first variant exists, Word suppresses header/footer on the first page.
+    if (hasFirst) return 'first';
+    if (!hasDefault && !hasEven && !hasOdd) return null;
+    return null;
   }
 
   if (identifier.alternateHeaders) {
