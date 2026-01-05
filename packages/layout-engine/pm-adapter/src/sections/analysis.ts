@@ -245,6 +245,7 @@ export function createFinalSectionFromBodySectPr(
     titlePg: bodySectionData.titlePg ?? false,
     headerRefs: bodySectionData.headerRefs,
     footerRefs: bodySectionData.footerRefs,
+    numbering: bodySectionData.numbering,
     vAlign: bodySectionData.vAlign,
   };
 }
