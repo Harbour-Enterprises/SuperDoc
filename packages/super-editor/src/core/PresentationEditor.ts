@@ -4719,6 +4719,23 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
+  /**
+   * Computes layout constraints for header and footer content.
+   *
+   * This method calculates the available width and height for laying out header/footer
+   * content, following Microsoft Word's layout model:
+   * - Headers/footers use the same left/right margins as the body content
+   * - Content renders at its natural height and can extend beyond the nominal space
+   * - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
+   *
+   * The width is constrained to the body content width (page width minus left/right margins).
+   * The height represents the maximum available vertical space between top and bottom margins,
+   * allowing header/footer content to grow naturally and push body text as needed.
+   *
+   * @returns Constraint object containing width, height, pageWidth, and margins,
+   *          or null if the constraints cannot be computed (e.g., invalid margins that
+   *          exceed page dimensions or produce non-positive content width/height).
+   */
   #computeHeaderFooterConstraints() {
     const pageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
@@ -4742,39 +4759,60 @@ export class PresentationEditor extends EventEmitter {
     // - Content renders at natural height and can extend into the body area if needed
     // - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
     //
-    // The constraint height determines how much space is available before layout pagination.
-    // We use the margin distances (headerMargin, footerMargin) as the constraint because:
-    // 1. This gives headers/footers their natural rendering space
-    // 2. When headerMargin == topMargin (e.g., Word's "Narrow" margins), this still provides
-    //    reasonable space instead of 0px
-    // 3. The soundness fix in layout-paragraph.ts handles edge cases where content spacing
-    //    exceeds this constraint
-    // 4. Keeping the constraint reasonable ensures behindDoc images with large offsets are
-    //    correctly excluded from height calculations (see layoutHeaderFooter's maxBehindDocOverflow)
+    // Use the full body height for measuring headers/footers so content can grow
+    // naturally (Word-style) and push body text as needed.
     const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
     const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+
+    // Validate that margins are finite numbers and don't exceed page height
+    if (!Number.isFinite(marginTop) || !Number.isFinite(marginBottom)) {
+      console.warn('[PresentationEditor] Invalid top or bottom margin: not a finite number');
+      return null;
+    }
+
+    const totalVerticalMargins = marginTop + marginBottom;
+    if (totalVerticalMargins >= pageSize.h) {
+      console.warn(
+        `[PresentationEditor] Invalid margins: top (${marginTop}) + bottom (${marginBottom}) = ${totalVerticalMargins} >= page height (${pageSize.h})`,
+      );
+      return null;
+    }
+
+    // Minimum height for header/footer content to prevent degenerate layouts
+    const MIN_HEADER_FOOTER_HEIGHT = 1;
+    const height = Math.max(MIN_HEADER_FOOTER_HEIGHT, pageSize.h - totalVerticalMargins);
     const headerMargin = margins.header ?? 0;
     const footerMargin = margins.footer ?? 0;
-    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
-    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+    const headerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginTop - headerMargin);
+    const footerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginBottom - footerMargin);
 
-    // Use the larger of content space or margin distance.
-    // If all margins are 0 (edge-to-edge layout), height will be 0 and layoutHeaderFooter
-    // will return an empty layout, which is the correct behavior.
-    const height = Math.max(
-      headerContentSpace,
-      footerContentSpace,
-      headerMargin,
-      footerMargin,
-      marginTop,
-      marginBottom,
-    );
+    // overflowBaseHeight: Bounds behindDoc overflow handling in headers/footers.
+    //
+    // Purpose:
+    // - Prevents decorative background assets (images/drawings with behindDoc=true and extreme
+    //   offsets) from inflating header/footer layout height and driving excessive page margins.
+    // - Without this bound, a decorative image positioned far outside the header/footer band
+    //   (e.g., offsetV=5000) would incorrectly expand the header/footer height, pushing body
+    //   content and creating unwanted whitespace.
+    //
+    // Calculation rationale:
+    // - Uses the larger of headerBand or footerBand as the base height.
+    // - headerBand = marginTop - headerMargin (space between page top and header start)
+    // - footerBand = marginBottom - footerMargin (space between footer end and page bottom)
+    // - Taking the max ensures consistent overflow handling regardless of whether we're
+    //   measuring a header or footer, using the more permissive band size.
+    // - This value is passed to layoutHeaderFooter, which allows behindDoc fragments to
+    //   overflow by up to 4x this base (or 192pt, whichever is larger) before excluding
+    //   them from height calculations.
+    const overflowBaseHeight = Math.max(headerBand, footerBand);
+
     return {
       width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
       margins: { left: marginLeft, right: marginRight },
+      overflowBaseHeight,
     };
   }
 
@@ -4807,6 +4845,59 @@ export class PresentationEditor extends EventEmitter {
     this.#headerDecorationProvider = this.#createDecorationProvider('header', layout);
     this.#footerDecorationProvider = this.#createDecorationProvider('footer', layout);
     this.#rebuildHeaderFooterRegions(layout);
+  }
+
+  /**
+   * Computes layout metrics for header/footer decoration rendering.
+   *
+   * This helper consolidates the calculation of layout height, container height, and vertical offset
+   * for header/footer content, ensuring consistent metrics across both per-rId and variant-based layouts.
+   *
+   * For headers:
+   * - layoutHeight: The actual measured height of the header content
+   * - containerHeight: The larger of the box height (space between headerDistance and topMargin) or layoutHeight
+   * - offset: Always positioned at headerDistance from page top (Word's model)
+   *
+   * For footers:
+   * - layoutHeight: The actual measured height of the footer content
+   * - containerHeight: The larger of the box height (space between bottomMargin and footerDistance) or layoutHeight
+   * - offset: Positioned so the container bottom aligns with footerDistance from page bottom
+   *   When content exceeds the nominal space (box.height), the footer extends upward into the body area,
+   *   matching Word's behavior where overflow pushes body text up rather than clipping.
+   *
+   * @param kind - Whether this is a header or footer
+   * @param layoutHeight - The measured height of the header/footer content layout (may be 0 if layout has no height)
+   * @param box - The computed decoration box containing nominal position and dimensions
+   * @param pageHeight - Total page height in points
+   * @param footerMargin - Footer margin (footerDistance) from page bottom, used only for footer offset calculation
+   * @returns Object containing layoutHeight (validated as non-negative finite number),
+   *          containerHeight (max of box height and layout height), and offset (vertical position from page top)
+   */
+  #computeHeaderFooterMetrics(
+    kind: 'header' | 'footer',
+    layoutHeight: number,
+    box: { height: number; offset: number },
+    pageHeight: number,
+    footerMargin: number,
+  ): { layoutHeight: number; containerHeight: number; offset: number } {
+    // Ensure layoutHeight is a valid finite number, default to 0 if not
+    const validatedLayoutHeight = Number.isFinite(layoutHeight) && layoutHeight >= 0 ? layoutHeight : 0;
+
+    // Container must accommodate both the nominal box height and the actual content height
+    const containerHeight = Math.max(box.height, validatedLayoutHeight);
+
+    // Calculate vertical offset based on header/footer type
+    // Headers: Always start at headerDistance (box.offset) from page top
+    // Footers: Position so container bottom is at footerDistance from page bottom
+    //   - If content is taller than box.height, this extends the footer upward
+    //   - This matches Word's behavior where overflow grows into body area
+    const offset = kind === 'header' ? box.offset : Math.max(0, pageHeight - footerMargin - containerHeight);
+
+    return {
+      layoutHeight: validatedLayoutHeight,
+      containerHeight,
+      offset,
+    };
   }
 
   #createDecorationProvider(kind: 'header' | 'footer', layout: Layout): PageDecorationProvider | undefined {
@@ -4852,43 +4943,62 @@ export class PresentationEditor extends EventEmitter {
 
       // PRIORITY 1: Try per-rId layout if we have a section-specific rId
       if (sectionRId && layoutsByRId.has(sectionRId)) {
-        const rIdLayout = layoutsByRId.get(sectionRId)!;
-        const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
-        if (slotPage) {
-          const fragments = slotPage.fragments ?? [];
-          const pageHeight =
-            page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
-          const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-          const box = this.#computeDecorationBox(kind, margins, pageHeight);
+        const rIdLayout = layoutsByRId.get(sectionRId);
+        // Defensive null check: layoutsByRId.has() should guarantee the value exists,
+        // but we verify to prevent runtime errors if the Map state is inconsistent
+        if (!rIdLayout) {
+          console.warn(
+            `[PresentationEditor] Inconsistent state: layoutsByRId.has('${sectionRId}') returned true but get() returned undefined`,
+          );
+          // Fall through to PRIORITY 2 (variant-based layout)
+        } else {
+          const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
+          if (slotPage) {
+            const fragments = slotPage.fragments ?? [];
+            const pageHeight =
+              page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+            const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+            const box = this.#computeDecorationBox(kind, margins, pageHeight);
 
-          // Normalize fragments to start at y=0 if minY is negative
-          const layoutMinY = rIdLayout.layout.minY ?? 0;
-          const normalizedFragments =
-            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+            // Use helper to compute metrics with type safety and consistent logic
+            const rawLayoutHeight = rIdLayout.layout.height ?? 0;
+            const metrics = this.#computeHeaderFooterMetrics(
+              kind,
+              rawLayoutHeight,
+              box,
+              pageHeight,
+              margins.footer ?? 0,
+            );
 
-          return {
-            fragments: normalizedFragments,
-            height: box.height,
-            contentHeight: rIdLayout.layout.height ?? box.height,
-            offset: box.offset,
-            marginLeft: box.x,
-            contentWidth: box.width,
-            headerId: sectionRId,
-            sectionType: headerFooterType,
-            minY: layoutMinY,
-            box: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-            hitRegion: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-          };
+            // Normalize fragments to start at y=0 if minY is negative
+            const layoutMinY = rIdLayout.layout.minY ?? 0;
+            const normalizedFragments =
+              layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
+            return {
+              fragments: normalizedFragments,
+              height: metrics.containerHeight,
+              contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+              offset: metrics.offset,
+              marginLeft: box.x,
+              contentWidth: box.width,
+              headerId: sectionRId,
+              sectionType: headerFooterType,
+              minY: layoutMinY,
+              box: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+              hitRegion: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+            };
+          }
         }
       }
 
@@ -4910,6 +5020,11 @@ export class PresentationEditor extends EventEmitter {
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+      // Use helper to compute metrics with type safety and consistent logic
+      const rawLayoutHeight = variant.layout.height ?? 0;
+      const metrics = this.#computeHeaderFooterMetrics(kind, rawLayoutHeight, box, pageHeight, margins.footer ?? 0);
+
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
 
@@ -4919,9 +5034,9 @@ export class PresentationEditor extends EventEmitter {
 
       return {
         fragments: normalizedFragments,
-        height: box.height,
-        contentHeight: variant.layout.height ?? box.height,
-        offset: box.offset,
+        height: metrics.containerHeight,
+        contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+        offset: metrics.offset,
         marginLeft: box.x,
         contentWidth: box.width,
         headerId: finalHeaderId,
@@ -4929,15 +5044,15 @@ export class PresentationEditor extends EventEmitter {
         minY: layoutMinY,
         box: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
         hitRegion: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
       };
     };
