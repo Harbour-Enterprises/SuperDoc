@@ -66,7 +66,6 @@ import {
   DEFAULT_LIST_INDENT_STEP_PX as DEFAULT_LIST_INDENT_STEP,
   DEFAULT_LIST_HANGING_PX as DEFAULT_LIST_HANGING,
   SPACE_SUFFIX_GAP_PX,
-  DEFAULT_TAB_INTERVAL_PX,
 } from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 import { calculateRotatedBounds, normalizeRotation } from '@superdoc/geometry-utils';
