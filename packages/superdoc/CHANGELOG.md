@@ -1,3 +1,10 @@
+## [1.1.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.3...v1.1.4) (2026-01-05)
+
+
+### Bug Fixes
+
+* missing comment text on export ([#1582](https://github.com/Harbour-Enterprises/SuperDoc/issues/1582)) ([#1637](https://github.com/Harbour-Enterprises/SuperDoc/issues/1637)) ([5ec87a0](https://github.com/Harbour-Enterprises/SuperDoc/commit/5ec87a032cbcd8aca802ca9495a4ae54c7bef398))
+
 ## [1.1.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.1.2...v1.1.3) (2026-01-02)
 
 
