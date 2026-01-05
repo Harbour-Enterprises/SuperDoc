@@ -1,7 +1,12 @@
 import { Plugin, PluginKey, TextSelection } from 'prosemirror-state';
 import { Extension } from '@core/Extension.js';
 import { Decoration, DecorationSet } from 'prosemirror-view';
-import { removeCommentsById, resolveCommentById, getHighlightColor, translateFormatChangesToEnglish } from './comments-helpers.js';
+import {
+  removeCommentsById,
+  resolveCommentById,
+  getHighlightColor,
+  translateFormatChangesToEnglish,
+} from './comments-helpers.js';
 import { CommentMarkName } from './comments-constants.js';
 
 // Example tracked-change keys, if needed
@@ -569,18 +574,21 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
     });
   }
 
-  const emitParams = createOrUpdateTrackedChangeComment({
-    documentId: editor.options.documentId,
-    event: isNewChange ? 'add' : 'update',
-    marks: {
-      insertedMark,
-      deletionMark,
-      formatMark,
-    },
-    deletionNodes,
-    nodes,
-    newEditorState,
-  });
+  const emitParams =
+    nodes.length > 0
+      ? createOrUpdateTrackedChangeComment({
+          documentId: editor.options.documentId,
+          event: isNewChange ? 'add' : 'update',
+          marks: {
+            insertedMark,
+            deletionMark,
+            formatMark,
+          },
+          deletionNodes,
+          nodes,
+          newEditorState,
+        })
+      : null;
 
   if (emitParams) editor.emit('commentsUpdate', emitParams);
 
