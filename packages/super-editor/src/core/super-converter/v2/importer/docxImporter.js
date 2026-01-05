@@ -57,14 +57,12 @@ import bookmarkEndAttrConfigs from '@converter/v3/handlers/w/bookmark-end/attrib
  * @returns {'word' | 'google-docs' | 'unknown'} The detected origin
  */
 const detectDocumentOrigin = (docx) => {
-  // Check for commentsExtended.xml - Word typically has this with valid w15:commentEx elements
   const commentsExtended = docx['word/commentsExtended.xml'];
   if (commentsExtended) {
     const { elements: initialElements = [] } = commentsExtended;
     if (initialElements?.length > 0) {
       const { elements = [] } = initialElements[0] ?? {};
       const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
-      // If we have valid commentEx elements, it's likely Word
       if (commentEx.length > 0) {
         return 'word';
       }
@@ -78,7 +76,6 @@ const detectDocumentOrigin = (docx) => {
     return 'google-docs';
   }
 
-  // Fallback to unknown (defaults to Word format for backward compatibility)
   return 'unknown';
 };
 
@@ -86,7 +83,6 @@ export const createDocumentJson = (docx, converter, editor) => {
   const json = carbonCopy(getInitialJSON(docx));
   if (!json) return null;
 
-  // Detect and store document origin
   if (converter) {
     converter.documentOrigin = detectDocumentOrigin(docx);
   }

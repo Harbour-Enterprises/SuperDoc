@@ -47,7 +47,6 @@ export const getCommentDefinition = (comment, commentId, allComments, editor) =>
   // because Word doesn't recognize tracked changes as comment parents
   if (comment?.parentCommentId) {
     const parentComment = allComments.find((c) => c.commentId === comment.parentCommentId);
-    // Only set parent if it exists and is not a tracked change
     if (parentComment && !parentComment.trackedChange) {
       attributes['w15:paraIdParent'] = parentComment.commentParaId;
     }
@@ -137,18 +136,16 @@ export const updateCommentsXml = (commentDefs = [], commentsXml) => {
  */
 export const determineExportStrategy = (comments) => {
   if (!comments || comments.length === 0) {
-    return 'word'; // Default to Word format
+    return 'word';
   }
 
   const origins = new Set(comments.map((c) => c.origin || 'word'));
 
   if (origins.size === 1) {
     const origin = origins.values().next().value;
-    // If all comments are from the same origin, use that origin's format
     return origin === 'google-docs' ? 'google-docs' : 'word';
   }
 
-  // Mixed origins: use Word format (most compatible)
   return 'word';
 };
 
@@ -176,7 +173,6 @@ export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml, ex
     return xmlCopy;
   }
 
-  // Re-build the comment definitions
   const commentsEx = comments.map((comment) => {
     const attributes = {
       'w15:paraId': comment.commentParaId,
@@ -190,7 +186,6 @@ export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml, ex
     const parentId = comment.parentCommentId;
     if (parentId && (exportStrategy === 'word' || comment.originalXmlStructure?.hasCommentsExtended)) {
       const parentComment = comments.find((c) => c.commentId === parentId);
-      // Only set parent if it exists and is not a tracked change
       if (parentComment && !parentComment.trackedChange) {
         attributes['w15:paraIdParent'] = parentComment.commentParaId;
       }
@@ -337,23 +332,17 @@ export const generateRelationship = (target) => {
 export const prepareCommentsXmlFilesForExport = ({ convertedXml, defs, commentsWithParaIds, exportType }) => {
   const relationships = [];
 
-  // If we're exporting clean, simply remove the comments files
   if (exportType === 'clean') {
     const documentXml = removeCommentsFilesFromConvertedXml(convertedXml);
     return { documentXml, relationships };
   }
 
-  // Determine export strategy based on comment origins
   const exportStrategy = determineExportStrategy(commentsWithParaIds);
-
-  // Initialize comments files with empty content
   const updatedXml = generateConvertedXmlWithCommentFiles(convertedXml);
 
-  // Update comments.xml
   updatedXml['word/comments.xml'] = updateCommentsXml(defs, updatedXml['word/comments.xml']);
   relationships.push(generateRelationship('comments.xml'));
 
-  // Update commentsExtended.xml based on export strategy
   updatedXml['word/commentsExtended.xml'] = updateCommentsExtendedXml(
     commentsWithParaIds,
     updatedXml['word/commentsExtended.xml'],
