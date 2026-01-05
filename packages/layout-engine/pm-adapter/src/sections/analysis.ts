@@ -203,6 +203,8 @@ export function createFinalSectionFromBodySectPr(
   totalParagraphs: number,
   sectionIndex: number,
 ): SectionRange | null {
+  const clampedStart = Math.max(0, Math.min(currentStart, Math.max(totalParagraphs - 1, 0)));
+
   const tempNode: PMNode = {
     type: 'paragraph',
     attrs: {
@@ -225,7 +227,7 @@ export function createFinalSectionFromBodySectPr(
 
   return {
     sectionIndex,
-    startParagraphIndex: currentStart,
+    startParagraphIndex: clampedStart,
     endParagraphIndex: totalParagraphs - 1,
     sectPr: bodySectPr,
     margins: hasAnyMargin

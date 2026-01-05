@@ -270,7 +270,7 @@ describe('headerFooterUtils', () => {
       expect(firstPageType).toBe('default');
 
       // Verify sectionTitlePg is false
-      expect(identifier.sectionTitlePg.get(0)).toBeUndefined();
+      expect(identifier.sectionTitlePg.get(0)).toBe(false);
       expect(identifier.titlePg).toBe(false);
     });
 
@@ -317,6 +317,37 @@ describe('headerFooterUtils', () => {
         sectionPageNumber: 2,
       });
       expect(secondPageType).toBe('default');
+    });
+
+    it('respects per-section titlePg when earlier sections enable it and later sections disable it', () => {
+      const sectionMetadata: SectionMetadata[] = [
+        {
+          sectionIndex: 0,
+          headerRefs: { default: 'h0-default', first: 'h0-first' },
+          titlePg: true,
+        },
+        {
+          sectionIndex: 1,
+          headerRefs: { default: 'h1-default', first: 'h1-first' },
+          titlePg: false,
+        },
+      ];
+
+      const identifier = buildMultiSectionIdentifier(sectionMetadata);
+
+      const section0First = getHeaderFooterTypeForSection(1, 0, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+      const section1First = getHeaderFooterTypeForSection(3, 1, identifier, {
+        kind: 'header',
+        sectionPageNumber: 1,
+      });
+
+      expect(section0First).toBe('first');
+      expect(section1First).toBe('default');
+      expect(identifier.sectionTitlePg.get(0)).toBe(true);
+      expect(identifier.sectionTitlePg.get(1)).toBe(false);
     });
   });
 
