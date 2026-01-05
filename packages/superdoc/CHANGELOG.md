@@ -1,11 +1,3 @@
-# [1.2.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.4...v1.2.0-next.5) (2026-01-05)
-
-
-### Bug Fixes
-
-* headers/footers that extend past their size are clipped ([#1630](https://github.com/Harbour-Enterprises/SuperDoc/issues/1630)) ([3e689fb](https://github.com/Harbour-Enterprises/SuperDoc/commit/3e689fbbeaf156cdba6ff3a0c8dd6d2391b7d23a))
-* ruler zoom along with doc ([#1628](https://github.com/Harbour-Enterprises/SuperDoc/issues/1628)) ([0ce6c1c](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ce6c1c96c8b6da7db977387572c3e047f167aa2))
-
 # [1.2.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0-next.3...v1.2.0-next.4) (2026-01-03)
 
 
