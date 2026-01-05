@@ -136,6 +136,39 @@ function applyTableIndent(x: number, width: number, indent: number): { x: number
 }
 
 /**
+ * Resolve the table fragment frame within a column based on justification.
+ *
+ * When justification is center or right/end, the table is aligned within the
+ * column width and tableIndent is ignored. Otherwise, tableIndent offsets the
+ * table from the left margin and reduces its usable width.
+ *
+ * @param baseX - Left edge of the column in pixels
+ * @param columnWidth - Available column width in pixels
+ * @param tableWidth - Measured table width in pixels
+ * @param attrs - Table attributes
+ * @returns Resolved x and width for the table fragment
+ */
+function resolveTableFrame(
+  baseX: number,
+  columnWidth: number,
+  tableWidth: number,
+  attrs: TableBlock['attrs'],
+): { x: number; width: number } {
+  const width = Math.min(columnWidth, tableWidth);
+  const justification = typeof attrs?.justification === 'string' ? attrs.justification : undefined;
+
+  if (justification === 'center') {
+    return { x: baseX + Math.max(0, (columnWidth - width) / 2), width };
+  }
+  if (justification === 'right' || justification === 'end') {
+    return { x: baseX + Math.max(0, columnWidth - width), width };
+  }
+
+  const tableIndent = getTableIndentWidth(attrs);
+  return applyTableIndent(baseX, width, tableIndent);
+}
+
+/**
  * Calculate minimum width for a table column based on cell content.
  *
  * For now, uses a conservative minimum of 25px per column as the layout engine
@@ -970,11 +1003,9 @@ function layoutMonolithicTable(context: TableLayoutContext): void {
     coordinateSystem: 'fragment',
   };
 
-  // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
-  const tableIndent = getTableIndentWidth(context.block.attrs);
   const baseX = context.columnX(state.columnIndex);
   const baseWidth = Math.min(context.columnWidth, context.measure.totalWidth || context.columnWidth);
-  const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+  const { x, width } = resolveTableFrame(baseX, context.columnWidth, baseWidth, context.block.attrs);
 
   const fragment: TableFragment = {
     kind: 'table',
@@ -1108,11 +1139,9 @@ export function layoutTableBlock({
       coordinateSystem: 'fragment',
     };
 
-    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
-    const tableIndent = getTableIndentWidth(block.attrs);
     const baseX = columnX(state.columnIndex);
     const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
-    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+    const { x, width } = resolveTableFrame(baseX, columnWidth, baseWidth, block.attrs);
 
     const fragment: TableFragment = {
       kind: 'table',
@@ -1192,11 +1221,9 @@ export function layoutTableBlock({
       // Only create a fragment if we made progress (rendered some lines)
       // Don't create empty fragments with just padding
       if (fragmentHeight > 0 && madeProgress) {
-        // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
-        const tableIndent = getTableIndentWidth(block.attrs);
         const baseX = columnX(state.columnIndex);
         const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
-        const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+        const { x, width } = resolveTableFrame(baseX, columnWidth, baseWidth, block.attrs);
 
         const fragment: TableFragment = {
           kind: 'table',
@@ -1257,11 +1284,9 @@ export function layoutTableBlock({
       const forcedEndRow = bodyStartRow + 1;
       const fragmentHeight = forcedPartialRow.partialHeight + (repeatHeaderCount > 0 ? headerHeight : 0);
 
-      // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
-      const tableIndent = getTableIndentWidth(block.attrs);
       const baseX = columnX(state.columnIndex);
       const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
-      const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+      const { x, width } = resolveTableFrame(baseX, columnWidth, baseWidth, block.attrs);
 
       const fragment: TableFragment = {
         kind: 'table',
@@ -1300,11 +1325,9 @@ export function layoutTableBlock({
       );
     }
 
-    // Apply tableIndent offset (negative values extend table into left margin, matching Word behavior)
-    const tableIndent = getTableIndentWidth(block.attrs);
     const baseX = columnX(state.columnIndex);
     const baseWidth = Math.min(columnWidth, measure.totalWidth || columnWidth);
-    const { x, width } = applyTableIndent(baseX, baseWidth, tableIndent);
+    const { x, width } = resolveTableFrame(baseX, columnWidth, baseWidth, block.attrs);
 
     const fragment: TableFragment = {
       kind: 'table',
