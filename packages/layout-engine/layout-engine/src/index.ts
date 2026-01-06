@@ -1489,10 +1489,40 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
             const spacingAfter = getParagraphSpacingAfter(paraBlock);
             const currentHeight = getMeasureHeight(paraBlock, measure);
             const nextHeight = getMeasureHeight(nextBlock, nextMeasure);
-            const combinedHeight =
-              nextBlock.kind === 'paragraph'
-                ? currentHeight + Math.max(spacingAfter, getParagraphSpacingBefore(nextBlock)) + nextHeight
-                : currentHeight + spacingAfter + nextHeight;
+
+            // Type guard: Check if both block and measure are paragraphs for type-safe access
+            const nextIsParagraph = nextBlock.kind === 'paragraph' && nextMeasure.kind === 'paragraph';
+
+            /**
+             * Spacing before the next block.
+             * Only paragraph blocks have configurable spacing-before values.
+             */
+            const nextSpacingBefore = nextIsParagraph ? getParagraphSpacingBefore(nextBlock) : 0;
+
+            /**
+             * Height of the first line of the next block.
+             * For paragraphs, use the actual first line height for more accurate keepNext calculations.
+             * Falls back to full block height if line height is invalid or block is not a paragraph.
+             * Related to SD-1282: This optimization prevents unnecessary page breaks by only requiring
+             * space for the next block's first line rather than its full height.
+             */
+            const nextFirstLineHeight = (() => {
+              if (!nextIsParagraph) {
+                return nextHeight;
+              }
+              const firstLineHeight = nextMeasure.lines[0]?.lineHeight;
+              // Validate lineHeight is a positive finite number
+              if (typeof firstLineHeight === 'number' && Number.isFinite(firstLineHeight) && firstLineHeight > 0) {
+                return firstLineHeight;
+              }
+              return nextHeight;
+            })();
+
+            // For keepNext, we only need enough space for the next block to start (heading + first line), not the full next block.
+            // This prevents excessive page breaks while still honoring the keepNext constraint.
+            const combinedHeight = nextIsParagraph
+              ? currentHeight + Math.max(spacingAfter, nextSpacingBefore) + nextFirstLineHeight
+              : currentHeight + spacingAfter + nextHeight;
 
             if (combinedHeight > availableHeight && state.page.fragments.length > 0) {
               state = paginator.advanceColumn(state);
