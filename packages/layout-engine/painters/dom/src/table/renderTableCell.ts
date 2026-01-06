@@ -11,7 +11,8 @@ import type {
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
-import { toCssFontFamily } from '../../../../../../shared/font-utils/index.js';
+import { applyParagraphBorderStyles, applyParagraphShadingStyles } from '../renderer.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 
 /**
  * Default gap between list marker and text content in pixels.
@@ -167,6 +168,50 @@ function renderListMarker(params: MarkerRenderParams): HTMLElement {
   lineContainer.appendChild(lineEl);
 
   return lineContainer;
+}
+
+/**
+ * Apply paragraph-level visual styling such as borders and shading.
+ * Borders are set per side with sensible defaults and clamping.
+ */
+function applyParagraphBordersAndShading(paraWrapper: HTMLElement, block: ParagraphBlock): void {
+  const borders = block.attrs?.borders;
+
+  if (borders) {
+    paraWrapper.style.boxSizing = 'border-box';
+
+    const sideStyles: Record<'top' | 'bottom' | 'left' | 'right', { width: string; style: string; color: string }> = {
+      top: { width: 'border-top-width', style: 'border-top-style', color: 'border-top-color' },
+      bottom: { width: 'border-bottom-width', style: 'border-bottom-style', color: 'border-bottom-color' },
+      left: { width: 'border-left-width', style: 'border-left-style', color: 'border-left-color' },
+      right: { width: 'border-right-width', style: 'border-right-style', color: 'border-right-color' },
+    };
+
+    (['top', 'bottom', 'left', 'right'] as const).forEach((side) => {
+      const border = borders[side];
+      if (!border) return;
+
+      const styleValue = border.style ?? 'solid';
+      let widthValue = typeof border.width === 'number' ? Math.max(0, border.width) : 1; // default width when undefined
+
+      // Border style none should render as zero width
+      if (styleValue === 'none') {
+        widthValue = 0;
+      }
+
+      const cssKeys = sideStyles[side];
+      paraWrapper.style.setProperty(cssKeys.style, styleValue);
+      paraWrapper.style.setProperty(cssKeys.width, `${widthValue}px`);
+      if (border.color) {
+        paraWrapper.style.setProperty(cssKeys.color, border.color);
+      }
+    });
+  }
+
+  const shadingFill = block.attrs?.shading?.fill;
+  if (shadingFill) {
+    paraWrapper.style.backgroundColor = shadingFill;
+  }
 }
 
 /**
@@ -505,6 +550,12 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
+        applyParagraphBordersAndShading(paraWrapper, block as ParagraphBlock);
+
+        // Apply paragraph-level border and shading styles (SD-1296)
+        // These were previously missing, causing paragraph borders to not render in table cells
+        applyParagraphBorderStyles(paraWrapper, block.attrs?.borders);
+        applyParagraphShadingStyles(paraWrapper, block.attrs?.shading);
 
         // Calculate height of rendered content for proper block accumulation
         let renderedHeight = 0;
@@ -569,16 +620,78 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
               lineEl.style.paddingLeft = `${indentLeftPx}px`;
             } else {
               // Preserve non-list paragraph indentation that was cleared above
+              /**
+               * SD-1295: Hanging indent implementation for table cells.
+               *
+               * **Mathematical Model:**
+               * The hanging indent effect is achieved through a combination of paddingLeft and textIndent:
+               * - `firstLineOffset = firstLine - hanging`
+               * - This offset can be positive (indent first line further right) or negative (outdent first line to the left)
+               *
+               * **CSS Application Pattern:**
+               * - **First line:**
+               *   - `paddingLeft = left` (base left indent)
+               *   - `textIndent = firstLineOffset` (additional first-line adjustment)
+               *   - Combined effect: text starts at `left + firstLineOffset` pixels from cell edge
+               *
+               * - **Body lines (continuation lines):**
+               *   - `paddingLeft = left + hanging` (when hanging > 0)
+               *   - `textIndent` not set (defaults to 0)
+               *   - Combined effect: text starts at `left + hanging` pixels from cell edge
+               *   - This indents body lines further right, creating the "hanging" visual effect
+               *
+               * **Edge Cases:**
+               * - Negative hanging: Intentionally ignored for body lines (no effect, body uses left indent only)
+               * - Negative left indent: Clamped to 0 by CSS (browsers don't support negative padding)
+               * - Zero values: No style applied (avoids unnecessary CSS)
+               * - Partial rendering: `isFirstLine` checks both line index and rendering start position
+               *   to ensure correct treatment when rendering starts mid-paragraph
+               *
+               * **Examples:**
+               * 1. Classic hanging indent (bibliography style):
+               *    - left: 20, hanging: 30, firstLine: 0
+               *    - First line: paddingLeft=20px, textIndent=-30px → starts at -10px (outdented)
+               *    - Body lines: paddingLeft=50px → starts at 50px (indented)
+               *
+               * 2. First-line indent with hanging:
+               *    - left: 20, hanging: 30, firstLine: 10
+               *    - First line: paddingLeft=20px, textIndent=-20px → starts at 0px
+               *    - Body lines: paddingLeft=50px → starts at 50px
+               *
+               * 3. Simple first-line indent (no hanging):
+               *    - left: 20, hanging: 0, firstLine: 15
+               *    - First line: paddingLeft=20px, textIndent=15px → starts at 35px
+               *    - Body lines: paddingLeft=20px → starts at 20px
+               */
               const indent = block.attrs?.indent;
               if (indent) {
-                if (typeof indent.left === 'number' && indent.left > 0) {
-                  lineEl.style.paddingLeft = `${indent.left}px`;
+                const leftIndent: number = typeof indent.left === 'number' ? indent.left : 0;
+                const hanging: number = typeof indent.hanging === 'number' ? indent.hanging : 0;
+                const firstLine: number = typeof indent.firstLine === 'number' ? indent.firstLine : 0;
+                const isFirstLine: boolean = lineIdx === 0 && localStartLine === 0;
+
+                // Calculate first-line offset: firstLine - hanging
+                // This creates the "hanging" effect where first line starts further left
+                const firstLineOffset: number = firstLine - hanging;
+
+                if (isFirstLine) {
+                  // First line: paddingLeft = left, textIndent = firstLine - hanging
+                  if (leftIndent > 0) {
+                    lineEl.style.paddingLeft = `${leftIndent}px`;
+                  }
+                  if (firstLineOffset !== 0) {
+                    lineEl.style.textIndent = `${firstLineOffset}px`;
+                  }
+                } else {
+                  // Body lines: use left indent only (hanging already accounted for on first line)
+                  if (leftIndent > 0) {
+                    lineEl.style.paddingLeft = `${leftIndent}px`;
+                  }
                 }
+
+                // Right indent applies to all lines
                 if (typeof indent.right === 'number' && indent.right > 0) {
                   lineEl.style.paddingRight = `${indent.right}px`;
-                }
-                if (lineIdx === 0 && typeof indent.firstLine === 'number' && indent.firstLine !== 0) {
-                  lineEl.style.textIndent = `${indent.firstLine}px`;
                 }
               }
             }

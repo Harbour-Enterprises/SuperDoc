@@ -75,7 +75,7 @@ import {
   ensureRulerStyles,
   RULER_CLASS_NAMES,
 } from './ruler/index.js';
-import { toCssFontFamily } from '../../../../../shared/font-utils/index.js';
+import { toCssFontFamily } from '@superdoc/font-utils';
 import {
   hashParagraphBorders,
   hashTableBorders,
@@ -1768,6 +1768,7 @@ export class DomPainter {
       const block = lookup.block as ParagraphBlock;
       const measure = lookup.measure as ParagraphMeasure;
       const wordLayout = isMinimalWordLayout(block.attrs?.wordLayout) ? block.attrs.wordLayout : undefined;
+      const alignment = (block.attrs as ParagraphAttrs | undefined)?.alignment;
 
       const fragmentEl = this.doc.createElement('div');
       fragmentEl.classList.add(CLASS_NAMES.fragment);
@@ -1809,7 +1810,14 @@ export class DomPainter {
       // Otherwise, fall back to slicing from the original measure.
       const lines = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
 
-      applyParagraphBlockStyles(fragmentEl, block.attrs);
+      applyParagraphBlockStyles(fragmentEl, block.attrs, { includeBorders: false, includeShading: false });
+      const { shadingLayer, borderLayer } = createParagraphDecorationLayers(this.doc, fragment.width, block.attrs);
+      if (shadingLayer) {
+        fragmentEl.appendChild(shadingLayer);
+      }
+      if (borderLayer) {
+        fragmentEl.appendChild(borderLayer);
+      }
       if (block.attrs?.styleId) {
         fragmentEl.dataset.styleId = block.attrs.styleId;
         fragmentEl.setAttribute('styleid', block.attrs.styleId);
@@ -2469,11 +2477,19 @@ export class DomPainter {
       contentEl.classList.add('superdoc-list-content');
       this.applySdtDataset(contentEl, paragraphMetadata);
       contentEl.style.display = 'inline-block';
+      contentEl.style.position = 'relative';
       contentEl.style.width = `${fragment.width}px`;
       const lines = itemMeasure.paragraph.lines.slice(fragment.fromLine, fragment.toLine);
       // Track B: preserve indent for wordLayout-based lists to show hierarchy
       const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
-      applyParagraphBlockStyles(contentEl, contentAttrs);
+      applyParagraphBlockStyles(contentEl, contentAttrs, { includeBorders: false, includeShading: false });
+      const { shadingLayer, borderLayer } = createParagraphDecorationLayers(this.doc, fragment.width, contentAttrs);
+      if (shadingLayer) {
+        contentEl.appendChild(shadingLayer);
+      }
+      if (borderLayer) {
+        contentEl.appendChild(borderLayer);
+      }
       // INTENTIONAL DIVERGENCE: Force list content to left alignment
       // Microsoft Word DOES justify list paragraphs when alignment is 'justify',
       // but we intentionally keep lists left-aligned to match user expectations
@@ -4255,7 +4271,17 @@ export class DomPainter {
       const hanging = paraIndent?.hanging ?? 0;
       const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
       const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
-      const indentOffset = indentLeft + firstLineOffsetForCumX;
+      const wordLayoutValue = (block.attrs as ParagraphAttrs | undefined)?.wordLayout;
+      const wordLayout = isMinimalWordLayout(wordLayoutValue) ? wordLayoutValue : undefined;
+      const isListParagraph = Boolean(wordLayout?.marker);
+      const rawTextStartPx =
+        typeof wordLayout?.marker?.textStartX === 'number' && Number.isFinite(wordLayout.marker.textStartX)
+          ? wordLayout.marker.textStartX
+          : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+            ? wordLayout.textStartPx
+            : undefined;
+      const listIndentOffset = isFirstLineOfPara ? (rawTextStartPx ?? indentLeft) : indentLeft;
+      const indentOffset = isListParagraph ? listIndentOffset : indentLeft + firstLineOffsetForCumX;
       let cumulativeX = 0; // Start at 0, we'll add indentOffset when positioning
       const segmentsByRun = new Map<number, LineSegment[]>();
       line.segments.forEach((segment) => {
@@ -5448,7 +5474,11 @@ export const applyRunDataAttributes = (element: HTMLElement, dataAttrs?: Record<
   });
 };
 
-const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs): void => {
+const applyParagraphBlockStyles = (
+  element: HTMLElement,
+  attrs?: ParagraphAttrs,
+  options: { includeBorders?: boolean; includeShading?: boolean } = {},
+): void => {
   if (!attrs) return;
   if (attrs.styleId) {
     element.setAttribute('styleid', attrs.styleId);
@@ -5480,14 +5510,100 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
       }
     }
   }
-  applyParagraphBorderStyles(element, attrs.borders);
-  applyParagraphShadingStyles(element, attrs.shading);
+  if (options.includeBorders ?? true) {
+    applyParagraphBorderStyles(element, attrs.borders);
+  }
+  if (options.includeShading ?? true) {
+    applyParagraphShadingStyles(element, attrs.shading);
+  }
+};
+
+const getParagraphBorderBox = (
+  fragmentWidth: number,
+  indent?: ParagraphAttrs['indent'],
+): { leftInset: number; width: number } => {
+  const indentLeft = Number.isFinite(indent?.left) ? indent!.left! : 0;
+  const indentRight = Number.isFinite(indent?.right) ? indent!.right! : 0;
+  const firstLine = Number.isFinite(indent?.firstLine) ? indent!.firstLine! : 0;
+  const hanging = Number.isFinite(indent?.hanging) ? indent!.hanging! : 0;
+  const firstLineOffset = firstLine - hanging;
+  const minLeftInset = Math.min(indentLeft, indentLeft + firstLineOffset);
+  const leftInset = Math.max(0, minLeftInset);
+  const rightInset = Math.max(0, indentRight);
+  return {
+    leftInset,
+    width: Math.max(0, fragmentWidth - leftInset - rightInset),
+  };
+};
+
+/**
+ * Builds overlay elements for paragraph shading and borders with indent-aware sizing.
+ * Returns layers in the order they should be appended (shading below borders).
+ */
+const createParagraphDecorationLayers = (
+  doc: Document,
+  fragmentWidth: number,
+  attrs?: ParagraphAttrs,
+): { shadingLayer?: HTMLElement; borderLayer?: HTMLElement } => {
+  if (!attrs?.borders && !attrs?.shading) return {};
+  const borderBox = getParagraphBorderBox(fragmentWidth, attrs.indent);
+  const baseStyles = {
+    position: 'absolute',
+    top: '0px',
+    bottom: '0px',
+    left: `${borderBox.leftInset}px`,
+    width: `${borderBox.width}px`,
+    pointerEvents: 'none',
+    boxSizing: 'border-box',
+  } as const;
+
+  let shadingLayer: HTMLElement | undefined;
+  if (attrs.shading) {
+    shadingLayer = doc.createElement('div');
+    shadingLayer.classList.add('superdoc-paragraph-shading');
+    Object.assign(shadingLayer.style, baseStyles);
+    applyParagraphShadingStyles(shadingLayer, attrs.shading);
+  }
+
+  let borderLayer: HTMLElement | undefined;
+  if (attrs.borders) {
+    borderLayer = doc.createElement('div');
+    borderLayer.classList.add('superdoc-paragraph-border');
+    Object.assign(borderLayer.style, baseStyles);
+    borderLayer.style.zIndex = '1';
+    applyParagraphBorderStyles(borderLayer, attrs.borders);
+  }
+
+  return { shadingLayer, borderLayer };
 };
 
 type BorderSide = keyof NonNullable<ParagraphAttrs['borders']>;
 const BORDER_SIDES: BorderSide[] = ['top', 'right', 'bottom', 'left'];
 
-const applyParagraphBorderStyles = (element: HTMLElement, borders?: ParagraphAttrs['borders']): void => {
+/**
+ * Applies paragraph border styles to an HTML element.
+ * Sets CSS border properties (width, style, color) for each side specified in the borders object.
+ *
+ * @param {HTMLElement} element - The HTML element to apply border styles to
+ * @param {ParagraphAttrs['borders']} borders - Optional borders object containing border definitions for top, right, bottom, and left sides
+ *
+ * @remarks
+ * - Sets box-sizing to 'border-box' to ensure borders are included in element dimensions
+ * - Each side's border is processed independently - only specified sides receive border styles
+ * - Border width defaults to 1px if not specified, and negative widths are clamped to 0px
+ * - Border style defaults to 'solid' if not specified or if style is not 'none'
+ * - Border color defaults to '#000' (black) if not specified
+ * - Border style 'none' is handled specially to ensure no visible border
+ *
+ * @example
+ * ```typescript
+ * applyParagraphBorderStyles(paraElement, {
+ *   top: { width: 2, style: 'solid', color: '#FF0000' },
+ *   bottom: { width: 1, style: 'dashed', color: '#0000FF' }
+ * });
+ * ```
+ */
+export const applyParagraphBorderStyles = (element: HTMLElement, borders?: ParagraphAttrs['borders']): void => {
   if (!borders) return;
   element.style.boxSizing = 'border-box';
   BORDER_SIDES.forEach((side) => {
@@ -5529,7 +5645,27 @@ const stripListIndent = (attrs?: ParagraphAttrs): ParagraphAttrs | undefined => 
   };
 };
 
-const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
+/**
+ * Applies paragraph shading (background color) styles to an HTML element.
+ * Sets the CSS background-color property based on the shading fill value.
+ *
+ * @param {HTMLElement} element - The HTML element to apply shading styles to
+ * @param {ParagraphAttrs['shading']} shading - Optional shading object containing fill color definition
+ *
+ * @remarks
+ * - Only applies background color if shading.fill is defined
+ * - Currently only supports the `fill` property for solid color backgrounds
+ * - Theme-based shading properties (themeColor, themeTint, themeShade) are not yet supported
+ * - The fill value should be a valid CSS color string (hex, rgb, named color, etc.)
+ *
+ * @example
+ * ```typescript
+ * applyParagraphShadingStyles(paraElement, {
+ *   fill: '#FFFF00'
+ * });
+ * ```
+ */
+export const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
   if (!shading?.fill) return;
   element.style.backgroundColor = shading.fill;
 };

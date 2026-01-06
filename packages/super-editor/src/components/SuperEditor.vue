@@ -2,8 +2,8 @@
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
 import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
-import { Editor } from '@/index.js';
-import { PresentationEditor } from '@/core/PresentationEditor.js';
+import { Editor } from '@superdoc/super-editor';
+import { PresentationEditor } from '@core/PresentationEditor.js';
 import { getStarterExtensions } from '@extensions/index.js';
 import SlashMenu from './slash-menu/SlashMenu.vue';
 import { onMarginClickCursorChange } from './cursor-helpers.js';
@@ -17,7 +17,8 @@ import { checkNodeSpecificClicks } from './cursor-helpers.js';
 import { adjustPaginationBreaks } from './pagination-helpers.js';
 import { getFileObject } from '@superdoc/common';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
-import { isHeadless } from '@/utils/headless-helpers.js';
+import { isHeadless } from '@utils/headless-helpers.js';
+import { isMacOS } from '@core/utilities/isMacOS.js';
 const emit = defineEmits(['editor-ready', 'editor-click', 'editor-keydown', 'comments-loaded', 'selection-update']);
 
 const DOCX = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -65,6 +66,18 @@ const contextMenuDisabled = computed(() => {
  */
 const rulersVisible = ref(Boolean(props.options.rulers));
 
+/**
+ * Current zoom level from PresentationEditor.
+ * Used to scale the container min-width to accommodate zoomed content.
+ */
+const currentZoom = ref(1);
+
+/**
+ * Reference to the zoomChange event handler for cleanup.
+ * Stored to ensure proper removal in onBeforeUnmount to prevent memory leaks.
+ */
+let zoomChangeHandler = null;
+
 // Watch for changes in options.rulers with deep option to catch nested changes
 watch(
   () => props.options,
@@ -79,6 +92,51 @@ watch(
   },
   { immediate: true, deep: true },
 );
+
+/**
+ * Computed style for the container that scales min-width based on zoom.
+ * Uses the maximum page width across all pages (for multi-section docs with landscape pages),
+ * falling back to 8.5in (letter size).
+ */
+const containerStyle = computed(() => {
+  // Default: 8.5 inches at 96 DPI = 816px (letter size)
+  let maxWidth = 8.5 * 96;
+
+  const ed = editor.value;
+
+  // First, try to get per-page sizes from layout (handles landscape/multi-section docs)
+  if (ed && 'getPages' in ed && typeof ed.getPages === 'function') {
+    const pages = ed.getPages();
+    if (Array.isArray(pages) && pages.length > 0) {
+      // Find the maximum width across all pages (some may be landscape)
+      for (const page of pages) {
+        if (page.size && typeof page.size.w === 'number' && page.size.w > 0) {
+          maxWidth = Math.max(maxWidth, page.size.w);
+        }
+      }
+    }
+  }
+
+  // Fallback: use first section's page width from pageStyles if no pages yet
+  if (maxWidth === 8.5 * 96 && ed && 'getPageStyles' in ed && typeof ed.getPageStyles === 'function') {
+    const styles = ed.getPageStyles();
+    if (
+      styles &&
+      typeof styles === 'object' &&
+      styles.pageSize &&
+      typeof styles.pageSize === 'object' &&
+      typeof styles.pageSize.width === 'number' &&
+      styles.pageSize.width > 0
+    ) {
+      maxWidth = styles.pageSize.width * 96; // width is in inches
+    }
+  }
+
+  const scaledWidth = maxWidth * currentZoom.value;
+  return {
+    minWidth: `${scaledWidth}px`,
+  };
+});
 
 const message = useMessage();
 
@@ -663,6 +721,17 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
         }
       }
     });
+
+    // Listen for zoom changes to update container sizing
+    zoomChangeHandler = ({ zoom }) => {
+      currentZoom.value = zoom;
+    };
+    presentationEditor.on('zoomChange', zoomChangeHandler);
+
+    // Initialize zoom from current state
+    if (typeof presentationEditor.zoom === 'number') {
+      currentZoom.value = presentationEditor.zoom;
+    }
   }
 
   editor.value.on('paginationUpdate', () => {
@@ -750,7 +819,31 @@ onMounted(() => {
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
 });
 
+/**
+ * Handle mouse down events in the editor margin area.
+ * Moves the cursor to the clicked location for normal left-clicks, but preserves
+ * the current selection for right-clicks and context menu triggers.
+ *
+ * This prevents unwanted cursor movement when the user is trying to open a context menu:
+ * - Right-clicks (button !== 0) are ignored because they open the context menu
+ * - Ctrl+Click on Mac is ignored because it triggers the context menu (even though button === 0)
+ * - Clicks directly on the ProseMirror content area are ignored (handled by ProseMirror itself)
+ *
+ * For normal left-clicks on margin areas, delegates to onMarginClickCursorChange which
+ * positions the cursor at the appropriate location based on the click coordinates.
+ *
+ * @param {MouseEvent} event - The mousedown event from the margin click
+ * @returns {void}
+ */
 const handleMarginClick = (event) => {
+  // Skip right-clicks - don't move cursor when user is trying to open context menu
+  if (event.button !== 0) {
+    return;
+  }
+  // On Mac, Ctrl+Click triggers context menu but reports button=0
+  if (event.ctrlKey && isMacOS()) {
+    return;
+  }
   if (event.target.classList.contains('ProseMirror')) return;
 
   onMarginClickCursorChange(event, activeEditor.value);
@@ -777,13 +870,20 @@ const handleMarginChange = ({ side, value }) => {
 onBeforeUnmount(() => {
   stopPolling();
   clearSelectedImage();
+
+  // Clean up zoomChange listener if it exists
+  if (editor.value instanceof PresentationEditor && zoomChangeHandler) {
+    editor.value.off('zoomChange', zoomChangeHandler);
+    zoomChangeHandler = null;
+  }
+
   editor.value?.destroy();
   editor.value = null;
 });
 </script>
 
 <template>
-  <div class="super-editor-container">
+  <div class="super-editor-container" :style="containerStyle">
     <!-- Ruler: teleport to external container if specified, otherwise render inline -->
     <Teleport v-if="options.rulerContainer && rulersVisible && !!activeEditor" :to="options.rulerContainer">
       <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
@@ -878,7 +978,7 @@ onBeforeUnmount(() => {
 .super-editor-container {
   width: auto;
   height: auto;
-  min-width: 8in;
+  /* min-width is controlled via inline style (containerStyle) to scale with zoom */
   min-height: 11in;
   position: relative;
   display: flex;

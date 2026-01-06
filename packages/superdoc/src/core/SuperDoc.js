@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 
 import { DOCX, PDF, HTML } from '@superdoc/common';
-import { SuperToolbar, createZip } from '@harbour-enterprises/super-editor';
+import { SuperToolbar, createZip } from '@superdoc/super-editor';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { createSuperdocVueApp } from './create-app.js';
 import { shuffleArray } from '@superdoc/common/collaboration/awareness';
@@ -39,6 +39,9 @@ const DEFAULT_USER = Object.freeze({
 export class SuperDoc extends EventEmitter {
   /** @type {Array<string>} */
   static allowedTypes = [DOCX, PDF, HTML];
+
+  /** @type {boolean} */
+  #destroyed = false;
 
   /** @type {string} */
   version;
@@ -179,6 +182,12 @@ export class SuperDoc extends EventEmitter {
 
     // Initialize collaboration if configured
     await this.#initCollaboration(this.config.modules);
+
+    // Check if destroy() was called while we were initializing
+    if (this.#destroyed) {
+      this.#cleanupCollaboration();
+      return;
+    }
 
     // Apply csp nonce if provided
     if (this.config.cspNonce) this.#patchNaiveUIStyles();
@@ -996,16 +1005,10 @@ export class SuperDoc extends EventEmitter {
   }
 
   /**
-   * Destroy the superdoc instance
+   * Clean up collaboration resources (providers, ydocs, sockets)
    * @returns {void}
    */
-  destroy() {
-    if (!this.app) {
-      return;
-    }
-
-    this.#log('[superdoc] Unmounting app');
-
+  #cleanupCollaboration() {
     this.config.socket?.cancelWebsocketRetry();
     this.config.socket?.disconnect();
     this.config.socket?.destroy();
@@ -1015,14 +1018,27 @@ export class SuperDoc extends EventEmitter {
     this.provider?.destroy();
 
     this.config.documents.forEach((doc) => {
-      if (doc.provider) {
-        doc.provider.disconnect();
-        doc.provider.destroy();
-      }
-
-      // Destroy the ydoc
+      doc.provider?.disconnect();
+      doc.provider?.destroy();
       doc.ydoc?.destroy();
     });
+  }
+
+  /**
+   * Destroy the superdoc instance
+   * @returns {void}
+   */
+  destroy() {
+    // Mark as destroyed early to prevent in-flight init from mounting
+    this.#destroyed = true;
+
+    this.#cleanupCollaboration();
+
+    if (!this.app) {
+      return;
+    }
+
+    this.#log('[superdoc] Unmounting app');
 
     this.superdocStore.reset();
 

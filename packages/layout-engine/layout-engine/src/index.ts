@@ -37,6 +37,7 @@ import { layoutDrawingBlock } from './layout-drawing.js';
 import { layoutTableBlock, createAnchoredTableFragment } from './layout-table.js';
 import { collectAnchoredDrawings, collectAnchoredTables, collectPreRegisteredAnchors } from './anchors.js';
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
+import { formatPageNumber } from './pageNumbering.js';
 
 type PageSize = { w: number; h: number };
 type Margins = {
@@ -66,6 +67,59 @@ const DEFAULT_PARAGRAPH_LINE_HEIGHT_PX = 20;
  */
 function hasHeight(fragment: Fragment): fragment is ImageFragment | DrawingFragment | TableFragment {
   return fragment.kind === 'image' || fragment.kind === 'drawing' || fragment.kind === 'table';
+}
+
+/**
+ * Read the paragraph spacing-before value (legacy key aware), normalized to pixels.
+ *
+ * @param block - Paragraph block to read spacing from
+ * @returns Non-negative spacing-before value in pixels
+ */
+function getParagraphSpacingBefore(block: ParagraphBlock): number {
+  const spacing = block.attrs?.spacing as Record<string, unknown> | undefined;
+  const value = spacing?.before ?? spacing?.lineSpaceBefore;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Read the paragraph spacing-after value (legacy key aware), normalized to pixels.
+ *
+ * @param block - Paragraph block to read spacing from
+ * @returns Non-negative spacing-after value in pixels
+ */
+function getParagraphSpacingAfter(block: ParagraphBlock): number {
+  const spacing = block.attrs?.spacing as Record<string, unknown> | undefined;
+  const value = spacing?.after ?? spacing?.lineSpaceAfter;
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Get the layout height contribution for a measured block.
+ *
+ * @param block - Flow block associated with the measure
+ * @param measure - Measure for the block
+ * @returns Height in pixels for keep-next calculations
+ */
+function getMeasureHeight(block: FlowBlock, measure: Measure): number {
+  switch (measure.kind) {
+    case 'paragraph':
+      return measure.totalHeight;
+    case 'table':
+      return measure.totalHeight;
+    case 'list':
+      return measure.totalHeight;
+    case 'image':
+    case 'drawing':
+      return measure.height;
+    case 'sectionBreak':
+    case 'pageBreak':
+    case 'columnBreak':
+      return 0;
+    default: {
+      const _exhaustive: never = measure;
+      return block.kind === 'paragraph' ? DEFAULT_PARAGRAPH_LINE_HEIGHT_PX : 0;
+    }
+  }
 }
 
 // ConstraintBoundary and PageState now come from paginator
@@ -103,6 +157,12 @@ export type HeaderFooterConstraints = {
   pageWidth?: number;
   /** Page margins for page-relative anchor positioning */
   margins?: { left: number; right: number };
+  /**
+   * Optional base height used to bound behindDoc overflow handling.
+   * When provided, decorative assets far outside the header/footer band
+   * won't inflate layout height.
+   */
+  overflowBaseHeight?: number;
 };
 
 const DEFAULT_PAGE_SIZE: PageSize = { w: 612, h: 792 }; // Letter portrait in px (8.5in × 11in @ 72dpi)
@@ -121,129 +181,6 @@ const layoutLog = (...args: unknown[]): void => {
 
   console.log(...args);
 };
-
-/**
- * Format a page number according to the specified numbering style.
- *
- * Converts a numeric page number into the requested format for display in headers/footers
- * and page navigation. Supports multiple numbering styles commonly found in word processing
- * documents.
- *
- * @param num - The numeric page number to format (1-based, positive integer)
- * @param format - The numbering format style to apply
- *   - 'decimal': Standard numeric format (1, 2, 3, ...)
- *   - 'lowerLetter': Lowercase alphabetic (a, b, c, ..., z, aa, ab, ...)
- *   - 'upperLetter': Uppercase alphabetic (A, B, C, ..., Z, AA, AB, ...)
- *   - 'lowerRoman': Lowercase Roman numerals (i, ii, iii, iv, v, ...)
- *   - 'upperRoman': Uppercase Roman numerals (I, II, III, IV, V, ...)
- * @returns The formatted page number as a string
- */
-function formatPageNumber(
-  num: number,
-  format: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman',
-): string {
-  switch (format) {
-    case 'decimal':
-      return String(num);
-    case 'lowerLetter':
-      return toLetter(num, false);
-    case 'upperLetter':
-      return toLetter(num, true);
-    case 'lowerRoman':
-      return toRoman(num).toLowerCase();
-    case 'upperRoman':
-      return toRoman(num);
-    default:
-      return String(num);
-  }
-}
-
-/**
- * Convert a numeric value to alphabetic representation (Excel-style column naming).
- *
- * Converts positive integers to alphabetic sequences using base-26 representation
- * where A=1, B=2, ..., Z=26, AA=27, AB=28, etc. This mimics the column naming
- * convention used in spreadsheet applications.
- *
- * Algorithm: Uses division by 26 with adjustment for 1-based indexing (no zero digit).
- * Each iteration computes the rightmost letter and shifts the remaining value.
- *
- * Edge cases:
- * - Values less than 1 are treated as 1 (returns 'a' or 'A')
- * - Non-integer values are floored before conversion
- *
- * @param num - The numeric value to convert (positive integer expected)
- * @param uppercase - If true, returns uppercase letters (A, B, C); if false, lowercase (a, b, c)
- * @returns The alphabetic representation as a string
- * @example
- * toLetter(1, true)   // Returns 'A'
- * toLetter(26, true)  // Returns 'Z'
- * toLetter(27, true)  // Returns 'AA'
- * toLetter(52, true)  // Returns 'AZ'
- * toLetter(702, true) // Returns 'ZZ'
- */
-function toLetter(num: number, uppercase: boolean): string {
-  let result = '';
-  let n = Math.max(1, Math.floor(num));
-  while (n > 0) {
-    const remainder = (n - 1) % 26;
-    const char = String.fromCharCode((uppercase ? 65 : 97) + remainder);
-    result = char + result;
-    n = Math.floor((n - 1) / 26);
-  }
-  return result;
-}
-
-/**
- * Convert a numeric value to Roman numeral representation.
- *
- * Converts positive integers to uppercase Roman numerals using standard Roman numeral
- * notation with subtractive notation (e.g., IV for 4, IX for 9, XL for 40, etc.).
- *
- * Algorithm: Uses a greedy approach with a lookup table of value-numeral pairs ordered
- * from largest to smallest. Repeatedly subtracts the largest possible value and appends
- * the corresponding numeral until the number is reduced to zero.
- *
- * Supported range: 1 to 3999 (standard Roman numeral range)
- * - Values less than 1 are treated as 1 (returns 'I')
- * - Values greater than 3999 will produce non-standard extended Roman numerals
- * - Non-integer values are floored before conversion
- *
- * @param num - The numeric value to convert (positive integer expected, typically 1-3999)
- * @returns The Roman numeral representation as an uppercase string
- * @example
- * toRoman(1)    // Returns 'I'
- * toRoman(4)    // Returns 'IV'
- * toRoman(9)    // Returns 'IX'
- * toRoman(58)   // Returns 'LVIII'
- * toRoman(1994) // Returns 'MCMXCIV'
- */
-function toRoman(num: number): string {
-  const lookup: Array<[number, string]> = [
-    [1000, 'M'],
-    [900, 'CM'],
-    [500, 'D'],
-    [400, 'CD'],
-    [100, 'C'],
-    [90, 'XC'],
-    [50, 'L'],
-    [40, 'XL'],
-    [10, 'X'],
-    [9, 'IX'],
-    [5, 'V'],
-    [4, 'IV'],
-    [1, 'I'],
-  ];
-  let result = '';
-  let n = Math.max(1, Math.floor(num));
-  for (const [value, numeral] of lookup) {
-    while (n >= value) {
-      result += numeral;
-      n -= value;
-    }
-  }
-  return result;
-}
 
 /**
  * Layout FlowBlocks into paginated fragments using measured line data.
@@ -269,8 +206,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     footer: options.margins?.footer ?? options.margins?.bottom ?? DEFAULT_MARGINS.bottom,
   };
 
-  const contentWidth = pageSize.w - (margins.left + margins.right);
-  if (contentWidth <= 0) {
+  const baseContentWidth = pageSize.w - (margins.left + margins.right);
+  if (baseContentWidth <= 0) {
     throw new Error('layoutDocument: pageSize and margins yield non-positive content area');
   }
 
@@ -301,9 +238,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     : 0;
 
   // Calculate effective top margin: ensure body content starts below header content.
-  // The header starts at headerDistance (margins.header) from the page top.
-  // Body content must start at headerDistance + actualHeaderHeight (at minimum).
-  // We take the max of the document's top margin and the header-required space.
+  // Word always positions header at headerDistance from page top, regardless of topMargin.
+  // Body content must start below headerDistance + header content height.
   const headerDistance = margins.header ?? margins.top;
   const effectiveTopMargin =
     maxHeaderContentHeight > 0 ? Math.max(margins.top, headerDistance + maxHeaderContentHeight) : margins.top;
@@ -322,17 +258,20 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     : 0;
 
   // Calculate effective bottom margin: ensure body content ends above footer content.
-  // The footer starts at footerDistance (margins.footer) from the page bottom.
-  // Body content must end at footerDistance + actualFooterHeight (at minimum) from page bottom.
-  // We take the max of the document's bottom margin and the footer-required space.
+  // Word always positions footer at footerDistance from page bottom, regardless of bottomMargin.
+  // Body content must end above footerDistance + footer content height.
   const footerDistance = margins.footer ?? margins.bottom;
   const effectiveBottomMargin =
     maxFooterContentHeight > 0 ? Math.max(margins.bottom, footerDistance + maxFooterContentHeight) : margins.bottom;
 
   let activeTopMargin = effectiveTopMargin;
   let activeBottomMargin = effectiveBottomMargin;
+  let activeLeftMargin = margins.left;
+  let activeRightMargin = margins.right;
   let pendingTopMargin: number | null = null;
   let pendingBottomMargin: number | null = null;
+  let pendingLeftMargin: number | null = null;
+  let pendingRightMargin: number | null = null;
   let activeHeaderDistance = margins.header ?? margins.top;
   let pendingHeaderDistance: number | null = null;
   let activeFooterDistance = margins.footer ?? margins.bottom;
@@ -356,10 +295,11 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let pendingVAlign: VerticalAlign | null = null;
 
   // Create floating-object manager for anchored image tracking
+  const paginatorMargins = { left: activeLeftMargin, right: activeRightMargin };
   const floatManager = createFloatingObjectManager(
-    normalizeColumns(activeColumns, contentWidth),
-    { left: margins.left, right: margins.right },
-    pageSize.w,
+    normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
+    { left: activeLeftMargin, right: activeRightMargin },
+    activePageSize.w,
   );
 
   // Will be aliased to paginator.pages/states after paginator is created
@@ -394,23 +334,44 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         next.activeOrientation = block.orientation;
         next.pendingOrientation = null;
       }
+      const headerDistance =
+        typeof block.margins?.header === 'number' ? Math.max(0, block.margins.header) : next.activeHeaderDistance;
+      const footerDistance =
+        typeof block.margins?.footer === 'number' ? Math.max(0, block.margins.footer) : next.activeFooterDistance;
+      const sectionTop = typeof block.margins?.top === 'number' ? Math.max(0, block.margins.top) : baseMargins.top;
+      const sectionBottom =
+        typeof block.margins?.bottom === 'number' ? Math.max(0, block.margins.bottom) : baseMargins.bottom;
       if (block.margins?.header !== undefined) {
-        const headerDist = Math.max(0, block.margins.header);
-        next.activeHeaderDistance = headerDist;
-        next.pendingHeaderDistance = headerDist;
-        // Account for actual header content height
-        const requiredTop = maxHeaderContentHeight > 0 ? headerDist + maxHeaderContentHeight : headerDist;
-        next.activeTopMargin = Math.max(baseMargins.top, requiredTop);
-        next.pendingTopMargin = next.activeTopMargin;
+        next.activeHeaderDistance = headerDistance;
+        next.pendingHeaderDistance = headerDistance;
       }
       if (block.margins?.footer !== undefined) {
-        const footerDistance = Math.max(0, block.margins.footer);
         next.activeFooterDistance = footerDistance;
         next.pendingFooterDistance = footerDistance;
-        // Account for actual footer content height
-        const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
-        next.activeBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
+      }
+      if (block.margins?.top !== undefined || block.margins?.header !== undefined) {
+        // Word always positions header at headerDistance from page top.
+        // Body must start at headerDistance + headerContentHeight (where header content ends).
+        const requiredTop = maxHeaderContentHeight > 0 ? headerDistance + maxHeaderContentHeight : 0;
+        next.activeTopMargin = Math.max(sectionTop, requiredTop);
+        next.pendingTopMargin = next.activeTopMargin;
+      }
+      if (block.margins?.bottom !== undefined || block.margins?.footer !== undefined) {
+        // Word always positions footer at footerDistance from page bottom.
+        // Body must end at footerDistance + footerContentHeight from page bottom.
+        const requiredBottom = maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : 0;
+        next.activeBottomMargin = Math.max(sectionBottom, requiredBottom);
         next.pendingBottomMargin = next.activeBottomMargin;
+      }
+      if (block.margins?.left !== undefined) {
+        const leftMargin = Math.max(0, block.margins.left);
+        next.activeLeftMargin = leftMargin;
+        next.pendingLeftMargin = leftMargin;
+      }
+      if (block.margins?.right !== undefined) {
+        const rightMargin = Math.max(0, block.margins.right);
+        next.activeRightMargin = rightMargin;
+        next.pendingRightMargin = rightMargin;
       }
       if (block.columns) {
         next.activeColumns = { count: block.columns.count, gap: block.columns.gap };
@@ -446,8 +407,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     const headerPx = block.margins?.header;
     const footerPx = block.margins?.footer;
     const topPx = block.margins?.top;
+    const bottomPx = block.margins?.bottom;
+    const leftPx = block.margins?.left;
+    const rightPx = block.margins?.right;
     const nextTop = next.pendingTopMargin ?? next.activeTopMargin;
     const nextBottom = next.pendingBottomMargin ?? next.activeBottomMargin;
+    const nextLeft = next.pendingLeftMargin ?? next.activeLeftMargin;
+    const nextRight = next.pendingRightMargin ?? next.activeRightMargin;
     const nextHeader = next.pendingHeaderDistance ?? next.activeHeaderDistance;
     const nextFooter = next.pendingFooterDistance ?? next.activeFooterDistance;
 
@@ -458,7 +424,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     // Account for actual header content height when calculating top margin
     // Recalculate if either top or header margin changes
     if (typeof headerPx === 'number' || typeof topPx === 'number') {
-      const sectionTop = topPx ?? baseMargins.top;
+      const sectionTop = typeof topPx === 'number' ? Math.max(0, topPx) : baseMargins.top;
       const sectionHeader = next.pendingHeaderDistance;
       const requiredTop = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
       next.pendingTopMargin = Math.max(sectionTop, requiredTop);
@@ -467,13 +433,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     }
 
     // Account for actual footer content height when calculating bottom margin
-    if (typeof footerPx === 'number') {
+    if (typeof footerPx === 'number' || typeof bottomPx === 'number') {
       const sectionFooter = next.pendingFooterDistance;
+      const sectionBottom = typeof bottomPx === 'number' ? Math.max(0, bottomPx) : baseMargins.bottom;
       const requiredBottom = maxFooterContentHeight > 0 ? sectionFooter + maxFooterContentHeight : sectionFooter;
-      next.pendingBottomMargin = Math.max(baseMargins.bottom, requiredBottom);
+      next.pendingBottomMargin = Math.max(sectionBottom, requiredBottom);
     } else {
       next.pendingBottomMargin = nextBottom;
     }
+    next.pendingLeftMargin = typeof leftPx === 'number' ? Math.max(0, leftPx) : nextLeft;
+    next.pendingRightMargin = typeof rightPx === 'number' ? Math.max(0, rightPx) : nextRight;
     if (block.pageSize) next.pendingPageSize = { w: block.pageSize.w, h: block.pageSize.h };
     if (block.orientation) next.pendingOrientation = block.orientation;
     const sectionType = block.type ?? 'continuous';
@@ -550,7 +519,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   // Paginator encapsulation for page/column helpers
   let pageCount = 0;
   // Page numbering state
-  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' = 'decimal';
+  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash' =
+    'decimal';
   let activePageCounter = 1;
   let pendingNumbering: SectionNumbering | null = null;
   // Section header/footer ref tracking state
@@ -579,7 +549,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let pendingSectionIndex: number | null = null;
 
   const paginator = createPaginator({
-    margins: { left: margins.left, right: margins.right },
+    margins: paginatorMargins,
     getActiveTopMargin: () => activeTopMargin,
     getActiveBottomMargin: () => activeBottomMargin,
     getActiveHeaderDistance: () => activeHeaderDistance,
@@ -595,8 +565,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const applied = applyPendingToActive({
           activeTopMargin,
           activeBottomMargin,
+          activeLeftMargin,
+          activeRightMargin,
           pendingTopMargin,
           pendingBottomMargin,
+          pendingLeftMargin,
+          pendingRightMargin,
           activeHeaderDistance,
           activeFooterDistance,
           pendingHeaderDistance,
@@ -611,8 +585,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         });
         activeTopMargin = applied.activeTopMargin;
         activeBottomMargin = applied.activeBottomMargin;
+        activeLeftMargin = applied.activeLeftMargin;
+        activeRightMargin = applied.activeRightMargin;
         pendingTopMargin = applied.pendingTopMargin;
         pendingBottomMargin = applied.pendingBottomMargin;
+        pendingLeftMargin = applied.pendingLeftMargin;
+        pendingRightMargin = applied.pendingRightMargin;
         activeHeaderDistance = applied.activeHeaderDistance;
         activeFooterDistance = applied.activeFooterDistance;
         pendingHeaderDistance = applied.pendingHeaderDistance;
@@ -624,6 +602,14 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         activeOrientation = applied.activeOrientation;
         pendingOrientation = applied.pendingOrientation;
         cachedColumnsState.state = null;
+        paginatorMargins.left = activeLeftMargin;
+        paginatorMargins.right = activeRightMargin;
+        const contentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
+        floatManager.setLayoutContext(
+          normalizeColumns(activeColumns, contentWidth),
+          { left: activeLeftMargin, right: activeRightMargin },
+          activePageSize.w,
+        );
         // Apply pending numbering
         if (pendingNumbering) {
           if (pendingNumbering.format) activeNumberFormat = pendingNumbering.format;
@@ -688,7 +674,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   } = { state: null, constraintIndex: -2, contentWidth: -1, colsConfig: null, normalized: null };
 
   const getCurrentColumns = (): NormalizedColumns => {
-    const currentContentWidth = activePageSize.w - (margins.left + margins.right);
+    const currentContentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
     const state = states[states.length - 1] ?? null;
     const colsConfig = state ? getActiveColumnsForState(state) : activeColumns;
     const constraintIndex = state ? state.activeConstraintIndex : -1;
@@ -743,6 +729,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
     // Invalidate columns cache to ensure recalculation with new region
     cachedColumnsState.state = null;
+
+    const contentWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
+    floatManager.setLayoutContext(
+      normalizeColumns(activeColumns, contentWidth),
+      { left: activeLeftMargin, right: activeRightMargin },
+      activePageSize.w,
+    );
 
     // Note: We do NOT reset cursorY - content continues from current position
     // This creates the mid-page region effect
@@ -817,6 +810,16 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
         activeBottomMargin = Math.max(margins.bottom, requiredBottomMargin);
         pendingBottomMargin = activeBottomMargin;
+      }
+      if (block.margins?.left !== undefined) {
+        const leftMargin = Math.max(0, block.margins.left);
+        activeLeftMargin = leftMargin;
+        pendingLeftMargin = leftMargin;
+      }
+      if (block.margins?.right !== undefined) {
+        const rightMargin = Math.max(0, block.margins.right);
+        activeRightMargin = rightMargin;
+        pendingRightMargin = rightMargin;
       }
       if (block.columns) {
         activeColumns = { count: block.columns.count, gap: block.columns.gap };
@@ -1037,10 +1040,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       if (alignV === 'top') {
         anchorY = offsetV;
       } else if (alignV === 'bottom') {
-        const pageHeight = contentBottom + margins.bottom;
+        const pageHeight = contentBottom + (state.page.margins?.bottom ?? activeBottomMargin);
         anchorY = pageHeight - imageHeight + offsetV;
       } else if (alignV === 'center') {
-        const pageHeight = contentBottom + margins.bottom;
+        const pageHeight = contentBottom + (state.page.margins?.bottom ?? activeBottomMargin);
         anchorY = (pageHeight - imageHeight) / 2 + offsetV;
       } else {
         anchorY = offsetV;
@@ -1055,12 +1058,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       ? computeAnchorX(
           entry.block.anchor,
           state.columnIndex,
-          normalizeColumns(activeColumns, contentWidth),
+          normalizeColumns(activeColumns, activePageSize.w - (activeLeftMargin + activeRightMargin)),
           entry.measure.width,
-          { left: margins.left, right: margins.right },
+          { left: activeLeftMargin, right: activeRightMargin },
           activePageSize.w,
         )
-      : margins.left;
+      : activeLeftMargin;
 
     // Register with float manager so all paragraphs see this exclusion
     // NOTE: We only register exclusion zones here, NOT fragments.
@@ -1117,8 +1120,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       const sectionState: SectionState = {
         activeTopMargin,
         activeBottomMargin,
+        activeLeftMargin,
+        activeRightMargin,
         pendingTopMargin,
         pendingBottomMargin,
+        pendingLeftMargin,
+        pendingRightMargin,
         activeHeaderDistance,
         activeFooterDistance,
         pendingHeaderDistance,
@@ -1157,8 +1164,12 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       // Sync updated section state
       activeTopMargin = updatedState.activeTopMargin;
       activeBottomMargin = updatedState.activeBottomMargin;
+      activeLeftMargin = updatedState.activeLeftMargin;
+      activeRightMargin = updatedState.activeRightMargin;
       pendingTopMargin = updatedState.pendingTopMargin;
       pendingBottomMargin = updatedState.pendingBottomMargin;
+      pendingLeftMargin = updatedState.pendingLeftMargin;
+      pendingRightMargin = updatedState.pendingRightMargin;
       activeHeaderDistance = updatedState.activeHeaderDistance;
       activeFooterDistance = updatedState.activeFooterDistance;
       pendingHeaderDistance = updatedState.pendingHeaderDistance;
@@ -1305,7 +1316,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         paraBlock.runs.length === 0 ||
         (paraBlock.runs.length === 1 &&
           (!paraBlock.runs[0].kind || paraBlock.runs[0].kind === 'text') &&
-          (!paraBlock.runs[0].text || paraBlock.runs[0].text === ''));
+          (!(paraBlock.runs[0] as { text?: string }).text || (paraBlock.runs[0] as { text?: string }).text === ''));
 
       if (isEmpty) {
         // Check if previous block was pageBreak and next block is sectionBreak
@@ -1340,6 +1351,65 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         }
       }
 
+      if (paraBlock.attrs?.keepNext === true) {
+        const nextBlock = blocks[index + 1];
+        const nextMeasure = measures[index + 1];
+        if (
+          nextBlock &&
+          nextMeasure &&
+          nextBlock.kind !== 'sectionBreak' &&
+          nextBlock.kind !== 'pageBreak' &&
+          nextBlock.kind !== 'columnBreak'
+        ) {
+          const shouldSkipAnchoredTable = nextBlock.kind === 'table' && nextBlock.anchor?.isAnchored === true;
+          if (!shouldSkipAnchoredTable) {
+            let state = paginator.ensurePage();
+            const availableHeight = state.contentBottom - state.cursorY;
+            const spacingAfter = getParagraphSpacingAfter(paraBlock);
+            const currentHeight = getMeasureHeight(paraBlock, measure);
+            const nextHeight = getMeasureHeight(nextBlock, nextMeasure);
+
+            // Type guard: Check if both block and measure are paragraphs for type-safe access
+            const nextIsParagraph = nextBlock.kind === 'paragraph' && nextMeasure.kind === 'paragraph';
+
+            /**
+             * Spacing before the next block.
+             * Only paragraph blocks have configurable spacing-before values.
+             */
+            const nextSpacingBefore = nextIsParagraph ? getParagraphSpacingBefore(nextBlock) : 0;
+
+            /**
+             * Height of the first line of the next block.
+             * For paragraphs, use the actual first line height for more accurate keepNext calculations.
+             * Falls back to full block height if line height is invalid or block is not a paragraph.
+             * Related to SD-1282: This optimization prevents unnecessary page breaks by only requiring
+             * space for the next block's first line rather than its full height.
+             */
+            const nextFirstLineHeight = (() => {
+              if (!nextIsParagraph) {
+                return nextHeight;
+              }
+              const firstLineHeight = nextMeasure.lines[0]?.lineHeight;
+              // Validate lineHeight is a positive finite number
+              if (typeof firstLineHeight === 'number' && Number.isFinite(firstLineHeight) && firstLineHeight > 0) {
+                return firstLineHeight;
+              }
+              return nextHeight;
+            })();
+
+            // For keepNext, we only need enough space for the next block to start (heading + first line), not the full next block.
+            // This prevents excessive page breaks while still honoring the keepNext constraint.
+            const combinedHeight = nextIsParagraph
+              ? currentHeight + Math.max(spacingAfter, nextSpacingBefore) + nextFirstLineHeight
+              : currentHeight + spacingAfter + nextHeight;
+
+            if (combinedHeight > availableHeight && state.page.fragments.length > 0) {
+              state = paginator.advanceColumn(state);
+            }
+          }
+        }
+      }
+
       layoutParagraphBlock(
         {
           block,
@@ -1358,8 +1428,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
               pageMargins: {
                 top: activeTopMargin,
                 bottom: activeBottomMargin,
-                left: margins.left,
-                right: margins.right,
+                left: activeLeftMargin,
+                right: activeRightMargin,
               },
               columns: getCurrentColumns(),
               placedAnchoredIds,
@@ -1391,9 +1461,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         const cols = getCurrentColumns();
         let maxWidth: number;
         if (relativeFrom === 'page') {
-          maxWidth = cols.count === 1 ? activePageSize.w - margins.left - margins.right : activePageSize.w;
+          maxWidth = cols.count === 1 ? activePageSize.w - (activeLeftMargin + activeRightMargin) : activePageSize.w;
         } else if (relativeFrom === 'margin') {
-          maxWidth = activePageSize.w - margins.left - margins.right;
+          maxWidth = activePageSize.w - (activeLeftMargin + activeRightMargin);
         } else {
           maxWidth = cols.width;
         }
@@ -1601,6 +1671,33 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   };
 }
 
+/**
+ * Lays out header or footer content within specified dimensional constraints.
+ *
+ * This function positions blocks (paragraphs, images, drawings) within a header or footer region,
+ * handling page-relative anchor transformations and computing the actual height required by
+ * visible content. Headers and footers are rendered within the content box but may contain
+ * page-relative anchored objects that need coordinate transformation.
+ *
+ * @param blocks - The flow blocks to layout (paragraphs, images, drawings, etc.)
+ * @param measures - Corresponding measurements for each block (must match blocks.length)
+ * @param constraints - Dimensional constraints including width, height, and optional margins
+ *
+ * @returns A HeaderFooterLayout containing:
+ *   - pages: Array of laid-out pages with positioned fragments
+ *   - height: The actual height consumed by visible content
+ *
+ * @throws {Error} If blocks and measures arrays have different lengths
+ * @throws {Error} If width or height constraints are not positive finite numbers
+ *
+ * Special handling for behindDoc anchored fragments:
+ * - Anchored images/drawings with behindDoc=true are decorative background elements
+ * - These fragments are excluded from height calculations if they fall outside a reasonable
+ *   overflow range (4x the header/footer height or 192pt, whichever is larger)
+ * - This prevents decorative elements with extreme offsets from inflating header/footer margins
+ * - behindDoc fragments within the overflow range are still included to handle modest positioning
+ * - All behindDoc fragments are still rendered in the layout; they're only excluded from height
+ */
 export function layoutHeaderFooter(
   blocks: FlowBlock[],
   measures: Measure[],
@@ -1616,9 +1713,25 @@ export function layoutHeaderFooter(
   if (!Number.isFinite(width) || width <= 0) {
     throw new Error('layoutHeaderFooter: width must be positive');
   }
+  // If height is zero or negative (e.g., edge-to-edge layouts with no margin space),
+  // return an empty layout instead of crashing. This handles documents with zero margins
+  // or unusual margin configurations gracefully.
   if (!Number.isFinite(height) || height <= 0) {
-    throw new Error('layoutHeaderFooter: height must be positive');
+    return { pages: [], height: 0 };
   }
+
+  // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
+  // Use a bounded base height so decorative assets far outside the header/footer band
+  // don't inflate layout height. Fallback to full height when no base is provided.
+  const overflowBase =
+    typeof constraints.overflowBaseHeight === 'number' &&
+    Number.isFinite(constraints.overflowBaseHeight) &&
+    constraints.overflowBaseHeight > 0
+      ? constraints.overflowBaseHeight
+      : height;
+  const maxBehindDocOverflow = Math.max(192, overflowBase * 4);
+  const minBehindDocY = -maxBehindDocOverflow;
+  const maxBehindDocY = height + maxBehindDocOverflow;
 
   // Transform page-relative anchor offsets to content-relative for correct positioning
   // Headers/footers are rendered within the content box, but page-relative anchors
@@ -1666,6 +1779,25 @@ export function layoutHeaderFooter(
       if (idx == null) continue;
       const block = blocks[idx];
       const measure = measures[idx];
+
+      // Exclude behindDoc anchored fragments with extreme offsets from height calculations.
+      // Decorative background images/drawings in headers/footers should not inflate margins.
+      // Fragments are still rendered in the layout; we only skip them when computing total height.
+      // We allow modest overflow (within maxBehindDocOverflow) to handle reasonable positioning.
+      const isAnchoredFragment =
+        (fragment.kind === 'image' || fragment.kind === 'drawing') && fragment.isAnchored === true;
+      if (isAnchoredFragment) {
+        // Runtime validation: ensure block.kind matches fragment.kind before type assertion
+        if (block.kind !== 'image' && block.kind !== 'drawing') {
+          throw new Error(
+            `Type mismatch: fragment kind is ${fragment.kind} but block kind is ${block.kind} for block ${block.id}`,
+          );
+        }
+        const anchoredBlock = block as ImageBlock | DrawingBlock;
+        if (anchoredBlock.anchor?.behindDoc && (fragment.y < minBehindDocY || fragment.y > maxBehindDocY)) {
+          continue;
+        }
+      }
 
       if (fragment.y < minY) minY = fragment.y;
       let bottom = fragment.y;

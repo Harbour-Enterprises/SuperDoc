@@ -243,7 +243,7 @@ describe('CommentsPlugin commands', () => {
       view.state = currentState;
     });
 
-    const spy = vi.spyOn(CommentHelpers, 'removeCommentsById');
+    const spy = vi.spyOn(CommentHelpers, 'resolveCommentById');
 
     const command = commands.resolveComment({ commentId: 'c-4' });
     const tr = currentState.tr;
@@ -795,5 +795,35 @@ describe('internal helper functions', () => {
     expect(trackedRange).toEqual(expect.objectContaining({ from: expect.any(Number), to: expect.any(Number) }));
 
     expect(findRangeById(doc, 'missing-id')).toBeNull();
+  });
+
+  it('createOrUpdateTrackedChangeComment returns early when nodes array is empty (IT-250)', () => {
+    // Regression test for IT-250: deleting tracked changes caused
+    // "Cannot read properties of undefined (reading 'marks')" error
+    // because nodes[0] was undefined when the array was empty
+    const schema = createCommentSchema();
+    const insertMark = schema.marks[TrackInsertMarkName].create({
+      id: 'empty-nodes-test',
+      author: 'Author',
+      authorEmail: 'author@example.com',
+      date: 'today',
+    });
+
+    const emptyState = EditorState.create({
+      schema,
+      doc: schema.node('doc', null, [schema.node('paragraph', null, [schema.text('Plain')])]),
+    });
+
+    // This should not throw - it should return undefined gracefully
+    const result = createOrUpdateTrackedChangeComment({
+      event: 'add',
+      marks: { insertedMark: insertMark, deletionMark: null, formatMark: null },
+      deletionNodes: [],
+      nodes: [], // Empty nodes array - the IT-250 bug condition
+      newEditorState: emptyState,
+      documentId: 'doc-1',
+    });
+
+    expect(result).toBeUndefined();
   });
 });

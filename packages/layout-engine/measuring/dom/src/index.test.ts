@@ -625,6 +625,7 @@ describe('measureBlock', () => {
     });
 
     it('converts spacing multipliers using the baseline line height', async () => {
+      const fontSize = 16;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'spaced',
@@ -632,7 +633,7 @@ describe('measureBlock', () => {
           {
             text: 'Line height test',
             fontFamily: 'Arial',
-            fontSize: 16,
+            fontSize,
           },
         ],
         attrs: {
@@ -641,13 +642,15 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
-      // The multiplier (1.5) is applied to this base
-      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
-      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * actualBase, 1);
+      // Word 2007+ uses fontSize × 1.15 as "single" line spacing (not just ascent+descent).
+      // The Canvas TextMetrics API doesn't expose lineGap, so we approximate it with 1.15×.
+      // The spacing multiplier (1.5) is applied to this base.
+      const singleLineHeight = fontSize * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(1.5 * singleLineHeight, 1);
     });
 
     it('applies higher auto multipliers to the baseline line height', async () => {
+      const fontSize = 16;
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'double-spaced',
@@ -655,7 +658,7 @@ describe('measureBlock', () => {
           {
             text: 'Double spaced text',
             fontFamily: 'Arial',
-            fontSize: 16,
+            fontSize,
           },
         ],
         attrs: {
@@ -664,9 +667,10 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      // With actual font metrics, the base is (ascent + descent + safety margin), not fontSize
-      const actualBase = measure.lines[0].ascent + measure.lines[0].descent + 1; // +1 for safety margin
-      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * actualBase, 1);
+      // Word 2007+ uses fontSize × 1.15 as "single" line spacing.
+      // The spacing multiplier (2.0) is applied to this base.
+      const singleLineHeight = fontSize * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(2 * singleLineHeight, 1);
     });
 
     it('treats large auto values as absolute pixel heights', async () => {
@@ -687,6 +691,114 @@ describe('measureBlock', () => {
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
       expect(measure.lines[0].lineHeight).toBeCloseTo(42, 3);
+    });
+
+    it('uses minimum line height for very small fonts', async () => {
+      const smallFontSize = 8; // Very small font
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'small-font',
+        runs: [
+          {
+            text: 'Tiny text',
+            fontFamily: 'Arial',
+            fontSize: smallFontSize,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // MIN_SINGLE_LINE_PX is 16px (12pt), which should be used instead of 8 * 1.15 = 9.2px
+      const minLineHeight = 16; // (12 * 96) / 72
+      expect(measure.lines[0].lineHeight).toBeCloseTo(minLineHeight, 1);
+    });
+
+    it('uses 1.15 multiplier for normal fonts', async () => {
+      const fontSize = 20;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'normal-font',
+        runs: [
+          {
+            text: 'Normal text',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // Normal font should use fontSize * 1.15
+      const expectedLineHeight = fontSize * 1.15; // 20 * 1.15 = 23px
+      expect(measure.lines[0].lineHeight).toBeCloseTo(expectedLineHeight, 1);
+    });
+
+    it('bypasses 1.15 base with exact lineRule', async () => {
+      const fontSize = 16;
+      const exactHeight = 30;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'exact-height',
+        runs: [
+          {
+            text: 'Exact line height',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+        attrs: {
+          spacing: { line: exactHeight, lineRule: 'exact' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // With lineRule: 'exact', should use the exact value, not the 1.15 base
+      expect(measure.lines[0].lineHeight).toBeCloseTo(exactHeight, 1);
+    });
+
+    it('uses max of base and specified value with atLeast lineRule', async () => {
+      const fontSize = 16;
+      const atLeastHeight = 12; // Less than base (16 * 1.15 = 18.4)
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'at-least-height',
+        runs: [
+          {
+            text: 'At least line height',
+            fontFamily: 'Arial',
+            fontSize,
+          },
+        ],
+        attrs: {
+          spacing: { line: atLeastHeight, lineRule: 'atLeast' },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      // With lineRule: 'atLeast', should use max of base (18.4) and specified (12)
+      const baseLineHeight = fontSize * 1.15; // 18.4
+      expect(measure.lines[0].lineHeight).toBeCloseTo(baseLineHeight, 1);
+    });
+
+    it('ensures line height is never smaller than glyph bounds to prevent clipping', async () => {
+      // This test verifies the clamp: Math.max(fontSize * 1.15, ascent + descent, MIN_SINGLE_LINE_PX)
+      // For any font, line height must be >= ascent + descent to prevent glyph overlap
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'clamp-test',
+        runs: [
+          {
+            text: 'Test clipping prevention',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+      const glyphBounds = measure.lines[0].ascent + measure.lines[0].descent;
+      // Line height must always accommodate the full glyph bounds
+      expect(measure.lines[0].lineHeight).toBeGreaterThanOrEqual(glyphBounds);
     });
 
     it('measures list blocks and returns marker widths and indents', async () => {
@@ -1297,6 +1409,67 @@ describe('measureBlock', () => {
       if (tabRun.kind === 'tab') {
         expect(tabRun.width).toBeGreaterThan(0);
         expect(tabRun.leader).toBe('dot');
+      }
+    });
+
+    it('preserves trailing spaces after tabs when line breaks', async () => {
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: '0-paragraph',
+        runs: [
+          {
+            text: 'Before',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 6,
+            pmEnd: 7,
+          },
+          {
+            text: 'Word Next',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {},
+      };
+
+      // Use narrow width to force line break after "Word "
+      const measure = expectParagraphMeasure(await measureBlock(block, 100));
+
+      // Should have multiple lines due to narrow width
+      expect(measure.lines.length).toBeGreaterThan(1);
+
+      // Find the line containing "Word " (the text after the tab)
+      const lineWithWord = measure.lines.find((line) => {
+        return line.segments?.some((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+      });
+
+      expect(lineWithWord).toBeDefined();
+
+      if (lineWithWord) {
+        // The segment should include the trailing space after "Word"
+        const wordSegment = lineWithWord.segments?.find((seg) => {
+          const run = block.runs[seg.runIndex];
+          return run.kind !== 'tab' && 'text' in run && run.text.includes('Word');
+        });
+
+        expect(wordSegment).toBeDefined();
+
+        if (wordSegment) {
+          const run = block.runs[wordSegment.runIndex];
+          if (run.kind !== 'tab' && 'text' in run) {
+            const segmentText = run.text.substring(wordSegment.fromChar, wordSegment.toChar);
+            // The segment should include "Word " (with trailing space)
+            expect(segmentText).toBe('Word ');
+          }
+        }
       }
     });
   });
@@ -3411,6 +3584,545 @@ describe('measureBlock', () => {
       // Set maxWidth to just after first word - should force second word to new line
       const breakMeasure = expectParagraphMeasure(await measureBlock(twoWordBlock, firstWordWidth + 2));
       expect(breakMeasure.lines.length).toBeGreaterThan(1);
+    });
+  });
+
+  describe('percentage table width (SD-1239)', () => {
+    it('scales column widths to 100% of available width when tableWidth type is pct with value 5000', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-100',
+        attrs: {
+          tableWidth: { value: 5000, type: 'pct' }, // 5000 = 100%
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 100], // Original: 200px total
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // With 100% width (5000), should scale to full 600px available width
+      // Original 200px → 600px means 3x scale: 100 * 3 = 300 each
+      expect(measure.totalWidth).toBe(600);
+      expect(measure.columnWidths[0]).toBe(300);
+      expect(measure.columnWidths[1]).toBe(300);
+    });
+
+    it('scales column widths to 50% of available width when tableWidth type is pct with value 2500', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-50',
+        attrs: {
+          tableWidth: { value: 2500, type: 'pct' }, // 2500 = 50%
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 100], // Original: 200px total
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // With 50% width (2500), should scale to 300px (half of 600px available)
+      // Original 200px → 300px means 1.5x scale: 100 * 1.5 = 150 each
+      expect(measure.totalWidth).toBe(300);
+      expect(measure.columnWidths[0]).toBe(150);
+      expect(measure.columnWidths[1]).toBe(150);
+    });
+
+    it('handles percentage width with width property instead of value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-width-prop',
+        attrs: {
+          tableWidth: { width: 2500, type: 'pct' }, // Using width property
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100], // Original: 100px
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 400 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // With 50% width, should scale to 200px (half of 400px)
+      expect(measure.totalWidth).toBe(200);
+      expect(measure.columnWidths[0]).toBe(200);
+    });
+
+    it('caps percentage width at maxWidth when percentage exceeds available space', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-capped',
+        attrs: {
+          tableWidth: { value: 5000, type: 'pct' }, // 100%
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [800], // Original: 800px, already > maxWidth
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 400 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Even at 100%, should not exceed maxWidth of 400px
+      expect(measure.totalWidth).toBe(400);
+    });
+
+    it('maintains column width ratios when scaling to percentage width', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-ratios',
+        attrs: {
+          tableWidth: { value: 5000, type: 'pct' }, // 100%
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-2',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-2',
+                    runs: [{ text: 'C', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [50, 100, 50], // 1:2:1 ratio, 200px total
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 400 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Should scale to 400px maintaining 1:2:1 ratio
+      // 50 * 2 = 100, 100 * 2 = 200, 50 * 2 = 100
+      expect(measure.totalWidth).toBe(400);
+      expect(measure.columnWidths[0]).toBe(100);
+      expect(measure.columnWidths[1]).toBe(200);
+      expect(measure.columnWidths[2]).toBe(100);
+    });
+
+    it('handles explicit pixel width (type: px)', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'px-table',
+        attrs: {
+          tableWidth: { width: 300, type: 'px' },
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+              {
+                id: 'cell-0-1',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-1',
+                    runs: [{ text: 'B', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100, 100], // Original: 200px
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Explicit 300px width should scale columns from 200px to 300px
+      expect(measure.totalWidth).toBe(300);
+      expect(measure.columnWidths[0]).toBe(150);
+      expect(measure.columnWidths[1]).toBe(150);
+    });
+
+    it('ignores zero percentage value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-zero',
+        attrs: {
+          tableWidth: { value: 0, type: 'pct' }, // 0 = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [100],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Zero percentage is invalid - should fall back to auto layout
+      // Auto layout without explicit width means column widths used as-is
+      expect(measure.totalWidth).toBe(100);
+      expect(measure.columnWidths[0]).toBe(100);
+    });
+
+    it('ignores negative percentage value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-negative',
+        attrs: {
+          tableWidth: { value: -2500, type: 'pct' }, // Negative = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [150],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Negative percentage is invalid - should fall back to auto layout
+      expect(measure.totalWidth).toBe(150);
+      expect(measure.columnWidths[0]).toBe(150);
+    });
+
+    it('ignores NaN percentage value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-nan',
+        attrs: {
+          tableWidth: { value: NaN, type: 'pct' }, // NaN = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [200],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // NaN is invalid - should fall back to auto layout
+      expect(measure.totalWidth).toBe(200);
+      expect(measure.columnWidths[0]).toBe(200);
+    });
+
+    it('ignores Infinity percentage value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-infinity',
+        attrs: {
+          tableWidth: { value: Infinity, type: 'pct' }, // Infinity = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [175],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Infinity is invalid - should fall back to auto layout
+      expect(measure.totalWidth).toBe(175);
+      expect(measure.columnWidths[0]).toBe(175);
+    });
+
+    it('ignores tableWidth with missing both width and value properties', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'pct-table-missing-props',
+        attrs: {
+          tableWidth: { type: 'pct' }, // Missing value/width = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [120],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // Missing value is invalid - should fall back to auto layout
+      expect(measure.totalWidth).toBe(120);
+      expect(measure.columnWidths[0]).toBe(120);
+    });
+
+    it('ignores tableWidth when type is pixel with invalid value', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'px-table-nan',
+        attrs: {
+          tableWidth: { width: NaN, type: 'pixel' }, // NaN pixel width = invalid
+        },
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [130],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // NaN pixel width is invalid - should fall back to auto layout
+      expect(measure.totalWidth).toBe(130);
+      expect(measure.columnWidths[0]).toBe(130);
+    });
+
+    it('handles missing tableWidth property entirely', async () => {
+      const block: FlowBlock = {
+        kind: 'table',
+        id: 'table-no-width',
+        attrs: {}, // No tableWidth property at all
+        rows: [
+          {
+            id: 'row-0',
+            cells: [
+              {
+                id: 'cell-0-0',
+                blocks: [
+                  {
+                    kind: 'paragraph',
+                    id: 'para-0',
+                    runs: [{ text: 'A', fontFamily: 'Arial', fontSize: 12 }],
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+        columnWidths: [140],
+      };
+
+      const measure = await measureBlock(block, { maxWidth: 600 });
+
+      expect(measure.kind).toBe('table');
+      if (measure.kind !== 'table') throw new Error('expected table measure');
+
+      // No tableWidth - auto layout uses column widths as-is
+      expect(measure.totalWidth).toBe(140);
+      expect(measure.columnWidths[0]).toBe(140);
     });
   });
 

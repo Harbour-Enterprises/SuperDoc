@@ -215,13 +215,13 @@ Version bumps are automatic based on commit messages:
 
 ```bash
 # View latest releases
-npm view superdoc versions --json
+pnpm view superdoc versions --json
 
 # Check current tags
-npm view superdoc dist-tags
+pnpm view superdoc dist-tags
 
 # Dry run to preview release
-npx semantic-release --dry-run --no-ci
+pnpx semantic-release --dry-run --no-ci
 ```
 
 ### Common Issues

@@ -1,4 +1,4 @@
-import type { ProseMirrorJSON } from '@core/types/EditorTypes.js';
+import type { ProseMirrorJSON } from '../../core/types/EditorTypes.js';
 import type { Node as ProseMirrorNode } from 'prosemirror-model';
 
 type BookmarkConfig = {
@@ -11,6 +11,10 @@ type SearchMatch = {
   from: number;
   to: number;
   text: string;
+};
+
+export type SearchCommandOptions = {
+  highlight?: boolean;
 };
 
 type DocumentSectionCreateOptions = {
@@ -64,7 +68,7 @@ export interface SpecializedCommandAugmentations {
 
   // Search
   goToFirstMatch: () => boolean;
-  search: (pattern: string | RegExp) => SearchMatch[];
+  search: (pattern: string | RegExp, options?: SearchCommandOptions) => SearchMatch[];
   goToSearchResult: (match: SearchMatch) => boolean;
 
   // Custom selection
@@ -87,10 +91,6 @@ export interface SpecializedCommandAugmentations {
   appendRowsToStructuredContentTable: (options: StructuredContentTableAppendOptions) => boolean;
 }
 
-declare module '@core/types/ChainedCommands.js' {
-  interface ExtensionCommandMap extends SpecializedCommandAugmentations {}
-}
-
-declare module '@core/types/ChainedCommands' {
+declare module '../../core/types/ChainedCommands.js' {
   interface ExtensionCommandMap extends SpecializedCommandAugmentations {}
 }

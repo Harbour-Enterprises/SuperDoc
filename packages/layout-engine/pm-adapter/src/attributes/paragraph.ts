@@ -42,7 +42,7 @@ import {
 import { normalizeOoxmlTabs } from './tabs.js';
 import { normalizeParagraphBorders, normalizeParagraphShading } from './borders.js';
 import { mirrorIndentForRtl, ensureBidiIndentPx, DEFAULT_BIDI_INDENT_PX } from './bidi.js';
-import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
+import { hydrateParagraphStyleAttrs, hydrateMarkerStyleAttrs } from './paragraph-styles.js';
 import type { ParagraphStyleHydration } from './paragraph-styles.js';
 import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 
@@ -851,12 +851,12 @@ const extractDropCapRunFromParagraph = (para: PMNode): DropCapRun | null => {
  * @param paragraphAttrs - Resolved paragraph attributes including spacing, indent, and tabs
  * @param numberingProps - Numbering properties with numId, ilvl, and optional resolved marker RPr
  * @param styleContext - Style context for resolving character styles and doc defaults
- * @param paragraphNode - Optional paragraph node to extract first text run font properties
+ * @param paragraphNode - Optional paragraph node used to hydrate marker run properties via OOXML cascade
  * @returns WordParagraphLayoutOutput with marker and gutter information, or null if computation fails
  *
  * @remarks
  * - Returns null early if numberingProps is explicitly null (vs undefined)
- * - Falls back to first text run font, then style-engine character style if resolvedMarkerRpr is not available
+ * - Uses marker hydration when converterContext is available, then falls back to resolvedMarkerRpr and style-engine defaults
  * - Converts indent from twips to pixels for rendering
  * - Gracefully handles computation errors by returning null
  */
@@ -864,7 +864,9 @@ export const computeWordLayoutForParagraph = (
   paragraphAttrs: ParagraphAttrs,
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
-  _paragraphNode?: PMNode,
+  paragraphNode?: PMNode,
+  converterContext?: ConverterContext,
+  resolvedPpr?: Record<string, unknown>,
 ): WordParagraphLayoutOutput | null => {
   if (numberingProps === null) {
     return null;
@@ -918,11 +920,30 @@ export const computeWordLayoutForParagraph = (
       },
     };
 
-    let markerRun = numberingProps?.resolvedMarkerRpr;
+    let markerRun: ResolvedRunProperties | undefined;
+
+    const markerHydration =
+      paragraphNode && converterContext ? hydrateMarkerStyleAttrs(paragraphNode, converterContext, resolvedPpr) : null;
+
+    if (markerHydration) {
+      const resolvedColor = markerHydration.color ? `#${markerHydration.color.replace('#', '')}` : undefined;
+      markerRun = {
+        fontFamily: markerHydration.fontFamily ?? 'Times New Roman',
+        fontSize: markerHydration.fontSize / 2, // half-points to points
+        bold: markerHydration.bold,
+        italic: markerHydration.italic,
+        color: resolvedColor,
+        letterSpacing: markerHydration.letterSpacing != null ? twipsToPx(markerHydration.letterSpacing) : undefined,
+      };
+    }
 
     if (!markerRun) {
-      // Fallback to style-engine computed character style for the paragraph
-      // This matches MS Word behavior: list markers inherit font from paragraph style
+      markerRun = numberingProps?.resolvedMarkerRpr;
+    }
+
+    if (!markerRun) {
+      // Fallback to style-engine when converterContext is not available
+      // This path uses hardcoded defaults but maintains backwards compatibility
       const { character: characterStyle } = resolveStyle({ styleId: paragraphAttrs.styleId }, styleContext);
       if (characterStyle) {
         markerRun = {
@@ -936,7 +957,7 @@ export const computeWordLayoutForParagraph = (
       }
     }
 
-    // Final fallback if style-engine returned nothing
+    // Final fallback if neither hydration nor style-engine returned anything
     if (!markerRun) {
       markerRun = {
         fontFamily: 'Times New Roman',
@@ -969,6 +990,41 @@ export const computeWordLayoutForParagraph = (
   }
 };
 
+const normalizeWordLayoutForIndent = (
+  wordLayout: WordParagraphLayoutOutput,
+  paragraphIndent: ParagraphIndent | undefined,
+): WordParagraphLayoutOutput => {
+  const resolvedIndent = wordLayout.resolvedIndent ?? paragraphIndent ?? {};
+  const indentLeft = isFiniteNumber(resolvedIndent.left) ? resolvedIndent.left : 0;
+  const firstLine = isFiniteNumber(resolvedIndent.firstLine) ? resolvedIndent.firstLine : 0;
+  const hanging = isFiniteNumber(resolvedIndent.hanging) ? resolvedIndent.hanging : 0;
+  const shouldFirstLineIndentMode = firstLine > 0 && !hanging;
+
+  if (wordLayout.firstLineIndentMode === true && !shouldFirstLineIndentMode) {
+    wordLayout.firstLineIndentMode = false;
+  }
+
+  if (wordLayout.firstLineIndentMode === true) {
+    if (isFiniteNumber(wordLayout.textStartPx)) {
+      if (
+        wordLayout.marker &&
+        (!isFiniteNumber(wordLayout.marker.textStartX) || wordLayout.marker.textStartX !== wordLayout.textStartPx)
+      ) {
+        wordLayout.marker.textStartX = wordLayout.textStartPx;
+      }
+    } else if (wordLayout.marker && isFiniteNumber(wordLayout.marker.textStartX)) {
+      wordLayout.textStartPx = wordLayout.marker.textStartX;
+    }
+  } else {
+    wordLayout.textStartPx = indentLeft;
+    if (wordLayout.marker) {
+      wordLayout.marker.textStartX = indentLeft;
+    }
+  }
+
+  return wordLayout;
+};
+
 /**
  * Compute paragraph attributes from PM node, resolving styles and handling BiDi text.
  * This is the main function for converting PM paragraph attributes to layout engine format.
@@ -991,9 +1047,15 @@ export const computeParagraphAttrs = (
   // defaults for unspecified fields (e.g., before/after from docDefaults).
   const mergedSpacing = mergeSpacingSources(hydrated?.spacing, paragraphProps.spacing, attrs.spacing);
   const normalizedSpacing = normalizeParagraphSpacing(mergedSpacing);
-  const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
+  const normalizeIndentObject = (value: unknown): ParagraphIndent | undefined => {
+    if (!value || typeof value !== 'object') return;
+    return normalizePxIndent(value) ?? convertIndentTwipsToPx(value);
+  };
   const normalizedIndent =
-    normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
+    normalizeIndentObject(attrs.indent) ??
+    convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
+    convertIndentTwipsToPx(hydrated?.indent as ParagraphIndent) ??
+    normalizeParagraphIndent(attrs.textIndent);
 
   /**
    * Unwraps and normalizes tab stop data structures from various formats.
@@ -1195,6 +1257,12 @@ export const computeParagraphAttrs = (
    * 1. normalizedSpacing.contextualSpacing - Value from normalized spacing object
    * 2. paragraphProps.contextualSpacing - Direct property on paragraphProperties
    * 3. attrs.contextualSpacing - Top-level attribute
+   * 4. hydrated.contextualSpacing - Value resolved from paragraph style chain
+   *
+   * The hydrated fallback (priority 4) is critical for style-defined contextualSpacing,
+   * such as the ListBullet style which defines w:contextualSpacing to suppress spacing
+   * between consecutive list items of the same style ("Don't add space between paragraphs
+   * of the same style" in MS Word).
    *
    * OOXML Boolean Handling:
    * - Supports multiple representations: true, 1, '1', 'true', 'on'
@@ -1204,7 +1272,8 @@ export const computeParagraphAttrs = (
   const contextualSpacingValue =
     normalizedSpacing?.contextualSpacing ??
     safeGetProperty(paragraphProps, 'contextualSpacing') ??
-    safeGetProperty(attrs, 'contextualSpacing');
+    safeGetProperty(attrs, 'contextualSpacing') ??
+    hydrated?.contextualSpacing;
 
   if (contextualSpacingValue != null) {
     // Use isTruthy to properly handle OOXML boolean representations (true, 1, '1', 'true', 'on')
@@ -1488,7 +1557,12 @@ export const computeParagraphAttrs = (
     const numericNumId = typeof numId === 'number' ? numId : undefined;
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
-    const resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+    let resolvedLevel: Partial<AdapterNumberingProps> | undefined;
+    try {
+      resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+    } catch (error) {
+      resolvedLevel = undefined;
+    }
 
     if (resolvedLevel) {
       if (resolvedLevel.format && numberingProps.format == null) {
@@ -1559,7 +1633,7 @@ export const computeParagraphAttrs = (
     // Do NOT set hardcoded defaults here - let computeWordLayoutForParagraph use
     // style-engine fallback to resolve from paragraph style (matching MS Word behavior)
     if (!enrichedNumberingProps.resolvedMarkerRpr) {
-      const numbering = computed.numbering as Record<string, unknown> | undefined;
+      const numbering = computed.numbering as unknown as Record<string, unknown> | undefined;
       if (numbering && typeof numbering.marker === 'object' && numbering.marker !== null) {
         const marker = numbering.marker as Record<string, unknown>;
         if (typeof marker.run === 'object' && marker.run !== null) {
@@ -1570,15 +1644,30 @@ export const computeParagraphAttrs = (
       // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    let wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+    let wordLayout: WordParagraphLayoutOutput | null = null;
+    try {
+      wordLayout = computeWordLayoutForParagraph(
+        paragraphAttrs,
+        enrichedNumberingProps,
+        styleContext,
+        para,
+        converterContext,
+        hydrated?.resolved as Record<string, unknown> | undefined,
+      );
+    } catch (error) {
+      wordLayout = null;
+    }
 
     // Fallback: some numbering levels only specify a firstLine indent (no left/hanging).
     // When wordLayout computation returns null, ensure we still provide a textStartPx
     // so first-line wrapping in columns has the correct width.
     if (!wordLayout && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           // Treat as first-line-indent mode: text starts after the marker+firstLine offset.
           firstLineIndentMode: true,
@@ -1591,14 +1680,13 @@ export const computeParagraphAttrs = (
     // the numbering indent has a firstLine value, set a minimal textStartPx to
     // match the resolved first-line indent. This guards against cases where
     // word-layout computation omits textStart for levels without left/hanging.
-    if (
-      wordLayout &&
-      (!wordLayout.textStartPx || !Number.isFinite(wordLayout.textStartPx)) &&
-      enrichedNumberingProps.resolvedLevelIndent
-    ) {
+    if (wordLayout && !Number.isFinite(wordLayout.textStartPx) && enrichedNumberingProps.resolvedLevelIndent) {
       const resolvedIndentPx = convertIndentTwipsToPx(enrichedNumberingProps.resolvedLevelIndent);
-      const firstLinePx = resolvedIndentPx?.firstLine ?? 0;
-      if (firstLinePx > 0) {
+      const baseIndent = resolvedIndentPx ?? enrichedNumberingProps.resolvedLevelIndent;
+      const mergedIndent = { ...baseIndent, ...(paragraphAttrs.indent ?? {}) };
+      const firstLinePx = isFiniteNumber(mergedIndent.firstLine) ? mergedIndent.firstLine : 0;
+      const hangingPx = isFiniteNumber(mergedIndent.hanging) ? mergedIndent.hanging : 0;
+      if (firstLinePx > 0 && !hangingPx) {
         wordLayout = {
           ...wordLayout,
           firstLineIndentMode: wordLayout.firstLineIndentMode ?? true,
@@ -1619,6 +1707,7 @@ export const computeParagraphAttrs = (
           wordLayout.marker.suffix = listRendering.suffix;
         }
       }
+      wordLayout = normalizeWordLayoutForIndent(wordLayout, paragraphAttrs.indent);
       paragraphAttrs.wordLayout = wordLayout;
     }
 

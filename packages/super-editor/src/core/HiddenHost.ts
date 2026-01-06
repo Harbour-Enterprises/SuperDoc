@@ -11,20 +11,22 @@
  * @returns A configured hidden host div element
  *
  * @remarks
- * - Uses position: absolute with left: -9999px to move off-screen
+ * - Uses position: fixed with left: -9999px to move off-screen without affecting scroll
  * - Uses opacity: 0 (NOT visibility: hidden) to keep content focusable
  * - Does NOT set aria-hidden="true" because the editor must remain accessible
  * - Sets pointer-events: none and z-index: -1 to prevent interaction
  * - Sets user-select: none to prevent text selection in the hidden editor
+ * - Sets overflow-anchor: none to prevent scroll anchoring issues when content changes
  * - The viewport host is aria-hidden, but this host provides semantic structure
  */
 export function createHiddenHost(doc: Document, widthPx: number): HTMLElement {
   const host = doc.createElement('div');
   host.className = 'presentation-editor__hidden-host';
-  host.style.position = 'absolute';
+  host.style.position = 'fixed';
   host.style.left = '-9999px';
   host.style.top = '0';
   host.style.width = `${widthPx}px`;
+  host.style.setProperty('overflow-anchor', 'none');
   host.style.pointerEvents = 'none';
   // DO NOT use visibility:hidden - it prevents focusing!
   // Instead use opacity:0 and z-index to hide while keeping focusable

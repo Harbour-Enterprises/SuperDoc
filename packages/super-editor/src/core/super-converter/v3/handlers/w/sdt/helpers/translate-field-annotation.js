@@ -188,10 +188,15 @@ export function prepareHtmlAnnotation(params) {
   const {
     node: { attrs = {}, marks = [] },
     editorSchema,
+    editor,
   } = params;
 
   let html = attrs.rawHtml || attrs.displayLabel;
-  const paragraphHtmlContainer = sanitizeHtml(html);
+  const paragraphHtmlContainer = sanitizeHtml(
+    html,
+    undefined,
+    editor?.options?.document ?? editor?.options?.mockDocument,
+  );
   const marksFromAttrs = translateFieldAttrsToMarks(attrs);
   const allMarks = [...marks, ...marksFromAttrs];
 
@@ -205,7 +210,6 @@ export function prepareHtmlAnnotation(params) {
 
   const htmlAnnotationNode = state.doc.toJSON();
   const listTypes = ['bulletList', 'orderedList'];
-  const { editor } = params;
   const seenLists = new Map();
   state.doc.descendants((node) => {
     if (listTypes.includes(node.type.name)) {

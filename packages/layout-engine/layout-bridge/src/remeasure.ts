@@ -8,6 +8,13 @@ import type {
   ParagraphIndent,
 } from '@superdoc/contracts';
 import { Engines } from '@superdoc/contracts';
+import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
+import {
+  LIST_MARKER_GAP as _LIST_MARKER_GAP,
+  SPACE_SUFFIX_GAP_PX as _SPACE_SUFFIX_GAP_PX,
+  DEFAULT_TAB_INTERVAL_PX as _DEFAULT_TAB_INTERVAL_PX,
+} from '@superdoc/common/layout-constants';
+import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 
 /**
  * Type definition for paragraph block attributes that include indentation and tab stops.
@@ -17,7 +24,7 @@ type ParagraphBlockAttrs = {
   indent?: { left?: number; right?: number; firstLine?: number; hanging?: number };
   tabs?: TabStop[];
   tabIntervalTwips?: number;
-  wordLayout?: { textStartPx?: number; marker?: { textStartX?: number } };
+  wordLayout?: WordParagraphLayoutOutput;
   numberingProperties?: unknown;
 };
 
@@ -101,11 +108,147 @@ function fontString(run: Run): string {
   return `${italic}${bold}${size}px ${family}`.trim();
 }
 
+/**
+ * Extracts text content from a run.
+ *
+ * Different run types have different text content:
+ * - Text runs: Have text property with string content
+ * - Image/drawing runs: Have 'src' property, no text content
+ * - Line breaks, breaks, field annotations: Special kinds with no text content
+ *
+ * @param run - The run to extract text from
+ * @returns Text content of the run, or empty string for non-text runs
+ */
 function runText(run: Run): string {
   return 'src' in run || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
     ? ''
     : (run.text ?? '');
 }
+
+/**
+ * Determines if a character is considered a "word character" for capitalization.
+ *
+ * Word characters are defined as:
+ * - Digits: 0-9 (ASCII 48-57)
+ * - Uppercase letters: A-Z (ASCII 65-90)
+ * - Lowercase letters: a-z (ASCII 97-122)
+ * - Apostrophe: ' (for contractions like "don't", "it's")
+ *
+ * Used by capitalizeText to determine word boundaries. A capital letter is
+ * applied when a word character follows a non-word character.
+ *
+ * @param char - The character to check (single character string)
+ * @returns True if the character is a word character, false otherwise
+ *
+ * @example
+ * ```typescript
+ * isWordChar('a');  // true
+ * isWordChar('Z');  // true
+ * isWordChar('5');  // true
+ * isWordChar("'");  // true (for contractions)
+ * isWordChar(' ');  // false
+ * isWordChar('-');  // false
+ * ```
+ */
+const isWordChar = (char: string): boolean => {
+  if (!char) return false;
+  const code = char.charCodeAt(0);
+  return (code >= 48 && code <= 57) || (code >= 65 && code <= 90) || (code >= 97 && code <= 122) || char === "'";
+};
+
+/**
+ * Capitalizes the first letter of each word in text.
+ *
+ * Implements CSS text-transform: capitalize by uppercasing the first character
+ * of each word. A word is defined as any sequence of word characters (letters,
+ * digits, apostrophes) preceded by a non-word character or the start of text.
+ *
+ * This function handles proper word boundary detection even when operating on
+ * a slice of text within a larger string (via fullText and startOffset parameters),
+ * ensuring correct capitalization at slice boundaries.
+ *
+ * @param text - The text to capitalize
+ * @param fullText - Optional full text context (for proper boundary detection when text is a slice)
+ * @param startOffset - Optional offset of text within fullText (required if fullText provided)
+ * @returns Text with first letter of each word capitalized
+ *
+ * @example
+ * ```typescript
+ * capitalizeText("hello world");
+ * // Returns: "Hello World"
+ *
+ * capitalizeText("don't stop");
+ * // Returns: "Don't Stop"
+ *
+ * // With full text context for slice
+ * capitalizeText("world", "hello world", 6);
+ * // Returns: "world" (not "World" because 'w' is mid-word in full context)
+ * ```
+ */
+const capitalizeText = (text: string, fullText?: string, startOffset?: number): string => {
+  if (!text) return text;
+  const hasFullText = typeof startOffset === 'number' && fullText != null;
+  let result = '';
+  for (let i = 0; i < text.length; i += 1) {
+    const prevChar = hasFullText
+      ? startOffset! + i > 0
+        ? fullText![startOffset! + i - 1]
+        : ''
+      : i > 0
+        ? text[i - 1]
+        : '';
+    const ch = text[i];
+    result += isWordChar(ch) && !isWordChar(prevChar) ? ch.toUpperCase() : ch;
+  }
+  return result;
+};
+
+/**
+ * Applies CSS text-transform to text.
+ *
+ * Implements the CSS text-transform property values:
+ * - 'uppercase': Convert all characters to uppercase
+ * - 'lowercase': Convert all characters to lowercase
+ * - 'capitalize': Capitalize first letter of each word (via capitalizeText)
+ * - 'none': No transformation (return original text)
+ *
+ * Used during text measurement to apply visual transformations without mutating
+ * the underlying document model. The transform is applied during rendering and
+ * measurement but does not affect the stored text content.
+ *
+ * @param text - The text to transform
+ * @param transform - CSS text-transform value ('uppercase', 'lowercase', 'capitalize', 'none', undefined)
+ * @param fullText - Optional full text context (passed to capitalizeText for proper word boundaries)
+ * @param startOffset - Optional offset within fullText (passed to capitalizeText)
+ * @returns Transformed text, or original text if transform is 'none' or undefined
+ *
+ * @example
+ * ```typescript
+ * applyTextTransform("Hello World", "uppercase");
+ * // Returns: "HELLO WORLD"
+ *
+ * applyTextTransform("Hello World", "lowercase");
+ * // Returns: "hello world"
+ *
+ * applyTextTransform("hello world", "capitalize");
+ * // Returns: "Hello World"
+ *
+ * applyTextTransform("hello", undefined);
+ * // Returns: "hello" (no transformation)
+ * ```
+ */
+const applyTextTransform = (
+  text: string,
+  transform: 'uppercase' | 'lowercase' | 'capitalize' | 'none' | undefined,
+  fullText?: string,
+  startOffset?: number,
+): string => {
+  if (!text || !transform || transform === 'none') return text;
+  if (transform === 'uppercase') return text.toUpperCase();
+  if (transform === 'lowercase') return text.toLowerCase();
+  if (transform === 'capitalize') return capitalizeText(text, fullText, startOffset);
+  return text;
+};
 
 // --- Tab helpers (aligned with measuring/dom defaults) ---
 const DEFAULT_TAB_INTERVAL_TWIPS = 720; // 0.5in
@@ -155,6 +298,52 @@ const twipsToPx = (twips: number): number => twips / TWIPS_PER_PX;
 const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
 
 type TabStopPx = { pos: number; val: TabStop['val']; leader?: TabStop['leader'] };
+
+/**
+ * Type definition for minimal marker run formatting properties.
+ *
+ * Used to generate font strings for marker text measurement. Contains only
+ * the essential typography properties needed for canvas measurement.
+ */
+type MarkerRun = {
+  fontFamily?: string;
+  fontSize?: number;
+  bold?: boolean;
+  italic?: boolean;
+};
+
+/**
+ * Generates a CSS font string for measuring list marker text.
+ *
+ * Similar to the main fontString() function but specialized for marker runs
+ * which may have incomplete formatting information. Provides sensible defaults
+ * for missing properties (16px Arial) to ensure measurement always succeeds.
+ *
+ * The CSS font string format is required by canvas.measureText() API:
+ * [style] [weight] <size> <family>
+ *
+ * @param run - Marker run with optional formatting properties (fontFamily, fontSize, bold, italic)
+ * @returns CSS font string suitable for CanvasRenderingContext2D.font property
+ *
+ * @example
+ * ```typescript
+ * markerFontString({ fontFamily: 'Arial', fontSize: 14, bold: true });
+ * // Returns: "bold 14px Arial"
+ *
+ * markerFontString({ fontSize: 18, italic: true });
+ * // Returns: "italic 18px Arial" (defaults to Arial)
+ *
+ * markerFontString();
+ * // Returns: "16px Arial" (all defaults)
+ * ```
+ */
+const markerFontString = (run?: MarkerRun): string => {
+  const size = run?.fontSize ?? 16;
+  const family = run?.fontFamily ?? 'Arial';
+  const italic = run?.italic ? 'italic ' : '';
+  const bold = run?.bold ? 'bold ' : '';
+  return `${italic}${bold}${size}px ${family}`.trim();
+};
 
 /**
  * Build tab stop positions in pixels from OOXML tab stop specifications.
@@ -300,7 +489,10 @@ const getNextTabStopPx = (
  */
 function measureRunSliceWidth(run: Run, fromChar: number, toChar: number): number {
   const context = getCtx();
-  const text = runText(run).slice(fromChar, toChar);
+  const fullText = runText(run);
+  // Only TextRun and TabRun have textTransform property (via RunMarks)
+  const transform = isTextRun(run) ? run.textTransform : undefined;
+  const text = applyTextTransform(fullText.slice(fromChar, toChar), transform, fullText, fromChar);
   if (!context) {
     // Fallback: simple proportional width (approximate)
     // When canvas context is unavailable (e.g., server-side rendering),
@@ -485,12 +677,27 @@ export function remeasureParagraph(
       : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
         ? wordLayout.textStartPx
         : undefined;
+  const resolvedTextStartPx = resolveListTextStartPx(
+    wordLayout,
+    indentLeft,
+    indentFirstLine,
+    indentHanging,
+    (markerText, marker) => {
+      const context = getCtx();
+      if (!context) return 0;
+      context.font = markerFontString(marker.run);
+      return context.measureText(markerText).width;
+    },
+  );
+  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
   // If numbering defines only a firstLine indent with no left/hanging, treat it as a hanging-style layout:
   // don't shrink available width in columns (matches Word which positions marker + tab but leaves normal text width).
-  const treatAsHanging = textStartPx && indentLeft === 0 && indentHanging === 0;
+  // IMPORTANT: If a list marker is present, the marker+tab are rendered inline, so we MUST
+  // shrink the first-line width to match the painter's availableWidth.
+  const treatAsHanging = !wordLayout?.marker && effectiveTextStartPx && indentLeft === 0 && indentHanging === 0;
   const firstLineWidth =
-    typeof textStartPx === 'number' && textStartPx > indentLeft && !treatAsHanging
-      ? Math.max(1, maxWidth - textStartPx - indentRight)
+    typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft && !treatAsHanging
+      ? Math.max(1, maxWidth - effectiveTextStartPx - indentRight)
       : Math.max(1, contentWidth - rawFirstLineOffset);
   const tabStops = buildTabStopsPx(indent as ParagraphIndent | undefined, attrs?.tabs, attrs?.tabIntervalTwips);
 

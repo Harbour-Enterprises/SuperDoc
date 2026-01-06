@@ -10,10 +10,9 @@ import { toFlowBlocks } from './index.js';
 import type { PMNode } from './index.js';
 import { measureBlock } from '@superdoc/measuring-dom';
 import { layoutDocument } from '@superdoc/layout-engine';
-import type { ParaFragment } from '@superdoc/layout-engine';
 import { createDomPainter } from '@superdoc/painter-dom';
 // Cleaned: remove unused PDF painter import
-import type { Measure, ParagraphMeasure, TabStop } from '@superdoc/contracts';
+import type { Measure, ParaFragment, ParagraphMeasure, TabStop } from '@superdoc/contracts';
 import basicParagraphFixture from './fixtures/basic-paragraph.json';
 import edgeCasesFixture from './fixtures/edge-cases.json';
 import twoColumnFixture from './fixtures/two-column-two-page.json';
@@ -527,7 +526,9 @@ describe('PM → FlowBlock → Measure integration', () => {
     painter.paint(layout, mount);
 
     const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
-    expect(fragment.style.backgroundColor).toBe('rgb(170, 187, 204)');
+    const shadingLayer = fragment.querySelector('.superdoc-paragraph-shading') as HTMLElement;
+    expect(shadingLayer).toBeTruthy();
+    expect(shadingLayer.style.backgroundColor).toBe('rgb(170, 187, 204)');
 
     document.body.removeChild(mount);
   });

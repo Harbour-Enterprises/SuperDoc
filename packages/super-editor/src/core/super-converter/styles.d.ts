@@ -1,4 +1,15 @@
 /**
+ * Resolves run properties from styles chain
+ */
+export function resolveRunProperties(
+  params: unknown,
+  inlineRpr: unknown,
+  resolvedPpr: unknown,
+  isListNumber?: boolean,
+  numberingDefinedInline?: boolean,
+): unknown;
+
+/**
  * Resolves paragraph properties from styles chain
  */
 export function resolveParagraphProperties(

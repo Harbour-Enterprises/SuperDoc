@@ -45,13 +45,15 @@ export class EditorAdapter {
 
         if (this.editor.commands?.search) {
           // First try with original text
-          rawMatches = this.editor.commands.search(text, { highlight }) ?? [];
+          const searchResult = this.editor.commands.search(text, { highlight });
+          rawMatches = Array.isArray(searchResult) ? searchResult : [];
 
           // If no matches and text has list prefix, try with stripped prefix
           if (rawMatches.length === 0 && text && /^\d+(\.\d+)?\.\s+/.test(text)) {
             const strippedText = stripListPrefix(text);
             if (strippedText) {
-              rawMatches = this.editor.commands.search(strippedText, { highlight }) ?? [];
+              const strippedResult = this.editor.commands.search(strippedText, { highlight });
+              rawMatches = Array.isArray(strippedResult) ? strippedResult : [];
             }
           }
 
@@ -60,7 +62,8 @@ export class EditorAdapter {
           if (rawMatches.length === 0 && text) {
             const normalizedText = text.replace(/\s+/g, ' ').trim();
             if (normalizedText !== text && normalizedText.length > 0) {
-              rawMatches = this.editor.commands.search(normalizedText, { highlight }) ?? [];
+              const normalizedResult = this.editor.commands.search(normalizedText, { highlight });
+              rawMatches = Array.isArray(normalizedResult) ? normalizedResult : [];
             }
           }
         }
@@ -112,13 +115,19 @@ export class EditorAdapter {
         // First try with original query (escaped for regex)
         const escapedOriginal = this.escapeRegex(query);
         const regexOriginal = new RegExp(escapedOriginal, caseSensitive ? 'g' : 'gi');
-        const originalResults = this.editor.commands.search(regexOriginal, { highlight: false }) || [];
+        const originalSearchResult = this.editor.commands.search(regexOriginal, { highlight: false });
+        const originalResults = Array.isArray(originalSearchResult)
+          ? (originalSearchResult as Array<{ from: number; to: number; text?: string }>)
+          : [];
 
         // Then try with stripped prefix (also escaped for regex)
         const strippedQuery = query.replace(/^\d+(\.\d+)?\.\s+/, '');
         const escapedStripped = this.escapeRegex(strippedQuery);
         const regexStripped = new RegExp(escapedStripped, caseSensitive ? 'g' : 'gi');
-        const strippedResults = this.editor.commands.search(regexStripped, { highlight: false }) || [];
+        const strippedSearchResult = this.editor.commands.search(regexStripped, { highlight: false });
+        const strippedResults = Array.isArray(strippedSearchResult)
+          ? (strippedSearchResult as Array<{ from: number; to: number; text?: string }>)
+          : [];
 
         // Return stripped results if found, otherwise original
         const results = strippedResults.length > 0 ? strippedResults : originalResults;
@@ -132,7 +141,10 @@ export class EditorAdapter {
       // No list prefix, just search normally
       const escapedQuery = this.escapeRegex(query);
       const regex = new RegExp(escapedQuery, caseSensitive ? 'g' : 'gi');
-      const results = this.editor.commands.search(regex, { highlight: false }) || [];
+      const searchResult = this.editor.commands.search(regex, { highlight: false });
+      const results = Array.isArray(searchResult)
+        ? (searchResult as Array<{ from: number; to: number; text?: string }>)
+        : [];
 
       return results.map((match: { from: number; to: number; text?: string }) => ({
         from: match.from,
@@ -159,7 +171,21 @@ export class EditorAdapter {
    * @param inlineColor - Hex color for the highlight (default: #6CA0DC)
    */
   createHighlight(from: number, to: number, inlineColor: string = DEFAULT_HIGHLIGHT_COLOR): void {
-    this.editor.chain().setTextSelection({ from, to }).setHighlight(inlineColor).run();
+    const chain = this.editor.chain();
+    if (chain && typeof chain.setTextSelection === 'function') {
+      const chainWithSelection = chain.setTextSelection({ from, to });
+      if (
+        chainWithSelection &&
+        typeof chainWithSelection === 'object' &&
+        'setHighlight' in chainWithSelection &&
+        typeof chainWithSelection.setHighlight === 'function'
+      ) {
+        const chainWithHighlight = chainWithSelection.setHighlight(inlineColor);
+        if (chainWithHighlight && typeof chainWithHighlight === 'object' && 'run' in chainWithHighlight) {
+          chainWithHighlight.run();
+        }
+      }
+    }
     this.scrollToPosition(from);
   }
 
@@ -174,7 +200,10 @@ export class EditorAdapter {
       return;
     }
     const domPos = view.domAtPos(from);
-    domPos?.node?.scrollIntoView(true);
+    const node = domPos?.node;
+    if (node && 'scrollIntoView' in node && typeof node.scrollIntoView === 'function') {
+      (node as Element).scrollIntoView(true);
+    }
   }
 
   /**
@@ -266,11 +295,11 @@ export class EditorAdapter {
     }
 
     if (state.storedMarks) {
-      return [...state.storedMarks];
+      return [...state.storedMarks] as MarkType[];
     }
 
     const resolved = state.doc.resolve(position);
-    return resolved.marks();
+    return [...resolved.marks()] as MarkType[];
   }
 
   /**
@@ -636,11 +665,15 @@ export class EditorAdapter {
    */
   createTrackedChange(from: number, to: number, suggestedText: string): string {
     const changeId = generateId('tracked-change');
-    this.editor.commands.enableTrackChanges();
+    if (typeof this.editor.commands?.enableTrackChanges === 'function') {
+      this.editor.commands.enableTrackChanges();
+    }
     try {
       this.applyPatch(from, to, suggestedText);
     } finally {
-      this.editor.commands.disableTrackChanges();
+      if (typeof this.editor.commands?.disableTrackChanges === 'function') {
+        this.editor.commands.disableTrackChanges();
+      }
     }
     return changeId;
   }
@@ -656,17 +689,29 @@ export class EditorAdapter {
    */
   async createComment(from: number, to: number, text: string): Promise<string> {
     const commentId = generateId('comment');
-    this.editor.commands.enableTrackChanges();
+    if (typeof this.editor.commands?.enableTrackChanges === 'function') {
+      this.editor.commands.enableTrackChanges();
+    }
     try {
-      this.editor
-        .chain()
-        .setTextSelection({ from, to })
-        .insertComment({
-          commentText: text,
-        })
-        .run();
+      const chain = this.editor.chain();
+      if (chain && typeof chain.setTextSelection === 'function') {
+        const chainWithSelection = chain.setTextSelection({ from, to });
+        if (
+          chainWithSelection &&
+          typeof chainWithSelection === 'object' &&
+          'insertComment' in chainWithSelection &&
+          typeof chainWithSelection.insertComment === 'function'
+        ) {
+          const chainWithComment = chainWithSelection.insertComment({ commentText: text });
+          if (chainWithComment && typeof chainWithComment === 'object' && 'run' in chainWithComment) {
+            chainWithComment.run();
+          }
+        }
+      }
     } finally {
-      this.editor.commands.disableTrackChanges();
+      if (typeof this.editor.commands?.disableTrackChanges === 'function') {
+        this.editor.commands.disableTrackChanges();
+      }
     }
 
     return commentId;

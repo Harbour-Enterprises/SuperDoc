@@ -198,14 +198,31 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
   // Note: Table cells can only contain paragraphs, images, and drawings (not nested tables)
   const blocks: (ParagraphBlock | ImageBlock | DrawingBlock)[] = [];
 
+  // Extract cell background color for auto text color resolution
+  const cellBackground = cellNode.attrs?.background as { color?: string } | undefined;
+  let cellBackgroundColor: string | undefined;
+  if (cellBackground && typeof cellBackground.color === 'string') {
+    const rawColor = cellBackground.color.trim();
+    if (rawColor) {
+      const normalized = rawColor.startsWith('#') ? rawColor : `#${rawColor}`;
+      // Validate it's a proper hex color (3 or 6 hex digits after #)
+      if (/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(normalized)) {
+        cellBackgroundColor = normalized;
+      }
+    }
+  }
+
   // Create enhanced converter context with table style paragraph props for the style cascade
   // This allows paragraphs inside table cells to inherit table style's pPr
-  const cellConverterContext: ConverterContext | undefined = tableStyleParagraphProps
-    ? {
-        ...context.converterContext,
-        tableStyleParagraphProps,
-      }
-    : context.converterContext;
+  // Also includes backgroundColor for auto text color resolution
+  const cellConverterContext: ConverterContext | undefined =
+    tableStyleParagraphProps || cellBackgroundColor
+      ? {
+          ...context.converterContext,
+          ...(tableStyleParagraphProps && { tableStyleParagraphProps }),
+          ...(cellBackgroundColor && { backgroundColor: cellBackgroundColor }),
+        }
+      : context.converterContext;
 
   const paragraphToFlowBlocks = context.converters?.paragraphToFlowBlocks ?? context.paragraphToFlowBlocks;
   const listCounterContext = context.listCounterContext;

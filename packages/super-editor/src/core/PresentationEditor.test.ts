@@ -320,6 +320,63 @@ describe('PresentationEditor', () => {
     }
   });
 
+  describe('scrollToPosition', () => {
+    let originalScrollIntoView: unknown;
+
+    beforeEach(() => {
+      originalScrollIntoView = (Element.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView;
+      Object.defineProperty(Element.prototype, 'scrollIntoView', {
+        value: vi.fn(),
+        configurable: true,
+      });
+    });
+
+    afterEach(() => {
+      if (originalScrollIntoView) {
+        Object.defineProperty(Element.prototype, 'scrollIntoView', {
+          value: originalScrollIntoView,
+          configurable: true,
+        });
+      } else {
+        delete (Element.prototype as unknown as { scrollIntoView?: unknown }).scrollIntoView;
+      }
+    });
+
+    it('scrolls the containing page element', async () => {
+      mockIncrementalLayout.mockResolvedValueOnce({
+        layout: {
+          pageSize: { w: 100, h: 100 },
+          pageGap: 0,
+          pages: [
+            {
+              number: 1,
+              fragments: [{ pmStart: 0, pmEnd: 50 }],
+            },
+          ],
+        },
+        measures: [],
+      });
+
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-scroll-page',
+        content: { type: 'doc', content: [{ type: 'paragraph' }] },
+        mode: 'docx',
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      const pageEl = document.createElement('div');
+      pageEl.setAttribute('data-page-index', '0');
+      viewportHost.appendChild(pageEl);
+
+      const didScroll = editor.scrollToPosition(50, { behavior: 'auto' });
+      expect(didScroll).toBe(true);
+      expect(pageEl.scrollIntoView).toHaveBeenCalled();
+    });
+  });
+
   describe('setDocumentMode', () => {
     it('should initialize with editing mode by default', () => {
       editor = new PresentationEditor({

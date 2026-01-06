@@ -4,6 +4,9 @@ export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/ta
 // Re-export TabStop for external consumers
 export type { TabStop };
 
+// Export table contracts
+export { OOXML_PCT_DIVISOR, type TableWidthAttr, type TableColumnSpec } from './engines/tables.js';
+
 // Export justify utilities
 export {
   shouldApplyJustify,
@@ -748,7 +751,7 @@ export type SectionBreakBlock = {
     left?: number;
   };
   numbering?: {
-    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
     start?: number;
   };
   headerRefs?: {
@@ -791,7 +794,7 @@ export type SectionRefs = {
 };
 
 export type SectionNumbering = {
-  format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+  format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
   start?: number;
 };
 
@@ -1008,6 +1011,36 @@ export type DropCapDescriptor = {
 };
 
 /**
+ * Marker metadata for word-layout lists.
+ * Contains styling and positioning information for list markers.
+ */
+export type WordLayoutMarker = {
+  /** The text content of the marker (e.g., "1.", "a)", "•"). */
+  markerText?: string;
+  /** Horizontal alignment of the marker within its allocated space. */
+  justification?: 'left' | 'right' | 'center';
+  /** Spacing between marker text and paragraph content in pixels. */
+  gutterWidthPx?: number;
+  /** Total width allocated for the marker box in pixels. */
+  markerBoxWidthPx?: number;
+  /** Type of separator between marker and text (tab, space, or nothing). */
+  suffix?: 'tab' | 'space' | 'nothing';
+  /** Pre-calculated X position where the marker should be placed (used in firstLineIndentMode). */
+  markerX?: number;
+  /** Pre-calculated X position where paragraph text should begin after the marker (used in firstLineIndentMode). */
+  textStartX?: number;
+  /** Style properties for the marker text. */
+  run: {
+    fontFamily: string;
+    fontSize: number;
+    bold?: boolean;
+    italic?: boolean;
+    color?: string;
+    letterSpacing?: number;
+  };
+};
+
+/**
  * Word layout configuration for list items created via input rules.
  *
  * This type represents the structure of wordLayout data produced by @superdoc/word-layout
@@ -1089,7 +1122,7 @@ export type WordLayoutConfig = {
    * Marker metadata for word-layout lists.
    * Present when the paragraph is part of a list structure.
    */
-  marker?: unknown;
+  marker?: WordLayoutMarker;
   /**
    * Additional word-layout properties may be present but are not yet typed.
    */
@@ -1477,6 +1510,8 @@ export type TableFragment = {
   repeatHeaderCount?: number;
   partialRow?: PartialRowInfo;
   metadata?: TableFragmentMetadata;
+  pmStart?: number;
+  pmEnd?: number;
 };
 
 export type ImageFragment = {

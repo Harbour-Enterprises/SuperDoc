@@ -106,7 +106,8 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
 
   let hitChain: Element[] = [];
   const doc = document as Document & DocumentWithElementsFromPoint;
-  if (typeof doc.elementsFromPoint === 'function') {
+  const hasElementsFromPoint = typeof doc.elementsFromPoint === 'function';
+  if (hasElementsFromPoint) {
     try {
       hitChain = doc.elementsFromPoint(viewX, viewY) ?? [];
     } catch {
@@ -161,15 +162,19 @@ export function clickToPositionDom(domContainer: HTMLElement, clientX: number, c
   const fragmentEl = hitChain.find((el) => el.classList?.contains?.(CLASS_NAMES.fragment)) as HTMLElement | null;
 
   if (!fragmentEl) {
-    // Fallback: try querySelector on the page
-    const fallbackFragment = pageEl.querySelector(`.${CLASS_NAMES.fragment}`) as HTMLElement | null;
+    if (hasElementsFromPoint) {
+      log('No fragment found in hit chain; returning null to allow geometry mapping');
+      return null;
+    }
 
+    // Fallback for environments without elementsFromPoint (e.g., JSDOM tests)
+    const fallbackFragment = pageEl.querySelector(`.${CLASS_NAMES.fragment}`) as HTMLElement | null;
     if (!fallbackFragment) {
       log('No fragment found in hit chain or fallback');
       return null;
     }
 
-    log('Using fallback fragment:', {
+    log('Using fallback fragment (no elementsFromPoint):', {
       blockId: fallbackFragment.dataset.blockId,
       pmStart: fallbackFragment.dataset.pmStart,
       pmEnd: fallbackFragment.dataset.pmEnd,

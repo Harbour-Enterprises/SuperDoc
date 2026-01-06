@@ -1,5 +1,7 @@
 import { DOM_CLASS_NAMES } from '@superdoc/painter-dom';
 
+import { debugLog, getSelectionDebugConfig } from './SelectionDebug.js';
+
 /**
  * Represents a single entry in the DOM position index.
  *
@@ -96,6 +98,7 @@ export class DomPositionIndex {
 
     for (const node of pmNodes) {
       if (node.classList.contains(DOM_CLASS_NAMES.INLINE_SDT_WRAPPER)) continue;
+      if (node.closest('.superdoc-page-header, .superdoc-page-footer')) continue;
       if (leafOnly && nonLeaf.has(node)) continue;
 
       const pmStart = Number(node.dataset.pmStart ?? 'NaN');
@@ -108,6 +111,69 @@ export class DomPositionIndex {
 
     entries.sort((a, b) => (a.pmStart - b.pmStart !== 0 ? a.pmStart - b.pmStart : a.pmEnd - b.pmEnd));
     this.#entries = entries;
+
+    const isVerbose = getSelectionDebugConfig().logLevel === 'verbose';
+    if (isVerbose) {
+      const counts = { total: entries.length, body: 0, header: 0, footer: 0 };
+      const bodySamples: Array<{ pmStart: number; pmEnd: number; pageIndex: string | null; text: string }> = [];
+      const headerSamples: Array<{ pmStart: number; pmEnd: number; pageIndex: string | null; text: string }> = [];
+      const footerSamples: Array<{ pmStart: number; pmEnd: number; pageIndex: string | null; text: string }> = [];
+
+      for (const entry of entries) {
+        const pageEl = entry.el.closest(`.${DOM_CLASS_NAMES.PAGE}`) as HTMLElement | null;
+        const pageIndex = pageEl?.dataset.pageIndex ?? null;
+        const section = entry.el.closest('.superdoc-page-header')
+          ? 'header'
+          : entry.el.closest('.superdoc-page-footer')
+            ? 'footer'
+            : 'body';
+
+        if (section === 'header') {
+          counts.header += 1;
+          if (headerSamples.length < 10) {
+            headerSamples.push({
+              pmStart: entry.pmStart,
+              pmEnd: entry.pmEnd,
+              pageIndex,
+              text: (entry.el.textContent ?? '').slice(0, 40),
+            });
+          }
+          continue;
+        }
+        if (section === 'footer') {
+          counts.footer += 1;
+          if (footerSamples.length < 10) {
+            footerSamples.push({
+              pmStart: entry.pmStart,
+              pmEnd: entry.pmEnd,
+              pageIndex,
+              text: (entry.el.textContent ?? '').slice(0, 40),
+            });
+          }
+          continue;
+        }
+
+        counts.body += 1;
+        if (bodySamples.length < 10) {
+          bodySamples.push({
+            pmStart: entry.pmStart,
+            pmEnd: entry.pmEnd,
+            pageIndex,
+            text: (entry.el.textContent ?? '').slice(0, 40),
+          });
+        }
+      }
+
+      debugLog(
+        'verbose',
+        `DomPositionIndex: rebuild summary ${JSON.stringify({
+          counts,
+          bodySamples,
+          headerSamples,
+          footerSamples,
+        })}`,
+      );
+    }
   }
 
   /**

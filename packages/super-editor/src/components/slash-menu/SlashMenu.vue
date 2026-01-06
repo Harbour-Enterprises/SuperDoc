@@ -7,6 +7,8 @@ import { moveCursorToMouseEvent } from '../cursor-helpers.js';
 import { getEditorSurfaceElement } from '../../core/helpers/editorSurface.js';
 import { getItems } from './menuItems.js';
 import { getEditorContext } from './utils.js';
+import { SLASH_MENU_HANDLED_FLAG } from './event-flags.js';
+import { isMacOS } from '../../core/utilities/isMacOS.js';
 
 const props = defineProps({
   editor: {
@@ -74,11 +76,31 @@ const filteredSections = computed(() => {
   ];
 });
 
+/**
+ * Watch for menu open/close state changes and manage search input focus.
+ *
+ * When the menu opens, automatically focuses the hidden search input to enable
+ * immediate keyboard interaction (search filtering and navigation). Uses the
+ * preventScroll option to avoid unwanted scrolling behavior.
+ *
+ * The preventScroll option is critical because:
+ * - The search input is positioned off-screen (opacity: 0, height: 0)
+ * - Without preventScroll, browsers may scroll parent containers to bring the
+ *   focused element into view, causing jarring page jumps
+ * - This ensures the menu appears at the cursor position without disrupting
+ *   the user's viewport
+ *
+ * @param {boolean} open - The new value of isOpen (true when menu opens, false when closed)
+ * @returns {void}
+ */
 watch(isOpen, (open) => {
   if (open) {
     nextTick(() => {
       if (searchInput.value) {
-        searchInput.value.focus();
+        // Use preventScroll to avoid scrolling the page when focusing the search input.
+        // Without this, the browser may scroll parent containers to bring the input into view,
+        // which causes unwanted page jumps when opening the context menu.
+        searchInput.value.focus({ preventScroll: true });
       }
     });
   }
@@ -210,21 +232,65 @@ const handleGlobalKeyDown = (event) => {
  * Handle clicks outside the menu to close it.
  * Uses pointerdown instead of mousedown because PresentationEditor's pointer handlers
  * call event.preventDefault() which suppresses mousedown events.
- * @param {PointerEvent|MouseEvent} event
+ * @param {PointerEvent|MouseEvent} event - The pointer or mouse event
+ * @returns {void}
  */
 const handleGlobalOutsideClick = (event) => {
   if (isOpen.value && menuRef.value && !menuRef.value.contains(event.target)) {
-    moveCursorToMouseEvent(event, props.editor);
+    // Only move cursor for left-clicks (button === 0).
+    // For right-clicks (button === 2), preserve the current selection/cursor
+    // because the contextmenu handler will open a new menu at the click position.
+    // Also skip Ctrl+Click on Mac, which triggers contextmenu but reports button=0.
+    const isCtrlClickOnMac = event.ctrlKey && isMacOS();
+    const isLeftClick = event.button === 0 && !isCtrlClickOnMac;
+
+    if (isLeftClick) {
+      moveCursorToMouseEvent(event, props.editor);
+    }
     closeMenu({ restoreCursor: false });
   }
 };
 
-const handleRightClick = async (event) => {
+/**
+ * Determines whether the SlashMenu should handle a context menu event.
+ * Checks if the editor is editable, context menu is enabled, and the event
+ * should not be bypassed (e.g., modifier keys are not pressed).
+ *
+ * @param {MouseEvent} event - The context menu event to validate
+ * @returns {boolean} true if the SlashMenu should handle the event, false otherwise
+ */
+const shouldHandleContextMenu = (event) => {
   const readOnly = !props.editor?.isEditable;
   const contextMenuDisabled = props.editor?.options?.disableContextMenu;
   const bypass = shouldBypassContextMenu(event);
 
-  if (readOnly || contextMenuDisabled || bypass) {
+  return !readOnly && !contextMenuDisabled && !bypass;
+};
+
+/**
+ * Capture phase handler for context menu events that marks the event as handled by SlashMenu.
+ * This flag is used by PresentationInputBridge to skip forwarding the event to the hidden editor,
+ * preventing duplicate context menu handling.
+ *
+ * The capture phase ensures this runs before PresentationInputBridge's bubble phase handler,
+ * allowing us to set the flag before the event reaches other handlers.
+ *
+ * @param {MouseEvent} event - The context menu event in capture phase
+ */
+const handleRightClickCapture = (event) => {
+  try {
+    if (shouldHandleContextMenu(event)) {
+      event[SLASH_MENU_HANDLED_FLAG] = true;
+    }
+  } catch (error) {
+    // Prevent handler crashes from breaking the event flow
+    // Log warning but don't throw to allow other handlers to run
+    console.warn('[SlashMenu] Error in capture phase context menu handler:', error);
+  }
+};
+
+const handleRightClick = async (event) => {
+  if (!shouldHandleContextMenu(event)) {
     return;
   }
 
@@ -378,6 +444,7 @@ onMounted(() => {
   // Attach context menu to the active surface (flow view.dom or presentation host)
   contextMenuTarget = getEditorSurfaceElement(props.editor);
   if (contextMenuTarget) {
+    contextMenuTarget.addEventListener('contextmenu', handleRightClickCapture, true);
     contextMenuTarget.addEventListener('contextmenu', handleRightClick);
   }
 
@@ -407,6 +474,7 @@ onBeforeUnmount(() => {
         props.editor.off('slashMenu:close', slashMenuCloseHandler);
       }
       props.editor.off('update', handleEditorUpdate);
+      contextMenuTarget?.removeEventListener('contextmenu', handleRightClickCapture, true);
       contextMenuTarget?.removeEventListener('contextmenu', handleRightClick);
     } catch (error) {
       console.warn('[SlashMenu] Error during cleanup:', error);

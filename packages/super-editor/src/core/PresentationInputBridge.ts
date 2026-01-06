@@ -1,4 +1,5 @@
 import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
+import { SLASH_MENU_HANDLED_FLAG } from '../components/slash-menu/event-flags.js';
 
 export class PresentationInputBridge {
   #windowRoot: Window;
@@ -253,9 +254,20 @@ export class PresentationInputBridge {
   /**
    * Forwards context menu events to the hidden editor.
    *
+   * Checks if the SlashMenu component has already handled the event by inspecting
+   * the SLASH_MENU_HANDLED_FLAG. If the flag is set, the event is not forwarded,
+   * preventing duplicate context menu handling. This coordination allows SlashMenu
+   * to intercept right-clicks in the capture phase and prevent the default editor
+   * context menu from appearing.
+   *
    * @param event - The context menu event from the layout surface
    */
   #forwardContextMenu(event: MouseEvent) {
+    // Skip forwarding if SlashMenu has already handled this event
+    const handledBySlashMenu = Boolean((event as unknown as Record<string, unknown>)[SLASH_MENU_HANDLED_FLAG]);
+    if (handledBySlashMenu) {
+      return;
+    }
     if (!this.#isEditable()) {
       return;
     }

@@ -16,6 +16,7 @@ import type {
   TrackedChangeMeta,
   SdtMetadata,
   ParagraphAttrs,
+  ParagraphIndent,
   FieldAnnotationRun,
   FieldAnnotationMetadata,
 } from '@superdoc/contracts';
@@ -41,7 +42,7 @@ import {
   normalizeParagraphIndent,
   normalizePxIndent,
 } from '../attributes/index.js';
-import { hydrateParagraphStyleAttrs } from '../attributes/paragraph-styles.js';
+import { hydrateParagraphStyleAttrs, hydrateCharacterStyleAttrs } from '../attributes/paragraph-styles.js';
 import { resolveNodeSdtMetadata, getNodeInstruction } from '../sdt/index.js';
 import { shouldRequirePageBoundary, hasIntrinsicBoundarySignals, createSectionBreakBlock } from '../sections/index.js';
 import { trackedChangesCompatible, collectTrackedChangeFromMarks, applyMarksToRun } from '../marks/index.js';
@@ -54,7 +55,7 @@ import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
 import { contentBlockNodeToDrawingBlock } from './content-block.js';
 import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
 import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
-import { ptToPx, pickNumber, isPlainObject } from '../utilities.js';
+import { ptToPx, pickNumber, isPlainObject, convertIndentTwipsToPx, twipsToPx } from '../utilities.js';
 import { resolveStyle } from '@superdoc/style-engine';
 
 // ============================================================================
@@ -66,6 +67,24 @@ import { resolveStyle } from '@superdoc/style-engine';
  * This ensures images are always rendered with a fallback size for better UX.
  */
 const DEFAULT_IMAGE_DIMENSION_PX = 100;
+
+/**
+ * Conversion constant: OOXML font sizes are stored in half-points.
+ * To convert to full points: divide by 2.
+ */
+const HALF_POINTS_PER_POINT = 2;
+
+/**
+ * Screen DPI (dots per inch) for pixel conversions.
+ * Standard display density is 96 DPI.
+ */
+const SCREEN_DPI = 96;
+
+/**
+ * Point DPI (dots per inch) for typography.
+ * Standard typography uses 72 DPI (1 inch = 72 points).
+ */
+const POINT_DPI = 72;
 
 // ============================================================================
 // Helper functions for inline image detection and conversion
@@ -609,15 +628,14 @@ const applyBaseRunDefaults = (
   if (defaults.letterSpacing != null && run.letterSpacing == null) {
     run.letterSpacing = defaults.letterSpacing;
   }
-  if (defaults.bold && run.bold === undefined) {
-    run.bold = true;
-  }
-  if (defaults.italic && run.italic === undefined) {
-    run.italic = true;
-  }
-  if (defaults.underline && !run.underline) {
-    run.underline = defaults.underline;
-  }
+  // NOTE: We intentionally do NOT apply bold, italic, or underline from baseRunDefaults.
+  // These properties come from the paragraph's default character style (e.g., Heading 1's bold),
+  // but should NOT be applied to runs that have their own character styles or marks.
+  // Bold/italic/underline should only come from:
+  // 1. Linked character styles (via applyRunStyles)
+  // 2. Inline marks (via applyMarksToRun)
+  // Applying paragraph-level character defaults here causes incorrect bolding of normal text
+  // in paragraphs with bold styles like Heading 1.
 };
 
 /**
@@ -719,39 +737,73 @@ export function paragraphToFlowBlocks(
 
   let baseRunDefaults: RunDefaults = {};
   try {
-    const spacingSource =
-      para.attrs?.spacing !== undefined
-        ? para.attrs.spacing
-        : paragraphProps.spacing !== undefined
-          ? paragraphProps.spacing
-          : paragraphHydration?.spacing;
-    const indentSource = para.attrs?.indent ?? paragraphProps.indent ?? paragraphHydration?.indent;
-    const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
-    const normalizedIndent =
-      normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? para.attrs?.textIndent);
-    const styleNodeAttrs =
-      paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
-        ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }
-        : (para.attrs ?? {});
-    const styleNode = buildStyleNodeFromAttrs(styleNodeAttrs, normalizedSpacing, normalizedIndent);
-    if (styleNodeAttrs.styleId == null && paragraphProps.styleId) {
-      styleNode.styleId = paragraphProps.styleId as string;
+    // Try to get character defaults from the correct OOXML cascade via styles.js
+    // This includes w:rPrDefault from w:docDefaults, which resolveStyle() ignores
+    const charHydration = converterContext
+      ? hydrateCharacterStyleAttrs(para, converterContext, paragraphHydration?.resolved as Record<string, unknown>)
+      : null;
+
+    if (charHydration) {
+      // Use correctly cascaded character properties from styles.js
+      // Font size is in half-points, convert to pixels: halfPts / 2 = pts, pts * (96/72) = px
+      const fontSizePx = (charHydration.fontSize / HALF_POINTS_PER_POINT) * (SCREEN_DPI / POINT_DPI);
+      baseRunDefaults = {
+        fontFamily: charHydration.fontFamily,
+        fontSizePx,
+        color: charHydration.color ? `#${charHydration.color.replace('#', '')}` : undefined,
+        bold: charHydration.bold,
+        italic: charHydration.italic,
+        underline: charHydration.underline
+          ? {
+              style: charHydration.underline.type as TextRun['underline'] extends { style?: infer S } ? S : never,
+              color: charHydration.underline.color,
+            }
+          : undefined,
+        letterSpacing: charHydration.letterSpacing != null ? twipsToPx(charHydration.letterSpacing) : undefined,
+      };
+    } else {
+      // Fallback: use resolveStyle when converterContext is not available
+      // This path uses hardcoded defaults but maintains backwards compatibility
+      const spacingSource =
+        para.attrs?.spacing !== undefined
+          ? para.attrs.spacing
+          : paragraphProps.spacing !== undefined
+            ? paragraphProps.spacing
+            : paragraphHydration?.spacing;
+      const normalizeIndentObject = (value: unknown): ParagraphIndent | undefined => {
+        if (!value || typeof value !== 'object') return;
+        return normalizePxIndent(value) ?? convertIndentTwipsToPx(value as ParagraphIndent);
+      };
+      const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
+      const normalizedIndent =
+        normalizeIndentObject(para.attrs?.indent) ??
+        convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
+        convertIndentTwipsToPx(paragraphHydration?.indent as ParagraphIndent) ??
+        normalizeParagraphIndent(para.attrs?.textIndent);
+      const styleNodeAttrs =
+        paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
+          ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }
+          : (para.attrs ?? {});
+      const styleNode = buildStyleNodeFromAttrs(styleNodeAttrs, normalizedSpacing, normalizedIndent);
+      if (styleNodeAttrs.styleId == null && paragraphProps.styleId) {
+        styleNode.styleId = paragraphProps.styleId as string;
+      }
+      const resolved = resolveStyle(styleNode, styleContext);
+      baseRunDefaults = {
+        fontFamily: resolved.character.font?.family,
+        fontSizePx: ptToPx(resolved.character.font?.size),
+        color: resolved.character.color,
+        bold: resolved.character.font?.weight != null ? resolved.character.font.weight >= 600 : undefined,
+        italic: resolved.character.font?.italic,
+        underline: resolved.character.underline
+          ? {
+              style: resolved.character.underline.style,
+              color: resolved.character.underline.color,
+            }
+          : undefined,
+        letterSpacing: ptToPx(resolved.character.letterSpacing),
+      };
     }
-    const resolved = resolveStyle(styleNode, styleContext);
-    baseRunDefaults = {
-      fontFamily: resolved.character.font?.family,
-      fontSizePx: ptToPx(resolved.character.font?.size),
-      color: resolved.character.color,
-      bold: resolved.character.font?.weight != null ? resolved.character.font.weight >= 600 : undefined,
-      italic: resolved.character.font?.italic,
-      underline: resolved.character.underline
-        ? {
-            style: resolved.character.underline.style,
-            color: resolved.character.underline.color,
-          }
-        : undefined,
-      letterSpacing: ptToPx(resolved.character.letterSpacing),
-    };
   } catch {
     baseRunDefaults = {};
   }
@@ -908,7 +960,13 @@ export function paragraphToFlowBlocks(
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
       // Apply marks ONCE here - this ensures they override linked styles
-      applyMarksToRun(run, [...(node.marks ?? []), ...(inheritedMarks ?? [])], hyperlinkConfig, themeColors);
+      applyMarksToRun(
+        run,
+        [...(node.marks ?? []), ...(inheritedMarks ?? [])],
+        hyperlinkConfig,
+        themeColors,
+        converterContext?.backgroundColor,
+      );
       currentRuns.push(run);
       return;
     }

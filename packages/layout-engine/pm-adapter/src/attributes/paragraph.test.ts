@@ -937,6 +937,48 @@ describe('computeParagraphAttrs', () => {
     expect(result?.indent?.left).toBeCloseTo(24);
   });
 
+  it('converts small twips indent values from paragraphProperties', () => {
+    const para: PMNode = {
+      attrs: {
+        paragraphProperties: {
+          indent: {
+            firstLine: 14,
+          },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    };
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect(result?.indent?.firstLine).toBeCloseTo(twipsToPx(14));
+  });
+
+  it('should not force first-line indent mode when paragraph overrides numbering firstLine', () => {
+    const para: PMNode = {
+      attrs: {
+        indent: { left: 0, firstLine: 0 },
+        numberingProperties: {
+          numId: 1,
+          ilvl: 0,
+          resolvedLevelIndent: { left: 0, firstLine: 2160 },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+
+    expect(result?.wordLayout?.firstLineIndentMode).not.toBe(true);
+    expect(result?.wordLayout?.textStartPx).toBe(0);
+    expect(result?.wordLayout?.marker?.textStartX).toBe(0);
+  });
+
   it('should normalize paragraph borders', () => {
     const para: PMNode = {
       attrs: {
@@ -2907,6 +2949,111 @@ describe('computeParagraphAttrs - numbering properties fallback from listRenderi
 
         expect(result?.contextualSpacing).toBeUndefined();
       });
+
+      it('should use hydrated.contextualSpacing when all higher priorities are absent (priority 4)', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        const hydrationOverride = {
+          contextualSpacing: true,
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should use hydrated.contextualSpacing=false when all higher priorities are absent', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        const hydrationOverride = {
+          contextualSpacing: false,
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(false);
+      });
+
+      it('should prioritize attrs.contextualSpacing over hydrated.contextualSpacing', () => {
+        const para: PMNode = {
+          attrs: {
+            contextualSpacing: true,
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        const hydrationOverride = {
+          contextualSpacing: false, // Should be overridden by attrs
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should prioritize paragraphProps.contextualSpacing over hydrated.contextualSpacing', () => {
+        const para: PMNode = {
+          attrs: {
+            paragraphProperties: {
+              contextualSpacing: true,
+            },
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        const hydrationOverride = {
+          contextualSpacing: false, // Should be overridden by paragraphProps
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
+
+      it('should prioritize normalizedSpacing.contextualSpacing over hydrated.contextualSpacing', () => {
+        const para: PMNode = {
+          attrs: {
+            spacing: {
+              before: 10,
+              after: 10,
+              contextualSpacing: true,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        const hydrationOverride = {
+          contextualSpacing: false, // Should be overridden by spacing.contextualSpacing
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(true);
+      });
     });
 
     describe('OOXML boolean value handling', () => {
@@ -3155,6 +3302,54 @@ describe('computeParagraphAttrs - numbering properties fallback from listRenderi
         expect(result?.contextualSpacing).toBe(true);
         expect(result?.spacing?.before).toBeDefined();
         expect(result?.spacing?.after).toBeDefined();
+      });
+
+      it('should integrate with styles that define contextualSpacing (e.g., ListBullet)', () => {
+        const para: PMNode = {
+          attrs: {
+            styleId: 'ListBullet',
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        // Simulate a style like ListBullet that defines contextualSpacing
+        const hydrationOverride = {
+          contextualSpacing: true,
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        expect(result?.contextualSpacing).toBe(true);
+        expect(result?.spacing?.before).toBeDefined();
+        expect(result?.spacing?.after).toBeDefined();
+      });
+
+      it('should allow paragraph to override style-defined contextualSpacing', () => {
+        const para: PMNode = {
+          attrs: {
+            styleId: 'ListBullet',
+            contextualSpacing: false, // Explicit override of style
+            spacing: {
+              before: 10,
+              after: 10,
+            },
+          },
+        };
+        const styleContext = createStyleContext();
+        // Simulate a style that defines contextualSpacing=true
+        const hydrationOverride = {
+          contextualSpacing: true, // From style
+          spacing: { before: 10, after: 10 },
+        };
+
+        const result = computeParagraphAttrs(para, styleContext, undefined, undefined, hydrationOverride);
+
+        // Paragraph-level override should win
+        expect(result?.contextualSpacing).toBe(false);
       });
     });
   });
