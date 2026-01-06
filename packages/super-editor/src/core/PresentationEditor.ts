@@ -643,6 +643,7 @@ export class PresentationEditor extends EventEmitter {
   #dragLastPointer: SelectionDebugHudState['lastPointer'] = null;
   #dragLastRawHit: PositionHit | null = null;
   #dragUsedPageNotMountedFallback = false;
+  #suppressFocusInFromDraggable = false;
 
   // Cell selection drag state
   // Tracks cell-specific context when drag starts in a table for multi-cell selection
@@ -3044,6 +3045,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
+    this.#suppressFocusInFromDraggable = isDraggableAnnotation;
 
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
@@ -3987,6 +3989,11 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    if (this.#suppressFocusInFromDraggable) {
+      this.#suppressFocusInFromDraggable = false;
+      return;
+    }
+
     const target = event.target as Node | null;
     const activeTarget = this.#getActiveDomTarget();
     if (!activeTarget) {
@@ -4024,6 +4031,8 @@ export class PresentationEditor extends EventEmitter {
   };
 
   #handlePointerUp = (event: PointerEvent) => {
+    this.#suppressFocusInFromDraggable = false;
+
     if (!this.#isDragging) return;
 
     // Release pointer capture if we have it
