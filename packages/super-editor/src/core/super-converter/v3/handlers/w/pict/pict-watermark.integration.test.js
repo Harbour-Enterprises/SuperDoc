@@ -46,7 +46,7 @@ describe('VML Watermark Integration Tests', () => {
                 name: 'v:imagedata',
                 attributes: {
                   'r:id': 'rId1',
-                  'o:title': 'Baloons',
+                  'o:title': 'Balloons',
                   gain: '19661f',
                   blacklevel: '22938f',
                 },
