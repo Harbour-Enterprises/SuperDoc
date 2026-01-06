@@ -1017,6 +1017,686 @@ describe('renderTableCell', () => {
     });
   });
 
+  describe('paragraph borders and shading (SD-1296)', () => {
+    it('should apply paragraph borders to paraWrapper', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-with-borders',
+        runs: [{ text: 'Text with border', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 2, style: 'solid', color: '#FF0000' },
+            bottom: { width: 1, style: 'dashed', color: '#0000FF' },
+            left: { width: 3, style: 'dotted', color: '#00FF00' },
+            right: { width: 1, style: 'solid', color: '#000000' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 16,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-with-para-borders',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Verify borders are applied
+      expect(paraWrapper.style.boxSizing).toBe('border-box');
+      expect(paraWrapper.style.borderTopWidth).toBe('2px');
+      expect(paraWrapper.style.borderTopStyle).toBe('solid');
+      expect(paraWrapper.style.borderTopColor).toBe('rgb(255, 0, 0)');
+      expect(paraWrapper.style.borderBottomWidth).toBe('1px');
+      expect(paraWrapper.style.borderBottomStyle).toBe('dashed');
+      expect(paraWrapper.style.borderBottomColor).toBe('rgb(0, 0, 255)');
+      expect(paraWrapper.style.borderLeftWidth).toBe('3px');
+      expect(paraWrapper.style.borderLeftStyle).toBe('dotted');
+      expect(paraWrapper.style.borderLeftColor).toBe('rgb(0, 255, 0)');
+      expect(paraWrapper.style.borderRightWidth).toBe('1px');
+      expect(paraWrapper.style.borderRightStyle).toBe('solid');
+      expect(paraWrapper.style.borderRightColor).toBe('rgb(0, 0, 0)');
+    });
+
+    it('should apply paragraph shading (background) to paraWrapper', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-with-shading',
+        runs: [{ text: 'Shaded text', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          shading: {
+            fill: '#FFFF00',
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 11,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-with-para-shading',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Verify shading is applied
+      expect(paraWrapper.style.backgroundColor).toBe('rgb(255, 255, 0)');
+    });
+
+    it('should apply both borders and shading to the same paragraph', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-both-styles',
+        runs: [{ text: 'Styled paragraph', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 1, style: 'solid', color: '#333333' },
+            bottom: { width: 1, style: 'solid', color: '#333333' },
+          },
+          shading: {
+            fill: '#E0E0E0',
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 16,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-both-styles',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Verify both borders and shading are applied
+      expect(paraWrapper.style.borderTopWidth).toBe('1px');
+      expect(paraWrapper.style.borderBottomWidth).toBe('1px');
+      expect(paraWrapper.style.backgroundColor).toBe('rgb(224, 224, 224)');
+    });
+
+    it('should handle multiple paragraphs with different borders in same cell', () => {
+      const para1: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-1',
+        runs: [{ text: 'First paragraph', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            bottom: { width: 2, style: 'solid', color: '#FF0000' },
+          },
+        },
+      };
+
+      const para2: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-2',
+        runs: [{ text: 'Second paragraph', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 1, style: 'dashed', color: '#0000FF' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 15,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure, measure],
+        width: 120,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-multi-para-borders',
+        blocks: [para1, para2],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrappers = contentElement.children;
+
+      // First paragraph has bottom border
+      const wrapper1 = paraWrappers[0] as HTMLElement;
+      expect(wrapper1.style.borderBottomWidth).toBe('2px');
+      expect(wrapper1.style.borderBottomColor).toBe('rgb(255, 0, 0)');
+
+      // Second paragraph has top border
+      const wrapper2 = paraWrappers[1] as HTMLElement;
+      expect(wrapper2.style.borderTopWidth).toBe('1px');
+      expect(wrapper2.style.borderTopStyle).toBe('dashed');
+      expect(wrapper2.style.borderTopColor).toBe('rgb(0, 0, 255)');
+    });
+
+    it('should not apply borders when paragraph has no borders attribute', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-no-borders',
+        runs: [{ text: 'No borders', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {},
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 10,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-no-borders',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // No borders should be applied
+      expect(paraWrapper.style.borderTopWidth).toBe('');
+      expect(paraWrapper.style.borderBottomWidth).toBe('');
+      expect(paraWrapper.style.borderLeftWidth).toBe('');
+      expect(paraWrapper.style.borderRightWidth).toBe('');
+    });
+
+    it('should handle border style "none" correctly', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-border-none',
+        runs: [{ text: 'Border none', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 1, style: 'none', color: '#000000' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 11,
+            width: 80,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-border-none',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Border style 'none' should result in no visible border
+      expect(paraWrapper.style.borderTopStyle).toBe('none');
+      expect(paraWrapper.style.borderTopWidth).toBe('0px');
+    });
+
+    it('should handle zero width borders (width: 0)', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-zero-width',
+        runs: [{ text: 'Zero width border', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 0, style: 'solid', color: '#FF0000' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 17,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-zero-width',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Zero width should render as '0px'
+      expect(paraWrapper.style.borderTopWidth).toBe('0px');
+      expect(paraWrapper.style.borderTopStyle).toBe('solid');
+      expect(paraWrapper.style.borderTopColor).toBe('rgb(255, 0, 0)');
+    });
+
+    it('should clamp negative width borders to 0px', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-negative-width',
+        runs: [{ text: 'Negative width border', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            left: { width: -5, style: 'solid', color: '#0000FF' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 21,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-negative-width',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Negative width should be clamped to '0px'
+      expect(paraWrapper.style.borderLeftWidth).toBe('0px');
+      expect(paraWrapper.style.borderLeftStyle).toBe('solid');
+      expect(paraWrapper.style.borderLeftColor).toBe('rgb(0, 0, 255)');
+    });
+
+    it('should default to 1px when width is undefined', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-undefined-width',
+        runs: [{ text: 'Undefined width', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            bottom: { style: 'dashed', color: '#00FF00' } as ParagraphBlock['attrs']['borders']['bottom'],
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 15,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-undefined-width',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Undefined width should default to '1px'
+      expect(paraWrapper.style.borderBottomWidth).toBe('1px');
+      expect(paraWrapper.style.borderBottomStyle).toBe('dashed');
+      expect(paraWrapper.style.borderBottomColor).toBe('rgb(0, 255, 0)');
+    });
+
+    it('should only apply border to specified sides (e.g., only top)', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-top-only',
+        runs: [{ text: 'Only top border', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          borders: {
+            top: { width: 3, style: 'solid', color: '#FF00FF' },
+          },
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 15,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-top-only',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // Only top border should be set
+      expect(paraWrapper.style.borderTopWidth).toBe('3px');
+      expect(paraWrapper.style.borderTopStyle).toBe('solid');
+      expect(paraWrapper.style.borderTopColor).toBe('rgb(255, 0, 255)');
+
+      // Left, right, and bottom borders should remain unset
+      expect(paraWrapper.style.borderLeftWidth).toBe('');
+      expect(paraWrapper.style.borderRightWidth).toBe('');
+      expect(paraWrapper.style.borderBottomWidth).toBe('');
+    });
+
+    it('should handle empty shading object (shading: {})', () => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-empty-shading',
+        runs: [{ text: 'Empty shading', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          shading: {},
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 13,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 20,
+      };
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 120,
+        height: 40,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-empty-shading',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+
+      // No background should be applied when shading object is empty (no fill property)
+      expect(paraWrapper.style.backgroundColor).toBe('');
+    });
+  });
+
   describe('renderDrawingContent callback', () => {
     it('should render ShapeGroup drawing blocks via callback', () => {
       const shapeGroupBlock = {
