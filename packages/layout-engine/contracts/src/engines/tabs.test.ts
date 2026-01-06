@@ -73,6 +73,22 @@ describe('engines-tabs computeTabStops', () => {
     expect(firstDefault?.val).toBe('start');
     expect(firstDefault?.leader).toBe('none');
   });
+
+  it('preserves explicit tab stops that fall before the left indent', () => {
+    const explicitPos = -360; // 0.25" before paragraph start
+    const stops = computeTabStops({
+      explicitStops: [
+        { val: 'start', pos: explicitPos, leader: 'none' },
+        { val: 'decimal', pos: 1440, leader: 'dot' },
+      ],
+      defaultTabInterval: 720,
+      paragraphIndent: { left: 720 },
+    });
+
+    expect(stops.find((stop) => stop.pos === explicitPos)).toBeDefined();
+    // Default stops should still start at/after left indent
+    expect(stops.filter((stop) => stop.pos >= 720).length).toBeGreaterThan(0);
+  });
 });
 
 describe('engines-tabs layoutWithTabs', () => {

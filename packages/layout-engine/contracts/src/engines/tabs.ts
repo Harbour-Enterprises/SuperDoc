@@ -115,26 +115,27 @@ export function computeTabStops(context: TabContext): TabStop[] {
   // Extract cleared positions before filtering (OOXML: clear tabs suppress default stops)
   const clearPositions = explicitStops.filter((stop) => stop.val === 'clear').map((stop) => stop.pos);
 
-  // Start with explicit stops (filter out 'clear' tabs - they remove default stops)
-  const stops = explicitStops.filter((stop) => stop.val !== 'clear');
+  // Separate explicit stops so we can preserve positions before the left indent.
+  const explicit = explicitStops.filter((stop) => stop.val !== 'clear');
 
   // Find the rightmost explicit stop
-  const maxExplicit = stops.reduce((max, stop) => Math.max(max, stop.pos), 0);
-  const hasExplicit = stops.length > 0;
+  const maxExplicit = explicit.reduce((max, stop) => Math.max(max, stop.pos), 0);
+  const hasExplicit = explicit.length > 0;
   const defaultStart = hasExplicit ? Math.max(maxExplicit, leftIndent ?? 0) : 0;
 
   // Add default stops beyond the explicit range (if any)
   let pos = hasExplicit ? defaultStart : 0;
   const targetLimit = Math.max(defaultStart, leftIndent ?? 0) + 14400; // 14400 twips = 10 inches
+  const defaultStops: TabStop[] = [];
   while (pos < targetLimit) {
     pos += defaultTabInterval;
 
     // Don't add if there's already an explicit stop OR a cleared position at this position
-    const hasExplicitStop = stops.some((s) => Math.abs(s.pos - pos) < 20);
+    const hasExplicitStop = explicit.some((s) => Math.abs(s.pos - pos) < 20);
     const hasClearStop = clearPositions.some((clearPos) => Math.abs(clearPos - pos) < 20);
 
     if (!hasExplicitStop && !hasClearStop) {
-      stops.push({
+      defaultStops.push({
         val: 'start',
         pos,
         leader: 'none',
@@ -142,8 +143,10 @@ export function computeTabStops(context: TabContext): TabStop[] {
     }
   }
 
-  // Filter out stops before the left indent and sort
-  return stops.filter((stop) => stop.pos >= leftIndent).sort((a, b) => a.pos - b.pos);
+  // Default stops should not appear before the paragraph's left indent.
+  const filteredDefaults = defaultStops.filter((stop) => stop.pos >= (leftIndent ?? 0));
+
+  return [...explicit, ...filteredDefaults].sort((a, b) => a.pos - b.pos);
 }
 
 /**

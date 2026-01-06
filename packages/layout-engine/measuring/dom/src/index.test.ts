@@ -190,6 +190,40 @@ describe('measureBlock', () => {
       expect(measure.lines[0].maxWidth).toBe(maxWidth - textStartPx);
     });
 
+    it('respects hanging indent for manual numbering paragraphs', async () => {
+      const maxWidth = 400;
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'manual-numbering',
+        runs: [
+          {
+            text: '(a)',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            pmStart: 3,
+            pmEnd: 4,
+          },
+          {
+            text: 'Specified Entity means in relation to Party A for the purpose of:',
+            fontFamily: 'Times New Roman',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: { left: 48, hanging: 48 },
+          tabs: [{ pos: -48, align: 'left' }],
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      // Negative first-line offsets extend into the hanging region, granting full width.
+      expect(measure.lines[0].maxWidth).toBe(maxWidth);
+    });
+
     it('falls back to marker.textStartX when wordLayout.textStartPx is missing', async () => {
       const maxWidth = 200;
       const textStartX = 96; // First-line text start after marker + tab
@@ -1470,6 +1504,58 @@ describe('measureBlock', () => {
             expect(segmentText).toBe('Word ');
           }
         }
+      }
+    });
+
+    it('aligns first-line tabs relative to the paragraph start', async () => {
+      const firstLinePx = 96; // 1 inch
+      const tabPosPx = 144; // 1.5 inches from paragraph start
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'first-line-tab',
+        runs: [
+          {
+            text: '(a)',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+          {
+            kind: 'tab',
+            text: '\t',
+            tabStops: [{ pos: tabPosPx, val: 'left' }],
+            tabIndex: 0,
+            pmStart: 3,
+            pmEnd: 4,
+          },
+          {
+            text: 'After tab text',
+            fontFamily: 'Arial',
+            fontSize: 16,
+          },
+        ],
+        attrs: {
+          indent: {
+            firstLine: firstLinePx,
+          },
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 400));
+
+      const tabRun = block.runs[1];
+      expect(tabRun.kind).toBe('tab');
+      if (tabRun.kind === 'tab') {
+        expect(tabRun.width).toBeGreaterThan(0);
+        // Width should only cover the distance from the first-line indent to the tab stop.
+        expect(tabRun.width).toBeLessThan(tabPosPx - firstLinePx);
+      }
+
+      const firstLine = measure.lines[0];
+      expect(firstLine.segments).toBeDefined();
+      const segmentAfterTab = firstLine.segments?.find((seg) => seg.runIndex === 2 && typeof seg.x === 'number');
+      expect(segmentAfterTab).toBeDefined();
+      if (segmentAfterTab) {
+        expect(segmentAfterTab.x).toBeCloseTo(tabPosPx - firstLinePx, 5);
       }
     });
   });

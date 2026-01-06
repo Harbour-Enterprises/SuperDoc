@@ -547,10 +547,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
   const rawFirstLineOffset = suppressFirstLine ? 0 : firstLine - hanging;
   // When wordLayout is present, the hanging region is occupied by the list marker/tab.
-  // Do not expand the first-line width; use the same content width as subsequent lines.
-  // Do not let hanging expand the available width; clamp negative offset to zero.
-  const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset);
-  const firstLineOffset = isWordLayoutList ? 0 : clampedFirstLineOffset;
+  // For true Word lists we rely on marker/tabs to control alignment, so skip custom offsets.
+  const firstLineOffset = isWordLayoutList ? 0 : rawFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // Body lines use contentWidth (same as first line for most cases).
   // The hanging indent affects WHERE body lines start (indentLeft), not their available width.
@@ -581,7 +579,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // because it's consistent with marker.markerX positioning. Mismatched priority causes justify overflow.
   const rawTextStartPx = (wordLayout as { textStartPx?: unknown } | undefined)?.textStartPx;
   const markerTextStartX = (wordLayout as { marker?: { textStartX?: unknown } } | undefined)?.marker?.textStartX;
-  const textStartPx =
+  const explicitTextStartPx =
     typeof markerTextStartX === 'number' && Number.isFinite(markerTextStartX)
       ? markerTextStartX
       : typeof rawTextStartPx === 'number' && Number.isFinite(rawTextStartPx)
@@ -603,7 +601,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return measureText(markerText, markerFont, ctx);
     },
   );
-  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
+  const effectiveTextStartPx = explicitTextStartPx ?? resolvedTextStartPx;
 
   if (typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
@@ -629,6 +627,17 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     if (barTabStops.length > 0) {
       line.bars = barTabStops.map((stop) => ({ x: stop.pos }));
     }
+  };
+
+  /**
+   * Computes the active offset for tab calculations on the current line.
+   * Tabs in Word measure from the paragraph's left indent. When a positive
+   * first-line indent is present, the visible text is shifted by firstLineOffset.
+   * Paragraph layout handles this shift via CSS text-indent/padding, so tab math
+   * must subtract the offset to avoid double-counting.
+   */
+  const getCurrentLineTabOffset = (): number => {
+    return lines.length === 0 ? firstLineOffset : 0;
   };
 
   // Drop cap handling: measure drop cap and calculate reserved space
@@ -978,19 +987,32 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       // Advance to next tab stop using the same logic as inline "\t" handling
       const originX = currentLine.width;
-      const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
-      tabStopCursor = nextIndex;
-      const tabAdvance = Math.max(0, target - currentLine.width);
-      currentLine.width = roundValue(currentLine.width + tabAdvance);
+      const lineTabOffset = getCurrentLineTabOffset();
+      let absoluteTarget: number;
+      let stop: TabStopPx | undefined;
+      if (lineTabOffset < 0 && currentLine.width + lineTabOffset < 0 && tabStopCursor < tabStops.length) {
+        stop = tabStops[tabStopCursor];
+        absoluteTarget = stop?.pos ?? currentLine.width + lineTabOffset;
+        tabStopCursor += 1;
+      } else {
+        const result = getNextTabStopPx(currentLine.width + lineTabOffset, tabStops, tabStopCursor);
+        absoluteTarget = result.target;
+        tabStopCursor = result.nextIndex;
+        stop = result.stop;
+      }
+      const normalizedTarget = absoluteTarget - lineTabOffset;
+      const targetWidth = Math.max(0, normalizedTarget);
+      const tabAdvance = targetWidth - currentLine.width;
+      currentLine.width = roundValue(targetWidth);
       // Persist measured tab width on the TabRun for downstream consumers/tests
-      (run as TabRun & { width?: number }).width = tabAdvance;
+      (run as TabRun & { width?: number }).width = Math.max(0, tabAdvance);
 
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
       if (stop) {
         validateTabStopVal(stop);
-        pendingTabAlignment = { target, val: stop.val };
+        pendingTabAlignment = { target: normalizedTarget, val: stop.val };
       } else {
         pendingTabAlignment = null;
       }
@@ -998,8 +1020,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Emit leader decoration if requested
       if (stop && stop.leader && stop.leader !== 'none') {
         const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
-        const from = Math.min(originX, target);
-        const to = Math.max(originX, target);
+        const from = Math.min(originX, normalizedTarget);
+        const to = Math.max(originX, normalizedTarget);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
       }
@@ -1786,10 +1808,23 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
         }
         const originX = currentLine.width;
-        const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
-        tabStopCursor = nextIndex;
-        const tabAdvance = Math.max(0, target - currentLine.width);
-        currentLine.width = roundValue(currentLine.width + tabAdvance);
+        const lineTabOffset = getCurrentLineTabOffset();
+        let absoluteTarget: number;
+        let stop: TabStopPx | undefined;
+        if (lineTabOffset < 0 && currentLine.width + lineTabOffset < 0 && tabStopCursor < tabStops.length) {
+          stop = tabStops[tabStopCursor];
+          absoluteTarget = stop?.pos ?? currentLine.width + lineTabOffset;
+          tabStopCursor += 1;
+        } else {
+          const result = getNextTabStopPx(currentLine.width + lineTabOffset, tabStops, tabStopCursor);
+          absoluteTarget = result.target;
+          tabStopCursor = result.nextIndex;
+          stop = result.stop;
+        }
+        const normalizedTarget = absoluteTarget - lineTabOffset;
+        const targetWidth = Math.max(0, normalizedTarget);
+        const tabAdvance = targetWidth - currentLine.width;
+        currentLine.width = roundValue(targetWidth);
 
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
         currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
@@ -1798,7 +1833,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         charPosInRun += 1;
         if (stop) {
           validateTabStopVal(stop);
-          pendingTabAlignment = { target, val: stop.val };
+          pendingTabAlignment = { target: normalizedTarget, val: stop.val };
         } else {
           pendingTabAlignment = null;
         }
@@ -1806,8 +1841,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
           const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
-          const from = Math.min(originX, target);
-          const to = Math.max(originX, target);
+          const from = Math.min(originX, normalizedTarget);
+          const to = Math.max(originX, normalizedTarget);
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
