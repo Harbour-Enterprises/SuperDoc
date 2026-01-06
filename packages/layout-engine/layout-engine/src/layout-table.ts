@@ -739,8 +739,8 @@ function applyTableFragmentPmRange(fragment: TableFragment, block: TableBlock, m
  * Compute partial row split information for rows that don't fit.
  *
  * When a row exceeds the available height and cantSplit is not set,
- * this function calculates where to split within the row by finding
- * a common line advancement across all cells, ensuring structural alignment.
+ * this function calculates where to split within the row by advancing
+ * each cell independently based on its available line height.
  *
  * Algorithm:
  *
