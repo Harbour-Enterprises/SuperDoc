@@ -75,7 +75,7 @@ describe('w:t translator', () => {
       expect(result.text).toBe(`${nbsp} ${nbsp} ${nbsp} Address:`);
     });
 
-    it('keeps NBSP-only runs even when xml:space is default', () => {
+    it('keeps non-breaking space-only runs even when xml:space is not "preserve"', () => {
       const nbsp = '\u00A0';
       const params = {
         extraParams: {
