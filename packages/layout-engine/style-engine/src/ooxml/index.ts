@@ -335,7 +335,9 @@ export function getNumberingProperties(
 
   const numDefElements = numDefinition.elements as Array<Record<string, unknown>> | undefined;
   const lvlOverride = numDefElements?.find(
-    (element) => element.name === 'w:lvlOverride' && element.attributes?.['w:ilvl'] == ilvl,
+    (element) =>
+      element.name === 'w:lvlOverride' &&
+      (element.attributes as Record<string, unknown> | undefined)?.['w:ilvl'] == ilvl,
   );
   const lvlOverrideElements = lvlOverride?.elements as Array<Record<string, unknown>> | undefined;
   const overridePr = lvlOverrideElements?.find((el) => el.name === translator.xmlName);
@@ -374,7 +376,8 @@ export function getNumberingProperties(
   }
 
   const levelDefinition = listDefElements?.find(
-    (element) => element.name === 'w:lvl' && element.attributes?.['w:ilvl'] == ilvl,
+    (element) =>
+      element.name === 'w:lvl' && (element.attributes as Record<string, unknown> | undefined)?.['w:ilvl'] == ilvl,
   );
   if (!levelDefinition) return {};
 
