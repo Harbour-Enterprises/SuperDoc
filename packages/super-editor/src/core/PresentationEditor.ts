@@ -6692,6 +6692,10 @@ export class PresentationEditor extends EventEmitter {
       const spans = this.#painterHost.querySelectorAll('.superdoc-line span[data-pm-start]') as NodeListOf<HTMLElement>;
       spans.forEach((span) => {
         try {
+          // Skip header/footer spans - they belong to separate PM documents
+          // and their data-pm-start values don't correspond to the body doc
+          if (span.closest('.superdoc-page-header, .superdoc-page-footer')) return;
+
           const pmStart = Number(span.dataset.pmStart ?? 'NaN');
           if (!Number.isFinite(pmStart)) return;
 
