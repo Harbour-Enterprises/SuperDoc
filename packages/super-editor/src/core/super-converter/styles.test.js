@@ -1353,7 +1353,7 @@ describe('getStyleProperties', () => {
     const params = { docx: { 'word/styles.xml': { elements: [{ elements: [] }] } } };
     const result = getStyleProperties(params, null, mockRPrTranslator);
 
-    expect(result).toEqual({ properties: {}, isDefault: false, basedOn: null });
+    expect(result).toEqual({ properties: {}, isDefault: false, basedOn: undefined });
   });
 
   it('should return empty result when style is not found', () => {
@@ -1368,7 +1368,7 @@ describe('getStyleProperties', () => {
 
     expect(result.properties).toEqual({});
     expect(result.isDefault).toBe(false);
-    expect(result.basedOn).toBeNull();
+    expect(result.basedOn).toBeUndefined();
   });
 
   it('should extract properties from a style definition', () => {

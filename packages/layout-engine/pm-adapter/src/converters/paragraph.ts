@@ -754,7 +754,7 @@ export function paragraphToFlowBlocks(
         italic: charHydration.italic,
         underline: charHydration.underline
           ? {
-              style: charHydration.underline.type,
+              style: charHydration.underline.type as TextRun['underline'] extends { style?: infer S } ? S : never,
               color: charHydration.underline.color,
             }
           : undefined,
@@ -797,7 +797,7 @@ export function paragraphToFlowBlocks(
         letterSpacing: ptToPx(resolved.character.letterSpacing),
       };
     }
-  } catch (error) {
+  } catch {
     baseRunDefaults = {};
   }
   const paragraphAttrs = computeParagraphAttrs(

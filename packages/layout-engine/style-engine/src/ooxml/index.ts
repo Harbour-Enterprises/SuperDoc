@@ -157,7 +157,7 @@ export function resolveParagraphProperties(
     : {};
 
   let numberingProps: Record<string, unknown> = {};
-  let ilvl =
+  const ilvl =
     (inlinePropsSafe?.numberingProperties as Record<string, unknown> | undefined)?.ilvl ??
     (styleProps?.numberingProperties as Record<string, unknown> | undefined)?.ilvl;
   let numId =
@@ -174,8 +174,8 @@ export function resolveParagraphProperties(
 
   const isList = numId != null && numId !== 0 && numId !== '0';
   if (isList) {
-    ilvl = ilvl != null ? (ilvl as number) : 0;
-    numberingProps = getNumberingProperties(translators, params, ilvl, numId as number | string, translators.pPr);
+    const ilvlNum = ilvl != null ? (ilvl as number) : 0;
+    numberingProps = getNumberingProperties(translators, params, ilvlNum, numId as number | string, translators.pPr);
     if (overrideInlineStyleId && numberingProps.styleId) {
       styleId = numberingProps.styleId as string;
       styleProps = resolveStyleChain(params, styleId, translators.pPr);
@@ -228,7 +228,7 @@ export function resolveStyleChain(
   followBasedOnChain = true,
 ): Record<string, unknown> {
   let styleProps: Record<string, unknown> = {};
-  let basedOn: string | null = null;
+  let basedOn: string | undefined = undefined;
   if (styleId && styleId !== 'Normal') {
     ({ properties: styleProps, basedOn } = getStyleProperties(params, styleId, translator));
   }
@@ -268,12 +268,12 @@ export function getDefaultProperties(
 
   const defaults = rootElements.find((el) => el.name === 'w:docDefaults');
   const xmlName = translator.xmlName;
-  const elementPrDefault = (defaults as Record<string, unknown>)?.elements?.find(
-    (el: Record<string, unknown>) => el.name === `${xmlName}Default`,
-  ) as Record<string, unknown> | undefined;
-  const elementPr = elementPrDefault?.elements?.find((el: Record<string, unknown>) => el.name === xmlName) as
-    | Record<string, unknown>
+  const defaultsElements = (defaults as Record<string, unknown>)?.elements as
+    | Array<Record<string, unknown>>
     | undefined;
+  const elementPrDefault = defaultsElements?.find((el) => el.name === `${xmlName}Default`);
+  const elementPrDefaultElements = elementPrDefault?.elements as Array<Record<string, unknown>> | undefined;
+  const elementPr = elementPrDefaultElements?.find((el) => el.name === xmlName);
   if (!elementPr) {
     return {};
   }
@@ -285,8 +285,8 @@ export function getStyleProperties(
   params: OoxmlResolverParams,
   styleId: string,
   translator: OoxmlTranslator,
-): { properties: Record<string, unknown>; isDefault: boolean; basedOn: string | null } {
-  const emptyResult = { properties: {}, isDefault: false, basedOn: null };
+): { properties: Record<string, unknown>; isDefault: boolean; basedOn: string | undefined } {
+  const emptyResult = { properties: {}, isDefault: false, basedOn: undefined };
   if (!styleId) return emptyResult;
 
   const docx = params?.docx as Record<string, unknown> | undefined;
@@ -301,23 +301,18 @@ export function getStyleProperties(
   const style = rootElements.find(
     (el) => el.name === 'w:style' && (el.attributes as Record<string, unknown>)?.['w:styleId'] === styleId,
   ) as Record<string, unknown> | undefined;
-  let basedOn = style?.elements?.find((el: Record<string, unknown>) => el.name === 'w:basedOn') as
-    | Record<string, unknown>
-    | undefined;
-  if (basedOn) {
-    basedOn = basedOn?.attributes?.['w:val'] as string | undefined;
-  }
-  const elementPr = style?.elements?.find((el: Record<string, unknown>) => el.name === translator.xmlName) as
-    | Record<string, unknown>
-    | undefined;
+  const styleElements = style?.elements as Array<Record<string, unknown>> | undefined;
+  const basedOnElement = styleElements?.find((el) => el.name === 'w:basedOn');
+  const basedOn = (basedOnElement?.attributes as Record<string, unknown> | undefined)?.['w:val'] as string | undefined;
+  const elementPr = styleElements?.find((el) => el.name === translator.xmlName);
   if (!elementPr) {
-    return { ...emptyResult, basedOn: basedOn as string | null };
+    return { ...emptyResult, basedOn };
   }
 
   const result = translator.encode({ ...params, nodes: [elementPr] }) || {};
   const isDefault = (style?.attributes as Record<string, unknown>)?.['w:default'] === '1';
 
-  return { properties: result, isDefault, basedOn: basedOn as string | null };
+  return { properties: result, isDefault, basedOn };
 }
 
 export function getNumberingProperties(
@@ -338,29 +333,30 @@ export function getNumberingProperties(
   const numDefinition = definitions[numId as keyof typeof definitions] as Record<string, unknown> | undefined;
   if (!numDefinition) return {};
 
-  const lvlOverride = (numDefinition.elements as Array<Record<string, unknown>> | undefined)?.find(
+  const numDefElements = numDefinition.elements as Array<Record<string, unknown>> | undefined;
+  const lvlOverride = numDefElements?.find(
     (element) => element.name === 'w:lvlOverride' && element.attributes?.['w:ilvl'] == ilvl,
-  ) as Record<string, unknown> | undefined;
-  const overridePr = lvlOverride?.elements?.find((el: Record<string, unknown>) => el.name === translator.xmlName) as
-    | Record<string, unknown>
-    | undefined;
+  );
+  const lvlOverrideElements = lvlOverride?.elements as Array<Record<string, unknown>> | undefined;
+  const overridePr = lvlOverrideElements?.find((el) => el.name === translator.xmlName);
   if (overridePr) {
     const overrideProps = translator.encode({ ...params, nodes: [overridePr] }) || {};
     propertiesChain.push(overrideProps);
   }
 
-  const abstractNumId = numDefinition.elements?.find((item: Record<string, unknown>) => item.name === 'w:abstractNumId')
-    ?.attributes?.['w:val'] as string | undefined;
+  const abstractNumIdElement = numDefElements?.find((item) => item.name === 'w:abstractNumId');
+  const abstractNumId = (abstractNumIdElement?.attributes as Record<string, unknown> | undefined)?.['w:val'] as
+    | string
+    | undefined;
 
   const listDefinitionForThisNumId = abstracts[abstractNumId as keyof typeof abstracts] as
     | Record<string, unknown>
     | undefined;
   if (!listDefinitionForThisNumId) return {};
 
-  const numStyleLink = listDefinitionForThisNumId.elements?.find(
-    (item: Record<string, unknown>) => item.name === 'w:numStyleLink',
-  ) as Record<string, unknown> | undefined;
-  const styleId = numStyleLink?.attributes?.['w:val'] as string | undefined;
+  const listDefElements = listDefinitionForThisNumId.elements as Array<Record<string, unknown>> | undefined;
+  const numStyleLink = listDefElements?.find((item) => item.name === 'w:numStyleLink');
+  const styleId = (numStyleLink?.attributes as Record<string, unknown> | undefined)?.['w:val'] as string | undefined;
 
   if (styleId && tries < 1) {
     const { properties: styleProps } = getStyleProperties(params, styleId, translators.pPr);
@@ -377,22 +373,19 @@ export function getNumberingProperties(
     }
   }
 
-  const levelDefinition = listDefinitionForThisNumId?.elements?.find(
-    (element: Record<string, unknown>) => element.name === 'w:lvl' && element.attributes?.['w:ilvl'] == ilvl,
-  ) as Record<string, unknown> | undefined;
+  const levelDefinition = listDefElements?.find(
+    (element) => element.name === 'w:lvl' && element.attributes?.['w:ilvl'] == ilvl,
+  );
   if (!levelDefinition) return {};
 
-  const abstractElementPr = levelDefinition?.elements?.find(
-    (el: Record<string, unknown>) => el.name === translator.xmlName,
-  ) as Record<string, unknown> | undefined;
+  const levelDefElements = levelDefinition.elements as Array<Record<string, unknown>> | undefined;
+  const abstractElementPr = levelDefElements?.find((el) => el.name === translator.xmlName);
   if (!abstractElementPr) return {};
   const abstractProps = translator.encode({ ...params, nodes: [abstractElementPr] }) || {};
 
-  const pStyleElement = levelDefinition?.elements?.find((el: Record<string, unknown>) => el.name === 'w:pStyle') as
-    | Record<string, unknown>
-    | undefined;
+  const pStyleElement = levelDefElements?.find((el) => el.name === 'w:pStyle');
   if (pStyleElement) {
-    const pStyleId = pStyleElement?.attributes?.['w:val'] as string | undefined;
+    const pStyleId = (pStyleElement.attributes as Record<string, unknown> | undefined)?.['w:val'] as string | undefined;
     (abstractProps as Record<string, unknown>).styleId = pStyleId;
   }
   propertiesChain.push(abstractProps as Record<string, unknown>);
@@ -414,23 +407,19 @@ export function resolveDocxFontFamily(
   let resolved = ascii;
   if (docx && themeAscii) {
     const theme = docx['word/theme/theme1.xml'] as Record<string, unknown> | undefined;
-    if (theme?.elements?.length) {
-      const { elements: topElements } = theme as { elements?: Array<Record<string, unknown>> };
-      const { elements } = (topElements?.[0] as { elements?: Array<Record<string, unknown>> }) || {};
-      const themeElements = elements?.find((el) => el.name === 'a:themeElements') as
-        | Record<string, unknown>
-        | undefined;
-      const fontScheme = themeElements?.elements?.find((el: Record<string, unknown>) => el.name === 'a:fontScheme') as
-        | Record<string, unknown>
-        | undefined;
+    const themeElements = theme?.elements as Array<Record<string, unknown>> | undefined;
+    if (themeElements?.length) {
+      const topElement = themeElements[0];
+      const topElementElements = topElement?.elements as Array<Record<string, unknown>> | undefined;
+      const themeElementsNode = topElementElements?.find((el) => el.name === 'a:themeElements');
+      const themeElementsElements = themeElementsNode?.elements as Array<Record<string, unknown>> | undefined;
+      const fontScheme = themeElementsElements?.find((el) => el.name === 'a:fontScheme');
+      const fontSchemeElements = fontScheme?.elements as Array<Record<string, unknown>> | undefined;
       const prefix = themeAscii.startsWith('minor') ? 'minor' : 'major';
-      const font = fontScheme?.elements?.find((el: Record<string, unknown>) => el.name === `a:${prefix}Font`) as
-        | Record<string, unknown>
-        | undefined;
-      const latin = font?.elements?.find((el: Record<string, unknown>) => el.name === 'a:latin') as
-        | Record<string, unknown>
-        | undefined;
-      const typeface = latin?.attributes?.typeface as string | undefined;
+      const font = fontSchemeElements?.find((el) => el.name === `a:${prefix}Font`);
+      const fontElements = font?.elements as Array<Record<string, unknown>> | undefined;
+      const latin = fontElements?.find((el) => el.name === 'a:latin');
+      const typeface = (latin?.attributes as Record<string, unknown> | undefined)?.typeface as string | undefined;
       resolved = typeface || resolved;
     }
   }

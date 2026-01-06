@@ -441,7 +441,7 @@ export const hydrateCharacterStyleAttrs = (
     if (!resolved || typeof resolved !== 'object') {
       return null;
     }
-  } catch (error) {
+  } catch {
     return null;
   }
 
@@ -510,7 +510,7 @@ export const hydrateMarkerStyleAttrs = (
     if (!resolved || typeof resolved !== 'object') {
       return null;
     }
-  } catch (error) {
+  } catch {
     return null;
   }
 
@@ -540,11 +540,11 @@ export const hydrateMarkerStyleAttrs = (
  */
 function extractFontFamily(fontFamily: unknown, docx?: Record<string, unknown>): string | undefined {
   if (!fontFamily || typeof fontFamily !== 'object') return undefined;
-  const resolved = resolveDocxFontFamily(
-    fontFamily as Record<string, unknown>,
-    docx ?? null,
-    SuperConverter.toCssFontFamily,
-  );
+  // Cast SuperConverter to access toCssFontFamily (JS static method not typed)
+  const toCssFontFamily = (
+    SuperConverter as { toCssFontFamily?: (fontName: string, docx?: Record<string, unknown>) => string }
+  ).toCssFontFamily;
+  const resolved = resolveDocxFontFamily(fontFamily as Record<string, unknown>, docx ?? null, toCssFontFamily);
   return resolved ?? undefined;
 }
 

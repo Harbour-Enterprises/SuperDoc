@@ -106,12 +106,7 @@ export function splitBlockPatch(state, dispatch, editor) {
  * @param {import('prosemirror-state').EditorState} state - The current editor state.
  * @param {import('prosemirror-state').Transaction} tr - The transaction to modify with marks.
  * @param {Object} editor - The editor instance containing the converter.
- * @param {Object} editor.converter - The DOCX converter instance with style data.
- * @param {Object} editor.converter.convertedXml - The parsed DOCX XML structure.
- * @param {Object} editor.converter.numbering - The numbering definitions from DOCX.
- * @param {Object | null} paragraphAttrs - The paragraph attributes containing style information.
- * @param {Object} [paragraphAttrs.paragraphProperties] - Paragraph properties object.
- * @param {string} [paragraphAttrs.paragraphProperties.styleId] - The style ID to resolve.
+ * @param {{ paragraphProperties?: { styleId?: string } } | null} paragraphAttrs - The paragraph attributes containing style information.
  * @returns {void}
  *
  * @remarks
@@ -136,11 +131,17 @@ function applyStyleMarks(state, tr, editor, paragraphAttrs) {
     const params = { docx: editor?.converter?.convertedXml ?? {}, numbering: editor?.converter?.numbering ?? {} };
     const resolvedPpr = styleId ? { styleId } : {};
     const runProperties = styleId ? resolveRunProperties(params, {}, resolvedPpr, false, false) : {};
-    const markDefsFromStyle = styleId ? encodeMarksFromRPr(runProperties, editor?.converter?.convertedXml ?? {}) : [];
+    /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */
+    const markDefsFromStyle = styleId
+      ? /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */ (
+          encodeMarksFromRPr(runProperties, editor?.converter?.convertedXml ?? {})
+        )
+      : [];
 
     const selectionMarks = state.selection?.$from?.marks ? state.selection.$from.marks() : [];
     const selectionMarkDefs = selectionMarks.map((mark) => ({ type: mark.type.name, attrs: mark.attrs }));
 
+    /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */
     const markDefsToApply = selectionMarks.length ? selectionMarkDefs : markDefsFromStyle;
 
     const marksToApply = markDefsToApply
@@ -154,7 +155,7 @@ function applyStyleMarks(state, tr, editor, paragraphAttrs) {
       tr.ensureMarks(marksToApply);
       tr.setMeta('sdStyleMarks', markDefsToApply);
     }
-  } catch (_error) {
+  } catch {
     // ignore failures; typing still works without style marks
   }
 }

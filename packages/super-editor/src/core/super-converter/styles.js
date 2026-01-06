@@ -19,37 +19,13 @@ import { combineProperties as _combineProperties } from '@superdoc/style-engine'
 const ooxmlResolver = createOoxmlResolver({ pPr: w_pPrTranslator, rPr: w_rPrTranslator });
 
 /**
- * Properties that must be explicitly overridden by inline formatting.
- * These properties require special handling because inline w:rPr formatting must
- * always take precedence over character style (w:rStyle) properties, even though
- * both are merged in the style chain. This explicit override ensures that direct
- * formatting (e.g., w:sz for fontSize) always wins over linked character styles.
- *
- * Note: fontFamily and color are already handled by combineProperties with full override logic.
+ * Font family converter from SuperConverter (lazy getter to avoid circular import)
+ * @returns {(fontName: string, docx?: Record<string, unknown>) => string}
  */
-const INLINE_OVERRIDE_PROPERTIES = [
-  'fontSize',
-  'bold',
-  'italic',
-  'strike',
-  'underline',
-  'letterSpacing',
-  'vertAlign',
-  'position',
-];
-
-/**
- * Default font size in half-points (20 half-points = 10pt).
- * This baseline ensures all text has a valid, positive font size when no other source provides one.
- * Used as the final fallback in fontSize resolution cascade:
- * 1. Inline formatting (highest priority)
- * 2. Character style
- * 3. Paragraph style
- * 4. Document defaults
- * 5. Normal style
- * 6. DEFAULT_FONT_SIZE_HALF_POINTS (this constant)
- */
-const DEFAULT_FONT_SIZE_HALF_POINTS = 20;
+const getToCssFontFamily = () => {
+  // @ts-expect-error - SuperConverter.toCssFontFamily exists but isn't typed
+  return SuperConverter.toCssFontFamily;
+};
 
 /**
  * Font size scaling factor for subscript and superscript text.
@@ -125,7 +101,7 @@ export const getNumberingProperties = ooxmlResolver.getNumberingProperties;
  *
  * @param {Array<Object>} propertiesArray - Ordered list of property objects to combine.
  * @param {Array<string>} [fullOverrideProps=[]] - Keys that should overwrite instead of merge.
- * @param {Object<string, Function>} [specialHandling={}] - Optional per-key merge overrides.
+ * @param {Record<string, import('@superdoc/style-engine').SpecialHandler>} [specialHandling={}] - Optional per-key merge overrides.
  * @returns {Object} Combined property object.
  */
 export const combineProperties = (propertiesArray, fullOverrideProps = [], specialHandling = {}) => {
@@ -203,7 +179,7 @@ export function encodeMarksFromRPr(runProperties, docx) {
         textStyleAttrs[key] = `${spacing}pt`;
         break;
       case 'fontFamily':
-        const fontFamily = resolveDocxFontFamily(value, docx, SuperConverter.toCssFontFamily);
+        const fontFamily = resolveDocxFontFamily(value, docx, getToCssFontFamily());
         textStyleAttrs[key] = fontFamily;
         // value can be a string (from resolveRunPropertiesFromParagraphStyle) or an object
         const eastAsiaFamily = typeof value === 'object' && value !== null ? value['eastAsia'] : undefined;
@@ -502,7 +478,7 @@ export function encodeCSSFromRPr(runProperties, docx) {
       }
       case 'fontFamily': {
         if (!value) break;
-        const fontFamily = resolveDocxFontFamily(value, docx, SuperConverter.toCssFontFamily);
+        const fontFamily = resolveDocxFontFamily(value, docx, getToCssFontFamily());
         if (fontFamily) {
           css['font-family'] = fontFamily;
         }
