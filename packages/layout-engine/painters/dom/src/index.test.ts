@@ -3385,9 +3385,9 @@ describe('DomPainter', () => {
     painter.paint(shadedLayout, mount);
 
     const fragment = mount.querySelector('[data-block-id="shaded-block"]') as HTMLElement;
-    expect(fragment.style.backgroundColor).toBe('rgb(255, 238, 170)');
-    const borderLayer = fragment.querySelector('.superdoc-paragraph-border') as HTMLElement;
-    expect(borderLayer).toBeTruthy();
+    const shadingLayer = fragment.querySelector('.superdoc-paragraph-shading') as HTMLElement;
+    expect(shadingLayer).toBeTruthy();
+    expect(shadingLayer.style.backgroundColor).toBe('rgb(255, 238, 170)');
   });
 
   it('strips indent padding when rendering list content', () => {

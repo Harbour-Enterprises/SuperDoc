@@ -1811,7 +1811,10 @@ export class DomPainter {
       const lines = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
 
       applyParagraphBlockStyles(fragmentEl, block.attrs, { includeBorders: false, includeShading: false });
-      const borderLayer = createParagraphBorderLayer(this.doc, fragment.width, block.attrs);
+      const { shadingLayer, borderLayer } = createParagraphDecorationLayers(this.doc, fragment.width, block.attrs);
+      if (shadingLayer) {
+        fragmentEl.appendChild(shadingLayer);
+      }
       if (borderLayer) {
         fragmentEl.appendChild(borderLayer);
       }
@@ -2480,7 +2483,10 @@ export class DomPainter {
       // Track B: preserve indent for wordLayout-based lists to show hierarchy
       const contentAttrs = wordLayout ? item.paragraph.attrs : stripListIndent(item.paragraph.attrs);
       applyParagraphBlockStyles(contentEl, contentAttrs, { includeBorders: false, includeShading: false });
-      const borderLayer = createParagraphBorderLayer(this.doc, fragment.width, contentAttrs);
+      const { shadingLayer, borderLayer } = createParagraphDecorationLayers(this.doc, fragment.width, contentAttrs);
+      if (shadingLayer) {
+        contentEl.appendChild(shadingLayer);
+      }
       if (borderLayer) {
         contentEl.appendChild(borderLayer);
       }
@@ -5521,27 +5527,44 @@ const getParagraphBorderBox = (
 };
 
 /**
- * Builds an overlay element for paragraph borders/shading with indent-aware sizing.
+ * Builds overlay elements for paragraph shading and borders with indent-aware sizing.
+ * Returns layers in the order they should be appended (shading below borders).
  */
-const createParagraphBorderLayer = (
+const createParagraphDecorationLayers = (
   doc: Document,
   fragmentWidth: number,
   attrs?: ParagraphAttrs,
-): HTMLElement | null => {
-  if (!attrs?.borders && !attrs?.shading) return null;
+): { shadingLayer?: HTMLElement; borderLayer?: HTMLElement } => {
+  if (!attrs?.borders && !attrs?.shading) return {};
   const borderBox = getParagraphBorderBox(fragmentWidth, attrs.indent);
-  const borderLayer = doc.createElement('div');
-  borderLayer.classList.add('superdoc-paragraph-border');
-  borderLayer.style.position = 'absolute';
-  borderLayer.style.top = '0px';
-  borderLayer.style.bottom = '0px';
-  borderLayer.style.left = `${borderBox.leftInset}px`;
-  borderLayer.style.width = `${borderBox.width}px`;
-  borderLayer.style.pointerEvents = 'none';
-  borderLayer.style.boxSizing = 'border-box';
-  applyParagraphBorderStyles(borderLayer, attrs.borders);
-  applyParagraphShadingStyles(borderLayer, attrs.shading);
-  return borderLayer;
+  const baseStyles = {
+    position: 'absolute',
+    top: '0px',
+    bottom: '0px',
+    left: `${borderBox.leftInset}px`,
+    width: `${borderBox.width}px`,
+    pointerEvents: 'none',
+    boxSizing: 'border-box',
+  } as const;
+
+  let shadingLayer: HTMLElement | undefined;
+  if (attrs.shading) {
+    shadingLayer = doc.createElement('div');
+    shadingLayer.classList.add('superdoc-paragraph-shading');
+    Object.assign(shadingLayer.style, baseStyles);
+    applyParagraphShadingStyles(shadingLayer, attrs.shading);
+  }
+
+  let borderLayer: HTMLElement | undefined;
+  if (attrs.borders) {
+    borderLayer = doc.createElement('div');
+    borderLayer.classList.add('superdoc-paragraph-border');
+    Object.assign(borderLayer.style, baseStyles);
+    borderLayer.style.zIndex = '1';
+    applyParagraphBorderStyles(borderLayer, attrs.borders);
+  }
+
+  return { shadingLayer, borderLayer };
 };
 
 type BorderSide = keyof NonNullable<ParagraphAttrs['borders']>;
