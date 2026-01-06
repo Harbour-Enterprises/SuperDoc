@@ -19,6 +19,21 @@ const XML_NODE_NAME = 'w:r';
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_KEY_NAME = 'run';
 
+/*
+ * Wraps the provided content in a SuperDoc run node.
+ */
+const createRunNodeWithContent = (content, encodedAttrs, runLevelMarks, runProperties) => {
+  const node = {
+    type: SD_KEY_NAME,
+    content,
+    attrs: { ...encodedAttrs, runProperties },
+  };
+  if (runLevelMarks.length) {
+    node.marks = runLevelMarks.map((mark) => cloneMark(mark));
+  }
+  return node;
+};
+
 const encode = (params, encodedAttrs = {}) => {
   const { nodes = [], nodeListHandler } = params || {};
   const runNode = nodes[0];
@@ -86,17 +101,38 @@ const encode = (params, encodedAttrs = {}) => {
 
   const filtered = contentWithRunMarks.filter(Boolean);
 
-  const runNodeResult = {
-    type: SD_KEY_NAME,
-    content: filtered,
-    attrs: { ...encodedAttrs, runProperties },
-  };
-
-  if (runLevelMarks.length) {
-    runNodeResult.marks = runLevelMarks;
+  const containsBreakNodes = filtered.some((child) => child?.type === 'lineBreak');
+  if (!containsBreakNodes) {
+    const defaultNode = createRunNodeWithContent(filtered, encodedAttrs, runLevelMarks, runProperties);
+    return defaultNode;
   }
 
-  return runNodeResult;
+  const splitRuns = [];
+  let currentChunk = [];
+  /**
+   * OOXML sometimes bundles multiple <w:t> siblings and <w:br/> tags inside one <w:r>.
+   * Our renderer expects each break to be wrapped in its own run, so we finalize
+   * the accumulated text chunk before emitting a break run.
+   */
+  const finalizeTextChunk = () => {
+    if (!currentChunk.length) return;
+    const chunkNode = createRunNodeWithContent(currentChunk, encodedAttrs, runLevelMarks, runProperties);
+    if (chunkNode) splitRuns.push(chunkNode);
+    currentChunk = [];
+  };
+
+  filtered.forEach((child) => {
+    if (child?.type === 'lineBreak') {
+      finalizeTextChunk();
+      const breakNode = createRunNodeWithContent([child], encodedAttrs, runLevelMarks, runProperties);
+      if (breakNode) splitRuns.push(breakNode);
+    } else {
+      currentChunk.push(child);
+    }
+  });
+  finalizeTextChunk();
+
+  return splitRuns;
 };
 
 const decode = (params, decodedAttrs = {}) => {
