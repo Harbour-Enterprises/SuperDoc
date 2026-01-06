@@ -657,9 +657,14 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     if (hasMatchingId) nodesWithMark.push(node);
   });
 
+  const nodesToProcess = nodesWithMark.length ? nodesWithMark : node ? [node] : [];
+  if (!nodesToProcess.length) {
+    return;
+  }
+
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    nodes: nodesWithMark.length ? nodesWithMark : [node],
+    nodes: nodesToProcess,
     mark: trackedMark,
     marks,
     trackedChangeType,
