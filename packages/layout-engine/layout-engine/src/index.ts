@@ -37,6 +37,7 @@ import { layoutDrawingBlock } from './layout-drawing.js';
 import { layoutTableBlock, createAnchoredTableFragment } from './layout-table.js';
 import { collectAnchoredDrawings, collectAnchoredTables, collectPreRegisteredAnchors } from './anchors.js';
 import { createPaginator, type PageState, type ConstraintBoundary } from './paginator.js';
+import { formatPageNumber } from './pageNumbering.js';
 
 type PageSize = { w: number; h: number };
 type Margins = {
@@ -180,129 +181,6 @@ const layoutLog = (...args: unknown[]): void => {
 
   console.log(...args);
 };
-
-/**
- * Format a page number according to the specified numbering style.
- *
- * Converts a numeric page number into the requested format for display in headers/footers
- * and page navigation. Supports multiple numbering styles commonly found in word processing
- * documents.
- *
- * @param num - The numeric page number to format (1-based, positive integer)
- * @param format - The numbering format style to apply
- *   - 'decimal': Standard numeric format (1, 2, 3, ...)
- *   - 'lowerLetter': Lowercase alphabetic (a, b, c, ..., z, aa, ab, ...)
- *   - 'upperLetter': Uppercase alphabetic (A, B, C, ..., Z, AA, AB, ...)
- *   - 'lowerRoman': Lowercase Roman numerals (i, ii, iii, iv, v, ...)
- *   - 'upperRoman': Uppercase Roman numerals (I, II, III, IV, V, ...)
- * @returns The formatted page number as a string
- */
-function formatPageNumber(
-  num: number,
-  format: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman',
-): string {
-  switch (format) {
-    case 'decimal':
-      return String(num);
-    case 'lowerLetter':
-      return toLetter(num, false);
-    case 'upperLetter':
-      return toLetter(num, true);
-    case 'lowerRoman':
-      return toRoman(num).toLowerCase();
-    case 'upperRoman':
-      return toRoman(num);
-    default:
-      return String(num);
-  }
-}
-
-/**
- * Convert a numeric value to alphabetic representation (Excel-style column naming).
- *
- * Converts positive integers to alphabetic sequences using base-26 representation
- * where A=1, B=2, ..., Z=26, AA=27, AB=28, etc. This mimics the column naming
- * convention used in spreadsheet applications.
- *
- * Algorithm: Uses division by 26 with adjustment for 1-based indexing (no zero digit).
- * Each iteration computes the rightmost letter and shifts the remaining value.
- *
- * Edge cases:
- * - Values less than 1 are treated as 1 (returns 'a' or 'A')
- * - Non-integer values are floored before conversion
- *
- * @param num - The numeric value to convert (positive integer expected)
- * @param uppercase - If true, returns uppercase letters (A, B, C); if false, lowercase (a, b, c)
- * @returns The alphabetic representation as a string
- * @example
- * toLetter(1, true)   // Returns 'A'
- * toLetter(26, true)  // Returns 'Z'
- * toLetter(27, true)  // Returns 'AA'
- * toLetter(52, true)  // Returns 'AZ'
- * toLetter(702, true) // Returns 'ZZ'
- */
-function toLetter(num: number, uppercase: boolean): string {
-  let result = '';
-  let n = Math.max(1, Math.floor(num));
-  while (n > 0) {
-    const remainder = (n - 1) % 26;
-    const char = String.fromCharCode((uppercase ? 65 : 97) + remainder);
-    result = char + result;
-    n = Math.floor((n - 1) / 26);
-  }
-  return result;
-}
-
-/**
- * Convert a numeric value to Roman numeral representation.
- *
- * Converts positive integers to uppercase Roman numerals using standard Roman numeral
- * notation with subtractive notation (e.g., IV for 4, IX for 9, XL for 40, etc.).
- *
- * Algorithm: Uses a greedy approach with a lookup table of value-numeral pairs ordered
- * from largest to smallest. Repeatedly subtracts the largest possible value and appends
- * the corresponding numeral until the number is reduced to zero.
- *
- * Supported range: 1 to 3999 (standard Roman numeral range)
- * - Values less than 1 are treated as 1 (returns 'I')
- * - Values greater than 3999 will produce non-standard extended Roman numerals
- * - Non-integer values are floored before conversion
- *
- * @param num - The numeric value to convert (positive integer expected, typically 1-3999)
- * @returns The Roman numeral representation as an uppercase string
- * @example
- * toRoman(1)    // Returns 'I'
- * toRoman(4)    // Returns 'IV'
- * toRoman(9)    // Returns 'IX'
- * toRoman(58)   // Returns 'LVIII'
- * toRoman(1994) // Returns 'MCMXCIV'
- */
-function toRoman(num: number): string {
-  const lookup: Array<[number, string]> = [
-    [1000, 'M'],
-    [900, 'CM'],
-    [500, 'D'],
-    [400, 'CD'],
-    [100, 'C'],
-    [90, 'XC'],
-    [50, 'L'],
-    [40, 'XL'],
-    [10, 'X'],
-    [9, 'IX'],
-    [5, 'V'],
-    [4, 'IV'],
-    [1, 'I'],
-  ];
-  let result = '';
-  let n = Math.max(1, Math.floor(num));
-  for (const [value, numeral] of lookup) {
-    while (n >= value) {
-      result += numeral;
-      n -= value;
-    }
-  }
-  return result;
-}
 
 /**
  * Layout FlowBlocks into paginated fragments using measured line data.
@@ -641,7 +519,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   // Paginator encapsulation for page/column helpers
   let pageCount = 0;
   // Page numbering state
-  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' = 'decimal';
+  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash' =
+    'decimal';
   let activePageCounter = 1;
   let pendingNumbering: SectionNumbering | null = null;
   // Section header/footer ref tracking state
