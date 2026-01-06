@@ -1,3 +1,10 @@
+# [1.3.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.2-next.1...v1.3.0-next.1) (2026-01-06)
+
+
+### Features
+
+* add support for subscript and superscript rendering ([#1649](https://github.com/Harbour-Enterprises/SuperDoc/issues/1649)) ([1e3019c](https://github.com/Harbour-Enterprises/SuperDoc/commit/1e3019cbc8d28d6cf9bd1720c56926b6fc300e8d))
+
 ## [1.2.2-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.1...v1.2.2-next.1) (2026-01-06)
 
 
