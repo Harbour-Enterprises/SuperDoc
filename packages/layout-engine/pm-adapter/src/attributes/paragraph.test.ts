@@ -970,7 +970,7 @@ describe('computeParagraphAttrs', () => {
     const styleContext = {
       styles: {},
       defaults: {},
-    };
+    } as never;
 
     const result = computeParagraphAttrs(para, styleContext);
 
