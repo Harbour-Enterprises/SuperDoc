@@ -908,7 +908,13 @@ export function paragraphToFlowBlocks(
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
       // Apply marks ONCE here - this ensures they override linked styles
-      applyMarksToRun(run, [...(node.marks ?? []), ...(inheritedMarks ?? [])], hyperlinkConfig, themeColors);
+      applyMarksToRun(
+        run,
+        [...(node.marks ?? []), ...(inheritedMarks ?? [])],
+        hyperlinkConfig,
+        themeColors,
+        converterContext?.backgroundColor,
+      );
       currentRuns.push(run);
       return;
     }
