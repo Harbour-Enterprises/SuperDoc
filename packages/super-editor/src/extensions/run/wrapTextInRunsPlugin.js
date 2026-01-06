@@ -1,12 +1,6 @@
 import { Plugin } from 'prosemirror-state';
-import { decodeRPrFromMarks } from '@converter/styles.js';
+import { decodeRPrFromMarks, resolveRunProperties, encodeMarksFromRPr } from '@converter/styles.js';
 
-/**
- * Normalizes and merges overlapping ranges so they can be processed once.
- * @param {Array<{from: number, to: number}>} ranges
- * @param {number} docSize
- * @returns {Array<{from: number, to: number}>}
- */
 const mergeRanges = (ranges, docSize) => {
   if (!ranges.length) return [];
   const sorted = ranges
@@ -29,12 +23,6 @@ const mergeRanges = (ranges, docSize) => {
   return merged;
 };
 
-/**
- * Extracts changed ranges from a batch of transactions.
- * @param {Array<import('prosemirror-state').Transaction>} trs
- * @param {number} docSize
- * @returns {Array<{from: number, to: number}>}
- */
 const collectChangedRanges = (trs, docSize) => {
   const ranges = [];
   trs.forEach((tr) => {
@@ -50,13 +38,6 @@ const collectChangedRanges = (trs, docSize) => {
   return mergeRanges(ranges, docSize);
 };
 
-/**
- * Re-maps ranges through the provided transaction mappings to keep them aligned with the latest doc.
- * @param {Array<{from: number, to: number}>} ranges
- * @param {Array<import('prosemirror-state').Transaction>} transactions
- * @param {number} docSize
- * @returns {Array<{from: number, to: number}>}
- */
 const mapRangesThroughTransactions = (ranges, transactions, docSize) => {
   let mapped = ranges;
   transactions.forEach((tr) => {
@@ -72,17 +53,98 @@ const mapRangesThroughTransactions = (ranges, transactions, docSize) => {
   return mergeRanges(mapped, docSize);
 };
 
+const getParagraphAtPos = (doc, pos) => {
+  try {
+    const $pos = doc.resolve(pos);
+    for (let depth = $pos.depth; depth >= 0; depth--) {
+      const node = $pos.node(depth);
+      if (node.type.name === 'paragraph') {
+        return node;
+      }
+    }
+  } catch (_e) {
+    /* ignore invalid positions */
+  }
+  return null;
+};
+
 /**
- * Creates a transaction that wraps bare text nodes in run nodes within the provided ranges.
- * @param {import('prosemirror-state').EditorState} state
- * @param {Array<{from: number, to: number}>} ranges
- * @param {import('prosemirror-model').NodeType | undefined} runType
- * @returns {import('prosemirror-state').Transaction | null}
+ * Resolves run properties from a paragraph's style definition.
+ * Extracts character-level formatting (fonts, sizes, bold, italic, etc.) that should
+ * apply to text within the paragraph based on the paragraph's styleId.
+ *
+ * @param {Object | null} paragraphNode - The ProseMirror paragraph node containing style information.
+ * @param {Object} paragraphNode.attrs - Node attributes.
+ * @param {Object} [paragraphNode.attrs.paragraphProperties] - Paragraph properties object.
+ * @param {string} [paragraphNode.attrs.paragraphProperties.styleId] - The paragraph style ID to resolve.
+ * @param {Object} editor - The editor instance containing the converter.
+ * @param {Object} editor.converter - The DOCX converter instance with style data.
+ * @param {Object} editor.converter.convertedXml - The parsed DOCX XML structure for theme/font lookups.
+ * @param {Object} editor.converter.numbering - The numbering definitions from DOCX.
+ * @returns {Object} Simplified run properties object with character-level formatting.
+ * @returns {string} [return.fontFamily] - Resolved font family name (extracted from complex font object).
+ * @returns {string} [return.fontSize] - Font size in points (e.g., "12pt").
+ * @returns {boolean} [return.bold] - Whether text should be bold.
+ * @returns {boolean} [return.italic] - Whether text should be italic.
+ * @returns {Object} [return.underline] - Underline properties from DOCX (contains w:val, w:color).
+ * @returns {boolean} [return.strike] - Whether text should be struck through.
+ *
+ * @remarks
+ * Font family extraction handles two cases:
+ * 1. Complex font objects with 'ascii' property: extracts the ascii value
+ * 2. Simple string values: uses the string directly
+ * 3. Nested objects: attempts to extract 'ascii' property from the fontValue
+ *
+ * Font size conversion: DOCX uses half-points, so we divide by 2 to get points.
+ *
+ * Error handling: Returns empty object on any failure to prevent crashes during typing.
+ * This allows the plugin to gracefully degrade when converter data is unavailable.
  */
-const buildWrapTransaction = (state, ranges, runType) => {
+const resolveRunPropertiesFromParagraphStyle = (paragraphNode, editor) => {
+  if (!paragraphNode || !editor?.converter) return {};
+
+  const styleId = paragraphNode.attrs?.paragraphProperties?.styleId;
+  if (!styleId) return {};
+
+  try {
+    const params = { docx: editor.converter.convertedXml, numbering: editor.converter.numbering };
+    const resolvedPpr = { styleId };
+    const runProps = resolveRunProperties(params, {}, resolvedPpr, false, false);
+
+    const runProperties = {};
+    if (runProps.fontFamily) {
+      const fontValue = runProps.fontFamily.ascii || runProps.fontFamily;
+      if (fontValue) {
+        runProperties.fontFamily = typeof fontValue === 'string' ? fontValue : fontValue.ascii;
+      }
+    }
+    if (runProps.fontSize) {
+      runProperties.fontSize = `${runProps.fontSize / 2}pt`;
+    }
+    if (runProps.bold) runProperties.bold = true;
+    if (runProps.italic) runProperties.italic = true;
+    if (runProps.underline) runProperties.underline = runProps.underline;
+    if (runProps.strike) runProperties.strike = true;
+
+    return runProperties;
+  } catch (_e) {
+    return {};
+  }
+};
+
+const createMarksFromDefs = (schema, markDefs = []) =>
+  markDefs
+    .map((def) => {
+      const markType = schema.marks[def.type];
+      return markType ? markType.create(def.attrs) : null;
+    })
+    .filter(Boolean);
+
+const buildWrapTransaction = (state, ranges, runType, editor, markDefsFromMeta = []) => {
   if (!ranges.length) return null;
 
   const replacements = [];
+  const metaStyleMarks = createMarksFromDefs(state.schema, markDefsFromMeta);
 
   ranges.forEach(({ from, to }) => {
     state.doc.nodesBetween(from, to, (node, pos, parent, index) => {
@@ -92,7 +154,26 @@ const buildWrapTransaction = (state, ranges, runType) => {
       if (match && !match.matchType(runType)) return;
       if (!match && !parent.type.contentMatch.matchType(runType)) return;
 
-      const runProperties = decodeRPrFromMarks(node.marks);
+      let runProperties = decodeRPrFromMarks(node.marks);
+
+      if ((!node.marks || node.marks.length === 0) && editor?.converter) {
+        const paragraphNode = getParagraphAtPos(state.doc, pos);
+        const styleRunProps = resolveRunPropertiesFromParagraphStyle(paragraphNode, editor);
+        if (Object.keys(styleRunProps).length > 0) {
+          runProperties = styleRunProps;
+          const markDefs = metaStyleMarks.length
+            ? markDefsFromMeta
+            : encodeMarksFromRPr(styleRunProps, editor.converter.convertedXml || {});
+          const styleMarks = metaStyleMarks.length ? metaStyleMarks : createMarksFromDefs(state.schema, markDefs);
+          if (styleMarks.length && typeof state.schema.text === 'function') {
+            const textNode = state.schema.text(node.text || '', styleMarks);
+            if (textNode) {
+              node = textNode;
+            }
+          }
+        }
+      }
+
       const runNode = runType.create({ runProperties }, node);
       replacements.push({ from: pos, to: pos + node.nodeSize, runNode });
     });
@@ -106,16 +187,10 @@ const buildWrapTransaction = (state, ranges, runType) => {
   return tr.docChanged ? tr : null;
 };
 
-/**
- * Plugin that wraps bare text nodes in run nodes, including text inserted via IME
- * composition. While composing we collect changed ranges, and on compositionend
- * we immediately wrap without waiting for additional input.
- *
- * @returns {Plugin}
- */
-export const wrapTextInRunsPlugin = () => {
+export const wrapTextInRunsPlugin = (editor) => {
   let view = null;
   let pendingRanges = [];
+  let lastStyleMarksMeta = [];
 
   const flush = () => {
     if (!view) return;
@@ -124,7 +199,7 @@ export const wrapTextInRunsPlugin = () => {
       pendingRanges = [];
       return;
     }
-    const tr = buildWrapTransaction(view.state, pendingRanges, runType);
+    const tr = buildWrapTransaction(view.state, pendingRanges, runType, editor, lastStyleMarksMeta);
     pendingRanges = [];
     if (tr) {
       view.dispatch(tr);
@@ -132,7 +207,6 @@ export const wrapTextInRunsPlugin = () => {
   };
 
   const onCompositionEnd = () => {
-    // Defer so ProseMirror applies the composition-ending transaction first.
     if (typeof globalThis === 'undefined') return;
     globalThis.queueMicrotask(flush);
   };
@@ -146,6 +220,7 @@ export const wrapTextInRunsPlugin = () => {
           editorView.dom.removeEventListener('compositionend', onCompositionEnd);
           view = null;
           pendingRanges = [];
+          lastStyleMarksMeta = [];
         },
       };
     },
@@ -155,7 +230,6 @@ export const wrapTextInRunsPlugin = () => {
       const runType = newState.schema.nodes.run;
       if (!runType) return null;
 
-      // Keep pending ranges up to date across the transaction batch
       pendingRanges = mapRangesThroughTransactions(pendingRanges, transactions, docSize);
       const changedRanges = collectChangedRanges(transactions, docSize);
       pendingRanges = mergeRanges([...pendingRanges, ...changedRanges], docSize);
@@ -164,7 +238,16 @@ export const wrapTextInRunsPlugin = () => {
         return null;
       }
 
-      const tr = buildWrapTransaction(newState, pendingRanges, runType);
+      const latestStyleMarksMeta =
+        [...transactions]
+          .reverse()
+          .find((tr) => tr.getMeta && tr.getMeta('sdStyleMarks'))
+          ?.getMeta('sdStyleMarks') || lastStyleMarksMeta;
+      if (latestStyleMarksMeta && latestStyleMarksMeta.length) {
+        lastStyleMarksMeta = latestStyleMarksMeta;
+      }
+
+      const tr = buildWrapTransaction(newState, pendingRanges, runType, editor, latestStyleMarksMeta);
       pendingRanges = [];
       return tr;
     },
