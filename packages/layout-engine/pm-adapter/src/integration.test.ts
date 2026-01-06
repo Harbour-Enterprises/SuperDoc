@@ -526,7 +526,9 @@ describe('PM → FlowBlock → Measure integration', () => {
     painter.paint(layout, mount);
 
     const fragment = mount.querySelector('.superdoc-fragment') as HTMLElement;
-    expect(fragment.style.backgroundColor).toBe('rgb(170, 187, 204)');
+    const borderLayer = fragment.querySelector('.superdoc-paragraph-border') as HTMLElement;
+    expect(borderLayer).toBeTruthy();
+    expect(borderLayer.style.backgroundColor).toBe('rgb(170, 187, 204)');
 
     document.body.removeChild(mount);
   });

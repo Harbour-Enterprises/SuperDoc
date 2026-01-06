@@ -197,7 +197,11 @@ const getParagraphBorderBox = (
 ): { x: number; width: number } => {
   const indentLeft = Number.isFinite(indent?.left) ? indent!.left! : 0;
   const indentRight = Number.isFinite(indent?.right) ? indent!.right! : 0;
-  const leftInset = Math.max(0, indentLeft);
+  const firstLine = Number.isFinite(indent?.firstLine) ? indent!.firstLine! : 0;
+  const hanging = Number.isFinite(indent?.hanging) ? indent!.hanging! : 0;
+  const firstLineOffset = firstLine - hanging;
+  const minLeftInset = Math.min(indentLeft, indentLeft + firstLineOffset);
+  const leftInset = Math.max(0, minLeftInset);
   const rightInset = Math.max(0, indentRight);
   return {
     x: fragment.x + leftInset,
