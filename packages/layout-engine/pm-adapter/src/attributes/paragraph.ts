@@ -1026,12 +1026,8 @@ export const computeParagraphAttrs = (
   // defaults for unspecified fields (e.g., before/after from docDefaults).
   const mergedSpacing = mergeSpacingSources(hydrated?.spacing, paragraphProps.spacing, attrs.spacing);
   const normalizedSpacing = normalizeParagraphSpacing(mergedSpacing);
-  const normalizeIndentObject = (value?: ParagraphIndent): ParagraphIndent | undefined => {
-    if (!value) return undefined;
-    return normalizePxIndent(value) ?? convertIndentTwipsToPx(value);
-  };
   const normalizedIndent =
-    normalizeIndentObject(attrs.indent as ParagraphIndent) ??
+    normalizePxIndent(attrs.indent as ParagraphIndent) ??
     convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
     convertIndentTwipsToPx(hydrated?.indent as ParagraphIndent) ??
     normalizeParagraphIndent(attrs.textIndent);
