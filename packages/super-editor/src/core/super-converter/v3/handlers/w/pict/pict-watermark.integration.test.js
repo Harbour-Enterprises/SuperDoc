@@ -124,7 +124,7 @@ describe('VML Watermark Integration Tests', () => {
       expect(imagedata).toBeDefined();
       expect(imagedata.attributes).toMatchObject({
         'r:id': 'rId1',
-        'o:title': 'Baloons',
+        'o:title': 'Balloons',
         gain: '19661f',
         blacklevel: '22938f',
       });
