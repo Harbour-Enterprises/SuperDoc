@@ -45,7 +45,7 @@ export function parseColumnGap(gapTwips: string | number | undefined): number {
 type SectionType = 'continuous' | 'nextPage' | 'evenPage' | 'oddPage';
 type Orientation = 'portrait' | 'landscape';
 type HeaderRefType = Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
-type NumberingFormat = 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+type NumberingFormat = 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
 type VerticalAlign = 'top' | 'center' | 'bottom' | 'both';
 
 interface SectionElement {
@@ -184,7 +184,14 @@ function extractPageNumbering(elements: SectionElement[]):
   if (!pgNumType?.attributes) return undefined;
 
   const fmtRaw = pgNumType.attributes['w:fmt'] as string | undefined;
-  const validFormats: NumberingFormat[] = ['decimal', 'lowerLetter', 'upperLetter', 'lowerRoman', 'upperRoman'];
+  const validFormats: NumberingFormat[] = [
+    'decimal',
+    'lowerLetter',
+    'upperLetter',
+    'lowerRoman',
+    'upperRoman',
+    'numberInDash',
+  ];
   const fmt = (validFormats.includes(fmtRaw as NumberingFormat) ? fmtRaw : undefined) as NumberingFormat | undefined;
 
   const startRaw = pgNumType.attributes['w:start'];

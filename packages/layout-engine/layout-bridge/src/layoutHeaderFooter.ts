@@ -270,9 +270,8 @@ export async function layoutHeaderFooterWithCache(
 
       // Resolve page number tokens for this specific page
       const { displayText, totalPages: totalPagesForPage } = pageResolver(pageNum);
-      const resolvedPageNum = parseInt(displayText, 10) || pageNum;
 
-      resolveHeaderFooterTokens(clonedBlocks, resolvedPageNum, totalPagesForPage);
+      resolveHeaderFooterTokens(clonedBlocks, pageNum, totalPagesForPage, displayText);
 
       // Measure and layout
       const measures = await cache.measureBlocks(clonedBlocks, constraints, measureBlock);

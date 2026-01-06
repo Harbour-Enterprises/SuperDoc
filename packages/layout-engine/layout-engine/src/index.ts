@@ -195,11 +195,12 @@ const layoutLog = (...args: unknown[]): void => {
  *   - 'upperLetter': Uppercase alphabetic (A, B, C, ..., Z, AA, AB, ...)
  *   - 'lowerRoman': Lowercase Roman numerals (i, ii, iii, iv, v, ...)
  *   - 'upperRoman': Uppercase Roman numerals (I, II, III, IV, V, ...)
+ *   - 'numberInDash': Dashed numeric format (-1-, -2-, -3-)
  * @returns The formatted page number as a string
  */
 function formatPageNumber(
   num: number,
-  format: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman',
+  format: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash',
 ): string {
   switch (format) {
     case 'decimal':
@@ -212,6 +213,8 @@ function formatPageNumber(
       return toRoman(num).toLowerCase();
     case 'upperRoman':
       return toRoman(num);
+    case 'numberInDash':
+      return `-${num}-`;
     default:
       return String(num);
   }
@@ -641,7 +644,8 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   // Paginator encapsulation for page/column helpers
   let pageCount = 0;
   // Page numbering state
-  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' = 'decimal';
+  let activeNumberFormat: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash' =
+    'decimal';
   let activePageCounter = 1;
   let pendingNumbering: SectionNumbering | null = null;
   // Section header/footer ref tracking state
