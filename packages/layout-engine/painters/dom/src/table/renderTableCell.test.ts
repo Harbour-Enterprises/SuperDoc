@@ -1697,6 +1697,422 @@ describe('renderTableCell', () => {
     });
   });
 
+  describe('hanging indent (SD-1295)', () => {
+    const createMultiLineParagraph = (indent: {
+      left?: number;
+      hanging?: number;
+      firstLine?: number;
+      right?: number;
+    }) => {
+      const para: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'para-hanging',
+        runs: [{ text: 'First line text. Second line text that wraps.', fontFamily: 'Arial', fontSize: 16 }],
+        attrs: {
+          indent,
+        },
+      };
+
+      const measure: ParagraphMeasure = {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: 17,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+          {
+            fromRun: 0,
+            fromChar: 17,
+            toRun: 0,
+            toChar: 45,
+            width: 100,
+            ascent: 12,
+            descent: 4,
+            lineHeight: 20,
+          },
+        ],
+        totalHeight: 40,
+      };
+
+      return { para, measure };
+    };
+
+    it('should apply hanging indent: first line at left, body lines at left+hanging', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        hanging: 30,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-hanging',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line: paddingLeft = left (20px), textIndent = firstLine - hanging = 0 - 30 = -30px
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('20px');
+      expect(firstLine.style.textIndent).toBe('-30px');
+
+      // Body line: paddingLeft = left = 20px
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('20px');
+      expect(bodyLine.style.textIndent).toBe('');
+    });
+
+    it('should handle firstLine + hanging combination', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        hanging: 30,
+        firstLine: 10, // First line indent of 10
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-firstline-hanging',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line: paddingLeft = left (20px), textIndent = firstLine - hanging = 10 - 30 = -20px
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('20px');
+      expect(firstLine.style.textIndent).toBe('-20px');
+
+      // Body line: paddingLeft = left = 20px
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('20px');
+    });
+
+    it('should handle left indent without hanging', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 40,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-left-only',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // Both lines should have same left padding (no hanging effect)
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('40px');
+      expect(firstLine.style.textIndent).toBe('');
+
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('40px');
+    });
+
+    it('should handle firstLine indent without hanging', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        firstLine: 15,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-firstline-only',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line: paddingLeft = left (20px), textIndent = firstLine - hanging = 15 - 0 = 15px
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('20px');
+      expect(firstLine.style.textIndent).toBe('15px');
+
+      // Body line: paddingLeft = left (20px), no hanging
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('20px');
+    });
+
+    it('should apply right indent to all lines', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        hanging: 30,
+        right: 15,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-right-indent',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // Both lines should have right padding
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingRight).toBe('15px');
+
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingRight).toBe('15px');
+    });
+
+    it('should not apply textIndent when firstLineOffset is zero', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        hanging: 0,
+        firstLine: 0,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-zero-offset',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line should not have textIndent when offset is 0
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.textIndent).toBe('');
+    });
+
+    it('should handle partial rendering starting from body line', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 20,
+        hanging: 30,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-partial',
+        blocks: [para],
+        attrs: {},
+      };
+
+      // Render only the second line (skip first line)
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+        fromLine: 1,
+        toLine: 2,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // When starting from line 1 (body line), it should get body line treatment
+      // paddingLeft = left = 20px
+      const renderedLine = lines[0] as HTMLElement;
+      expect(renderedLine.style.paddingLeft).toBe('20px');
+      expect(renderedLine.style.textIndent).toBe('');
+    });
+
+    it('should handle negative hanging indent', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: 40,
+        hanging: -20,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-negative-hanging',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line: paddingLeft = left (40px), textIndent = firstLine - hanging = 0 - (-20) = 20px
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('40px');
+      expect(firstLine.style.textIndent).toBe('20px');
+
+      // Body lines: negative hanging is ignored, only left indent applies
+      // paddingLeft = left (40px) since hanging <= 0
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('40px');
+      expect(bodyLine.style.textIndent).toBe('');
+    });
+
+    it('should handle negative left indent', () => {
+      const { para, measure } = createMultiLineParagraph({
+        left: -15,
+        hanging: 20,
+      });
+
+      const cellMeasure: TableCellMeasure = {
+        blocks: [measure],
+        width: 150,
+        height: 60,
+        gridColumnStart: 0,
+        colSpan: 1,
+        rowSpan: 1,
+      };
+
+      const cell: TableCell = {
+        id: 'cell-negative-left',
+        blocks: [para],
+        attrs: {},
+      };
+
+      const { cellElement } = renderTableCell({
+        ...createBaseDeps(),
+        cellMeasure,
+        cell,
+      });
+
+      const contentElement = cellElement.firstElementChild as HTMLElement;
+      const paraWrapper = contentElement.firstElementChild as HTMLElement;
+      const lines = paraWrapper.children;
+
+      // First line: negative leftIndent means no paddingLeft is applied (leftIndent > 0 check fails)
+      // textIndent = firstLine - hanging = 0 - 20 = -20px
+      const firstLine = lines[0] as HTMLElement;
+      expect(firstLine.style.paddingLeft).toBe('');
+      expect(firstLine.style.textIndent).toBe('-20px');
+
+      // Body lines: negative leftIndent + positive hanging
+      // PaddingLeft not applied because left indent is negative
+      const bodyLine = lines[1] as HTMLElement;
+      expect(bodyLine.style.paddingLeft).toBe('');
+      expect(bodyLine.style.textIndent).toBe('');
+    });
+  });
+
   describe('renderDrawingContent callback', () => {
     it('should render ShapeGroup drawing blocks via callback', () => {
       const shapeGroupBlock = {
