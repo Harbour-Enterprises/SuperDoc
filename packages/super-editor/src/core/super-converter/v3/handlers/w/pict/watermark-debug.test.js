@@ -16,7 +16,7 @@ describe('Watermark Import Debug - User XML', () => {
                 attributes: {
                   Id: 'rId1',
                   Type: 'http://schemas.openxmlformats.org/officeDocument/2006/relationships/image',
-                  Target: 'media/baloons.png',
+                  Target: 'media/balloons.png',
                 },
               },
             ],
