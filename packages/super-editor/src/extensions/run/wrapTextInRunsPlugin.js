@@ -1,5 +1,5 @@
 import { Plugin } from 'prosemirror-state';
-import { decodeRPrFromMarks, resolveRunProperties, encodeMarksFromRPr } from '@converter/styles.js';
+import { decodeRPrFromMarks, resolveRunProperties } from '@converter/styles.js';
 
 const mergeRanges = (ranges, docSize) => {
   if (!ranges.length) return [];
@@ -140,6 +140,56 @@ const createMarksFromDefs = (schema, markDefs = []) =>
     })
     .filter(Boolean);
 
+/**
+ * Creates mark definitions from pre-converted style run properties.
+ * This is used when we already have CSS-formatted values (e.g., fontSize: "12pt")
+ * and need to create marks without going through encodeMarksFromRPr which expects
+ * raw OOXML values.
+ *
+ * @param {Object} styleRunProps - Pre-converted run properties from resolveRunPropertiesFromParagraphStyle
+ * @returns {Array<Object>} Mark definitions ready for createMarksFromDefs
+ */
+const createMarkDefsFromStyleRunProps = (styleRunProps) => {
+  const markDefs = [];
+  const textStyleAttrs = {};
+
+  if (styleRunProps.fontSize) {
+    textStyleAttrs.fontSize = styleRunProps.fontSize;
+  }
+  if (styleRunProps.fontFamily) {
+    textStyleAttrs.fontFamily = styleRunProps.fontFamily;
+  }
+
+  if (Object.keys(textStyleAttrs).length > 0) {
+    markDefs.push({ type: 'textStyle', attrs: textStyleAttrs });
+  }
+
+  if (styleRunProps.bold) {
+    markDefs.push({ type: 'bold', attrs: { value: true } });
+  }
+  if (styleRunProps.italic) {
+    markDefs.push({ type: 'italic', attrs: { value: true } });
+  }
+  if (styleRunProps.strike) {
+    markDefs.push({ type: 'strike', attrs: { value: true } });
+  }
+  if (styleRunProps.underline) {
+    const underlineType = styleRunProps.underline['w:val'];
+    if (underlineType) {
+      let underlineColor = styleRunProps.underline['w:color'];
+      if (underlineColor && underlineColor.toLowerCase() !== 'auto' && !underlineColor.startsWith('#')) {
+        underlineColor = `#${underlineColor}`;
+      }
+      markDefs.push({
+        type: 'underline',
+        attrs: { underlineType, underlineColor },
+      });
+    }
+  }
+
+  return markDefs;
+};
+
 const buildWrapTransaction = (state, ranges, runType, editor, markDefsFromMeta = []) => {
   if (!ranges.length) return null;
 
@@ -161,9 +211,8 @@ const buildWrapTransaction = (state, ranges, runType, editor, markDefsFromMeta =
         const styleRunProps = resolveRunPropertiesFromParagraphStyle(paragraphNode, editor);
         if (Object.keys(styleRunProps).length > 0) {
           runProperties = styleRunProps;
-          const markDefs = metaStyleMarks.length
-            ? markDefsFromMeta
-            : encodeMarksFromRPr(styleRunProps, editor.converter.convertedXml || {});
+          // Use metaStyleMarks if available, otherwise create marks from pre-converted style properties
+          const markDefs = metaStyleMarks.length ? markDefsFromMeta : createMarkDefsFromStyleRunProps(styleRunProps);
           const styleMarks = metaStyleMarks.length ? metaStyleMarks : createMarksFromDefs(state.schema, markDefs);
           if (styleMarks.length && typeof state.schema.text === 'function') {
             const textNode = state.schema.text(node.text || '', styleMarks);

@@ -366,11 +366,13 @@ const buildCharacterStyleHydration = (
  * 1. Document defaults (w:rPrDefault in w:docDefaults)
  * 2. Normal style run properties
  * 3. Paragraph style run properties (w:rPr inside paragraph style)
- * 4. Character style (if w:rStyle is specified)
- * 5. Inline run properties (direct formatting)
+ * 4. Numbering level run properties (if applicable)
  *
- * The function extracts inline run properties from paragraph-level run properties
- * (w:rPr in w:pPr), providing accurate base character defaults for text rendering.
+ * IMPORTANT: This function does NOT include w:pPr/w:rPr (paragraph-level run properties) in the cascade.
+ * In OOXML, w:pPr/w:rPr is specifically for:
+ * - The paragraph mark glyph
+ * - New text typed at the end of the paragraph by the user
+ * It is NOT meant to be inherited by existing runs without explicit formatting.
  *
  * @param para - The ProseMirror paragraph node to hydrate
  * @param context - The converter context containing DOCX and optional numbering data
@@ -405,9 +407,10 @@ export const hydrateCharacterStyleAttrs = (
   const styleIdSource = attrs.styleId ?? paragraphProps.styleId;
   const styleId = typeof styleIdSource === 'string' && styleIdSource.trim() ? styleIdSource : null;
 
-  // Extract inline run properties from paragraph-level rPr
-  // Priority: paragraphProperties.runProperties -> attrs.runProperties
-  const inlineRpr = extractInlineRunProperties(para, paragraphProps);
+  // For paragraph-level character defaults, we do NOT use w:pPr/w:rPr as inline properties.
+  // In OOXML, w:pPr/w:rPr is only for NEW text typed at the paragraph end, not for existing runs.
+  // Runs without explicit w:rPr should inherit from: docDefaults → Normal → paragraph style rPr.
+  const inlineRpr: Record<string, unknown> = {};
 
   // Build resolved paragraph properties for the style chain
   // This includes styleId and numberingProperties which affect run property resolution
@@ -474,7 +477,9 @@ export const hydrateMarkerStyleAttrs = (
   const styleIdSource = attrs.styleId ?? paragraphProps.styleId;
   const styleId = typeof styleIdSource === 'string' && styleIdSource.trim() ? styleIdSource : null;
 
-  const inlineRpr = extractInlineRunProperties(para, paragraphProps);
+  // For list markers, we do NOT use w:pPr/w:rPr as inline properties.
+  // Marker styling comes from numbering definition rPr, not paragraph's default run properties.
+  const inlineRpr: Record<string, unknown> = {};
 
   const numberingProps = attrs.numberingProperties ?? paragraphProps.numberingProperties;
   const numberingDefinedInline = (numberingProps as Record<string, unknown> | undefined)?.numId != null;
@@ -511,47 +516,6 @@ export const hydrateMarkerStyleAttrs = (
 
   return buildCharacterStyleHydration(resolved, context.docx);
 };
-
-/**
- * Extracts inline run properties from a paragraph node for use in style cascade resolution.
- *
- * This function implements OOXML's run property priority system:
- * 1. Paragraph-level run properties (w:rPr inside w:pPr) - highest priority
- * 2. Paragraph node attrs-level run properties - second priority
- *
- * Note: We intentionally do NOT fall back to first text run marks here. Marks are
- * direct formatting on specific runs and should not become paragraph defaults.
- *
- * The extracted properties are used by `resolveRunProperties` to apply the correct
- * OOXML cascade: docDefaults -> Normal style -> paragraph style rPr -> character style -> inline rPr.
- *
- * @param para - The ProseMirror paragraph node to extract from
- * @param paragraphProps - The paragraph properties object (from attrs.paragraphProperties)
- * @returns A record containing run properties in OOXML format (fontFamily, fontSize, bold, etc.)
- *
- * @example
- * ```typescript
- * const paragraphProps = { runProperties: { fontSize: 24, bold: true } };
- * const rpr = extractInlineRunProperties(para, paragraphProps);
- * // Returns: { fontSize: 24, bold: true }
- *
- * ```
- */
-function extractInlineRunProperties(para: PMNode, paragraphProps: Record<string, unknown>): Record<string, unknown> {
-  // Check for paragraph-level run properties (w:rPr inside w:pPr)
-  const paragraphRpr = paragraphProps.runProperties;
-  if (paragraphRpr && typeof paragraphRpr === 'object') {
-    return cloneIfObject(paragraphRpr) ?? {};
-  }
-
-  // Check attrs-level run properties
-  const attrsRpr = para.attrs?.runProperties;
-  if (attrsRpr && typeof attrsRpr === 'object') {
-    return cloneIfObject(attrsRpr) ?? {};
-  }
-
-  return {};
-}
 
 /**
  * Extracts CSS font-family string from resolved OOXML fontFamily object.

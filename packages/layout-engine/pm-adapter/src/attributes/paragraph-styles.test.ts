@@ -445,7 +445,7 @@ describe('hydrateCharacterStyleAttrs', () => {
     );
   });
 
-  it('extracts inline run properties from paragraphProperties.runProperties', () => {
+  it('does NOT use paragraphProperties.runProperties as inline run properties (w:pPr/w:rPr is for new text only)', () => {
     resolveRunProperties.mockReturnValue({ fontSize: 22 });
 
     const para = {
@@ -457,16 +457,18 @@ describe('hydrateCharacterStyleAttrs', () => {
     } as never;
     hydrateCharacterStyleAttrs(para, { docx: {} });
 
+    // inlineRpr should be empty - paragraph's runProperties (w:pPr/w:rPr) is only for new text,
+    // not for existing runs. Runs without explicit formatting inherit from style cascade only.
     expect(resolveRunProperties).toHaveBeenCalledWith(
       expect.anything(),
-      { fontSize: 24, bold: true },
+      {}, // Empty inline run properties
       expect.anything(),
       false,
       false,
     );
   });
 
-  it('extracts inline run properties from attrs.runProperties as fallback', () => {
+  it('does NOT use attrs.runProperties as inline run properties (w:pPr/w:rPr is for new text only)', () => {
     resolveRunProperties.mockReturnValue({ fontSize: 22 });
 
     const para = {
@@ -476,9 +478,10 @@ describe('hydrateCharacterStyleAttrs', () => {
     } as never;
     hydrateCharacterStyleAttrs(para, { docx: {} });
 
+    // inlineRpr should be empty - paragraph's runProperties is for new text only
     expect(resolveRunProperties).toHaveBeenCalledWith(
       expect.anything(),
-      { italic: true },
+      {}, // Empty inline run properties
       expect.anything(),
       false,
       false,
@@ -707,7 +710,7 @@ describe('hydrateMarkerStyleAttrs', () => {
     );
   });
 
-  it('extracts inline run properties for marker', () => {
+  it('does NOT use paragraphProperties.runProperties for marker (w:pPr/w:rPr is for new text only)', () => {
     resolveRunProperties.mockReturnValue({ fontSize: 22 });
 
     const para = {
@@ -719,9 +722,10 @@ describe('hydrateMarkerStyleAttrs', () => {
     } as never;
     hydrateMarkerStyleAttrs(para, { docx: {} });
 
+    // Marker styling comes from numbering definition rPr, not from paragraph's w:pPr/w:rPr
     expect(resolveRunProperties).toHaveBeenCalledWith(
       expect.anything(),
-      { bold: true },
+      {}, // Empty inline run properties
       expect.anything(),
       true,
       false,
