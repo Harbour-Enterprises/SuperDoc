@@ -1,3 +1,14 @@
+## [1.2.2-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.1...v1.2.2-next.1) (2026-01-06)
+
+
+### Bug Fixes
+
+* adjusted row height not preserved when table doesn't fit current page ([#1642](https://github.com/Harbour-Enterprises/SuperDoc/issues/1642)) ([edcab55](https://github.com/Harbour-Enterprises/SuperDoc/commit/edcab5507ee92d56ab25079b7345928c8dd7839a))
+* auto color in tables with dark cells ([#1644](https://github.com/Harbour-Enterprises/SuperDoc/issues/1644)) ([f498a03](https://github.com/Harbour-Enterprises/SuperDoc/commit/f498a03dff563e7e24aaed78cbbb3b93bedf23a8))
+* hanging indent in tables ([#1647](https://github.com/Harbour-Enterprises/SuperDoc/issues/1647)) ([ee8a206](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee8a206378f0941fb2fa4ea02842fd3629f43350))
+* paragraph borders inside table cells ([#1646](https://github.com/Harbour-Enterprises/SuperDoc/issues/1646)) ([13a3797](https://github.com/Harbour-Enterprises/SuperDoc/commit/13a3797c3706ad75a55bb09a055f7fddd0662609))
+* table widths with percents ([#1645](https://github.com/Harbour-Enterprises/SuperDoc/issues/1645)) ([a64a7b7](https://github.com/Harbour-Enterprises/SuperDoc/commit/a64a7b743279326bc5a0e72a6553d2f0e400a5ee))
+
 ## [1.2.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.0...v1.2.1) (2026-01-05)
 
 
