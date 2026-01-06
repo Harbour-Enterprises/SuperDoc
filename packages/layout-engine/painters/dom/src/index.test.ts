@@ -2177,6 +2177,88 @@ describe('DomPainter', () => {
     expect(tabEl.style.width).toBe(`${expectedTabWidth}px`);
   });
 
+  it('positions tab-aligned list text using textStartX instead of hanging indent', () => {
+    const block: FlowBlock = {
+      kind: 'paragraph',
+      id: 'list-tab-textstart-block',
+      runs: [{ text: 'Item', fontFamily: 'Arial', fontSize: 16 }],
+      attrs: {
+        indent: { left: 48, hanging: 24 },
+        numberingProperties: { numId: 1, ilvl: 0 },
+        wordLayout: {
+          indentLeftPx: 48,
+          textStartPx: 48,
+          marker: {
+            markerText: '1.',
+            glyphWidthPx: 10,
+            markerBoxWidthPx: 15,
+            markerX: 24,
+            textStartX: 48,
+            baselineOffsetPx: 0,
+            justification: 'left',
+            suffix: 'tab',
+            run: { fontFamily: 'Arial', fontSize: 16 },
+          },
+        },
+      },
+    };
+
+    const measure: ParagraphMeasure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 4,
+          width: 40,
+          ascent: 12,
+          descent: 4,
+          lineHeight: 20,
+          segments: [{ runIndex: 0, fromChar: 0, toChar: 4, width: 40, x: 0 }],
+        },
+      ],
+      totalHeight: 20,
+      marker: {
+        markerWidth: 15,
+        markerTextWidth: 10,
+        indentLeft: 48,
+      },
+    };
+
+    const listLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'list-tab-textstart-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 0,
+              y: 0,
+              width: 200,
+              markerWidth: 15,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({ blocks: [block], measures: [measure] });
+    painter.paint(listLayout, mount);
+
+    const lineEl = mount.querySelector('.superdoc-line') as HTMLElement;
+    expect(lineEl).toBeTruthy();
+    const textSpan = Array.from(lineEl.querySelectorAll('span')).find((el) => el.textContent === 'Item') as
+      | HTMLElement
+      | undefined;
+    expect(textSpan).toBeTruthy();
+    expect(textSpan?.style.left).toBe('48px');
+  });
+
   it('reuses fragment DOM nodes when layout geometry changes', () => {
     const painter = createDomPainter({ blocks: [block], measures: [measure] });
     painter.paint(layout, mount);

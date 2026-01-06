@@ -4271,7 +4271,17 @@ export class DomPainter {
       const hanging = paraIndent?.hanging ?? 0;
       const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
       const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
-      const indentOffset = indentLeft + firstLineOffsetForCumX;
+      const wordLayoutValue = (block.attrs as ParagraphAttrs | undefined)?.wordLayout;
+      const wordLayout = isMinimalWordLayout(wordLayoutValue) ? wordLayoutValue : undefined;
+      const isListParagraph = Boolean(wordLayout?.marker);
+      const rawTextStartPx =
+        typeof wordLayout?.marker?.textStartX === 'number' && Number.isFinite(wordLayout.marker.textStartX)
+          ? wordLayout.marker.textStartX
+          : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+            ? wordLayout.textStartPx
+            : undefined;
+      const listIndentOffset = isFirstLineOfPara ? (rawTextStartPx ?? indentLeft) : indentLeft;
+      const indentOffset = isListParagraph ? listIndentOffset : indentLeft + firstLineOffsetForCumX;
       let cumulativeX = 0; // Start at 0, we'll add indentOffset when positioning
       const segmentsByRun = new Map<number, LineSegment[]>();
       line.segments.forEach((segment) => {
