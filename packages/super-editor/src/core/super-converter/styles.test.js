@@ -80,6 +80,15 @@ describe('encodeMarksFromRPr', () => {
       attrs: { textTransform: 'uppercase' },
     });
   });
+
+  it('encodes vertical alignment and position into textStyle', () => {
+    const rPr = { vertAlign: 'subscript', position: 4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { vertAlign: 'subscript', position: '2pt' },
+    });
+  });
 });
 
 describe('encodeCSSFromRPr', () => {
@@ -121,6 +130,194 @@ describe('encodeCSSFromRPr', () => {
   it('should encode font family using converter fallbacks', () => {
     const css = encodeCSSFromRPr({ fontFamily: { 'w:ascii': 'Arial' } }, {});
     expect(css['font-family']).toBe('Arial, sans-serif');
+  });
+
+  it('applies vertical-align and scaling for superscript/subscript', () => {
+    const css = encodeCSSFromRPr({ vertAlign: 'superscript', fontSize: 20 }, {});
+    expect(css['vertical-align']).toBe('super');
+    expect(css['font-size']).toBe('6.5pt'); // 20 half-points = 10pt; scaled 65%
+  });
+
+  it('uses numeric position when provided', () => {
+    const css = encodeCSSFromRPr({ position: 4 }, {});
+    expect(css['vertical-align']).toBe('2pt');
+  });
+});
+
+describe('decodeRPrFromMarks', () => {
+  it('decodes vertAlign and position from textStyle mark', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: 'subscript', position: '1.5pt' } }];
+    expect(decodeRPrFromMarks(marks)).toMatchObject({ vertAlign: 'subscript', position: 3 });
+  });
+});
+
+describe('encodeMarksFromRPr - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const rPr = { vertAlign: null };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.vertAlign).toBeUndefined();
+  });
+
+  it('handles undefined vertAlign gracefully', () => {
+    const rPr = { vertAlign: undefined };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.vertAlign).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const rPr = { position: null };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles undefined position gracefully', () => {
+    const rPr = { position: undefined };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles NaN position gracefully', () => {
+    const rPr = { position: NaN };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles Infinity position gracefully', () => {
+    const rPr = { position: Infinity };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles negative Infinity position gracefully', () => {
+    const rPr = { position: -Infinity };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const rPr = { position: -4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { position: '-2pt' },
+    });
+  });
+
+  it('handles zero position value', () => {
+    const rPr = { position: 0 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { position: '0pt' },
+    });
+  });
+
+  it('handles both vertAlign and position set together', () => {
+    const rPr = { vertAlign: 'superscript', position: 4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { vertAlign: 'superscript', position: '2pt' },
+    });
+  });
+});
+
+describe('encodeCSSFromRPr - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const css = encodeCSSFromRPr({ vertAlign: null }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles undefined vertAlign gracefully', () => {
+    const css = encodeCSSFromRPr({ vertAlign: undefined }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: null }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles undefined position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: undefined }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles NaN position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: NaN }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles Infinity position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: Infinity }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles negative Infinity position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: -Infinity }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const css = encodeCSSFromRPr({ position: -4 }, {});
+    expect(css['vertical-align']).toBe('-2pt');
+  });
+
+  it('handles zero position value', () => {
+    const css = encodeCSSFromRPr({ position: 0 }, {});
+    expect(css['vertical-align']).toBe('0pt');
+  });
+
+  it('position takes precedence over vertAlign when both are set', () => {
+    const css = encodeCSSFromRPr({ vertAlign: 'superscript', position: 4 }, {});
+    expect(css['vertical-align']).toBe('2pt');
+    expect(css['font-size']).toBeUndefined();
+  });
+});
+
+describe('decodeRPrFromMarks - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: null } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.vertAlign).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: null } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBeUndefined();
+  });
+
+  it('handles invalid position string gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: 'invalid' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: '-2pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBe(-4);
+  });
+
+  it('handles zero position value', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: '0pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBe(0);
+  });
+
+  it('handles both vertAlign and position set together', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: 'subscript', position: '2pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.vertAlign).toBe('subscript');
+    expect(rPr.position).toBe(4);
   });
 });
 
