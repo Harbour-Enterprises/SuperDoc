@@ -33,7 +33,7 @@ const createDummyFragment = (): TableFragment => ({
 function createMockTableBlock(
   rowCount: number,
   rowAttrs?: Array<{ repeatHeader?: boolean; cantSplit?: boolean }>,
-  tableAttrs?: { tableProperties?: { floatingTableProperties?: unknown } },
+  tableAttrs?: TableAttrs,
 ): TableBlock {
   const rows = Array.from({ length: rowCount }, (_, i) => ({
     id: `row-${i}` as BlockId,
@@ -332,6 +332,41 @@ describe('layoutTableBlock', () => {
 
       const fragment = fragments[0];
       expect(fragment.metadata?.rowBoundaries).toBeUndefined();
+    });
+  });
+
+  describe('justification alignment', () => {
+    it('positions the table based on justification', () => {
+      const measure = createMockTableMeasure([100, 100], [20]);
+      const fragments: TableFragment[] = [];
+      const mockPage = { fragments };
+
+      const layoutWithJustification = (justification: 'center' | 'right') => {
+        const block = createMockTableBlock(1, undefined, { justification });
+        fragments.length = 0;
+
+        layoutTableBlock({
+          block,
+          measure,
+          columnWidth: 500,
+          ensurePage: () => ({
+            page: mockPage,
+            columnIndex: 0,
+            cursorY: 0,
+            contentBottom: 1000,
+          }),
+          advanceColumn: (state) => state,
+          columnX: () => 0,
+        });
+
+        return fragments[0];
+      };
+
+      const centerFragment = layoutWithJustification('center');
+      expect(centerFragment.x).toBe(150);
+
+      const rightFragment = layoutWithJustification('right');
+      expect(rightFragment.x).toBe(300);
     });
   });
 

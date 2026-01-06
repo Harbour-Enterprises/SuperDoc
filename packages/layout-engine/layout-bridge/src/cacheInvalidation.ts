@@ -102,12 +102,16 @@ export function computeSectionMetadataHash(sections: SectionMetadata[]): string 
  * @returns Constraints hash string
  */
 export function computeConstraintsHash(constraints: HeaderFooterConstraints): string {
-  const { width, height, pageWidth, margins } = constraints;
+  const { width, height, pageWidth, margins, overflowBaseHeight } = constraints;
 
   const parts = [`w:${width}`, `h:${height}`];
 
   if (pageWidth !== undefined) {
     parts.push(`pw:${pageWidth}`);
+  }
+
+  if (overflowBaseHeight !== undefined) {
+    parts.push(`obh:${overflowBaseHeight}`);
   }
 
   if (margins) {

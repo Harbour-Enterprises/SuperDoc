@@ -23,7 +23,16 @@ import { getUnderlineCssString } from '@extensions/linked-styles/underline-css.j
  *
  * Note: fontFamily and color are already handled by combineProperties with full override logic.
  */
-const INLINE_OVERRIDE_PROPERTIES = ['fontSize', 'bold', 'italic', 'strike', 'underline', 'letterSpacing'];
+const INLINE_OVERRIDE_PROPERTIES = [
+  'fontSize',
+  'bold',
+  'italic',
+  'strike',
+  'underline',
+  'letterSpacing',
+  'vertAlign',
+  'position',
+];
 
 /**
  * Default font size in half-points (20 half-points = 10pt).
@@ -37,6 +46,14 @@ const INLINE_OVERRIDE_PROPERTIES = ['fontSize', 'bold', 'italic', 'strike', 'und
  * 6. DEFAULT_FONT_SIZE_HALF_POINTS (this constant)
  */
 const DEFAULT_FONT_SIZE_HALF_POINTS = 20;
+
+/**
+ * Font size scaling factor for subscript and superscript text.
+ * This value (0.65 or 65%) matches Microsoft Word's default rendering behavior
+ * for vertical alignment (w:vertAlign) when set to 'superscript' or 'subscript'.
+ * Applied to the base font size to reduce text size for sub/superscripts.
+ */
+const SUBSCRIPT_SUPERSCRIPT_SCALE = 0.65;
 
 /**
  * Gets the resolved run properties by merging defaults, styles, and inline properties.
@@ -609,6 +626,21 @@ export function encodeMarksFromRPr(runProperties, docx) {
         }
         break;
       }
+      case 'vertAlign': {
+        if (value) {
+          textStyleAttrs.vertAlign = value;
+        }
+        break;
+      }
+      case 'position': {
+        if (value != null && Number.isFinite(value)) {
+          const points = halfPointToPoints(value);
+          if (Number.isFinite(points)) {
+            textStyleAttrs.position = `${points}pt`;
+          }
+        }
+        break;
+      }
     }
   });
 
@@ -619,6 +651,7 @@ export function encodeMarksFromRPr(runProperties, docx) {
   if (highlightColor) {
     marks.push({ type: 'highlight', attrs: { color: highlightColor } });
   }
+
   return marks;
 }
 
@@ -754,6 +787,8 @@ export function encodeCSSFromRPr(runProperties, docx) {
   let hasTextDecorationNone = false;
   let highlightColor = null;
   let hasHighlightTag = false;
+  let verticalAlignValue;
+  let fontSizeOverride;
 
   Object.keys(runProperties).forEach((key) => {
     const value = runProperties[key];
@@ -892,6 +927,37 @@ export function encodeCSSFromRPr(runProperties, docx) {
         }
         break;
       }
+      case 'vertAlign': {
+        // Skip if position is present - position takes precedence over vertAlign
+        if (runProperties.position != null && Number.isFinite(runProperties.position)) {
+          break;
+        }
+        if (value === 'superscript' || value === 'subscript') {
+          verticalAlignValue = value === 'superscript' ? 'super' : 'sub';
+          if (runProperties.fontSize != null && Number.isFinite(runProperties.fontSize)) {
+            const scaledPoints = halfPointToPoints(runProperties.fontSize * SUBSCRIPT_SUPERSCRIPT_SCALE);
+            if (Number.isFinite(scaledPoints)) {
+              fontSizeOverride = `${scaledPoints}pt`;
+            }
+          } else {
+            fontSizeOverride = `${SUBSCRIPT_SUPERSCRIPT_SCALE * 100}%`;
+          }
+        } else if (value === 'baseline') {
+          verticalAlignValue = 'baseline';
+        }
+        break;
+      }
+      case 'position': {
+        if (value != null && Number.isFinite(value)) {
+          const points = halfPointToPoints(value);
+          if (Number.isFinite(points)) {
+            verticalAlignValue = `${points}pt`;
+            // Position takes precedence over vertAlign, so clear font-size override
+            fontSizeOverride = undefined;
+          }
+        }
+        break;
+      }
       default:
         break;
     }
@@ -910,6 +976,14 @@ export function encodeCSSFromRPr(runProperties, docx) {
       // @ts-expect-error - CSS object allows string indexing
       css['color'] = 'inherit';
     }
+  }
+
+  if (fontSizeOverride) {
+    css['font-size'] = fontSizeOverride;
+  }
+
+  if (verticalAlignValue) {
+    css['vertical-align'] = verticalAlignValue;
   }
 
   return css;
@@ -996,6 +1070,20 @@ export function decodeRPrFromMarks(marks) {
                 runProperties.fontFamily = result;
               }
               break;
+            case 'vertAlign':
+              if (value != null) {
+                runProperties.vertAlign = value;
+              }
+              break;
+            case 'position': {
+              if (value != null) {
+                const numeric = parseFloat(value);
+                if (!isNaN(numeric)) {
+                  runProperties.position = numeric * 2;
+                }
+              }
+              break;
+            }
           }
         });
         break;

@@ -29,36 +29,38 @@
  * - Kerning and ligature support
  */
 
-import type {
-  FlowBlock,
-  ParagraphBlock,
-  ParagraphSpacing,
-  ParagraphIndent,
-  ImageBlock,
-  ListBlock,
-  Measure,
-  Line,
-  ParagraphMeasure,
-  ImageMeasure,
-  TableBlock,
-  TableMeasure,
-  TableRowMeasure,
-  TableCellMeasure,
-  ListMeasure,
-  Run,
-  TextRun,
-  TabRun,
-  ImageRun,
-  LineBreakRun,
-  FieldAnnotationRun,
-  TabStop,
-  DrawingBlock,
-  DrawingMeasure,
-  DrawingGeometry,
-  DropCapDescriptor,
+import {
+  Engines,
+  OOXML_PCT_DIVISOR,
+  type FlowBlock,
+  type ParagraphBlock,
+  type ParagraphSpacing,
+  type ParagraphIndent,
+  type ImageBlock,
+  type ListBlock,
+  type Measure,
+  type Line,
+  type ParagraphMeasure,
+  type ImageMeasure,
+  type TableBlock,
+  type TableMeasure,
+  type TableRowMeasure,
+  type TableCellMeasure,
+  type ListMeasure,
+  type Run,
+  type TextRun,
+  type TabRun,
+  type ImageRun,
+  type LineBreakRun,
+  type FieldAnnotationRun,
+  type TabStop,
+  type DrawingBlock,
+  type DrawingMeasure,
+  type DrawingGeometry,
+  type DropCapDescriptor,
+  type TableWidthAttr,
 } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
-import { Engines } from '@superdoc/contracts';
 import {
   LIST_MARKER_GAP,
   MIN_MARKER_GUTTER,
@@ -1990,8 +1992,97 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   };
 }
 
+/**
+ * Validates and extracts a numeric value from a table width attribute.
+ *
+ * Performs runtime validation to ensure the value is a valid, finite number
+ * that can be used in calculations. This guards against NaN, Infinity, and
+ * invalid numeric values that could break layout calculations.
+ *
+ * @param attr - Table width attribute object (potentially unsafe)
+ * @returns Valid numeric value or undefined if validation fails
+ *
+ * @example
+ * ```typescript
+ * validateTableWidthValue({ width: 2500, type: 'pct' }) // Returns: 2500
+ * validateTableWidthValue({ value: 300, type: 'px' }) // Returns: 300
+ * validateTableWidthValue({ width: NaN, type: 'pct' }) // Returns: undefined
+ * validateTableWidthValue({ width: -100, type: 'pct' }) // Returns: undefined
+ * validateTableWidthValue({}) // Returns: undefined
+ * ```
+ */
+function validateTableWidthValue(attr: TableWidthAttr): number | undefined {
+  const value = attr.width ?? attr.value;
+
+  // Must be a number, finite (not NaN/Infinity), and positive
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolves table width from OOXML attributes to actual pixel width.
+ *
+ * Handles two types of width specifications:
+ * 1. Percentage width (type: 'pct'): OOXML stores percentages as 1/50ths of a percent
+ *    - 5000 = 100% (full width)
+ *    - 2500 = 50% (half width)
+ *    - 1000 = 20% (one-fifth width)
+ *    The percentage is applied to the available maxWidth to get pixel width.
+ *
+ * 2. Explicit pixel width (type: 'px' or 'pixel'): Direct pixel value used as-is.
+ *
+ * Includes runtime validation to guard against invalid values (NaN, Infinity, negative).
+ *
+ * @param attrs - Table block attributes (may be undefined)
+ * @param maxWidth - Available width in pixels for percentage calculations
+ * @returns Resolved pixel width or undefined if no valid width specified
+ *
+ * @example
+ * ```typescript
+ * // 50% of 600px = 300px
+ * resolveTableWidth({ tableWidth: { value: 2500, type: 'pct' } }, 600) // Returns: 300
+ *
+ * // Explicit 400px
+ * resolveTableWidth({ tableWidth: { width: 400, type: 'px' } }, 600) // Returns: 400
+ *
+ * // Invalid: NaN value
+ * resolveTableWidth({ tableWidth: { value: NaN, type: 'pct' } }, 600) // Returns: undefined
+ * ```
+ */
+function resolveTableWidth(attrs: TableBlock['attrs'], maxWidth: number): number | undefined {
+  // Type guard: validate attrs.tableWidth matches TableWidthAttr structure
+  const tableWidthAttr = attrs?.tableWidth;
+  if (!tableWidthAttr || typeof tableWidthAttr !== 'object') {
+    return undefined;
+  }
+
+  const typedAttr = tableWidthAttr as TableWidthAttr;
+  const validValue = validateTableWidthValue(typedAttr);
+
+  if (validValue === undefined) {
+    return undefined;
+  }
+
+  if (typedAttr.type === 'pct') {
+    // Convert OOXML percentage to pixels
+    // OOXML_PCT_DIVISOR (5000) = 100%
+    return Math.round(maxWidth * (validValue / OOXML_PCT_DIVISOR));
+  } else if (typedAttr.type === 'px' || typedAttr.type === 'pixel') {
+    // Explicit pixel width - use directly
+    return validValue;
+  }
+
+  return undefined;
+}
+
 async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
+
+  // Resolve percentage or explicit pixel table width
+  const resolvedTableWidth = resolveTableWidth(block.attrs, maxWidth);
 
   let columnWidths: number[];
 
@@ -2063,27 +2154,40 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
   // Determine actual column count from table structure
   const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
 
+  // Effective target width: use resolvedTableWidth if set (from percentage or explicit px),
+  // but never exceed maxWidth (available column space)
+  const effectiveTargetWidth = resolvedTableWidth != null ? Math.min(resolvedTableWidth, maxWidth) : maxWidth;
+
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
 
     // Check if table has fixed layout (preserves exact widths)
-    const hasExplicitWidth = block.attrs?.tableWidth != null;
+    // Use resolvedTableWidth to check for valid explicit width (validated and non-undefined)
+    const hasExplicitWidth = resolvedTableWidth != null;
     const hasFixedLayout = block.attrs?.tableLayout === 'fixed';
 
-    // For fixed-layout tables, preserve the exact widths without adjustment
+    // For tables with explicit/percentage width or fixed layout, scale to target width
     if (hasExplicitWidth || hasFixedLayout) {
-      // Scale proportionally only if total width exceeds available width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
-      if (totalWidth > maxWidth) {
-        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      // Scale to effectiveTargetWidth (resolved percentage or explicit width)
+      // This handles both scaling down (too wide) and scaling up (percentage-based)
+      if (totalWidth !== effectiveTargetWidth && effectiveTargetWidth > 0) {
+        const scale = effectiveTargetWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.round(w * scale)));
+        // Normalize to exact target width (handle rounding errors)
+        const scaledSum = columnWidths.reduce((a, b) => a + b, 0);
+        if (scaledSum !== effectiveTargetWidth && columnWidths.length > 0) {
+          const diff = effectiveTargetWidth - scaledSum;
+          columnWidths[columnWidths.length - 1] = Math.max(1, columnWidths[columnWidths.length - 1] + diff);
+        }
       }
     } else {
       // For auto-layout tables, adjust column widths to match actual column count
       if (columnWidths.length < maxCellCount) {
         // Pad missing columns with equal distribution of remaining space
         const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
-        const remainingWidth = Math.max(0, maxWidth - usedWidth);
+        const remainingWidth = Math.max(0, effectiveTargetWidth - usedWidth);
         const missingColumns = maxCellCount - columnWidths.length;
         const paddingWidth = Math.max(1, Math.floor(remainingWidth / missingColumns));
         columnWidths.push(...Array.from({ length: missingColumns }, () => paddingWidth));
@@ -2092,15 +2196,15 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         columnWidths = columnWidths.slice(0, maxCellCount);
       }
 
-      // Scale proportionally if total width exceeds available width
+      // Scale proportionally if total width exceeds effective target width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
-      if (totalWidth > maxWidth) {
-        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      if (totalWidth > effectiveTargetWidth) {
+        columnWidths = scaleColumnWidths(columnWidths, effectiveTargetWidth);
       }
     }
   } else {
     // Fallback: Equal distribution based on max cells in any row
-    const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
+    const columnWidth = Math.max(1, Math.floor(effectiveTargetWidth / maxCellCount));
     columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
 

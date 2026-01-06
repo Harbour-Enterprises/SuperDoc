@@ -95,16 +95,31 @@ watch(
 
 /**
  * Computed style for the container that scales min-width based on zoom.
- * Uses the actual page width from the editor when available, falling back to 8.5in (letter size).
+ * Uses the maximum page width across all pages (for multi-section docs with landscape pages),
+ * falling back to 8.5in (letter size).
  */
 const containerStyle = computed(() => {
-  // Try to get actual page width from editor
-  let baseWidth = 8.5 * 96; // Default: 8.5 inches at 96 DPI = 816px (letter size)
+  // Default: 8.5 inches at 96 DPI = 816px (letter size)
+  let maxWidth = 8.5 * 96;
 
   const ed = editor.value;
-  if (ed && 'getPageStyles' in ed && typeof ed.getPageStyles === 'function') {
+
+  // First, try to get per-page sizes from layout (handles landscape/multi-section docs)
+  if (ed && 'getPages' in ed && typeof ed.getPages === 'function') {
+    const pages = ed.getPages();
+    if (Array.isArray(pages) && pages.length > 0) {
+      // Find the maximum width across all pages (some may be landscape)
+      for (const page of pages) {
+        if (page.size && typeof page.size.w === 'number' && page.size.w > 0) {
+          maxWidth = Math.max(maxWidth, page.size.w);
+        }
+      }
+    }
+  }
+
+  // Fallback: use first section's page width from pageStyles if no pages yet
+  if (maxWidth === 8.5 * 96 && ed && 'getPageStyles' in ed && typeof ed.getPageStyles === 'function') {
     const styles = ed.getPageStyles();
-    // Validate that pageSize exists and width is a positive number
     if (
       styles &&
       typeof styles === 'object' &&
@@ -113,11 +128,11 @@ const containerStyle = computed(() => {
       typeof styles.pageSize.width === 'number' &&
       styles.pageSize.width > 0
     ) {
-      baseWidth = styles.pageSize.width * 96; // width is in inches
+      maxWidth = styles.pageSize.width * 96; // width is in inches
     }
   }
 
-  const scaledWidth = baseWidth * currentZoom.value;
+  const scaledWidth = maxWidth * currentZoom.value;
   return {
     minWidth: `${scaledWidth}px`,
   };

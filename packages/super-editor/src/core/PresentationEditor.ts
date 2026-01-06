@@ -1,6 +1,7 @@
 import { NodeSelection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { EpochPositionMapper } from './EpochPositionMapper.js';
@@ -61,6 +62,8 @@ import {
   setupInternalFieldAnnotationDragHandlers,
 } from './FieldAnnotationDragDrop.js';
 import { initHeaderFooterRegistry as initHeaderFooterRegistryFromHelper } from './header-footer/HeaderFooterRegistryInit.js';
+import { decodeRPrFromMarks } from './super-converter/styles.js';
+import { halfPointToPoints } from './super-converter/helpers.js';
 import { layoutPerRIdHeaderFooters as layoutPerRIdHeaderFootersFromHelper } from './header-footer/HeaderFooterPerRidLayout.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
 import {
@@ -106,6 +109,15 @@ const CommentMarkName = 'commentMark';
 const TrackInsertMarkName = 'trackInsert';
 const TrackDeleteMarkName = 'trackDelete';
 const TrackFormatMarkName = 'trackFormat';
+
+/**
+ * Font size scaling factor for subscript and superscript text.
+ * This value (0.65 or 65%) matches Microsoft Word's default rendering behavior
+ * for vertical alignment (w:vertAlign) when set to 'superscript' or 'subscript'.
+ * Applied to the base font size to reduce text size for sub/superscripts.
+ */
+const SUBSCRIPT_SUPERSCRIPT_SCALE = 0.65;
+
 // Collaboration cursor imports
 import { absolutePositionToRelativePosition, ySyncPluginKey } from 'y-prosemirror';
 import type * as Y from 'yjs';
@@ -4438,6 +4450,7 @@ export class PresentationEditor extends EventEmitter {
       // Avoid MutationObserver overhead while repainting large DOM trees.
       this.#domIndexObserverManager?.pause();
       painter.paint(layout, this.#painterHost);
+      this.#applyVertAlignToLayout();
       this.#rebuildDomPositionIndex();
       this.#domIndexObserverManager?.resume();
       this.#layoutEpoch = layoutEpoch;
@@ -4719,6 +4732,23 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
+  /**
+   * Computes layout constraints for header and footer content.
+   *
+   * This method calculates the available width and height for laying out header/footer
+   * content, following Microsoft Word's layout model:
+   * - Headers/footers use the same left/right margins as the body content
+   * - Content renders at its natural height and can extend beyond the nominal space
+   * - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
+   *
+   * The width is constrained to the body content width (page width minus left/right margins).
+   * The height represents the maximum available vertical space between top and bottom margins,
+   * allowing header/footer content to grow naturally and push body text as needed.
+   *
+   * @returns Constraint object containing width, height, pageWidth, and margins,
+   *          or null if the constraints cannot be computed (e.g., invalid margins that
+   *          exceed page dimensions or produce non-positive content width/height).
+   */
   #computeHeaderFooterConstraints() {
     const pageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
@@ -4742,39 +4772,60 @@ export class PresentationEditor extends EventEmitter {
     // - Content renders at natural height and can extend into the body area if needed
     // - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
     //
-    // The constraint height determines how much space is available before layout pagination.
-    // We use the margin distances (headerMargin, footerMargin) as the constraint because:
-    // 1. This gives headers/footers their natural rendering space
-    // 2. When headerMargin == topMargin (e.g., Word's "Narrow" margins), this still provides
-    //    reasonable space instead of 0px
-    // 3. The soundness fix in layout-paragraph.ts handles edge cases where content spacing
-    //    exceeds this constraint
-    // 4. Keeping the constraint reasonable ensures behindDoc images with large offsets are
-    //    correctly excluded from height calculations (see layoutHeaderFooter's maxBehindDocOverflow)
+    // Use the full body height for measuring headers/footers so content can grow
+    // naturally (Word-style) and push body text as needed.
     const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
     const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+
+    // Validate that margins are finite numbers and don't exceed page height
+    if (!Number.isFinite(marginTop) || !Number.isFinite(marginBottom)) {
+      console.warn('[PresentationEditor] Invalid top or bottom margin: not a finite number');
+      return null;
+    }
+
+    const totalVerticalMargins = marginTop + marginBottom;
+    if (totalVerticalMargins >= pageSize.h) {
+      console.warn(
+        `[PresentationEditor] Invalid margins: top (${marginTop}) + bottom (${marginBottom}) = ${totalVerticalMargins} >= page height (${pageSize.h})`,
+      );
+      return null;
+    }
+
+    // Minimum height for header/footer content to prevent degenerate layouts
+    const MIN_HEADER_FOOTER_HEIGHT = 1;
+    const height = Math.max(MIN_HEADER_FOOTER_HEIGHT, pageSize.h - totalVerticalMargins);
     const headerMargin = margins.header ?? 0;
     const footerMargin = margins.footer ?? 0;
-    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
-    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+    const headerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginTop - headerMargin);
+    const footerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginBottom - footerMargin);
 
-    // Use the larger of content space or margin distance.
-    // If all margins are 0 (edge-to-edge layout), height will be 0 and layoutHeaderFooter
-    // will return an empty layout, which is the correct behavior.
-    const height = Math.max(
-      headerContentSpace,
-      footerContentSpace,
-      headerMargin,
-      footerMargin,
-      marginTop,
-      marginBottom,
-    );
+    // overflowBaseHeight: Bounds behindDoc overflow handling in headers/footers.
+    //
+    // Purpose:
+    // - Prevents decorative background assets (images/drawings with behindDoc=true and extreme
+    //   offsets) from inflating header/footer layout height and driving excessive page margins.
+    // - Without this bound, a decorative image positioned far outside the header/footer band
+    //   (e.g., offsetV=5000) would incorrectly expand the header/footer height, pushing body
+    //   content and creating unwanted whitespace.
+    //
+    // Calculation rationale:
+    // - Uses the larger of headerBand or footerBand as the base height.
+    // - headerBand = marginTop - headerMargin (space between page top and header start)
+    // - footerBand = marginBottom - footerMargin (space between footer end and page bottom)
+    // - Taking the max ensures consistent overflow handling regardless of whether we're
+    //   measuring a header or footer, using the more permissive band size.
+    // - This value is passed to layoutHeaderFooter, which allows behindDoc fragments to
+    //   overflow by up to 4x this base (or 192pt, whichever is larger) before excluding
+    //   them from height calculations.
+    const overflowBaseHeight = Math.max(headerBand, footerBand);
+
     return {
       width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
       margins: { left: marginLeft, right: marginRight },
+      overflowBaseHeight,
     };
   }
 
@@ -4807,6 +4858,59 @@ export class PresentationEditor extends EventEmitter {
     this.#headerDecorationProvider = this.#createDecorationProvider('header', layout);
     this.#footerDecorationProvider = this.#createDecorationProvider('footer', layout);
     this.#rebuildHeaderFooterRegions(layout);
+  }
+
+  /**
+   * Computes layout metrics for header/footer decoration rendering.
+   *
+   * This helper consolidates the calculation of layout height, container height, and vertical offset
+   * for header/footer content, ensuring consistent metrics across both per-rId and variant-based layouts.
+   *
+   * For headers:
+   * - layoutHeight: The actual measured height of the header content
+   * - containerHeight: The larger of the box height (space between headerDistance and topMargin) or layoutHeight
+   * - offset: Always positioned at headerDistance from page top (Word's model)
+   *
+   * For footers:
+   * - layoutHeight: The actual measured height of the footer content
+   * - containerHeight: The larger of the box height (space between bottomMargin and footerDistance) or layoutHeight
+   * - offset: Positioned so the container bottom aligns with footerDistance from page bottom
+   *   When content exceeds the nominal space (box.height), the footer extends upward into the body area,
+   *   matching Word's behavior where overflow pushes body text up rather than clipping.
+   *
+   * @param kind - Whether this is a header or footer
+   * @param layoutHeight - The measured height of the header/footer content layout (may be 0 if layout has no height)
+   * @param box - The computed decoration box containing nominal position and dimensions
+   * @param pageHeight - Total page height in points
+   * @param footerMargin - Footer margin (footerDistance) from page bottom, used only for footer offset calculation
+   * @returns Object containing layoutHeight (validated as non-negative finite number),
+   *          containerHeight (max of box height and layout height), and offset (vertical position from page top)
+   */
+  #computeHeaderFooterMetrics(
+    kind: 'header' | 'footer',
+    layoutHeight: number,
+    box: { height: number; offset: number },
+    pageHeight: number,
+    footerMargin: number,
+  ): { layoutHeight: number; containerHeight: number; offset: number } {
+    // Ensure layoutHeight is a valid finite number, default to 0 if not
+    const validatedLayoutHeight = Number.isFinite(layoutHeight) && layoutHeight >= 0 ? layoutHeight : 0;
+
+    // Container must accommodate both the nominal box height and the actual content height
+    const containerHeight = Math.max(box.height, validatedLayoutHeight);
+
+    // Calculate vertical offset based on header/footer type
+    // Headers: Always start at headerDistance (box.offset) from page top
+    // Footers: Position so container bottom is at footerDistance from page bottom
+    //   - If content is taller than box.height, this extends the footer upward
+    //   - This matches Word's behavior where overflow grows into body area
+    const offset = kind === 'header' ? box.offset : Math.max(0, pageHeight - footerMargin - containerHeight);
+
+    return {
+      layoutHeight: validatedLayoutHeight,
+      containerHeight,
+      offset,
+    };
   }
 
   #createDecorationProvider(kind: 'header' | 'footer', layout: Layout): PageDecorationProvider | undefined {
@@ -4852,43 +4956,62 @@ export class PresentationEditor extends EventEmitter {
 
       // PRIORITY 1: Try per-rId layout if we have a section-specific rId
       if (sectionRId && layoutsByRId.has(sectionRId)) {
-        const rIdLayout = layoutsByRId.get(sectionRId)!;
-        const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
-        if (slotPage) {
-          const fragments = slotPage.fragments ?? [];
-          const pageHeight =
-            page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
-          const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-          const box = this.#computeDecorationBox(kind, margins, pageHeight);
+        const rIdLayout = layoutsByRId.get(sectionRId);
+        // Defensive null check: layoutsByRId.has() should guarantee the value exists,
+        // but we verify to prevent runtime errors if the Map state is inconsistent
+        if (!rIdLayout) {
+          console.warn(
+            `[PresentationEditor] Inconsistent state: layoutsByRId.has('${sectionRId}') returned true but get() returned undefined`,
+          );
+          // Fall through to PRIORITY 2 (variant-based layout)
+        } else {
+          const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
+          if (slotPage) {
+            const fragments = slotPage.fragments ?? [];
+            const pageHeight =
+              page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+            const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+            const box = this.#computeDecorationBox(kind, margins, pageHeight);
 
-          // Normalize fragments to start at y=0 if minY is negative
-          const layoutMinY = rIdLayout.layout.minY ?? 0;
-          const normalizedFragments =
-            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+            // Use helper to compute metrics with type safety and consistent logic
+            const rawLayoutHeight = rIdLayout.layout.height ?? 0;
+            const metrics = this.#computeHeaderFooterMetrics(
+              kind,
+              rawLayoutHeight,
+              box,
+              pageHeight,
+              margins.footer ?? 0,
+            );
 
-          return {
-            fragments: normalizedFragments,
-            height: box.height,
-            contentHeight: rIdLayout.layout.height ?? box.height,
-            offset: box.offset,
-            marginLeft: box.x,
-            contentWidth: box.width,
-            headerId: sectionRId,
-            sectionType: headerFooterType,
-            minY: layoutMinY,
-            box: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-            hitRegion: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-          };
+            // Normalize fragments to start at y=0 if minY is negative
+            const layoutMinY = rIdLayout.layout.minY ?? 0;
+            const normalizedFragments =
+              layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
+            return {
+              fragments: normalizedFragments,
+              height: metrics.containerHeight,
+              contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+              offset: metrics.offset,
+              marginLeft: box.x,
+              contentWidth: box.width,
+              headerId: sectionRId,
+              sectionType: headerFooterType,
+              minY: layoutMinY,
+              box: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+              hitRegion: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+            };
+          }
         }
       }
 
@@ -4910,6 +5033,11 @@ export class PresentationEditor extends EventEmitter {
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+      // Use helper to compute metrics with type safety and consistent logic
+      const rawLayoutHeight = variant.layout.height ?? 0;
+      const metrics = this.#computeHeaderFooterMetrics(kind, rawLayoutHeight, box, pageHeight, margins.footer ?? 0);
+
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
 
@@ -4919,9 +5047,9 @@ export class PresentationEditor extends EventEmitter {
 
       return {
         fragments: normalizedFragments,
-        height: box.height,
-        contentHeight: variant.layout.height ?? box.height,
-        offset: box.offset,
+        height: metrics.containerHeight,
+        contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+        offset: metrics.offset,
         marginLeft: box.x,
         contentWidth: box.width,
         headerId: finalHeaderId,
@@ -4929,15 +5057,15 @@ export class PresentationEditor extends EventEmitter {
         minY: layoutMinY,
         box: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
         hitRegion: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
       };
     };
@@ -6100,6 +6228,20 @@ export class PresentationEditor extends EventEmitter {
     return { pageSize, margins, columns };
   }
 
+  /**
+   * Applies zoom transformation to the document viewport and painter hosts.
+   *
+   * Handles documents with varying page sizes (multi-section docs with landscape pages)
+   * by calculating actual dimensions from per-page sizes rather than assuming uniform pages.
+   *
+   * The implementation uses two key concepts:
+   * - **maxWidth/maxHeight**: Maximum dimension across all pages (for viewport sizing)
+   * - **totalWidth/totalHeight**: Sum of all page dimensions + gaps (for full document extent)
+   *
+   * Layout modes:
+   * - Vertical: Uses maxWidth for viewport width, totalHeight for scroll height
+   * - Horizontal: Uses totalWidth for viewport width, maxHeight for scroll height
+   */
   #applyZoom() {
     // Apply zoom by scaling the children (#painterHost and #selectionOverlay) and
     // setting the viewport dimensions to the scaled size.
@@ -6116,21 +6258,42 @@ export class PresentationEditor extends EventEmitter {
 
     const layoutMode = this.#layoutOptions.layoutMode ?? 'vertical';
 
-    // Get unscaled document dimensions
-    const pageWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
-    const pageHeight = this.#getBodyPageHeight();
-
+    // Calculate actual document dimensions from per-page sizes.
+    // Multi-section documents can have pages with different sizes (e.g., landscape pages).
     const pages = this.#layoutState.layout?.pages;
-    const pageCount = Array.isArray(pages) && pages.length > 0 ? pages.length : 1;
     const pageGap = this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap();
+    const defaultWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    const defaultHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+
+    let maxWidth = defaultWidth;
+    let maxHeight = defaultHeight;
+    let totalWidth = 0;
+    let totalHeight = 0;
+
+    if (Array.isArray(pages) && pages.length > 0) {
+      pages.forEach((page, index) => {
+        const pageWidth = page.size && typeof page.size.w === 'number' && page.size.w > 0 ? page.size.w : defaultWidth;
+        const pageHeight =
+          page.size && typeof page.size.h === 'number' && page.size.h > 0 ? page.size.h : defaultHeight;
+        maxWidth = Math.max(maxWidth, pageWidth);
+        maxHeight = Math.max(maxHeight, pageHeight);
+        totalWidth += pageWidth;
+        totalHeight += pageHeight;
+        if (index < pages.length - 1) {
+          totalWidth += pageGap;
+          totalHeight += pageGap;
+        }
+      });
+    } else {
+      totalWidth = defaultWidth;
+      totalHeight = defaultHeight;
+    }
 
     // Horizontal layout stacks pages in a single row, so width grows with pageCount
     if (layoutMode === 'horizontal') {
-      const totalWidth = pageWidth * pageCount + pageGap * Math.max(0, pageCount - 1);
-      const totalHeight = pageHeight;
-
+      // For horizontal: sum widths, use max height
       const scaledWidth = totalWidth * zoom;
-      const scaledHeight = totalHeight * zoom;
+      const scaledHeight = maxHeight * zoom;
 
       this.#viewportHost.style.width = `${scaledWidth}px`;
       this.#viewportHost.style.minWidth = `${scaledWidth}px`;
@@ -6138,27 +6301,26 @@ export class PresentationEditor extends EventEmitter {
       this.#viewportHost.style.transform = '';
 
       this.#painterHost.style.width = `${totalWidth}px`;
-      this.#painterHost.style.minHeight = `${totalHeight}px`;
+      this.#painterHost.style.minHeight = `${maxHeight}px`;
       this.#painterHost.style.transformOrigin = 'top left';
       this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
 
       this.#selectionOverlay.style.width = `${totalWidth}px`;
-      this.#selectionOverlay.style.height = `${totalHeight}px`;
+      this.#selectionOverlay.style.height = `${maxHeight}px`;
       this.#selectionOverlay.style.transformOrigin = 'top left';
       this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
       return;
     }
 
-    const totalHeight = pageHeight * pageCount + pageGap * Math.max(0, pageCount - 1);
-
+    // Vertical layout: use max width, sum heights
     // Zoom implementation:
-    // 1. #viewportHost has SCALED dimensions (pageWidth * zoom) for proper scroll container sizing
+    // 1. #viewportHost has SCALED dimensions (maxWidth * zoom) for proper scroll container sizing
     // 2. #painterHost has UNSCALED dimensions with transform: scale(zoom) applied
     // 3. When scaled, #painterHost visually fills #viewportHost exactly
     //
     // This ensures the scroll container sees the correct scaled content size while
     // the transform provides visual scaling.
-    const scaledWidth = pageWidth * zoom;
+    const scaledWidth = maxWidth * zoom;
     const scaledHeight = totalHeight * zoom;
 
     // Set viewport to scaled dimensions for scroll container
@@ -6169,13 +6331,13 @@ export class PresentationEditor extends EventEmitter {
 
     // Set painterHost to UNSCALED dimensions and apply transform
     // This way: 816px * scale(1.5) = 1224px visual = matches viewport
-    this.#painterHost.style.width = `${pageWidth}px`;
+    this.#painterHost.style.width = `${maxWidth}px`;
     this.#painterHost.style.minHeight = `${totalHeight}px`;
     this.#painterHost.style.transformOrigin = 'top left';
     this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
 
     // Selection overlay also scales - set to unscaled dimensions
-    this.#selectionOverlay.style.width = `${pageWidth}px`;
+    this.#selectionOverlay.style.width = `${maxWidth}px`;
     this.#selectionOverlay.style.height = `${totalHeight}px`;
     this.#selectionOverlay.style.transformOrigin = 'top left';
     this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
@@ -6502,5 +6664,108 @@ export class PresentationEditor extends EventEmitter {
     this.#errorBanner?.remove();
     this.#errorBanner = null;
     this.#errorBannerMessage = null;
+  }
+
+  /**
+   * Applies vertical alignment and font scaling to layout DOM elements for subscript/superscript rendering.
+   *
+   * This method post-processes the painted DOM layout to apply vertical alignment styles
+   * (super, sub, baseline, or custom position) based on run properties and text style marks.
+   * It handles both DOCX-style vertAlign ('superscript', 'subscript', 'baseline') and
+   * custom position offsets (in half-points).
+   *
+   * Processing logic:
+   * 1. Queries all text spans with ProseMirror position markers
+   * 2. For each span, resolves the ProseMirror position to find the containing run node
+   * 3. Extracts vertAlign and position from run properties and/or text style marks
+   * 4. Applies CSS vertical-align and font-size styles based on the extracted properties
+   * 5. Position takes precedence over vertAlign when both are present
+   *
+   * @throws Does not throw - DOM manipulation errors are silently caught to prevent layout corruption
+   * @private
+   */
+  #applyVertAlignToLayout() {
+    const doc = this.#editor?.state?.doc;
+    if (!doc || !this.#painterHost) return;
+
+    try {
+      const spans = this.#painterHost.querySelectorAll('.superdoc-line span[data-pm-start]') as NodeListOf<HTMLElement>;
+      spans.forEach((span) => {
+        try {
+          // Skip header/footer spans - they belong to separate PM documents
+          // and their data-pm-start values don't correspond to the body doc
+          if (span.closest('.superdoc-page-header, .superdoc-page-footer')) return;
+
+          const pmStart = Number(span.dataset.pmStart ?? 'NaN');
+          if (!Number.isFinite(pmStart)) return;
+
+          const pos = Math.max(0, Math.min(pmStart, doc.content.size));
+          const $pos = doc.resolve(pos);
+
+          let runNode: ProseMirrorNode | null = null;
+          for (let depth = $pos.depth; depth >= 0; depth--) {
+            const node = $pos.node(depth);
+            if (node.type.name === 'run') {
+              runNode = node;
+              break;
+            }
+          }
+
+          let vertAlign: string | null = runNode?.attrs?.runProperties?.vertAlign ?? null;
+          let position: number | null = runNode?.attrs?.runProperties?.position ?? null;
+          let fontSizeHalfPts: number | null = runNode?.attrs?.runProperties?.fontSize ?? null;
+
+          if (!vertAlign && position == null && runNode) {
+            runNode.forEach((child: ProseMirrorNode) => {
+              if (!child.isText || !child.marks?.length) return;
+              const rpr = decodeRPrFromMarks(child.marks as Mark[]) as {
+                vertAlign?: string;
+                position?: number;
+                fontSize?: number;
+              };
+              if (rpr.vertAlign && !vertAlign) vertAlign = rpr.vertAlign;
+              if (rpr.position != null && position == null) position = rpr.position;
+              if (rpr.fontSize != null && fontSizeHalfPts == null) fontSizeHalfPts = rpr.fontSize;
+            });
+          }
+
+          if (vertAlign == null && position == null) return;
+
+          const styleEntries: string[] = [];
+          if (position != null && Number.isFinite(position)) {
+            const pts = halfPointToPoints(position);
+            if (Number.isFinite(pts)) {
+              styleEntries.push(`vertical-align: ${pts}pt`);
+            }
+          } else if (vertAlign === 'superscript' || vertAlign === 'subscript') {
+            styleEntries.push(`vertical-align: ${vertAlign === 'superscript' ? 'super' : 'sub'}`);
+            if (fontSizeHalfPts != null && Number.isFinite(fontSizeHalfPts)) {
+              const scaledPts = halfPointToPoints(fontSizeHalfPts * SUBSCRIPT_SUPERSCRIPT_SCALE);
+              if (Number.isFinite(scaledPts)) {
+                styleEntries.push(`font-size: ${scaledPts}pt`);
+              } else {
+                styleEntries.push(`font-size: ${SUBSCRIPT_SUPERSCRIPT_SCALE * 100}%`);
+              }
+            } else {
+              styleEntries.push(`font-size: ${SUBSCRIPT_SUPERSCRIPT_SCALE * 100}%`);
+            }
+          } else if (vertAlign === 'baseline') {
+            styleEntries.push('vertical-align: baseline');
+          }
+
+          if (!styleEntries.length) return;
+          const existing = span.getAttribute('style');
+          const merged = existing ? `${existing}; ${styleEntries.join('; ')}` : styleEntries.join('; ');
+          span.setAttribute('style', merged);
+        } catch (error) {
+          // Silently catch errors for individual spans to prevent layout corruption
+          // DOM manipulation failures should not break the entire layout process
+          console.error('Failed to apply vertical alignment to span:', error);
+        }
+      });
+    } catch (error) {
+      // Silently catch errors to prevent layout corruption
+      console.error('Failed to apply vertical alignment to layout:', error);
+    }
   }
 }

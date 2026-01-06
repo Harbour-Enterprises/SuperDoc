@@ -769,4 +769,218 @@ describe('PresentationEditor - Zoom Functionality', () => {
       }
     });
   });
+
+  describe('applyZoom with varying page sizes', () => {
+    it('should use max width for vertical layout with mixed portrait/landscape pages', async () => {
+      vi.useFakeTimers();
+
+      // Simulate a multi-section document with portrait and landscape pages
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [
+            { number: 1, size: { w: 612, h: 792 }, fragments: [] }, // Portrait (8.5x11)
+            { number: 2, size: { w: 792, h: 612 }, fragments: [] }, // Landscape (11x8.5)
+            { number: 3, size: { w: 612, h: 792 }, fragments: [] }, // Portrait (8.5x11)
+          ],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      try {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc-mixed',
+          pageSize: { w: 612, h: 792 },
+        });
+
+        editor.setLayoutMode('vertical');
+        await vi.runAllTimersAsync();
+
+        editor.setZoom(1.5);
+
+        const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+        // For vertical layout with mixed pages, viewport should use max width (792 from landscape)
+        // maxWidth = 792, totalHeight = 612 + 792 + 612 + 2 * pageGap
+        // Default pageGap for vertical layout is 24: totalHeight = 2016 + 48 = 2064 (heights), but we need to sum heights: 792 + 612 + 792 = 2196
+        // Wait, pages are: [Portrait 612x792, Landscape 792x612, Portrait 612x792]
+        // Heights: 792 + 612 + 792 = 2196, gaps: 2 * 24 = 48, total = 2244
+        // scaledWidth = 792 * 1.5 = 1188
+        // scaledHeight = 2244 * 1.5 = 3366
+        expect(viewportHost?.style.width).toBe('1188px');
+        expect(viewportHost?.style.minWidth).toBe('1188px');
+        expect(viewportHost?.style.minHeight).toBe('3366px');
+
+        expect(painterHost?.style.width).toBe('792px'); // Unscaled max width
+        expect(painterHost?.style.minHeight).toBe('2244px'); // Unscaled total height
+        expect(painterHost?.style.transform).toBe('scale(1.5)');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should sum widths and use max height for horizontal layout with mixed page sizes', async () => {
+      vi.useFakeTimers();
+
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [
+            { number: 1, size: { w: 612, h: 792 }, fragments: [] }, // Portrait
+            { number: 2, size: { w: 792, h: 612 }, fragments: [] }, // Landscape
+          ],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      try {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc-horizontal-mixed',
+          pageSize: { w: 612, h: 792 },
+        });
+
+        editor.setLayoutMode('horizontal');
+        await vi.runAllTimersAsync();
+
+        editor.setZoom(2);
+
+        const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+        // For horizontal layout: sum widths (612 + 792 + pageGap = 1424), use max height (792)
+        // scaledWidth = 1424 * 2 = 2848
+        // scaledHeight = 792 * 2 = 1584
+        expect(viewportHost?.style.width).toBe('2848px');
+        expect(viewportHost?.style.minWidth).toBe('2848px');
+        expect(viewportHost?.style.minHeight).toBe('1584px');
+
+        expect(painterHost?.style.width).toBe('1424px'); // Unscaled total width
+        expect(painterHost?.style.minHeight).toBe('792px'); // Unscaled max height
+        expect(painterHost?.style.transform).toBe('scale(2)');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should handle empty pages array by using default dimensions', () => {
+      editor = new PresentationEditor({
+        element: container,
+        documentId: 'test-doc-empty-pages',
+        pageSize: { w: 612, h: 792 },
+      });
+
+      // Mock empty pages
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      editor.setZoom(1.5);
+
+      const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+      const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+      // Should fall back to default dimensions (612, 792)
+      // scaledWidth = 612 * 1.5 = 918
+      // scaledHeight = 792 * 1.5 = 1188
+      expect(viewportHost?.style.width).toBe('918px');
+      expect(viewportHost?.style.minWidth).toBe('918px');
+      expect(viewportHost?.style.minHeight).toBe('1188px');
+
+      expect(painterHost?.style.width).toBe('612px');
+      expect(painterHost?.style.minHeight).toBe('792px');
+      expect(painterHost?.style.transform).toBe('scale(1.5)');
+    });
+
+    it('should fall back to defaults for pages with missing size properties', async () => {
+      vi.useFakeTimers();
+
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [
+            { number: 1, size: { w: 612, h: 792 }, fragments: [] }, // Valid size
+            { number: 2, fragments: [] }, // Missing size
+            { number: 3, size: null, fragments: [] }, // Null size
+          ],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      try {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc-missing-sizes',
+          pageSize: { w: 612, h: 792 },
+        });
+
+        await vi.runAllTimersAsync();
+
+        editor.setZoom(1);
+
+        const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+        // All pages should use default dimensions
+        // maxWidth = 612, totalHeight = 792 + 792 + 792 + 2 * 24 = 2424
+        expect(viewportHost?.style.width).toBe('612px');
+        expect(viewportHost?.style.minWidth).toBe('612px');
+        expect(viewportHost?.style.minHeight).toBe('2424px');
+
+        expect(painterHost?.style.width).toBe('612px');
+        expect(painterHost?.style.minHeight).toBe('2424px');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('should fall back to defaults for pages with invalid size values', async () => {
+      vi.useFakeTimers();
+
+      mockIncrementalLayout.mockResolvedValue({
+        layout: {
+          pages: [
+            { number: 1, size: { w: 612, h: 792 }, fragments: [] }, // Valid
+            { number: 2, size: { w: 0, h: 792 }, fragments: [] }, // Zero width (invalid)
+            { number: 3, size: { w: -100, h: 792 }, fragments: [] }, // Negative width (invalid)
+            { number: 4, size: { w: 'invalid', h: 792 }, fragments: [] }, // Non-number (invalid)
+          ],
+          pageSize: { w: 612, h: 792 },
+        },
+        measures: [],
+      });
+
+      try {
+        editor = new PresentationEditor({
+          element: container,
+          documentId: 'test-doc-invalid-sizes',
+          pageSize: { w: 612, h: 792 },
+        });
+
+        await vi.runAllTimersAsync();
+
+        editor.setZoom(1);
+
+        const viewportHost = container.querySelector('.presentation-editor__viewport') as HTMLElement;
+        const painterHost = container.querySelector('.presentation-editor__pages') as HTMLElement;
+
+        // Invalid pages should fall back to defaults
+        // maxWidth = 612, totalHeight = 792 * 4 + 3 * 24 = 3240
+        expect(viewportHost?.style.width).toBe('612px');
+        expect(viewportHost?.style.minWidth).toBe('612px');
+        expect(viewportHost?.style.minHeight).toBe('3240px');
+
+        expect(painterHost?.style.width).toBe('612px');
+        expect(painterHost?.style.minHeight).toBe('3240px');
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
 });

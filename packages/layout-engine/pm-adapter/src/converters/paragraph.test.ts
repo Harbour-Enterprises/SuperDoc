@@ -770,6 +770,7 @@ describe('paragraph converters', () => {
           expect.arrayContaining([{ type: 'bold' }]),
           expect.any(Object),
           undefined,
+          undefined,
         );
       });
 
@@ -810,6 +811,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           expect.arrayContaining([{ type: 'italic' }, { type: 'bold' }]),
           { enableRichHyperlinks: false },
+          undefined,
           undefined,
         );
       });
