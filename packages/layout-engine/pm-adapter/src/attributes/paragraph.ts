@@ -42,7 +42,7 @@ import {
 import { normalizeOoxmlTabs } from './tabs.js';
 import { normalizeParagraphBorders, normalizeParagraphShading } from './borders.js';
 import { mirrorIndentForRtl, ensureBidiIndentPx, DEFAULT_BIDI_INDENT_PX } from './bidi.js';
-import { hydrateParagraphStyleAttrs } from './paragraph-styles.js';
+import { hydrateParagraphStyleAttrs, hydrateMarkerStyleAttrs } from './paragraph-styles.js';
 import type { ParagraphStyleHydration } from './paragraph-styles.js';
 import type { ConverterContext, ConverterNumberingContext } from '../converter-context.js';
 
@@ -851,12 +851,12 @@ const extractDropCapRunFromParagraph = (para: PMNode): DropCapRun | null => {
  * @param paragraphAttrs - Resolved paragraph attributes including spacing, indent, and tabs
  * @param numberingProps - Numbering properties with numId, ilvl, and optional resolved marker RPr
  * @param styleContext - Style context for resolving character styles and doc defaults
- * @param paragraphNode - Optional paragraph node to extract first text run font properties
+ * @param paragraphNode - Optional paragraph node used to hydrate marker run properties via OOXML cascade
  * @returns WordParagraphLayoutOutput with marker and gutter information, or null if computation fails
  *
  * @remarks
  * - Returns null early if numberingProps is explicitly null (vs undefined)
- * - Falls back to first text run font, then style-engine character style if resolvedMarkerRpr is not available
+ * - Uses marker hydration when converterContext is available, then falls back to resolvedMarkerRpr and style-engine defaults
  * - Converts indent from twips to pixels for rendering
  * - Gracefully handles computation errors by returning null
  */
@@ -864,7 +864,9 @@ export const computeWordLayoutForParagraph = (
   paragraphAttrs: ParagraphAttrs,
   numberingProps: AdapterNumberingProps | undefined,
   styleContext: StyleContext,
-  _paragraphNode?: PMNode,
+  paragraphNode?: PMNode,
+  converterContext?: ConverterContext,
+  resolvedPpr?: Record<string, unknown>,
 ): WordParagraphLayoutOutput | null => {
   if (numberingProps === null) {
     return null;
@@ -918,11 +920,30 @@ export const computeWordLayoutForParagraph = (
       },
     };
 
-    let markerRun = numberingProps?.resolvedMarkerRpr;
+    let markerRun: ResolvedRunProperties | undefined;
+
+    const markerHydration =
+      paragraphNode && converterContext ? hydrateMarkerStyleAttrs(paragraphNode, converterContext, resolvedPpr) : null;
+
+    if (markerHydration) {
+      const resolvedColor = markerHydration.color ? `#${markerHydration.color.replace('#', '')}` : undefined;
+      markerRun = {
+        fontFamily: markerHydration.fontFamily ?? 'Times New Roman',
+        fontSize: markerHydration.fontSize / 2, // half-points to points
+        bold: markerHydration.bold,
+        italic: markerHydration.italic,
+        color: resolvedColor,
+        letterSpacing: markerHydration.letterSpacing != null ? twipsToPx(markerHydration.letterSpacing) : undefined,
+      };
+    }
 
     if (!markerRun) {
-      // Fallback to style-engine computed character style for the paragraph
-      // This matches MS Word behavior: list markers inherit font from paragraph style
+      markerRun = numberingProps?.resolvedMarkerRpr;
+    }
+
+    if (!markerRun) {
+      // Fallback to style-engine when converterContext is not available
+      // This path uses hardcoded defaults but maintains backwards compatibility
       const { character: characterStyle } = resolveStyle({ styleId: paragraphAttrs.styleId }, styleContext);
       if (characterStyle) {
         markerRun = {
@@ -936,7 +957,7 @@ export const computeWordLayoutForParagraph = (
       }
     }
 
-    // Final fallback if style-engine returned nothing
+    // Final fallback if neither hydration nor style-engine returned anything
     if (!markerRun) {
       markerRun = {
         fontFamily: 'Times New Roman',
@@ -1536,7 +1557,12 @@ export const computeParagraphAttrs = (
     const numericNumId = typeof numId === 'number' ? numId : undefined;
 
     // Resolve numbering definition details (format, text, indent, marker run) from converter context
-    const resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+    let resolvedLevel: Partial<AdapterNumberingProps> | undefined;
+    try {
+      resolvedLevel = resolveNumberingFromContext(numId, ilvl, converterContext?.numbering);
+    } catch (error) {
+      resolvedLevel = undefined;
+    }
 
     if (resolvedLevel) {
       if (resolvedLevel.format && numberingProps.format == null) {
@@ -1618,7 +1644,19 @@ export const computeParagraphAttrs = (
       // style-engine to resolve from paragraph style, which is the correct MS Word behavior
     }
 
-    let wordLayout = computeWordLayoutForParagraph(paragraphAttrs, enrichedNumberingProps, styleContext, para);
+    let wordLayout: WordParagraphLayoutOutput | null = null;
+    try {
+      wordLayout = computeWordLayoutForParagraph(
+        paragraphAttrs,
+        enrichedNumberingProps,
+        styleContext,
+        para,
+        converterContext,
+        hydrated?.resolved as Record<string, unknown> | undefined,
+      );
+    } catch (error) {
+      wordLayout = null;
+    }
 
     // Fallback: some numbering levels only specify a firstLine indent (no left/hanging).
     // When wordLayout computation returns null, ensure we still provide a textStartPx

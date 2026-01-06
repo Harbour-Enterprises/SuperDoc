@@ -51,7 +51,10 @@ const sliceRunsForLine = (block: ParagraphBlock, line: Line): Run[] => {
     const run = block.runs[runIndex];
     if (!run) continue;
 
-    const text = run.kind === 'image' ? '' : (run.text ?? '');
+    const text =
+      run.kind === 'image' || run.kind === 'lineBreak' || run.kind === 'break' || run.kind === 'fieldAnnotation'
+        ? ''
+        : (run.text ?? '');
     const isFirstRun = runIndex === line.fromRun;
     const isLastRun = runIndex === line.toRun;
     const runLength = text.length;
@@ -191,6 +194,24 @@ const translateFragment = (fragment: Fragment, offsetY: number, offsetX: number 
   return fragment;
 };
 
+const getParagraphBorderBox = (
+  fragment: { x: number; width: number },
+  indent?: ParagraphAttrs['indent'],
+): { x: number; width: number } => {
+  const indentLeft = Number.isFinite(indent?.left) ? indent!.left! : 0;
+  const indentRight = Number.isFinite(indent?.right) ? indent!.right! : 0;
+  const firstLine = Number.isFinite(indent?.firstLine) ? indent!.firstLine! : 0;
+  const hanging = Number.isFinite(indent?.hanging) ? indent!.hanging! : 0;
+  const firstLineOffset = firstLine - hanging;
+  const minLeftInset = Math.min(indentLeft, indentLeft + firstLineOffset);
+  const leftInset = Math.max(0, minLeftInset);
+  const rightInset = Math.max(0, indentRight);
+  return {
+    x: fragment.x + leftInset,
+    width: Math.max(0, fragment.width - leftInset - rightInset),
+  };
+};
+
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   switch (run.kind) {
     case 'tab':
@@ -323,7 +344,8 @@ export class PdfPainter {
       images: Array.from(this.imageResources.values()),
     });
 
-    return new Blob([pdfBytes], { type: 'application/pdf' });
+    // Type assertion needed due to Uint8Array<ArrayBufferLike> vs Uint8Array<ArrayBuffer> mismatch
+    return new Blob([pdfBytes as BlobPart], { type: 'application/pdf' });
   }
 
   private buildPageStream(page: Page, pageHeightPx: number): string {
@@ -483,11 +505,12 @@ export class PdfPainter {
       .join('');
 
     const parts: string[] = [];
+    const borderBox = getParagraphBorderBox(fragment, block.attrs?.indent);
     const shadingChunk = this.renderShadingRect(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       block.attrs?.shading,
@@ -498,9 +521,9 @@ export class PdfPainter {
     }
     const borderChunk = this.renderBorderBox(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       block.attrs?.borders,
@@ -513,26 +536,28 @@ export class PdfPainter {
 
     // Paragraph marker rendering (Track B paragraph pipeline)
     const wordLayout = block.attrs?.wordLayout;
-    if (!fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker && measure.marker) {
+    const marker = wordLayout?.marker;
+    if (!fragment.continuesFromPrev && fragment.markerWidth && marker && measure.marker) {
       console.log('[PdfPainter.renderParagraphFragment] Rendering marker', {
         blockId: fragment.blockId,
-        markerText: wordLayout.marker.markerText,
+        markerText: marker.markerText,
         markerWidth: fragment.markerWidth,
         indent: block.attrs?.indent,
       });
       const markerBaseline = fragment.y + (lines[0]?.lineHeight ?? 0) - (lines[0]?.descent ?? 0);
-      const markerText = wordLayout.marker.markerText ?? '';
-      const markerRun: Run = {
+      const markerText = marker.markerText ?? '';
+      const markerRun: TextRun = {
+        kind: 'text',
         text: markerText,
-        fontFamily: toCssFontFamily(wordLayout.marker.run.fontFamily) ?? wordLayout.marker.run.fontFamily,
-        fontSize: wordLayout.marker.run.fontSize,
-        bold: wordLayout.marker.run.bold,
-        italic: wordLayout.marker.run.italic,
-        color: wordLayout.marker.run.color,
+        fontFamily: toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily,
+        fontSize: marker.run.fontSize,
+        bold: marker.run.bold,
+        italic: marker.run.italic,
+        color: marker.run.color,
       };
       const fontId = selectFont(markerRun);
       const markerTextWidth = measure.marker.markerTextWidth;
-      const justification = wordLayout.marker.justification ?? 'left';
+      const justification = marker.justification ?? 'left';
       let markerX: number;
       const indentLeft = indent?.left ?? 0;
       const indentFirstLine = indent?.firstLine ?? 0;
@@ -613,11 +638,12 @@ export class PdfPainter {
       .join('');
 
     const contentParts: string[] = [];
+    const borderBox = getParagraphBorderBox(fragment, item.paragraph.attrs?.indent);
     const shadingChunk = this.renderShadingRect(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       item.paragraph.attrs?.shading,
@@ -628,9 +654,9 @@ export class PdfPainter {
     }
     const borderChunk = this.renderBorderBox(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       item.paragraph.attrs?.borders,
@@ -651,16 +677,17 @@ export class PdfPainter {
     // Track B: Use wordLayout for marker styling and positioning
     const wordLayout = item.paragraph.attrs?.wordLayout;
     let markerX: number;
-    let markerRun: Run;
+    let markerRun: TextRun;
     let markerText: string;
     let markerJustification: string;
 
     if (wordLayout?.marker) {
       const marker = wordLayout.marker;
-      markerText = marker.markerText;
-      markerJustification = marker.justification;
+      markerText = marker.markerText ?? '';
+      markerJustification = marker.justification ?? 'left';
       markerRun = {
-        text: marker.markerText,
+        kind: 'text',
+        text: marker.markerText ?? '',
         fontFamily: toCssFontFamily(marker.run.fontFamily) ?? marker.run.fontFamily,
         fontSize: marker.run.fontSize,
         bold: marker.run.bold,
@@ -826,7 +853,7 @@ export class PdfPainter {
       const slack = availableWidth - line.width;
       if (spaceCount > 0 && slack > 0) {
         const extraPerSpacePx = slack / spaceCount;
-        const runWithFontSize = runs.find((r) => 'fontSize' in r && typeof (r as TextRun).fontSize === 'number') as
+        const runWithFontSize = runs.find((r) => r.kind === 'text' && typeof r.fontSize === 'number') as
           | TextRun
           | undefined;
         const baseFontSizePx = runWithFontSize?.fontSize ?? getPrimaryRun(block).fontSize;
@@ -849,14 +876,20 @@ export class PdfPainter {
       for (const segment of line.segments) {
         // Prefer original block run for styling; slice text by absolute run chars
         const blockRun = block.runs[segment.runIndex] as Run | undefined;
-        const isTab = blockRun?.kind === 'tab';
-        const isImage = blockRun?.kind === 'image';
-        if (!blockRun || isTab || isImage) continue;
+        if (
+          !blockRun ||
+          blockRun.kind === 'tab' ||
+          blockRun.kind === 'image' ||
+          blockRun.kind === 'lineBreak' ||
+          blockRun.kind === 'break' ||
+          blockRun.kind === 'fieldAnnotation'
+        )
+          continue;
 
         const fullText = blockRun.text ?? '';
         const segSlice = fullText.slice(segment.fromChar, segment.toChar);
         if (!segSlice) continue;
-        const segRun: Run = { ...blockRun, text: segSlice } as Run;
+        const segRun: TextRun = { ...blockRun, text: segSlice };
         const fontId = selectFont(segRun);
 
         if (segment.x !== undefined) {
@@ -870,10 +903,8 @@ export class PdfPainter {
           positioned = true;
         }
 
-        if (segRun.kind === 'text') {
-          parts.push(`${formatColor(segRun.color)} rg`);
-          parts.push(`/${fontId} ${toPt(segRun.fontSize).toFixed(2)} Tf`);
-        }
+        parts.push(`${formatColor(segRun.color)} rg`);
+        parts.push(`/${fontId} ${toPt(segRun.fontSize).toFixed(2)} Tf`);
         const text = resolveRunText(segRun, context);
         if (text) parts.push(toPdfTextOperand(text));
       }
@@ -881,7 +912,14 @@ export class PdfPainter {
       // Fallback: sequential run-based rendering from the line origin
       parts.push(`1 0 0 1 ${toPt(x).toFixed(2)} ${toPt(pageHeightPx - baseline).toFixed(2)} Tm`);
       runs.forEach((run) => {
-        if (run.kind === 'tab' || run.kind === 'image') return; // skip tabs and images
+        if (
+          run.kind === 'tab' ||
+          run.kind === 'image' ||
+          run.kind === 'lineBreak' ||
+          run.kind === 'break' ||
+          run.kind === 'fieldAnnotation'
+        )
+          return; // skip non-text runs
         const fontId = selectFont(run);
         parts.push(`${formatColor(run.color)} rg`);
         parts.push(`/${fontId} ${toPt(run.fontSize).toFixed(2)} Tf`);
@@ -1574,7 +1612,14 @@ const getDashPattern = (style: BorderStyle, strokeWidthPx: number): number[] | n
 const toPt = (px: number) => px * PX_TO_PT;
 
 const selectFont = (run: Run): FontKey => {
-  if (run.kind === 'tab' || run.kind === 'image') return FONT_IDS.regular;
+  if (
+    run.kind === 'tab' ||
+    run.kind === 'image' ||
+    run.kind === 'lineBreak' ||
+    run.kind === 'break' ||
+    run.kind === 'fieldAnnotation'
+  )
+    return FONT_IDS.regular;
   if (run.bold && run.italic) return FONT_IDS.boldItalic;
   if (run.bold) return FONT_IDS.bold;
   if (run.italic) return FONT_IDS.italic;
@@ -2195,12 +2240,15 @@ const concatBytes = (...buffers: Uint8Array[]): Uint8Array => {
   return result;
 };
 
-const getPrimaryRun = (paragraph: ParagraphBlock): Run => {
-  return (
-    paragraph.runs.find((run) => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize)) || {
-      text: '',
-      fontFamily: 'Arial',
-      fontSize: 16,
-    }
-  );
+const getPrimaryRun = (paragraph: ParagraphBlock): TextRun => {
+  const foundRun = paragraph.runs.find((run) => run.kind === 'text' && Boolean(run.fontFamily && run.fontSize));
+  if (foundRun && foundRun.kind === 'text') {
+    return foundRun;
+  }
+  return {
+    kind: 'text',
+    text: '',
+    fontFamily: 'Arial',
+    fontSize: 16,
+  };
 };

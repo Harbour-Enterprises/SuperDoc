@@ -3335,12 +3335,14 @@ describe('DomPainter', () => {
     painter.paint(borderLayout, mount);
 
     const fragment = mount.querySelector('[data-block-id="border-block"]') as HTMLElement;
-    expect(fragment.style.borderTopStyle).toBe('solid');
-    expect(fragment.style.borderTopWidth).toBe('2px');
-    expect(fragment.style.borderTopColor).toBe('rgb(255, 0, 0)');
-    expect(fragment.style.borderLeftStyle).toBe('dashed');
-    expect(fragment.style.borderLeftWidth).toBe('1px');
-    expect(fragment.style.borderLeftColor).toBe('rgb(0, 255, 0)');
+    const borderLayer = fragment.querySelector('.superdoc-paragraph-border') as HTMLElement;
+    expect(borderLayer).toBeTruthy();
+    expect(borderLayer.style.borderTopStyle).toBe('solid');
+    expect(borderLayer.style.borderTopWidth).toBe('2px');
+    expect(borderLayer.style.borderTopColor).toBe('rgb(255, 0, 0)');
+    expect(borderLayer.style.borderLeftStyle).toBe('dashed');
+    expect(borderLayer.style.borderLeftWidth).toBe('1px');
+    expect(borderLayer.style.borderLeftColor).toBe('rgb(0, 255, 0)');
   });
 
   it('applies paragraph shading fill to fragment backgrounds', () => {
@@ -3383,7 +3385,9 @@ describe('DomPainter', () => {
     painter.paint(shadedLayout, mount);
 
     const fragment = mount.querySelector('[data-block-id="shaded-block"]') as HTMLElement;
-    expect(fragment.style.backgroundColor).toBe('rgb(255, 238, 170)');
+    const shadingLayer = fragment.querySelector('.superdoc-paragraph-shading') as HTMLElement;
+    expect(shadingLayer).toBeTruthy();
+    expect(shadingLayer.style.backgroundColor).toBe('rgb(255, 238, 170)');
   });
 
   it('strips indent padding when rendering list content', () => {

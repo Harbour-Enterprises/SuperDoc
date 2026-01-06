@@ -1,3 +1,20 @@
+# [1.3.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.2...v1.3.0-next.3) (2026-01-06)
+
+
+### Bug Fixes
+
+* tabs extending past line width ([#1659](https://github.com/Harbour-Enterprises/SuperDoc/issues/1659)) ([0f9c053](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f9c053476f86156cdd787f29481eab73656a702))
+* unify run styles and fix new list item runs ([#1650](https://github.com/Harbour-Enterprises/SuperDoc/issues/1650)) ([65447ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/65447cad6f1b4227ec011aaf30b69c9650202dd5))
+
+# [1.3.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.1...v1.3.0-next.2) (2026-01-06)
+
+
+### Bug Fixes
+
+* account for indentation when drawing paragraph borders ([#1655](https://github.com/Harbour-Enterprises/SuperDoc/issues/1655)) ([01a8d39](https://github.com/Harbour-Enterprises/SuperDoc/commit/01a8d394784d714c539963430abc712dc360a0cd))
+* bug - page number format from first section overrides number ([#1654](https://github.com/Harbour-Enterprises/SuperDoc/issues/1654)) ([c45ecfa](https://github.com/Harbour-Enterprises/SuperDoc/commit/c45ecfae71be17953e88662e8e646dab173b4c61))
+* partial row height computation ([#1652](https://github.com/Harbour-Enterprises/SuperDoc/issues/1652)) ([0ccd3c8](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ccd3c8c9924cc2a5d35cd9d09ff45dc1a964496))
+
 # [1.3.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.2-next.1...v1.3.0-next.1) (2026-01-06)
 
 

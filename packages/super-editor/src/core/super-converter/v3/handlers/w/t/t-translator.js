@@ -72,7 +72,8 @@ const encode = (params, encodedAttrs = {}) => {
     // drop the node entirely. This prevents creating empty/whitespace text nodes that ProseMirror
     // may treat as invalid. The placeholder was only needed to prevent xml-js from dropping
     // the node during parsing - but if xml:space doesn't require preservation, we should drop it.
-    if (xmlSpace !== 'preserve' && typeof text === 'string' && !text.trim()) {
+    const isWhitespaceOnly = /^[ \t\n\r]*$/.test(text);
+    if (xmlSpace !== 'preserve' && isWhitespaceOnly) {
       return null;
     }
   } else if (!elements.length && encodedAttrs.xmlSpace === 'preserve') {

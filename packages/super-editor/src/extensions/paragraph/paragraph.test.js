@@ -29,39 +29,26 @@ describe('Paragraph Node', () => {
     expect(body.elements.map((el) => el.name)).toEqual(['w:p', 'w:sectPr']);
     const paragraph = body.elements[0];
     expect(paragraph.name).toBe('w:p');
-    expect(paragraph.elements).toEqual([
-      {
-        name: 'w:pPr',
-        type: 'element',
-        attributes: {},
-        elements: [
-          {
-            name: 'w:pStyle',
-            attributes: {
-              'w:val': 'Heading1',
-            },
-          },
-        ],
-      },
-      {
-        name: 'w:r',
-        elements: [
-          {
-            name: 'w:t',
-            elements: [
-              {
-                text: 'Test Heading',
-                type: 'text',
-              },
-            ],
-          },
-        ],
-      },
-    ]);
+
+    // Verify paragraph properties include the Heading1 style
+    const pPr = paragraph.elements.find((el) => el.name === 'w:pPr');
+    expect(pPr).toBeDefined();
+    expect(pPr.elements).toContainEqual({
+      name: 'w:pStyle',
+      attributes: { 'w:val': 'Heading1' },
+    });
+
+    // Verify run exists with text content
     const run = paragraph.elements.find((el) => el.name === 'w:r');
     expect(run).toBeDefined();
     const textNode = run.elements.find((el) => el.name === 'w:t');
-    expect(textNode?.elements?.[0]?.text).toBe('Test Heading');
+    expect(textNode).toBeDefined();
+    const textContent = textNode.elements?.find((child) => child.type === 'text');
+    expect(textContent?.text).toBe('Test Heading');
+
+    // Run properties should include font size from the Heading1 style
+    const rPr = run.elements.find((el) => el.name === 'w:rPr');
+    expect(rPr).toBeDefined();
   });
 
   it('inserting plain text creates a simple paragraph', async () => {

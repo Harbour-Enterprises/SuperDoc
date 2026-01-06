@@ -366,11 +366,9 @@ describe('PDF Painter', () => {
           indentLeftPx: 48,
           marker: {
             markerText: '-',
-            glyphWidthPx: 8,
             markerBoxWidthPx: 20,
             markerX: 4,
             textStartX: 24,
-            baselineOffsetPx: 0,
             justification: 'left',
             suffix: 'tab',
             run: { fontFamily: 'Arial', fontSize: 16 },
@@ -424,7 +422,7 @@ describe('PDF Painter', () => {
     const blob = await painter.render(markerLayout);
     const pdfText = await blob.text();
 
-    const indent = markerBlock.attrs?.indent ?? {};
+    const indent = (markerBlock.kind === 'paragraph' ? markerBlock.attrs?.indent : undefined) ?? {};
     const textStart = (indent.left ?? 0) + ((indent.firstLine ?? 0) - (indent.hanging ?? 0));
     const fragmentX = markerLayout.pages[0].fragments[0].x ?? 0;
     const expectedMarkerPx = fragmentX + textStart - (markerMeasure.marker?.markerWidth ?? 0); // 72 + 24 - 20 = 76px
@@ -455,7 +453,9 @@ describe('PDF Painter', () => {
       },
     };
     const width = 160;
-    const trackedMeasure = buildSimpleParagraphMeasure(trackedBlock.runs[0].text.length, width);
+    const firstRun = trackedBlock.runs[0];
+    const textLength = firstRun && firstRun.kind === 'text' ? firstRun.text.length : 0;
+    const trackedMeasure = buildSimpleParagraphMeasure(textLength, width);
     const painter = createPdfPainter({ blocks: [trackedBlock], measures: [trackedMeasure] });
     const blob = await painter.render(buildSingleFragmentLayout(trackedBlock.id, width));
     const pdfText = await blob.text();
@@ -484,7 +484,9 @@ describe('PDF Painter', () => {
       },
     };
     const width = 180;
-    const trackedMeasure = buildSimpleParagraphMeasure(trackedBlock.runs[0].text.length, width);
+    const firstRun = trackedBlock.runs[0];
+    const textLength = firstRun && firstRun.kind === 'text' ? firstRun.text.length : 0;
+    const trackedMeasure = buildSimpleParagraphMeasure(textLength, width);
     const painter = createPdfPainter({ blocks: [trackedBlock], measures: [trackedMeasure] });
     const blob = await painter.render(buildSingleFragmentLayout(trackedBlock.id, width));
     const pdfText = await blob.text();
