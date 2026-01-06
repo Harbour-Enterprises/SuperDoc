@@ -191,6 +191,24 @@ const translateFragment = (fragment: Fragment, offsetY: number, offsetX: number 
   return fragment;
 };
 
+const getParagraphBorderBox = (
+  fragment: { x: number; width: number },
+  indent?: ParagraphAttrs['indent'],
+): { x: number; width: number } => {
+  const indentLeft = Number.isFinite(indent?.left) ? indent!.left! : 0;
+  const indentRight = Number.isFinite(indent?.right) ? indent!.right! : 0;
+  const firstLine = Number.isFinite(indent?.firstLine) ? indent!.firstLine! : 0;
+  const hanging = Number.isFinite(indent?.hanging) ? indent!.hanging! : 0;
+  const firstLineOffset = firstLine - hanging;
+  const minLeftInset = Math.min(indentLeft, indentLeft + firstLineOffset);
+  const leftInset = Math.max(0, minLeftInset);
+  const rightInset = Math.max(0, indentRight);
+  return {
+    x: fragment.x + leftInset,
+    width: Math.max(0, fragment.width - leftInset - rightInset),
+  };
+};
+
 const resolveRunText = (run: Run, context: FragmentRenderContext): string => {
   switch (run.kind) {
     case 'tab':
@@ -483,11 +501,12 @@ export class PdfPainter {
       .join('');
 
     const parts: string[] = [];
+    const borderBox = getParagraphBorderBox(fragment, block.attrs?.indent);
     const shadingChunk = this.renderShadingRect(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       block.attrs?.shading,
@@ -498,9 +517,9 @@ export class PdfPainter {
     }
     const borderChunk = this.renderBorderBox(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       block.attrs?.borders,
@@ -613,11 +632,12 @@ export class PdfPainter {
       .join('');
 
     const contentParts: string[] = [];
+    const borderBox = getParagraphBorderBox(fragment, item.paragraph.attrs?.indent);
     const shadingChunk = this.renderShadingRect(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       item.paragraph.attrs?.shading,
@@ -628,9 +648,9 @@ export class PdfPainter {
     }
     const borderChunk = this.renderBorderBox(
       {
-        x: fragment.x,
+        x: borderBox.x,
         y: fragment.y,
-        width: fragment.width,
+        width: borderBox.width,
         height: fragmentHeight,
       },
       item.paragraph.attrs?.borders,

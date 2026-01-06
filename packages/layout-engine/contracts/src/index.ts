@@ -754,7 +754,7 @@ export type SectionBreakBlock = {
     left?: number;
   };
   numbering?: {
-    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
     start?: number;
   };
   headerRefs?: {
@@ -797,7 +797,7 @@ export type SectionRefs = {
 };
 
 export type SectionNumbering = {
-  format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman';
+  format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
   start?: number;
 };
 

@@ -1428,17 +1428,10 @@ describe('layoutTableBlock', () => {
     });
   });
 
-  describe('line advancement-based row splitting', () => {
-    /**
-     * Test suite for the line advancement algorithm introduced in commit 911977b94.
-     * This algorithm ensures that when a row is split across pages, all cells advance
-     * by the same number of lines rather than the same height, maintaining structural
-     * alignment across cells with different line heights.
-     */
-
-    it('should split rows based on line advancement rather than height', () => {
-      // Create a table with a single row where cells have different line heights
-      // This tests the core bug fix: cells should advance by the same number of lines
+  describe('per-cell line fitting for partial row splits', () => {
+    it('should allow cells to advance independently based on fitted lines', () => {
+      // Create a table with a single row where cells have different line heights.
+      // Each cell should advance based on its own fitted lines, not the minimum across cells.
       const block = createMockTableBlock(1);
 
       // Cell 0: 3 lines of 20px each (total 60px)
@@ -1479,13 +1472,16 @@ describe('layoutTableBlock', () => {
         columnX: () => 0,
       });
 
-      // With line advancement, both cells should advance by 1 line at a time
-      // So we should see multiple fragments as the row is split line by line
+      // We should see multiple fragments as the row is split
       expect(fragments.length).toBeGreaterThan(1);
 
-      // Check that fragments have partialRow metadata defined
-      const fragmentsWithPartialRow = fragments.filter((f) => 'partialRow' in f && f.partialRow !== null);
-      expect(fragmentsWithPartialRow.length).toBeGreaterThan(0);
+      const fragmentWithPartial = fragments.find((f) => 'partialRow' in f && f.partialRow);
+      expect(fragmentWithPartial).toBeDefined();
+
+      if (fragmentWithPartial && 'partialRow' in fragmentWithPartial && fragmentWithPartial.partialRow) {
+        const { toLineByCell } = fragmentWithPartial.partialRow;
+        expect(toLineByCell[0]).toBeGreaterThan(toLineByCell[1]);
+      }
     });
 
     it('should not call advanceColumn when partial row makes progress', () => {
@@ -1537,9 +1533,8 @@ describe('layoutTableBlock', () => {
       expect(advanceCallCount).toBeLessThan(fragments.length);
     });
 
-    it('should apply allCellsCompleteInFirstPass optimization', () => {
-      // When all cells complete in the first pass, the optimization should keep
-      // the natural heights without forcing line advancement alignment
+    it('should not create a partial row when all cells fit', () => {
+      // When all cells fit in the available space, no partial row metadata should exist.
       const block = createMockTableBlock(1);
 
       // Create a row where all cells will complete in available space
@@ -1581,7 +1576,7 @@ describe('layoutTableBlock', () => {
     });
 
     it('should handle cells with different line counts in partial row splits', () => {
-      // Edge case: cells have different numbers of lines, not just different line heights
+      // Edge case: cells have different numbers of lines.
       const block = createMockTableBlock(1);
 
       // Cell 0 has 2 lines, Cell 1 has 4 lines
@@ -1623,22 +1618,15 @@ describe('layoutTableBlock', () => {
       // Should create multiple fragments as the row is split
       expect(fragments.length).toBeGreaterThan(1);
 
-      // Verify that partial row metadata exists for intermediate fragments
+      // Verify that partial row metadata exists and allows different advancements.
       const intermediateFragments = fragments.slice(0, -1);
-      for (const fragment of intermediateFragments) {
-        if ('partialRow' in fragment && fragment.partialRow) {
-          // Each cell should advance by the minimum line advancement
-          const { toLineByCell, fromLineByCell } = fragment.partialRow;
-          const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
-
-          // All positive advancements should be equal (same number of lines advanced)
-          const positiveAdvancements = advancements.filter((a) => a > 0);
-          if (positiveAdvancements.length > 1) {
-            const minAdvancement = Math.min(...positiveAdvancements);
-            expect(positiveAdvancements.every((a) => a === minAdvancement)).toBe(true);
-          }
-        }
-      }
+      const fragmentWithUnevenAdvance = intermediateFragments.find((fragment) => {
+        if (!('partialRow' in fragment) || !fragment.partialRow) return false;
+        const { toLineByCell, fromLineByCell } = fragment.partialRow;
+        const advancements = toLineByCell.map((to, idx) => to - fromLineByCell[idx]);
+        return advancements.some((adv) => adv === 0) && advancements.some((adv) => adv > 0);
+      });
+      expect(fragmentWithUnevenAdvance).toBeDefined();
     });
 
     it('should handle continuation from partial rows correctly', () => {
