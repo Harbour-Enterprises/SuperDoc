@@ -2406,7 +2406,9 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 async function measureImageBlock(block: ImageBlock, constraints: MeasureConstraints): Promise<ImageMeasure> {
   const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
 
-  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
+  const bypassWidthConstraint =
+    block.anchor?.behindDoc || (block.wrap?.type === 'None' && (block.wrap?.behindDoc || block.anchor?.behindDoc));
+  const maxWidth = bypassWidthConstraint || !(constraints.maxWidth > 0) ? intrinsic.width : constraints.maxWidth;
 
   // For anchored images with negative vertical positioning (designed to overflow their container),
   // bypass the height constraint. This matches MS Word behavior where images in headers/footers
