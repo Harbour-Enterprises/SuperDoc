@@ -124,6 +124,21 @@ export interface TextStyleAttrs {
   styleId?: string | null;
   /** Font size (e.g., '12pt') */
   fontSize?: string | null;
+  /**
+   * Vertical alignment for subscript/superscript text (DOCX w:vertAlign).
+   * Standard values: 'superscript', 'subscript', 'baseline'.
+   * When both vertAlign and position are present, position takes precedence.
+   * Renders as CSS vertical-align: super/sub with 65% font-size scaling.
+   */
+  vertAlign?: 'superscript' | 'subscript' | 'baseline' | null;
+  /**
+   * Custom vertical position offset in points (DOCX w:position).
+   * Format: '{number}pt' where number is in points (e.g., '2pt', '-1.5pt').
+   * Positive values raise text, negative values lower text.
+   * Takes precedence over vertAlign when both are present.
+   * Renders as CSS vertical-align with the exact offset value.
+   */
+  position?: string | null;
   /** Font family (CSS font-family string) */
   fontFamily?: string | null;
   /** East Asian font family override */
