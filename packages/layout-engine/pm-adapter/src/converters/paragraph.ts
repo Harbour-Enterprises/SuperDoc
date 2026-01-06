@@ -726,9 +726,13 @@ export function paragraphToFlowBlocks(
         : paragraphProps.spacing !== undefined
           ? paragraphProps.spacing
           : paragraphHydration?.spacing;
+    const normalizeIndentObject = (value: unknown): ParagraphIndent | undefined => {
+      if (!value || typeof value !== 'object') return;
+      return normalizePxIndent(value) ?? convertIndentTwipsToPx(value);
+    };
     const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
     const normalizedIndent =
-      normalizePxIndent(para.attrs?.indent as ParagraphIndent) ??
+      normalizeIndentObject(para.attrs?.indent) ??
       convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
       convertIndentTwipsToPx(paragraphHydration?.indent as ParagraphIndent) ??
       normalizeParagraphIndent(para.attrs?.textIndent);
