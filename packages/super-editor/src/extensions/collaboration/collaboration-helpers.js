@@ -125,6 +125,9 @@ export const applyRemoteHeaderFooterChanges = (editor, key, data) => {
     const storage = editor.converter[`${type}s`];
     if (storage) storage[sectionId] = content;
 
+    // Mark as modified so exports include header/footer references
+    editor.converter.headerFooterModified = true;
+
     // Update active editors
     const editors = editor.converter[`${type}Editors`];
     editors?.forEach((item) => {
