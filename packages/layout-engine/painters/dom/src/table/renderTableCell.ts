@@ -683,13 +683,8 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
                     lineEl.style.textIndent = `${firstLineOffset}px`;
                   }
                 } else {
-                  // Body lines: paddingLeft = left + hanging (when hanging > 0)
-                  // This indents body lines further right, making first line "hang out"
-                  // Note: Negative hanging values are intentionally ignored for body lines,
-                  // treating them as if hanging were 0 (body lines use only left indent)
-                  if (hanging > 0) {
-                    lineEl.style.paddingLeft = `${leftIndent + hanging}px`;
-                  } else if (leftIndent > 0) {
+                  // Body lines: use left indent only (hanging already accounted for on first line)
+                  if (leftIndent > 0) {
                     lineEl.style.paddingLeft = `${leftIndent}px`;
                   }
                 }

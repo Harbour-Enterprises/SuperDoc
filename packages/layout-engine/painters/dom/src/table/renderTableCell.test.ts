@@ -1779,9 +1779,9 @@ describe('renderTableCell', () => {
       expect(firstLine.style.paddingLeft).toBe('20px');
       expect(firstLine.style.textIndent).toBe('-30px');
 
-      // Body line: paddingLeft = left + hanging = 20 + 30 = 50px
+      // Body line: paddingLeft = left = 20px
       const bodyLine = lines[1] as HTMLElement;
-      expect(bodyLine.style.paddingLeft).toBe('50px');
+      expect(bodyLine.style.paddingLeft).toBe('20px');
       expect(bodyLine.style.textIndent).toBe('');
     });
 
@@ -1822,9 +1822,9 @@ describe('renderTableCell', () => {
       expect(firstLine.style.paddingLeft).toBe('20px');
       expect(firstLine.style.textIndent).toBe('-20px');
 
-      // Body line: paddingLeft = left + hanging = 20 + 30 = 50px
+      // Body line: paddingLeft = left = 20px
       const bodyLine = lines[1] as HTMLElement;
-      expect(bodyLine.style.paddingLeft).toBe('50px');
+      expect(bodyLine.style.paddingLeft).toBe('20px');
     });
 
     it('should handle left indent without hanging', () => {
@@ -2019,9 +2019,9 @@ describe('renderTableCell', () => {
       const lines = paraWrapper.children;
 
       // When starting from line 1 (body line), it should get body line treatment
-      // paddingLeft = left + hanging = 20 + 30 = 50px
+      // paddingLeft = left = 20px
       const renderedLine = lines[0] as HTMLElement;
-      expect(renderedLine.style.paddingLeft).toBe('50px');
+      expect(renderedLine.style.paddingLeft).toBe('20px');
       expect(renderedLine.style.textIndent).toBe('');
     });
 
@@ -2106,10 +2106,9 @@ describe('renderTableCell', () => {
       expect(firstLine.style.textIndent).toBe('-20px');
 
       // Body lines: negative leftIndent + positive hanging
-      // Since leftIndent is negative, the condition (hanging > 0) applies
-      // paddingLeft = left + hanging = -15 + 20 = 5px
+      // PaddingLeft not applied because left indent is negative
       const bodyLine = lines[1] as HTMLElement;
-      expect(bodyLine.style.paddingLeft).toBe('5px');
+      expect(bodyLine.style.paddingLeft).toBe('');
       expect(bodyLine.style.textIndent).toBe('');
     });
   });
