@@ -982,7 +982,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const originX = currentLine.width;
       const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
       tabStopCursor = nextIndex;
-      const tabAdvance = Math.max(0, target - currentLine.width);
+      const clampedTarget = Math.min(target, currentLine.maxWidth);
+      const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
@@ -992,7 +993,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.toChar = 1; // tab is a single character
       if (stop) {
         validateTabStopVal(stop);
-        pendingTabAlignment = { target, val: stop.val };
+        pendingTabAlignment = { target: clampedTarget, val: stop.val };
       } else {
         pendingTabAlignment = null;
       }
@@ -1000,8 +1001,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Emit leader decoration if requested
       if (stop && stop.leader && stop.leader !== 'none') {
         const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
-        const from = Math.min(originX, target);
-        const to = Math.max(originX, target);
+        const from = Math.min(originX, clampedTarget);
+        const to = Math.max(originX, clampedTarget);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
       }
@@ -1790,7 +1791,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const originX = currentLine.width;
         const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
         tabStopCursor = nextIndex;
-        const tabAdvance = Math.max(0, target - currentLine.width);
+        const clampedTarget = Math.min(target, currentLine.maxWidth);
+        const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
 
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
@@ -1800,7 +1802,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         charPosInRun += 1;
         if (stop) {
           validateTabStopVal(stop);
-          pendingTabAlignment = { target, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget, val: stop.val };
         } else {
           pendingTabAlignment = null;
         }
@@ -1808,8 +1810,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
           const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
-          const from = Math.min(originX, target);
-          const to = Math.max(originX, target);
+          const from = Math.min(originX, clampedTarget);
+          const to = Math.max(originX, clampedTarget);
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
