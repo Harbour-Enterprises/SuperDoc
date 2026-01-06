@@ -726,17 +726,13 @@ export function paragraphToFlowBlocks(
         : paragraphProps.spacing !== undefined
           ? paragraphProps.spacing
           : paragraphHydration?.spacing;
-    const toIndentObject = (value: unknown): ParagraphIndent | undefined =>
-      value && typeof value === 'object' ? (value as ParagraphIndent) : undefined;
-    const attrsIndent = toIndentObject(para.attrs?.indent);
-    const paragraphIndent = toIndentObject(paragraphProps.indent);
-    const hydratedIndent = toIndentObject(paragraphHydration?.indent);
     const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
     const normalizedIndent =
-      (attrsIndent && (normalizePxIndent(attrsIndent) ?? convertIndentTwipsToPx(attrsIndent))) ??
-      (paragraphIndent && convertIndentTwipsToPx(paragraphIndent)) ??
-      (hydratedIndent && convertIndentTwipsToPx(hydratedIndent)) ??
+      (para.attrs?.indent && (normalizePxIndent(para.attrs.indent) ?? convertIndentTwipsToPx(para.attrs.indent))) ??
+      (paragraphProps.indent && convertIndentTwipsToPx(paragraphProps.indent)) ??
+      (paragraphHydration?.indent && convertIndentTwipsToPx(paragraphHydration.indent)) ??
       normalizeParagraphIndent(para.attrs?.textIndent);
+
     const styleNodeAttrs =
       paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
         ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }

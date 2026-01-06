@@ -1032,8 +1032,6 @@ export const computeParagraphAttrs = (
     (hydrated?.indent && convertIndentTwipsToPx(hydrated?.indent)) ??
     normalizeParagraphIndent(attrs.textIndent);
 
-  console.log('[debug] normalizedIndent:', normalizedIndent);
-
   /**
    * Unwraps and normalizes tab stop data structures from various formats.
    *
