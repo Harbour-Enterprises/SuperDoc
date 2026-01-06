@@ -2585,7 +2585,7 @@ export class DomPainter {
         }
 
         // Convert VML blacklevel (brightness) to CSS brightness
-        // VML blacklevel is a hex string like "22938f" - lower - less brightness
+        // VML blacklevel is a hex string like "22938f" - lower = less brightness
         if (block.blacklevel && typeof block.blacklevel === 'string' && block.blacklevel.endsWith('f')) {
           const brightness = Math.max(0, 1 + parseInt(block.blacklevel) / 327 / 100) + 0.5; // 0.5 factor added based on visual comparison.
           if (brightness > 0) {
