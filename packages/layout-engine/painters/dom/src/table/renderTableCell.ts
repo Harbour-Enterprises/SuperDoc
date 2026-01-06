@@ -11,6 +11,7 @@ import type {
 } from '@superdoc/contracts';
 import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
+import { applyParagraphBorderStyles, applyParagraphShadingStyles } from '../renderer.js';
 import { toCssFontFamily } from '@superdoc/font-utils';
 
 /**
@@ -550,6 +551,11 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
         applyParagraphBordersAndShading(paraWrapper, block as ParagraphBlock);
+
+        // Apply paragraph-level border and shading styles (SD-1296)
+        // These were previously missing, causing paragraph borders to not render in table cells
+        applyParagraphBorderStyles(paraWrapper, block.attrs?.borders);
+        applyParagraphShadingStyles(paraWrapper, block.attrs?.shading);
 
         // Calculate height of rendered content for proper block accumulation
         let renderedHeight = 0;

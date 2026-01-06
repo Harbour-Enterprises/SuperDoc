@@ -5488,7 +5488,30 @@ const applyParagraphBlockStyles = (element: HTMLElement, attrs?: ParagraphAttrs)
 type BorderSide = keyof NonNullable<ParagraphAttrs['borders']>;
 const BORDER_SIDES: BorderSide[] = ['top', 'right', 'bottom', 'left'];
 
-const applyParagraphBorderStyles = (element: HTMLElement, borders?: ParagraphAttrs['borders']): void => {
+/**
+ * Applies paragraph border styles to an HTML element.
+ * Sets CSS border properties (width, style, color) for each side specified in the borders object.
+ *
+ * @param {HTMLElement} element - The HTML element to apply border styles to
+ * @param {ParagraphAttrs['borders']} borders - Optional borders object containing border definitions for top, right, bottom, and left sides
+ *
+ * @remarks
+ * - Sets box-sizing to 'border-box' to ensure borders are included in element dimensions
+ * - Each side's border is processed independently - only specified sides receive border styles
+ * - Border width defaults to 1px if not specified, and negative widths are clamped to 0px
+ * - Border style defaults to 'solid' if not specified or if style is not 'none'
+ * - Border color defaults to '#000' (black) if not specified
+ * - Border style 'none' is handled specially to ensure no visible border
+ *
+ * @example
+ * ```typescript
+ * applyParagraphBorderStyles(paraElement, {
+ *   top: { width: 2, style: 'solid', color: '#FF0000' },
+ *   bottom: { width: 1, style: 'dashed', color: '#0000FF' }
+ * });
+ * ```
+ */
+export const applyParagraphBorderStyles = (element: HTMLElement, borders?: ParagraphAttrs['borders']): void => {
   if (!borders) return;
   element.style.boxSizing = 'border-box';
   BORDER_SIDES.forEach((side) => {
@@ -5530,7 +5553,27 @@ const stripListIndent = (attrs?: ParagraphAttrs): ParagraphAttrs | undefined => 
   };
 };
 
-const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
+/**
+ * Applies paragraph shading (background color) styles to an HTML element.
+ * Sets the CSS background-color property based on the shading fill value.
+ *
+ * @param {HTMLElement} element - The HTML element to apply shading styles to
+ * @param {ParagraphAttrs['shading']} shading - Optional shading object containing fill color definition
+ *
+ * @remarks
+ * - Only applies background color if shading.fill is defined
+ * - Currently only supports the `fill` property for solid color backgrounds
+ * - Theme-based shading properties (themeColor, themeTint, themeShade) are not yet supported
+ * - The fill value should be a valid CSS color string (hex, rgb, named color, etc.)
+ *
+ * @example
+ * ```typescript
+ * applyParagraphShadingStyles(paraElement, {
+ *   fill: '#FFFF00'
+ * });
+ * ```
+ */
+export const applyParagraphShadingStyles = (element: HTMLElement, shading?: ParagraphAttrs['shading']): void => {
   if (!shading?.fill) return;
   element.style.backgroundColor = shading.fill;
 };
