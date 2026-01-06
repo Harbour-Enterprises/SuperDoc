@@ -20,6 +20,7 @@ export const useCommentsStore = defineStore('comments', () => {
     readOnly: false,
     allowResolve: true,
     showResolved: false,
+    showSuggestionsInViewMode: false,
   });
 
   const isDebugging = false;

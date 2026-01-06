@@ -58,6 +58,10 @@ const commentInput = ref(null);
 const commentDialogElement = ref(null);
 
 const isActiveComment = computed(() => activeComment.value === props.comment.commentId);
+const isViewingSuggestionsMode = computed(() => {
+  return proxy.$superdoc.config.documentMode === 'viewing' && getConfig.value?.showSuggestionsInViewMode === true;
+});
+
 const showButtons = computed(() => {
   return (
     !getConfig.readOnly &&
@@ -73,6 +77,7 @@ const showSeparator = computed(() => (index) => {
 });
 
 const showInputSection = computed(() => {
+  if (isViewingSuggestionsMode.value) return false;
   return (
     !getConfig.readOnly &&
     isActiveComment.value &&

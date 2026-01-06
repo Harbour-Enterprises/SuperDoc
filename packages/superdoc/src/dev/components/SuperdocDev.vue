@@ -174,6 +174,7 @@ const init = async () => {
         // selector: 'comments-panel',
         // useInternalExternalComments: true,
         // suppressInternalExternal: true,
+        // showSuggestionsInViewMode: false,
         permissionResolver: commentPermissionResolver,
       },
       toolbar: {

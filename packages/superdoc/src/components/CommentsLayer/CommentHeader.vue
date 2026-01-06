@@ -42,6 +42,10 @@ const OVERFLOW_OPTIONS = Object.freeze({
   delete: { label: 'Delete', key: 'delete' },
 });
 
+const isViewingSuggestionsMode = computed(() => {
+  return proxy.$superdoc.config.documentMode === 'viewing' && props.config?.showSuggestionsInViewMode === true;
+});
+
 const generallyAllowed = computed(() => {
   if (!props.comment) return false;
   if (props.comment.resolvedTime) return false;
@@ -51,6 +55,7 @@ const generallyAllowed = computed(() => {
 });
 
 const allowResolve = computed(() => {
+  if (isViewingSuggestionsMode.value) return false;
   if (!generallyAllowed.value) return false;
 
   // Do not allow child comments to resolve
@@ -70,6 +75,7 @@ const allowResolve = computed(() => {
 });
 
 const allowReject = computed(() => {
+  if (isViewingSuggestionsMode.value) return false;
   if (!generallyAllowed.value) return false;
   if (!props.comment.trackedChange) return false;
 

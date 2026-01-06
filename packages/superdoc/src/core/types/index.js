@@ -59,6 +59,7 @@
  *   currentUser?: User | null,
  *   superdoc?: SuperDoc | null,
  * }) => boolean | undefined} [comments.permissionResolver] Custom permission resolver for comment actions
+ * @property {boolean} [comments.showSuggestionsInViewMode=false] When true, displays tracked changes and comments in viewing mode (read-only display, no action buttons)
  * @property {Object} [ai] AI module configuration
  * @property {string} [ai.apiKey] Harbour API key for AI features
  * @property {string} [ai.endpoint] Custom endpoint URL for AI services

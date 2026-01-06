@@ -611,6 +611,127 @@ describe('SuperDoc core', () => {
     expect(setDocumentMode).toHaveBeenLastCalledWith('editing');
   });
 
+  it('keeps comments visible in viewing mode when showSuggestionsInViewMode is true', async () => {
+    const { superdocStore } = createAppHarness();
+    const removeComments = vi.fn();
+    const restoreComments = vi.fn();
+    const setTrackedChangesPreferences = vi.fn();
+    const setDocumentMode = vi.fn();
+    const docStub = {
+      removeComments,
+      restoreComments,
+      getEditor: vi.fn(() => ({ setDocumentMode })),
+      getPresentationEditor: vi.fn(() => null),
+    };
+    superdocStore.documents = [docStub];
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: { showSuggestionsInViewMode: true }, toolbar: {} },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    instance.setTrackedChangesPreferences = setTrackedChangesPreferences;
+    await flushMicrotasks();
+
+    instance.setDocumentMode('viewing');
+    expect(removeComments).not.toHaveBeenCalled();
+    expect(setTrackedChangesPreferences).toHaveBeenCalledWith({ mode: 'review', enabled: true });
+    expect(setDocumentMode).toHaveBeenLastCalledWith('viewing');
+  });
+
+  it('removes comments in viewing mode when showSuggestionsInViewMode is false', async () => {
+    const { superdocStore } = createAppHarness();
+    const removeComments = vi.fn();
+    const restoreComments = vi.fn();
+    const setTrackedChangesPreferences = vi.fn();
+    const setDocumentMode = vi.fn();
+    const docStub = {
+      removeComments,
+      restoreComments,
+      getEditor: vi.fn(() => ({ setDocumentMode })),
+      getPresentationEditor: vi.fn(() => null),
+    };
+    superdocStore.documents = [docStub];
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: { showSuggestionsInViewMode: false }, toolbar: {} },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    instance.setTrackedChangesPreferences = setTrackedChangesPreferences;
+    await flushMicrotasks();
+
+    instance.setDocumentMode('viewing');
+    expect(removeComments).toHaveBeenCalledTimes(1);
+    expect(setTrackedChangesPreferences).toHaveBeenCalledWith({ mode: 'original', enabled: false });
+    expect(setDocumentMode).toHaveBeenLastCalledWith('viewing');
+  });
+
+  it('defaults to hiding comments in viewing mode when showSuggestionsInViewMode is not provided', async () => {
+    const { superdocStore } = createAppHarness();
+    const removeComments = vi.fn();
+    const restoreComments = vi.fn();
+    const setTrackedChangesPreferences = vi.fn();
+    const setDocumentMode = vi.fn();
+    const docStub = {
+      removeComments,
+      restoreComments,
+      getEditor: vi.fn(() => ({ setDocumentMode })),
+      getPresentationEditor: vi.fn(() => null),
+    };
+    superdocStore.documents = [docStub];
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    instance.setTrackedChangesPreferences = setTrackedChangesPreferences;
+    await flushMicrotasks();
+
+    instance.setDocumentMode('viewing');
+    expect(removeComments).toHaveBeenCalledTimes(1);
+    expect(setTrackedChangesPreferences).toHaveBeenCalledWith({ mode: 'original', enabled: false });
+    expect(setDocumentMode).toHaveBeenLastCalledWith('viewing');
+  });
+
+  it('sets correct tracked changes defaults when initialized with viewing mode and showSuggestionsInViewMode true', async () => {
+    createAppHarness();
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      documentMode: 'viewing',
+      modules: { comments: { showSuggestionsInViewMode: true }, toolbar: {} },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    expect(instance.config.layoutEngineOptions.trackedChanges).toEqual({
+      mode: 'review',
+      enabled: true,
+    });
+  });
+
   it('skips rendering comments list when role is viewer', async () => {
     createAppHarness();
 

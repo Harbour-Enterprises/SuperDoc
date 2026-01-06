@@ -153,11 +153,13 @@ export class SuperDoc extends EventEmitter {
     }
     // Only set defaults if user didn't explicitly configure tracked changes
     if (!this.config.layoutEngineOptions.trackedChanges) {
-      // Default: ON for editing/suggesting modes, OFF for viewing mode
       const isViewingMode = this.config.documentMode === 'viewing';
+      const showSuggestionsInViewMode = this.config.modules?.comments?.showSuggestionsInViewMode;
+      const shouldShowTrackedChanges = !isViewingMode || showSuggestionsInViewMode;
+
       this.config.layoutEngineOptions.trackedChanges = {
-        mode: isViewingMode ? 'final' : 'review',
-        enabled: !isViewingMode,
+        mode: shouldShowTrackedChanges ? 'review' : 'final',
+        enabled: shouldShowTrackedChanges,
       };
     }
 
@@ -797,11 +799,20 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Disable tracked changes for viewing mode (show original document without change markers)
-    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
+    const showSuggestions = this.config.modules?.comments?.showSuggestionsInViewMode;
+
+    if (showSuggestions) {
+      this.setTrackedChangesPreferences({ mode: 'review', enabled: true });
+    } else {
+      // Disable tracked changes for viewing mode (show original document without change markers)
+      this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
+
+      this.superdocStore.documents.forEach((doc) => {
+        doc.removeComments();
+      });
+    }
 
     this.superdocStore.documents.forEach((doc) => {
-      doc.removeComments();
       this.#applyDocumentMode(doc, 'viewing');
     });
 
