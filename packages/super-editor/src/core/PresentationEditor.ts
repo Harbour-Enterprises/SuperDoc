@@ -6714,7 +6714,11 @@ export class PresentationEditor extends EventEmitter {
           if (!vertAlign && position == null && runNode) {
             runNode.forEach((child: ProseMirrorNode) => {
               if (!child.isText || !child.marks?.length) return;
-              const rpr = decodeRPrFromMarks(child.marks as Mark[]);
+              const rpr = decodeRPrFromMarks(child.marks as Mark[]) as {
+                vertAlign?: string;
+                position?: number;
+                fontSize?: number;
+              };
               if (rpr.vertAlign && !vertAlign) vertAlign = rpr.vertAlign;
               if (rpr.position != null && position == null) position = rpr.position;
               if (rpr.fontSize != null && fontSizeHalfPts == null) fontSizeHalfPts = rpr.fontSize;
