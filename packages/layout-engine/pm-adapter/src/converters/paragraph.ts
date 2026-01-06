@@ -16,6 +16,7 @@ import type {
   TrackedChangeMeta,
   SdtMetadata,
   ParagraphAttrs,
+  ParagraphIndent,
   FieldAnnotationRun,
   FieldAnnotationMetadata,
 } from '@superdoc/contracts';
@@ -54,7 +55,7 @@ import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
 import { contentBlockNodeToDrawingBlock } from './content-block.js';
 import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
 import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
-import { ptToPx, pickNumber, isPlainObject, twipsToPx } from '../utilities.js';
+import { ptToPx, pickNumber, isPlainObject, convertIndentTwipsToPx, twipsToPx } from '../utilities.js';
 import { resolveStyle } from '@superdoc/style-engine';
 
 // ============================================================================
@@ -769,10 +770,16 @@ export function paragraphToFlowBlocks(
           : paragraphProps.spacing !== undefined
             ? paragraphProps.spacing
             : paragraphHydration?.spacing;
-      const indentSource = para.attrs?.indent ?? paragraphProps.indent ?? paragraphHydration?.indent;
+      const normalizeIndentObject = (value: unknown): ParagraphIndent | undefined => {
+        if (!value || typeof value !== 'object') return;
+        return normalizePxIndent(value) ?? convertIndentTwipsToPx(value as ParagraphIndent);
+      };
       const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
       const normalizedIndent =
-        normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? para.attrs?.textIndent);
+        normalizeIndentObject(para.attrs?.indent) ??
+        convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
+        convertIndentTwipsToPx(paragraphHydration?.indent as ParagraphIndent) ??
+        normalizeParagraphIndent(para.attrs?.textIndent);
       const styleNodeAttrs =
         paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
           ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }

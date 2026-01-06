@@ -667,11 +667,10 @@ describe('AIActionsService', () => {
       await expect(actions.insertContent('')).rejects.toThrow('Query cannot be empty');
     });
 
-    it('should return failure when no editor', async () => {
-      const actions = new AIActionsService(mockProvider, null, () => mockEditor.state.doc.textContent, false);
-      const result = await actions.insertContent('insert content');
-
-      expect(result).toEqual({ success: false, results: [] });
+    it('should throw when no editor is provided', () => {
+      expect(() => {
+        return new AIActionsService(mockProvider, null, () => mockEditor.state.doc.textContent, false);
+      }).toThrowError('SuperDoc editor is not available; retry once the editor is initialized');
     });
 
     it('should return failure when AI returns no suggestions', async () => {
