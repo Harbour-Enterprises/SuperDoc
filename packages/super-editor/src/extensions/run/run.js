@@ -71,7 +71,7 @@ export const Run = OxmlNode.create({
   },
   addPmPlugins() {
     return [
-      wrapTextInRunsPlugin(),
+      wrapTextInRunsPlugin(this.editor),
       splitRunsAfterMarkPlugin,
       calculateInlineRunPropertiesPlugin(this.editor),
       cleanupEmptyRunsPlugin,

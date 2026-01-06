@@ -2,6 +2,7 @@
 import { NodeSelection, TextSelection, AllSelection } from 'prosemirror-state';
 import { canSplit } from 'prosemirror-transform';
 import { defaultBlockAt } from '@core/helpers/defaultBlockAt.js';
+import { resolveRunProperties, encodeMarksFromRPr } from '@core/super-converter/styles.js';
 
 /**
  * Splits a run node at the current selection into two paragraphs.
@@ -13,7 +14,6 @@ export const splitRunToParagraph = () => (props) => {
   if (!empty) return false;
   if ($from.parent.type.name !== 'run') return false;
 
-  // Resolve the dispatch function from view (preferred) or editor (headless fallback)
   let dispatchTransaction = null;
   if (view?.dispatch) {
     dispatchTransaction = view.dispatch.bind(view);
@@ -22,9 +22,13 @@ export const splitRunToParagraph = () => (props) => {
   }
   if (!dispatchTransaction) return false;
 
-  const handled = splitBlockPatch(state, (transaction) => {
-    dispatchTransaction(transaction);
-  });
+  const handled = splitBlockPatch(
+    state,
+    (transaction) => {
+      dispatchTransaction(transaction);
+    },
+    editor,
+  );
 
   if (handled) {
     tr.setMeta('preventDispatch', true);
@@ -35,10 +39,12 @@ export const splitRunToParagraph = () => (props) => {
 
 /**
  * Minimal copy of ProseMirror splitBlock logic that tolerates splitting runs.
+ * Enhanced to preserve paragraph attributes and apply style-based marks.
  * @param {import('prosemirror-state').EditorState} state
  * @param {(tr: import('prosemirror-state').Transaction) => void} dispatch
+ * @param {Object} [editor]
  */
-export function splitBlockPatch(state, dispatch) {
+export function splitBlockPatch(state, dispatch, editor) {
   let { $from } = state.selection;
   if (state.selection instanceof NodeSelection && state.selection.node.isBlock) {
     if (!$from.parentOffset || !canSplit(state.doc, $from.pos)) return false;
@@ -50,6 +56,7 @@ export function splitBlockPatch(state, dispatch) {
   let types = [];
   let splitDepth,
     deflt,
+    paragraphAttrs = null,
     atEnd = false,
     atStart = false;
   for (let d = $from.depth; ; d--) {
@@ -58,7 +65,8 @@ export function splitBlockPatch(state, dispatch) {
       atEnd = $from.end(d) == $from.pos + ($from.depth - d);
       atStart = $from.start(d) == $from.pos - ($from.depth - d);
       deflt = defaultBlockAt($from.node(d - 1).contentMatchAt($from.indexAfter(d - 1)));
-      types.unshift(null); // changed
+      paragraphAttrs = { ...node.attrs };
+      types.unshift({ type: deflt || node.type, attrs: paragraphAttrs });
       splitDepth = d;
       break;
     } else {
@@ -72,7 +80,7 @@ export function splitBlockPatch(state, dispatch) {
   let splitPos = tr.mapping.map($from.pos);
   let can = canSplit(tr.doc, splitPos, types.length, types);
   if (!can) {
-    types[0] = deflt ? { type: deflt } : null;
+    types[0] = deflt ? { type: deflt, attrs: paragraphAttrs } : null;
     can = canSplit(tr.doc, splitPos, types.length, types);
   }
   if (!can) return false;
@@ -83,8 +91,73 @@ export function splitBlockPatch(state, dispatch) {
     if (deflt && $from.node(splitDepth - 1).canReplaceWith($first.index(), $first.index() + 1, deflt))
       tr.setNodeMarkup(tr.mapping.map($from.before(splitDepth)), deflt);
   }
+
+  applyStyleMarks(state, tr, editor, paragraphAttrs);
+
   if (dispatch) dispatch(tr.scrollIntoView());
   return true;
+}
+
+/**
+ * Applies style-based marks to a transaction after a block split operation.
+ * Resolves run properties from paragraph styles and converts them to editor marks.
+ * If the selection already has marks, those take precedence over style-based marks.
+ *
+ * @param {import('prosemirror-state').EditorState} state - The current editor state.
+ * @param {import('prosemirror-state').Transaction} tr - The transaction to modify with marks.
+ * @param {Object} editor - The editor instance containing the converter.
+ * @param {{ paragraphProperties?: { styleId?: string } } | null} paragraphAttrs - The paragraph attributes containing style information.
+ * @returns {void}
+ *
+ * @remarks
+ * This function performs the following steps:
+ * 1. Extracts the styleId from paragraph attributes
+ * 2. Resolves run properties from the paragraph style using the converter
+ * 3. Encodes resolved properties into mark definitions
+ * 4. Checks if selection already has marks (user-applied formatting)
+ * 5. Applies either selection marks or style-based marks to the transaction
+ * 6. Stores mark definitions in transaction metadata for downstream plugins
+ *
+ * Error handling: Failures are silently ignored to ensure typing continues to work
+ * even if style resolution fails. This is intentional defensive programming.
+ */
+function applyStyleMarks(state, tr, editor, paragraphAttrs) {
+  const styleId = paragraphAttrs?.paragraphProperties?.styleId;
+  if (!editor?.converter && !styleId) {
+    return;
+  }
+
+  try {
+    const params = { docx: editor?.converter?.convertedXml ?? {}, numbering: editor?.converter?.numbering ?? {} };
+    const resolvedPpr = styleId ? { styleId } : {};
+    const runProperties = styleId ? resolveRunProperties(params, {}, resolvedPpr, false, false) : {};
+    /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */
+    const markDefsFromStyle = styleId
+      ? /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */ (
+          encodeMarksFromRPr(runProperties, editor?.converter?.convertedXml ?? {})
+        )
+      : [];
+
+    const selectionMarks = state.selection?.$from?.marks ? state.selection.$from.marks() : [];
+    const selectionMarkDefs = selectionMarks.map((mark) => ({ type: mark.type.name, attrs: mark.attrs }));
+
+    /** @type {Array<{type: string, attrs: Record<string, unknown>}>} */
+    const markDefsToApply = selectionMarks.length ? selectionMarkDefs : markDefsFromStyle;
+
+    const marksToApply = markDefsToApply
+      .map((def) => {
+        const markType = state.schema.marks[def.type];
+        return markType ? markType.create(def.attrs) : null;
+      })
+      .filter(Boolean);
+
+    if (marksToApply.length > 0) {
+      tr.ensureMarks(marksToApply);
+      tr.setMeta('sdStyleMarks', markDefsToApply);
+    }
+  } catch {
+    // ignore failures; typing still works without style marks
+  }
 }
 
 export const splitRunAtCursor = () => (props) => {
@@ -97,16 +170,16 @@ export const splitRunAtCursor = () => (props) => {
   if ($pos.parent.type !== runType) return false;
 
   const run = $pos.parent;
-  const offset = $pos.parentOffset; // offset inside this run
-  const runStart = $pos.before(); // position before the run
-  const runEnd = runStart + run.nodeSize; // position after the run
+  const offset = $pos.parentOffset;
+  const runStart = $pos.before();
+  const runEnd = runStart + run.nodeSize;
 
   const leftFrag = run.content.cut(0, offset);
   const rightFrag = run.content.cut(offset);
 
   const leftRun = runType.create(run.attrs, leftFrag, run.marks);
   const rightRun = runType.create(run.attrs, rightFrag, run.marks);
-  const gapPos = runStart + leftRun.nodeSize; // cursor between the two runs
+  const gapPos = runStart + leftRun.nodeSize;
   tr.replaceWith(runStart, runEnd, [leftRun, rightRun]).setSelection(TextSelection.create(tr.doc, gapPos));
 
   if (dispatch) {

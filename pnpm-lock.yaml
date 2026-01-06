@@ -810,6 +810,9 @@ importers:
       '@superdoc/preset-geometry':
         specifier: workspace:*
         version: link:../preset-geometry
+      '@superdoc/style-engine':
+        specifier: workspace:*
+        version: link:../layout-engine/style-engine
       '@superdoc/url-validation':
         specifier: workspace:*
         version: link:../../shared/url-validation

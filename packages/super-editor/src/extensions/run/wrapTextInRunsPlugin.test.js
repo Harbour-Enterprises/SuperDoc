@@ -12,11 +12,45 @@ const makeSchema = () =>
         group: 'block',
         content: 'inline*',
         toDOM: () => ['p', 0],
+        attrs: {
+          paragraphProperties: { default: null },
+        },
       },
-      run: { inline: true, group: 'inline', content: 'inline*', toDOM: () => ['span', { 'data-run': '1' }, 0] },
+      run: {
+        inline: true,
+        group: 'inline',
+        content: 'inline*',
+        toDOM: () => ['span', { 'data-run': '1' }, 0],
+        attrs: {
+          runProperties: { default: null },
+        },
+      },
       text: { group: 'inline' },
     },
-    marks: {},
+    marks: {
+      bold: {
+        toDOM: () => ['strong', 0],
+        parseDOM: [{ tag: 'strong' }],
+      },
+      italic: {
+        toDOM: () => ['em', 0],
+        parseDOM: [{ tag: 'em' }],
+      },
+      textStyle: {
+        attrs: {
+          fontFamily: { default: null },
+          fontSize: { default: null },
+        },
+        toDOM: (mark) => [
+          'span',
+          { style: `font-family: ${mark.attrs.fontFamily}; font-size: ${mark.attrs.fontSize}` },
+          0,
+        ],
+        parseDOM: [
+          { tag: 'span', getAttrs: (dom) => ({ fontFamily: dom.style.fontFamily, fontSize: dom.style.fontSize }) },
+        ],
+      },
+    },
   });
 
 const paragraphDoc = (schema) => schema.node('doc', null, [schema.node('paragraph')]);
@@ -29,12 +63,12 @@ describe('wrapTextInRunsPlugin', () => {
     document.body.appendChild(container);
   });
 
-  const createView = (schema, doc) =>
+  const createView = (schema, doc, editor) =>
     new EditorView(container, {
       state: EditorState.create({
         schema,
         doc,
-        plugins: [wrapTextInRunsPlugin()],
+        plugins: [wrapTextInRunsPlugin(editor)],
       }),
       dispatchTransaction(tr) {
         const state = this.state.apply(tr);
@@ -78,5 +112,250 @@ describe('wrapTextInRunsPlugin', () => {
     const paragraph = view.state.doc.firstChild;
     expect(paragraph.firstChild.type.name).toBe('run');
     expect(paragraph.textContent).toBe('あ');
+  });
+
+  describe('resolveRunPropertiesFromParagraphStyle', () => {
+    it('resolves run properties from paragraph styleId', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: {
+            'w:styles': {
+              'w:style': [
+                {
+                  '@w:styleId': 'Heading1',
+                  '@w:type': 'paragraph',
+                  'w:rPr': {
+                    'w:b': {},
+                    'w:sz': { '@w:val': '28' },
+                  },
+                },
+              ],
+            },
+          },
+          numbering: {},
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'Heading1' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('handles missing converter gracefully', () => {
+      const schema = makeSchema();
+      const mockEditor = {}; // No converter
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'Heading1' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('handles missing styleId gracefully', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: {},
+          numbering: {},
+        },
+      };
+
+      const paragraphWithoutStyle = schema.node('paragraph', {
+        paragraphProperties: {},
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithoutStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('extracts ascii property from complex font family object', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: {
+            'w:styles': {
+              'w:style': [
+                {
+                  '@w:styleId': 'TestStyle',
+                  '@w:type': 'paragraph',
+                  'w:rPr': {
+                    'w:rFonts': {
+                      '@w:ascii': 'Arial',
+                      '@w:hAnsi': 'Arial',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          numbering: {},
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'TestStyle' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('handles fontFamily as plain string', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: {
+            'w:styles': {
+              'w:style': [
+                {
+                  '@w:styleId': 'TestStyle',
+                  '@w:type': 'paragraph',
+                  'w:rPr': {
+                    'w:rFonts': 'Times New Roman',
+                  },
+                },
+              ],
+            },
+          },
+          numbering: {},
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'TestStyle' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('falls back when fontFamily object has no ascii property', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: {
+            'w:styles': {
+              'w:style': [
+                {
+                  '@w:styleId': 'TestStyle',
+                  '@w:type': 'paragraph',
+                  'w:rPr': {
+                    'w:rFonts': {
+                      '@w:hAnsi': 'Calibri',
+                    },
+                  },
+                },
+              ],
+            },
+          },
+          numbering: {},
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'TestStyle' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('handles malformed converter context without crashing', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          convertedXml: null, // Malformed
+          numbering: undefined, // Malformed
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'TestStyle' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
+
+    it('handles errors during style resolution gracefully', () => {
+      const schema = makeSchema();
+      const mockEditor = {
+        converter: {
+          get convertedXml() {
+            throw new Error('Converter error');
+          },
+          numbering: {},
+        },
+      };
+
+      const paragraphWithStyle = schema.node('paragraph', {
+        paragraphProperties: { styleId: 'TestStyle' },
+      });
+
+      const doc = schema.node('doc', null, [paragraphWithStyle]);
+      const view = createView(schema, doc, mockEditor);
+
+      const tr = view.state.tr.setSelection(TextSelection.create(view.state.doc, 1)).insertText('Test');
+      view.dispatch(tr);
+
+      const paragraph = view.state.doc.firstChild;
+      expect(paragraph.firstChild.type.name).toBe('run');
+      expect(paragraph.textContent).toBe('Test');
+    });
   });
 });
