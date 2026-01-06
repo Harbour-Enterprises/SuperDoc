@@ -950,7 +950,7 @@ describe('computeParagraphAttrs', () => {
     const styleContext = {
       styles: {},
       defaults: {},
-    } as never;
+    };
 
     const result = computeParagraphAttrs(para, styleContext);
     expect(result?.indent?.firstLine).toBeCloseTo(twipsToPx(14));
