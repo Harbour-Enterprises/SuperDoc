@@ -4,6 +4,9 @@ export { computeTabStops, layoutWithTabs, calculateTabWidth } from './engines/ta
 // Re-export TabStop for external consumers
 export type { TabStop };
 
+// Export table contracts
+export { OOXML_PCT_DIVISOR, type TableWidthAttr, type TableColumnSpec } from './engines/tables.js';
+
 // Export justify utilities
 export {
   shouldApplyJustify,
