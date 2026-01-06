@@ -2554,6 +2554,34 @@ export class DomPainter {
       img.style.height = '100%';
       img.style.objectFit = block.objectFit ?? 'contain';
       img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
+
+      // Apply VML image adjustments (gain/blacklevel) as CSS filters for watermark effects
+      // conversion formulas calculated based on Libreoffice vml reader
+      // https://github.com/LibreOffice/core/blob/951a74d047cfddff78014225f55ecb2bbdcd9c4c/oox/source/vml/vmlshapecontext.cxx#L465C13-L493C1
+      const filters: string[] = [];
+      if (block.gain != null || block.blacklevel != null) {
+        // Convert VML gain to CSS contrast
+        // VML gain is a hex string like "19661f" - higher = more contrast
+        if (block.gain && typeof block.gain === 'string' && block.gain.endsWith('f')) {
+          const contrast = Math.max(0, parseInt(block.gain) / 65536);
+          if (contrast > 0) {
+            filters.push(`contrast(${contrast})`);
+          }
+        }
+
+        // Convert VML blacklevel (brightness) to CSS brightness
+        // VML blacklevel is a hex string like "22938f" - lower - less brightness
+        if (block.blacklevel && typeof block.blacklevel === 'string' && block.blacklevel.endsWith('f')) {
+          const brightness = Math.max(0, 1 + parseInt(block.blacklevel) / 327 / 100) + 0.5; // 0.5 factor added based on visual comparison.
+          if (brightness > 0) {
+            filters.push(`brightness(${brightness})`);
+          }
+        }
+
+        if (filters.length > 0) {
+          img.style.filter = filters.join(' ');
+        }
+      }
       fragmentEl.appendChild(img);
 
       return fragmentEl;

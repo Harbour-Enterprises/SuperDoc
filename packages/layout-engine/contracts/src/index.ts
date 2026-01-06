@@ -529,6 +529,9 @@ export type ImageBlock = {
   anchor?: ImageAnchor;
   wrap?: ImageWrap;
   attrs?: ImageBlockAttrs;
+  // VML image adjustments for watermark effects
+  gain?: string | number; // Brightness/washout (VML hex string or number)
+  blacklevel?: string | number; // Contrast adjustment (VML hex string or number)
 };
 
 export type DrawingKind = 'image' | 'vectorShape' | 'shapeGroup';

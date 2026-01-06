@@ -272,6 +272,10 @@ export function imageNodeToBlock(
     anchor,
     wrap: normalizedWrap,
     attrs: attrsWithPm,
+    // VML image adjustments for watermark effects
+    gain: typeof attrs.gain === 'string' || typeof attrs.gain === 'number' ? attrs.gain : undefined,
+    blacklevel:
+      typeof attrs.blacklevel === 'string' || typeof attrs.blacklevel === 'number' ? attrs.blacklevel : undefined,
   };
 }
 

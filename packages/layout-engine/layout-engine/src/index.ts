@@ -1915,7 +1915,12 @@ export function layoutHeaderFooter(
           );
         }
         const anchoredBlock = block as ImageBlock | DrawingBlock;
-        if (anchoredBlock.anchor?.behindDoc && (fragment.y < minBehindDocY || fragment.y > maxBehindDocY)) {
+        // Skip all behindDoc anchored images (like watermarks) from height calculation
+        if (anchoredBlock.anchor?.behindDoc) {
+          continue;
+        }
+        // For non-behindDoc anchored images, only skip if they're extremely far outside the bounds
+        if (fragment.y < minBehindDocY || fragment.y > maxBehindDocY) {
           continue;
         }
       }

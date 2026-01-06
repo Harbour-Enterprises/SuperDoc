@@ -58,7 +58,9 @@ export function collectPreRegisteredAnchors(blocks: FlowBlock[], measures: Measu
     const drawingBlock = block as ImageBlock | DrawingBlock;
     const drawingMeasure = measure as ImageMeasure | DrawingMeasure;
 
-    if (!drawingBlock.anchor?.isAnchored) continue;
+    if (!drawingBlock.anchor?.isAnchored) {
+      continue;
+    }
 
     // Only pre-register page/margin-relative anchors
     if (isPageRelativeAnchor(drawingBlock)) {
