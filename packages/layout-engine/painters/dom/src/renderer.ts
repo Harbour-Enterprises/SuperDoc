@@ -4256,9 +4256,8 @@ export class DomPainter {
       const hanging = paraIndent?.hanging ?? 0;
       const isFirstLineOfPara = lineIndex === 0 || lineIndex === undefined;
       const firstLineOffsetForCumX = isFirstLineOfPara ? firstLine - hanging : 0;
-      const wordLayout = isMinimalWordLayout((block.attrs as ParagraphAttrs | undefined)?.wordLayout)
-        ? (block.attrs as ParagraphAttrs).wordLayout
-        : undefined;
+      const wordLayoutValue = (block.attrs as ParagraphAttrs | undefined)?.wordLayout;
+      const wordLayout = isMinimalWordLayout(wordLayoutValue) ? wordLayoutValue : undefined;
       const isListParagraph = Boolean(wordLayout?.marker);
       const rawTextStartPx =
         typeof wordLayout?.marker?.textStartX === 'number' && Number.isFinite(wordLayout.marker.textStartX)
