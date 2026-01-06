@@ -937,6 +937,25 @@ describe('computeParagraphAttrs', () => {
     expect(result?.indent?.left).toBeCloseTo(24);
   });
 
+  it('converts small twips indent values from paragraphProperties', () => {
+    const para: PMNode = {
+      attrs: {
+        paragraphProperties: {
+          indent: {
+            firstLine: 14,
+          },
+        },
+      },
+    };
+    const styleContext = {
+      styles: {},
+      defaults: {},
+    } as never;
+
+    const result = computeParagraphAttrs(para, styleContext);
+    expect(result?.indent?.firstLine).toBeCloseTo(twipsToPx(14));
+  });
+
   it('should not force first-line indent mode when paragraph overrides numbering firstLine', () => {
     const para: PMNode = {
       attrs: {

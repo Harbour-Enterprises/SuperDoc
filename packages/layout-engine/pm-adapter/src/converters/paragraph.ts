@@ -16,6 +16,7 @@ import type {
   TrackedChangeMeta,
   SdtMetadata,
   ParagraphAttrs,
+  ParagraphIndent,
   FieldAnnotationRun,
   FieldAnnotationMetadata,
 } from '@superdoc/contracts';
@@ -54,7 +55,7 @@ import { textNodeToRun, tabNodeToRun, tokenNodeToRun } from './text-run.js';
 import { contentBlockNodeToDrawingBlock } from './content-block.js';
 import { DEFAULT_HYPERLINK_CONFIG, TOKEN_INLINE_TYPES } from '../constants.js';
 import { createLinkedStyleResolver, applyLinkedStyleToRun, extractRunStyleId } from '../styles/linked-run.js';
-import { ptToPx, pickNumber, isPlainObject } from '../utilities.js';
+import { ptToPx, pickNumber, isPlainObject, convertIndentTwipsToPx } from '../utilities.js';
 import { resolveStyle } from '@superdoc/style-engine';
 
 // ============================================================================
@@ -725,10 +726,17 @@ export function paragraphToFlowBlocks(
         : paragraphProps.spacing !== undefined
           ? paragraphProps.spacing
           : paragraphHydration?.spacing;
-    const indentSource = para.attrs?.indent ?? paragraphProps.indent ?? paragraphHydration?.indent;
+    const toIndentObject = (value: unknown): ParagraphIndent | undefined =>
+      value && typeof value === 'object' ? (value as ParagraphIndent) : undefined;
+    const attrsIndent = toIndentObject(para.attrs?.indent);
+    const paragraphIndent = toIndentObject(paragraphProps.indent);
+    const hydratedIndent = toIndentObject(paragraphHydration?.indent);
     const normalizedSpacing = normalizeParagraphSpacing(spacingSource);
     const normalizedIndent =
-      normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? para.attrs?.textIndent);
+      (attrsIndent && (normalizePxIndent(attrsIndent) ?? convertIndentTwipsToPx(attrsIndent))) ??
+      (paragraphIndent && convertIndentTwipsToPx(paragraphIndent)) ??
+      (hydratedIndent && convertIndentTwipsToPx(hydratedIndent)) ??
+      normalizeParagraphIndent(para.attrs?.textIndent);
     const styleNodeAttrs =
       paragraphHydration?.tabStops && !para.attrs?.tabStops && !para.attrs?.tabs
         ? { ...(para.attrs ?? {}), tabStops: paragraphHydration.tabStops }

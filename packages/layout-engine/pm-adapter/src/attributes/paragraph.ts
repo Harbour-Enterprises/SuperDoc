@@ -1026,9 +1026,13 @@ export const computeParagraphAttrs = (
   // defaults for unspecified fields (e.g., before/after from docDefaults).
   const mergedSpacing = mergeSpacingSources(hydrated?.spacing, paragraphProps.spacing, attrs.spacing);
   const normalizedSpacing = normalizeParagraphSpacing(mergedSpacing);
-  const indentSource = attrs.indent ?? paragraphProps.indent ?? hydrated?.indent;
   const normalizedIndent =
-    normalizePxIndent(indentSource) ?? normalizeParagraphIndent(indentSource ?? attrs.textIndent);
+    (attrs.indent && (normalizePxIndent(attrs.indent) ?? convertIndentTwipsToPx(attrs.indent))) ??
+    (paragraphProps.indent && convertIndentTwipsToPx(paragraphProps.indent)) ??
+    (hydrated?.indent && convertIndentTwipsToPx(hydrated?.indent)) ??
+    normalizeParagraphIndent(attrs.textIndent);
+
+  console.log('[debug] normalizedIndent:', normalizedIndent);
 
   /**
    * Unwraps and normalizes tab stop data structures from various formats.
