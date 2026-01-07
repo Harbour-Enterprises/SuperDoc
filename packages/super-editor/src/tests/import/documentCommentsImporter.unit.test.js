@@ -240,6 +240,34 @@ describe('importCommentData extended metadata', () => {
     expect(comment.isDone).toBe(false);
     expect(comment.parentCommentId).toBeUndefined();
   });
+
+  it('resolves parent by last paragraph paraId when comment has multiple paragraphs', () => {
+    const docx = buildDocx({
+      comments: [
+        {
+          id: 2,
+          internalId: 'parent-comment',
+          // Parent has TWO paragraphs: first='FIRST-PARA', last='LAST-PARA'
+          elements: [{ fakeParaId: 'FIRST-PARA' }, { fakeParaId: 'LAST-PARA' }],
+        },
+        {
+          id: 3,
+          internalId: 'child-comment',
+          elements: [{ fakeParaId: 'CHILD-PARA' }],
+        },
+      ],
+      extended: [
+        { paraId: 'LAST-PARA', done: '0' },
+        // Child points to LAST paragraph of parent (per OOXML spec)
+        { paraId: 'CHILD-PARA', done: '0', parent: 'LAST-PARA' },
+      ],
+    });
+
+    const comments = importCommentData({ docx });
+    const child = comments.find((c) => c.commentId === 'child-comment');
+
+    expect(child.parentCommentId).toBe('parent-comment');
+  });
 });
 
 describe('Google Docs threading (missing commentsExtended.xml)', () => {
