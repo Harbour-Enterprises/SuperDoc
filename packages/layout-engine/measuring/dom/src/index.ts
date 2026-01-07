@@ -1626,6 +1626,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               tabStopCursor = 0;
               pendingTabAlignment = null;
               lastAppliedTabAlign = null;
+              activeTabGroup = null;
 
               // Body line, so use bodyContentWidth for hanging indent
               currentLine = {
@@ -1647,7 +1648,20 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               currentLine.width = roundValue(currentLine.width + boundarySpacing + singleSpaceWidth);
               currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
               currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
-              appendSegment(currentLine.segments, runIndex, spaceStartChar, spaceEndChar, singleSpaceWidth);
+              // If in an active tab alignment group, use explicit X positioning
+              let spaceExplicitX: number | undefined;
+              if (inActiveTabGroup && activeTabGroup) {
+                spaceExplicitX = activeTabGroup.currentX;
+                activeTabGroup.currentX = roundValue(activeTabGroup.currentX + singleSpaceWidth);
+              }
+              appendSegment(
+                currentLine.segments,
+                runIndex,
+                spaceStartChar,
+                spaceEndChar,
+                singleSpaceWidth,
+                spaceExplicitX,
+              );
               currentLine.spaceCount += 1;
             }
           }

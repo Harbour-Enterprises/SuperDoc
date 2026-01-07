@@ -677,6 +677,46 @@ describe('measureBlock', () => {
       expect(firstTextSegment!.x).toBeLessThan(300);
     });
 
+    it('positions leading spaces correctly in tab alignment groups', async () => {
+      // Regression test: leading spaces in runs after a tab must advance the X position.
+      // Bug: " of " run's leading space was positioned but didn't update activeTabGroup.currentX,
+      // causing "of " to overlap with the space at the same X position.
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'space-positioning-test',
+        runs: [
+          { kind: 'tab' } as Run,
+          { text: 'A', fontFamily: 'Arial', fontSize: 12 },
+          { text: ' B', fontFamily: 'Arial', fontSize: 12 }, // Leading space before B
+        ],
+        attrs: {
+          tabs: [{ pos: 200, val: 'end' }],
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 300));
+      expect(measure.lines).toHaveLength(1);
+
+      const segments = measure.lines[0].segments!;
+      // Should have: tab segment, "A" segment, " " (space) segment, "B" segment
+      // Find segments by content
+      const textSegments = segments.filter((s) => s.runIndex > 0);
+      expect(textSegments.length).toBeGreaterThanOrEqual(3); // A, space, B (at minimum)
+
+      // All text segments should have explicit X positions (in tab alignment group)
+      for (const seg of textSegments) {
+        expect(seg.x).toBeDefined();
+      }
+
+      // Verify segments don't overlap: each segment's X should be >= previous segment's X + width
+      for (let i = 1; i < textSegments.length; i++) {
+        const prev = textSegments[i - 1];
+        const curr = textSegments[i];
+        // Current X should be at or after previous segment ends
+        expect(curr.x).toBeGreaterThanOrEqual(prev.x! + prev.width - 0.5); // Allow small rounding tolerance
+      }
+    });
+
     it('converts spacing multipliers using the baseline line height', async () => {
       const fontSize = 16;
       const block: FlowBlock = {
