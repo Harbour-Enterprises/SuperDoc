@@ -6320,7 +6320,8 @@ export class PresentationEditor extends EventEmitter {
     // Calculate actual document dimensions from per-page sizes.
     // Multi-section documents can have pages with different sizes (e.g., landscape pages).
     const pages = this.#layoutState.layout?.pages;
-    const pageGap = this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap();
+    // Always use current layout mode's gap - layout.pageGap may be stale if layoutMode changed
+    const pageGap = this.#getEffectivePageGap();
     const defaultWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
     const defaultHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
 
