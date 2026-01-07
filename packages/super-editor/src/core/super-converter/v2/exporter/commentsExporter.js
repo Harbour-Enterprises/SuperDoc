@@ -155,23 +155,22 @@ export const determineExportStrategy = (comments) => {
  * @param {Array[Object]} comments The comments list
  * @param {Object} commentsExtendedXml The commentsExtended.xml structure as JSON
  * @param {'word' | 'google-docs' | 'unknown'} exportStrategy The export strategy to use
- * @returns {Object} The updated commentsExtended structure
+ * @returns {Object | null} The updated commentsExtended structure, or null if it shouldn't be generated
  */
 export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml, exportStrategy = 'word') => {
-  const xmlCopy = carbonCopy(commentsExtendedXml);
-
   // For Google Docs origin, check if original had commentsExtended.xml
-  // If not, we may skip generating it (threading will be range-based in document.xml)
-  // For compatibility, we'll still generate it but threading relies on range nesting
+  // If not, we skip generating it entirely (threading will be range-based in document.xml)
+  // The importer only uses range-based threading when the file is missing, not when it's empty
   const shouldGenerateCommentsExtended =
     exportStrategy === 'word' || comments.some((c) => c.originalXmlStructure?.hasCommentsExtended);
 
   if (!shouldGenerateCommentsExtended && exportStrategy === 'google-docs') {
-    // For Google Docs without original commentsExtended.xml, return empty structure
+    // For Google Docs without original commentsExtended.xml, return null to skip file generation
     // Threading will be handled via range nesting in document.xml
-    xmlCopy.elements[0].elements = [];
-    return xmlCopy;
+    return null;
   }
+
+  const xmlCopy = carbonCopy(commentsExtendedXml);
 
   const commentsEx = comments.map((comment) => {
     const attributes = {
@@ -343,16 +342,20 @@ export const prepareCommentsXmlFilesForExport = ({ convertedXml, defs, commentsW
   updatedXml['word/comments.xml'] = updateCommentsXml(defs, updatedXml['word/comments.xml']);
   relationships.push(generateRelationship('comments.xml'));
 
-  updatedXml['word/commentsExtended.xml'] = updateCommentsExtendedXml(
+  const commentsExtendedXml = updateCommentsExtendedXml(
     commentsWithParaIds,
     updatedXml['word/commentsExtended.xml'],
     exportStrategy,
   );
 
-  // Only add relationship if we're actually generating commentsExtended.xml content
-  const commentsExtendedHasContent = updatedXml['word/commentsExtended.xml']?.elements?.[0]?.elements?.length > 0;
-  if (commentsExtendedHasContent) {
+  // Only add the file and relationship if we're actually generating commentsExtended.xml
+  // For Google Docs without original commentsExtended.xml, we skip it entirely to preserve range-based threading
+  if (commentsExtendedXml !== null) {
+    updatedXml['word/commentsExtended.xml'] = commentsExtendedXml;
     relationships.push(generateRelationship('commentsExtended.xml'));
+  } else {
+    // Remove the file from the XML structure so the importer uses range-based threading
+    delete updatedXml['word/commentsExtended.xml'];
   }
 
   // Generate updates for documentIds.xml and commentsExtensible.xml here
@@ -367,7 +370,6 @@ export const prepareCommentsXmlFilesForExport = ({ convertedXml, defs, commentsW
   relationships.push(generateRelationship('commentsIds.xml'));
   relationships.push(generateRelationship('commentsExtensible.xml'));
 
-  // Generate export-ready files
   return {
     relationships,
     documentXml: updatedXml,

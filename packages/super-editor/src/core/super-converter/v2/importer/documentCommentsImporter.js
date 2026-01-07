@@ -97,7 +97,6 @@ export function importCommentData({ docx, editor, converter }) {
 const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   if (!comments?.length) return [];
 
-  // Always extract range data to get tracked change relationships
   const rangeData = extractCommentRangesFromDocument(docx, converter);
   const { commentsInTrackedChanges } = rangeData;
   const trackedChangeParentMap = detectThreadingFromTrackedChanges(comments, commentsInTrackedChanges);
@@ -116,21 +115,13 @@ const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   const commentEx = elements.filter((el) => el.name === 'w15:commentEx');
 
   return comments.map((comment) => {
-    // 1. Find extended definition for additional metadata (isDone, parent)
     const extendedDef = commentEx.find((ce) => {
-      // Check if any of the comment's elements are included in the extended comment's elements
-      // Comments might have multiple elements, so we need to check if any of them are included in the extended comments
-      const isIncludedInCommentElements = comment.elements?.some(
-        (el) => el.attrs?.['w14:paraId'] === ce.attributes['w15:paraId'],
-      );
-      return isIncludedInCommentElements;
+      return comment.elements?.some((el) => el.attrs?.['w14:paraId'] === ce.attributes['w15:paraId']);
     });
 
     let isDone = comment.isDone ?? false;
     let parentCommentId = undefined;
 
-    // Check if this comment is part of a tracked change
-    // If inside a tracked change, it takes precedence as parent (flattening the thread)
     const trackedChangeParent = trackedChangeParentMap.get(comment.importedId);
     const isInsideTrackedChange = trackedChangeParent && trackedChangeParent.isTrackedChangeParent;
 
@@ -192,8 +183,8 @@ const extractCommentRangesFromDocument = (docx, converter) => {
   const commentsInTrackedChanges = new Map();
   let positionIndex = 0;
   let lastElementWasCommentMarker = false;
-  // Track recently closed comments that might be associated with adjacent tracked changes
   const recentlyClosedComments = new Set();
+  let lastTrackedChange = null;
 
   const walkElements = (elements, currentTrackedChangeId = null) => {
     if (!elements || !Array.isArray(elements)) return;
@@ -221,7 +212,6 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           }
         }
         lastElementWasCommentMarker = true;
-        // Clear recently closed comments when a new comment starts
         recentlyClosedComments.clear();
       } else if (isCommentEnd) {
         const commentId = element.attributes?.['w:id'];
@@ -236,38 +226,61 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           } else {
             rangePositions.get(id).endIndex = positionIndex;
           }
-          // Track this comment as recently closed - it might be associated with an adjacent deletion
           recentlyClosedComments.add(id);
         }
         lastElementWasCommentMarker = true;
       } else if (isTrackedChange) {
         const trackedChangeId = element.attributes?.['w:id'];
+        const author = element.attributes?.['w:author'];
+        const date = element.attributes?.['w:date'];
+        const elementType = element.name;
         let mappedId = trackedChangeId;
+        let isReplacement = false;
 
         if (trackedChangeId !== undefined && converter) {
           if (!converter.trackedChangeIdMap) {
             converter.trackedChangeIdMap = new Map();
           }
 
-          if (!converter.trackedChangeIdMap.has(String(trackedChangeId))) {
-            converter.trackedChangeIdMap.set(String(trackedChangeId), uuidv4());
+          // Word uses different IDs for deletion and insertion in replacements, link them by same author/date
+          if (
+            lastTrackedChange &&
+            lastTrackedChange.type !== elementType &&
+            lastTrackedChange.author === author &&
+            lastTrackedChange.date === date
+          ) {
+            mappedId = lastTrackedChange.mappedId;
+            converter.trackedChangeIdMap.set(String(trackedChangeId), mappedId);
+            isReplacement = true;
+          } else {
+            if (!converter.trackedChangeIdMap.has(String(trackedChangeId))) {
+              converter.trackedChangeIdMap.set(String(trackedChangeId), uuidv4());
+            }
+            mappedId = converter.trackedChangeIdMap.get(String(trackedChangeId));
           }
-          mappedId = converter.trackedChangeIdMap.get(String(trackedChangeId));
         }
 
-        // For deletions, associate recently closed comments that ended just before this deletion
-        // This handles the case where Word places comment ranges before w:del elements
-        // For insertions, we also check recently closed comments in case they're adjacent
+        if (currentTrackedChangeId === null) {
+          if (isReplacement) {
+            lastTrackedChange = null;
+          } else {
+            lastTrackedChange = {
+              type: elementType,
+              author,
+              date,
+              mappedId,
+              wordId: String(trackedChangeId),
+            };
+          }
+        }
+
         if (mappedId && recentlyClosedComments.size > 0) {
           recentlyClosedComments.forEach((commentId) => {
-            // Only associate if the comment isn't already associated with another tracked change
             if (!commentsInTrackedChanges.has(commentId)) {
               commentsInTrackedChanges.set(commentId, String(mappedId));
             }
           });
         }
-        // Clear recently closed comments after processing this tracked change
-        // This prevents associating comments with later tracked changes
         recentlyClosedComments.clear();
 
         if (element.elements && Array.isArray(element.elements)) {
@@ -279,10 +292,9 @@ const extractCommentRangesFromDocument = (docx, converter) => {
           lastElementWasCommentMarker = false;
         }
 
-        // Clear recently closed comments when we encounter a new paragraph
-        // This prevents associating comments from one paragraph with tracked changes in another
         if (element.name === 'w:p') {
           recentlyClosedComments.clear();
+          lastTrackedChange = null;
         }
 
         if (element.elements && Array.isArray(element.elements)) {

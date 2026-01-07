@@ -12,6 +12,7 @@ import { CommentMarkName } from './comments-constants.js';
 // Example tracked-change keys, if needed
 import { TrackInsertMarkName, TrackDeleteMarkName, TrackFormatMarkName } from '../track-changes/constants.js';
 import { TrackChangesBasePluginKey } from '../track-changes/plugins/index.js';
+import { getTrackChanges } from '../track-changes/trackChangesHelpers/getTrackChanges.js';
 import { comments_module_events } from '@superdoc/common';
 import { normalizeCommentEventPayload, updatePosition } from './helpers/index.js';
 import { v4 as uuidv4 } from 'uuid';
@@ -606,16 +607,51 @@ const handleTrackedChangeTransaction = (trackedChangeMeta, trackedChanges, newEd
   return newTrackedChanges;
 };
 
-const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion }) => {
+const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsertion, marks }) => {
+  console.log('=== getTrackedChangeText DEBUG ===');
+  console.log('trackedChangeType:', trackedChangeType);
+  console.log('isDeletionInsertion:', isDeletionInsertion);
+  console.log(
+    'nodes received:',
+    nodes?.map((n) => ({
+      type: n.type?.name,
+      text: n.text || n.textContent,
+      marks: n.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+    })),
+  );
+
   let trackedChangeText = '';
   let deletionText = '';
 
-  if (trackedChangeType === TrackInsertMarkName) {
-    trackedChangeText = nodes.reduce((acc, node) => {
-      if (!node.marks.find((nodeMark) => nodeMark.type.name === mark.type.name)) return acc;
-      acc += node?.text || node?.textContent || '';
+  // Extract deletion text first
+  if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
+    console.log('Extracting deletion text...');
+    deletionText = nodes.reduce((acc, node) => {
+      const hasDeleteMark = node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName);
+      console.log('  node:', { type: node.type?.name, text: node.text || node.textContent });
+      console.log('  hasDeleteMark:', hasDeleteMark);
+      if (!hasDeleteMark) return acc;
+      const nodeText = node?.text || node?.textContent || '';
+      console.log('  adding node text:', nodeText);
+      acc += nodeText;
       return acc;
     }, '');
+    console.log('final deletionText:', deletionText);
+  }
+
+  if (trackedChangeType === TrackInsertMarkName || isDeletionInsertion) {
+    console.log('Extracting insertion text...');
+    trackedChangeText = nodes.reduce((acc, node) => {
+      const hasInsertMark = node.marks.find((nodeMark) => nodeMark.type.name === TrackInsertMarkName);
+      console.log('  node:', { type: node.type?.name, text: node.text || node.textContent });
+      console.log('  hasInsertMark:', hasInsertMark);
+      if (!hasInsertMark) return acc;
+      const nodeText = node?.text || node?.textContent || '';
+      console.log('  adding node text:', nodeText);
+      acc += nodeText;
+      return acc;
+    }, '');
+    console.log('final trackedChangeText:', trackedChangeText);
   }
 
   // If this is a format change, let's get the string of what changes were made
@@ -623,14 +659,11 @@ const getTrackedChangeText = ({ nodes, mark, trackedChangeType, isDeletionInsert
     trackedChangeText = translateFormatChangesToEnglish(mark.attrs);
   }
 
-  if (trackedChangeType === TrackDeleteMarkName || isDeletionInsertion) {
-    deletionText = nodes.reduce((acc, node) => {
-      if (!node.marks.find((nodeMark) => nodeMark.type.name === TrackDeleteMarkName)) return acc;
-      acc += node?.text || node?.textContent || '';
-      return acc;
-    }, '');
-  }
-
+  console.log('=== FINAL RESULT ===');
+  console.log('returning tracked change text', {
+    deletionText,
+    trackedChangeText,
+  });
   return {
     deletionText,
     trackedChangeText,
@@ -646,20 +679,122 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
   const id = attrs.id;
 
   const node = nodes[0];
-  const isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
+  // Use getTrackChanges to find all tracked changes with the matching ID
+  // This will find both insertion and deletion marks if they exist with the same ID
+  const trackedChangesWithId = getTrackChanges(newEditorState, id);
 
+  // Check metadata first - this should be set correctly by groupChanges() in createCommentForTrackChanges
+  // for both newly created and imported tracked changes
+  let isDeletionInsertion = !!(marks.insertedMark && marks.deletionMark);
+
+  // Fallback: If metadata doesn't indicate replacement (e.g., edge cases during import),
+  // check the document state directly to detect replacements by finding both marks with same ID
+  // This ensures robustness even if groupChanges() misses a replacement or metadata isn't set
+  if (!isDeletionInsertion) {
+    const hasInsertMark = trackedChangesWithId.some(({ mark }) => mark.type.name === TrackInsertMarkName);
+    const hasDeleteMark = trackedChangesWithId.some(({ mark }) => mark.type.name === TrackDeleteMarkName);
+    isDeletionInsertion = hasInsertMark && hasDeleteMark;
+  }
+
+  console.log(
+    'trackedChangesWithId from getTrackChanges:',
+    trackedChangesWithId?.map(({ mark, from, to }) => ({
+      markType: mark.type.name,
+      markId: mark.attrs.id,
+      from,
+      to,
+    })),
+  );
+
+  console.log('=== createOrUpdateTrackedChangeComment DEBUG ===');
+  console.log('isDeletionInsertion:', isDeletionInsertion);
+  console.log('trackedChangeType:', trackedChangeType);
+  console.log('id:', id);
+  console.log('marks.insertedMark:', marks.insertedMark?.attrs);
+  console.log('marks.deletionMark:', marks.deletionMark?.attrs);
+  console.log(
+    'nodes from step.slice:',
+    nodes?.map((n) => ({
+      type: n.type?.name,
+      text: n.text || n.textContent,
+      marks: n.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+    })),
+  );
+  console.log(
+    'deletionNodes:',
+    deletionNodes?.map((n) => ({
+      type: n.type?.name,
+      text: n.text || n.textContent,
+      marks: n.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+    })),
+  );
+
+  // Collect nodes from the tracked changes found
+  // We need to get the actual nodes at those positions
   let nodesWithMark = [];
-  newEditorState.doc.descendants((node) => {
-    const { marks = [] } = node;
-    const changeMarks = marks.filter((mark) => TRACK_CHANGE_MARKS.includes(mark.type.name));
-    if (!changeMarks.length) return;
-    const hasMatchingId = changeMarks.find((mark) => mark.attrs.id === id);
-    if (hasMatchingId) nodesWithMark.push(node);
+  trackedChangesWithId.forEach(({ from, to, mark }) => {
+    console.log(`Collecting nodes for ${mark.type.name} from ${from} to ${to}`);
+    newEditorState.doc.nodesBetween(from, to, (node, pos) => {
+      console.log(
+        `  Found node at pos ${pos}: type=${node.type?.name}, isText=${node.isText}, text="${node.text || node.textContent}", marks=`,
+        node.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+      );
+      // Only collect inline text nodes
+      if (node.isText) {
+        // Check if this node has the mark (it should, since getTrackChanges found it)
+        const hasMatchingMark = node.marks?.some((m) => TRACK_CHANGE_MARKS.includes(m.type.name) && m.attrs.id === id);
+        console.log(
+          `    hasMatchingMark: ${hasMatchingMark}, pos check: ${pos} >= ${from} && ${pos + node.nodeSize} <= ${to}`,
+        );
+        if (hasMatchingMark) {
+          // Check if we already have this node (by reference, not by content)
+          const alreadyAdded = nodesWithMark.some((n) => n === node);
+          if (!alreadyAdded) {
+            console.log(`    Adding node to nodesWithMark`);
+            nodesWithMark.push(node);
+          } else {
+            console.log(`    Node already in nodesWithMark, skipping`);
+          }
+        }
+      }
+    });
   });
+
+  console.log(
+    'nodesWithMark from document:',
+    nodesWithMark?.map((n) => ({
+      type: n.type?.name,
+      text: n.text || n.textContent,
+      marks: n.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+    })),
+  );
+
+  // For replacements, we need both insertion nodes and deletion nodes
+  // When isDeletionInsertion is true, nodesWithMark should contain both types
+  let nodesToUse;
+  if (isDeletionInsertion) {
+    // For replacements, use nodes found in document (which should include both insertion and deletion)
+    // Also include nodes from step.slice and deletionNodes if they exist (for newly created replacements)
+    const allNodes = [...nodesWithMark, ...nodes, ...(deletionNodes || [])];
+    // Remove duplicates by comparing node identity
+    nodesToUse = Array.from(new Set(allNodes));
+  } else {
+    // For non-replacements, use nodes found in document or fall back to step nodes
+    nodesToUse = nodesWithMark.length ? nodesWithMark : [node];
+  }
+
+  console.log(
+    'final nodesToUse:',
+    nodesToUse?.map((n) => ({
+      type: n.type?.name,
+      text: n.text || n.textContent,
+      marks: n.marks?.map((m) => ({ name: m.type.name, id: m.attrs.id })),
+    })),
+  );
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    nodes: nodesWithMark.length ? nodesWithMark : [node],
+    nodes: nodesToUse,
     mark: trackedMark,
     marks,
     trackedChangeType,
