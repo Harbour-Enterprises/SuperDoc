@@ -74,8 +74,8 @@ describe('VML Watermark Integration Tests', () => {
         type: 'image',
         attrs: expect.objectContaining({
           src: 'word/media/balloons.png',
-          alt: 'Baloons',
-          title: 'Baloons',
+          alt: 'Balloons',
+          title: 'Balloons',
           extension: 'png',
           rId: 'rId1',
           vmlWatermark: true,
@@ -319,7 +319,7 @@ describe('VML Watermark Integration Tests', () => {
                 name: 'v:imagedata',
                 attributes: {
                   'r:id': 'rId1',
-                  'o:title': 'Baloons',
+                  'o:title': 'Balloons',
                   gain: '19661f',
                   blacklevel: '22938f',
                 },

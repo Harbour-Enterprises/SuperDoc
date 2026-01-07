@@ -7,10 +7,10 @@ describe('Watermark End-to-End Test', () => {
     const watermarkPmNode = {
       type: { name: 'image' },
       attrs: {
-        src: 'word/media/baloons.png',
-        alt: 'Baloons',
+        src: 'word/media/balloons.png',
+        alt: 'Balloons',
         extension: 'png',
-        title: 'Baloons',
+        title: 'Balloons',
         rId: 'rId1',
         vmlWatermark: true,
         vmlStyle: 'position:absolute;margin-left:0;margin-top:0;width:466.55pt;height:233.25pt;z-index:-251653120',
@@ -21,7 +21,7 @@ describe('Watermark End-to-End Test', () => {
         },
         vmlImagedata: {
           'r:id': 'rId1',
-          'o:title': 'Baloons',
+          'o:title': 'Balloons',
           gain: '19661f',
           blacklevel: '22938f',
         },
@@ -61,7 +61,7 @@ describe('Watermark End-to-End Test', () => {
 
     expect(imageBlock).not.toBeNull();
     expect(imageBlock.kind).toBe('image');
-    expect(imageBlock.src).toBe('word/media/baloons.png');
+    expect(imageBlock.src).toBe('word/media/balloons.png');
 
     // Check anchor properties
     expect(imageBlock.anchor).toBeDefined();

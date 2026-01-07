@@ -133,7 +133,7 @@ describe('pictNodeTypeStrategy', () => {
             name: 'v:imagedata',
             attributes: {
               'r:id': 'rId1',
-              'o:title': 'Baloons',
+              'o:title': 'Balloons',
             },
           },
         ],
