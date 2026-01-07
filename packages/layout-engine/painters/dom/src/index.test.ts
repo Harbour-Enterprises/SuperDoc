@@ -2435,6 +2435,155 @@ describe('DomPainter', () => {
     expect(headerEl?.textContent).toBe('Page 1 of 1');
   });
 
+  it('renders behindDoc header images directly on page, not in header container', () => {
+    // Per OOXML spec, behindDoc images should render behind body content.
+    // This requires placing them directly on the page element (not in header container)
+    // because the header container has z-index: 1 which creates a stacking context.
+    const behindDocImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'behind-doc-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 200,
+      height: 100,
+      anchor: { behindDoc: true },
+    };
+    const behindDocImageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 100,
+    };
+
+    const normalImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'normal-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 50,
+      height: 30,
+    };
+    const normalImageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 30,
+    };
+
+    // behindDoc fragment has zIndex: 0 (set by layout engine)
+    const behindDocFragment = {
+      kind: 'image' as const,
+      blockId: 'behind-doc-img',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+      zIndex: 0, // behindDoc images get zIndex: 0
+      isAnchored: true,
+    };
+
+    // Normal fragment in header
+    const normalFragment = {
+      kind: 'image' as const,
+      blockId: 'normal-img',
+      x: 10,
+      y: 10,
+      width: 50,
+      height: 30,
+    };
+
+    const painter = createDomPainter({
+      blocks: [block, behindDocImageBlock, normalImageBlock],
+      measures: [measure, behindDocImageMeasure, normalImageMeasure],
+      headerProvider: () => ({
+        fragments: [behindDocFragment, normalFragment],
+        height: 100,
+      }),
+    });
+
+    painter.paint({ ...layout, pages: [{ ...layout.pages[0], number: 1 }] }, mount);
+
+    const headerEl = mount.querySelector('.superdoc-page-header');
+    expect(headerEl).toBeTruthy();
+
+    // behindDoc image should NOT be inside header container
+    const behindDocInHeader = headerEl?.querySelector('img[src*="base64"]');
+    // Normal image should be inside header container
+    const normalInHeader = headerEl?.querySelectorAll('.superdoc-fragment');
+
+    // The header should contain only the normal fragment, not the behindDoc one
+    // behindDoc fragment is rendered directly on the page element
+    expect(normalInHeader?.length).toBe(1);
+
+    // behindDoc image should be rendered directly on page with z-index: 0
+    const pageEl = mount.querySelector('.superdoc-page');
+    const allImagesOnPage = pageEl?.querySelectorAll(':scope > .superdoc-fragment img');
+    // One of these should be the behindDoc image rendered directly on the page
+    expect(allImagesOnPage?.length).toBeGreaterThanOrEqual(1);
+
+    // Find the behindDoc fragment on the page (direct child with z-index: 0 and data attribute)
+    const directFragments = pageEl?.querySelectorAll(':scope > .superdoc-fragment');
+    let foundBehindDoc = false;
+    directFragments?.forEach((frag) => {
+      const el = frag as HTMLElement;
+      if (el.style.zIndex === '0' && el.dataset.behindDocSection === 'header') {
+        foundBehindDoc = true;
+      }
+    });
+    expect(foundBehindDoc).toBe(true);
+  });
+
+  it('cleans up behindDoc fragments on re-render (no accumulation)', () => {
+    // This test verifies that behindDoc fragments don't accumulate across re-renders.
+    // Since they're inserted directly on the page (not in header container), they must
+    // be explicitly removed before re-rendering.
+    const behindDocImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'behind-doc-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 200,
+      height: 100,
+      anchor: { behindDoc: true },
+    };
+    const behindDocImageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 100,
+    };
+
+    const behindDocFragment = {
+      kind: 'image' as const,
+      blockId: 'behind-doc-img',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+      zIndex: 0,
+      isAnchored: true,
+    };
+
+    const painter = createDomPainter({
+      blocks: [block, behindDocImageBlock],
+      measures: [measure, behindDocImageMeasure],
+      headerProvider: () => ({
+        fragments: [behindDocFragment],
+        height: 100,
+      }),
+    });
+
+    const testLayout = { ...layout, pages: [{ ...layout.pages[0], number: 1 }] };
+
+    // First render
+    painter.paint(testLayout, mount);
+
+    // Second render (simulates incremental update)
+    painter.paint(testLayout, mount);
+
+    // Third render
+    painter.paint(testLayout, mount);
+
+    // Should only have ONE behindDoc fragment, not three
+    const pageEl = mount.querySelector('.superdoc-page');
+    const behindDocElements = pageEl?.querySelectorAll('[data-behind-doc-section="header"]');
+    expect(behindDocElements?.length).toBe(1);
+  });
+
   it('applies track-change classes and metadata when rendering review mode', () => {
     const trackedBlock: FlowBlock = {
       kind: 'paragraph',
