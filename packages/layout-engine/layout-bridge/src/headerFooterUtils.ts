@@ -297,17 +297,28 @@ export function buildMultiSectionIdentifier(
  * - Alternate headers (even/odd pages based on physical page number)
  * - Fallback to default variant
  *
+ * **Important**: When `titlePg` is enabled, this function returns 'first' even if the
+ * section doesn't explicitly define a 'first' header/footer. This supports Word's
+ * inheritance behavior where sections inherit header/footer definitions from previous
+ * sections. The rendering layer is responsible for resolving the actual content ID
+ * through inheritance fallback logic.
+ *
  * @param pageNumber - Physical page number (1-indexed)
  * @param sectionIndex - Index of the section this page belongs to
  * @param identifier - Multi-section identifier with per-section mappings
- * @param options - Optional settings (kind: 'header' | 'footer')
- * @returns HeaderFooterType ('default' | 'first' | 'even' | 'odd') or null if none available
+ * @param options - Optional settings (kind: 'header' | 'footer', sectionPageNumber)
+ * @returns HeaderFooterType ('default' | 'first' | 'even' | 'odd') or null if no header/footer content exists
  *
  * @example
  * ```typescript
- * // First page of section 1 with titlePg enabled
- * const type = getHeaderFooterTypeForSection(1, 1, identifier, { kind: 'footer' });
- * // Returns 'first' if section 1 has a 'first' footer
+ * // First page of section 1 with titlePg enabled and 'first' header defined
+ * const type = getHeaderFooterTypeForSection(1, 1, identifier, { kind: 'header' });
+ * // Returns 'first'
+ *
+ * // First page of section 2 with titlePg enabled but NO 'first' header defined
+ * // (section 2 only has 'default' header)
+ * const type = getHeaderFooterTypeForSection(2, 1, identifier, { kind: 'header' });
+ * // Returns 'first' - rendering layer will inherit from section 1's 'first' header
  * ```
  */
 export function getHeaderFooterTypeForSection(
@@ -342,9 +353,11 @@ export function getHeaderFooterTypeForSection(
   // Use the section-relative page number to determine "first page" variants
   const isFirstPageOfSection = sectionPageNumber === 1;
   if (isFirstPageOfSection && titlePgEnabled) {
-    // If no first variant exists, Word suppresses header/footer on the first page.
-    if (hasFirst) return 'first';
-    if (!hasDefault && !hasEven && !hasOdd) return null;
+    // Return 'first' variant type when titlePg is enabled, regardless of whether this section
+    // has a 'first' header defined. Word inherits headers from previous sections when not defined,
+    // so we let the rendering layer handle the inheritance/fallback logic.
+    // Only return null if there's absolutely no header content anywhere.
+    if (hasFirst || hasDefault || hasEven || hasOdd) return 'first';
     return null;
   }
 

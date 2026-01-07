@@ -205,6 +205,14 @@ export async function incrementalLayout(
    */
   let headerContentHeights: Partial<Record<'default' | 'first' | 'even' | 'odd', number>> | undefined;
 
+  /**
+   * Actual measured header content heights per relationship ID.
+   * Used for multi-section documents where each section may have unique headers.
+   * Keys are relationship IDs (e.g., 'rId6', 'rId7').
+   * Values are the actual content heights in pixels.
+   */
+  let headerContentHeightsByRId: Map<string, number> | undefined;
+
   // Check if we have headers via either headerBlocks (by variant) or headerBlocksByRId (by relationship ID)
   const hasHeaderBlocks = headerFooter?.headerBlocks && Object.keys(headerFooter.headerBlocks).length > 0;
   const hasHeaderBlocksByRId = headerFooter?.headerBlocksByRId && headerFooter.headerBlocksByRId.size > 0;
@@ -268,9 +276,10 @@ export async function incrementalLayout(
     }
 
     // Also extract heights from headerBlocksByRId (for multi-section documents)
-    // These headers may not be in headerBlocks but still need to prevent body overlap
+    // Store each rId's height separately for per-page margin calculation
     if (hasHeaderBlocksByRId && headerFooter.headerBlocksByRId) {
-      for (const [_rId, blocks] of headerFooter.headerBlocksByRId) {
+      headerContentHeightsByRId = new Map<string, number>();
+      for (const [rId, blocks] of headerFooter.headerBlocksByRId) {
         if (!blocks || blocks.length === 0) continue;
         // Measure blocks to get height
         const measureConstraints = {
@@ -284,9 +293,8 @@ export async function incrementalLayout(
           height: headerFooter.constraints.height,
         });
         if (layout.height > 0) {
-          // Store as 'default' if no variant-specific heights exist, or take max
-          const currentDefault = headerContentHeights.default ?? 0;
-          headerContentHeights.default = Math.max(currentDefault, layout.height);
+          // Store height by rId for per-page margin calculation
+          headerContentHeightsByRId.set(rId, layout.height);
         }
       }
     }
@@ -305,6 +313,14 @@ export async function incrementalLayout(
    * Undefined if footer pre-layout fails or footers are not present.
    */
   let footerContentHeights: Partial<Record<'default' | 'first' | 'even' | 'odd', number>> | undefined;
+
+  /**
+   * Actual measured footer content heights per relationship ID.
+   * Used for multi-section documents where each section may have unique footers.
+   * Keys are relationship IDs (e.g., 'rId8', 'rId9').
+   * Values are the actual content heights in pixels.
+   */
+  let footerContentHeightsByRId: Map<string, number> | undefined;
 
   // Check if we have footers via either footerBlocks (by variant) or footerBlocksByRId (by relationship ID)
   const hasFooterBlocks = headerFooter?.footerBlocks && Object.keys(headerFooter.footerBlocks).length > 0;
@@ -373,8 +389,10 @@ export async function incrementalLayout(
       }
 
       // Also extract heights from footerBlocksByRId (for multi-section documents)
+      // Store each rId's height separately for per-page margin calculation
       if (hasFooterBlocksByRId && headerFooter.footerBlocksByRId) {
-        for (const [_rId, blocks] of headerFooter.footerBlocksByRId) {
+        footerContentHeightsByRId = new Map<string, number>();
+        for (const [rId, blocks] of headerFooter.footerBlocksByRId) {
           if (!blocks || blocks.length === 0) continue;
           // Measure blocks to get height
           const measureConstraints = {
@@ -388,9 +406,8 @@ export async function incrementalLayout(
             height: headerFooter.constraints.height,
           });
           if (layout.height > 0) {
-            // Store as 'default' if no variant-specific heights exist, or take max
-            const currentDefault = footerContentHeights.default ?? 0;
-            footerContentHeights.default = Math.max(currentDefault, layout.height);
+            // Store height by rId for per-page margin calculation
+            footerContentHeightsByRId.set(rId, layout.height);
           }
         }
       }
@@ -406,8 +423,10 @@ export async function incrementalLayout(
   const layoutStart = performance.now();
   let layout = layoutDocument(nextBlocks, measures, {
     ...options,
-    headerContentHeights, // Pass header heights to prevent overlap
-    footerContentHeights, // Pass footer heights to prevent overlap
+    headerContentHeights, // Pass header heights to prevent overlap (per-variant)
+    footerContentHeights, // Pass footer heights to prevent overlap (per-variant)
+    headerContentHeightsByRId, // Pass header heights by rId for per-page margin calculation
+    footerContentHeightsByRId, // Pass footer heights by rId for per-page margin calculation
     remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
       remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
   });
@@ -483,8 +502,10 @@ export async function incrementalLayout(
       const relayoutStart = performance.now();
       layout = layoutDocument(currentBlocks, currentMeasures, {
         ...options,
-        headerContentHeights, // Pass header heights to prevent overlap
-        footerContentHeights, // Pass footer heights to prevent overlap
+        headerContentHeights, // Pass header heights to prevent overlap (per-variant)
+        footerContentHeights, // Pass footer heights to prevent overlap (per-variant)
+        headerContentHeightsByRId, // Pass header heights by rId for per-page margin calculation
+        footerContentHeightsByRId, // Pass footer heights by rId for per-page margin calculation
         remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
           remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
       });

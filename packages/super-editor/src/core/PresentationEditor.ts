@@ -4960,12 +4960,37 @@ export class PresentationEditor extends EventEmitter {
         ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
         : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
 
-      const sectionRId =
-        page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
-          : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
-            : undefined;
+      // Resolve the section-specific rId for this header/footer variant.
+      // Implements Word's OOXML inheritance model:
+      //   1. Try current section's variant (e.g., 'first' header for first page with titlePg)
+      //   2. If not found, inherit from previous section's same variant
+      //   3. Final fallback: use current section's 'default' variant
+      // This ensures documents with multi-section layouts render correctly when sections
+      // don't explicitly define all header/footer variants (common in Word documents).
+      let sectionRId: string | undefined;
+      if (page?.sectionRefs && kind === 'header') {
+        sectionRId = page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionHeaderIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.headerRefs?.default;
+        }
+      } else if (page?.sectionRefs && kind === 'footer') {
+        sectionRId = page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionFooterIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.footerRefs?.default;
+        }
+      }
 
       if (!headerFooterType) {
         return null;
