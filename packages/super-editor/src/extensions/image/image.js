@@ -425,6 +425,10 @@ export const Image = Node.create({
     // Calculate margin data based on anchor data, margin offsets and float direction
     const hasAnchorData = Boolean(anchorData);
     const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
+    const isWrapBehindDoc = wrap?.attrs?.behindDoc;
+    const isAnchorBehindDoc = anchorData?.behindDoc;
+    const isBehindDocAnchor = wrap?.type === 'None' && (isWrapBehindDoc || isAnchorBehindDoc);
+    const isAbsolutelyPositioned = style.includes('position: absolute;');
 
     if (hasAnchorData) {
       switch (anchorData.hRelativeFrom) {
@@ -458,7 +462,6 @@ export const Image = Node.create({
             // and the element is absolutely positioned (e.g., wrap type 'None'),
             // we need to use 'left' positioning to allow negative offsets
             // This handles cases like full-width images that extend into margins
-            const isAbsolutelyPositioned = style.includes('position: absolute;');
             if (isAbsolutelyPositioned) {
               // Don't apply horizontal offset via margins - will use 'left' instead
               // Set a flag to apply the offset directly as 'left' property
@@ -478,7 +481,8 @@ export const Image = Node.create({
       const relativeFromPageV = anchorData?.vRelativeFrom === 'page';
       const relativeFromMarginV = anchorData?.vRelativeFrom === 'margin';
       const maxMarginV = 500;
-      const baseTop = Math.max(0, marginOffset?.top ?? 0);
+      const allowNegativeTopOffset = isBehindDocAnchor;
+      const baseTop = allowNegativeTopOffset ? (marginOffset?.top ?? 0) : Math.max(0, marginOffset?.top ?? 0);
       // TODO: Images that go into the margin have negative offsets - often by high values.
       // These values will not be shown correctly when rendered in browser. Adjusting to zero is smallest possible
       // adjustment that continues to give a result close to the original.
@@ -504,9 +508,12 @@ export const Image = Node.create({
         }
       }
 
+      const appliedTopViaStyle = isAbsolutelyPositioned && allowNegativeTopOffset && !relativeFromMarginV;
+      if (appliedTopViaStyle) {
+        style += `top: ${top}px;`;
       // Don't apply vertical offset as margin-top for images positioned relative to margin
       // as this causes double-counting of the offset
-      if (top && !relativeFromMarginV) {
+      } else if (top && !relativeFromMarginV) {
         if (relativeFromPageV && top >= maxMarginV) margin.top += maxMarginV;
         else margin.top += top;
       }
@@ -520,6 +527,10 @@ export const Image = Node.create({
     }
     if (margin.top) style += `margin-top: ${margin.top}px;`;
     if (margin.bottom) style += `margin-bottom: ${margin.bottom}px;`;
+
+    if (isBehindDocAnchor) {
+      style += 'max-width: none;';
+    }
 
     // Merge wrap styling with existing htmlAttributes style
     const finalAttributes = { ...htmlAttributes };
