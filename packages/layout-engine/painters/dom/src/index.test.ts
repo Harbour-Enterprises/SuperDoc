@@ -2517,16 +2517,71 @@ describe('DomPainter', () => {
     // One of these should be the behindDoc image rendered directly on the page
     expect(allImagesOnPage?.length).toBeGreaterThanOrEqual(1);
 
-    // Find the behindDoc fragment on the page (direct child with z-index: 0)
+    // Find the behindDoc fragment on the page (direct child with z-index: 0 and data attribute)
     const directFragments = pageEl?.querySelectorAll(':scope > .superdoc-fragment');
     let foundBehindDoc = false;
     directFragments?.forEach((frag) => {
-      const style = (frag as HTMLElement).style;
-      if (style.zIndex === '0') {
+      const el = frag as HTMLElement;
+      if (el.style.zIndex === '0' && el.dataset.behindDocSection === 'header') {
         foundBehindDoc = true;
       }
     });
     expect(foundBehindDoc).toBe(true);
+  });
+
+  it('cleans up behindDoc fragments on re-render (no accumulation)', () => {
+    // This test verifies that behindDoc fragments don't accumulate across re-renders.
+    // Since they're inserted directly on the page (not in header container), they must
+    // be explicitly removed before re-rendering.
+    const behindDocImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'behind-doc-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 200,
+      height: 100,
+      anchor: { behindDoc: true },
+    };
+    const behindDocImageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 100,
+    };
+
+    const behindDocFragment = {
+      kind: 'image' as const,
+      blockId: 'behind-doc-img',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+      zIndex: 0,
+      isAnchored: true,
+    };
+
+    const painter = createDomPainter({
+      blocks: [block, behindDocImageBlock],
+      measures: [measure, behindDocImageMeasure],
+      headerProvider: () => ({
+        fragments: [behindDocFragment],
+        height: 100,
+      }),
+    });
+
+    const testLayout = { ...layout, pages: [{ ...layout.pages[0], number: 1 }] };
+
+    // First render
+    painter.paint(testLayout, mount);
+
+    // Second render (simulates incremental update)
+    painter.paint(testLayout, mount);
+
+    // Third render
+    painter.paint(testLayout, mount);
+
+    // Should only have ONE behindDoc fragment, not three
+    const pageEl = mount.querySelector('.superdoc-page');
+    const behindDocElements = pageEl?.querySelectorAll('[data-behind-doc-section="header"]');
+    expect(behindDocElements?.length).toBe(1);
   });
 
   it('applies track-change classes and metadata when rendering review mode', () => {

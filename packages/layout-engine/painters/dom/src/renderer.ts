@@ -1546,6 +1546,12 @@ export class DomPainter {
       }
     }
 
+    // Remove any previously rendered behindDoc fragments for this section before re-rendering.
+    // Unlike the header/footer container (which uses innerHTML = '' to clear), behindDoc
+    // fragments are placed directly on the page element and must be explicitly removed.
+    const behindDocSelector = `[data-behind-doc-section="${kind}"]`;
+    pageEl.querySelectorAll(behindDocSelector).forEach((el) => el.remove());
+
     // Render behindDoc fragments directly on the page with z-index: 0
     // and insert them at the beginning of the page so they render behind body content.
     // We can't use z-index: -1 because that goes behind the page's white background.
@@ -1558,6 +1564,7 @@ export class DomPainter {
       fragEl.style.top = `${pageY}px`;
       fragEl.style.left = `${marginLeft + fragment.x}px`;
       fragEl.style.zIndex = '0'; // Same level as page, but inserted first so renders behind
+      fragEl.dataset.behindDocSection = kind; // Track for cleanup on re-render
       // Insert at beginning of page so it renders behind body content due to DOM order
       pageEl.insertBefore(fragEl, pageEl.firstChild);
     });
