@@ -1530,7 +1530,40 @@ export class DomPainter {
       pageNumberText: page.numberText,
     };
 
-    data.fragments.forEach((fragment) => {
+    // Separate behindDoc fragments (zIndex === 0) from normal fragments.
+    // behindDoc fragments need to render behind body content, so they must be
+    // placed directly on the page (not in the header container) with negative z-index.
+    const behindDocFragments: typeof data.fragments = [];
+    const normalFragments: typeof data.fragments = [];
+
+    for (const fragment of data.fragments) {
+      const isBehindDoc =
+        (fragment.kind === 'image' || fragment.kind === 'drawing') && 'zIndex' in fragment && fragment.zIndex === 0;
+      if (isBehindDoc) {
+        behindDocFragments.push(fragment);
+      } else {
+        normalFragments.push(fragment);
+      }
+    }
+
+    // Render behindDoc fragments directly on the page with z-index: 0
+    // and insert them at the beginning of the page so they render behind body content.
+    // We can't use z-index: -1 because that goes behind the page's white background.
+    // By inserting at the beginning and using z-index: 0, they render below body content
+    // which also has z-index values but comes later in DOM order.
+    behindDocFragments.forEach((fragment) => {
+      const fragEl = this.renderFragment(fragment, context);
+      // Adjust position: fragment.y is relative to header container, we need page-relative
+      const pageY = effectiveOffset + fragment.y + (kind === 'footer' ? footerYOffset : 0);
+      fragEl.style.top = `${pageY}px`;
+      fragEl.style.left = `${marginLeft + fragment.x}px`;
+      fragEl.style.zIndex = '0'; // Same level as page, but inserted first so renders behind
+      // Insert at beginning of page so it renders behind body content due to DOM order
+      pageEl.insertBefore(fragEl, pageEl.firstChild);
+    });
+
+    // Render normal fragments in the header/footer container
+    normalFragments.forEach((fragment) => {
       const fragEl = this.renderFragment(fragment, context);
       // Apply footer offset to push content to bottom
       if (footerYOffset > 0) {

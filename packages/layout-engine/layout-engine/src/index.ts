@@ -1941,10 +1941,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
  *
  * Special handling for behindDoc anchored fragments:
  * - Anchored images/drawings with behindDoc=true are decorative background elements
- * - These fragments are excluded from height calculations if they fall outside a reasonable
- *   overflow range (4x the header/footer height or 192pt, whichever is larger)
- * - This prevents decorative elements with extreme offsets from inflating header/footer margins
- * - behindDoc fragments within the overflow range are still included to handle modest positioning
+ * - Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout
+ * - These fragments are ALWAYS excluded from height calculations, regardless of position
+ * - This matches Word behavior where behindDoc images never inflate header/footer margins
  * - All behindDoc fragments are still rendered in the layout; they're only excluded from height
  */
 export function layoutHeaderFooter(
@@ -1968,19 +1967,6 @@ export function layoutHeaderFooter(
   if (!Number.isFinite(height) || height <= 0) {
     return { pages: [], height: 0 };
   }
-
-  // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
-  // Use a bounded base height so decorative assets far outside the header/footer band
-  // don't inflate layout height. Fallback to full height when no base is provided.
-  const overflowBase =
-    typeof constraints.overflowBaseHeight === 'number' &&
-    Number.isFinite(constraints.overflowBaseHeight) &&
-    constraints.overflowBaseHeight > 0
-      ? constraints.overflowBaseHeight
-      : height;
-  const maxBehindDocOverflow = Math.max(192, overflowBase * 4);
-  const minBehindDocY = -maxBehindDocOverflow;
-  const maxBehindDocY = height + maxBehindDocOverflow;
 
   // Transform page-relative anchor offsets to content-relative for correct positioning
   // Headers/footers are rendered within the content box, but page-relative anchors
@@ -2029,10 +2015,10 @@ export function layoutHeaderFooter(
       const block = blocks[idx];
       const measure = measures[idx];
 
-      // Exclude behindDoc anchored fragments with extreme offsets from height calculations.
-      // Decorative background images/drawings in headers/footers should not inflate margins.
+      // Exclude ALL behindDoc anchored fragments from height calculations.
+      // Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout.
+      // These decorative background images/drawings render behind text but never inflate margins.
       // Fragments are still rendered in the layout; we only skip them when computing total height.
-      // We allow modest overflow (within maxBehindDocOverflow) to handle reasonable positioning.
       const isAnchoredFragment =
         (fragment.kind === 'image' || fragment.kind === 'drawing') && fragment.isAnchored === true;
       if (isAnchoredFragment) {
@@ -2043,7 +2029,8 @@ export function layoutHeaderFooter(
           );
         }
         const anchoredBlock = block as ImageBlock | DrawingBlock;
-        if (anchoredBlock.anchor?.behindDoc && (fragment.y < minBehindDocY || fragment.y > maxBehindDocY)) {
+        // behindDoc images never affect layout - skip entirely from height calculation
+        if (anchoredBlock.anchor?.behindDoc) {
           continue;
         }
       }
