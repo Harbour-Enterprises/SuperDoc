@@ -508,7 +508,7 @@ export const Image = Node.create({
         }
       }
 
-      const appliedTopViaStyle = top && isAbsolutelyPositioned && allowNegativeTopOffset && !relativeFromMarginV;
+      const appliedTopViaStyle = isAbsolutelyPositioned && allowNegativeTopOffset && !relativeFromMarginV;
       if (appliedTopViaStyle) {
         style += `top: ${top}px;`;
       } else if (top && !relativeFromMarginV) {
