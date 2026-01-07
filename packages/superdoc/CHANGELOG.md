@@ -1,3 +1,10 @@
+# [1.3.0-next.10](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.9...v1.3.0-next.10) (2026-01-07)
+
+
+### Bug Fixes
+
+* screenshots ([39c9392](https://github.com/Harbour-Enterprises/SuperDoc/commit/39c9392ecabe1447d41eabad7bdbf73c84b66e6e))
+
 # [1.3.0-next.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.8...v1.3.0-next.9) (2026-01-07)
 
 
