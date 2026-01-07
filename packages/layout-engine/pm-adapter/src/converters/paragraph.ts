@@ -1070,12 +1070,14 @@ export function paragraphToFlowBlocks(
         // Create token run with pageReference metadata
         // Get PM positions from the parent pageReference node (not the synthetic text node)
         const pageRefPos = positions.get(node);
+        // Pass empty marks to textNodeToRun to prevent double mark application.
+        // Marks will be applied AFTER linked styles to ensure proper priority and honor enableComments.
         const tokenRun = textNodeToRun(
           { type: 'text', text: fallbackText } as PMNode,
           positions,
           defaultFont,
           defaultSize,
-          mergedMarks,
+          [], // Empty marks - will be applied after linked styles
           activeSdt,
           hyperlinkConfig,
           themeColors,
@@ -1084,6 +1086,15 @@ export function paragraphToFlowBlocks(
         applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
         applyBaseRunDefaults(tokenRun, baseRunDefaults, defaultFont, defaultSize);
         applyInlineRunProperties(tokenRun, activeRunProperties);
+        // Apply marks ONCE here - this ensures they override linked styles and honor enableComments
+        applyMarksToRun(
+          tokenRun,
+          mergedMarks,
+          hyperlinkConfig,
+          themeColors,
+          converterContext?.backgroundColor,
+          enableComments,
+        );
         // Copy PM positions from parent pageReference node
         if (pageRefPos) {
           (tokenRun as TextRun).pmStart = pageRefPos.start;
