@@ -425,7 +425,9 @@ export const Image = Node.create({
     // Calculate margin data based on anchor data, margin offsets and float direction
     const hasAnchorData = Boolean(anchorData);
     const hasMarginOffsets = marginOffset?.horizontal != null || marginOffset?.top != null;
-    const isBehindDocAnchor = wrap?.type === 'None' && (wrap?.attrs?.behindDoc || anchorData?.behindDoc);
+    const isWrapBehindDoc = wrap?.attrs?.behindDoc;
+    const isAnchorBehindDoc = anchorData?.behindDoc;
+    const isBehindDocAnchor = wrap?.type === 'None' && (isWrapBehindDoc || isAnchorBehindDoc);
     const isAbsolutelyPositioned = style.includes('position: absolute;');
 
     if (hasAnchorData) {
