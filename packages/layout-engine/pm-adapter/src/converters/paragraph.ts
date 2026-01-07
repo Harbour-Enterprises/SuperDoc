@@ -638,6 +638,16 @@ const applyBaseRunDefaults = (
   // in paragraphs with bold styles like Heading 1.
 };
 
+const applyInlineRunProperties = (
+  run: TextRun,
+  runProperties: (Record<string, unknown> & { letterSpacing?: number | null }) | null | undefined,
+): void => {
+  if (!runProperties) return;
+  if (runProperties?.letterSpacing != null) {
+    run.letterSpacing = twipsToPx(runProperties.letterSpacing);
+  }
+};
+
 /**
  * Converts a paragraph PM node to an array of FlowBlocks.
  *
@@ -936,6 +946,7 @@ export function paragraphToFlowBlocks(
     inheritedMarks: PMMark[] = [],
     activeSdt?: SdtMetadata,
     activeRunStyleId: string | null = null,
+    activeRunProperties?: Record<string, unknown> | null,
   ) => {
     if (node.type === 'text' && node.text) {
       // Apply styles in correct priority order:
@@ -959,6 +970,7 @@ export function paragraphToFlowBlocks(
       const inlineStyleId = getInlineStyleId(inheritedMarks);
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
+      applyInlineRunProperties(run, activeRunProperties);
       // Apply marks ONCE here - this ensures they override linked styles
       applyMarksToRun(
         run,
@@ -973,8 +985,13 @@ export function paragraphToFlowBlocks(
 
     if (node.type === 'run' && Array.isArray(node.content)) {
       const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
-      const nextRunStyleId = extractRunStyleId(node.attrs?.runProperties) ?? activeRunStyleId;
-      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId));
+      const runProperties =
+        typeof node.attrs?.runProperties === 'object' && node.attrs.runProperties !== null
+          ? (node.attrs.runProperties as Record<string, unknown>)
+          : null;
+      const nextRunStyleId = extractRunStyleId(runProperties) ?? activeRunStyleId;
+      const nextRunProperties = runProperties ?? activeRunProperties;
+      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId, nextRunProperties));
       return;
     }
 
@@ -982,7 +999,7 @@ export function paragraphToFlowBlocks(
     if (node.type === 'structuredContent' && Array.isArray(node.content)) {
       const inlineMetadata = resolveNodeSdtMetadata(node, 'structuredContent');
       const nextSdt = inlineMetadata ?? activeSdt;
-      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId));
+      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId, activeRunProperties));
       return;
     }
 
@@ -1060,6 +1077,7 @@ export function paragraphToFlowBlocks(
         const inlineStyleId = getInlineStyleId(mergedMarks);
         applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
         applyBaseRunDefaults(tokenRun, baseRunDefaults, defaultFont, defaultSize);
+        applyInlineRunProperties(tokenRun, activeRunProperties);
         // Copy PM positions from parent pageReference node
         if (pageRefPos) {
           (tokenRun as TextRun).pmStart = pageRefPos.start;
@@ -1076,7 +1094,9 @@ export function paragraphToFlowBlocks(
         currentRuns.push(tokenRun);
       } else if (Array.isArray(node.content)) {
         // No bookmark found, fall back to treating as transparent container
-        node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt));
+        node.content.forEach((child) =>
+          visitNode(child, mergedMarks, activeSdt, activeRunStyleId, activeRunProperties),
+        );
       }
       return;
     }
@@ -1094,7 +1114,9 @@ export function paragraphToFlowBlocks(
       }
       // Process any content inside the bookmark (usually empty)
       if (Array.isArray(node.content)) {
-        node.content.forEach((child) => visitNode(child, inheritedMarks, activeSdt));
+        node.content.forEach((child) =>
+          visitNode(child, inheritedMarks, activeSdt, activeRunStyleId, activeRunProperties),
+        );
       }
       return;
     }
@@ -1148,6 +1170,7 @@ export function paragraphToFlowBlocks(
           runStyleId: activeRunStyleId,
           mergedMarksCount: mergedMarks.length,
         });
+        applyInlineRunProperties(tokenRun as TextRun, activeRunProperties);
         currentRuns.push(tokenRun);
       }
       return;
