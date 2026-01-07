@@ -1111,6 +1111,10 @@ export function paragraphToFlowBlocks(
     if (TOKEN_INLINE_TYPES.has(node.type)) {
       const tokenKind = TOKEN_INLINE_TYPES.get(node.type);
       if (tokenKind) {
+        const marksAsAttrs = Array.isArray(node.attrs?.marksAsAttrs) ? (node.attrs.marksAsAttrs as PMMark[]) : [];
+        const nodeMarks = node.marks ?? [];
+        const effectiveMarks = nodeMarks.length > 0 ? nodeMarks : marksAsAttrs;
+        const mergedMarks = [...effectiveMarks, ...(inheritedMarks ?? [])];
         const tokenRun = tokenNodeToRun(
           node,
           positions,
@@ -1127,6 +1131,23 @@ export function paragraphToFlowBlocks(
         const inlineStyleId = getInlineStyleId(inheritedMarks);
         applyRunStyles(tokenRun as TextRun, inlineStyleId, activeRunStyleId);
         applyBaseRunDefaults(tokenRun as TextRun, baseRunDefaults, defaultFont, defaultSize);
+        if (mergedMarks.length > 0) {
+          applyMarksToRun(
+            tokenRun as TextRun,
+            mergedMarks,
+            hyperlinkConfig,
+            themeColors,
+            converterContext?.backgroundColor,
+          );
+        }
+        console.debug('[token-debug] paragraph-token-run', {
+          token: (tokenRun as TextRun).token,
+          fontFamily: (tokenRun as TextRun).fontFamily,
+          fontSize: (tokenRun as TextRun).fontSize,
+          inlineStyleId,
+          runStyleId: activeRunStyleId,
+          mergedMarksCount: mergedMarks.length,
+        });
         currentRuns.push(tokenRun);
       }
       return;
