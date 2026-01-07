@@ -1,3 +1,14 @@
+# [1.3.0-next.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.7...v1.3.0-next.8) (2026-01-07)
+
+
+### Bug Fixes
+
+* allow override row borders ([#1672](https://github.com/Harbour-Enterprises/SuperDoc/issues/1672)) ([a4bb109](https://github.com/Harbour-Enterprises/SuperDoc/commit/a4bb109fde65f02442c4ee5e1930fe90877bc107))
+* **comments:** use last paragraph paraId for threading ([#1671](https://github.com/Harbour-Enterprises/SuperDoc/issues/1671)) ([50ffea6](https://github.com/Harbour-Enterprises/SuperDoc/commit/50ffea69cfe167f895b65d0b36f0d9d41e15e6f7))
+* field annotation drag and drop ([#1668](https://github.com/Harbour-Enterprises/SuperDoc/issues/1668)) ([659d152](https://github.com/Harbour-Enterprises/SuperDoc/commit/659d152fa5349cde16800016680d3bef92ae548e))
+* table borders additional fixes ([ca034fc](https://github.com/Harbour-Enterprises/SuperDoc/commit/ca034fc7baeaf92d74ad39b54518cfd530de2d5e))
+* take letter spacing into account when measuring text ([#1670](https://github.com/Harbour-Enterprises/SuperDoc/issues/1670)) ([47c6bf7](https://github.com/Harbour-Enterprises/SuperDoc/commit/47c6bf7ccf731928a9065caba92e0a8749578ae8))
+
 # [1.3.0-next.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.6...v1.3.0-next.7) (2026-01-07)
 
 
