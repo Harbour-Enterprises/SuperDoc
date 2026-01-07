@@ -797,8 +797,11 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Disable tracked changes for viewing mode (show original document without change markers)
-    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
+    // Enable tracked changes in 'original' mode for viewing (hides insertions, shows original document)
+    this.setTrackedChangesPreferences({ mode: 'original', enabled: true });
+
+    // Clear comment positions to hide floating comment bubbles in viewing mode
+    this.commentsStore?.clearEditorCommentPositions?.();
 
     this.superdocStore.documents.forEach((doc) => {
       doc.removeComments();

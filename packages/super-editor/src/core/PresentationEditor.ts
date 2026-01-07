@@ -1338,12 +1338,15 @@ export class PresentationEditor extends EventEmitter {
     if (!validModes.includes(mode)) {
       throw new TypeError(`[PresentationEditor] Invalid mode "${mode}". Must be one of: ${validModes.join(', ')}`);
     }
+    const modeChanged = this.#documentMode !== mode;
     this.#documentMode = mode;
     this.#editor.setDocumentMode(mode);
     this.#syncDocumentModeClass();
     this.#syncHiddenEditorA11yAttributes();
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
-    if (trackedChangesChanged) {
+    // Re-render if mode changed OR tracked changes preferences changed.
+    // Mode change affects enableComments in toFlowBlocks even if tracked changes didn't change.
+    if (modeChanged || trackedChangesChanged) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
@@ -4330,12 +4333,14 @@ export class PresentationEditor extends EventEmitter {
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
+        const commentsEnabled = this.#documentMode !== 'viewing';
         const result = toFlowBlocks(docJson, {
           mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
           sectionMetadata,
           trackedChangesMode: this.#trackedChangesMode,
           enableTrackedChanges: this.#trackedChangesEnabled,
+          enableComments: commentsEnabled,
           enableRichHyperlinks: true,
           themeColors: this.#editor?.converter?.themeColors ?? undefined,
           converterContext,
@@ -4499,10 +4504,12 @@ export class PresentationEditor extends EventEmitter {
 
       // Emit fresh comment positions after layout completes.
       // This ensures positions are always in sync with the current document and layout.
-      const commentPositions = this.#collectCommentPositions();
-      const positionKeys = Object.keys(commentPositions);
-      if (positionKeys.length > 0) {
-        this.emit('commentPositions', { positions: commentPositions });
+      if (this.#documentMode !== 'viewing') {
+        const commentPositions = this.#collectCommentPositions();
+        const positionKeys = Object.keys(commentPositions);
+        if (positionKeys.length > 0) {
+          this.emit('commentPositions', { positions: commentPositions });
+        }
       }
       if (this.#telemetryEmitter && metrics) {
         this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });

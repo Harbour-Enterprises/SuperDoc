@@ -668,6 +668,10 @@ const applyInlineRunProperties = (
  * @param trackedChanges - Optional tracked changes configuration
  * @param bookmarks - Optional bookmark position map
  * @param hyperlinkConfig - Hyperlink configuration
+ * @param themeColors - Optional theme color palette for color resolution
+ * @param converters - Optional converter dependencies injected to avoid circular imports
+ * @param converterContext - Optional converter context with document styles
+ * @param enableComments - Whether to include comment marks in the output (defaults to true). Set to false for viewing modes where comments should be hidden.
  * @returns Array of FlowBlocks (paragraphs, images, drawings, page breaks, etc.)
  */
 export function paragraphToFlowBlocks(
@@ -731,6 +735,7 @@ export function paragraphToFlowBlocks(
     ) => FlowBlock | null;
   },
   converterContext?: ConverterContext,
+  enableComments = true,
 ): FlowBlock[] {
   const baseBlockId = nextBlockId('paragraph');
   const paragraphProps =
@@ -978,6 +983,7 @@ export function paragraphToFlowBlocks(
         hyperlinkConfig,
         themeColors,
         converterContext?.backgroundColor,
+        enableComments,
       );
       currentRuns.push(run);
       return;
@@ -1064,12 +1070,14 @@ export function paragraphToFlowBlocks(
         // Create token run with pageReference metadata
         // Get PM positions from the parent pageReference node (not the synthetic text node)
         const pageRefPos = positions.get(node);
+        // Pass empty marks to textNodeToRun to prevent double mark application.
+        // Marks will be applied AFTER linked styles to ensure proper priority and honor enableComments.
         const tokenRun = textNodeToRun(
           { type: 'text', text: fallbackText } as PMNode,
           positions,
           defaultFont,
           defaultSize,
-          mergedMarks,
+          [], // Empty marks - will be applied after linked styles
           activeSdt,
           hyperlinkConfig,
           themeColors,
@@ -1078,6 +1086,15 @@ export function paragraphToFlowBlocks(
         applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
         applyBaseRunDefaults(tokenRun, baseRunDefaults, defaultFont, defaultSize);
         applyInlineRunProperties(tokenRun, activeRunProperties);
+        // Apply marks ONCE here - this ensures they override linked styles and honor enableComments
+        applyMarksToRun(
+          tokenRun,
+          mergedMarks,
+          hyperlinkConfig,
+          themeColors,
+          converterContext?.backgroundColor,
+          enableComments,
+        );
         // Copy PM positions from parent pageReference node
         if (pageRefPos) {
           (tokenRun as TextRun).pmStart = pageRefPos.start;
@@ -1160,6 +1177,7 @@ export function paragraphToFlowBlocks(
             hyperlinkConfig,
             themeColors,
             converterContext?.backgroundColor,
+            enableComments,
           );
         }
         console.debug('[token-debug] paragraph-token-run', {
@@ -1388,6 +1406,7 @@ export function paragraphToFlowBlocks(
       hyperlinkConfig,
       applyMarksToRun,
       themeColors,
+      enableComments,
     );
     if (trackedChanges.enabled && filteredRuns.length === 0) {
       return;

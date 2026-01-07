@@ -1618,4 +1618,149 @@ describe('mark application', () => {
       });
     });
   });
+
+  describe('enableComments parameter', () => {
+    it('skips comment marks when enableComments is false', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [
+        { type: 'bold' },
+        { type: 'comment', attrs: { commentId: 'c-1', internal: false } },
+        { type: 'commentMark', attrs: { commentId: 'c-2', internal: true } },
+        { type: 'italic' },
+      ];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, false);
+
+      // Bold and italic should be applied
+      expect(run.bold).toBe(true);
+      expect(run.italic).toBe(true);
+
+      // Comments should NOT be applied when enableComments is false
+      expect(run.comments).toBeUndefined();
+    });
+
+    it('includes comment marks when enableComments is true', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [
+        { type: 'bold' },
+        { type: 'comment', attrs: { commentId: 'c-1', internal: false } },
+        { type: 'commentMark', attrs: { commentId: 'c-2', internal: true } },
+      ];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, true);
+
+      // Bold should be applied
+      expect(run.bold).toBe(true);
+
+      // Comments SHOULD be applied when enableComments is true
+      expect(run.comments).toBeDefined();
+      expect(run.comments).toHaveLength(2);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', internal: false });
+      expect(run.comments?.[1]).toEqual({ commentId: 'c-2', internal: true });
+    });
+
+    it('includes comment marks when enableComments is undefined (default true)', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [{ type: 'comment', attrs: { commentId: 'c-1', internal: false } }];
+
+      // Default behavior when enableComments is not specified should include comments
+      applyMarksToRun(run, marks, undefined);
+
+      expect(run.comments).toBeDefined();
+      expect(run.comments).toHaveLength(1);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', internal: false });
+    });
+
+    it('includes comment marks when config object is undefined', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [{ type: 'commentMark', attrs: { commentId: 'c-1', internal: true } }];
+
+      // When no config is passed, comments should be included by default
+      applyMarksToRun(run, marks);
+
+      expect(run.comments).toBeDefined();
+      expect(run.comments).toHaveLength(1);
+      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', internal: true });
+    });
+
+    it('handles mixed marks with enableComments false', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [
+        { type: 'bold' },
+        { type: 'textStyle', attrs: { color: 'FF0000' } },
+        { type: 'comment', attrs: { commentId: 'c-1' } },
+        { type: 'underline', attrs: { underlineType: 'double' } },
+        { type: 'commentMark', attrs: { commentId: 'c-2' } },
+        { type: 'italic' },
+      ];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, false);
+
+      // All non-comment marks should be applied
+      expect(run.bold).toBe(true);
+      expect(run.italic).toBe(true);
+      expect(run.color).toBe('#FF0000');
+      expect(run.underline?.style).toBe('double');
+
+      // Comments should be skipped
+      expect(run.comments).toBeUndefined();
+    });
+
+    it('handles mixed marks with enableComments true', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [
+        { type: 'bold' },
+        { type: 'comment', attrs: { commentId: 'c-1', internal: false } },
+        { type: 'italic' },
+        { type: 'commentMark', attrs: { commentId: 'c-2', internal: true } },
+      ];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, true);
+
+      // All marks should be applied
+      expect(run.bold).toBe(true);
+      expect(run.italic).toBe(true);
+      expect(run.comments).toHaveLength(2);
+    });
+
+    it('only skips comment marks, not other marks, when enableComments is false', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [
+        { type: 'comment', attrs: { commentId: 'c-1' } },
+        { type: 'strike' },
+        { type: 'commentMark', attrs: { commentId: 'c-2' } },
+        { type: 'highlight', attrs: { color: 'FFFF00' } },
+      ];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, false);
+
+      // Non-comment marks should be applied
+      expect(run.strike).toBe(true);
+      expect(run.highlight).toBe('#FFFF00');
+
+      // Comments should be skipped
+      expect(run.comments).toBeUndefined();
+    });
+
+    it('handles enableComments with empty marks array', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+
+      applyMarksToRun(run, [], undefined, undefined, undefined, false);
+
+      expect(run.comments).toBeUndefined();
+      expect(run.bold).toBeUndefined();
+    });
+
+    it('handles enableComments with only non-comment marks', () => {
+      const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
+      const marks: PMMark[] = [{ type: 'bold' }, { type: 'italic' }];
+
+      applyMarksToRun(run, marks, undefined, undefined, undefined, false);
+
+      // Non-comment marks should still be applied
+      expect(run.bold).toBe(true);
+      expect(run.italic).toBe(true);
+      expect(run.comments).toBeUndefined();
+    });
+  });
 });

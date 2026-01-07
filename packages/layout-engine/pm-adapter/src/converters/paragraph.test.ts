@@ -781,6 +781,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           undefined,
           undefined,
+          true, // enableComments defaults to true
         );
       });
 
@@ -823,6 +824,7 @@ describe('paragraph converters', () => {
           { enableRichHyperlinks: false },
           undefined,
           undefined,
+          true, // enableComments defaults to true
         );
       });
     });
@@ -1337,15 +1339,26 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
+        // textNodeToRun is called with empty marks (marks are applied separately via applyMarksToRun)
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           expect.any(Object),
           positions,
           'Arial',
           16,
-          [{ type: 'bold' }, { type: 'italic' }],
+          [], // Empty marks - applied separately to honor enableComments
           undefined,
           expect.any(Object),
           undefined,
+        );
+
+        // Marks are applied via applyMarksToRun to honor enableComments flag
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          [{ type: 'bold' }, { type: 'italic' }],
+          expect.any(Object),
+          undefined,
+          undefined,
+          true, // enableComments defaults to true
         );
       });
     });
@@ -1816,6 +1829,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           applyMarksToRun,
           undefined,
+          true,
         );
 
         const paraBlock = blocks[0] as ParagraphBlock;

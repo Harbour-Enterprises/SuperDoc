@@ -150,6 +150,13 @@ export interface AdapterOptions {
   enableRichHyperlinks?: boolean;
 
   /**
+   * Feature flag for propagating comment annotations into FlowBlocks.
+   * When false, comment marks are ignored and no comment highlights appear.
+   * Defaults to `true`.
+   */
+  enableComments?: boolean;
+
+  /**
    * Theme color palette extracted from the DOCX `word/theme/theme1.xml` part.
    * Used to resolve `w:themeColor` marks when `w:val` is missing.
    */
@@ -279,6 +286,9 @@ export interface NodeHandlerContext {
   // Tracked changes & hyperlinks
   trackedChangesConfig: TrackedChangesConfig;
   hyperlinkConfig: HyperlinkConfig;
+
+  // Comments
+  enableComments: boolean;
 
   // Bookmarks
   bookmarks: Map<string, number>;

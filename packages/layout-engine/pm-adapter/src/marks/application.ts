@@ -824,6 +824,7 @@ const DEFAULT_HYPERLINK_CONFIG: HyperlinkConfig = {
  * @param hyperlinkConfig - Configuration for hyperlink processing (defaults to basic mode)
  * @param themeColors - Optional theme color palette for resolving theme colors
  * @param backgroundColor - Optional cell background color for auto text color resolution
+ * @param enableComments - Whether to process comment marks (defaults to true)
  * @throws Does not throw; errors in mark processing are logged but do not interrupt processing
  */
 export const applyMarksToRun = (
@@ -832,7 +833,13 @@ export const applyMarksToRun = (
   hyperlinkConfig: HyperlinkConfig = DEFAULT_HYPERLINK_CONFIG,
   themeColors?: ThemeColorPalette,
   backgroundColor?: string,
+  enableComments = true,
 ): void => {
+  // If comments are disabled, clear any existing annotations before processing marks.
+  if (!enableComments && 'comments' in run && (run as TextRun).comments) {
+    delete (run as TextRun).comments;
+  }
+
   // Type guard to distinguish TabRun from TextRun
   const isTabRun = run.kind === 'tab';
 
@@ -886,8 +893,8 @@ export const applyMarksToRun = (
           break;
         case 'commentMark':
         case 'comment': {
-          // Comment marks only apply to TextRun
-          if (!isTabRun) {
+          // Comment marks only apply to TextRun, and only when comments are enabled
+          if (!isTabRun && enableComments) {
             pushCommentAnnotation(run, mark.attrs ?? {});
           }
           break;

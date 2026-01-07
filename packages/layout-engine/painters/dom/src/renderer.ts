@@ -5180,6 +5180,8 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.token ?? '',
           // Tracked changes - force re-render when added or removed tracked change
           textRun.trackedChange ? 1 : 0,
+          // Comment annotations - force re-render when comments are enabled/disabled
+          textRun.comments?.length ?? 0,
         ].join(',');
       })
       .join('|');
