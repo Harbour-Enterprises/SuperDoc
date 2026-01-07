@@ -1,3 +1,11 @@
+# [1.3.0-next.12](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.11...v1.3.0-next.12) (2026-01-07)
+
+
+### Bug Fixes
+
+* indents from linked styles ([#1679](https://github.com/Harbour-Enterprises/SuperDoc/issues/1679)) ([70bc68c](https://github.com/Harbour-Enterprises/SuperDoc/commit/70bc68c07f7603f6f4845febe562f5fd6b72b5a1))
+* section-aware ruler adjustments ([#1677](https://github.com/Harbour-Enterprises/SuperDoc/issues/1677)) ([32b5bad](https://github.com/Harbour-Enterprises/SuperDoc/commit/32b5badfbd94d5ff02a1424e3d18862a9191db8a))
+
 # [1.3.0-next.11](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.10...v1.3.0-next.11) (2026-01-07)
 
 
