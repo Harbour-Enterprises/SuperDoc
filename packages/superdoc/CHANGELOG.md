@@ -1,3 +1,10 @@
+# [1.3.0-next.11](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.10...v1.3.0-next.11) (2026-01-07)
+
+
+### Bug Fixes
+
+* additional fixes for view mode ([#1676](https://github.com/Harbour-Enterprises/SuperDoc/issues/1676)) ([fc2b7d6](https://github.com/Harbour-Enterprises/SuperDoc/commit/fc2b7d6436229b88453ddf7589fdfca333957c74))
+
 # [1.3.0-next.10](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.9...v1.3.0-next.10) (2026-01-07)
 
 
