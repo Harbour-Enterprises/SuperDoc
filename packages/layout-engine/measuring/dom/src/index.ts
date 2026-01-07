@@ -839,6 +839,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   let lastFontSize = 12;
   let tabStopCursor = 0;
   let pendingTabAlignment: { target: number; val: TabStop['val'] } | null = null;
+  let pendingRunSpacing = 0;
   // Remember the last applied tab alignment so we can clamp end-aligned
   // segments to the exact target after measuring to avoid 1px drift.
   let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
@@ -880,6 +881,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return false;
     }
     return true;
+  };
+
+  const resolveBoundarySpacing = (lineWidth: number, isRunStart: boolean, run: TextRun): number => {
+    if (lineWidth <= 0) return 0;
+    return isRunStart ? pendingRunSpacing : (run.letterSpacing ?? 0);
   };
 
   /**
@@ -1067,6 +1073,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1119,6 +1126,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1212,7 +1220,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       } else {
         pendingTabAlignment = null;
       }
-
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1260,6 +1268,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
         // Check if we've reached the end of the tab group
         if (activeTabGroup && runIndex + 1 >= activeTabGroup.measure.endRunIndex) {
           activeTabGroup = null;
@@ -1336,6 +1345,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1398,6 +1408,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
         continue;
       }
 
@@ -1458,6 +1469,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1466,6 +1478,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // The remaining run must be TextRun (which has text, fontSize, etc.)
     if (!('text' in run) || !('fontSize' in run)) {
       // Safety check - skip if this isn't a TextRun
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1480,6 +1493,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const segment = tabSegments[segmentIndex];
       const isLastSegment = segmentIndex === tabSegments.length - 1;
       if (/^[ ]+$/.test(segment)) {
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0;
         const spacesLength = segment.length;
         const spacesStartChar = charPosInRun;
         const spacesEndChar = charPosInRun + spacesLength;
@@ -1499,7 +1513,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: spacesLength,
           };
         } else {
-          const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+          const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
           if (
             currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
             currentLine.width > 0
@@ -1593,6 +1607,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           const spaceStartChar = charPosInRun;
           const spaceEndChar = charPosInRun + 1;
           const singleSpaceWidth = measureRunWidth(' ', font, ctx, run, spaceStartChar);
+          const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
 
           if (!currentLine) {
             // Start a new line with just the space
@@ -1611,7 +1626,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           } else {
             // Add space to existing line
             // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-            const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+            const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
             if (
               currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
               currentLine.width > 0
@@ -1860,7 +1875,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const isTocEntry = block.attrs?.isTocEntry;
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-        const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
+        const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
         // Check if paragraph has justified alignment
         const justifyAlignment = block.attrs?.alignment === 'justify';
         const totalWidthWithWord =
@@ -2186,6 +2202,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 */
       }
     }
+
+    pendingRunSpacing = (run as TextRun).letterSpacing ?? 0;
   }
 
   if (!currentLine && lines.length === 0) {
