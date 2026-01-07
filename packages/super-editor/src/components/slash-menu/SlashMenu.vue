@@ -595,7 +595,7 @@ onBeforeUnmount(() => {
   margin-right: 10px;
 }
 
-.slash-menu-item-icon svg {
+.slash-menu .slash-menu-item-icon svg {
   height: 12px;
   width: 12px;
 }
