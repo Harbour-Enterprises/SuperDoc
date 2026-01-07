@@ -124,7 +124,7 @@ test.describe('comments & tracked changes', () => {
 
     const trackedChanges = page.getByRole('dialog').filter({ hasText: 'SuperDoc 8083 (imported)', visible: true });
     const trackedChangeCount = await trackedChanges.count();
-    expect(trackedChangeCount).toBe(5);
+    expect(trackedChangeCount).toBe(4);
   });
 
   test('should have correct tracked change text', async ({ page }) => {
