@@ -4,7 +4,7 @@ import { updateSectionMargins, getSectPrMargins } from '@converter/section-prope
  * Find the governing section break (paragraph with sectPr) for the current selection.
  * Prefers the first sectPr at or after the selection; falls back to the last before it.
  */
-function findGoverningSectPrParagraph(doc, pos) {
+function findGoverningSectPrParagraph(doc, selectionPos) {
   const candidates = [];
   doc.descendants((node, nodePos) => {
     if (node.type?.name === 'paragraph' && node.attrs?.paragraphProperties?.sectPr) {
@@ -12,7 +12,14 @@ function findGoverningSectPrParagraph(doc, pos) {
     }
   });
   if (!candidates.length) return null;
-  const atOrAfter = candidates.find((c) => c.pos >= pos);
+
+  // First, prefer a paragraph that actually contains the selection.
+  const inside = candidates.find((c) => selectionPos >= c.pos && selectionPos < c.pos + c.node.nodeSize);
+  if (inside) return inside;
+
+  // Otherwise, fall back to the first sectPr at or after the selection,
+  // or the last before if none are after.
+  const atOrAfter = candidates.find((c) => c.pos >= selectionPos);
   return atOrAfter ?? candidates[candidates.length - 1];
 }
 
