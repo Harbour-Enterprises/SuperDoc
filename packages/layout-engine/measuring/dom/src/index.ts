@@ -2409,7 +2409,7 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
   const isBlockBehindDoc = block.anchor?.behindDoc;
   const isBlockWrapBehindDoc = block.wrap?.type === 'None' && block.wrap?.behindDoc;
   const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc;
-  const isWidthConstraintBypassed = bypassWidthConstraint || !(constraints.maxWidth > 0);
+  const isWidthConstraintBypassed = bypassWidthConstraint || constraints.maxWidth <= 0;
 
   const maxWidth = isWidthConstraintBypassed ? intrinsic.width : constraints.maxWidth;
 
