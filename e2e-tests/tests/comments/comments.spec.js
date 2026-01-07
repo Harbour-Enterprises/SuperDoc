@@ -20,6 +20,7 @@ test.describe('comments & tracked changes', () => {
     },
   ];
 
+  // This is now 4 tracked changes with 2 replacements , one addition and one deletion
   const documentTrackedChanges = [
     {
       author: 'SuperDoc 8083 (imported)',
@@ -38,12 +39,10 @@ test.describe('comments & tracked changes', () => {
     },
     {
       author: 'SuperDoc 8083 (imported)',
-      text: ['Deleted: ', 'rem'],
-      date: new Date(1763743800000),
-    },
-    {
-      author: 'SuperDoc 8083 (imported)',
-      text: ['Added: ', 'add'],
+      text: [
+        ['Added: ', 'add'],
+        ['Deleted: ', 'rem'],
+      ],
       date: new Date(1763743800000),
     },
   ];
