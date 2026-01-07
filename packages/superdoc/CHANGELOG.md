@@ -1,3 +1,13 @@
+# [1.3.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.3...v1.3.0-next.4) (2026-01-07)
+
+
+### Bug Fixes
+
+* empty display label and default label ([#1621](https://github.com/Harbour-Enterprises/SuperDoc/issues/1621)) ([e29e14f](https://github.com/Harbour-Enterprises/SuperDoc/commit/e29e14f37c27fbad19c87c3571fa26f901d8ced4))
+* list marker position when item contains tab ([#1658](https://github.com/Harbour-Enterprises/SuperDoc/issues/1658)) ([e2148bb](https://github.com/Harbour-Enterprises/SuperDoc/commit/e2148bb3a9fd0f6cbcc7d6cf9c0779a6756b6052))
+* prevent crash when deleting tracked changes with empty nodes ([#1663](https://github.com/Harbour-Enterprises/SuperDoc/issues/1663)) ([e8a02d7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e8a02d72c0e333fb323991ed493913845f12f1a1))
+* sync header/footer changes to ydoc ([#1623](https://github.com/Harbour-Enterprises/SuperDoc/issues/1623)) ([0b581a5](https://github.com/Harbour-Enterprises/SuperDoc/commit/0b581a5999d3b3e4a2319297d47acb798cfc9826))
+
 # [1.3.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.2...v1.3.0-next.3) (2026-01-06)
 
 
