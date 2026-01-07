@@ -32,6 +32,7 @@
     "pack": "pnpm run build:superdoc && pnpm run type-check && pnpm --prefix ./packages/superdoc run pack",
     "release": "pnpm run build:superdoc && pnpm run type-check && pnpx semantic-release",
     "release:dry-run": "pnpm run build:superdoc && pnpm run type-check && pnpx semantic-release --dry-run",
+    "release:local": "pnpm run build:superdoc && pnpm run type-check && pnpx semantic-release --no-ci",
     "prepare": "husky",
     "test:layout": "node ./scripts/test-layout.mjs",
     "lint:staged": "lint-staged",
