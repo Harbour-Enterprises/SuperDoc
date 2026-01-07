@@ -1,3 +1,10 @@
+# [1.3.0-next.9](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.8...v1.3.0-next.9) (2026-01-07)
+
+
+### Bug Fixes
+
+* layout engine not correctly supporting view mode ([#1673](https://github.com/Harbour-Enterprises/SuperDoc/issues/1673)) ([b24d64e](https://github.com/Harbour-Enterprises/SuperDoc/commit/b24d64e44db723245b8f76224f11cb20b9e60ea0))
+
 # [1.3.0-next.8](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.7...v1.3.0-next.8) (2026-01-07)
 
 
