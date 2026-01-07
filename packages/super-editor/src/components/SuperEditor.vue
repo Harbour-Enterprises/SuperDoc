@@ -861,10 +861,29 @@ const handleMarginChange = ({ side, value }) => {
   const base = activeEditor.value;
   if (!base) return;
 
-  const pageStyles = base.getPageStyles();
-  const { pageMargins } = pageStyles;
-  const update = { ...pageMargins, [side]: value };
-  base?.updatePageStyle({ pageMargins: update });
+  const payload =
+    side === 'left'
+      ? { leftInches: value }
+      : side === 'right'
+        ? { rightInches: value }
+        : side === 'top'
+          ? { topInches: value }
+          : side === 'bottom'
+            ? { bottomInches: value }
+            : {};
+
+  const didUpdateSection =
+    typeof base.commands?.setSectionPageMarginsAtSelection === 'function'
+      ? base.commands.setSectionPageMarginsAtSelection(payload)
+      : false;
+
+  // Fallback to legacy behavior if section-aware command is unavailable or failed
+  if (!didUpdateSection) {
+    const pageStyles = base.getPageStyles();
+    const { pageMargins } = pageStyles;
+    const update = { ...pageMargins, [side]: value };
+    base?.updatePageStyle({ pageMargins: update });
+  }
 };
 
 onBeforeUnmount(() => {
