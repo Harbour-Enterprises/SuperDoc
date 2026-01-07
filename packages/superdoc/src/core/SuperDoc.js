@@ -797,7 +797,7 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Enable tracked changes in 'original' mode for viewing (hides insertions, shows original document)
+    // Show the original document when viewing: hide insertions and render deletions as normal text
     this.setTrackedChangesPreferences({ mode: 'original', enabled: true });
 
     // Clear comment positions to hide floating comment bubbles in viewing mode

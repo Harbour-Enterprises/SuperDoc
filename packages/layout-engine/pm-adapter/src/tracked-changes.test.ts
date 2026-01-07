@@ -883,6 +883,22 @@ describe('tracked-changes', () => {
       expect((result[1] as TextRun).text).toBe('More');
     });
 
+    it('should strip metadata from remaining runs in original mode after filtering inserts', () => {
+      const runs: Run[] = [
+        { text: 'Keep', fontFamily: 'Arial', fontSize: 12, trackedChange: { kind: 'delete', id: 'del-1' } },
+        { text: 'Inserted', fontFamily: 'Arial', fontSize: 12, trackedChange: { kind: 'insert', id: 'ins-1' } },
+      ];
+      const config: TrackedChangesConfig = { enabled: true, mode: 'original' };
+      const hyperlinkConfig: HyperlinkConfig = { enableRichHyperlinks: false };
+      const applyMarksToRun = vi.fn();
+
+      const result = applyTrackedChangesModeToRuns(runs, config, hyperlinkConfig, applyMarksToRun);
+      expect(result).toHaveLength(1);
+      const [kept] = result as TextRun[];
+      expect(kept.text).toBe('Keep');
+      expect(kept.trackedChange).toBeUndefined();
+    });
+
     it('should filter deletions in final mode', () => {
       const runs: Run[] = [
         { text: 'Normal', fontFamily: 'Arial', fontSize: 12 },
@@ -897,6 +913,22 @@ describe('tracked-changes', () => {
       expect(result).toHaveLength(2);
       expect((result[0] as TextRun).text).toBe('Normal');
       expect((result[1] as TextRun).text).toBe('More');
+    });
+
+    it('should strip metadata from remaining runs in final mode after filtering deletions', () => {
+      const runs: Run[] = [
+        { text: 'Keep', fontFamily: 'Arial', fontSize: 12, trackedChange: { kind: 'insert', id: 'ins-1' } },
+        { text: 'Deleted', fontFamily: 'Arial', fontSize: 12, trackedChange: { kind: 'delete', id: 'del-1' } },
+      ];
+      const config: TrackedChangesConfig = { enabled: true, mode: 'final' };
+      const hyperlinkConfig: HyperlinkConfig = { enableRichHyperlinks: false };
+      const applyMarksToRun = vi.fn();
+
+      const result = applyTrackedChangesModeToRuns(runs, config, hyperlinkConfig, applyMarksToRun);
+      expect(result).toHaveLength(1);
+      const [kept] = result as TextRun[];
+      expect(kept.text).toBe('Keep');
+      expect(kept.trackedChange).toBeUndefined();
     });
 
     it('should strip metadata when disabled', () => {
