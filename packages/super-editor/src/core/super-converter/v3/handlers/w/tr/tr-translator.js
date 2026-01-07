@@ -1,10 +1,11 @@
 // @ts-check
 import { NodeTranslator } from '@translator';
-import { twipsToPixels, pixelsToTwips } from '@core/super-converter/helpers.js';
+import { twipsToPixels, pixelsToTwips, eighthPointsToPixels } from '@core/super-converter/helpers.js';
 import { createAttributeHandler } from '@converter/v3/handlers/utils.js';
 
 import { translateChildNodes } from '@core/super-converter/v2/exporter/helpers/index.js';
 import { translator as tcTranslator } from '../tc';
+import { translator as tblBordersTranslator } from '../tblBorders';
 import { translator as trPrTranslator } from '../trPr';
 import { advancePastRowSpans, fillPlaceholderColumns, isPlaceholderCell } from './tr-helpers.js';
 
@@ -51,6 +52,14 @@ const encode = (params, encodedAttrs) => {
   encodedAttrs['rowHeight'] = twipsToPixels(tableRowProperties['rowHeight']?.value);
   encodedAttrs['cantSplit'] = tableRowProperties['cantSplit'];
 
+  // Handle borders
+  const baseBorders = params.extraParams?.rowBorders;
+  const rowTableBorders = getRowTableBorders({
+    params,
+    row,
+    baseBorders,
+  });
+
   // Handling cells
   const { columnWidths: gridColumnWidths, activeRowSpans = [] } = params.extraParams;
   const totalColumns = Array.isArray(gridColumnWidths) ? gridColumnWidths.length : 0;
@@ -90,6 +99,10 @@ const encode = (params, encodedAttrs) => {
       path: [...(params.path || []), node],
       extraParams: {
         ...params.extraParams,
+        rowBorders: {
+          ...baseBorders,
+          ...rowTableBorders,
+        },
         node,
         columnIndex: startColumn,
         columnWidth,
@@ -124,6 +137,55 @@ const encode = (params, encodedAttrs) => {
   };
   return newNode;
 };
+
+/**
+ * Row-level table property exceptions (w:tblPrEx) can override table borders for a specific row.
+ * @param {Object} args
+ * @param {import('@translator').SCEncoderConfig} args.params
+ * @param {Object} args.row - OOXML <w:tr> element
+ * @param {Record<string, unknown> | undefined} args.baseBorders - Processed base table borders for the table
+ * @returns {Record<string, unknown> | undefined}
+ */
+function getRowTableBorders({ params, row, baseBorders }) {
+  const tblPrEx = row?.elements?.find?.((el) => el.name === 'w:tblPrEx');
+  const tblBorders = tblPrEx?.elements?.find?.((el) => el.name === 'w:tblBorders');
+
+  if (!tblBorders) {
+    return baseBorders;
+  }
+
+  const rawOverrides = tblBordersTranslator.encode({ ...params, nodes: [tblBorders] }) || {};
+  const overrides = processRawTableBorders(rawOverrides);
+
+  if (!Object.keys(overrides).length) {
+    return baseBorders;
+  }
+
+  return { ...(baseBorders || {}), ...overrides };
+}
+
+/**
+ * Normalize raw w:tblBorders output to match table border processing.
+ * @param {Object[]} [rawBorders]
+ * @returns {Object}
+ */
+function processRawTableBorders(rawBorders) {
+  const borders = {};
+  Object.entries(rawBorders || {}).forEach(([name, attributes]) => {
+    const attrs = {};
+    const color = attributes?.color;
+    const size = attributes?.size;
+    const val = attributes?.val;
+
+    if (color && color !== 'auto') attrs.color = color.startsWith('#') ? color : `#${color}`;
+    if (size != null && size !== 'auto') attrs.size = eighthPointsToPixels(size);
+    if (val) attrs.val = val;
+
+    borders[name] = attrs;
+  });
+
+  return borders;
+}
 
 /**
  * Decode the tableRow node back into OOXML <w:tr>.

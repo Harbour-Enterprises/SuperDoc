@@ -87,8 +87,7 @@ const encode = (params, encodedAttrs) => {
   const borderProps = _processTableBorders(encodedAttrs.tableProperties.borders || {});
   const referencedStyles = _getReferencedTableStyles(encodedAttrs.tableStyleId, params) || {};
 
-  const rowBorders = { ...referencedStyles.rowBorders, ...borderProps.rowBorders };
-  encodedAttrs.borders = { ...referencedStyles.borders, ...borderProps.borders };
+  encodedAttrs.borders = { ...referencedStyles.borders, ...borderProps };
   encodedAttrs.tableProperties.cellMargins = referencedStyles.cellMargins = {
     ...referencedStyles.cellMargins,
     ...encodedAttrs.tableProperties.cellMargins,
@@ -124,7 +123,7 @@ const encode = (params, encodedAttrs) => {
       extraParams: {
         row,
         table: node,
-        rowBorders,
+        rowBorders: encodedAttrs.borders,
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
@@ -231,27 +230,23 @@ const decode = (params, decodedAttrs) => {
 /**
  * Process the table borders
  * @param {Object[]} [rawBorders] The raw border properties from the `tableProperties` attribute
- * @returns {Record<"borders"|"rowBorders", Record<string,unknown>>}
+ * @returns {Record<string,unknown>}
  */
-function _processTableBorders(rawBorders) {
+export function _processTableBorders(rawBorders) {
   const /** @type {Record<string,unknown>} */ borders = {};
-  const /** @type {Record<string,unknown>} */ rowBorders = {};
   Object.entries(rawBorders).forEach(([name, attributes]) => {
     const attrs = {};
     const color = attributes.color;
     const size = attributes.size;
+    const val = attributes.val;
     if (color && color !== 'auto') attrs['color'] = color.startsWith('#') ? color : `#${color}`;
     if (size && size !== 'auto') attrs['size'] = eighthPointsToPixels(size);
+    if (val) attrs['val'] = val;
 
-    const rowBorderNames = ['insideH', 'insideV'];
-    if (rowBorderNames.includes(name)) rowBorders[name] = attrs;
     borders[name] = attrs;
   });
 
-  return {
-    borders,
-    rowBorders,
-  };
+  return borders;
 }
 
 /**
@@ -315,10 +310,9 @@ export function _getReferencedTableStyles(tableStyleReference, params) {
     }
     const tableProperties = tblPrTranslator.encode({ ...params, nodes: [tblPr] });
     if (tableProperties) {
-      const { borders, rowBorders } = _processTableBorders(tableProperties.borders || {});
+      const borders = _processTableBorders(tableProperties.borders || {});
 
-      if (borders) stylesToReturn.borders = borders;
-      if (rowBorders) stylesToReturn.rowBorders = rowBorders;
+      if (borders || Object.keys(borders).length) stylesToReturn.borders = borders;
 
       const cellMargins = {};
       Object.entries(tableProperties.cellMargins || {}).forEach(([key, attrs]) => {
