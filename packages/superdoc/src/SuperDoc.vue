@@ -575,7 +575,7 @@ const showCommentsSidebar = computed(() => {
 
 const showToolsFloatingMenu = computed(() => {
   if (!isCommentsEnabled.value) return false;
-  return toolsMenuPosition.top && !getConfig.value?.readOnly;
+  return selectionPosition.value && toolsMenuPosition.top && !getConfig.value?.readOnly;
 });
 const showActiveSelection = computed(() => {
   if (!isCommentsEnabled.value) return false;
@@ -670,6 +670,7 @@ const handleSelectionChange = (selection) => {
 
 const resetSelection = () => {
   selectionPosition.value = null;
+  toolsMenuPosition.top = null;
 };
 
 const updateSelection = ({ startX, startY, x, y, source }) => {
@@ -677,7 +678,8 @@ const updateSelection = ({ startX, startY, x, y, source }) => {
   const hasEndCoords = typeof x === 'number' || typeof y === 'number';
 
   if (!hasStartCoords && !hasEndCoords) {
-    return (selectionPosition.value = null);
+    resetSelection();
+    return;
   }
 
   // Initialize the selection position
