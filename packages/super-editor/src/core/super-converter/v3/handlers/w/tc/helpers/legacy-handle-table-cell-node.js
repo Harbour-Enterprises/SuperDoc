@@ -251,14 +251,14 @@ const processInlineCellBorders = (borders, rowBorders) => {
     const borderAttrs = borders[direction];
     const rowBorderAttrs = rowBorders[direction];
 
-    if (borderAttrs && borderAttrs['val'] !== 'nil') {
+    if (borderAttrs && borderAttrs['val'] !== 'none') {
       const color = borderAttrs['color'];
       let size = borderAttrs['size'];
       if (size) size = eighthPointsToPixels(size);
       acc[direction] = { color, size, val: borderAttrs['val'] };
       return acc;
     }
-    if (borderAttrs && borderAttrs['val'] === 'nil') {
+    if (borderAttrs && borderAttrs['val'] === 'none') {
       const border = Object.assign({}, rowBorderAttrs || {});
       if (!Object.keys(border).length) {
         return acc;
