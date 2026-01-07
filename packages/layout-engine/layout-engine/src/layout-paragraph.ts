@@ -302,11 +302,16 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       } else if (vRelativeFrom === 'paragraph') {
         // vRelativeFrom === 'paragraph' - position relative to anchor paragraph
         const baseAnchorY = state.cursorY;
-        // For vRelativeFrom="paragraph", MS Word positions relative to where text sits within the line,
-        // not the paragraph top. Adjust anchor point by half the line height to better match Word's behavior.
         const firstLineHeight = measure.lines?.[0]?.lineHeight ?? 0;
-        const paragraphAdjustment = firstLineHeight / 2;
-        anchorY = baseAnchorY + paragraphAdjustment + offsetV;
+        if (alignV === 'top') {
+          anchorY = baseAnchorY + offsetV;
+        } else if (alignV === 'bottom') {
+          anchorY = baseAnchorY + firstLineHeight - imageHeight + offsetV;
+        } else if (alignV === 'center') {
+          anchorY = baseAnchorY + (firstLineHeight - imageHeight) / 2 + offsetV;
+        } else {
+          anchorY = baseAnchorY + offsetV;
+        }
       } else {
         // vRelativeFrom is undefined/null - use simple offset from current cursor (legacy behavior)
         const baseAnchorY = state.cursorY;
