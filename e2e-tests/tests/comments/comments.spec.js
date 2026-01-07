@@ -40,8 +40,7 @@ test.describe('comments & tracked changes', () => {
     {
       author: 'SuperDoc 8083 (imported)',
       text: [
-        ['Added: ', 'add'],
-        ['Deleted: ', 'rem'],
+        ['Added: ', 'add', 'Deleted: ','rem'],
       ],
       date: new Date(1763743800000),
     },
