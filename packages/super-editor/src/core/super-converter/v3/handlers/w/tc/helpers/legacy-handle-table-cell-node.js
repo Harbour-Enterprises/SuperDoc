@@ -16,7 +16,7 @@ export function handleTableCellNode({
   allColumnWidths = [],
   _referencedStyles,
 }) {
-  const { nodeListHandler } = params;
+  const { nodeListHandler, extraParams = {} } = params;
   const attributes = {};
   const referencedStyles = _referencedStyles ?? { fontSize: null, fonts: {}, cellMargins: {} };
 
@@ -26,20 +26,17 @@ export function handleTableCellNode({
   attributes['tableCellProperties'] = tableCellProperties;
 
   const rows = table?.elements?.filter((el) => el.name === 'w:tr') ?? [];
-  const rowIndex = rows.findIndex((r) => r === row);
-  const isFirstRow = rowIndex === 0;
-  const isLastRow = rowIndex >= 0 && rowIndex === rows.length - 1;
+  const isLastRow = extraParams.rowIndex >= 0 && extraParams.rowIndex === rows.length - 1;
 
-  const totalColumns = table?.elements?.filter((el) => el.name === 'w:tc')?.length ?? 0;
-  const isFirstColumn = columnIndex === 0;
+  const totalColumns = row?.elements?.filter((el) => el.name === 'w:tc')?.length ?? 0;
   const isLastColumn = columnIndex === totalColumns;
 
   // Borders
-  if (rowBorders?.insideH && !isFirstRow && !isLastRow) {
+  if (rowBorders?.insideH && !isLastRow) {
     rowBorders['bottom'] = rowBorders.insideH;
     delete rowBorders.insideH;
   }
-  if (rowBorders?.insideV && !isFirstColumn && !isLastColumn) {
+  if (rowBorders?.insideV && !isLastColumn) {
     rowBorders['right'] = rowBorders.insideV;
     delete rowBorders?.insideV;
   }
