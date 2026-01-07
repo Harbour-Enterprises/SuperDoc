@@ -30,6 +30,22 @@ const createCommentSchema = () => {
     doc: { content: 'block+' },
     paragraph: { content: 'inline*', group: 'block', toDOM: () => ['p', 0], parseDOM: [{ tag: 'p' }] },
     text: { group: 'inline' },
+    commentRangeStart: {
+      inline: true,
+      group: 'inline',
+      atom: true,
+      attrs: { 'w:id': {} },
+      toDOM: (node) => ['commentRangeStart', node.attrs],
+      parseDOM: [{ tag: 'commentRangeStart' }],
+    },
+    commentRangeEnd: {
+      inline: true,
+      group: 'inline',
+      atom: true,
+      attrs: { 'w:id': {} },
+      toDOM: (node) => ['commentRangeEnd', node.attrs],
+      parseDOM: [{ tag: 'commentRangeEnd' }],
+    },
   };
 
   const marks = {
@@ -322,6 +338,46 @@ describe('CommentsPlugin commands', () => {
 
     expect(result).toBe(false);
     expect(editor.view.focus).not.toHaveBeenCalled();
+  });
+
+  it('findRangeById finds resolved comment via commentRangeStart/End nodes', () => {
+    const schema = createCommentSchema();
+    const startNode = schema.nodes.commentRangeStart.create({ 'w:id': 'resolved-1' });
+    const endNode = schema.nodes.commentRangeEnd.create({ 'w:id': 'resolved-1' });
+    const paragraph = schema.node('paragraph', null, [startNode, schema.text('Commented text'), endNode]);
+    const doc = schema.node('doc', null, [paragraph]);
+
+    const result = findRangeById(doc, 'resolved-1');
+
+    expect(result).not.toBeNull();
+    expect(result.from).toBe(1); // position of commentRangeStart
+    expect(result.to).toBe(16); // position of commentRangeEnd
+  });
+
+  it('findRangeById returns null when commentRangeStart/End nodes have different ids', () => {
+    const schema = createCommentSchema();
+    const startNode = schema.nodes.commentRangeStart.create({ 'w:id': 'comment-1' });
+    const endNode = schema.nodes.commentRangeEnd.create({ 'w:id': 'comment-2' });
+    const paragraph = schema.node('paragraph', null, [startNode, schema.text('Commented text'), endNode]);
+    const doc = schema.node('doc', null, [paragraph]);
+
+    const result = findRangeById(doc, 'comment-1');
+
+    expect(result).toBeNull(); // Only found start, not end
+  });
+
+  it('focuses editor when moving cursor to resolved comment by id via nodes', () => {
+    const schema = createCommentSchema();
+    const startNode = schema.nodes.commentRangeStart.create({ 'w:id': 'resolved-1' });
+    const endNode = schema.nodes.commentRangeEnd.create({ 'w:id': 'resolved-1' });
+    const paragraph = schema.node('paragraph', null, [startNode, schema.text('Commented text'), endNode]);
+    const doc = schema.node('doc', null, [paragraph]);
+    const { editor, commands } = createEditorEnvironment(schema, doc);
+
+    const result = commands.setCursorById('resolved-1')({ state: editor.state, editor });
+
+    expect(result).toBe(true);
+    expect(editor.view.focus).toHaveBeenCalled();
   });
 });
 
