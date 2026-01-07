@@ -1369,9 +1369,10 @@ export class PresentationEditor extends EventEmitter {
       throw new TypeError('[PresentationEditor] setTrackedChangesOverrides expects an object or undefined');
     }
     if (overrides !== undefined) {
-      if (overrides.mode !== undefined && !['review', 'simple', 'original'].includes(overrides.mode as string)) {
+      const validModes = ['review', 'original', 'final', 'off'];
+      if (overrides.mode !== undefined && !validModes.includes(overrides.mode as string)) {
         throw new TypeError(
-          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: review, simple, original`,
+          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: ${validModes.join(', ')}`,
         );
       }
       if (overrides.enabled !== undefined && typeof overrides.enabled !== 'boolean') {

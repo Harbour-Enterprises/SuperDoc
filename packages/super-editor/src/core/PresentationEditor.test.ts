@@ -1990,7 +1990,8 @@ describe('PresentationEditor', () => {
       it('should accept valid overrides', () => {
         expect(() => editor.setTrackedChangesOverrides({ mode: 'review' })).not.toThrow();
         expect(() => editor.setTrackedChangesOverrides({ enabled: true })).not.toThrow();
-        expect(() => editor.setTrackedChangesOverrides({ mode: 'simple', enabled: false })).not.toThrow();
+        expect(() => editor.setTrackedChangesOverrides({ mode: 'original', enabled: false })).not.toThrow();
+        expect(() => editor.setTrackedChangesOverrides({ mode: 'final' })).not.toThrow();
       });
     });
   });

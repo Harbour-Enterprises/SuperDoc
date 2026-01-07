@@ -502,6 +502,23 @@ export const applyTrackedChangesModeToRuns = (
         );
       }
     });
+
+    // In 'original' mode we want to show the document before tracked changes.
+    // After filtering out insertions, strip remaining tracked-change metadata so deletions render as normal text.
+    // In 'final' mode we want to show the document with all changes accepted.
+    // After filtering out deletions, strip remaining tracked-change metadata so insertions render as normal text.
+    // Note: We only strip 'insert' and 'delete' kinds, not 'format' kind which should remain visible.
+    if ((config.mode === 'original' || config.mode === 'final') && config.enabled) {
+      filtered.forEach((run) => {
+        if (
+          isTextRun(run) &&
+          run.trackedChange &&
+          (run.trackedChange.kind === 'insert' || run.trackedChange.kind === 'delete')
+        ) {
+          delete run.trackedChange;
+        }
+      });
+    }
   }
 
   return filtered;
