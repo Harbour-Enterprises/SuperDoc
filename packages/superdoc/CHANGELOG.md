@@ -1,3 +1,10 @@
+# [1.3.0-next.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.5...v1.3.0-next.6) (2026-01-07)
+
+
+### Bug Fixes
+
+* header/footer sizes ([#1666](https://github.com/Harbour-Enterprises/SuperDoc/issues/1666)) ([9cd0cce](https://github.com/Harbour-Enterprises/SuperDoc/commit/9cd0ccebe0b07dbdace54a8a2c7fb06fdd225b01))
+
 # [1.3.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.4...v1.3.0-next.5) (2026-01-07)
 
 
