@@ -511,6 +511,8 @@ export const Image = Node.create({
       const appliedTopViaStyle = isAbsolutelyPositioned && allowNegativeTopOffset && !relativeFromMarginV;
       if (appliedTopViaStyle) {
         style += `top: ${top}px;`;
+      // Don't apply vertical offset as margin-top for images positioned relative to margin
+      // as this causes double-counting of the offset
       } else if (top && !relativeFromMarginV) {
         if (relativeFromPageV && top >= maxMarginV) margin.top += maxMarginV;
         else margin.top += top;
