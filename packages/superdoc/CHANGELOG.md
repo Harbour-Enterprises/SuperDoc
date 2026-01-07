@@ -1,3 +1,10 @@
+# [1.3.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.4...v1.3.0-next.5) (2026-01-07)
+
+
+### Bug Fixes
+
+* line wrap with right-align page numbers, page number font inheritance ([#1665](https://github.com/Harbour-Enterprises/SuperDoc/issues/1665)) ([6a996f0](https://github.com/Harbour-Enterprises/SuperDoc/commit/6a996f0eaaaf64299d11a5258319907ef349a112))
+
 # [1.3.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.3...v1.3.0-next.4) (2026-01-07)
 
 
