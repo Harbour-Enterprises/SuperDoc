@@ -114,6 +114,7 @@ const encode = (params, encodedAttrs) => {
 
   const content = [];
   const totalColumns = columnWidths.length;
+  const totalRows = rows.length;
   const activeRowSpans = totalColumns > 0 ? new Array(totalColumns).fill(0) : [];
   rows.forEach((row, rowIndex) => {
     const result = trTranslator.encode({
@@ -127,6 +128,8 @@ const encode = (params, encodedAttrs) => {
         columnWidths,
         activeRowSpans: activeRowSpans.slice(),
         rowIndex,
+        totalRows,
+        totalColumns,
         _referencedStyles: referencedStyles,
       },
     });
