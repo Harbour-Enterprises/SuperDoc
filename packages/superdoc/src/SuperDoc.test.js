@@ -636,4 +636,102 @@ describe('SuperDoc.vue', () => {
   // Note: The handlePresentationEditorReady test was removed because that function
   // no longer exists. PresentationEditor now registers itself automatically in the
   // constructor and manages zoom/layout data internally.
+
+  it('hides tools bubble when selection is cleared (SD-1241)', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editorMock = {
+      options: { documentId: 'doc-1' },
+      commands: { togglePagination: vi.fn() },
+      view: {
+        coordsAtPos: vi.fn((pos) =>
+          pos === 1 ? { top: 100, bottom: 140, left: 10, right: 30 } : { top: 120, bottom: 160, left: 70, right: 90 },
+        ),
+        state: { selection: { empty: true } },
+      },
+      getPageStyles: vi.fn(() => ({ pageMargins: {} })),
+    };
+
+    // First, make a selection to show the tools menu
+    options.onSelectionUpdate({
+      editor: editorMock,
+      transaction: { selection: { $from: { pos: 1 }, $to: { pos: 6 } } },
+    });
+    await nextTick();
+
+    const setupState = wrapper.vm.$.setupState;
+    setupState.toolsMenuPosition.top = '100px';
+    setupState.toolsMenuPosition.right = '0px';
+    superdocStoreStub.selectionPosition.value = {
+      left: 10,
+      right: 90,
+      top: 100,
+      bottom: 160,
+      source: 'super-editor',
+    };
+    await nextTick();
+
+    // Verify tools menu is visible
+    expect(wrapper.vm.showToolsFloatingMenu).toBe(true);
+
+    // Clear the selection (simulating cursor change/deselection)
+    setupState.resetSelection();
+    await nextTick();
+
+    // Verify both selectionPosition and toolsMenuPosition.top are cleared
+    expect(superdocStoreStub.selectionPosition.value).toBeNull();
+    expect(setupState.toolsMenuPosition.top).toBeNull();
+
+    // Verify tools menu is now hidden (computed returns falsy value)
+    expect(wrapper.vm.showToolsFloatingMenu).toBeFalsy();
+  });
+
+  it('showToolsFloatingMenu returns falsy when selectionPosition is null even if toolsMenuPosition.top is set', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const setupState = wrapper.vm.$.setupState;
+
+    // Set toolsMenuPosition.top but leave selectionPosition null
+    setupState.toolsMenuPosition.top = '100px';
+    superdocStoreStub.selectionPosition.value = null;
+    await nextTick();
+
+    // Tools menu should be hidden because selectionPosition is null
+    expect(wrapper.vm.showToolsFloatingMenu).toBeFalsy();
+  });
+
+  it('hides tools bubble when updateSelection receives no coordinates', async () => {
+    const superdocStub = createSuperdocStub();
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const setupState = wrapper.vm.$.setupState;
+
+    // Set up initial state with selection and tools menu visible
+    setupState.toolsMenuPosition.top = '100px';
+    superdocStoreStub.selectionPosition.value = {
+      left: 10,
+      right: 90,
+      top: 100,
+      bottom: 160,
+      source: 'super-editor',
+    };
+    await nextTick();
+
+    expect(wrapper.vm.showToolsFloatingMenu).toBeTruthy();
+
+    // Call updateSelection with no coordinates (simulates deselection)
+    setupState.updateSelection({});
+    await nextTick();
+
+    // Both should be cleared
+    expect(superdocStoreStub.selectionPosition.value).toBeNull();
+    expect(setupState.toolsMenuPosition.top).toBeNull();
+    expect(wrapper.vm.showToolsFloatingMenu).toBeFalsy();
+  });
 });
