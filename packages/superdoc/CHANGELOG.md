@@ -1,3 +1,10 @@
+# [1.3.0-next.7](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.6...v1.3.0-next.7) (2026-01-07)
+
+
+### Bug Fixes
+
+* header images that extend past area should be behind content ([#1669](https://github.com/Harbour-Enterprises/SuperDoc/issues/1669)) ([bf7d679](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf7d6798c7698b884734b32b70993acb0bfa0cd0))
+
 # [1.3.0-next.6](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.5...v1.3.0-next.6) (2026-01-07)
 
 
