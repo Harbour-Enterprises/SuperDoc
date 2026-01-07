@@ -549,6 +549,13 @@ export const useCommentsStore = defineStore('comments', () => {
     editorCommentPositions.value = allCommentPositions || {};
   };
 
+  /**
+   * Clear editor comment positions (used when entering viewing mode to hide comment bubbles)
+   */
+  const clearEditorCommentPositions = () => {
+    editorCommentPositions.value = {};
+  };
+
   const getFloatingComments = computed(() => {
     const comments = getGroupedComments.value?.parentComments
       .filter((c) => !c.resolvedTime)
@@ -679,6 +686,7 @@ export const useCommentsStore = defineStore('comments', () => {
     processLoadedDocxComments,
     translateCommentsForExport,
     handleEditorLocationsUpdate,
+    clearEditorCommentPositions,
     handleTrackedChangeUpdate,
   };
 });

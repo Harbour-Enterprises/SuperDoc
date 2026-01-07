@@ -781,6 +781,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           undefined,
           undefined,
+          true, // enableComments defaults to true
         );
       });
 
@@ -823,6 +824,7 @@ describe('paragraph converters', () => {
           { enableRichHyperlinks: false },
           undefined,
           undefined,
+          true, // enableComments defaults to true
         );
       });
     });
@@ -1816,6 +1818,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           applyMarksToRun,
           undefined,
+          true,
         );
 
         const paraBlock = blocks[0] as ParagraphBlock;

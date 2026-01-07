@@ -364,8 +364,16 @@ export const applyFormatChangeMarks = (
   run: TextRun,
   config: TrackedChangesConfig,
   hyperlinkConfig: HyperlinkConfig,
-  applyMarksToRun: (run: TextRun, marks: PMMark[], config: HyperlinkConfig, themeColors?: ThemeColorPalette) => void,
+  applyMarksToRun: (
+    run: TextRun,
+    marks: PMMark[],
+    config: HyperlinkConfig,
+    themeColors?: ThemeColorPalette,
+    backgroundColor?: string,
+    enableComments?: boolean,
+  ) => void,
   themeColors?: ThemeColorPalette,
+  enableComments = true,
 ): void => {
   const tracked = run.trackedChange;
   if (!tracked || tracked.kind !== 'format') {
@@ -402,7 +410,7 @@ export const applyFormatChangeMarks = (
   resetRunFormatting(run);
 
   try {
-    applyMarksToRun(run, beforeMarks as PMMark[], hyperlinkConfig, themeColors);
+    applyMarksToRun(run, beforeMarks as PMMark[], hyperlinkConfig, themeColors, undefined, enableComments);
   } catch (error) {
     if (process.env.NODE_ENV === 'development') {
       console.warn('[PM-Adapter] Error applying format change marks, resetting formatting:', error);
@@ -426,8 +434,16 @@ export const applyTrackedChangesModeToRuns = (
   runs: Run[],
   config: TrackedChangesConfig | undefined,
   hyperlinkConfig: HyperlinkConfig,
-  applyMarksToRun: (run: TextRun, marks: PMMark[], config: HyperlinkConfig, themeColors?: ThemeColorPalette) => void,
+  applyMarksToRun: (
+    run: TextRun,
+    marks: PMMark[],
+    config: HyperlinkConfig,
+    themeColors?: ThemeColorPalette,
+    backgroundColor?: string,
+    enableComments?: boolean,
+  ) => void,
   themeColors?: ThemeColorPalette,
+  enableComments = true,
 ): Run[] => {
   if (!config) {
     return runs;
@@ -443,7 +459,7 @@ export const applyTrackedChangesModeToRuns = (
       // Apply format changes even when not filtering insertions/deletions
       runs.forEach((run) => {
         if (isTextRun(run)) {
-          applyFormatChangeMarks(run, config, hyperlinkConfig, applyMarksToRun, themeColors);
+          applyFormatChangeMarks(run, config, hyperlinkConfig, applyMarksToRun, themeColors, enableComments);
         }
       });
     }
@@ -476,7 +492,14 @@ export const applyTrackedChangesModeToRuns = (
     // Apply format changes to filtered runs
     filtered.forEach((run) => {
       if (isTextRun(run)) {
-        applyFormatChangeMarks(run, config, hyperlinkConfig || DEFAULT_HYPERLINK_CONFIG, applyMarksToRun, themeColors);
+        applyFormatChangeMarks(
+          run,
+          config,
+          hyperlinkConfig || DEFAULT_HYPERLINK_CONFIG,
+          applyMarksToRun,
+          themeColors,
+          enableComments,
+        );
       }
     });
   }

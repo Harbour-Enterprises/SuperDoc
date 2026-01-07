@@ -22,6 +22,37 @@ import type {
 } from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
 
+/**
+ * Comment annotation structure attached to runs.
+ */
+type CommentAnnotation = {
+  commentId?: string;
+  internal?: boolean;
+};
+
+/**
+ * Run type with validated comment annotations.
+ */
+type RunWithComments = Run & {
+  comments: CommentAnnotation[];
+};
+
+/**
+ * Type guard to check if a run has valid comment annotations.
+ * Ensures the comments property exists, is an array, and is non-empty
+ * before attempting to access comment metadata.
+ *
+ * @param run - The run to check for comments
+ * @returns True if run has valid comments array, false otherwise
+ */
+function hasComments(run: Run): run is RunWithComments {
+  return (
+    'comments' in run &&
+    Array.isArray((run as Partial<RunWithComments>).comments) &&
+    (run as Partial<RunWithComments>).comments!.length > 0
+  );
+}
+
 export type DirtyRegion = {
   firstDirtyIndex: number;
   lastStableIndex: number;
@@ -131,6 +162,19 @@ const getTrackedChangeKey = (run: Run): string => {
     return `${tc.kind ?? ''}:${tc.id ?? ''}:${tc.author ?? ''}:${tc.date ?? ''}:${beforeHash}:${afterHash}`;
   }
   return '';
+};
+
+/**
+ * Generates a hash key from comment annotations for equality comparison.
+ * Includes comment IDs and internal flag to catch visibility changes.
+ * Uses type guard to safely access comment metadata.
+ *
+ * @param run - The run to extract comment key from
+ * @returns Hash string, or empty string if no comments
+ */
+const getCommentKey = (run: Run): string => {
+  if (!hasComments(run)) return '';
+  return run.comments.map((c) => `${c.commentId ?? ''}:${c.internal ? '1' : '0'}`).join('|');
 };
 
 // ============================================================================
@@ -368,7 +412,8 @@ const paragraphBlocksEqual = (a: FlowBlock & { kind: 'paragraph' }, b: FlowBlock
       ('fontSize' in runA ? runA.fontSize : undefined) !== ('fontSize' in runB ? runB.fontSize : undefined) ||
       ('fontFamily' in runA ? runA.fontFamily : undefined) !== ('fontFamily' in runB ? runB.fontFamily : undefined) ||
       ('highlight' in runA ? runA.highlight : undefined) !== ('highlight' in runB ? runB.highlight : undefined) ||
-      getTrackedChangeKey(runA) !== getTrackedChangeKey(runB)
+      getTrackedChangeKey(runA) !== getTrackedChangeKey(runB) ||
+      getCommentKey(runA) !== getCommentKey(runB)
     ) {
       return false;
     }

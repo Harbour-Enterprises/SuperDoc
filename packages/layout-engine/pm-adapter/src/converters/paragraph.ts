@@ -668,6 +668,10 @@ const applyInlineRunProperties = (
  * @param trackedChanges - Optional tracked changes configuration
  * @param bookmarks - Optional bookmark position map
  * @param hyperlinkConfig - Hyperlink configuration
+ * @param themeColors - Optional theme color palette for color resolution
+ * @param converters - Optional converter dependencies injected to avoid circular imports
+ * @param converterContext - Optional converter context with document styles
+ * @param enableComments - Whether to include comment marks in the output (defaults to true). Set to false for viewing modes where comments should be hidden.
  * @returns Array of FlowBlocks (paragraphs, images, drawings, page breaks, etc.)
  */
 export function paragraphToFlowBlocks(
@@ -731,6 +735,7 @@ export function paragraphToFlowBlocks(
     ) => FlowBlock | null;
   },
   converterContext?: ConverterContext,
+  enableComments = true,
 ): FlowBlock[] {
   const baseBlockId = nextBlockId('paragraph');
   const paragraphProps =
@@ -978,6 +983,7 @@ export function paragraphToFlowBlocks(
         hyperlinkConfig,
         themeColors,
         converterContext?.backgroundColor,
+        enableComments,
       );
       currentRuns.push(run);
       return;
@@ -1160,6 +1166,7 @@ export function paragraphToFlowBlocks(
             hyperlinkConfig,
             themeColors,
             converterContext?.backgroundColor,
+            enableComments,
           );
         }
         console.debug('[token-debug] paragraph-token-run', {
@@ -1388,6 +1395,7 @@ export function paragraphToFlowBlocks(
       hyperlinkConfig,
       applyMarksToRun,
       themeColors,
+      enableComments,
     );
     if (trackedChanges.enabled && filteredRuns.length === 0) {
       return;
