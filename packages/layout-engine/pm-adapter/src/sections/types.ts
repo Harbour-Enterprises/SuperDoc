@@ -73,7 +73,10 @@ export type SectionSignature = {
   headerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
   footerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
   columnsPx?: { count: number; gap: number };
-  numbering?: { format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman'; start?: number };
+  numbering?: {
+    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
+    start?: number;
+  };
 } | null;
 
 /**
@@ -107,6 +110,9 @@ export interface SectionRange {
   titlePg: boolean;
   headerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
   footerRefs?: Partial<Record<'default' | 'first' | 'even' | 'odd', string>>;
-  numbering?: { format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman'; start?: number };
+  numbering?: {
+    format?: 'decimal' | 'lowerLetter' | 'upperLetter' | 'lowerRoman' | 'upperRoman' | 'numberInDash';
+    start?: number;
+  };
   vAlign?: SectionVerticalAlign;
 }

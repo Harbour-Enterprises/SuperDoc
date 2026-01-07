@@ -36,11 +36,11 @@ export class AIActionsService {
     private onStreamChunk?: (partialResult: string) => void,
     private readonly streamPreference?: boolean,
   ) {
-    this.adapter = new EditorAdapter(this.editor);
-    this.logger = new Logger(this.enableLogging);
-    if (!this.adapter) {
+    if (!this.editor) {
       throw new Error('SuperDoc editor is not available; retry once the editor is initialized');
     }
+    this.adapter = new EditorAdapter(this.editor);
+    this.logger = new Logger(this.enableLogging);
 
     if (typeof this.provider.streamResults === 'boolean') {
       this.streamPreference = this.provider.streamResults;

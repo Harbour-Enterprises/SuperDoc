@@ -1,3 +1,37 @@
+# [1.3.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.4...v1.3.0-next.5) (2026-01-07)
+
+
+### Bug Fixes
+
+* line wrap with right-align page numbers, page number font inheritance ([#1665](https://github.com/Harbour-Enterprises/SuperDoc/issues/1665)) ([6a996f0](https://github.com/Harbour-Enterprises/SuperDoc/commit/6a996f0eaaaf64299d11a5258319907ef349a112))
+
+# [1.3.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.3...v1.3.0-next.4) (2026-01-07)
+
+
+### Bug Fixes
+
+* empty display label and default label ([#1621](https://github.com/Harbour-Enterprises/SuperDoc/issues/1621)) ([e29e14f](https://github.com/Harbour-Enterprises/SuperDoc/commit/e29e14f37c27fbad19c87c3571fa26f901d8ced4))
+* list marker position when item contains tab ([#1658](https://github.com/Harbour-Enterprises/SuperDoc/issues/1658)) ([e2148bb](https://github.com/Harbour-Enterprises/SuperDoc/commit/e2148bb3a9fd0f6cbcc7d6cf9c0779a6756b6052))
+* prevent crash when deleting tracked changes with empty nodes ([#1663](https://github.com/Harbour-Enterprises/SuperDoc/issues/1663)) ([e8a02d7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e8a02d72c0e333fb323991ed493913845f12f1a1))
+* sync header/footer changes to ydoc ([#1623](https://github.com/Harbour-Enterprises/SuperDoc/issues/1623)) ([0b581a5](https://github.com/Harbour-Enterprises/SuperDoc/commit/0b581a5999d3b3e4a2319297d47acb798cfc9826))
+
+# [1.3.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.2...v1.3.0-next.3) (2026-01-06)
+
+
+### Bug Fixes
+
+* tabs extending past line width ([#1659](https://github.com/Harbour-Enterprises/SuperDoc/issues/1659)) ([0f9c053](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f9c053476f86156cdd787f29481eab73656a702))
+* unify run styles and fix new list item runs ([#1650](https://github.com/Harbour-Enterprises/SuperDoc/issues/1650)) ([65447ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/65447cad6f1b4227ec011aaf30b69c9650202dd5))
+
+# [1.3.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.1...v1.3.0-next.2) (2026-01-06)
+
+
+### Bug Fixes
+
+* account for indentation when drawing paragraph borders ([#1655](https://github.com/Harbour-Enterprises/SuperDoc/issues/1655)) ([01a8d39](https://github.com/Harbour-Enterprises/SuperDoc/commit/01a8d394784d714c539963430abc712dc360a0cd))
+* bug - page number format from first section overrides number ([#1654](https://github.com/Harbour-Enterprises/SuperDoc/issues/1654)) ([c45ecfa](https://github.com/Harbour-Enterprises/SuperDoc/commit/c45ecfae71be17953e88662e8e646dab173b4c61))
+* partial row height computation ([#1652](https://github.com/Harbour-Enterprises/SuperDoc/issues/1652)) ([0ccd3c8](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ccd3c8c9924cc2a5d35cd9d09ff45dc1a964496))
+
 # [1.3.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.2-next.1...v1.3.0-next.1) (2026-01-06)
 
 

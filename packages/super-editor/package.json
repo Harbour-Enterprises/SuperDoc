@@ -120,6 +120,7 @@
     "@superdoc/painter-dom": "workspace:*",
     "@superdoc/pm-adapter": "workspace:*",
     "@superdoc/preset-geometry": "workspace:*",
+    "@superdoc/style-engine": "workspace:*",
     "@superdoc/url-validation": "workspace:*",
     "@superdoc/word-layout": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",

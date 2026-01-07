@@ -700,7 +700,11 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     nodesToUse = Array.from(new Set(allNodes));
   } else {
     // For non-replacements, use nodes found in document or fall back to step nodes
-    nodesToUse = nodesWithMark.length ? nodesWithMark : [node];
+    nodesToUse = nodesWithMark.length ? nodesWithMark : node ? [node] : []
+  }
+
+  if (!nodesToUse.length) {
+    return;
   }
 
   const { deletionText, trackedChangeText } = getTrackedChangeText({
