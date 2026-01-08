@@ -911,6 +911,20 @@ export function paragraphToFlowBlocks(
   let tabOrdinal = 0;
 
   const nextId = () => (partIndex === 0 ? baseBlockId : `${baseBlockId}-${partIndex}`);
+  const attachAnchorParagraphId = <T extends FlowBlock>(block: T, anchorParagraphId: string): T => {
+    const applicableKinds = new Set(['drawing', 'image', 'table']);
+    if (!applicableKinds.has(block.kind)) {
+      return block;
+    }
+    const blockWithAttrs = block as T & { attrs?: Record<string, unknown> };
+    return {
+      ...blockWithAttrs,
+      attrs: {
+        ...(blockWithAttrs.attrs ?? {}),
+        anchorParagraphId,
+      },
+    };
+  };
 
   const flushParagraph = () => {
     if (currentRuns.length === 0) {
@@ -1209,6 +1223,7 @@ export function paragraphToFlowBlocks(
       }
 
       // Anchored/floating image: existing behavior (flush and create ImageBlock)
+      const anchorParagraphId = nextId();
       flushParagraph();
       const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
       const trackedMeta = trackedChanges?.enabled ? collectTrackedChangeFromMarks(mergedMarks) : undefined;
@@ -1219,7 +1234,7 @@ export function paragraphToFlowBlocks(
         const imageBlock = converters.imageNodeToBlock(node, nextBlockId, positions, trackedMeta, trackedChanges);
         if (imageBlock && imageBlock.kind === 'image') {
           annotateBlockWithTrackedChange(imageBlock, trackedMeta, trackedChanges);
-          blocks.push(imageBlock);
+          blocks.push(attachAnchorParagraphId(imageBlock, anchorParagraphId));
         }
       }
       return;
@@ -1228,6 +1243,7 @@ export function paragraphToFlowBlocks(
     if (node.type === 'contentBlock') {
       const attrs = node.attrs ?? {};
       if (attrs.horizontalRule === true) {
+        const anchorParagraphId = nextId();
         flushParagraph();
         const indent = paragraphAttrs?.indent;
         const hrIndentLeft = typeof indent?.left === 'number' ? indent.left : undefined;
@@ -1239,51 +1255,55 @@ export function paragraphToFlowBlocks(
         const convert = converters?.contentBlockNodeToDrawingBlock ?? contentBlockNodeToDrawingBlock;
         const drawingBlock = convert(hrNode, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'vectorShape') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.vectorShapeNodeToDrawingBlock) {
         const drawingBlock = converters.vectorShapeNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeGroup') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeGroupNodeToDrawingBlock) {
         const drawingBlock = converters.shapeGroupNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeContainer') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeContainerNodeToDrawingBlock) {
         const drawingBlock = converters.shapeContainerNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeTextbox') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeTextboxNodeToDrawingBlock) {
         const drawingBlock = converters.shapeTextboxNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
@@ -1291,6 +1311,7 @@ export function paragraphToFlowBlocks(
 
     // Tables may occasionally appear inline via wrappers; treat as block-level
     if (node.type === 'table') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.tableNodeToBlock) {
         const tableBlock = converters.tableNodeToBlock(
@@ -1307,7 +1328,7 @@ export function paragraphToFlowBlocks(
           ...(converterContext !== undefined ? [converterContext] : []),
         );
         if (tableBlock) {
-          blocks.push(tableBlock);
+          blocks.push(attachAnchorParagraphId(tableBlock, anchorParagraphId));
         }
       }
       return;
