@@ -1,3 +1,11 @@
+# [1.3.0-next.14](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.13...v1.3.0-next.14) (2026-01-08)
+
+
+### Bug Fixes
+
+* ruler when comments are present ([#1681](https://github.com/Harbour-Enterprises/SuperDoc/issues/1681)) ([90458a5](https://github.com/Harbour-Enterprises/SuperDoc/commit/90458a5bd80dae60379547aa108ed5403ad1a072))
+* tab widths mid line ([#1682](https://github.com/Harbour-Enterprises/SuperDoc/issues/1682)) ([92dabbe](https://github.com/Harbour-Enterprises/SuperDoc/commit/92dabbe5ba63bb5333062044db37e5bbdf1437e3))
+
 # [1.3.0-next.13](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.12...v1.3.0-next.13) (2026-01-08)
 
 
