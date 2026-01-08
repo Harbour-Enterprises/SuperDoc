@@ -2700,7 +2700,9 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
 
   const isBlockBehindDoc = block.anchor?.behindDoc;
   const isBlockWrapBehindDoc = block.wrap?.type === 'None' && block.wrap?.behindDoc;
-  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc;
+  const isPageRelativeAnchor =
+    block.anchor?.isAnchored && (block.anchor?.hRelativeFrom === 'page' || block.anchor?.hRelativeFrom === 'margin');
+  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc || isPageRelativeAnchor;
   const isWidthConstraintBypassed = bypassWidthConstraint || constraints.maxWidth <= 0;
 
   const maxWidth = isWidthConstraintBypassed ? intrinsic.width : constraints.maxWidth;
@@ -2713,8 +2715,10 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
     ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
       (typeof block.margin?.top === 'number' && block.margin.top < 0));
 
+  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'fill';
+
   const maxHeight =
-    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+    shouldBypassHeightConstraint || !constraints.maxHeight || constraints.maxHeight <= 0
       ? Infinity
       : constraints.maxHeight;
 

@@ -354,17 +354,11 @@ export function computeAnchorX(
   let baseX: number;
   let availableWidth: number;
   if (relativeFrom === 'page') {
-    // Word's page-relative origin is the physical page edge. For single-column
-    // documents, authors typically expect column-relative behavior; if we detect
-    // a single column layout, treat page-relative as margin-relative to align
-    // with practical expectations and DOCX samples.
-    if (columns.count === 1) {
-      baseX = contentLeft;
-      availableWidth = contentWidth;
-    } else {
-      baseX = 0;
-      availableWidth = pageWidth != null ? pageWidth : contentWidth;
-    }
+    // Word's page-relative origin is always the physical page edge (x=0).
+    // Even for single-column layouts we honor the true page coordinate so
+    // anchors can extend into the margins (e.g., full-bleed covers).
+    baseX = 0;
+    availableWidth = pageWidth != null ? pageWidth : contentWidth + marginLeft + marginRight;
   } else if (relativeFrom === 'margin') {
     baseX = contentLeft;
     availableWidth = contentWidth;
