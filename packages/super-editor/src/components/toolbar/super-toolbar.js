@@ -65,6 +65,7 @@ import { parseSizeUnit } from '@core/utilities';
  * @property {*} icon.value - The value of the icon
  * @property {Object} tooltip - The tooltip for the item
  * @property {*} tooltip.value - The value of the tooltip
+ * @property {boolean} [restoreEditorFocus] - Whether to restore editor focus after command execution
  * @property {Object} attributes - Additional attributes for the item
  * @property {Object} attributes.value - The value of the attributes
  * @property {Object} disabled - Whether the item is disabled
@@ -239,6 +240,14 @@ export class SuperToolbar extends EventEmitter {
       selectionUpdate: null,
       focus: null,
     };
+
+    /**
+     * Timeout ID for restoring editor focus after toolbar command execution.
+     * Tracked for cleanup on destroy to prevent callbacks firing after toolbar is unmounted.
+     * @type {number|null}
+     * @private
+     */
+    this._restoreFocusTimeoutId = null;
 
     // Move legacy 'element' to 'selector'
     if (!this.config.selector && this.config.element) {
@@ -1048,6 +1057,7 @@ export class SuperToolbar extends EventEmitter {
     const wasFocused = Boolean(typeof hasFocusFn === 'function' && hasFocusFn.call(this.activeEditor.view));
     const { command } = item;
     const isMarkToggle = this.isMarkToggle(item);
+    const shouldRestoreFocus = Boolean(item?.restoreEditorFocus);
 
     // If the editor wasn't focused and this is a mark toggle, queue it and keep the button active
     // until the next selection update (after the user clicks into the editor).
@@ -1094,6 +1104,14 @@ export class SuperToolbar extends EventEmitter {
 
     if (isMarkToggle) this.#syncStickyMarksFromState();
     this.updateToolbarState();
+
+    if (shouldRestoreFocus && this.activeEditor && !this.activeEditor.options.isHeaderOrFooter) {
+      this._restoreFocusTimeoutId = setTimeout(() => {
+        this._restoreFocusTimeoutId = null;
+        if (!this.activeEditor || this.activeEditor.options.isHeaderOrFooter) return;
+        this.activeEditor.focus();
+      }, 0);
+    }
   }
 
   /**
@@ -1267,5 +1285,17 @@ export class SuperToolbar extends EventEmitter {
 
     const tr = state.tr.setStoredMarks([mark]);
     view.dispatch(tr);
+  }
+
+  /**
+   * Cleans up resources when the toolbar is destroyed.
+   * Clears any pending timeouts to prevent callbacks firing after unmount.
+   * @returns {void}
+   */
+  destroy() {
+    if (this._restoreFocusTimeoutId !== null) {
+      clearTimeout(this._restoreFocusTimeoutId);
+      this._restoreFocusTimeoutId = null;
+    }
   }
 }

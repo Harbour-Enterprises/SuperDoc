@@ -123,20 +123,38 @@ describe('resolveListTextStartPx', () => {
             glyphWidthPx: 20,
             justification: 'left',
             suffix: 'tab',
+            gutterWidthPx: 8,
           },
         };
         const indentLeft = 36;
         const firstLine = 0;
         const hanging = 18;
-        // markerStartPos = indentLeft - hanging + firstLine = 36 - 18 + 0 = 18
-        // currentPos = markerStartPos + glyphWidth = 18 + 20 = 38
-        // textStart = indentLeft + firstLine = 36 + 0 = 36
-        // Since textStart(36) < currentPos(38), use default tab interval:
-        // tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX)
-        //          = 48 - (38 % 48) = 48 - 38 = 10
-        // result = 38 + 10 = 48
+        // markerStartPos = 36 - 18 + 0 = 18
+        // currentPos = 18 + 20 = 38
+        // textStartTarget undefined, gap uses gutterWidthPx (8)
+        // tabWidth = gutterWidthPx (8) because textStart < currentPos
+        // result = 38 + 8 = 46
         const result = resolveListTextStartPx(wordLayout, indentLeft, firstLine, hanging, mockMeasureMarkerText);
-        expect(result).toBe(48);
+        expect(result).toBe(46);
+      });
+
+      it('uses textStartPx when provided even in standard mode', () => {
+        const wordLayout: MinimalWordLayout = {
+          marker: {
+            glyphWidthPx: 20,
+            justification: 'left',
+            suffix: 'tab',
+            gutterWidthPx: 8,
+          },
+          textStartPx: 50,
+        };
+        const indentLeft = 36;
+        const firstLine = 0;
+        const hanging = 18;
+        // markerStartPos = 18, currentPos = 38, textStartPx=50 => gap = max(50-38=12, gutter 8) = 12
+        // result = 38 + 12 = 50
+        const result = resolveListTextStartPx(wordLayout, indentLeft, firstLine, hanging, mockMeasureMarkerText);
+        expect(result).toBe(50);
       });
     });
 
@@ -307,15 +325,14 @@ describe('resolveListTextStartPx', () => {
       // markerStartPos = indentLeft - hanging + firstLine = 36 - 18 + 0 = 18
       // currentPos = 18 + 18 = 36
       // textStart = indentLeft + firstLine = 36 + 0 = 36
-      // tabWidth = textStart - currentPos = 36 - 36 = 0 (falls to default)
-      // Since tabWidth <= 0, use default interval:
-      // tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX)
-      //          = 48 - (36 % 48) = 48 - 36 = 12
+      // tabWidth = textStart - currentPos = 36 - 36 = 0 (falls to gutterWidth)
+      // Since tabWidth <= 0, use gutter width (LIST_MARKER_GAP = 8px):
+      // result = markerStartPos + glyphWidth + gutterWidth = 18 + 18 + 8 = 44
       const result = resolveListTextStartPx(wordLayout, indentLeft, firstLine, hanging, mockMeasureMarkerText);
-      expect(result).toBe(36 + 12); // 48
+      expect(result).toBe(44); // 18 + 18 + 8
     });
 
-    it('uses default tab interval when currentPos exceeds textStart', () => {
+    it('uses minimum gutter when currentPos exceeds textStart', () => {
       const wordLayout: MinimalWordLayout = {
         marker: {
           glyphWidthPx: 30, // Long marker
@@ -328,11 +345,11 @@ describe('resolveListTextStartPx', () => {
       // markerStartPos = 36 - 18 + 0 = 18
       // currentPos = 18 + 30 = 48
       // textStart = 36 + 0 = 36
-      // Since currentPos(48) > textStart(36), use default interval:
-      // tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX)
-      //          = 48 - (48 % 48) = 48 - 0 = 48
+      // tabWidth = textStart - currentPos = 36 - 48 = -12 (negative, falls to gutterWidth)
+      // Since tabWidth <= 0, use gutter width (LIST_MARKER_GAP = 8px):
+      // result = markerStartPos + glyphWidth + gutterWidth = 18 + 30 + 8 = 56
       const result = resolveListTextStartPx(wordLayout, indentLeft, firstLine, hanging, mockMeasureMarkerText);
-      expect(result).toBe(48 + 48); // 96
+      expect(result).toBe(56); // 18 + 30 + 8
     });
 
     it('enforces minimum LIST_MARKER_GAP tab width', () => {

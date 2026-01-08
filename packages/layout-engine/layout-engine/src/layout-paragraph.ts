@@ -410,6 +410,8 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
   const remeasureWidth = Math.max(1, columnWidth - indentLeft - indentRight);
   const hasNegativeIndent = indentLeft < 0 || indentRight < 0;
   let didRemeasureForColumnWidth = false;
+  // Track remeasured marker info to ensure fragment gets accurate marker text width
+  let remeasuredMarkerInfo: ParagraphMeasure['marker'] | undefined;
   if (
     typeof remeasureParagraph === 'function' &&
     typeof measurementWidth === 'number' &&
@@ -424,6 +426,10 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
     const newLines = normalizeLines(newMeasure);
     lines = newLines;
     didRemeasureForColumnWidth = true;
+    // Capture marker info from remeasure (may have updated markerTextWidth)
+    if (newMeasure.marker) {
+      remeasuredMarkerInfo = newMeasure.marker;
+    }
   }
 
   let fromLine = 0;
@@ -476,10 +482,13 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       ...computeFragmentPmRange(block, lines, 0, lines.length),
     };
 
-    if (measure.marker) {
-      fragment.markerWidth = measure.marker.markerWidth;
-      if (measure.marker.markerTextWidth != null) {
-        fragment.markerTextWidth = measure.marker.markerTextWidth;
+    if (measure.marker || remeasuredMarkerInfo) {
+      // Prefer remeasured marker info when available (has more accurate markerTextWidth)
+      const effectiveMarkerInfo = remeasuredMarkerInfo ?? measure.marker;
+      fragment.markerWidth = effectiveMarkerInfo?.markerWidth ?? measure.marker?.markerWidth ?? 0;
+      const markerTextWidth = remeasuredMarkerInfo?.markerTextWidth ?? measure.marker?.markerTextWidth;
+      if (markerTextWidth != null) {
+        fragment.markerTextWidth = markerTextWidth;
       }
     }
 
@@ -537,6 +546,10 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       const newLines = normalizeLines(newMeasure);
       lines = newLines;
       didRemeasureForFloats = true;
+      // Capture marker info from remeasure (may have updated markerTextWidth)
+      if (newMeasure.marker) {
+        remeasuredMarkerInfo = newMeasure.marker;
+      }
     }
   }
 
@@ -727,15 +740,20 @@ export function layoutParagraphBlock(ctx: ParagraphLayoutContext, anchors?: Para
       fragment.lines = lines.slice(fromLine, slice.toLine);
     }
 
-    if (measure.marker && fromLine === 0) {
-      fragment.markerWidth = measure.marker.markerWidth;
+    if ((measure.marker || remeasuredMarkerInfo) && fromLine === 0) {
+      // Prefer remeasured marker info when available (has more accurate markerTextWidth from canvas measurement)
+      const effectiveMarkerInfo = remeasuredMarkerInfo ?? measure.marker;
+      fragment.markerWidth = effectiveMarkerInfo?.markerWidth ?? measure.marker?.markerWidth ?? 0;
       // Preserve actual marker text width for accurate tab calculation in renderer
-      if (measure.marker.markerTextWidth != null) {
-        fragment.markerTextWidth = measure.marker.markerTextWidth;
+      // Prefer remeasured value which is measured via canvas (more accurate than original measure)
+      const markerTextWidth = remeasuredMarkerInfo?.markerTextWidth ?? measure.marker?.markerTextWidth;
+      if (markerTextWidth != null) {
+        fragment.markerTextWidth = markerTextWidth;
       }
       // Preserve gutter info for word-layout lists (used by renderer for tab sizing)
-      if (measure.kind === 'paragraph' && measure.marker?.gutterWidth != null) {
-        fragment.markerGutter = measure.marker.gutterWidth;
+      const gutterWidth = remeasuredMarkerInfo?.gutterWidth ?? measure.marker?.gutterWidth;
+      if (gutterWidth != null) {
+        fragment.markerGutter = gutterWidth;
       }
     }
 
