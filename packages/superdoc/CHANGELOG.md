@@ -1,3 +1,10 @@
+## [1.3.1-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0...v1.3.1-next.1) (2026-01-08)
+
+
+### Bug Fixes
+
+* caret in lists ([#1683](https://github.com/Harbour-Enterprises/SuperDoc/issues/1683)) ([c7b9847](https://github.com/Harbour-Enterprises/SuperDoc/commit/c7b984783eee79698d74617e26c5f6eeb76d4a6d))
+
 # [1.3.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.1...v1.3.0) (2026-01-08)
 
 
