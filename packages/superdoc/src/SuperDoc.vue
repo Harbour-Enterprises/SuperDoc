@@ -88,6 +88,16 @@ const { isHighContrastMode } = useHighContrastMode();
 const { uiFontFamily } = useUiFontFamily();
 
 const isViewingMode = () => proxy?.$superdoc?.config?.documentMode === 'viewing';
+const isViewingCommentsVisible = computed(
+  () => isViewingMode() && proxy?.$superdoc?.config?.comments?.visible === true,
+);
+const isViewingTrackChangesVisible = computed(
+  () => isViewingMode() && proxy?.$superdoc?.config?.trackChanges?.visible === true,
+);
+const shouldRenderCommentsInViewing = computed(() => {
+  if (!isViewingMode()) return true;
+  return isViewingCommentsVisible.value || isViewingTrackChangesVisible.value;
+});
 
 const commentsModuleConfig = computed(() => {
   const config = modules.comments;
@@ -225,7 +235,7 @@ const onEditorReady = ({ editor, presentationEditor }) => {
     const commentsConfig = proxy.$superdoc.config.modules?.comments;
     if (!commentsConfig || commentsConfig === false) return;
     if (!positions || Object.keys(positions).length === 0) return;
-    if (isViewingMode()) {
+    if (!shouldRenderCommentsInViewing.value) {
       commentsStore.clearEditorCommentPositions?.();
       return;
     }
@@ -501,7 +511,7 @@ const editorOptions = (doc) => {
 const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
-  if (isViewingMode()) {
+  if (!shouldRenderCommentsInViewing.value) {
     commentsStore.clearEditorCommentPositions?.();
     return;
   }
@@ -581,7 +591,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
 
 const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
 const showCommentsSidebar = computed(() => {
-  if (isViewingMode()) return false;
+  if (!shouldRenderCommentsInViewing.value) return false;
   return (
     pendingComment.value ||
     (getFloatingComments.value?.length > 0 &&
