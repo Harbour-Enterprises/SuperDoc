@@ -1,4 +1,4 @@
-import { Plugin } from 'prosemirror-state';
+import { Plugin, TextSelection } from 'prosemirror-state';
 import { decodeRPrFromMarks, resolveRunProperties } from '@converter/styles.js';
 
 const mergeRanges = (ranges, docSize) => {
@@ -190,6 +190,32 @@ const createMarkDefsFromStyleRunProps = (styleRunProps) => {
   return markDefs;
 };
 
+// Keep collapsed selections inside run nodes so caret geometry maps to text positions.
+const normalizeSelectionIntoRun = (tr, runType) => {
+  const selection = tr.selection;
+  if (!(selection instanceof TextSelection)) return;
+  if (selection.from !== selection.to) return;
+  const $pos = tr.doc.resolve(selection.from);
+  if ($pos.parent.type === runType) return;
+
+  const nodeAfter = $pos.nodeAfter;
+  if (nodeAfter?.type === runType && nodeAfter.content.size > 0) {
+    const nextPos = selection.from + 1;
+    if (nextPos <= tr.doc.content.size) {
+      tr.setSelection(TextSelection.create(tr.doc, nextPos));
+    }
+    return;
+  }
+
+  const nodeBefore = $pos.nodeBefore;
+  if (nodeBefore?.type === runType && nodeBefore.content.size > 0) {
+    const prevPos = selection.from - 1;
+    if (prevPos >= 0) {
+      tr.setSelection(TextSelection.create(tr.doc, prevPos));
+    }
+  }
+};
+
 const buildWrapTransaction = (state, ranges, runType, editor, markDefsFromMeta = []) => {
   if (!ranges.length) return null;
 
@@ -232,6 +258,7 @@ const buildWrapTransaction = (state, ranges, runType, editor, markDefsFromMeta =
 
   const tr = state.tr;
   replacements.sort((a, b) => b.from - a.from).forEach(({ from, to, runNode }) => tr.replaceWith(from, to, runNode));
+  normalizeSelectionIntoRun(tr, runType);
 
   return tr.docChanged ? tr : null;
 };

@@ -1406,6 +1406,59 @@ describe('DomPainter', () => {
     expect(line?.textContent).toBe('\u00A0');
   });
 
+  it('annotates placeholder spans for empty lines with pm positions', () => {
+    const blockWithEmptyRun: FlowBlock = {
+      kind: 'paragraph',
+      id: 'empty-block',
+      runs: [{ text: '', fontFamily: 'Arial', fontSize: 16, pmStart: 1, pmEnd: 1 }],
+    };
+    const measureWithEmptyLine: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 0,
+          width: 0,
+          ascent: 0,
+          descent: 0,
+          lineHeight: 18,
+        },
+      ],
+      totalHeight: 18,
+    };
+    const emptyLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'empty-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 10,
+              y: 10,
+              width: 200,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [blockWithEmptyRun],
+      measures: [measureWithEmptyLine],
+    });
+    painter.paint(emptyLayout, mount);
+
+    const emptySpan = mount.querySelector('.superdoc-line span.superdoc-empty-run') as HTMLElement | null;
+    expect(emptySpan?.dataset.pmStart).toBe('1');
+    expect(emptySpan?.dataset.pmEnd).toBe('1');
+  });
+
   it('renders image fragments', () => {
     const imageBlock: FlowBlock = {
       kind: 'image',

@@ -4060,10 +4060,16 @@ export class DomPainter {
     let runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
 
-    // Targeted debug removed now that issue is understood.
-
+    // Preserve PM positions for DOM caret mapping on empty lines.
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
+      span.classList.add('superdoc-empty-run');
+      if (lineRange.pmStart != null) {
+        span.dataset.pmStart = String(lineRange.pmStart);
+      }
+      if (lineRange.pmEnd != null) {
+        span.dataset.pmEnd = String(lineRange.pmEnd);
+      }
       span.innerHTML = '&nbsp;';
       el.appendChild(span);
     }

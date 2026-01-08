@@ -258,6 +258,13 @@ export function resolveListTextStartPx(
 
   // Step 6: Handle 'tab' suffix with justification
   const markerJustification = marker.justification ?? 'left';
+  // Use the larger of box vs glyph as the effective marker width to ensure we clear the rendered box
+  const markerWidthEffective = Math.max(
+    typeof marker.markerBoxWidthPx === 'number' && Number.isFinite(marker.markerBoxWidthPx)
+      ? marker.markerBoxWidthPx
+      : 0,
+    finalMarkerTextWidth,
+  );
 
   // Center/right justification: use gutter width
   if (markerJustification !== 'left') {
@@ -309,16 +316,31 @@ export function resolveListTextStartPx(
   }
 
   // Step 8: Left justification with 'tab' suffix in standard mode
+  const textStartTarget =
+    typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
+      ? wordLayout.textStartPx
+      : undefined;
+  const gutterWidth =
+    typeof marker.gutterWidthPx === 'number' && Number.isFinite(marker.gutterWidthPx) && marker.gutterWidthPx > 0
+      ? marker.gutterWidthPx
+      : LIST_MARKER_GAP;
+  const currentPosStandard = markerStartPos + markerWidthEffective;
+
+  if (textStartTarget !== undefined) {
+    const gap = Math.max(textStartTarget - currentPosStandard, gutterWidth);
+    return currentPosStandard + gap;
+  }
+
   const textStart = indentLeft + firstLine;
-  let tabWidth = textStart - currentPos;
+  let tabWidth = textStart - currentPosStandard;
 
   // If tab doesn't reach text start, use default tab interval
   if (tabWidth <= 0) {
-    tabWidth = DEFAULT_TAB_INTERVAL_PX - (currentPos % DEFAULT_TAB_INTERVAL_PX);
+    tabWidth = gutterWidth;
   } else if (tabWidth < LIST_MARKER_GAP) {
-    // Enforce minimum gap
-    tabWidth = LIST_MARKER_GAP;
+    // Enforce minimum gap (use gutter if larger)
+    tabWidth = Math.max(tabWidth, gutterWidth);
   }
 
-  return markerStartPos + finalMarkerTextWidth + tabWidth;
+  return currentPosStandard + tabWidth;
 }

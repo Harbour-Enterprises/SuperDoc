@@ -1,4 +1,4 @@
-import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { NodeSelection, Selection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
@@ -3446,7 +3446,12 @@ export class PresentationEditor extends EventEmitter {
 
     if (!handledByDepth) {
       try {
-        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
+        const doc = this.#editor.state.doc;
+        let nextSelection: Selection = TextSelection.create(doc, hit.pos);
+        if (!nextSelection.$from.parent.inlineContent) {
+          nextSelection = Selection.near(doc.resolve(hit.pos), 1);
+        }
+        const tr = this.#editor.state.tr.setSelection(nextSelection);
         this.#editor.view?.dispatch(tr);
       } catch {
         // Position may be invalid during layout updates (e.g., after drag-drop) - ignore
@@ -4628,6 +4633,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    const { from, to } = selection;
     const docEpoch = this.#epochMapper.getCurrentEpoch();
     if (this.#layoutEpoch < docEpoch) {
       // The visible layout DOM does not match the current document state.
@@ -4650,7 +4656,6 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const { from, to } = selection;
     if (from === to) {
       const caretLayout = this.#computeCaretLayoutRect(from);
       if (!caretLayout) {
