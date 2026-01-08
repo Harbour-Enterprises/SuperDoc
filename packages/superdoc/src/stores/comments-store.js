@@ -59,18 +59,6 @@ export const useCommentsStore = defineStore('comments', () => {
   const pendingComment = ref(null);
   const isViewingMode = computed(() => viewingVisibility.documentMode === 'viewing');
 
-  const getThreadParent = (comment) => {
-    if (!comment?.parentCommentId) return comment;
-    return commentsList.value.find((c) => c.commentId === comment.parentCommentId) || comment;
-  };
-
-  const isThreadVisible = (comment) => {
-    if (!isViewingMode.value) return true;
-    const parent = getThreadParent(comment);
-    const isTrackedChange = Boolean(parent?.trackedChange);
-    return isTrackedChange ? viewingVisibility.trackChangesVisible : viewingVisibility.commentsVisible;
-  };
-
   /**
    * Initialize the store
    *
@@ -98,6 +86,19 @@ export const useCommentsStore = defineStore('comments', () => {
   const getComment = (id) => {
     if (id === undefined || id === null) return null;
     return commentsList.value.find((c) => c.commentId == id || c.importedId == id);
+  };
+
+  const getThreadParent = (comment) => {
+    if (!comment?.parentCommentId) return comment;
+    return getComment(comment.parentCommentId);
+  };
+
+  const isThreadVisible = (comment) => {
+    if (!isViewingMode.value) return true;
+    const parent = getThreadParent(comment);
+    if (!parent && comment?.parentCommentId) return false;
+    const isTrackedChange = Boolean(parent?.trackedChange);
+    return isTrackedChange ? viewingVisibility.trackChangesVisible : viewingVisibility.commentsVisible;
   };
 
   /**
