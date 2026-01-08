@@ -1,3 +1,12 @@
+# [1.3.0-next.13](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.12...v1.3.0-next.13) (2026-01-08)
+
+
+### Bug Fixes
+
+* effective gap ([580b52b](https://github.com/Harbour-Enterprises/SuperDoc/commit/580b52b1996088cdf0bc8005ec079f909a55b840))
+* hide tools bubble on cursor change ([#1678](https://github.com/Harbour-Enterprises/SuperDoc/issues/1678)) ([1fb865d](https://github.com/Harbour-Enterprises/SuperDoc/commit/1fb865d48d40045ed5be2dcd0692334a8aa5bdc7))
+* no comment bubbles in viewing mode ([#1680](https://github.com/Harbour-Enterprises/SuperDoc/issues/1680)) ([653706e](https://github.com/Harbour-Enterprises/SuperDoc/commit/653706e247c89d8b8858d87b8d185f928a48d65f))
+
 # [1.3.0-next.12](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.11...v1.3.0-next.12) (2026-01-07)
 
 
