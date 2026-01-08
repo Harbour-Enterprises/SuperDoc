@@ -477,7 +477,6 @@ const SDT_CONTAINER_STYLES = `
 const FIELD_ANNOTATION_STYLES = `
 /* Field annotation draggable styles */
 .superdoc-layout .annotation[data-draggable="true"] {
-  cursor: grab;
   user-select: none;
   -webkit-user-select: none;
 }
