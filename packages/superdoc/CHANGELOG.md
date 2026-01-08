@@ -1,3 +1,11 @@
+## [1.3.1-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.2...v1.3.1-next.3) (2026-01-08)
+
+
+### Bug Fixes
+
+* **comments:** preserve resolved comment status and range on export ([#1674](https://github.com/Harbour-Enterprises/SuperDoc/issues/1674)) ([390e40a](https://github.com/Harbour-Enterprises/SuperDoc/commit/390e40afc2358e7ad4f1f90e9c6ea3044f94ec73))
+* correctly position vector shape relative to paragraph ([#1687](https://github.com/Harbour-Enterprises/SuperDoc/issues/1687)) ([4c38cb9](https://github.com/Harbour-Enterprises/SuperDoc/commit/4c38cb9145c2256f2ff289338fb5cf58ecf3a4c7))
+
 ## [1.3.1-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.1...v1.3.1-next.2) (2026-01-08)
 
 
