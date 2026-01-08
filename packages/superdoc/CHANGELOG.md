@@ -1,3 +1,46 @@
+# [1.3.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.2.1...v1.3.0) (2026-01-08)
+
+
+### Bug Fixes
+
+* account for indentation when drawing paragraph borders ([#1655](https://github.com/Harbour-Enterprises/SuperDoc/issues/1655)) ([01a8d39](https://github.com/Harbour-Enterprises/SuperDoc/commit/01a8d394784d714c539963430abc712dc360a0cd))
+* additional fixes for view mode ([#1676](https://github.com/Harbour-Enterprises/SuperDoc/issues/1676)) ([fc2b7d6](https://github.com/Harbour-Enterprises/SuperDoc/commit/fc2b7d6436229b88453ddf7589fdfca333957c74))
+* adjusted row height not preserved when table doesn't fit current page ([#1642](https://github.com/Harbour-Enterprises/SuperDoc/issues/1642)) ([edcab55](https://github.com/Harbour-Enterprises/SuperDoc/commit/edcab5507ee92d56ab25079b7345928c8dd7839a))
+* allow override row borders ([#1672](https://github.com/Harbour-Enterprises/SuperDoc/issues/1672)) ([a4bb109](https://github.com/Harbour-Enterprises/SuperDoc/commit/a4bb109fde65f02442c4ee5e1930fe90877bc107))
+* auto color in tables with dark cells ([#1644](https://github.com/Harbour-Enterprises/SuperDoc/issues/1644)) ([f498a03](https://github.com/Harbour-Enterprises/SuperDoc/commit/f498a03dff563e7e24aaed78cbbb3b93bedf23a8))
+* bug - page number format from first section overrides number ([#1654](https://github.com/Harbour-Enterprises/SuperDoc/issues/1654)) ([c45ecfa](https://github.com/Harbour-Enterprises/SuperDoc/commit/c45ecfae71be17953e88662e8e646dab173b4c61))
+* **comments:** use last paragraph paraId for threading ([#1671](https://github.com/Harbour-Enterprises/SuperDoc/issues/1671)) ([50ffea6](https://github.com/Harbour-Enterprises/SuperDoc/commit/50ffea69cfe167f895b65d0b36f0d9d41e15e6f7))
+* effective gap ([580b52b](https://github.com/Harbour-Enterprises/SuperDoc/commit/580b52b1996088cdf0bc8005ec079f909a55b840))
+* empty display label and default label ([#1621](https://github.com/Harbour-Enterprises/SuperDoc/issues/1621)) ([e29e14f](https://github.com/Harbour-Enterprises/SuperDoc/commit/e29e14f37c27fbad19c87c3571fa26f901d8ced4))
+* field annotation drag and drop ([#1668](https://github.com/Harbour-Enterprises/SuperDoc/issues/1668)) ([659d152](https://github.com/Harbour-Enterprises/SuperDoc/commit/659d152fa5349cde16800016680d3bef92ae548e))
+* hanging indent in tables ([#1647](https://github.com/Harbour-Enterprises/SuperDoc/issues/1647)) ([ee8a206](https://github.com/Harbour-Enterprises/SuperDoc/commit/ee8a206378f0941fb2fa4ea02842fd3629f43350))
+* header images that extend past area should be behind content ([#1669](https://github.com/Harbour-Enterprises/SuperDoc/issues/1669)) ([bf7d679](https://github.com/Harbour-Enterprises/SuperDoc/commit/bf7d6798c7698b884734b32b70993acb0bfa0cd0))
+* header/footer sizes ([#1666](https://github.com/Harbour-Enterprises/SuperDoc/issues/1666)) ([9cd0cce](https://github.com/Harbour-Enterprises/SuperDoc/commit/9cd0ccebe0b07dbdace54a8a2c7fb06fdd225b01))
+* hide tools bubble on cursor change ([#1678](https://github.com/Harbour-Enterprises/SuperDoc/issues/1678)) ([1fb865d](https://github.com/Harbour-Enterprises/SuperDoc/commit/1fb865d48d40045ed5be2dcd0692334a8aa5bdc7))
+* indents from linked styles ([#1679](https://github.com/Harbour-Enterprises/SuperDoc/issues/1679)) ([70bc68c](https://github.com/Harbour-Enterprises/SuperDoc/commit/70bc68c07f7603f6f4845febe562f5fd6b72b5a1))
+* layout engine not correctly supporting view mode ([#1673](https://github.com/Harbour-Enterprises/SuperDoc/issues/1673)) ([b24d64e](https://github.com/Harbour-Enterprises/SuperDoc/commit/b24d64e44db723245b8f76224f11cb20b9e60ea0))
+* line wrap with right-align page numbers, page number font inheritance ([#1665](https://github.com/Harbour-Enterprises/SuperDoc/issues/1665)) ([6a996f0](https://github.com/Harbour-Enterprises/SuperDoc/commit/6a996f0eaaaf64299d11a5258319907ef349a112))
+* list marker position when item contains tab ([#1658](https://github.com/Harbour-Enterprises/SuperDoc/issues/1658)) ([e2148bb](https://github.com/Harbour-Enterprises/SuperDoc/commit/e2148bb3a9fd0f6cbcc7d6cf9c0779a6756b6052))
+* no comment bubbles in viewing mode ([#1680](https://github.com/Harbour-Enterprises/SuperDoc/issues/1680)) ([653706e](https://github.com/Harbour-Enterprises/SuperDoc/commit/653706e247c89d8b8858d87b8d185f928a48d65f))
+* paragraph borders inside table cells ([#1646](https://github.com/Harbour-Enterprises/SuperDoc/issues/1646)) ([13a3797](https://github.com/Harbour-Enterprises/SuperDoc/commit/13a3797c3706ad75a55bb09a055f7fddd0662609))
+* partial row height computation ([#1652](https://github.com/Harbour-Enterprises/SuperDoc/issues/1652)) ([0ccd3c8](https://github.com/Harbour-Enterprises/SuperDoc/commit/0ccd3c8c9924cc2a5d35cd9d09ff45dc1a964496))
+* prevent crash when deleting tracked changes with empty nodes ([#1663](https://github.com/Harbour-Enterprises/SuperDoc/issues/1663)) ([e8a02d7](https://github.com/Harbour-Enterprises/SuperDoc/commit/e8a02d72c0e333fb323991ed493913845f12f1a1))
+* ruler when comments are present ([#1681](https://github.com/Harbour-Enterprises/SuperDoc/issues/1681)) ([90458a5](https://github.com/Harbour-Enterprises/SuperDoc/commit/90458a5bd80dae60379547aa108ed5403ad1a072))
+* screenshots ([39c9392](https://github.com/Harbour-Enterprises/SuperDoc/commit/39c9392ecabe1447d41eabad7bdbf73c84b66e6e))
+* section-aware ruler adjustments ([#1677](https://github.com/Harbour-Enterprises/SuperDoc/issues/1677)) ([32b5bad](https://github.com/Harbour-Enterprises/SuperDoc/commit/32b5badfbd94d5ff02a1424e3d18862a9191db8a))
+* sync header/footer changes to ydoc ([#1623](https://github.com/Harbour-Enterprises/SuperDoc/issues/1623)) ([0b581a5](https://github.com/Harbour-Enterprises/SuperDoc/commit/0b581a5999d3b3e4a2319297d47acb798cfc9826))
+* tab widths mid line ([#1682](https://github.com/Harbour-Enterprises/SuperDoc/issues/1682)) ([92dabbe](https://github.com/Harbour-Enterprises/SuperDoc/commit/92dabbe5ba63bb5333062044db37e5bbdf1437e3))
+* table borders additional fixes ([ca034fc](https://github.com/Harbour-Enterprises/SuperDoc/commit/ca034fc7baeaf92d74ad39b54518cfd530de2d5e))
+* table widths with percents ([#1645](https://github.com/Harbour-Enterprises/SuperDoc/issues/1645)) ([a64a7b7](https://github.com/Harbour-Enterprises/SuperDoc/commit/a64a7b743279326bc5a0e72a6553d2f0e400a5ee))
+* tabs extending past line width ([#1659](https://github.com/Harbour-Enterprises/SuperDoc/issues/1659)) ([0f9c053](https://github.com/Harbour-Enterprises/SuperDoc/commit/0f9c053476f86156cdd787f29481eab73656a702))
+* take letter spacing into account when measuring text ([#1670](https://github.com/Harbour-Enterprises/SuperDoc/issues/1670)) ([47c6bf7](https://github.com/Harbour-Enterprises/SuperDoc/commit/47c6bf7ccf731928a9065caba92e0a8749578ae8))
+* unify run styles and fix new list item runs ([#1650](https://github.com/Harbour-Enterprises/SuperDoc/issues/1650)) ([65447ca](https://github.com/Harbour-Enterprises/SuperDoc/commit/65447cad6f1b4227ec011aaf30b69c9650202dd5))
+
+
+### Features
+
+* add support for subscript and superscript rendering ([#1649](https://github.com/Harbour-Enterprises/SuperDoc/issues/1649)) ([1e3019c](https://github.com/Harbour-Enterprises/SuperDoc/commit/1e3019cbc8d28d6cf9bd1720c56926b6fc300e8d))
+
 # [1.3.0-next.14](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0-next.13...v1.3.0-next.14) (2026-01-08)
 
 
