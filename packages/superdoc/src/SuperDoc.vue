@@ -485,6 +485,8 @@ const editorOptions = (doc) => {
           ...(proxy.$superdoc.config.layoutEngineOptions || {}),
           debugLabel: proxy.$superdoc.config.layoutEngineOptions?.debugLabel ?? doc.name ?? doc.id,
           zoom: (activeZoom.value ?? 100) / 100,
+          emitCommentPositionsInViewing: isViewingMode() && shouldRenderCommentsInViewing.value,
+          enableCommentsInViewing: isViewingCommentsVisible.value,
         }
       : undefined,
     permissionResolver: (payload = {}) =>

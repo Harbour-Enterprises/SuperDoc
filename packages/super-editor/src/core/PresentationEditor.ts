@@ -294,6 +294,10 @@ export type LayoutEngineOptions = {
   debugLabel?: string;
   layoutMode?: LayoutMode;
   trackedChanges?: TrackedChangesOverrides;
+  /** Emit comment positions while in viewing mode (used to render comment highlights). */
+  emitCommentPositionsInViewing?: boolean;
+  /** Render comment highlights while in viewing mode. */
+  enableCommentsInViewing?: boolean;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
   /**
@@ -723,6 +727,8 @@ export class PresentationEditor extends EventEmitter {
       debugLabel: options.layoutEngineOptions?.debugLabel,
       layoutMode: options.layoutEngineOptions?.layoutMode ?? 'vertical',
       trackedChanges: options.layoutEngineOptions?.trackedChanges,
+      emitCommentPositionsInViewing: options.layoutEngineOptions?.emitCommentPositionsInViewing,
+      enableCommentsInViewing: options.layoutEngineOptions?.enableCommentsInViewing,
       presence: validatedPresence,
     };
     this.#trackedChangesOverrides = options.layoutEngineOptions?.trackedChanges;
@@ -4339,7 +4345,8 @@ export class PresentationEditor extends EventEmitter {
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
-        const commentsEnabled = this.#documentMode !== 'viewing';
+        const commentsEnabled =
+          this.#documentMode !== 'viewing' || this.#layoutOptions.enableCommentsInViewing === true;
         const result = toFlowBlocks(docJson, {
           mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
@@ -4510,7 +4517,8 @@ export class PresentationEditor extends EventEmitter {
 
       // Emit fresh comment positions after layout completes.
       // This ensures positions are always in sync with the current document and layout.
-      if (this.#documentMode !== 'viewing') {
+      const allowViewingCommentPositions = this.#layoutOptions.emitCommentPositionsInViewing === true;
+      if (this.#documentMode !== 'viewing' || allowViewingCommentPositions) {
         const commentPositions = this.#collectCommentPositions();
         const positionKeys = Object.keys(commentPositions);
         if (positionKeys.length > 0) {
