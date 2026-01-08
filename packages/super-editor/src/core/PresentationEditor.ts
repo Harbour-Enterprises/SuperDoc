@@ -2,6 +2,7 @@ import { NodeSelection, Selection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
+import type { Mapping } from 'prosemirror-transform';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { EpochPositionMapper } from './EpochPositionMapper.js';
@@ -588,6 +589,7 @@ export class PresentationEditor extends EventEmitter {
   #telemetryEmitter: ((event: TelemetryEvent) => void) | null = null;
   #renderScheduled = false;
   #pendingDocChange = false;
+  #pendingMapping: Mapping | null = null;
   #isRerendering = false;
   #selectionSync = new SelectionSyncCoordinator();
   #remoteCursorUpdateScheduled = false;
@@ -2486,6 +2488,20 @@ export class PresentationEditor extends EventEmitter {
       }
       if (trackedChangesChanged || transaction?.docChanged) {
         this.#pendingDocChange = true;
+        // Store the mapping from this transaction for position updates during paint.
+        // Only stored for doc changes - other triggers don't have position shifts.
+        if (transaction?.docChanged) {
+          if (this.#pendingMapping !== null) {
+            // Multiple rapid transactions before rerender - compose the mappings.
+            // The painter's gate checks maps.length > 1 to trigger full rebuild,
+            // which is the safe fallback for complex/batched edits.
+            const combined = this.#pendingMapping.slice();
+            combined.appendMapping(transaction.mapping);
+            this.#pendingMapping = combined;
+          } else {
+            this.#pendingMapping = transaction.mapping;
+          }
+        }
         this.#selectionSync.onLayoutStart();
         this.#scheduleRerender();
       }
@@ -4486,7 +4502,11 @@ export class PresentationEditor extends EventEmitter {
       );
       // Avoid MutationObserver overhead while repainting large DOM trees.
       this.#domIndexObserverManager?.pause();
-      painter.paint(layout, this.#painterHost);
+      // Pass the transaction mapping for efficient position attribute updates.
+      // Consumed here and cleared to prevent stale mappings on subsequent paints.
+      const mapping = this.#pendingMapping;
+      this.#pendingMapping = null;
+      painter.paint(layout, this.#painterHost, mapping ?? undefined);
       this.#applyVertAlignToLayout();
       this.#rebuildDomPositionIndex();
       this.#domIndexObserverManager?.resume();

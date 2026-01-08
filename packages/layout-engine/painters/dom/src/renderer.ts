@@ -43,6 +43,7 @@ import type {
   DropCapDescriptor,
   TableAttrs,
   TableCellAttrs,
+  PositionMapping,
 } from '@superdoc/contracts';
 import { calculateJustifySpacing, computeLinePmRange, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
@@ -236,6 +237,7 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
  * - 'book': Book-style layout with facing pages
  */
 export type LayoutMode = 'vertical' | 'horizontal' | 'book';
+
 type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
@@ -791,6 +793,8 @@ export class DomPainter {
   private layoutVersion = 0;
   private layoutEpoch = 0;
   private processedLayoutVersion = -1;
+  /** Current transaction mapping for position updates (null if no mapping or complex transaction) */
+  private currentMapping: PositionMapping | null = null;
   private onScrollHandler: ((e: Event) => void) | null = null;
   private onWindowScrollHandler: ((e: Event) => void) | null = null;
   private onResizeHandler: ((e: Event) => void) | null = null;
@@ -937,7 +941,7 @@ export class DomPainter {
     this.changedBlocks = changed;
   }
 
-  public paint(layout: Layout, mount: HTMLElement): void {
+  public paint(layout: Layout, mount: HTMLElement, mapping?: PositionMapping): void {
     if (!(mount instanceof HTMLElement)) {
       throw new Error('DomPainter.paint requires a valid HTMLElement mount');
     }
@@ -947,6 +951,17 @@ export class DomPainter {
       throw new Error('DomPainter.paint requires a DOM-like document');
     }
     this.doc = doc;
+
+    // Simple transaction gate: only use position mapping optimization for single-step transactions.
+    // Complex transactions (paste, multi-step replace, etc.) fall back to full rebuild.
+    const isSimpleTransaction = mapping && mapping.maps.length === 1;
+    if (mapping && !isSimpleTransaction) {
+      // Complex transaction - force all fragments to rebuild (safe fallback)
+      this.blockLookup.forEach((_, id) => this.changedBlocks.add(id));
+      this.currentMapping = null;
+    } else {
+      this.currentMapping = mapping ?? null;
+    }
 
     ensurePrintStyles(doc);
     ensureLinkStyles(doc);
@@ -977,6 +992,7 @@ export class DomPainter {
       this.currentLayout = layout;
       this.pageStates = [];
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
     if (mode === 'book') {
@@ -985,6 +1001,7 @@ export class DomPainter {
       this.currentLayout = layout;
       this.pageStates = [];
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
 
@@ -997,6 +1014,7 @@ export class DomPainter {
       this.renderVirtualized(layout, mount);
       this.currentLayout = layout;
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
 
@@ -1010,6 +1028,7 @@ export class DomPainter {
 
     this.currentLayout = layout;
     this.changedBlocks.clear();
+    this.currentMapping = null;
   }
 
   // ----------------
@@ -1692,6 +1711,9 @@ export class DomPainter {
           pageEl.replaceChild(replacement, current.element);
           current.element = replacement;
           current.signature = fragmentSignature(fragment, this.blockLookup);
+        } else if (this.currentMapping) {
+          // Fragment NOT rebuilt - update position attributes to reflect document changes
+          this.updatePositionAttributes(current.element, this.currentMapping);
         }
 
         this.updateFragmentElement(current.element, fragment, contextBase.section);
@@ -1725,6 +1747,59 @@ export class DomPainter {
 
     state.fragments = nextFragments;
     this.renderDecorationsForPage(pageEl, page);
+  }
+
+  /**
+   * Updates data-pm-start/data-pm-end attributes on all elements within a fragment
+   * using the transaction's mapping. Skips header/footer content (separate PM coordinate space).
+   * Also skips fragments that end before the edit point (their positions don't change).
+   */
+  private updatePositionAttributes(fragmentEl: HTMLElement, mapping: PositionMapping): void {
+    // Skip header/footer elements (they use a separate PM coordinate space)
+    if (fragmentEl.closest('.superdoc-page-header, .superdoc-page-footer')) {
+      return;
+    }
+
+    // Wrap mapping logic in try-catch to prevent corrupted mappings from crashing paint cycle
+    try {
+      // Quick check: if the fragment's end position doesn't change, nothing inside needs updating.
+      // This happens for all content BEFORE the edit point.
+      const fragEnd = fragmentEl.dataset.pmEnd;
+      if (fragEnd !== undefined && fragEnd !== '') {
+        const endNum = Number(fragEnd);
+        if (Number.isFinite(endNum) && mapping.map(endNum, -1) === endNum) {
+          // Fragment ends before edit point - no position changes needed
+          return;
+        }
+      }
+
+      // Get all elements with position attributes (including the fragment element itself)
+      const elements = fragmentEl.querySelectorAll('[data-pm-start], [data-pm-end]');
+      const allElements = [fragmentEl, ...Array.from(elements)] as HTMLElement[];
+
+      for (const el of allElements) {
+        const oldStart = el.dataset.pmStart;
+        const oldEnd = el.dataset.pmEnd;
+
+        if (oldStart !== undefined && oldStart !== '') {
+          const num = Number(oldStart);
+          if (Number.isFinite(num)) {
+            el.dataset.pmStart = String(mapping.map(num));
+          }
+        }
+
+        if (oldEnd !== undefined && oldEnd !== '') {
+          const num = Number(oldEnd);
+          if (Number.isFinite(num)) {
+            // Use bias -1 for end positions to handle edge cases correctly
+            el.dataset.pmEnd = String(mapping.map(num, -1));
+          }
+        }
+      }
+    } catch (error) {
+      // Log the error but don't crash the paint cycle - corrupted mappings shouldn't break rendering
+      console.error('Error updating position attributes with mapping:', error);
+    }
   }
 
   private createPageState(page: Page, pageSize: { w: number; h: number }): PageDomState {
@@ -4993,12 +5068,11 @@ const fragmentKey = (fragment: Fragment): string => {
 const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
   const base = lookup.get(fragment.blockId)?.version ?? 'missing';
   if (fragment.kind === 'para') {
+    // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
     return [
       base,
       fragment.fromLine,
       fragment.toLine,
-      fragment.pmStart ?? '',
-      fragment.pmEnd ?? '',
       fragment.continuesFromPrev ? 1 : 0,
       fragment.continuesOnNext ? 1 : 0,
       fragment.markerWidth ?? '', // Include markerWidth to trigger re-render when list status changes
@@ -5151,19 +5225,20 @@ const deriveBlockVersion = (block: FlowBlock): string => {
             imgRun.distBottom ?? '',
             imgRun.distLeft ?? '',
             imgRun.distRight ?? '',
-            imgRun.pmStart ?? '',
-            imgRun.pmEnd ?? '',
+            // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
           ].join(',');
         }
 
         // Handle LineBreakRun
         if (run.kind === 'lineBreak') {
-          return ['linebreak', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
+          return 'linebreak';
         }
 
         // Handle TabRun
         if (run.kind === 'tab') {
-          return [run.text ?? '', 'tab', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
+          return [run.text ?? '', 'tab'].join(',');
         }
 
         // Handle TextRun (kind is 'text' or undefined)
@@ -5181,8 +5256,7 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.strike ? 1 : 0,
           textRun.highlight ?? '',
           textRun.letterSpacing != null ? textRun.letterSpacing : '',
-          textRun.pmStart ?? '',
-          textRun.pmEnd ?? '',
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
           textRun.token ?? '',
           // Tracked changes - force re-render when added or removed tracked change
           textRun.trackedChange ? 1 : 0,
