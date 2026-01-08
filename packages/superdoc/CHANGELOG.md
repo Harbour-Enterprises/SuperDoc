@@ -1,3 +1,10 @@
+## [1.3.1-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.1...v1.3.1-next.2) (2026-01-08)
+
+
+### Bug Fixes
+
+* performance - exclude pmStart/pmEnd from fragment change detection ([#1651](https://github.com/Harbour-Enterprises/SuperDoc/issues/1651)) ([4502422](https://github.com/Harbour-Enterprises/SuperDoc/commit/45024222ef98fe8bc808bce4cdfad7f0464df1cc))
+
 ## [1.3.1-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0...v1.3.1-next.1) (2026-01-08)
 
 
