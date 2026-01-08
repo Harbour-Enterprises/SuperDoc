@@ -200,6 +200,7 @@ const buildCommentsStore = () => ({
   init: vi.fn(),
   showAddComment: vi.fn(),
   handleEditorLocationsUpdate: vi.fn(),
+  clearEditorCommentPositions: vi.fn(),
   handleTrackedChangeUpdate: vi.fn(),
   removePendingComment: vi.fn(),
   setActiveComment: vi.fn(),
@@ -603,6 +604,70 @@ describe('SuperDoc.vue', () => {
     expect(wrapper.find('.floating-comments').exists()).toBe(true);
   });
 
+  it('hides floating comments sidebar entirely in viewing mode even with comment positions', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.documentMode = 'viewing';
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    commentsStoreStub.getFloatingComments.value = [{ commentId: 'c-1' }];
+    commentsStoreStub.hasInitializedLocations.value = true;
+    superdocStoreStub.isReady.value = true;
+    await nextTick();
+
+    expect(wrapper.vm.showCommentsSidebar).toBe(false);
+    expect(wrapper.find('.superdoc__right-sidebar').exists()).toBe(false);
+  });
+
+  it('ignores comment location updates while in viewing mode', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.documentMode = 'viewing';
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    options.onCommentLocationsUpdate({
+      allCommentPositions: {
+        'comment-1': { threadId: 'comment-1', bounds: { top: 10, left: 5, right: 20, bottom: 30 } },
+      },
+      allCommentIds: ['comment-1'],
+    });
+    await nextTick();
+
+    expect(commentsStoreStub.handleEditorLocationsUpdate).not.toHaveBeenCalled();
+    expect(commentsStoreStub.clearEditorCommentPositions).toHaveBeenCalled();
+  });
+
+  it('clears PDF selections when viewing mode is active to keep tools hidden', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.documentMode = 'viewing';
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const setupState = wrapper.vm.$.setupState;
+    setupState.toolsMenuPosition.top = '120px';
+    superdocStoreStub.selectionPosition.value = {
+      left: 5,
+      right: 25,
+      top: 50,
+      bottom: 90,
+      source: 'pdf',
+    };
+    await nextTick();
+
+    expect(wrapper.vm.showToolsFloatingMenu).toBeTruthy();
+
+    setupState.handleSelectionChange({
+      selectionBounds: { top: 10, left: 10, right: 20, bottom: 30 },
+      source: 'pdf',
+    });
+    await nextTick();
+
+    expect(superdocStoreStub.selectionPosition.value).toBeNull();
+    expect(setupState.toolsMenuPosition.top).toBeNull();
+    expect(wrapper.vm.showToolsFloatingMenu).toBeFalsy();
+  });
+
   it('does not crash when selectionUpdate carries stale positions after new file insert', async () => {
     const superdocStub = createSuperdocStub();
     const wrapper = await mountComponent(superdocStub);
@@ -636,6 +701,39 @@ describe('SuperDoc.vue', () => {
   // Note: The handlePresentationEditorReady test was removed because that function
   // no longer exists. PresentationEditor now registers itself automatically in the
   // constructor and manages zoom/layout data internally.
+
+  it('clears selection updates in viewing mode to keep the tools bubble hidden', async () => {
+    const superdocStub = createSuperdocStub();
+    superdocStub.config.documentMode = 'viewing';
+    const wrapper = await mountComponent(superdocStub);
+    await nextTick();
+
+    const setupState = wrapper.vm.$.setupState;
+    setupState.toolsMenuPosition.top = '100px';
+    superdocStoreStub.selectionPosition.value = {
+      left: 10,
+      right: 40,
+      top: 50,
+      bottom: 70,
+      source: 'super-editor',
+    };
+    await nextTick();
+
+    expect(wrapper.vm.showToolsFloatingMenu).toBeTruthy();
+
+    const options = wrapper.findComponent(SuperEditorStub).props('options');
+    const editorMock = { options: { documentId: 'doc-1' } };
+
+    options.onSelectionUpdate({
+      editor: editorMock,
+      transaction: { selection: { $from: { pos: 1 }, $to: { pos: 1 } } },
+    });
+    await nextTick();
+
+    expect(superdocStoreStub.selectionPosition.value).toBeNull();
+    expect(setupState.toolsMenuPosition.top).toBeNull();
+    expect(wrapper.vm.showToolsFloatingMenu).toBeFalsy();
+  });
 
   it('hides tools bubble when selection is cleared (SD-1241)', async () => {
     const superdocStub = createSuperdocStub();

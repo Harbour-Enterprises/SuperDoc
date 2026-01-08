@@ -87,6 +87,8 @@ commentsStore.proxy = proxy;
 const { isHighContrastMode } = useHighContrastMode();
 const { uiFontFamily } = useUiFontFamily();
 
+const isViewingMode = () => proxy?.$superdoc?.config?.documentMode === 'viewing';
+
 const commentsModuleConfig = computed(() => {
   const config = modules.comments;
   if (config === false || config == null) return null;
@@ -223,6 +225,10 @@ const onEditorReady = ({ editor, presentationEditor }) => {
     const commentsConfig = proxy.$superdoc.config.modules?.comments;
     if (!commentsConfig || commentsConfig === false) return;
     if (!positions || Object.keys(positions).length === 0) return;
+    if (isViewingMode()) {
+      commentsStore.clearEditorCommentPositions?.();
+      return;
+    }
 
     // Map PM positions to visual layout coordinates
     const mappedPositions = presentationEditor.getCommentBounds(positions, layers.value);
@@ -251,6 +257,14 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
     // When comment is added selection will be equal to comment text
     // Should skip calculations to keep text selection for comments correct
     skipSelectionUpdate.value = false;
+    if (isViewingMode()) {
+      resetSelection();
+    }
+    return;
+  }
+
+  if (isViewingMode()) {
+    resetSelection();
     return;
   }
 
@@ -487,6 +501,10 @@ const editorOptions = (doc) => {
 const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
+  if (isViewingMode()) {
+    commentsStore.clearEditorCommentPositions?.();
+    return;
+  }
 
   const presentation = PresentationEditor.getInstance(doc.id);
   if (!presentation) {
@@ -563,6 +581,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
 
 const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
 const showCommentsSidebar = computed(() => {
+  if (isViewingMode()) return false;
   return (
     pendingComment.value ||
     (getFloatingComments.value?.length > 0 &&
@@ -637,6 +656,10 @@ const getSelectionPosition = computed(() => {
 });
 
 const handleSelectionChange = (selection) => {
+  if (isViewingMode()) {
+    resetSelection();
+    return;
+  }
   if (!selection.selectionBounds || !isCommentsEnabled.value) return;
 
   resetSelection();
