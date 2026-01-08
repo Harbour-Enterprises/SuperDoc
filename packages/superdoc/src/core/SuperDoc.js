@@ -169,8 +169,8 @@ export class SuperDoc extends EventEmitter {
       const isViewingMode = this.config.documentMode === 'viewing';
       const viewingTrackedChangesVisible = isViewingMode && this.config.trackChanges?.visible === true;
       this.config.layoutEngineOptions.trackedChanges = {
-        mode: isViewingMode ? (viewingTrackedChangesVisible ? 'review' : 'final') : 'review',
-        enabled: isViewingMode ? viewingTrackedChangesVisible : true,
+        mode: isViewingMode ? (viewingTrackedChangesVisible ? 'review' : 'original') : 'review',
+        enabled: true,
       };
     }
 
@@ -816,7 +816,7 @@ export class SuperDoc extends EventEmitter {
     const trackChangesVisible = this.config.trackChanges?.visible === true;
 
     this.setTrackedChangesPreferences(
-      trackChangesVisible ? { mode: 'review', enabled: true } : { mode: 'final', enabled: false },
+      trackChangesVisible ? { mode: 'review', enabled: true } : { mode: 'original', enabled: true },
     );
 
     // Clear comment positions to hide floating comment bubbles in viewing mode
