@@ -1045,6 +1045,12 @@ export interface CommentReferenceAttrs extends InlineNodeAttributes {
   attributes?: Record<string, unknown>;
 }
 
+/** Footnote reference node attributes */
+export interface FootnoteReferenceAttrs extends InlineNodeAttributes {
+  /** Footnote id from OOXML (w:id) */
+  id?: string | null;
+}
+
 // ============================================
 // MODULE AUGMENTATION
 // ============================================
@@ -1087,6 +1093,7 @@ declare module '../../core/types/NodeAttributesMap.js' {
     commentRangeStart: CommentRangeStartAttrs;
     commentRangeEnd: CommentRangeEndAttrs;
     commentReference: CommentReferenceAttrs;
+    footnoteReference: FootnoteReferenceAttrs;
 
     // Permissions
     permStart: PermStartAttrs;

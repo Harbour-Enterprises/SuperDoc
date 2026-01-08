@@ -184,6 +184,7 @@ class SuperConverter {
 
     this.addedMedia = {};
     this.comments = [];
+    this.footnotes = [];
     this.inlineDocumentFonts = [];
 
     // Store custom highlight colors
@@ -924,6 +925,7 @@ class SuperConverter {
       this.pageStyles = result.pageStyles;
       this.numbering = result.numbering;
       this.comments = result.comments;
+      this.footnotes = result.footnotes;
       this.linkedStyles = result.linkedStyles;
       this.inlineDocumentFonts = result.inlineDocumentFonts;
       this.themeColors = result.themeColors ?? null;

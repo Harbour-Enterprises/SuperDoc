@@ -283,6 +283,11 @@ interface EditorWithConverter extends Editor {
     footerIds?: { default?: string; first?: string; even?: string; odd?: string };
     createDefaultHeader?: (variant: string) => string;
     createDefaultFooter?: (variant: string) => string;
+    footnotes?: Array<{
+      id: string;
+      content?: unknown[];
+      text?: string;
+    }>;
   };
 }
 
@@ -349,6 +354,31 @@ type LayoutState = {
   layout: Layout | null;
   bookmarks: Map<string, number>;
   anchorMap?: Map<string, number>;
+};
+
+type FootnoteReference = { id: string; pos: number };
+type FootnotesLayoutInput = {
+  refs: FootnoteReference[];
+  blocksById: Map<string, FlowBlock[]>;
+  gap?: number;
+  topPadding?: number;
+  dividerHeight?: number;
+};
+
+type FootnoteNumberById = Record<string, number>;
+
+type ConverterContextForFootnotes = {
+  docx: unknown;
+  numbering: unknown;
+  linkedStyles: unknown;
+  footnoteNumberById?: FootnoteNumberById;
+  [key: string]: unknown;
+};
+
+type BuildFootnotesLayoutInputParams = {
+  converterContext?: ConverterContextForFootnotes;
+  themeColors: unknown;
+  footnoteNumberById?: FootnoteNumberById;
 };
 
 type LayoutMetrics = {
@@ -4383,13 +4413,41 @@ export class PresentationEditor extends EventEmitter {
       const sectionMetadata: SectionMetadata[] = [];
       let blocks: FlowBlock[] | undefined;
       let bookmarks: Map<string, number> = new Map();
+      let converterContext:
+        | { docx: unknown; numbering: unknown; linkedStyles: unknown; footnoteNumberById?: Record<string, number> }
+        | undefined;
       try {
-        const converter = (this.#editor as Editor & { converter?: Record<string, unknown> }).converter;
-        const converterContext = converter
+        const converterForContext = (this.#editor as Editor & { converter?: Record<string, unknown> }).converter;
+        // Compute visible footnote numbering (1-based) by first appearance in the document.
+        // This matches Word behavior even when OOXML ids are non-contiguous or start at 0.
+        const footnoteNumberById: Record<string, number> = {};
+        try {
+          const seen = new Set<string>();
+          let counter = 1;
+          this.#editor?.state?.doc?.descendants?.((node: any) => {
+            if (node?.type?.name !== 'footnoteReference') return;
+            const rawId = node?.attrs?.id;
+            if (rawId == null) return;
+            const key = String(rawId);
+            if (!key || seen.has(key)) return;
+            seen.add(key);
+            footnoteNumberById[key] = counter;
+            counter += 1;
+          });
+        } catch {}
+        // Expose numbering to node views and layout adapter.
+        try {
+          if (converterForContext && typeof converterForContext === 'object') {
+            (converterForContext as any).footnoteNumberById = footnoteNumberById;
+          }
+        } catch {}
+        
+        converterContext = converterForContext
           ? {
-              docx: converter.convertedXml,
-              numbering: converter.numbering,
-              linkedStyles: converter.linkedStyles,
+              docx: converterForContext.convertedXml,
+              numbering: converterForContext.numbering,
+              linkedStyles: converterForContext.linkedStyles,
+              ...(Object.keys(footnoteNumberById).length ? { footnoteNumberById } : {}),
             }
           : undefined;
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
@@ -4422,7 +4480,13 @@ export class PresentationEditor extends EventEmitter {
         return;
       }
 
-      const layoutOptions = this.#resolveLayoutOptions(blocks, sectionMetadata);
+      const baseLayoutOptions = this.#resolveLayoutOptions(blocks, sectionMetadata);
+	      const footnotesLayoutInput = this.#buildFootnotesLayoutInput({
+	        converterContext,
+	        themeColors: this.#editor?.converter?.themeColors ?? undefined,
+	        footnoteNumberById: converterContext?.footnoteNumberById,
+	      });
+      const layoutOptions = footnotesLayoutInput ? { ...baseLayoutOptions, footnotes: footnotesLayoutInput } : baseLayoutOptions;
       const previousBlocks = this.#layoutState.blocks;
       const previousLayout = this.#layoutState.layout;
 
@@ -4430,6 +4494,8 @@ export class PresentationEditor extends EventEmitter {
       let measures: Measure[];
       let headerLayouts: HeaderFooterLayoutResult[] | undefined;
       let footerLayouts: HeaderFooterLayoutResult[] | undefined;
+      let extraBlocks: FlowBlock[] | undefined;
+      let extraMeasures: Measure[] | undefined;
       const headerFooterInput = this.#buildHeaderFooterInput();
       try {
         const result = await incrementalLayout(
@@ -4456,6 +4522,8 @@ export class PresentationEditor extends EventEmitter {
         }
 
         ({ layout, measures } = result);
+        extraBlocks = Array.isArray(result.extraBlocks) ? result.extraBlocks : undefined;
+        extraMeasures = Array.isArray(result.extraMeasures) ? result.extraMeasures : undefined;
         // Add pageGap to layout for hit testing to account for gaps between rendered pages.
         // Gap depends on virtualization mode and must be non-negative.
         layout.pageGap = this.#getEffectivePageGap();
@@ -4532,7 +4600,13 @@ export class PresentationEditor extends EventEmitter {
         footerMeasures.push(...rIdResult.measures);
       }
 
-      // Pass all blocks (main document + headers + footers) to the painter
+      // Merge any extra lookup blocks (e.g., footnotes injected into page fragments)
+      if (extraBlocks && extraMeasures && extraBlocks.length === extraMeasures.length && extraBlocks.length > 0) {
+        footerBlocks.push(...extraBlocks);
+        footerMeasures.push(...extraMeasures);
+      }
+
+      // Pass all blocks (main document + headers + footers + extras) to the painter
       painter.setData?.(
         blocks,
         measures,
@@ -4579,6 +4653,7 @@ export class PresentationEditor extends EventEmitter {
           this.emit('commentPositions', { positions: commentPositions });
         }
       }
+
       if (this.#telemetryEmitter && metrics) {
         this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });
       }
@@ -4805,6 +4880,163 @@ export class PresentationEditor extends EventEmitter {
         Partial<Pick<PageMargins, 'header' | 'footer'>>,
       ...(columns ? { columns } : {}),
       sectionMetadata,
+    };
+  }
+
+  #buildFootnotesLayoutInput({
+    converterContext,
+    themeColors,
+    footnoteNumberById,
+  }: {
+    converterContext: { docx: unknown; numbering: unknown; linkedStyles: unknown; footnoteNumberById?: Record<string, number> } | undefined;
+    themeColors: unknown;
+    footnoteNumberById?: Record<string, number>;
+  }): {
+      refs: Array<{ id: string; pos: number }>;
+      blocksById: Map<string, FlowBlock[]>;
+      gap?: number;
+      topPadding?: number;
+      dividerHeight?: number;
+    } | null {
+    const toSuperscriptDigits = (value: unknown): string => {
+      const map: Record<string, string> = {
+        '0': '⁰',
+        '1': '¹',
+        '2': '²',
+        '3': '³',
+        '4': '⁴',
+        '5': '⁵',
+        '6': '⁶',
+        '7': '⁷',
+        '8': '⁸',
+        '9': '⁹',
+      };
+      const str = String(value ?? '');
+      return str
+        .split('')
+        .map((ch) => map[ch] ?? ch)
+        .join('');
+	    };
+
+		    const ensureFootnoteMarker = (blocks: FlowBlock[], id: string): void => {
+		      const displayNumberRaw = footnoteNumberById && typeof footnoteNumberById === 'object' ? footnoteNumberById[id] : undefined;
+		      const displayNumber =
+		        typeof displayNumberRaw === 'number' && Number.isFinite(displayNumberRaw) && displayNumberRaw > 0
+		          ? displayNumberRaw
+		          : 1;
+		      const firstParagraph = blocks.find((b) => b?.kind === 'paragraph') as
+		        | (FlowBlock & { kind: 'paragraph'; runs?: Array<Record<string, unknown>> })
+		        | undefined;
+		      if (!firstParagraph) return;
+		      const runs = Array.isArray(firstParagraph.runs) ? firstParagraph.runs : [];
+		      const markerText = toSuperscriptDigits(displayNumber);
+
+		      const baseRun = runs.find((r) => {
+		        const dataAttrs = (r as { dataAttrs?: Record<string, string> }).dataAttrs;
+		        if (dataAttrs?.['data-sd-footnote-number']) return false;
+		        const pmStart = (r as { pmStart?: unknown }).pmStart;
+		        const pmEnd = (r as { pmEnd?: unknown }).pmEnd;
+		        return typeof pmStart === 'number' && Number.isFinite(pmStart) && typeof pmEnd === 'number' && Number.isFinite(pmEnd);
+		      }) as { pmStart: number; pmEnd: number } | undefined;
+
+		      const markerPmStart = baseRun?.pmStart ?? null;
+		      const markerPmEnd =
+		        markerPmStart != null
+		          ? baseRun?.pmEnd != null
+		            ? Math.max(markerPmStart, Math.min(baseRun.pmEnd, markerPmStart + markerText.length))
+		            : markerPmStart + markerText.length
+		          : null;
+	      const alreadyHasMarker = runs.some((r) => {
+	        const dataAttrs = (r as { dataAttrs?: Record<string, string> }).dataAttrs;
+	        return Boolean(dataAttrs?.['data-sd-footnote-number']);
+		      });
+		      if (alreadyHasMarker) {
+		        if (markerPmStart != null && markerPmEnd != null) {
+		          const markerRun = runs.find((r) => {
+		            const dataAttrs = (r as { dataAttrs?: Record<string, string> }).dataAttrs;
+		            return Boolean(dataAttrs?.['data-sd-footnote-number']);
+		          }) as { pmStart?: number | null; pmEnd?: number | null } | undefined;
+	          if (markerRun) {
+	            if (markerRun.pmStart == null) markerRun.pmStart = markerPmStart;
+	            if (markerRun.pmEnd == null) markerRun.pmEnd = markerPmEnd;
+	          }
+	        }
+	        return;
+	      }
+
+	      const firstTextRun = runs.find((r) => typeof (r as { text?: unknown }).text === 'string') as
+	        | { fontFamily?: unknown; fontSize?: unknown; color?: unknown; text?: unknown }
+	        | undefined;
+
+	      const markerRun: Record<string, unknown> = {
+	        kind: 'text',
+	        text: markerText,
+	        dataAttrs: {
+	          'data-sd-footnote-number': 'true',
+	        },
+	        ...(markerPmStart != null ? { pmStart: markerPmStart } : {}),
+	        ...(markerPmEnd != null ? { pmEnd: markerPmEnd } : {}),
+	      };
+	      markerRun.fontFamily = typeof firstTextRun?.fontFamily === 'string' ? firstTextRun.fontFamily : 'Arial';
+	      markerRun.fontSize = typeof firstTextRun?.fontSize === 'number' && Number.isFinite(firstTextRun.fontSize) ? firstTextRun.fontSize : 12;
+	      if (firstTextRun?.color != null) markerRun.color = firstTextRun.color;
+
+      // Insert marker at the very start.
+      runs.unshift(markerRun);
+
+      firstParagraph.runs = runs;
+    };
+
+    const state = this.#editor?.state;
+    if (!state) return null;
+
+    const converter = (this.#editor as Partial<EditorWithConverter>)?.converter;
+    const importedFootnotes = Array.isArray(converter?.footnotes) ? converter!.footnotes! : [];
+    if (importedFootnotes.length === 0) return null;
+    
+    const refs: Array<{ id: string; pos: number }> = [];
+    const idsInUse = new Set<string>();
+    state.doc.descendants((node, pos) => {
+      if (node.type?.name !== 'footnoteReference') return;
+      const id = node.attrs?.id;
+      if (id == null) return;
+      const key = String(id);
+      const insidePos = Math.min(pos + 1, state.doc.content.size);
+      refs.push({ id: key, pos: insidePos });
+      idsInUse.add(key);
+    });
+    if (refs.length === 0) return null;
+
+    const blocksById = new Map<string, FlowBlock[]>();
+    idsInUse.forEach((id) => {
+      const entry = importedFootnotes.find((f) => String(f?.id) === id);
+      const content = entry?.content;
+      if (!Array.isArray(content) || content.length === 0) return;
+
+      try {
+        const clonedContent = JSON.parse(JSON.stringify(content));
+        const footnoteDoc = { type: 'doc', content: clonedContent };
+        const result = toFlowBlocks(footnoteDoc, {
+          blockIdPrefix: `footnote-${id}-`,
+          enableRichHyperlinks: true,
+          themeColors: themeColors as never,
+          converterContext: converterContext as never,
+        });
+        if (result?.blocks?.length) {
+          ensureFootnoteMarker(result.blocks, id);
+          blocksById.set(id, result.blocks);
+        }
+      } catch {}
+    });
+
+    if (blocksById.size === 0) return null;
+
+    return {
+      refs,
+      blocksById,
+      gap: 2,
+      topPadding: 4,
+      dividerHeight: 1,
     };
   }
 
@@ -5098,7 +5330,9 @@ export class PresentationEditor extends EventEmitter {
             const pageHeight =
               page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
             const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-            const box = this.#computeDecorationBox(kind, margins, pageHeight);
+            const decorationMargins =
+            kind === 'footer' ? this.#stripFootnoteReserveFromBottomMargin(margins, page ?? null) : margins;
+          const box = this.#computeDecorationBox(kind, decorationMargins, pageHeight);
 
             // Use helper to compute metrics with type safety and consistent logic
             const rawLayoutHeight = rIdLayout.layout.height ?? 0;
@@ -5160,12 +5394,13 @@ export class PresentationEditor extends EventEmitter {
 
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-      const box = this.#computeDecorationBox(kind, margins, pageHeight);
+      const decorationMargins =
+        kind === 'footer' ? this.#stripFootnoteReserveFromBottomMargin(margins, page ?? null) : margins;
+      const box = this.#computeDecorationBox(kind, decorationMargins, pageHeight);
 
       // Use helper to compute metrics with type safety and consistent logic
       const rawLayoutHeight = variant.layout.height ?? 0;
       const metrics = this.#computeHeaderFooterMetrics(kind, rawLayoutHeight, box, pageHeight, margins.footer ?? 0);
-
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
 
@@ -5275,6 +5510,19 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  #stripFootnoteReserveFromBottomMargin(pageMargins: PageMargins, page?: Page | null): PageMargins {
+    const reserveRaw = (page as Page | null | undefined)?.footnoteReserved;
+    const reserve = typeof reserveRaw === 'number' && Number.isFinite(reserveRaw) && reserveRaw > 0 ? reserveRaw : 0;
+    if (!reserve) return pageMargins;
+
+    const bottomRaw = pageMargins.bottom;
+    const bottom = typeof bottomRaw === 'number' && Number.isFinite(bottomRaw) ? bottomRaw : 0;
+    const nextBottom = Math.max(0, bottom - reserve);
+    if (nextBottom === bottom) return pageMargins;
+
+    return { ...pageMargins, bottom: nextBottom };
+  }
+
   /**
    * Computes the expected header/footer section type for a page based on document configuration.
    *
@@ -5364,7 +5612,8 @@ export class PresentationEditor extends EventEmitter {
 
       // Same for footer - always create a hit region
       const footerPayload = this.#footerDecorationProvider?.(page.number, margins, page);
-      const footerBox = this.#computeDecorationBox('footer', margins, actualPageHeight);
+      const footerBoxMargins = this.#stripFootnoteReserveFromBottomMargin(margins, page);
+      const footerBox = this.#computeDecorationBox('footer', footerBoxMargins, actualPageHeight);
       this.#footerRegions.set(pageIndex, {
         kind: 'footer',
         headerId: footerPayload?.headerId,

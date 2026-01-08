@@ -131,6 +131,19 @@ export type LayoutOptions = {
   remeasureParagraph?: (block: ParagraphBlock, maxWidth: number, firstLineIndent?: number) => ParagraphMeasure;
   sectionMetadata?: SectionMetadata[];
   /**
+   * Extra bottom margin per page index (0-based) reserved for non-body content
+   * rendered at the bottom of the page (e.g., footnotes).
+   *
+   * When provided, the paginator will shrink the body content area on that page by
+   * increasing the effective bottom margin for that page only.
+   */
+  footnoteReservedByPageIndex?: number[];
+  /**
+   * Optional footnote metadata consumed by higher-level orchestration (e.g. layout-bridge).
+   * The core layout engine does not interpret this field directly.
+   */
+  footnotes?: unknown;
+  /**
    * Actual measured header content heights per variant type.
    * When provided, the layout engine will ensure body content starts below
    * the header content, preventing overlap when headers exceed their allocated margin space.
@@ -679,7 +692,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   const paginator = createPaginator({
     margins: paginatorMargins,
     getActiveTopMargin: () => activeTopMargin,
-    getActiveBottomMargin: () => activeBottomMargin,
+    getActiveBottomMargin: () => {
+      const reserves = options.footnoteReservedByPageIndex;
+      const pageIndex = Math.max(0, pageCount - 1);
+      const reserve = Array.isArray(reserves) ? reserves[pageIndex] : 0;
+      const reservePx = typeof reserve === 'number' && Number.isFinite(reserve) && reserve > 0 ? reserve : 0;
+      return activeBottomMargin + reservePx;
+    },
     getActiveHeaderDistance: () => activeHeaderDistance,
     getActiveFooterDistance: () => activeFooterDistance,
     getActivePageSize: () => activePageSize,
