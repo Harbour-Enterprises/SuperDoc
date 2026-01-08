@@ -1152,10 +1152,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       // Advance to next tab stop using the same logic as inline "\t" handling
       const originX = currentLine.width;
-      const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+      // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+      const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+      const absCurrentX = currentLine.width + effectiveIndent;
+      const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
       tabStopCursor = nextIndex;
-      const clampedTarget = Math.min(target, currentLine.maxWidth);
-      const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
+      const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+      const clampedTarget = Math.min(target, maxAbsWidth);
+      const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
@@ -1167,8 +1171,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Emit leader decoration if requested
       if (stop && stop.leader && stop.leader !== 'none') {
         const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
-        const from = Math.min(originX, clampedTarget);
-        const to = Math.max(originX, clampedTarget);
+        const relativeTarget = clampedTarget - effectiveIndent;
+        const from = Math.min(originX, relativeTarget);
+        const to = Math.max(originX, relativeTarget);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
       }
@@ -1184,17 +1189,18 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
           if (groupMeasure.totalWidth > 0) {
             // Calculate the aligned starting X position based on total group width
+            const relativeTarget = clampedTarget - effectiveIndent;
             let groupStartX: number;
             if (stop.val === 'end') {
               // Right-align: position so right edge of group is at tab stop
-              groupStartX = Math.max(0, clampedTarget - groupMeasure.totalWidth);
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth);
             } else if (stop.val === 'center') {
               // Center-align: position so center of group is at tab stop
-              groupStartX = Math.max(0, clampedTarget - groupMeasure.totalWidth / 2);
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth / 2);
             } else {
               // Decimal-align: position so decimal point is at tab stop
               const beforeDecimal = groupMeasure.beforeDecimalWidth ?? groupMeasure.totalWidth;
-              groupStartX = Math.max(0, clampedTarget - beforeDecimal);
+              groupStartX = Math.max(0, relativeTarget - beforeDecimal);
             }
 
             // Set up active tab group for subsequent run processing
@@ -1202,7 +1208,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               measure: groupMeasure,
               startX: groupStartX,
               currentX: groupStartX,
-              target: clampedTarget,
+              target: relativeTarget,
               val: stop.val,
             };
 
@@ -1215,7 +1221,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           pendingTabAlignment = null;
         } else {
           // For start-aligned tabs, use the existing pendingTabAlignment mechanism
-          pendingTabAlignment = { target: clampedTarget, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
         }
       } else {
         pendingTabAlignment = null;
@@ -2068,10 +2074,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
         }
         const originX = currentLine.width;
-        const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+        // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+        const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+        const absCurrentX = currentLine.width + effectiveIndent;
+        const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
         tabStopCursor = nextIndex;
-        const clampedTarget = Math.min(target, currentLine.maxWidth);
-        const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
+        const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+        const clampedTarget = Math.min(target, maxAbsWidth);
+        const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
 
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
@@ -2081,7 +2091,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         charPosInRun += 1;
         if (stop) {
           validateTabStopVal(stop);
-          pendingTabAlignment = { target: clampedTarget, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
         } else {
           pendingTabAlignment = null;
         }
@@ -2089,8 +2099,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
           const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
-          const from = Math.min(originX, clampedTarget);
-          const to = Math.max(originX, clampedTarget);
+          const relativeTarget = clampedTarget - effectiveIndent;
+          const from = Math.min(originX, relativeTarget);
+          const to = Math.max(originX, relativeTarget);
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
