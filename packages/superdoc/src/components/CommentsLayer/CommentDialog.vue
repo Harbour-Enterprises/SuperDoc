@@ -121,7 +121,11 @@ const setFocus = () => {
 
   // Always allow scrolling to the comment location, even for resolved comments
   if (editor) {
-    const cursorId = props.comment.importedId || props.comment.commentId;
+    // For resolved comments, use commentId since prepareCommentsForImport rewrites
+    // commentRangeStart/End nodes' w:id to the internal commentId (not importedId)
+    const cursorId = props.comment.resolvedTime
+      ? props.comment.commentId
+      : props.comment.importedId || props.comment.commentId;
     editor.commands?.setCursorById(cursorId);
   }
 };
