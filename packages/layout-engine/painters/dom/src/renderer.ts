@@ -2668,8 +2668,8 @@ export class DomPainter {
         fragmentEl.dataset.pmEnd = String(fragment.pmEnd);
       }
 
-      // Add metadata for interactive image resizing
-      if (fragment.metadata) {
+      // Add metadata for interactive image resizing (skip watermarks - they should not be interactive)
+      if (fragment.metadata && !block.attrs?.vmlWatermark) {
         fragmentEl.setAttribute('data-image-metadata', JSON.stringify(fragment.metadata));
       }
 

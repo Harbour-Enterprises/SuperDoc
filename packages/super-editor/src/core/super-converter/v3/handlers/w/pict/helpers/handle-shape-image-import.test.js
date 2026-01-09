@@ -107,6 +107,19 @@ describe('handleShapeImageImport', () => {
     });
   });
 
+  it('should treat z-index 0 as not behind the document', () => {
+    const params = {
+      docx: createMockDocx(),
+      filename: 'header1.xml',
+    };
+    const style = 'position:absolute;width:466.55pt;height:233.25pt;z-index:0';
+    const pict = createWatermarkPict('rId1', style);
+
+    const result = handleShapeImageImport({ params, pict });
+
+    expect(result.attrs.wrap.attrs.behindDoc).toBe(false);
+  });
+
   it('should parse dimensions from VML style', () => {
     const params = {
       docx: createMockDocx(),

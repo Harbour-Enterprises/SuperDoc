@@ -95,7 +95,7 @@ export function handleShapeImageImport({ params, pict }) {
       wrap: {
         type: 'None',
         attrs: {
-          behindDoc: zIndex ? zIndex < 0 : true,
+          behindDoc: Number.isFinite(zIndex) ? zIndex < 0 : true,
         },
       },
       anchorData: {
