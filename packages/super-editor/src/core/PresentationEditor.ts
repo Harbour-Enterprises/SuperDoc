@@ -1397,6 +1397,40 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Update viewing-mode comment rendering behavior and re-render if needed.
+   *
+   * @param options - Viewing mode comment options.
+   */
+  setViewingCommentOptions(
+    options: { emitCommentPositionsInViewing?: boolean; enableCommentsInViewing?: boolean } = {},
+  ) {
+    if (options !== undefined && (typeof options !== 'object' || options === null || Array.isArray(options))) {
+      throw new TypeError('[PresentationEditor] setViewingCommentOptions expects an object or undefined');
+    }
+
+    let hasChanges = false;
+
+    if (typeof options.emitCommentPositionsInViewing === 'boolean') {
+      if (this.#layoutOptions.emitCommentPositionsInViewing !== options.emitCommentPositionsInViewing) {
+        this.#layoutOptions.emitCommentPositionsInViewing = options.emitCommentPositionsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (typeof options.enableCommentsInViewing === 'boolean') {
+      if (this.#layoutOptions.enableCommentsInViewing !== options.enableCommentsInViewing) {
+        this.#layoutOptions.enableCommentsInViewing = options.enableCommentsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    }
+  }
+
+  /**
    * Toggle the custom context menu at runtime to respect host-level guardrails.
    */
   setContextMenuDisabled(disabled: boolean) {

@@ -842,6 +842,8 @@ export class SuperDoc extends EventEmitter {
   #syncViewingVisibility() {
     const commentsVisible = this.config.comments?.visible === true;
     const trackChangesVisible = this.config.trackChanges?.visible === true;
+    const isViewingMode = this.config.documentMode === 'viewing';
+    const shouldRenderCommentsInViewing = commentsVisible || trackChangesVisible;
     if (this.commentsStore?.setViewingVisibility) {
       this.commentsStore.setViewingVisibility({
         documentMode: this.config.documentMode,
@@ -849,8 +851,20 @@ export class SuperDoc extends EventEmitter {
         trackChangesVisible,
       });
     }
-  }
 
+    const docs = this.superdocStore?.documents;
+    if (Array.isArray(docs) && docs.length > 0) {
+      docs.forEach((doc) => {
+        const presentationEditor = typeof doc.getPresentationEditor === 'function' ? doc.getPresentationEditor() : null;
+        if (presentationEditor?.setViewingCommentOptions) {
+          presentationEditor.setViewingCommentOptions({
+            emitCommentPositionsInViewing: isViewingMode && shouldRenderCommentsInViewing,
+            enableCommentsInViewing: isViewingMode && commentsVisible,
+          });
+        }
+      });
+    }
+  }
   /**
    * Search for text or regex in the active editor
    * @param {string | RegExp} text The text or regex to search for
