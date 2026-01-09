@@ -1,3 +1,10 @@
+## [1.4.1-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.1...v1.4.1-next.2) (2026-01-09)
+
+
+### Bug Fixes
+
+* annotation events in layout engine ([#1685](https://github.com/Harbour-Enterprises/SuperDoc/issues/1685)) ([db24ff8](https://github.com/Harbour-Enterprises/SuperDoc/commit/db24ff80afb9c048899060e3121e6b4d3e2edfac))
+
 ## [1.4.1-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0...v1.4.1-next.1) (2026-01-09)
 
 
