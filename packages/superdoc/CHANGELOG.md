@@ -1,3 +1,10 @@
+# [1.4.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0-next.1...v1.4.0-next.2) (2026-01-09)
+
+
+### Features
+
+* render watermarks ([#1694](https://github.com/Harbour-Enterprises/SuperDoc/issues/1694)) ([01a25af](https://github.com/Harbour-Enterprises/SuperDoc/commit/01a25af9b0abb31d94ce9887d708a2d9dc4f11f8))
+
 # [1.4.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.3...v1.4.0-next.1) (2026-01-09)
 
 
