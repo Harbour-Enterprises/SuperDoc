@@ -164,7 +164,7 @@ const resolveFootnoteMeasurementWidth = (options: LayoutOptions, blocks?: FlowBl
         left: normalizeMargin(block.margins?.left, margins.left),
       };
       const w = sectionPageSize.w - (sectionMargins.left + sectionMargins.right);
-      if (w > width) width = w;
+      if (w > 0 && w < width) width = w;
     }
   }
 
@@ -764,7 +764,9 @@ export async function incrementalLayout(
           if (!page.margins) continue;
 
           const pageSize = page.size ?? layoutForPages.pageSize;
-          const contentWidth = pageSize.w - ((page.margins.left ?? 0) + (page.margins.right ?? 0));
+          const pageContentWidth = pageSize.w - ((page.margins.left ?? 0) + (page.margins.right ?? 0));
+          const contentWidth = Math.min(pageContentWidth, footnoteWidth);
+          if (!Number.isFinite(contentWidth) || contentWidth <= 0) continue;
           const bandTopY = pageSize.h - (page.margins.bottom ?? 0);
           const x = page.margins.left ?? 0;
 

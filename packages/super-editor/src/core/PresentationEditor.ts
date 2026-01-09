@@ -66,7 +66,7 @@ import { initHeaderFooterRegistry as initHeaderFooterRegistryFromHelper } from '
 import { decodeRPrFromMarks } from './super-converter/styles.js';
 import { halfPointToPoints } from './super-converter/helpers.js';
 import { layoutPerRIdHeaderFooters as layoutPerRIdHeaderFootersFromHelper } from './header-footer/HeaderFooterPerRidLayout.js';
-import { toFlowBlocks } from '@superdoc/pm-adapter';
+import { toFlowBlocks, ConverterContext } from '@superdoc/pm-adapter';
 import {
   incrementalLayout,
   selectionToRects,
@@ -129,7 +129,6 @@ import {
 } from './header-footer/HeaderFooterRegistry.js';
 import { EditorOverlayManager } from './header-footer/EditorOverlayManager.js';
 import { isInRegisteredSurface } from './uiSurfaceRegistry.js';
-import { ConverterContext } from '@superdoc/pm-adapter/converter-context';
 
 export type PageSize = {
   w: number;
