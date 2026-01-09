@@ -696,8 +696,7 @@ export function remeasureParagraph(
       return width;
     },
   );
-  const effectiveTextStartPx =
-    typeof textStartPx === 'number' && Number.isFinite(textStartPx) ? textStartPx : resolvedTextStartPx;
+  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
   // If numbering defines only a firstLine indent with no left/hanging, treat it as a hanging-style layout:
   // don't shrink available width in columns (matches Word which positions marker + tab but leaves normal text width).
   // IMPORTANT: If a list marker is present, the marker+tab are rendered inline, so we MUST
