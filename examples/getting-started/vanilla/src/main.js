@@ -1,6 +1,7 @@
 import { SuperDoc } from 'superdoc';
 import 'superdoc/style.css';
 import './style.css';
+import { onClickExtension } from './onClickExtension.js';
 
 // Initialize SuperDoc
 let editor = null;
@@ -8,8 +9,22 @@ let editor = null;
 function initializeEditor(file = null) {
   // Cleanup previous instance if it exists
   if (editor) {
+    editor.destroy();
     editor = null;
   }
+
+  // Create click handler
+  const clickHandler = ({ pos, node, nodePos, event, direct }) => {
+    console.log('📍 Click details:', {
+      pos,
+      node: node?.type.name,
+      nodePos,
+      direct,
+      target: event.target.tagName,
+      clientX: event.clientX,
+      clientY: event.clientY
+    }, node);
+  };
 
   editor = new SuperDoc({
     selector: '#superdoc',
@@ -18,6 +33,9 @@ function initializeEditor(file = null) {
     documentMode: 'editing',
     pagination: true,
     rulers: true,
+    editorExtensions: [
+      onClickExtension(clickHandler),
+    ],
     onReady: (event) => {
       console.log('SuperDoc is ready', event);
     },
