@@ -7,9 +7,41 @@ import type {
   ParagraphFrame,
   TableAttrs,
   TableCellAttrs,
+  Run,
 } from '@superdoc/contracts';
 import { hasTrackedChange, resolveTrackedChangesEnabled } from './tracked-changes-utils.js';
 import { hashParagraphBorders, hashTableBorders, hashCellBorders } from './paragraph-hash-utils.js';
+
+/**
+ * Comment annotation structure attached to runs.
+ */
+type CommentAnnotation = {
+  commentId?: string;
+  internal?: boolean;
+};
+
+/**
+ * Run type with validated comment annotations.
+ */
+type RunWithComments = Run & {
+  comments: CommentAnnotation[];
+};
+
+/**
+ * Type guard to check if a run has valid comment annotations.
+ * Ensures the comments property exists, is an array, and is non-empty
+ * before attempting to access comment metadata.
+ *
+ * @param run - The run to check for comments
+ * @returns True if run has valid comments array, false otherwise
+ */
+function hasComments(run: Run): run is RunWithComments {
+  return (
+    'comments' in run &&
+    Array.isArray((run as Partial<RunWithComments>).comments) &&
+    (run as Partial<RunWithComments>).comments!.length > 0
+  );
+}
 
 /**
  * Maximum cache size (number of entries)
@@ -137,6 +169,11 @@ const hashRuns = (block: FlowBlock): string => {
               highlight ? `hl:${highlight}` : '',
             ].join('');
 
+            // Use type guard to safely access comment metadata
+            const commentHash = hasComments(run)
+              ? run.comments.map((c) => `${c.commentId ?? ''}:${c.internal ? '1' : '0'}`).join('|')
+              : '';
+
             // Include tracked change metadata in hash
             let trackedKey = '';
             if (hasTrackedChange(run)) {
@@ -146,7 +183,8 @@ const hashRuns = (block: FlowBlock): string => {
               trackedKey = `|tc:${tc.kind ?? ''}:${tc.id ?? ''}:${tc.author ?? ''}:${tc.date ?? ''}:${beforeHash}:${afterHash}`;
             }
 
-            cellHashes.push(`${text}:${marks}${trackedKey}`);
+            const commentKey = commentHash ? `|cm:${commentHash}` : '';
+            cellHashes.push(`${text}:${marks}${trackedKey}${commentKey}`);
           }
 
           // Include paragraph-level attributes that affect layout/rendering in hash.

@@ -48,8 +48,10 @@ export function importCommentData({ docx, editor, converter }) {
       path: [el],
     });
 
-    const { attrs } = parsedElements[0];
-    const paraId = attrs['w14:paraId'];
+    // Per OOXML spec, commentsExtended.xml links via the LAST paragraph's paraId
+    // when a comment has multiple paragraphs
+    const lastElement = parsedElements[parsedElements.length - 1];
+    const paraId = lastElement?.attrs?.['w14:paraId'];
 
     // Determine threading method based on whether commentsExtended.xml exists
     const commentsExtended = docx['word/commentsExtended.xml'];
@@ -123,14 +125,18 @@ const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
     let parentCommentId = undefined;
 
     const trackedChangeParent = trackedChangeParentMap.get(comment.importedId);
-    const isInsideTrackedChange = trackedChangeParent && trackedChangeParent.isTrackedChangeParent;
+    const isInsideTrackedChange = trackedChangeParent?.isTrackedChangeParent;
 
     if (extendedDef) {
       const details = getExtendedDetails(extendedDef);
       isDone = details.isDone ?? false;
 
       if (!isInsideTrackedChange && details.paraIdParent) {
-        const parentComment = comments.find((c) => c.paraId === details.paraIdParent);
+        const parentComment = comments.find(
+          (c) =>
+            c.paraId === details.paraIdParent ||
+            c.elements?.some((el) => el.attrs?.['w14:paraId'] === details.paraIdParent),
+        );
         parentCommentId = parentComment?.commentId;
       }
     }

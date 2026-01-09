@@ -251,6 +251,18 @@ export interface MiscellaneousCommands {
    */
   setSectionHeaderFooterAtSelection: (options?: SetBodyHeaderFooterOptions) => boolean;
 
+  /**
+   * Set section page margins (top/right/bottom/left) at selection.
+   * Updates the governing section's sectPr so changes persist to layout/export.
+   * @param options - Margin values in inches
+   */
+  setSectionPageMarginsAtSelection: (options?: {
+    topInches?: number;
+    rightInches?: number;
+    bottomInches?: number;
+    leftInches?: number;
+  }) => boolean;
+
   // ============================================
   // DOCUMENT COMMANDS
   // ============================================

@@ -135,11 +135,14 @@ describe('legacy-handle-table-cell-node', () => {
     expect(out.attrs.fontSize).toBe('12pt');
     expect(out.attrs.fontFamily).toBe('Arial');
 
-    // borders merged: inline bottom overrides; left set to none inherits from row with val=none
+    // borders merged: inline bottom overrides
+    // With position-based logic: cell at columnIndex=1 is not first column, so no left border from table-level
+    // Inline left with val="nil" explicitly disables left border (val='none' entry created)
+    // Cell spans columns 1-2 (last columns), so right border applies
     expect(out.attrs.borders.bottom.color).toBe('#FF0000');
     expect(out.attrs.borders.bottom.size).toBeCloseTo(4, 3);
-    expect(out.attrs.borders.left.val).toBe('none');
-    // untouched right comes from rowBorders
+    expect(out.attrs.borders.left).toEqual({ val: 'none' }); // inline nil creates explicit 'none' entry
+    // right comes from rowBorders (cell is in last column position)
     expect(out.attrs.borders.right).toEqual(rowBorders.right);
 
     // rowspan derived from vertical merge (restart + 2 continuations)

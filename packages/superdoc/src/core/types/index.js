@@ -153,6 +153,8 @@
  * @property {boolean} [isInternal] Whether the SuperDoc is internal
  * @property {string} [title] The title of the SuperDoc
  * @property {Object[]} [conversations] The conversations to load
+ * @property {{ visible?: boolean }} [comments] Toggle comment visibility when `documentMode` is `viewing` (default: false)
+ * @property {{ visible?: boolean }} [trackChanges] Toggle tracked-change visibility when `documentMode` is `viewing` (default: false)
  * @property {boolean} [isLocked] Whether the SuperDoc is locked
  * @property {function(File): Promise<string>} [handleImageUpload] The function to handle image uploads
  * @property {User} [lockedBy] The user who locked the SuperDoc

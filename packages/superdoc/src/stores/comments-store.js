@@ -21,6 +21,11 @@ export const useCommentsStore = defineStore('comments', () => {
     allowResolve: true,
     showResolved: false,
   });
+  const viewingVisibility = reactive({
+    documentMode: 'editing',
+    commentsVisible: false,
+    trackChangesVisible: false,
+  });
 
   const isDebugging = false;
   const debounceTimers = {};
@@ -52,6 +57,7 @@ export const useCommentsStore = defineStore('comments', () => {
   const generalCommentIds = ref([]);
 
   const pendingComment = ref(null);
+  const isViewingMode = computed(() => viewingVisibility.documentMode === 'viewing');
 
   /**
    * Initialize the store
@@ -80,6 +86,19 @@ export const useCommentsStore = defineStore('comments', () => {
   const getComment = (id) => {
     if (id === undefined || id === null) return null;
     return commentsList.value.find((c) => c.commentId == id || c.importedId == id);
+  };
+
+  const getThreadParent = (comment) => {
+    if (!comment?.parentCommentId) return comment;
+    return getComment(comment.parentCommentId);
+  };
+
+  const isThreadVisible = (comment) => {
+    if (!isViewingMode.value) return true;
+    const parent = getThreadParent(comment);
+    if (!parent && comment?.parentCommentId) return false;
+    const isTrackedChange = Boolean(parent?.trackedChange);
+    return isTrackedChange ? viewingVisibility.trackChangesVisible : viewingVisibility.commentsVisible;
   };
 
   /**
@@ -224,6 +243,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const childCommentMap = new Map();
 
     commentsList.value.forEach((comment) => {
+      if (!isThreadVisible(comment)) return;
       // Track resolved comments
       if (comment.resolvedTime) {
         resolvedComments.push(comment);
@@ -553,6 +573,13 @@ export const useCommentsStore = defineStore('comments', () => {
     editorCommentPositions.value = allCommentPositions || {};
   };
 
+  /**
+   * Clear editor comment positions (used when entering viewing mode to hide comment bubbles)
+   */
+  const clearEditorCommentPositions = () => {
+    editorCommentPositions.value = {};
+  };
+
   const getFloatingComments = computed(() => {
     const comments = getGroupedComments.value?.parentComments
       .filter((c) => !c.resolvedTime)
@@ -565,6 +592,18 @@ export const useCommentsStore = defineStore('comments', () => {
       });
     return comments;
   });
+
+  const setViewingVisibility = ({ documentMode, commentsVisible, trackChangesVisible } = {}) => {
+    if (typeof documentMode === 'string') {
+      viewingVisibility.documentMode = documentMode;
+    }
+    if (typeof commentsVisible === 'boolean') {
+      viewingVisibility.commentsVisible = commentsVisible;
+    }
+    if (typeof trackChangesVisible === 'boolean') {
+      viewingVisibility.trackChangesVisible = trackChangesVisible;
+    }
+  };
 
   /**
    * Get HTML content from the comment text JSON (which uses DOCX schema)
@@ -670,6 +709,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // Actions
     init,
+    setViewingVisibility,
     getComment,
     setActiveComment,
     getCommentLocation,
@@ -683,6 +723,7 @@ export const useCommentsStore = defineStore('comments', () => {
     processLoadedDocxComments,
     translateCommentsForExport,
     handleEditorLocationsUpdate,
+    clearEditorCommentPositions,
     handleTrackedChangeUpdate,
   };
 });

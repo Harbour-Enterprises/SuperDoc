@@ -748,7 +748,7 @@ describe('FloatingObjectManager', () => {
       const initialColumns = { width: 468, gap: 0, count: 1 };
       const manager = createFloatingObjectManager(initialColumns, { left: 72, right: 72 }, 612);
 
-      // Register image with page-relative positioning (treated as margin-relative for single column)
+      // Register image with page-relative positioning (origin at physical page edge)
       const imageBlock = createMockImageBlock({
         anchor: {
           isAnchored: true,
@@ -762,8 +762,8 @@ describe('FloatingObjectManager', () => {
       manager.registerDrawing(imageBlock, createMockMeasure(), 100, 0, 1);
 
       const zones = manager.getAllFloatsForPage(1);
-      // Right-aligned: contentLeft + contentWidth - imageWidth = 72 + 468 - 200 = 340
-      expect(zones[0].bounds.x).toBe(340);
+      // Right-aligned relative to the page edge: 0 + 612 - 200 = 412
+      expect(zones[0].bounds.x).toBe(412);
 
       // Update to A4 page size
       const newColumns = { width: 698, gap: 0, count: 1 };
@@ -784,8 +784,8 @@ describe('FloatingObjectManager', () => {
 
       const newZones = manager.getAllFloatsForPage(1);
       const newImageZone = newZones.find((z) => z.imageBlockId === 'test-image-2');
-      // Right-aligned with A4: 72 + 698 - 200 = 570
-      expect(newImageZone?.bounds.x).toBe(570);
+      // Right-aligned relative to the new page width: 0 + 842 - 200 = 642
+      expect(newImageZone?.bounds.x).toBe(642);
     });
 
     it('handles context update for multi-column to single-column transition', () => {

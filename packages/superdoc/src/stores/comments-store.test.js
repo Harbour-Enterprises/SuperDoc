@@ -266,4 +266,132 @@ describe('comments-store', () => {
 
     expect(store.commentsList[0].createdTime).toBe(now);
   });
+
+  describe('clearEditorCommentPositions', () => {
+    it('clears all editor comment positions', () => {
+      // Setup editorCommentPositions with data
+      store.editorCommentPositions = {
+        'comment-1': { from: 10, to: 20 },
+        'comment-2': { from: 30, to: 40 },
+        'comment-3': { from: 50, to: 60 },
+      };
+
+      // Verify positions are set
+      expect(Object.keys(store.editorCommentPositions).length).toBe(3);
+      expect(store.editorCommentPositions['comment-1']).toEqual({ from: 10, to: 20 });
+      expect(store.editorCommentPositions['comment-2']).toEqual({ from: 30, to: 40 });
+      expect(store.editorCommentPositions['comment-3']).toEqual({ from: 50, to: 60 });
+
+      // Clear all positions
+      store.clearEditorCommentPositions();
+
+      // Verify all positions are cleared (object should be empty)
+      expect(Object.keys(store.editorCommentPositions).length).toBe(0);
+      expect(store.editorCommentPositions).toEqual({});
+    });
+
+    it('handles already empty editorCommentPositions gracefully', () => {
+      store.editorCommentPositions = {};
+
+      // Should not throw
+      expect(() => store.clearEditorCommentPositions()).not.toThrow();
+
+      // Should still be empty
+      expect(store.editorCommentPositions).toEqual({});
+    });
+
+    it('clears positions even with many entries', () => {
+      // Setup many comment positions
+      const positions = {};
+      for (let i = 0; i < 100; i++) {
+        positions[`comment-${i}`] = { from: i * 10, to: i * 10 + 5 };
+      }
+      store.editorCommentPositions = positions;
+
+      // Verify we have 100 entries
+      expect(Object.keys(store.editorCommentPositions).length).toBe(100);
+
+      // Clear all
+      store.clearEditorCommentPositions();
+
+      // Verify all cleared
+      expect(Object.keys(store.editorCommentPositions).length).toBe(0);
+    });
+
+    it('resets editorCommentPositions to empty object, not null', () => {
+      store.editorCommentPositions = {
+        'comment-1': { from: 10, to: 20 },
+      };
+
+      store.clearEditorCommentPositions();
+
+      // Should be an empty object, not null or undefined
+      expect(store.editorCommentPositions).toEqual({});
+      expect(store.editorCommentPositions).not.toBeNull();
+      expect(store.editorCommentPositions).not.toBeUndefined();
+    });
+
+    it('can be called multiple times safely', () => {
+      store.editorCommentPositions = {
+        'comment-1': { from: 10, to: 20 },
+      };
+
+      // Clear once
+      store.clearEditorCommentPositions();
+      expect(store.editorCommentPositions).toEqual({});
+
+      // Clear again - should not throw
+      expect(() => store.clearEditorCommentPositions()).not.toThrow();
+      expect(store.editorCommentPositions).toEqual({});
+    });
+  });
+
+  describe('viewing visibility filters', () => {
+    it('hides tracked change threads when viewing mode hides tracked changes', () => {
+      store.commentsList = [
+        { commentId: 'tc-parent', trackedChange: true, createdTime: 1 },
+        { commentId: 'tc-child', parentCommentId: 'tc-parent', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toEqual([]);
+      expect(store.getGroupedComments.resolvedComments).toEqual([]);
+    });
+
+    it('shows standard comment threads when viewing mode shows comments', () => {
+      store.commentsList = [
+        { commentId: 'c-parent', trackedChange: false, createdTime: 1 },
+        { commentId: 'c-child', parentCommentId: 'c-parent', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toHaveLength(1);
+      expect(store.getGroupedComments.parentComments[0].commentId).toBe('c-parent');
+    });
+
+    it('hides tracked change threads when children reference importedId', () => {
+      store.commentsList = [
+        { commentId: 'tc-parent', importedId: 'imp-1', trackedChange: true, createdTime: 1 },
+        { commentId: 'tc-child', parentCommentId: 'imp-1', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toEqual([]);
+    });
+  });
 });

@@ -1,5 +1,6 @@
 import { handleVRectImport } from './handle-v-rect-import';
 import { handleShapeTextboxImport } from './handle-shape-textbox-import';
+import { handleShapeImageImport } from './handle-shape-image-import';
 
 /**
  * @param {Object} node
@@ -27,6 +28,12 @@ export function pictNodeTypeStrategy(node) {
     const textbox = shape.elements?.find((el) => el.name === 'v:textbox');
     if (textbox) {
       return { type: 'shapeContainer', handler: handleShapeTextboxImport };
+    }
+
+    // Check for v:imagedata (image watermarks)
+    const imagedata = shape.elements?.find((el) => el.name === 'v:imagedata');
+    if (imagedata) {
+      return { type: 'image', handler: handleShapeImageImport };
     }
   }
 
