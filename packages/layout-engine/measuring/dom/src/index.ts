@@ -669,7 +669,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
    *   due to rounding, when it would actually render fine
    */
   const WIDTH_FUDGE_PX = 0.5;
-  const WORD_WIDTH_TOLERANCE_PX = 12;
   const lines: Line[] = [];
   const indent = block.attrs?.indent;
   const spacing = block.attrs?.spacing;
@@ -680,10 +679,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const firstLine = indent?.firstLine ?? 0;
   const hanging = indent?.hanging ?? 0;
   const isWordLayoutList = Boolean(wordLayout?.marker);
-  const hasNonEmptyIndent = indentLeft !== 0 || indentRight !== 0 || firstLine !== 0 || hanging !== 0;
-  const hasEmptyLines = lines.length === 0;
-  const resolveWidthTolerance = (): number =>
-    !isWordLayoutList && hasNonEmptyIndent && hasEmptyLines ? -WORD_WIDTH_TOLERANCE_PX : WIDTH_FUDGE_PX;
   // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
   // suppressFirstLineIndent=true for these cases.
   const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
@@ -750,8 +745,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return measureText(markerText, markerFont, ctx);
     },
   );
-  const effectiveTextStartPx =
-    typeof textStartPx === 'number' && Number.isFinite(textStartPx) ? textStartPx : resolvedTextStartPx;
+  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
 
   if (typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).
@@ -1531,9 +1525,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
         } else {
           const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
-          const widthTolerance = resolveWidthTolerance();
           if (
-            currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - widthTolerance &&
+            currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
             currentLine.width > 0
           ) {
             trimTrailingWrapSpaces(currentLine);
@@ -1645,9 +1638,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             // Add space to existing line
             // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
             const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
-            const widthTolerance = resolveWidthTolerance();
             if (
-              currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - widthTolerance &&
+              currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
               currentLine.width > 0
             ) {
               // Space doesn't fit - finish current line and start new one with the space
@@ -1782,10 +1774,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               if (isLastChunk) {
                 // If this is also the last chunk, keep currentLine open for more content
                 const ls = (run as TextRun).letterSpacing ?? 0;
-                const widthTolerance = resolveWidthTolerance();
                 if (
                   shouldIncludeDelimiterSpace &&
-                  currentLine.width + spaceWidth <= currentLine.maxWidth - widthTolerance
+                  currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX
                 ) {
                   currentLine.toChar = wordEndWithSpace;
                   currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
@@ -1822,10 +1813,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               };
               // If trailing space fits, include it
               const ls = (run as TextRun).letterSpacing ?? 0;
-              const widthTolerance = resolveWidthTolerance();
               if (
                 shouldIncludeDelimiterSpace &&
-                currentLine.width + spaceWidth <= currentLine.maxWidth - widthTolerance
+                currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX
               ) {
                 currentLine.toChar = wordEndWithSpace;
                 currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
@@ -1872,8 +1862,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           // If a trailing space exists and fits safely, include it on this line
           // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           const ls = (run as TextRun).letterSpacing ?? 0;
-          const widthTolerance = resolveWidthTolerance();
-          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - widthTolerance) {
+          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ls);
             charPosInRun = wordEndWithSpace;
@@ -1907,8 +1896,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           wordCommitWidth +
           // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           (shouldIncludeDelimiterSpace ? ((run as TextRun).letterSpacing ?? 0) : 0);
-        const widthTolerance = resolveWidthTolerance();
-        const availableWidth = currentLine.maxWidth - widthTolerance;
+        const availableWidth = currentLine.maxWidth - WIDTH_FUDGE_PX;
         // Skip line break check if we're in an active tab alignment group - content was pre-measured
         let shouldBreak =
           !inActiveTabGroup &&
@@ -1968,8 +1956,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: 0,
           };
           // If trailing space would fit on the new line, consume it here; otherwise skip it
-          const widthTolerance = resolveWidthTolerance();
-          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - widthTolerance) {
+          if (shouldIncludeDelimiterSpace && currentLine.width + spaceWidth <= currentLine.maxWidth - WIDTH_FUDGE_PX) {
             currentLine.toChar = wordEndWithSpace;
             currentLine.width = roundValue(currentLine.width + spaceWidth + ((run as TextRun).letterSpacing ?? 0));
             charPosInRun = wordEndWithSpace;
@@ -1988,10 +1975,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         } else {
           currentLine.toRun = runIndex;
           // If adding the trailing space would exceed, commit only the word and finalize line
-          const widthTolerance = resolveWidthTolerance();
           if (
             shouldIncludeDelimiterSpace &&
-            currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth - widthTolerance
+            currentLine.width + boundarySpacing + wordOnlyWidth + spaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX
           ) {
             currentLine.toChar = wordEndNoSpace;
             currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
