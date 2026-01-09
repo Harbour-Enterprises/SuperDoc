@@ -1,5 +1,5 @@
 import type * as CoreCommandExports from './index.js';
-import type { CommandProps } from '@core/types/ChainedCommands.js';
+import type { CommandProps } from '../types/ChainedCommands.js';
 
 type ExtractCommandSignature<F> = F extends (...args: infer A) => (props: CommandProps) => infer R
   ? (...args: A) => R
@@ -39,6 +39,7 @@ type CoreCommandNames =
   | 'insertContent'
   | 'insertContentAt'
   | 'undoInputRule'
+  | 'setSectionPageMarginsAtSelection'
   | 'toggleList'
   | 'increaseListIndent'
   | 'decreaseListIndent'
@@ -52,6 +53,6 @@ type CoreCommandSignatures = {
   [K in CoreCommandNames]: ExtractCommandSignature<(typeof CoreCommandExports)[K]>;
 };
 
-declare module '@core/types/ChainedCommands.js' {
+declare module '../types/ChainedCommands.js' {
   interface CoreCommandMap extends CoreCommandSignatures {}
 }

@@ -1,6 +1,8 @@
-import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { NodeSelection, Selection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
+import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
+import type { Mapping } from 'prosemirror-transform';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { EpochPositionMapper } from './EpochPositionMapper.js';
@@ -61,6 +63,8 @@ import {
   setupInternalFieldAnnotationDragHandlers,
 } from './FieldAnnotationDragDrop.js';
 import { initHeaderFooterRegistry as initHeaderFooterRegistryFromHelper } from './header-footer/HeaderFooterRegistryInit.js';
+import { decodeRPrFromMarks } from './super-converter/styles.js';
+import { halfPointToPoints } from './super-converter/helpers.js';
 import { layoutPerRIdHeaderFooters as layoutPerRIdHeaderFootersFromHelper } from './header-footer/HeaderFooterPerRidLayout.js';
 import { toFlowBlocks } from '@superdoc/pm-adapter';
 import {
@@ -74,7 +78,7 @@ import {
   getBucketRepresentative,
   buildMultiSectionIdentifier,
   getHeaderFooterTypeForSection,
-  layoutHeaderFooterWithCache,
+  layoutHeaderFooterWithCache as _layoutHeaderFooterWithCache,
   PageGeometryHelper,
 } from '@superdoc/layout-bridge';
 import type {
@@ -98,7 +102,7 @@ import type {
   TrackedChangesMode,
   Fragment,
 } from '@superdoc/contracts';
-import { extractHeaderFooterSpace } from '@superdoc/contracts';
+import { extractHeaderFooterSpace as _extractHeaderFooterSpace } from '@superdoc/contracts';
 import { TrackChangesBasePluginKey } from '@extensions/track-changes/plugins/index.js';
 
 // Comment and tracked change mark names (inline to avoid missing declaration files)
@@ -106,6 +110,15 @@ const CommentMarkName = 'commentMark';
 const TrackInsertMarkName = 'trackInsert';
 const TrackDeleteMarkName = 'trackDelete';
 const TrackFormatMarkName = 'trackFormat';
+
+/**
+ * Font size scaling factor for subscript and superscript text.
+ * This value (0.65 or 65%) matches Microsoft Word's default rendering behavior
+ * for vertical alignment (w:vertAlign) when set to 'superscript' or 'subscript'.
+ * Applied to the base font size to reduce text size for sub/superscripts.
+ */
+const SUBSCRIPT_SUPERSCRIPT_SCALE = 0.65;
+
 // Collaboration cursor imports
 import { absolutePositionToRelativePosition, ySyncPluginKey } from 'y-prosemirror';
 import type * as Y from 'yjs';
@@ -282,6 +295,10 @@ export type LayoutEngineOptions = {
   debugLabel?: string;
   layoutMode?: LayoutMode;
   trackedChanges?: TrackedChangesOverrides;
+  /** Emit comment positions while in viewing mode (used to render comment highlights). */
+  emitCommentPositionsInViewing?: boolean;
+  /** Render comment highlights while in viewing mode. */
+  enableCommentsInViewing?: boolean;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
   /**
@@ -577,6 +594,7 @@ export class PresentationEditor extends EventEmitter {
   #telemetryEmitter: ((event: TelemetryEvent) => void) | null = null;
   #renderScheduled = false;
   #pendingDocChange = false;
+  #pendingMapping: Mapping | null = null;
   #isRerendering = false;
   #selectionSync = new SelectionSyncCoordinator();
   #remoteCursorUpdateScheduled = false;
@@ -632,6 +650,7 @@ export class PresentationEditor extends EventEmitter {
   #dragLastPointer: SelectionDebugHudState['lastPointer'] = null;
   #dragLastRawHit: PositionHit | null = null;
   #dragUsedPageNotMountedFallback = false;
+  #suppressFocusInFromDraggable = false;
 
   // Cell selection drag state
   // Tracks cell-specific context when drag starts in a table for multi-cell selection
@@ -711,6 +730,8 @@ export class PresentationEditor extends EventEmitter {
       debugLabel: options.layoutEngineOptions?.debugLabel,
       layoutMode: options.layoutEngineOptions?.layoutMode ?? 'vertical',
       trackedChanges: options.layoutEngineOptions?.trackedChanges,
+      emitCommentPositionsInViewing: options.layoutEngineOptions?.emitCommentPositionsInViewing,
+      enableCommentsInViewing: options.layoutEngineOptions?.enableCommentsInViewing,
       presence: validatedPresence,
     };
     this.#trackedChangesOverrides = options.layoutEngineOptions?.trackedChanges;
@@ -1269,13 +1290,14 @@ export class PresentationEditor extends EventEmitter {
    * Get the current zoom level.
    *
    * The zoom level is a multiplier that controls the visual scale of the document.
-   * This value is applied via CSS transform: scale() on the #viewportHost element,
-   * which ensures consistent scaling between rendered content and overlay elements
-   * (selections, cursors, interactive handles).
+   * Zoom is applied via CSS transform: scale() on the content elements (#painterHost
+   * and #selectionOverlay), with the viewport dimensions (#viewportHost) set to the
+   * scaled size to ensure proper scroll behavior.
    *
    * Relationship to Centralized Zoom Architecture:
    * - PresentationEditor is the SINGLE SOURCE OF TRUTH for zoom state
-   * - Zoom is applied internally via transform: scale() on #viewportHost
+   * - Zoom is applied internally via transform: scale() on #painterHost and #selectionOverlay
+   * - The #viewportHost dimensions are set to scaled values for proper scroll container behavior
    * - External components (toolbar, UI controls) should use setZoom() to modify zoom
    * - The zoom value is used throughout the system for coordinate transformations
    *
@@ -1336,12 +1358,15 @@ export class PresentationEditor extends EventEmitter {
     if (!validModes.includes(mode)) {
       throw new TypeError(`[PresentationEditor] Invalid mode "${mode}". Must be one of: ${validModes.join(', ')}`);
     }
+    const modeChanged = this.#documentMode !== mode;
     this.#documentMode = mode;
     this.#editor.setDocumentMode(mode);
     this.#syncDocumentModeClass();
     this.#syncHiddenEditorA11yAttributes();
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
-    if (trackedChangesChanged) {
+    // Re-render if mode changed OR tracked changes preferences changed.
+    // Mode change affects enableComments in toFlowBlocks even if tracked changes didn't change.
+    if (modeChanged || trackedChangesChanged) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
@@ -1365,9 +1390,10 @@ export class PresentationEditor extends EventEmitter {
       throw new TypeError('[PresentationEditor] setTrackedChangesOverrides expects an object or undefined');
     }
     if (overrides !== undefined) {
-      if (overrides.mode !== undefined && !['review', 'simple', 'original'].includes(overrides.mode as string)) {
+      const validModes = ['review', 'original', 'final', 'off'];
+      if (overrides.mode !== undefined && !validModes.includes(overrides.mode as string)) {
         throw new TypeError(
-          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: review, simple, original`,
+          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: ${validModes.join(', ')}`,
         );
       }
       if (overrides.enabled !== undefined && typeof overrides.enabled !== 'boolean') {
@@ -1378,6 +1404,40 @@ export class PresentationEditor extends EventEmitter {
     this.#layoutOptions.trackedChanges = overrides;
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
     if (trackedChangesChanged) {
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    }
+  }
+
+  /**
+   * Update viewing-mode comment rendering behavior and re-render if needed.
+   *
+   * @param options - Viewing mode comment options.
+   */
+  setViewingCommentOptions(
+    options: { emitCommentPositionsInViewing?: boolean; enableCommentsInViewing?: boolean } = {},
+  ) {
+    if (options !== undefined && (typeof options !== 'object' || options === null || Array.isArray(options))) {
+      throw new TypeError('[PresentationEditor] setViewingCommentOptions expects an object or undefined');
+    }
+
+    let hasChanges = false;
+
+    if (typeof options.emitCommentPositionsInViewing === 'boolean') {
+      if (this.#layoutOptions.emitCommentPositionsInViewing !== options.emitCommentPositionsInViewing) {
+        this.#layoutOptions.emitCommentPositionsInViewing = options.emitCommentPositionsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (typeof options.enableCommentsInViewing === 'boolean') {
+      if (this.#layoutOptions.enableCommentsInViewing !== options.enableCommentsInViewing) {
+        this.#layoutOptions.enableCommentsInViewing = options.enableCommentsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
@@ -2340,6 +2400,7 @@ export class PresentationEditor extends EventEmitter {
     }
     this.#layoutOptions.zoom = zoom;
     this.#applyZoom();
+    this.emit('zoomChange', { zoom });
     this.#scheduleSelectionUpdate();
     // Trigger cursor updates on zoom changes
     if (this.#remoteCursorState.size > 0) {
@@ -2480,6 +2541,20 @@ export class PresentationEditor extends EventEmitter {
       }
       if (trackedChangesChanged || transaction?.docChanged) {
         this.#pendingDocChange = true;
+        // Store the mapping from this transaction for position updates during paint.
+        // Only stored for doc changes - other triggers don't have position shifts.
+        if (transaction?.docChanged) {
+          if (this.#pendingMapping !== null) {
+            // Multiple rapid transactions before rerender - compose the mappings.
+            // The painter's gate checks maps.length > 1 to trigger full rebuild,
+            // which is the safe fallback for complex/batched edits.
+            const combined = this.#pendingMapping.slice();
+            combined.appendMapping(transaction.mapping);
+            this.#pendingMapping = combined;
+          } else {
+            this.#pendingMapping = transaction.mapping;
+          }
+        }
         this.#selectionSync.onLayoutStart();
         this.#scheduleRerender();
       }
@@ -2531,6 +2606,23 @@ export class PresentationEditor extends EventEmitter {
     this.#editorListeners.push({
       event: 'collaborationReady',
       handler: handleCollaborationReady as (...args: unknown[]) => void,
+    });
+
+    // Handle remote header/footer changes from collaborators
+    const handleRemoteHeaderFooterChanged = (payload: {
+      type: 'header' | 'footer';
+      sectionId: string;
+      content: unknown;
+    }) => {
+      this.#headerFooterAdapter?.invalidate(payload.sectionId);
+      this.#headerFooterManager?.refresh();
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    };
+    this.#editor.on('remoteHeaderFooterChanged', handleRemoteHeaderFooterChanged);
+    this.#editorListeners.push({
+      event: 'remoteHeaderFooterChanged',
+      handler: handleRemoteHeaderFooterChanged as (...args: unknown[]) => void,
     });
   }
 
@@ -3026,6 +3118,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
+    this.#suppressFocusInFromDraggable = isDraggableAnnotation;
 
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
@@ -3390,7 +3483,12 @@ export class PresentationEditor extends EventEmitter {
         mapped: mapped
           ? mapped.ok
             ? { ok: true, pos: mapped.pos, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
-            : { ok: false, reason: mapped.reason, fromEpoch: mapped.fromEpoch, toEpoch: mapped.toEpoch }
+            : {
+                ok: false,
+                reason: (mapped as { ok: false; reason: string }).reason,
+                fromEpoch: mapped.fromEpoch,
+                toEpoch: mapped.toEpoch,
+              }
           : null,
         hit: hit ? { pos: hit.pos, pageIndex: hit.pageIndex, layoutEpoch: hit.layoutEpoch } : null,
       })}`,
@@ -3417,7 +3515,12 @@ export class PresentationEditor extends EventEmitter {
 
     if (!handledByDepth) {
       try {
-        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
+        const doc = this.#editor.state.doc;
+        let nextSelection: Selection = TextSelection.create(doc, hit.pos);
+        if (!nextSelection.$from.parent.inlineContent) {
+          nextSelection = Selection.near(doc.resolve(hit.pos), 1);
+        }
+        const tr = this.#editor.state.tr.setSelection(nextSelection);
         this.#editor.view?.dispatch(tr);
       } catch {
         // Position may be invalid during layout updates (e.g., after drag-drop) - ignore
@@ -3798,7 +3901,7 @@ export class PresentationEditor extends EventEmitter {
             },
             mapped: {
               ok: false,
-              reason: mappedHead.reason,
+              reason: (mappedHead as { ok: false; reason: string }).reason,
               fromEpoch: mappedHead.fromEpoch,
               toEpoch: mappedHead.toEpoch,
             },
@@ -3964,6 +4067,11 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    if (this.#suppressFocusInFromDraggable) {
+      this.#suppressFocusInFromDraggable = false;
+      return;
+    }
+
     const target = event.target as Node | null;
     const activeTarget = this.#getActiveDomTarget();
     if (!activeTarget) {
@@ -4001,6 +4109,8 @@ export class PresentationEditor extends EventEmitter {
   };
 
   #handlePointerUp = (event: PointerEvent) => {
+    this.#suppressFocusInFromDraggable = false;
+
     if (!this.#isDragging) return;
 
     // Release pointer capture if we have it
@@ -4298,12 +4408,15 @@ export class PresentationEditor extends EventEmitter {
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
+        const commentsEnabled =
+          this.#documentMode !== 'viewing' || this.#layoutOptions.enableCommentsInViewing === true;
         const result = toFlowBlocks(docJson, {
-          mediaFiles: this.#editor?.storage?.image?.media as Record<string, string> | undefined,
+          mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
           sectionMetadata,
           trackedChangesMode: this.#trackedChangesMode,
           enableTrackedChanges: this.#trackedChangesEnabled,
+          enableComments: commentsEnabled,
           enableRichHyperlinks: true,
           themeColors: this.#editor?.converter?.themeColors ?? undefined,
           converterContext,
@@ -4443,7 +4556,12 @@ export class PresentationEditor extends EventEmitter {
       );
       // Avoid MutationObserver overhead while repainting large DOM trees.
       this.#domIndexObserverManager?.pause();
-      painter.paint(layout, this.#painterHost);
+      // Pass the transaction mapping for efficient position attribute updates.
+      // Consumed here and cleared to prevent stale mappings on subsequent paints.
+      const mapping = this.#pendingMapping;
+      this.#pendingMapping = null;
+      painter.paint(layout, this.#painterHost, mapping ?? undefined);
+      this.#applyVertAlignToLayout();
       this.#rebuildDomPositionIndex();
       this.#domIndexObserverManager?.resume();
       this.#layoutEpoch = layoutEpoch;
@@ -4457,6 +4575,9 @@ export class PresentationEditor extends EventEmitter {
       this.#layoutErrorState = 'healthy';
       this.#dismissErrorBanner();
 
+      // Update viewport dimensions after layout (page count may have changed)
+      this.#applyZoom();
+
       const metrics = createLayoutMetricsFromHelper(perf, startMark, layout, blocks);
       const payload = { layout, blocks, measures, metrics };
       this.emit('layoutUpdated', payload);
@@ -4464,10 +4585,13 @@ export class PresentationEditor extends EventEmitter {
 
       // Emit fresh comment positions after layout completes.
       // This ensures positions are always in sync with the current document and layout.
-      const commentPositions = this.#collectCommentPositions();
-      const positionKeys = Object.keys(commentPositions);
-      if (positionKeys.length > 0) {
-        this.emit('commentPositions', { positions: commentPositions });
+      const allowViewingCommentPositions = this.#layoutOptions.emitCommentPositionsInViewing === true;
+      if (this.#documentMode !== 'viewing' || allowViewingCommentPositions) {
+        const commentPositions = this.#collectCommentPositions();
+        const positionKeys = Object.keys(commentPositions);
+        if (positionKeys.length > 0) {
+          this.emit('commentPositions', { positions: commentPositions });
+        }
       }
       if (this.#telemetryEmitter && metrics) {
         this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });
@@ -4585,6 +4709,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    const { from, to } = selection;
     const docEpoch = this.#epochMapper.getCurrentEpoch();
     if (this.#layoutEpoch < docEpoch) {
       // The visible layout DOM does not match the current document state.
@@ -4607,7 +4732,6 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const { from, to } = selection;
     if (from === to) {
       const caretLayout = this.#computeCaretLayoutRect(from);
       if (!caretLayout) {
@@ -4804,6 +4928,23 @@ export class PresentationEditor extends EventEmitter {
     };
   }
 
+  /**
+   * Computes layout constraints for header and footer content.
+   *
+   * This method calculates the available width and height for laying out header/footer
+   * content, following Microsoft Word's layout model:
+   * - Headers/footers use the same left/right margins as the body content
+   * - Content renders at its natural height and can extend beyond the nominal space
+   * - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
+   *
+   * The width is constrained to the body content width (page width minus left/right margins).
+   * The height represents the maximum available vertical space between top and bottom margins,
+   * allowing header/footer content to grow naturally and push body text as needed.
+   *
+   * @returns Constraint object containing width, height, pageWidth, and margins,
+   *          or null if the constraints cannot be computed (e.g., invalid margins that
+   *          exceed page dimensions or produce non-positive content width/height).
+   */
   #computeHeaderFooterConstraints() {
     const pageSize = this.#layoutOptions.pageSize ?? DEFAULT_PAGE_SIZE;
     const margins = this.#layoutOptions.margins ?? DEFAULT_MARGINS;
@@ -4827,39 +4968,60 @@ export class PresentationEditor extends EventEmitter {
     // - Content renders at natural height and can extend into the body area if needed
     // - Body text boundaries are adjusted (effectiveTopMargin/effectiveBottomMargin) to prevent overlap
     //
-    // The constraint height determines how much space is available before layout pagination.
-    // We use the margin distances (headerMargin, footerMargin) as the constraint because:
-    // 1. This gives headers/footers their natural rendering space
-    // 2. When headerMargin == topMargin (e.g., Word's "Narrow" margins), this still provides
-    //    reasonable space instead of 0px
-    // 3. The soundness fix in layout-paragraph.ts handles edge cases where content spacing
-    //    exceeds this constraint
-    // 4. Keeping the constraint reasonable ensures behindDoc images with large offsets are
-    //    correctly excluded from height calculations (see layoutHeaderFooter's maxBehindDocOverflow)
+    // Use the full body height for measuring headers/footers so content can grow
+    // naturally (Word-style) and push body text as needed.
     const marginTop = margins.top ?? DEFAULT_MARGINS.top!;
     const marginBottom = margins.bottom ?? DEFAULT_MARGINS.bottom!;
+
+    // Validate that margins are finite numbers and don't exceed page height
+    if (!Number.isFinite(marginTop) || !Number.isFinite(marginBottom)) {
+      console.warn('[PresentationEditor] Invalid top or bottom margin: not a finite number');
+      return null;
+    }
+
+    const totalVerticalMargins = marginTop + marginBottom;
+    if (totalVerticalMargins >= pageSize.h) {
+      console.warn(
+        `[PresentationEditor] Invalid margins: top (${marginTop}) + bottom (${marginBottom}) = ${totalVerticalMargins} >= page height (${pageSize.h})`,
+      );
+      return null;
+    }
+
+    // Minimum height for header/footer content to prevent degenerate layouts
+    const MIN_HEADER_FOOTER_HEIGHT = 1;
+    const height = Math.max(MIN_HEADER_FOOTER_HEIGHT, pageSize.h - totalVerticalMargins);
     const headerMargin = margins.header ?? 0;
     const footerMargin = margins.footer ?? 0;
-    const headerContentSpace = Math.max(marginTop - headerMargin, 0);
-    const footerContentSpace = Math.max(marginBottom - footerMargin, 0);
+    const headerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginTop - headerMargin);
+    const footerBand = Math.max(MIN_HEADER_FOOTER_HEIGHT, marginBottom - footerMargin);
 
-    // Use the larger of content space or margin distance.
-    // If all margins are 0 (edge-to-edge layout), height will be 0 and layoutHeaderFooter
-    // will return an empty layout, which is the correct behavior.
-    const height = Math.max(
-      headerContentSpace,
-      footerContentSpace,
-      headerMargin,
-      footerMargin,
-      marginTop,
-      marginBottom,
-    );
+    // overflowBaseHeight: Bounds behindDoc overflow handling in headers/footers.
+    //
+    // Purpose:
+    // - Prevents decorative background assets (images/drawings with behindDoc=true and extreme
+    //   offsets) from inflating header/footer layout height and driving excessive page margins.
+    // - Without this bound, a decorative image positioned far outside the header/footer band
+    //   (e.g., offsetV=5000) would incorrectly expand the header/footer height, pushing body
+    //   content and creating unwanted whitespace.
+    //
+    // Calculation rationale:
+    // - Uses the larger of headerBand or footerBand as the base height.
+    // - headerBand = marginTop - headerMargin (space between page top and header start)
+    // - footerBand = marginBottom - footerMargin (space between footer end and page bottom)
+    // - Taking the max ensures consistent overflow handling regardless of whether we're
+    //   measuring a header or footer, using the more permissive band size.
+    // - This value is passed to layoutHeaderFooter, which allows behindDoc fragments to
+    //   overflow by up to 4x this base (or 192pt, whichever is larger) before excluding
+    //   them from height calculations.
+    const overflowBaseHeight = Math.max(headerBand, footerBand);
+
     return {
       width: measurementWidth,
       height,
       // Pass actual page dimensions for page-relative anchor positioning in headers/footers
       pageWidth: pageSize.w,
       margins: { left: marginLeft, right: marginRight },
+      overflowBaseHeight,
     };
   }
 
@@ -4894,6 +5056,59 @@ export class PresentationEditor extends EventEmitter {
     this.#rebuildHeaderFooterRegions(layout);
   }
 
+  /**
+   * Computes layout metrics for header/footer decoration rendering.
+   *
+   * This helper consolidates the calculation of layout height, container height, and vertical offset
+   * for header/footer content, ensuring consistent metrics across both per-rId and variant-based layouts.
+   *
+   * For headers:
+   * - layoutHeight: The actual measured height of the header content
+   * - containerHeight: The larger of the box height (space between headerDistance and topMargin) or layoutHeight
+   * - offset: Always positioned at headerDistance from page top (Word's model)
+   *
+   * For footers:
+   * - layoutHeight: The actual measured height of the footer content
+   * - containerHeight: The larger of the box height (space between bottomMargin and footerDistance) or layoutHeight
+   * - offset: Positioned so the container bottom aligns with footerDistance from page bottom
+   *   When content exceeds the nominal space (box.height), the footer extends upward into the body area,
+   *   matching Word's behavior where overflow pushes body text up rather than clipping.
+   *
+   * @param kind - Whether this is a header or footer
+   * @param layoutHeight - The measured height of the header/footer content layout (may be 0 if layout has no height)
+   * @param box - The computed decoration box containing nominal position and dimensions
+   * @param pageHeight - Total page height in points
+   * @param footerMargin - Footer margin (footerDistance) from page bottom, used only for footer offset calculation
+   * @returns Object containing layoutHeight (validated as non-negative finite number),
+   *          containerHeight (max of box height and layout height), and offset (vertical position from page top)
+   */
+  #computeHeaderFooterMetrics(
+    kind: 'header' | 'footer',
+    layoutHeight: number,
+    box: { height: number; offset: number },
+    pageHeight: number,
+    footerMargin: number,
+  ): { layoutHeight: number; containerHeight: number; offset: number } {
+    // Ensure layoutHeight is a valid finite number, default to 0 if not
+    const validatedLayoutHeight = Number.isFinite(layoutHeight) && layoutHeight >= 0 ? layoutHeight : 0;
+
+    // Container must accommodate both the nominal box height and the actual content height
+    const containerHeight = Math.max(box.height, validatedLayoutHeight);
+
+    // Calculate vertical offset based on header/footer type
+    // Headers: Always start at headerDistance (box.offset) from page top
+    // Footers: Position so container bottom is at footerDistance from page bottom
+    //   - If content is taller than box.height, this extends the footer upward
+    //   - This matches Word's behavior where overflow grows into body area
+    const offset = kind === 'header' ? box.offset : Math.max(0, pageHeight - footerMargin - containerHeight);
+
+    return {
+      layoutHeight: validatedLayoutHeight,
+      containerHeight,
+      offset,
+    };
+  }
+
   #createDecorationProvider(kind: 'header' | 'footer', layout: Layout): PageDecorationProvider | undefined {
     const results = kind === 'header' ? this.#headerLayoutResults : this.#footerLayoutResults;
     const layoutsByRId = kind === 'header' ? this.#headerLayoutsByRId : this.#footerLayoutsByRId;
@@ -4924,12 +5139,37 @@ export class PresentationEditor extends EventEmitter {
         ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
         : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
 
-      const sectionRId =
-        page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
-          : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
-            : undefined;
+      // Resolve the section-specific rId for this header/footer variant.
+      // Implements Word's OOXML inheritance model:
+      //   1. Try current section's variant (e.g., 'first' header for first page with titlePg)
+      //   2. If not found, inherit from previous section's same variant
+      //   3. Final fallback: use current section's 'default' variant
+      // This ensures documents with multi-section layouts render correctly when sections
+      // don't explicitly define all header/footer variants (common in Word documents).
+      let sectionRId: string | undefined;
+      if (page?.sectionRefs && kind === 'header') {
+        sectionRId = page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionHeaderIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.headerRefs?.default;
+        }
+      } else if (page?.sectionRefs && kind === 'footer') {
+        sectionRId = page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionFooterIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.footerRefs?.default;
+        }
+      }
 
       if (!headerFooterType) {
         return null;
@@ -4937,43 +5177,63 @@ export class PresentationEditor extends EventEmitter {
 
       // PRIORITY 1: Try per-rId layout if we have a section-specific rId
       if (sectionRId && layoutsByRId.has(sectionRId)) {
-        const rIdLayout = layoutsByRId.get(sectionRId)!;
-        const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
-        if (slotPage) {
-          const fragments = slotPage.fragments ?? [];
-          const pageHeight =
-            page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
-          const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
-          const box = this.#computeDecorationBox(kind, margins, pageHeight);
+        const rIdLayout = layoutsByRId.get(sectionRId);
+        // Defensive null check: layoutsByRId.has() should guarantee the value exists,
+        // but we verify to prevent runtime errors if the Map state is inconsistent
+        if (!rIdLayout) {
+          console.warn(
+            `[PresentationEditor] Inconsistent state: layoutsByRId.has('${sectionRId}') returned true but get() returned undefined`,
+          );
+          // Fall through to PRIORITY 2 (variant-based layout)
+        } else {
+          const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
+          if (slotPage) {
+            const fragments = slotPage.fragments ?? [];
 
-          // Normalize fragments to start at y=0 if minY is negative
-          const layoutMinY = rIdLayout.layout.minY ?? 0;
-          const normalizedFragments =
-            layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+            const pageHeight =
+              page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+            const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
+            const box = this.#computeDecorationBox(kind, margins, pageHeight);
 
-          return {
-            fragments: normalizedFragments,
-            height: box.height,
-            contentHeight: rIdLayout.layout.height ?? box.height,
-            offset: box.offset,
-            marginLeft: box.x,
-            contentWidth: box.width,
-            headerId: sectionRId,
-            sectionType: headerFooterType,
-            minY: layoutMinY,
-            box: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-            hitRegion: {
-              x: box.x,
-              y: box.offset,
-              width: box.width,
-              height: box.height,
-            },
-          };
+            // Use helper to compute metrics with type safety and consistent logic
+            const rawLayoutHeight = rIdLayout.layout.height ?? 0;
+            const metrics = this.#computeHeaderFooterMetrics(
+              kind,
+              rawLayoutHeight,
+              box,
+              pageHeight,
+              margins.footer ?? 0,
+            );
+
+            // Normalize fragments to start at y=0 if minY is negative
+            const layoutMinY = rIdLayout.layout.minY ?? 0;
+            const normalizedFragments =
+              layoutMinY < 0 ? fragments.map((f) => ({ ...f, y: f.y - layoutMinY })) : fragments;
+
+            return {
+              fragments: normalizedFragments,
+              height: metrics.containerHeight,
+              contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+              offset: metrics.offset,
+              marginLeft: box.x,
+              contentWidth: box.width,
+              headerId: sectionRId,
+              sectionType: headerFooterType,
+              minY: layoutMinY,
+              box: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+              hitRegion: {
+                x: box.x,
+                y: metrics.offset,
+                width: box.width,
+                height: metrics.containerHeight,
+              },
+            };
+          }
         }
       }
 
@@ -4992,9 +5252,15 @@ export class PresentationEditor extends EventEmitter {
         return null;
       }
       const fragments = slotPage.fragments ?? [];
+
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
+
+      // Use helper to compute metrics with type safety and consistent logic
+      const rawLayoutHeight = variant.layout.height ?? 0;
+      const metrics = this.#computeHeaderFooterMetrics(kind, rawLayoutHeight, box, pageHeight, margins.footer ?? 0);
+
       const fallbackId = this.#headerFooterManager?.getVariantId(kind, headerFooterType);
       const finalHeaderId = sectionRId ?? fallbackId ?? undefined;
 
@@ -5004,9 +5270,9 @@ export class PresentationEditor extends EventEmitter {
 
       return {
         fragments: normalizedFragments,
-        height: box.height,
-        contentHeight: variant.layout.height ?? box.height,
-        offset: box.offset,
+        height: metrics.containerHeight,
+        contentHeight: metrics.layoutHeight > 0 ? metrics.layoutHeight : metrics.containerHeight,
+        offset: metrics.offset,
         marginLeft: box.x,
         contentWidth: box.width,
         headerId: finalHeaderId,
@@ -5014,15 +5280,15 @@ export class PresentationEditor extends EventEmitter {
         minY: layoutMinY,
         box: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
         hitRegion: {
           x: box.x,
-          y: box.offset,
+          y: metrics.offset,
           width: box.width,
-          height: box.height,
+          height: metrics.containerHeight,
         },
       };
     };
@@ -6004,7 +6270,7 @@ export class PresentationEditor extends EventEmitter {
     this.#hoverOverlay.style.display = 'block';
     this.#hoverOverlay.style.left = `${coords.x}px`;
     this.#hoverOverlay.style.top = `${coords.y}px`;
-    // Width and height are in layout space - the transform on #viewportHost handles scaling
+    // Width and height are in layout space - the transform on #selectionOverlay handles scaling
     this.#hoverOverlay.style.width = `${region.width}px`;
     this.#hoverOverlay.style.height = `${region.height}px`;
 
@@ -6017,7 +6283,7 @@ export class PresentationEditor extends EventEmitter {
     // This prevents clipping for headers at the top of the page
     const tooltipHeight = 24; // Approximate tooltip height
     const spaceAbove = coords.y;
-    // Height is in layout space - the transform on #viewportHost handles scaling
+    // Height is in layout space - the transform on #selectionOverlay handles scaling
     const regionHeight = region.height;
     const tooltipY =
       spaceAbove < tooltipHeight + 4
@@ -6185,17 +6451,120 @@ export class PresentationEditor extends EventEmitter {
     return { pageSize, margins, columns };
   }
 
+  /**
+   * Applies zoom transformation to the document viewport and painter hosts.
+   *
+   * Handles documents with varying page sizes (multi-section docs with landscape pages)
+   * by calculating actual dimensions from per-page sizes rather than assuming uniform pages.
+   *
+   * The implementation uses two key concepts:
+   * - **maxWidth/maxHeight**: Maximum dimension across all pages (for viewport sizing)
+   * - **totalWidth/totalHeight**: Sum of all page dimensions + gaps (for full document extent)
+   *
+   * Layout modes:
+   * - Vertical: Uses maxWidth for viewport width, totalHeight for scroll height
+   * - Horizontal: Uses totalWidth for viewport width, maxHeight for scroll height
+   */
   #applyZoom() {
-    // Apply zoom via transform: scale() on #viewportHost.
-    // This is the SINGLE source of zoom - the toolbar no longer applies CSS zoom on .layers.
+    // Apply zoom by scaling the children (#painterHost and #selectionOverlay) and
+    // setting the viewport dimensions to the scaled size.
     //
-    // By applying transform on #viewportHost (which contains BOTH #painterHost AND #selectionOverlay),
-    // both the rendered content and selection overlays scale together automatically.
-    // This eliminates coordinate system mismatches that occurred when zoom was applied
-    // externally on a parent element that didn't contain the selection overlay.
+    // CSS transform: scale() only affects visual rendering, NOT layout box dimensions.
+    // Previously, transform was applied to #viewportHost which caused the parent scroll
+    // container to not see the scaled size, resulting in clipping at high zoom levels.
+    //
+    // The new approach:
+    // 1. Apply transform: scale(zoom) to #painterHost and #selectionOverlay (visual scaling)
+    // 2. Set #viewportHost width/height to scaled dimensions (layout box scaling)
+    // This ensures both visual rendering AND scroll container dimensions are correct.
     const zoom = this.#layoutOptions.zoom ?? 1;
-    this.#viewportHost.style.transformOrigin = 'top left';
-    this.#viewportHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+    const layoutMode = this.#layoutOptions.layoutMode ?? 'vertical';
+
+    // Calculate actual document dimensions from per-page sizes.
+    // Multi-section documents can have pages with different sizes (e.g., landscape pages).
+    const pages = this.#layoutState.layout?.pages;
+    // Always use current layout mode's gap - layout.pageGap may be stale if layoutMode changed
+    const pageGap = this.#getEffectivePageGap();
+    const defaultWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
+    const defaultHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
+
+    let maxWidth = defaultWidth;
+    let maxHeight = defaultHeight;
+    let totalWidth = 0;
+    let totalHeight = 0;
+
+    if (Array.isArray(pages) && pages.length > 0) {
+      pages.forEach((page, index) => {
+        const pageWidth = page.size && typeof page.size.w === 'number' && page.size.w > 0 ? page.size.w : defaultWidth;
+        const pageHeight =
+          page.size && typeof page.size.h === 'number' && page.size.h > 0 ? page.size.h : defaultHeight;
+        maxWidth = Math.max(maxWidth, pageWidth);
+        maxHeight = Math.max(maxHeight, pageHeight);
+        totalWidth += pageWidth;
+        totalHeight += pageHeight;
+        if (index < pages.length - 1) {
+          totalWidth += pageGap;
+          totalHeight += pageGap;
+        }
+      });
+    } else {
+      totalWidth = defaultWidth;
+      totalHeight = defaultHeight;
+    }
+
+    // Horizontal layout stacks pages in a single row, so width grows with pageCount
+    if (layoutMode === 'horizontal') {
+      // For horizontal: sum widths, use max height
+      const scaledWidth = totalWidth * zoom;
+      const scaledHeight = maxHeight * zoom;
+
+      this.#viewportHost.style.width = `${scaledWidth}px`;
+      this.#viewportHost.style.minWidth = `${scaledWidth}px`;
+      this.#viewportHost.style.minHeight = `${scaledHeight}px`;
+      this.#viewportHost.style.transform = '';
+
+      this.#painterHost.style.width = `${totalWidth}px`;
+      this.#painterHost.style.minHeight = `${maxHeight}px`;
+      this.#painterHost.style.transformOrigin = 'top left';
+      this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+      this.#selectionOverlay.style.width = `${totalWidth}px`;
+      this.#selectionOverlay.style.height = `${maxHeight}px`;
+      this.#selectionOverlay.style.transformOrigin = 'top left';
+      this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+      return;
+    }
+
+    // Vertical layout: use max width, sum heights
+    // Zoom implementation:
+    // 1. #viewportHost has SCALED dimensions (maxWidth * zoom) for proper scroll container sizing
+    // 2. #painterHost has UNSCALED dimensions with transform: scale(zoom) applied
+    // 3. When scaled, #painterHost visually fills #viewportHost exactly
+    //
+    // This ensures the scroll container sees the correct scaled content size while
+    // the transform provides visual scaling.
+    const scaledWidth = maxWidth * zoom;
+    const scaledHeight = totalHeight * zoom;
+
+    // Set viewport to scaled dimensions for scroll container
+    this.#viewportHost.style.width = `${scaledWidth}px`;
+    this.#viewportHost.style.minWidth = `${scaledWidth}px`;
+    this.#viewportHost.style.minHeight = `${scaledHeight}px`;
+    this.#viewportHost.style.transform = '';
+
+    // Set painterHost to UNSCALED dimensions and apply transform
+    // This way: 816px * scale(1.5) = 1224px visual = matches viewport
+    this.#painterHost.style.width = `${maxWidth}px`;
+    this.#painterHost.style.minHeight = `${totalHeight}px`;
+    this.#painterHost.style.transformOrigin = 'top left';
+    this.#painterHost.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
+
+    // Selection overlay also scales - set to unscaled dimensions
+    this.#selectionOverlay.style.width = `${maxWidth}px`;
+    this.#selectionOverlay.style.height = `${totalHeight}px`;
+    this.#selectionOverlay.style.transformOrigin = 'top left';
+    this.#selectionOverlay.style.transform = zoom === 1 ? '' : `scale(${zoom})`;
   }
 
   /**
@@ -6204,7 +6573,7 @@ export class PresentationEditor extends EventEmitter {
    * Transforms coordinates from page-local space (x, y relative to a specific page)
    * to overlay-space coordinates (absolute position within the stacked page layout).
    * The returned coordinates are in layout space (unscaled logical pixels), not screen
-   * space - the CSS transform: scale() on #viewportHost handles zoom scaling.
+   * space - the CSS transform: scale() on #painterHost and #selectionOverlay handles zoom scaling.
    *
    * Pages are rendered vertically stacked at y = pageIndex * pageHeight, so the
    * conversion involves:
@@ -6532,5 +6901,108 @@ export class PresentationEditor extends EventEmitter {
       ?.permissionRanges?.hasAllowedRanges;
     if (hasPermissionOverride) return false;
     return this.#documentMode === 'viewing';
+  }
+
+  /**
+   * Applies vertical alignment and font scaling to layout DOM elements for subscript/superscript rendering.
+   *
+   * This method post-processes the painted DOM layout to apply vertical alignment styles
+   * (super, sub, baseline, or custom position) based on run properties and text style marks.
+   * It handles both DOCX-style vertAlign ('superscript', 'subscript', 'baseline') and
+   * custom position offsets (in half-points).
+   *
+   * Processing logic:
+   * 1. Queries all text spans with ProseMirror position markers
+   * 2. For each span, resolves the ProseMirror position to find the containing run node
+   * 3. Extracts vertAlign and position from run properties and/or text style marks
+   * 4. Applies CSS vertical-align and font-size styles based on the extracted properties
+   * 5. Position takes precedence over vertAlign when both are present
+   *
+   * @throws Does not throw - DOM manipulation errors are silently caught to prevent layout corruption
+   * @private
+   */
+  #applyVertAlignToLayout() {
+    const doc = this.#editor?.state?.doc;
+    if (!doc || !this.#painterHost) return;
+
+    try {
+      const spans = this.#painterHost.querySelectorAll('.superdoc-line span[data-pm-start]') as NodeListOf<HTMLElement>;
+      spans.forEach((span) => {
+        try {
+          // Skip header/footer spans - they belong to separate PM documents
+          // and their data-pm-start values don't correspond to the body doc
+          if (span.closest('.superdoc-page-header, .superdoc-page-footer')) return;
+
+          const pmStart = Number(span.dataset.pmStart ?? 'NaN');
+          if (!Number.isFinite(pmStart)) return;
+
+          const pos = Math.max(0, Math.min(pmStart, doc.content.size));
+          const $pos = doc.resolve(pos);
+
+          let runNode: ProseMirrorNode | null = null;
+          for (let depth = $pos.depth; depth >= 0; depth--) {
+            const node = $pos.node(depth);
+            if (node.type.name === 'run') {
+              runNode = node;
+              break;
+            }
+          }
+
+          let vertAlign: string | null = runNode?.attrs?.runProperties?.vertAlign ?? null;
+          let position: number | null = runNode?.attrs?.runProperties?.position ?? null;
+          let fontSizeHalfPts: number | null = runNode?.attrs?.runProperties?.fontSize ?? null;
+
+          if (!vertAlign && position == null && runNode) {
+            runNode.forEach((child: ProseMirrorNode) => {
+              if (!child.isText || !child.marks?.length) return;
+              const rpr = decodeRPrFromMarks(child.marks as Mark[]) as {
+                vertAlign?: string;
+                position?: number;
+                fontSize?: number;
+              };
+              if (rpr.vertAlign && !vertAlign) vertAlign = rpr.vertAlign;
+              if (rpr.position != null && position == null) position = rpr.position;
+              if (rpr.fontSize != null && fontSizeHalfPts == null) fontSizeHalfPts = rpr.fontSize;
+            });
+          }
+
+          if (vertAlign == null && position == null) return;
+
+          const styleEntries: string[] = [];
+          if (position != null && Number.isFinite(position)) {
+            const pts = halfPointToPoints(position);
+            if (Number.isFinite(pts)) {
+              styleEntries.push(`vertical-align: ${pts}pt`);
+            }
+          } else if (vertAlign === 'superscript' || vertAlign === 'subscript') {
+            styleEntries.push(`vertical-align: ${vertAlign === 'superscript' ? 'super' : 'sub'}`);
+            if (fontSizeHalfPts != null && Number.isFinite(fontSizeHalfPts)) {
+              const scaledPts = halfPointToPoints(fontSizeHalfPts * SUBSCRIPT_SUPERSCRIPT_SCALE);
+              if (Number.isFinite(scaledPts)) {
+                styleEntries.push(`font-size: ${scaledPts}pt`);
+              } else {
+                styleEntries.push(`font-size: ${SUBSCRIPT_SUPERSCRIPT_SCALE * 100}%`);
+              }
+            } else {
+              styleEntries.push(`font-size: ${SUBSCRIPT_SUPERSCRIPT_SCALE * 100}%`);
+            }
+          } else if (vertAlign === 'baseline') {
+            styleEntries.push('vertical-align: baseline');
+          }
+
+          if (!styleEntries.length) return;
+          const existing = span.getAttribute('style');
+          const merged = existing ? `${existing}; ${styleEntries.join('; ')}` : styleEntries.join('; ');
+          span.setAttribute('style', merged);
+        } catch (error) {
+          // Silently catch errors for individual spans to prevent layout corruption
+          // DOM manipulation failures should not break the entire layout process
+          console.error('Failed to apply vertical alignment to span:', error);
+        }
+      });
+    } catch (error) {
+      // Silently catch errors to prevent layout corruption
+      console.error('Failed to apply vertical alignment to layout:', error);
+    }
   }
 }

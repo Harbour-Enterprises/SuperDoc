@@ -2,7 +2,7 @@ import { Extension } from '@core/index.js';
 import { PluginKey } from 'prosemirror-state';
 import { encodeStateAsUpdate } from 'yjs';
 import { ySyncPlugin, prosemirrorToYDoc } from 'y-prosemirror';
-import { updateYdocDocxData } from '@extensions/collaboration/collaboration-helpers.js';
+import { updateYdocDocxData, applyRemoteHeaderFooterChanges } from '@extensions/collaboration/collaboration-helpers.js';
 
 export const CollaborationPluginKey = new PluginKey('collaboration');
 
@@ -36,6 +36,22 @@ export const Collaboration = Extension.create({
         if (!(key in this.editor.storage.image.media)) {
           const fileData = metaMap.get(key);
           this.editor.storage.image.media[key] = fileData;
+        }
+      });
+    });
+
+    // Observer for remote header/footer JSON changes
+    const headerFooterMap = this.options.ydoc.getMap('headerFooterJson');
+    headerFooterMap.observe((event) => {
+      // Only process remote changes (not our own)
+      if (event.transaction.local) return;
+
+      event.changes.keys.forEach((change, key) => {
+        if (change.action === 'add' || change.action === 'update') {
+          const data = headerFooterMap.get(key);
+          if (data) {
+            applyRemoteHeaderFooterChanges(this.editor, key, data);
+          }
         }
       });
     });

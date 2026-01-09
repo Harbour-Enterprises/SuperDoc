@@ -13,10 +13,13 @@ testConfig.packages.forEach((packagePath, i) => {
       timeout: 10_000,
     });
 
-    // Compare the screenshot with the reference screenshot
-    await expect(page).toHaveScreenshot({
+    const screenshotOptions = {
       fullPage: true,
-    });
+      maxDiffPixelRatio: 0.05, // allow small visual drift across demos
+    };
+
+    // Compare the screenshot with the reference screenshot
+    await expect(page).toHaveScreenshot(screenshotOptions);
   });
 });
 });

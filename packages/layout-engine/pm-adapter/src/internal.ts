@@ -157,6 +157,7 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
   const hyperlinkConfig: HyperlinkConfig = {
     enableRichHyperlinks: options?.enableRichHyperlinks ?? false,
   };
+  const enableComments = options?.enableComments ?? true;
   const themeColors = options?.themeColors;
   const converterContext = options?.converterContext;
 
@@ -240,6 +241,7 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
       hyperlinkConfig,
       themeColorsParam ?? themeColors,
       converterCtx ?? converterContext,
+      enableComments,
     );
 
   const tableConverter = (
@@ -294,6 +296,7 @@ export function toFlowBlocks(pmDoc: PMNode | object, options?: AdapterOptions): 
     listCounterContext: { getListCounter, incrementListCounter, resetListCounter },
     trackedChangesConfig,
     hyperlinkConfig,
+    enableComments,
     bookmarks,
     sectionState: {
       ranges: sectionRanges,
@@ -446,6 +449,7 @@ function paragraphToFlowBlocks(
   hyperlinkConfig: HyperlinkConfig = DEFAULT_HYPERLINK_CONFIG,
   themeColors?: ThemeColorPalette,
   converterContext?: ConverterContext,
+  enableComments = true,
 ): FlowBlock[] {
   return paragraphToFlowBlocksImpl(
     para,
@@ -507,6 +511,7 @@ function paragraphToFlowBlocks(
         ),
     },
     converterContext,
+    enableComments,
   );
 }
 

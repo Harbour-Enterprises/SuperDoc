@@ -7,5 +7,6 @@
     "declaration": true,
     "declarationMap": true
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [{ "path": "../contracts/tsconfig.json" }, { "path": "../../../shared/common/tsconfig.json" }]
 }

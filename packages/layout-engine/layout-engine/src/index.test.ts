@@ -214,7 +214,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(16, 1);
   });
@@ -238,7 +239,8 @@ describe('layoutDocument', () => {
     const firstFragment = layout.pages[0].fragments[0];
     const secondFragment = layout.pages[0].fragments[1];
 
-    const firstBottom = firstFragment.y + measures[0].totalHeight;
+    const firstMeasure = measures[0] as ParagraphMeasure;
+    const firstBottom = firstFragment.y + firstMeasure.totalHeight;
     const gap = secondFragment.y - firstBottom;
     expect(gap).toBeCloseTo(18, 1);
   });
@@ -1484,6 +1486,7 @@ describe('layoutDocument', () => {
           kind: 'sectionBreak',
           id: 'first',
           type: 'continuous',
+          margins: {},
           attrs: { source: 'sectPr', isFirstSection: true },
         } as FlowBlock,
         firstPara,
@@ -1494,6 +1497,7 @@ describe('layoutDocument', () => {
           id: 'second',
           type: 'continuous',
           columns: { count: 2, gap: 48 },
+          margins: {},
           attrs: { source: 'sectPr' },
         } as FlowBlock,
         thirdPara,
@@ -2211,7 +2215,9 @@ describe('layoutHeaderFooter', () => {
     expect(layout.height).toBeCloseTo(15);
   });
 
-  it('includes near behindDoc anchored fragments when computing height', () => {
+  it('excludes ALL behindDoc anchored fragments from height (per OOXML spec)', () => {
+    // Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout.
+    // Even "near" behindDoc images should be excluded from height calculations.
     const paragraphBlock: FlowBlock = {
       kind: 'paragraph',
       id: 'para-1',
@@ -2224,7 +2230,7 @@ describe('layoutHeaderFooter', () => {
       anchor: {
         isAnchored: true,
         behindDoc: true,
-        offsetV: -20,
+        offsetV: -20, // Even with small offset, behindDoc should not affect height
       },
     };
     const paragraphMeasure: Measure = {
@@ -2243,7 +2249,8 @@ describe('layoutHeaderFooter', () => {
       height: 60,
     });
 
-    expect(layout.height).toBeGreaterThan(15);
+    // Height should only include paragraph, not the behindDoc image
+    expect(layout.height).toBeCloseTo(15);
   });
 
   it('transforms page-relative anchor offsets by subtracting left margin', () => {
@@ -2382,14 +2389,13 @@ describe('layoutHeaderFooter', () => {
       kind: 'drawing',
       id: 'drawing-1',
       drawingKind: 'vectorShape',
+      geometry: { width: 100, height: 50 },
       anchor: {
         isAnchored: true,
         behindDoc: true,
         offsetV: 2000, // Extreme offset beyond overflow threshold
       },
-      shape: {
-        type: 'Rectangle',
-      },
+      shapeKind: 'Rectangle',
     };
     const paragraphMeasure: Measure = {
       kind: 'paragraph',
@@ -2495,7 +2501,9 @@ describe('layoutHeaderFooter', () => {
     expect(layout.height).toBe(0);
   });
 
-  it('includes behindDoc fragments within overflow range alongside regular content', () => {
+  it('excludes ALL behindDoc fragments but includes non-behindDoc anchored images', () => {
+    // Per OOXML spec, behindDoc is purely a z-ordering directive - ALL behindDoc images
+    // are excluded from height, but non-behindDoc anchored images are still included.
     const paragraphBlock: FlowBlock = {
       kind: 'paragraph',
       id: 'para-1',
@@ -2508,7 +2516,7 @@ describe('layoutHeaderFooter', () => {
       anchor: {
         isAnchored: true,
         behindDoc: true,
-        offsetV: 5, // Within overflow range - should be included
+        offsetV: 5, // behindDoc - excluded from height
       },
     };
     const behindDocImage2: FlowBlock = {
@@ -2518,7 +2526,7 @@ describe('layoutHeaderFooter', () => {
       anchor: {
         isAnchored: true,
         behindDoc: true,
-        offsetV: 5000, // Extreme offset - should be excluded
+        offsetV: 5000, // behindDoc - excluded from height
       },
     };
     const regularImage: FlowBlock = {
@@ -2527,7 +2535,7 @@ describe('layoutHeaderFooter', () => {
       src: 'data:image/png;base64,zzz',
       anchor: {
         isAnchored: true,
-        behindDoc: false,
+        behindDoc: false, // NOT behindDoc - included in height
         offsetV: 25,
       },
     };
@@ -2563,12 +2571,18 @@ describe('layoutHeaderFooter', () => {
 
     // Height should include:
     // - paragraph (15)
-    // - behindDocImage1 at y=5, height=30, bottom=35 (within overflow range)
-    // - regularImage at y=25, height=35, bottom=60
-    // - behindDocImage2 excluded (extreme offset)
+    // - regularImage at y=25, height=35, bottom=60 (NOT behindDoc - included)
+    // - behindDocImage1 excluded (behindDoc)
+    // - behindDocImage2 excluded (behindDoc)
     expect(layout.height).toBeGreaterThan(15);
     expect(layout.height).toBeCloseTo(60, 0);
   });
+
+  // Note: Tests for overflowBaseHeight threshold behavior have been removed.
+  // Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout.
+  // ALL behindDoc images are now excluded from height calculations, regardless of position.
+  // See tests above: 'excludes ALL behindDoc anchored fragments from height (per OOXML spec)'
+  // and 'excludes ALL behindDoc fragments but includes non-behindDoc anchored images'.
 });
 
 describe('requirePageBoundary edge cases', () => {

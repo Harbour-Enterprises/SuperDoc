@@ -25,6 +25,9 @@ function encode(params, encodedAttrs) {
     columnIndex,
     columnWidth,
     columnWidths: allColumnWidths,
+    rowIndex,
+    totalRows,
+    totalColumns,
     _referencedStyles,
   } = params.extraParams;
 
@@ -37,6 +40,9 @@ function encode(params, encodedAttrs) {
     columnIndex,
     columnWidth,
     allColumnWidths,
+    rowIndex,
+    totalRows,
+    totalColumns,
     _referencedStyles,
   });
 

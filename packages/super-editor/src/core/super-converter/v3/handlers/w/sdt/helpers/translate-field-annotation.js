@@ -70,8 +70,12 @@ export function translateFieldAnnotation(params) {
   const annotationAttrsJson = JSON.stringify(annotationAttrs);
 
   // Build sdtPr elements with passthrough support
+  // Sanitize displayLabel to prevent string "undefined" from being written to DOCX
+  const sanitizedDisplayLabel =
+    attrs.displayLabel === 'undefined' || attrs.displayLabel === undefined ? '' : attrs.displayLabel;
+
   const sdtPrElements = [
-    { name: 'w:alias', attributes: { 'w:val': attrs.displayLabel } },
+    { name: 'w:alias', attributes: { 'w:val': sanitizedDisplayLabel } },
     { name: 'w:tag', attributes: { 'w:val': annotationAttrsJson } },
     { name: 'w:id', attributes: { 'w:val': id } },
   ];

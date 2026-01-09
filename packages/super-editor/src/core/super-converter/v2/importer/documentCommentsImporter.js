@@ -48,8 +48,10 @@ export function importCommentData({ docx, editor, converter }) {
       path: [el],
     });
 
-    const { attrs } = parsedElements[0];
-    const paraId = attrs['w14:paraId'];
+    // Per OOXML spec, commentsExtended.xml links via the LAST paragraph's paraId
+    // when a comment has multiple paragraphs
+    const lastElement = parsedElements[parsedElements.length - 1];
+    const paraId = lastElement?.attrs?.['w14:paraId'];
 
     return {
       commentId: internalId || uuidv4(),
@@ -119,7 +121,12 @@ const generateCommentsWithExtendedData = ({ docx, comments }) => {
     const { isDone, paraIdParent } = getExtendedDetails(extendedDef);
 
     let parentComment;
-    if (paraIdParent) parentComment = comments.find((c) => c.paraId === paraIdParent);
+    if (paraIdParent) {
+      // First try matching by paraId (last paragraph), then fallback to checking all elements
+      parentComment = comments.find(
+        (c) => c.paraId === paraIdParent || c.elements?.some((el) => el.attrs?.['w14:paraId'] === paraIdParent),
+      );
+    }
 
     const newComment = {
       ...comment,

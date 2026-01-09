@@ -36,6 +36,10 @@ vi.mock('../attributes/index.js', () => ({
   computeParagraphAttrs: vi.fn(),
   cloneParagraphAttrs: vi.fn(),
   hasPageBreakBefore: vi.fn(),
+  buildStyleNodeFromAttrs: vi.fn(() => ({})),
+  normalizeParagraphSpacing: vi.fn(),
+  normalizeParagraphIndent: vi.fn(),
+  normalizePxIndent: vi.fn(),
 }));
 
 vi.mock('../sdt/index.js', () => ({
@@ -53,6 +57,12 @@ vi.mock('../tracked-changes.js', () => ({
   shouldHideTrackedNode: vi.fn(),
   annotateBlockWithTrackedChange: vi.fn(),
   applyTrackedChangesModeToRuns: vi.fn(),
+}));
+
+vi.mock('../attributes/paragraph-styles.js', () => ({
+  hydrateParagraphStyleAttrs: vi.fn(),
+  hydrateCharacterStyleAttrs: vi.fn(),
+  hydrateMarkerStyleAttrs: vi.fn(),
 }));
 
 // Import mocked functions
@@ -770,6 +780,8 @@ describe('paragraph converters', () => {
           expect.arrayContaining([{ type: 'bold' }]),
           expect.any(Object),
           undefined,
+          undefined,
+          true, // enableComments defaults to true
         );
       });
 
@@ -811,6 +823,8 @@ describe('paragraph converters', () => {
           expect.arrayContaining([{ type: 'italic' }, { type: 'bold' }]),
           { enableRichHyperlinks: false },
           undefined,
+          undefined,
+          true, // enableComments defaults to true
         );
       });
     });
@@ -1325,15 +1339,26 @@ describe('paragraph converters', () => {
           styleContext,
         );
 
+        // textNodeToRun is called with empty marks (marks are applied separately via applyMarksToRun)
         expect(vi.mocked(textNodeToRun)).toHaveBeenCalledWith(
           expect.any(Object),
           positions,
           'Arial',
           16,
-          [{ type: 'bold' }, { type: 'italic' }],
+          [], // Empty marks - applied separately to honor enableComments
           undefined,
           expect.any(Object),
           undefined,
+        );
+
+        // Marks are applied via applyMarksToRun to honor enableComments flag
+        expect(vi.mocked(applyMarksToRun)).toHaveBeenCalledWith(
+          expect.any(Object),
+          [{ type: 'bold' }, { type: 'italic' }],
+          expect.any(Object),
+          undefined,
+          undefined,
+          true, // enableComments defaults to true
         );
       });
     });
@@ -1804,6 +1829,7 @@ describe('paragraph converters', () => {
           expect.any(Object),
           applyMarksToRun,
           undefined,
+          true,
         );
 
         const paraBlock = blocks[0] as ParagraphBlock;

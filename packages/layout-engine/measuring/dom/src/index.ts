@@ -29,36 +29,38 @@
  * - Kerning and ligature support
  */
 
-import type {
-  FlowBlock,
-  ParagraphBlock,
-  ParagraphSpacing,
-  ParagraphIndent,
-  ImageBlock,
-  ListBlock,
-  Measure,
-  Line,
-  ParagraphMeasure,
-  ImageMeasure,
-  TableBlock,
-  TableMeasure,
-  TableRowMeasure,
-  TableCellMeasure,
-  ListMeasure,
-  Run,
-  TextRun,
-  TabRun,
-  ImageRun,
-  LineBreakRun,
-  FieldAnnotationRun,
-  TabStop,
-  DrawingBlock,
-  DrawingMeasure,
-  DrawingGeometry,
-  DropCapDescriptor,
+import {
+  Engines,
+  OOXML_PCT_DIVISOR,
+  type FlowBlock,
+  type ParagraphBlock,
+  type ParagraphSpacing,
+  type ParagraphIndent,
+  type ImageBlock,
+  type ListBlock,
+  type Measure,
+  type Line,
+  type ParagraphMeasure,
+  type ImageMeasure,
+  type TableBlock,
+  type TableMeasure,
+  type TableRowMeasure,
+  type TableCellMeasure,
+  type ListMeasure,
+  type Run,
+  type TextRun,
+  type TabRun,
+  type ImageRun,
+  type LineBreakRun,
+  type FieldAnnotationRun,
+  type TabStop,
+  type DrawingBlock,
+  type DrawingMeasure,
+  type DrawingGeometry,
+  type DropCapDescriptor,
+  type TableWidthAttr,
 } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
-import { Engines } from '@superdoc/contracts';
 import {
   LIST_MARKER_GAP,
   MIN_MARKER_GUTTER,
@@ -437,13 +439,148 @@ function isFieldAnnotationRun(run: Run): run is FieldAnnotationRun {
 }
 
 /**
- * Calculate tab width and update the tab run with resolved width
- *
- * @param tabRun - The tab run to resolve
- * @param currentX - Current horizontal position before the tab
- * @param block - The paragraph block (for context like indent)
- * @returns The calculated tab width
+ * Information about a single run in a tab alignment group.
+ * Used for positioning content after right/center/decimal aligned tabs.
  */
+type TabAlignmentGroupRun = {
+  runIndex: number;
+  width: number;
+  /** For text runs, the full text content */
+  text?: string;
+  /** For decimal alignment, width of text before the decimal separator */
+  beforeDecimalWidth?: number;
+};
+
+/**
+ * Result of measuring content following a tab stop for alignment purposes.
+ */
+type TabAlignmentGroupMeasure = {
+  /** Total width of all content in the group */
+  totalWidth: number;
+  /** Individual run measurements */
+  runs: TabAlignmentGroupRun[];
+  /** Index of the last run in the group (exclusive - next run to process after group) */
+  endRunIndex: number;
+  /** For decimal alignment, the width before the decimal point (from first run containing decimal) */
+  beforeDecimalWidth?: number;
+};
+
+/**
+ * Measures all content following a tab stop until the next tab or end of paragraph.
+ *
+ * This function implements "look-ahead" measurement for non-start tab alignments (end, center, decimal).
+ * Microsoft Word treats all content from a tab to the next tab/EOL as a single unit for alignment:
+ * - End (right) tabs: position the group so its right edge aligns at the tab stop
+ * - Center tabs: position the group so its center aligns at the tab stop
+ * - Decimal tabs: position the group so the decimal point aligns at the tab stop
+ *
+ * @param startRunIndex - Index of the first run after the tab (where content begins)
+ * @param runs - Array of all runs in the paragraph
+ * @param ctx - Canvas 2D context for text measurement
+ * @param decimalSeparator - Character used as decimal point (for decimal tab alignment)
+ * @returns Measurement info including total width and per-run widths
+ */
+function measureTabAlignmentGroup(
+  startRunIndex: number,
+  runs: Run[],
+  ctx: CanvasRenderingContext2D,
+  decimalSeparator: string = '.',
+): TabAlignmentGroupMeasure {
+  const result: TabAlignmentGroupMeasure = {
+    totalWidth: 0,
+    runs: [],
+    endRunIndex: runs.length,
+  };
+
+  let foundDecimal = false;
+
+  for (let i = startRunIndex; i < runs.length; i++) {
+    const run = runs[i];
+
+    // Stop at the next tab - it marks the end of this alignment group
+    if (isTabRun(run)) {
+      result.endRunIndex = i;
+      break;
+    }
+
+    // Stop at line breaks - they end the alignment group
+    if (isLineBreakRun(run) || (run.kind === 'break' && (run as { breakType?: string }).breakType === 'line')) {
+      result.endRunIndex = i;
+      break;
+    }
+
+    // Measure text runs
+    if (run.kind === 'text' || run.kind === undefined) {
+      const textRun = run as TextRun;
+      const text = textRun.text || '';
+
+      if (text.length > 0) {
+        const { font } = buildFontString(textRun);
+        const width = measureRunWidth(text, font, ctx, textRun, 0);
+
+        // For decimal alignment, find the decimal position
+        let beforeDecimalWidth: number | undefined;
+        if (!foundDecimal) {
+          const decimalIdx = text.indexOf(decimalSeparator);
+          if (decimalIdx >= 0) {
+            foundDecimal = true;
+            const beforeText = text.slice(0, decimalIdx);
+            beforeDecimalWidth = beforeText.length > 0 ? measureRunWidth(beforeText, font, ctx, textRun, 0) : 0;
+            // Store the cumulative width before decimal (including previous runs)
+            result.beforeDecimalWidth = result.totalWidth + beforeDecimalWidth;
+          }
+        }
+
+        result.runs.push({
+          runIndex: i,
+          width,
+          text,
+          beforeDecimalWidth,
+        });
+        result.totalWidth += width;
+      } else {
+        // Empty text run - still track it but with zero width
+        result.runs.push({ runIndex: i, width: 0, text: '' });
+      }
+      continue;
+    }
+
+    // Measure image runs
+    if (isImageRun(run)) {
+      const leftSpace = run.distLeft ?? 0;
+      const rightSpace = run.distRight ?? 0;
+      const imageWidth = run.width + leftSpace + rightSpace;
+
+      result.runs.push({ runIndex: i, width: imageWidth });
+      result.totalWidth += imageWidth;
+      continue;
+    }
+
+    // Measure field annotation runs
+    if (isFieldAnnotationRun(run)) {
+      const fontSize = (run as { fontSize?: number }).fontSize ?? DEFAULT_FIELD_ANNOTATION_FONT_SIZE;
+      const { font } = buildFontString({
+        fontFamily: (run as { fontFamily?: string }).fontFamily ?? 'Arial',
+        fontSize,
+        bold: (run as { bold?: boolean }).bold,
+        italic: (run as { italic?: boolean }).italic,
+      });
+      const textWidth = run.displayLabel ? measureRunWidth(run.displayLabel, font, ctx, run, 0) : 0;
+      const pillWidth = textWidth + FIELD_ANNOTATION_PILL_PADDING;
+
+      result.runs.push({ runIndex: i, width: pillWidth });
+      result.totalWidth += pillWidth;
+      continue;
+    }
+
+    // For other run types (break types we didn't catch, etc.), include with zero width
+    // but they likely shouldn't appear in the middle of alignment groups
+    result.runs.push({ runIndex: i, width: 0 });
+  }
+
+  return result;
+}
+
 /**
  * Measure a single FlowBlock and calculate line breaks.
  *
@@ -702,10 +839,37 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   let lastFontSize = 12;
   let tabStopCursor = 0;
   let pendingTabAlignment: { target: number; val: TabStop['val'] } | null = null;
+  let pendingRunSpacing = 0;
   // Remember the last applied tab alignment so we can clamp end-aligned
   // segments to the exact target after measuring to avoid 1px drift.
   let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
   const warnedTabVals = new Set<string>();
+
+  /**
+   * Active tab alignment group state.
+   *
+   * When processing content after a non-start-aligned tab (end, center, decimal),
+   * we use look-ahead measurement to determine the total width of all content
+   * until the next tab or end of line. This state tracks:
+   * - The pre-measured group information
+   * - The starting X position for the aligned content
+   * - The current X position as we process runs within the group
+   *
+   * This enables proper right/center/decimal alignment where ALL content after
+   * the tab is treated as a unit, matching Microsoft Word's behavior.
+   */
+  let activeTabGroup: {
+    /** The measurement result from measureTabAlignmentGroup */
+    measure: TabAlignmentGroupMeasure;
+    /** The X position where the aligned group starts */
+    startX: number;
+    /** Current X position within the group (cumulative as we process runs) */
+    currentX: number;
+    /** The tab stop target position */
+    target: number;
+    /** The tab alignment type */
+    val: TabStop['val'];
+  } | null = null;
 
   /**
    * Validate and track tab stop val to ensure it's normalized.
@@ -717,6 +881,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return false;
     }
     return true;
+  };
+
+  const resolveBoundarySpacing = (lineWidth: number, isRunStart: boolean, run: TextRun): number => {
+    if (lineWidth <= 0) return 0;
+    return isRunStart ? pendingRunSpacing : (run.letterSpacing ?? 0);
   };
 
   /**
@@ -904,6 +1073,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -956,11 +1126,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
     // Handle tab runs specially
     if (isTabRun(run)) {
+      // Clear any previous tab group when we encounter a new tab
+      activeTabGroup = null;
+
       // Initialize line if needed
       if (!currentLine) {
         currentLine = {
@@ -978,9 +1152,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       // Advance to next tab stop using the same logic as inline "\t" handling
       const originX = currentLine.width;
-      const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+      // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+      const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+      const absCurrentX = currentLine.width + effectiveIndent;
+      const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
       tabStopCursor = nextIndex;
-      const tabAdvance = Math.max(0, target - currentLine.width);
+      const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+      const clampedTarget = Math.min(target, maxAbsWidth);
+      const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
@@ -988,22 +1167,66 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       currentLine.maxFontSize = Math.max(currentLine.maxFontSize, 12);
       currentLine.toRun = runIndex;
       currentLine.toChar = 1; // tab is a single character
-      if (stop) {
-        validateTabStopVal(stop);
-        pendingTabAlignment = { target, val: stop.val };
-      } else {
-        pendingTabAlignment = null;
-      }
 
       // Emit leader decoration if requested
       if (stop && stop.leader && stop.leader !== 'none') {
         const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
-        const from = Math.min(originX, target);
-        const to = Math.max(originX, target);
+        const relativeTarget = clampedTarget - effectiveIndent;
+        const from = Math.min(originX, relativeTarget);
+        const to = Math.max(originX, relativeTarget);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
       }
 
+      if (stop) {
+        validateTabStopVal(stop);
+
+        // For non-start alignments (end, center, decimal), use look-ahead measurement
+        // to properly align ALL content until the next tab or end of line
+        if (stop.val === 'end' || stop.val === 'center' || stop.val === 'decimal') {
+          // Measure all content from the next run until the next tab or end of paragraph
+          const groupMeasure = measureTabAlignmentGroup(runIndex + 1, runsToProcess, ctx, decimalSeparator);
+
+          if (groupMeasure.totalWidth > 0) {
+            // Calculate the aligned starting X position based on total group width
+            const relativeTarget = clampedTarget - effectiveIndent;
+            let groupStartX: number;
+            if (stop.val === 'end') {
+              // Right-align: position so right edge of group is at tab stop
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth);
+            } else if (stop.val === 'center') {
+              // Center-align: position so center of group is at tab stop
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth / 2);
+            } else {
+              // Decimal-align: position so decimal point is at tab stop
+              const beforeDecimal = groupMeasure.beforeDecimalWidth ?? groupMeasure.totalWidth;
+              groupStartX = Math.max(0, relativeTarget - beforeDecimal);
+            }
+
+            // Set up active tab group for subsequent run processing
+            activeTabGroup = {
+              measure: groupMeasure,
+              startX: groupStartX,
+              currentX: groupStartX,
+              target: relativeTarget,
+              val: stop.val,
+            };
+
+            // Update line width to start of aligned group
+            // (the actual content will extend from groupStartX to groupStartX + totalWidth)
+            currentLine.width = roundValue(groupStartX);
+          }
+
+          // Don't set pendingTabAlignment - we're using activeTabGroup instead
+          pendingTabAlignment = null;
+        } else {
+          // For start-aligned tabs, use the existing pendingTabAlignment mechanism
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
+        }
+      } else {
+        pendingTabAlignment = null;
+      }
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1019,9 +1242,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const bottomSpace = run.distBottom ?? 0;
       const imageHeight = run.height + topSpace + bottomSpace;
 
-      // If a tab alignment is pending, apply it to this image run
+      // Determine image position - check active tab group first, then pending alignment
       let imageStartX: number | undefined;
-      if (pendingTabAlignment && currentLine) {
+      if (activeTabGroup && currentLine) {
+        // Part of an active tab alignment group - use pre-calculated position
+        imageStartX = activeTabGroup.currentX;
+        activeTabGroup.currentX = roundValue(activeTabGroup.currentX + imageWidth);
+      } else if (pendingTabAlignment && currentLine) {
+        // Legacy: single-segment tab alignment (for start-aligned tabs)
         imageStartX = alignPendingTabForWidth(imageWidth);
       }
 
@@ -1046,14 +1274,20 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
+        // Check if we've reached the end of the tab group
+        if (activeTabGroup && runIndex + 1 >= activeTabGroup.measure.endRunIndex) {
+          activeTabGroup = null;
+        }
         continue;
       }
 
       // Preserve the tab alignment before the if-else block to avoid TypeScript narrowing issues
       const appliedTabAlign: { target: number; val: TabStop['val'] } | null = lastAppliedTabAlign;
 
-      // Check if image fits on current line
-      if (currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
+      // Check if image fits on current line (skip fit check if part of tab group - already measured)
+      const skipFitCheck = activeTabGroup !== null;
+      if (!skipFitCheck && currentLine.width + imageWidth > currentLine.maxWidth && currentLine.width > 0) {
         // Image doesn't fit - finish current line and start new line with image
         trimTrailingWrapSpaces(currentLine);
         const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
@@ -1067,6 +1301,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         tabStopCursor = 0;
         pendingTabAlignment = null;
         lastAppliedTabAlign = null;
+        activeTabGroup = null;
 
         // Start new line with the image (body line, so use bodyContentWidth for hanging indent)
         currentLine = {
@@ -1103,6 +1338,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         });
       }
 
+      // Check if we've reached the end of the tab group
+      if (activeTabGroup && runIndex + 1 >= activeTabGroup.measure.endRunIndex) {
+        activeTabGroup = null;
+      }
+
       // Clamp width if aligned to an end tab to avoid rounding drift
       // Note: Using type assertion to work around TypeScript control flow narrowing issue
       // where TS incorrectly infers `never` type after the if-else block above.
@@ -1111,6 +1351,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1173,6 +1414,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
         continue;
       }
 
@@ -1233,6 +1475,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1241,6 +1484,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // The remaining run must be TextRun (which has text, fontSize, etc.)
     if (!('text' in run) || !('fontSize' in run)) {
       // Safety check - skip if this isn't a TextRun
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1255,6 +1499,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const segment = tabSegments[segmentIndex];
       const isLastSegment = segmentIndex === tabSegments.length - 1;
       if (/^[ ]+$/.test(segment)) {
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0;
         const spacesLength = segment.length;
         const spacesStartChar = charPosInRun;
         const spacesEndChar = charPosInRun + spacesLength;
@@ -1274,7 +1519,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: spacesLength,
           };
         } else {
-          const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+          const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
           if (
             currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
             currentLine.width > 0
@@ -1333,9 +1578,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         }
       }
 
-      // Align this segment if a tab alignment is pending
+      // Determine segment position - check active tab group first, then pending alignment
       let segmentStartX: number | undefined;
-      if (currentLine && pendingTabAlignment) {
+      let inActiveTabGroup = false;
+      if (activeTabGroup && currentLine) {
+        // Part of an active tab alignment group - use pre-calculated position
+        segmentStartX = activeTabGroup.currentX;
+        inActiveTabGroup = true;
+        // Note: activeTabGroup.currentX will be updated as we process words in this segment
+      } else if (currentLine && pendingTabAlignment) {
+        // Legacy: single-segment tab alignment (for start-aligned tabs)
         segmentStartX = alignSegmentAtTab(segment, font, run, charPosInRun);
         // After alignment, currentLine.width is the X position where this segment starts
         if (segmentStartX == null) {
@@ -1361,6 +1613,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           const spaceStartChar = charPosInRun;
           const spaceEndChar = charPosInRun + 1;
           const singleSpaceWidth = measureRunWidth(' ', font, ctx, run, spaceStartChar);
+          const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
 
           if (!currentLine) {
             // Start a new line with just the space
@@ -1379,7 +1632,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           } else {
             // Add space to existing line
             // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-            const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+            const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
             if (
               currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
               currentLine.width > 0
@@ -1394,6 +1647,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               tabStopCursor = 0;
               pendingTabAlignment = null;
               lastAppliedTabAlign = null;
+              activeTabGroup = null;
 
               // Body line, so use bodyContentWidth for hanging indent
               currentLine = {
@@ -1415,7 +1669,20 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               currentLine.width = roundValue(currentLine.width + boundarySpacing + singleSpaceWidth);
               currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
               currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
-              appendSegment(currentLine.segments, runIndex, spaceStartChar, spaceEndChar, singleSpaceWidth);
+              // If in an active tab alignment group, use explicit X positioning
+              let spaceExplicitX: number | undefined;
+              if (inActiveTabGroup && activeTabGroup) {
+                spaceExplicitX = activeTabGroup.currentX;
+                activeTabGroup.currentX = roundValue(activeTabGroup.currentX + singleSpaceWidth);
+              }
+              appendSegment(
+                currentLine.segments,
+                runIndex,
+                spaceStartChar,
+                spaceEndChar,
+                singleSpaceWidth,
+                spaceExplicitX,
+              );
               currentLine.spaceCount += 1;
             }
           }
@@ -1614,7 +1881,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const isTocEntry = block.attrs?.isTocEntry;
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-        const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
+        const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
         // Check if paragraph has justified alignment
         const justifyAlignment = block.attrs?.alignment === 'justify';
         const totalWidthWithWord =
@@ -1624,8 +1892,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
           (shouldIncludeDelimiterSpace ? ((run as TextRun).letterSpacing ?? 0) : 0);
         const availableWidth = currentLine.maxWidth - WIDTH_FUDGE_PX;
+        // Skip line break check if we're in an active tab alignment group - content was pre-measured
         let shouldBreak =
-          currentLine.width + boundarySpacing + wordOnlyWidth > availableWidth && currentLine.width > 0 && !isTocEntry;
+          !inActiveTabGroup &&
+          currentLine.width + boundarySpacing + wordOnlyWidth > availableWidth &&
+          currentLine.width > 0 &&
+          !isTocEntry;
         let compressedWidth: number | null = null;
 
         // Justify-aware fit: allow minor per-space compression (non-last paragraph line) to keep the word.
@@ -1706,17 +1978,17 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             currentLine.width = roundValue(currentLine.width + boundarySpacing + wordOnlyWidth);
             currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
             currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
-            // Only pass explicit X for the first word after a tab (wordIndex === 0)
-            // Bug fix: Previously passed segmentStartX for all words, causing incorrect positioning
-            const useExplicitXHere = wordIndex === 0 && segmentStartX !== undefined;
-            appendSegment(
-              currentLine.segments,
-              runIndex,
-              wordStartChar,
-              wordEndNoSpace,
-              wordOnlyWidth,
-              useExplicitXHere ? segmentStartX : undefined,
-            );
+            // Determine explicit X position:
+            // - If in active tab group, use currentX from the group (for ALL words in group)
+            // - Otherwise, only use segmentStartX for first word after a tab
+            let explicitXHere: number | undefined;
+            if (inActiveTabGroup && activeTabGroup) {
+              explicitXHere = activeTabGroup.currentX;
+              activeTabGroup.currentX = roundValue(activeTabGroup.currentX + wordOnlyWidth);
+            } else if (wordIndex === 0 && segmentStartX !== undefined) {
+              explicitXHere = segmentStartX;
+            }
+            appendSegment(currentLine.segments, runIndex, wordStartChar, wordEndNoSpace, wordOnlyWidth, explicitXHere);
             // finish current line and start a new one on next iteration
             trimTrailingWrapSpaces(currentLine);
             const metrics = calculateTypographyMetrics(currentLine.maxFontSize, spacing, currentLine.maxFontInfo);
@@ -1733,9 +2005,16 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           }
           const newToChar = shouldIncludeDelimiterSpace ? wordEndWithSpace : wordEndNoSpace;
           currentLine.toChar = newToChar;
-          // For the first word in a tab-aligned segment, pass the explicit X position
-          const useExplicitX = wordIndex === 0 && segmentStartX !== undefined;
-          const explicitX = useExplicitX ? segmentStartX : undefined;
+          // Determine explicit X position:
+          // - If in active tab group, use currentX from the group (for ALL words in group)
+          // - Otherwise, only use segmentStartX for first word after a tab
+          let explicitX: number | undefined;
+          if (inActiveTabGroup && activeTabGroup) {
+            explicitX = activeTabGroup.currentX;
+            activeTabGroup.currentX = roundValue(activeTabGroup.currentX + wordCommitWidth);
+          } else if (wordIndex === 0 && segmentStartX !== undefined) {
+            explicitX = segmentStartX;
+          }
           const targetWidth =
             compressedWidth != null
               ? compressedWidth
@@ -1769,6 +2048,15 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       }
       lastAppliedTabAlign = null;
 
+      // Check if we've reached the end of the active tab alignment group
+      if (activeTabGroup && runIndex + 1 >= activeTabGroup.measure.endRunIndex) {
+        // Clamp line width to the tab target to ensure proper alignment
+        if (currentLine && activeTabGroup.val === 'end') {
+          currentLine.width = roundValue(activeTabGroup.target);
+        }
+        activeTabGroup = null;
+      }
+
       if (!isLastSegment) {
         pendingTabAlignment = null;
         if (!currentLine) {
@@ -1786,9 +2074,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
         }
         const originX = currentLine.width;
-        const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+        // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+        const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+        const absCurrentX = currentLine.width + effectiveIndent;
+        const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
         tabStopCursor = nextIndex;
-        const tabAdvance = Math.max(0, target - currentLine.width);
+        const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+        const clampedTarget = Math.min(target, maxAbsWidth);
+        const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
 
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
@@ -1798,7 +2091,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         charPosInRun += 1;
         if (stop) {
           validateTabStopVal(stop);
-          pendingTabAlignment = { target, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
         } else {
           pendingTabAlignment = null;
         }
@@ -1806,8 +2099,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
           const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
-          const from = Math.min(originX, target);
-          const to = Math.max(originX, target);
+          const relativeTarget = clampedTarget - effectiveIndent;
+          const from = Math.min(originX, relativeTarget);
+          const to = Math.max(originX, relativeTarget);
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
@@ -1919,6 +2213,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 */
       }
     }
+
+    pendingRunSpacing = (run as TextRun).letterSpacing ?? 0;
   }
 
   if (!currentLine && lines.length === 0) {
@@ -1990,8 +2286,97 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   };
 }
 
+/**
+ * Validates and extracts a numeric value from a table width attribute.
+ *
+ * Performs runtime validation to ensure the value is a valid, finite number
+ * that can be used in calculations. This guards against NaN, Infinity, and
+ * invalid numeric values that could break layout calculations.
+ *
+ * @param attr - Table width attribute object (potentially unsafe)
+ * @returns Valid numeric value or undefined if validation fails
+ *
+ * @example
+ * ```typescript
+ * validateTableWidthValue({ width: 2500, type: 'pct' }) // Returns: 2500
+ * validateTableWidthValue({ value: 300, type: 'px' }) // Returns: 300
+ * validateTableWidthValue({ width: NaN, type: 'pct' }) // Returns: undefined
+ * validateTableWidthValue({ width: -100, type: 'pct' }) // Returns: undefined
+ * validateTableWidthValue({}) // Returns: undefined
+ * ```
+ */
+function validateTableWidthValue(attr: TableWidthAttr): number | undefined {
+  const value = attr.width ?? attr.value;
+
+  // Must be a number, finite (not NaN/Infinity), and positive
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value;
+  }
+
+  return undefined;
+}
+
+/**
+ * Resolves table width from OOXML attributes to actual pixel width.
+ *
+ * Handles two types of width specifications:
+ * 1. Percentage width (type: 'pct'): OOXML stores percentages as 1/50ths of a percent
+ *    - 5000 = 100% (full width)
+ *    - 2500 = 50% (half width)
+ *    - 1000 = 20% (one-fifth width)
+ *    The percentage is applied to the available maxWidth to get pixel width.
+ *
+ * 2. Explicit pixel width (type: 'px' or 'pixel'): Direct pixel value used as-is.
+ *
+ * Includes runtime validation to guard against invalid values (NaN, Infinity, negative).
+ *
+ * @param attrs - Table block attributes (may be undefined)
+ * @param maxWidth - Available width in pixels for percentage calculations
+ * @returns Resolved pixel width or undefined if no valid width specified
+ *
+ * @example
+ * ```typescript
+ * // 50% of 600px = 300px
+ * resolveTableWidth({ tableWidth: { value: 2500, type: 'pct' } }, 600) // Returns: 300
+ *
+ * // Explicit 400px
+ * resolveTableWidth({ tableWidth: { width: 400, type: 'px' } }, 600) // Returns: 400
+ *
+ * // Invalid: NaN value
+ * resolveTableWidth({ tableWidth: { value: NaN, type: 'pct' } }, 600) // Returns: undefined
+ * ```
+ */
+function resolveTableWidth(attrs: TableBlock['attrs'], maxWidth: number): number | undefined {
+  // Type guard: validate attrs.tableWidth matches TableWidthAttr structure
+  const tableWidthAttr = attrs?.tableWidth;
+  if (!tableWidthAttr || typeof tableWidthAttr !== 'object') {
+    return undefined;
+  }
+
+  const typedAttr = tableWidthAttr as TableWidthAttr;
+  const validValue = validateTableWidthValue(typedAttr);
+
+  if (validValue === undefined) {
+    return undefined;
+  }
+
+  if (typedAttr.type === 'pct') {
+    // Convert OOXML percentage to pixels
+    // OOXML_PCT_DIVISOR (5000) = 100%
+    return Math.round(maxWidth * (validValue / OOXML_PCT_DIVISOR));
+  } else if (typedAttr.type === 'px' || typedAttr.type === 'pixel') {
+    // Explicit pixel width - use directly
+    return validValue;
+  }
+
+  return undefined;
+}
+
 async function measureTableBlock(block: TableBlock, constraints: MeasureConstraints): Promise<TableMeasure> {
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
+
+  // Resolve percentage or explicit pixel table width
+  const resolvedTableWidth = resolveTableWidth(block.attrs, maxWidth);
 
   let columnWidths: number[];
 
@@ -2063,27 +2448,40 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
   // Determine actual column count from table structure
   const maxCellCount = Math.max(1, Math.max(...block.rows.map((r) => r.cells.length)));
 
+  // Effective target width: use resolvedTableWidth if set (from percentage or explicit px),
+  // but never exceed maxWidth (available column space)
+  const effectiveTargetWidth = resolvedTableWidth != null ? Math.min(resolvedTableWidth, maxWidth) : maxWidth;
+
   // Use provided column widths from OOXML w:tblGrid if available
   if (block.columnWidths && block.columnWidths.length > 0) {
     columnWidths = [...block.columnWidths];
 
     // Check if table has fixed layout (preserves exact widths)
-    const hasExplicitWidth = block.attrs?.tableWidth != null;
+    // Use resolvedTableWidth to check for valid explicit width (validated and non-undefined)
+    const hasExplicitWidth = resolvedTableWidth != null;
     const hasFixedLayout = block.attrs?.tableLayout === 'fixed';
 
-    // For fixed-layout tables, preserve the exact widths without adjustment
+    // For tables with explicit/percentage width or fixed layout, scale to target width
     if (hasExplicitWidth || hasFixedLayout) {
-      // Scale proportionally only if total width exceeds available width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
-      if (totalWidth > maxWidth) {
-        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      // Scale to effectiveTargetWidth (resolved percentage or explicit width)
+      // This handles both scaling down (too wide) and scaling up (percentage-based)
+      if (totalWidth !== effectiveTargetWidth && effectiveTargetWidth > 0) {
+        const scale = effectiveTargetWidth / totalWidth;
+        columnWidths = columnWidths.map((w) => Math.max(1, Math.round(w * scale)));
+        // Normalize to exact target width (handle rounding errors)
+        const scaledSum = columnWidths.reduce((a, b) => a + b, 0);
+        if (scaledSum !== effectiveTargetWidth && columnWidths.length > 0) {
+          const diff = effectiveTargetWidth - scaledSum;
+          columnWidths[columnWidths.length - 1] = Math.max(1, columnWidths[columnWidths.length - 1] + diff);
+        }
       }
     } else {
       // For auto-layout tables, adjust column widths to match actual column count
       if (columnWidths.length < maxCellCount) {
         // Pad missing columns with equal distribution of remaining space
         const usedWidth = columnWidths.reduce((a, b) => a + b, 0);
-        const remainingWidth = Math.max(0, maxWidth - usedWidth);
+        const remainingWidth = Math.max(0, effectiveTargetWidth - usedWidth);
         const missingColumns = maxCellCount - columnWidths.length;
         const paddingWidth = Math.max(1, Math.floor(remainingWidth / missingColumns));
         columnWidths.push(...Array.from({ length: missingColumns }, () => paddingWidth));
@@ -2092,15 +2490,15 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
         columnWidths = columnWidths.slice(0, maxCellCount);
       }
 
-      // Scale proportionally if total width exceeds available width
+      // Scale proportionally if total width exceeds effective target width
       const totalWidth = columnWidths.reduce((a, b) => a + b, 0);
-      if (totalWidth > maxWidth) {
-        columnWidths = scaleColumnWidths(columnWidths, maxWidth);
+      if (totalWidth > effectiveTargetWidth) {
+        columnWidths = scaleColumnWidths(columnWidths, effectiveTargetWidth);
       }
     }
   } else {
     // Fallback: Equal distribution based on max cells in any row
-    const columnWidth = Math.max(1, Math.floor(maxWidth / maxCellCount));
+    const columnWidth = Math.max(1, Math.floor(effectiveTargetWidth / maxCellCount));
     columnWidths = Array.from({ length: maxCellCount }, () => columnWidth);
   }
 
@@ -2300,7 +2698,14 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 async function measureImageBlock(block: ImageBlock, constraints: MeasureConstraints): Promise<ImageMeasure> {
   const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
 
-  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
+  const isBlockBehindDoc = block.anchor?.behindDoc;
+  const isBlockWrapBehindDoc = block.wrap?.type === 'None' && block.wrap?.behindDoc;
+  const isPageRelativeAnchor =
+    block.anchor?.isAnchored && (block.anchor?.hRelativeFrom === 'page' || block.anchor?.hRelativeFrom === 'margin');
+  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc || isPageRelativeAnchor;
+  const isWidthConstraintBypassed = bypassWidthConstraint || constraints.maxWidth <= 0;
+
+  const maxWidth = isWidthConstraintBypassed ? intrinsic.width : constraints.maxWidth;
 
   // For anchored images with negative vertical positioning (designed to overflow their container),
   // bypass the height constraint. This matches MS Word behavior where images in headers/footers
@@ -2310,8 +2715,13 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
     ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
       (typeof block.margin?.top === 'number' && block.margin.top < 0));
 
+  // Bypass height constraint when:
+  // - Image has negative vertical positioning (designed to overflow container)
+  // - objectFit is 'cover' (image should render at exact extent dimensions, CSS handles content scaling/clipping)
+  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'cover';
+
   const maxHeight =
-    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+    shouldBypassHeightConstraint || !constraints.maxHeight || constraints.maxHeight <= 0
       ? Infinity
       : constraints.maxHeight;
 
@@ -2758,7 +3168,8 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
   }
 
   const raw = spacing.line;
-  const treatAsMultiplier = (spacing.lineRule === 'auto' || spacing.lineRule == null) && raw > 0 && raw <= 10;
+  const isAuto = spacing.lineRule === 'auto';
+  const treatAsMultiplier = (isAuto || spacing.lineRule == null) && raw > 0 && (isAuto || raw <= 10);
 
   if (treatAsMultiplier) {
     return raw * baseLineHeight;

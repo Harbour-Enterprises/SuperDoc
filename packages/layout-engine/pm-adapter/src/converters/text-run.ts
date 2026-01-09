@@ -158,5 +158,20 @@ export function tokenNodeToRun(
 
   const marks = [...effectiveMarks, ...(inheritedMarks ?? [])];
   applyMarksToRun(run, marks, hyperlinkConfig, themeColors);
+
+  // If marksAsAttrs carried font styling, mark the run so downstream defaults don't overwrite it.
+  if (marksAsAttrs.length > 0) {
+    (run as TextRun & { _explicitFont?: boolean })._explicitFont = true;
+  }
+  console.debug('[token-debug] tokenNodeToRun', {
+    token,
+    fontFamily: run.fontFamily,
+    fontSize: run.fontSize,
+    defaultFont,
+    defaultSize,
+    nodeMarksCount: nodeMarks.length,
+    marksAsAttrsCount: marksAsAttrs.length,
+    inheritedMarksCount: inheritedMarks?.length ?? 0,
+  });
   return run;
 }

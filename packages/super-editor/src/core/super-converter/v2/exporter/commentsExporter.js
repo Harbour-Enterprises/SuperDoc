@@ -137,9 +137,11 @@ export const updateCommentsExtendedXml = (comments = [], commentsExtendedXml) =>
 
   // Re-build the comment definitions
   const commentsEx = comments.map((comment) => {
+    // Check both resolvedTime (runtime) and isDone (imported) for resolved status
+    const isResolved = comment.resolvedTime || comment.isDone;
     const attributes = {
       'w15:paraId': comment.commentParaId,
-      'w15:done': comment.resolvedTime ? '1' : '0',
+      'w15:done': isResolved ? '1' : '0',
     };
 
     const parentId = comment.parentCommentId;

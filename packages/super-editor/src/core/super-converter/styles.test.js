@@ -80,6 +80,15 @@ describe('encodeMarksFromRPr', () => {
       attrs: { textTransform: 'uppercase' },
     });
   });
+
+  it('encodes vertical alignment and position into textStyle', () => {
+    const rPr = { vertAlign: 'subscript', position: 4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { vertAlign: 'subscript', position: '2pt' },
+    });
+  });
 });
 
 describe('encodeCSSFromRPr', () => {
@@ -121,6 +130,194 @@ describe('encodeCSSFromRPr', () => {
   it('should encode font family using converter fallbacks', () => {
     const css = encodeCSSFromRPr({ fontFamily: { 'w:ascii': 'Arial' } }, {});
     expect(css['font-family']).toBe('Arial, sans-serif');
+  });
+
+  it('applies vertical-align and scaling for superscript/subscript', () => {
+    const css = encodeCSSFromRPr({ vertAlign: 'superscript', fontSize: 20 }, {});
+    expect(css['vertical-align']).toBe('super');
+    expect(css['font-size']).toBe('6.5pt'); // 20 half-points = 10pt; scaled 65%
+  });
+
+  it('uses numeric position when provided', () => {
+    const css = encodeCSSFromRPr({ position: 4 }, {});
+    expect(css['vertical-align']).toBe('2pt');
+  });
+});
+
+describe('decodeRPrFromMarks', () => {
+  it('decodes vertAlign and position from textStyle mark', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: 'subscript', position: '1.5pt' } }];
+    expect(decodeRPrFromMarks(marks)).toMatchObject({ vertAlign: 'subscript', position: 3 });
+  });
+});
+
+describe('encodeMarksFromRPr - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const rPr = { vertAlign: null };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.vertAlign).toBeUndefined();
+  });
+
+  it('handles undefined vertAlign gracefully', () => {
+    const rPr = { vertAlign: undefined };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.vertAlign).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const rPr = { position: null };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles undefined position gracefully', () => {
+    const rPr = { position: undefined };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles NaN position gracefully', () => {
+    const rPr = { position: NaN };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles Infinity position gracefully', () => {
+    const rPr = { position: Infinity };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles negative Infinity position gracefully', () => {
+    const rPr = { position: -Infinity };
+    const marks = encodeMarksFromRPr(rPr, {});
+    const textStyleMark = marks.find((m) => m.type === 'textStyle');
+    expect(textStyleMark?.attrs?.position).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const rPr = { position: -4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { position: '-2pt' },
+    });
+  });
+
+  it('handles zero position value', () => {
+    const rPr = { position: 0 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { position: '0pt' },
+    });
+  });
+
+  it('handles both vertAlign and position set together', () => {
+    const rPr = { vertAlign: 'superscript', position: 4 };
+    const marks = encodeMarksFromRPr(rPr, {});
+    expect(marks).toContainEqual({
+      type: 'textStyle',
+      attrs: { vertAlign: 'superscript', position: '2pt' },
+    });
+  });
+});
+
+describe('encodeCSSFromRPr - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const css = encodeCSSFromRPr({ vertAlign: null }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles undefined vertAlign gracefully', () => {
+    const css = encodeCSSFromRPr({ vertAlign: undefined }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: null }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles undefined position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: undefined }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles NaN position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: NaN }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles Infinity position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: Infinity }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles negative Infinity position gracefully', () => {
+    const css = encodeCSSFromRPr({ position: -Infinity }, {});
+    expect(css['vertical-align']).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const css = encodeCSSFromRPr({ position: -4 }, {});
+    expect(css['vertical-align']).toBe('-2pt');
+  });
+
+  it('handles zero position value', () => {
+    const css = encodeCSSFromRPr({ position: 0 }, {});
+    expect(css['vertical-align']).toBe('0pt');
+  });
+
+  it('position takes precedence over vertAlign when both are set', () => {
+    const css = encodeCSSFromRPr({ vertAlign: 'superscript', position: 4 }, {});
+    expect(css['vertical-align']).toBe('2pt');
+    expect(css['font-size']).toBeUndefined();
+  });
+});
+
+describe('decodeRPrFromMarks - vertAlign/position edge cases', () => {
+  it('handles null vertAlign gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: null } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.vertAlign).toBeUndefined();
+  });
+
+  it('handles null position gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: null } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBeUndefined();
+  });
+
+  it('handles invalid position string gracefully', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: 'invalid' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBeUndefined();
+  });
+
+  it('handles negative position values correctly', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: '-2pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBe(-4);
+  });
+
+  it('handles zero position value', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { position: '0pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.position).toBe(0);
+  });
+
+  it('handles both vertAlign and position set together', () => {
+    const marks = [{ type: { name: 'textStyle' }, attrs: { vertAlign: 'subscript', position: '2pt' } }];
+    const rPr = decodeRPrFromMarks(marks);
+    expect(rPr.vertAlign).toBe('subscript');
+    expect(rPr.position).toBe(4);
   });
 });
 
@@ -892,5 +1089,1158 @@ describe('resolveRunProperties - fontSize fallback', () => {
 
     // Should skip non-number defaultProps and use normalProps
     expect(result.fontSize).toBe(22);
+  });
+});
+
+// =============================================================================
+// CRITICAL FUNCTION UNIT TESTS
+// These tests directly verify the core style resolution functions that are
+// essential for correct OOXML cascade behavior. They serve as a safety net
+// before any refactoring of the style resolution logic.
+// =============================================================================
+
+describe('getDefaultProperties', () => {
+  // Import the function directly for unit testing
+  let getDefaultProperties;
+
+  beforeAll(async () => {
+    const module = await import('./styles.js');
+    getDefaultProperties = module.getDefaultProperties;
+  });
+
+  // Create a mock translator that extracts properties from the XML element
+  const createMockTranslator = (xmlName) => ({
+    xmlName,
+    encode: (params) => {
+      const node = params.nodes?.[0];
+      if (!node?.elements) return {};
+      const result = {};
+      for (const el of node.elements) {
+        if (el.name === 'w:sz') {
+          result.fontSize = parseInt(el.attributes['w:val'], 10);
+        }
+        if (el.name === 'w:b') {
+          result.bold = true;
+        }
+        if (el.name === 'w:i') {
+          result.italic = true;
+        }
+        if (el.name === 'w:rFonts') {
+          result.fontFamily = { ascii: el.attributes['w:ascii'] };
+        }
+        if (el.name === 'w:ind') {
+          result.indent = {
+            left: parseInt(el.attributes['w:left'] || '0', 10),
+            hanging: parseInt(el.attributes['w:hanging'] || '0', 10),
+          };
+        }
+        if (el.name === 'w:spacing') {
+          result.spacing = {
+            before: parseInt(el.attributes['w:before'] || '0', 10),
+            after: parseInt(el.attributes['w:after'] || '0', 10),
+            line: parseInt(el.attributes['w:line'] || '0', 10),
+          };
+        }
+      }
+      return result;
+    },
+  });
+
+  const mockRPrTranslator = createMockTranslator('w:rPr');
+  const mockPPrTranslator = createMockTranslator('w:pPr');
+
+  it('should return empty object when styles.xml is missing', () => {
+    const params = { docx: {} };
+    const result = getDefaultProperties(params, mockRPrTranslator);
+    expect(result).toEqual({});
+  });
+
+  it('should return empty object when docDefaults is missing', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [{ elements: [] }],
+        },
+      },
+    };
+    const result = getDefaultProperties(params, mockRPrTranslator);
+    expect(result).toEqual({});
+  });
+
+  it('should extract run properties from w:rPrDefault', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [
+                            { name: 'w:sz', attributes: { 'w:val': '22' } },
+                            { name: 'w:rFonts', attributes: { 'w:ascii': 'Calibri' } },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getDefaultProperties(params, mockRPrTranslator);
+
+    expect(result.fontSize).toBe(22);
+    expect(result.fontFamily).toEqual({ ascii: 'Calibri' });
+  });
+
+  it('should extract paragraph properties from w:pPrDefault', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:pPrDefault',
+                      elements: [
+                        {
+                          name: 'w:pPr',
+                          elements: [
+                            { name: 'w:spacing', attributes: { 'w:after': '200', 'w:line': '276' } },
+                            { name: 'w:ind', attributes: { 'w:left': '720' } },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getDefaultProperties(params, mockPPrTranslator);
+
+    expect(result.spacing).toEqual({ before: 0, after: 200, line: 276 });
+    expect(result.indent).toEqual({ left: 720, hanging: 0 });
+  });
+
+  it('should return empty object when rPrDefault exists but has no rPr child', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [], // No w:rPr child
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getDefaultProperties(params, mockRPrTranslator);
+    expect(result).toEqual({});
+  });
+
+  it('should handle both rPrDefault and pPrDefault in the same document', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [{ name: 'w:sz', attributes: { 'w:val': '24' } }],
+                        },
+                      ],
+                    },
+                    {
+                      name: 'w:pPrDefault',
+                      elements: [
+                        {
+                          name: 'w:pPr',
+                          elements: [{ name: 'w:spacing', attributes: { 'w:after': '160' } }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const rPrResult = getDefaultProperties(params, mockRPrTranslator);
+    const pPrResult = getDefaultProperties(params, mockPPrTranslator);
+
+    expect(rPrResult.fontSize).toBe(24);
+    expect(pPrResult.spacing).toEqual({ before: 0, after: 160, line: 0 });
+  });
+});
+
+describe('getStyleProperties', () => {
+  let getStyleProperties;
+
+  beforeAll(async () => {
+    const module = await import('./styles.js');
+    getStyleProperties = module.getStyleProperties;
+  });
+
+  const createMockTranslator = (xmlName) => ({
+    xmlName,
+    encode: (params) => {
+      const node = params.nodes?.[0];
+      if (!node?.elements) return {};
+      const result = {};
+      for (const el of node.elements) {
+        if (el.name === 'w:sz') {
+          result.fontSize = parseInt(el.attributes['w:val'], 10);
+        }
+        if (el.name === 'w:b') {
+          result.bold = true;
+        }
+        if (el.name === 'w:color') {
+          result.color = { val: el.attributes['w:val'] };
+        }
+        if (el.name === 'w:ind') {
+          result.indent = {
+            left: parseInt(el.attributes['w:left'] || '0', 10),
+          };
+        }
+      }
+      return result;
+    },
+  });
+
+  const mockRPrTranslator = createMockTranslator('w:rPr');
+
+  it('should return empty result for null styleId', () => {
+    const params = { docx: { 'word/styles.xml': { elements: [{ elements: [] }] } } };
+    const result = getStyleProperties(params, null, mockRPrTranslator);
+
+    expect(result).toEqual({ properties: {}, isDefault: false, basedOn: undefined });
+  });
+
+  it('should return empty result when style is not found', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [{ elements: [] }],
+        },
+      },
+    };
+    const result = getStyleProperties(params, 'NonExistentStyle', mockRPrTranslator);
+
+    expect(result.properties).toEqual({});
+    expect(result.isDefault).toBe(false);
+    expect(result.basedOn).toBeUndefined();
+  });
+
+  it('should extract properties from a style definition', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Heading1', 'w:type': 'paragraph' },
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [
+                        { name: 'w:sz', attributes: { 'w:val': '32' } },
+                        { name: 'w:b', attributes: {} },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getStyleProperties(params, 'Heading1', mockRPrTranslator);
+
+    expect(result.properties.fontSize).toBe(32);
+    expect(result.properties.bold).toBe(true);
+    expect(result.isDefault).toBe(false);
+    expect(result.basedOn).toBeUndefined();
+  });
+
+  it('should correctly identify default styles (w:default="1")', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:type': 'paragraph', 'w:default': '1' },
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '22' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getStyleProperties(params, 'Normal', mockRPrTranslator);
+
+    expect(result.isDefault).toBe(true);
+    expect(result.properties.fontSize).toBe(22);
+  });
+
+  it('should extract basedOn reference correctly', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Heading1', 'w:type': 'paragraph' },
+                  elements: [
+                    { name: 'w:basedOn', attributes: { 'w:val': 'Normal' } },
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '32' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getStyleProperties(params, 'Heading1', mockRPrTranslator);
+
+    expect(result.basedOn).toBe('Normal');
+    expect(result.properties.fontSize).toBe(32);
+  });
+
+  it('should return basedOn even when style has no properties element', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'NoIndent', 'w:type': 'paragraph' },
+                  elements: [{ name: 'w:basedOn', attributes: { 'w:val': 'Normal' } }],
+                  // No w:rPr element
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const result = getStyleProperties(params, 'NoIndent', mockRPrTranslator);
+
+    expect(result.basedOn).toBe('Normal');
+    expect(result.properties).toEqual({});
+  });
+
+  it('should handle multiple styles and find the correct one', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:type': 'paragraph', 'w:default': '1' },
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '22' } }],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Heading1', 'w:type': 'paragraph' },
+                  elements: [
+                    { name: 'w:basedOn', attributes: { 'w:val': 'Normal' } },
+                    {
+                      name: 'w:rPr',
+                      elements: [
+                        { name: 'w:sz', attributes: { 'w:val': '32' } },
+                        { name: 'w:b', attributes: {} },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Heading2', 'w:type': 'paragraph' },
+                  elements: [
+                    { name: 'w:basedOn', attributes: { 'w:val': 'Normal' } },
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '26' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    };
+
+    const heading1Result = getStyleProperties(params, 'Heading1', mockRPrTranslator);
+    const heading2Result = getStyleProperties(params, 'Heading2', mockRPrTranslator);
+    const normalResult = getStyleProperties(params, 'Normal', mockRPrTranslator);
+
+    expect(heading1Result.properties.fontSize).toBe(32);
+    expect(heading1Result.properties.bold).toBe(true);
+    expect(heading1Result.basedOn).toBe('Normal');
+
+    expect(heading2Result.properties.fontSize).toBe(26);
+    expect(heading2Result.basedOn).toBe('Normal');
+
+    expect(normalResult.properties.fontSize).toBe(22);
+    expect(normalResult.isDefault).toBe(true);
+  });
+});
+
+describe('getNumberingProperties', () => {
+  let getNumberingProperties;
+
+  beforeAll(async () => {
+    const module = await import('./styles.js');
+    getNumberingProperties = module.getNumberingProperties;
+  });
+
+  // Mock translator for pPr
+  const createMockPPrTranslator = () => ({
+    xmlName: 'w:pPr',
+    encode: (params) => {
+      const node = params.nodes?.[0];
+      if (!node?.elements) return {};
+      const result = {};
+      for (const el of node.elements) {
+        if (el.name === 'w:ind') {
+          result.indent = {
+            left: parseInt(el.attributes['w:left'] || '0', 10),
+            hanging: parseInt(el.attributes['w:hanging'] || '0', 10),
+          };
+        }
+        if (el.name === 'w:numPr') {
+          result.numberingProperties = {};
+          for (const numEl of el.elements || []) {
+            if (numEl.name === 'w:numId') {
+              result.numberingProperties.numId = parseInt(numEl.attributes['w:val'], 10);
+            }
+            if (numEl.name === 'w:ilvl') {
+              result.numberingProperties.ilvl = parseInt(numEl.attributes['w:val'], 10);
+            }
+          }
+        }
+      }
+      return result;
+    },
+  });
+
+  // Mock translator for rPr
+  const createMockRPrTranslator = () => ({
+    xmlName: 'w:rPr',
+    encode: (params) => {
+      const node = params.nodes?.[0];
+      if (!node?.elements) return {};
+      const result = {};
+      for (const el of node.elements) {
+        if (el.name === 'w:sz') {
+          result.fontSize = parseInt(el.attributes['w:val'], 10);
+        }
+        if (el.name === 'w:b') {
+          result.bold = true;
+        }
+        if (el.name === 'w:rFonts') {
+          result.fontFamily = { ascii: el.attributes['w:ascii'] };
+        }
+      }
+      return result;
+    },
+  });
+
+  const mockPPrTranslator = createMockPPrTranslator();
+  const mockRPrTranslator = createMockRPrTranslator();
+
+  it('should return empty object when numbering definitions are missing', () => {
+    const params = { numbering: null };
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+    expect(result).toEqual({});
+  });
+
+  it('should return empty object when numId is not found', () => {
+    const params = {
+      numbering: {
+        definitions: {},
+        abstracts: {},
+      },
+    };
+    const result = getNumberingProperties(params, 0, 999, mockPPrTranslator);
+    expect(result).toEqual({});
+  });
+
+  it('should extract basic paragraph properties from numbering level', () => {
+    const params = {
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '720', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+
+    expect(result.indent).toEqual({ left: 720, hanging: 360 });
+  });
+
+  it('should extract run properties from numbering level', () => {
+    const params = {
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:rPr',
+                    elements: [
+                      { name: 'w:sz', attributes: { 'w:val': '24' } },
+                      { name: 'w:b', attributes: {} },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = getNumberingProperties(params, 0, 1, mockRPrTranslator);
+
+    expect(result.fontSize).toBe(24);
+    expect(result.bold).toBe(true);
+  });
+
+  it('should handle multiple levels and return correct level properties', () => {
+    const params = {
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '720', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '1' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '1440', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '2' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '2160', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const level0 = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+    const level1 = getNumberingProperties(params, 1, 1, mockPPrTranslator);
+    const level2 = getNumberingProperties(params, 2, 1, mockPPrTranslator);
+
+    expect(level0.indent.left).toBe(720);
+    expect(level1.indent.left).toBe(1440);
+    expect(level2.indent.left).toBe(2160);
+  });
+
+  it('should apply lvlOverride properties on top of abstract level properties', () => {
+    const params = {
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [
+              { name: 'w:abstractNumId', attributes: { 'w:val': '0' } },
+              {
+                name: 'w:lvlOverride',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '1080', 'w:hanging': '540' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '720', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+
+    // lvlOverride should override the abstract level properties
+    expect(result.indent).toEqual({ left: 1080, hanging: 540 });
+  });
+
+  it('should extract pStyle from level definition', () => {
+    const params = {
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  { name: 'w:pStyle', attributes: { 'w:val': 'ListParagraph' } },
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '720', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+
+    expect(result.styleId).toBe('ListParagraph');
+  });
+
+  it('should follow numStyleLink to resolve properties', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'ListBullet', 'w:type': 'numbering' },
+                  elements: [
+                    {
+                      name: 'w:pPr',
+                      elements: [
+                        {
+                          name: 'w:numPr',
+                          elements: [
+                            { name: 'w:numId', attributes: { 'w:val': '2' } },
+                            { name: 'w:ilvl', attributes: { 'w:val': '0' } },
+                          ],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+          2: {
+            name: 'w:num',
+            attributes: { 'w:numId': '2' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '1' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [{ name: 'w:numStyleLink', attributes: { 'w:val': 'ListBullet' } }],
+          },
+          1: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '1' },
+            elements: [
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '360', 'w:hanging': '180' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+
+    // Should follow the numStyleLink and get properties from the linked definition
+    expect(result.indent).toEqual({ left: 360, hanging: 180 });
+  });
+
+  it('should prevent infinite recursion when following numStyleLink', () => {
+    // Create a scenario where numStyleLink could cause infinite recursion
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'CircularStyle', 'w:type': 'numbering' },
+                  elements: [
+                    {
+                      name: 'w:pPr',
+                      elements: [
+                        {
+                          name: 'w:numPr',
+                          elements: [{ name: 'w:numId', attributes: { 'w:val': '1' } }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: {
+        definitions: {
+          1: {
+            name: 'w:num',
+            attributes: { 'w:numId': '1' },
+            elements: [{ name: 'w:abstractNumId', attributes: { 'w:val': '0' } }],
+          },
+        },
+        abstracts: {
+          0: {
+            name: 'w:abstractNum',
+            attributes: { 'w:abstractNumId': '0' },
+            elements: [
+              { name: 'w:numStyleLink', attributes: { 'w:val': 'CircularStyle' } },
+              // Also has a level definition as fallback
+              {
+                name: 'w:lvl',
+                attributes: { 'w:ilvl': '0' },
+                elements: [
+                  {
+                    name: 'w:pPr',
+                    elements: [{ name: 'w:ind', attributes: { 'w:left': '720', 'w:hanging': '360' } }],
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    // Should not hang or throw - the tries parameter prevents infinite recursion
+    const result = getNumberingProperties(params, 0, 1, mockPPrTranslator);
+
+    // After following the link once and hitting the recursion limit, it should return empty
+    // or the fallback level properties depending on implementation
+    expect(result).toBeDefined();
+  });
+});
+
+describe('isNormalDefault ordering logic', () => {
+  /**
+   * Tests for the critical logic that determines whether document defaults
+   * or Normal style should take precedence in the cascade.
+   *
+   * Per OOXML spec, when Normal style is marked as w:default="1", it should
+   * come AFTER document defaults in the cascade (so defaults override Normal).
+   * When Normal is NOT the default style, Normal should come BEFORE defaults.
+   */
+
+  it('should apply defaults AFTER Normal when Normal is marked as default (isNormalDefault=true)', () => {
+    // When Normal is the default style, the cascade should be:
+    // [defaultProps, normalProps] - so defaultProps values win when both exist
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [{ name: 'w:sz', attributes: { 'w:val': '24' } }], // 12pt from defaults
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:default': '1' }, // IS default
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '22' } }], // 11pt from Normal
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: { definitions: {}, abstracts: {} },
+    };
+
+    const result = resolveRunProperties(params, {}, {});
+
+    // When Normal is default, chain is [defaultProps, normalProps]
+    // normalProps comes LAST, so Normal's 22 (11pt) should win
+    expect(result.fontSize).toBe(22);
+  });
+
+  it('should apply Normal AFTER defaults when Normal is NOT marked as default (isNormalDefault=false)', () => {
+    // When Normal is NOT the default style, the cascade should be:
+    // [normalProps, defaultProps] - so defaults values win when both exist
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [{ name: 'w:sz', attributes: { 'w:val': '24' } }], // 12pt from defaults
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal' }, // NOT marked as default
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '22' } }], // 11pt from Normal
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: { definitions: {}, abstracts: {} },
+    };
+
+    const result = resolveRunProperties(params, {}, {});
+
+    // When Normal is NOT default, chain is [normalProps, defaultProps]
+    // defaultProps comes LAST, so defaults' 24 (12pt) should win
+    expect(result.fontSize).toBe(24);
+  });
+
+  it('should use Normal properties when defaults have no value', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [], // No fontSize in defaults
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [{ name: 'w:sz', attributes: { 'w:val': '28' } }], // 14pt from Normal
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: { definitions: {}, abstracts: {} },
+    };
+
+    const result = resolveRunProperties(params, {}, {});
+
+    // Normal's fontSize should be used since defaults has none
+    expect(result.fontSize).toBe(28);
+  });
+
+  it('should use defaults properties when Normal has no value', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:rPrDefault',
+                      elements: [
+                        {
+                          name: 'w:rPr',
+                          elements: [{ name: 'w:sz', attributes: { 'w:val': '26' } }], // 13pt from defaults
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                  elements: [
+                    {
+                      name: 'w:rPr',
+                      elements: [], // No fontSize in Normal
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: { definitions: {}, abstracts: {} },
+    };
+
+    const result = resolveRunProperties(params, {}, {});
+
+    // defaults' fontSize should be used since Normal has none
+    expect(result.fontSize).toBe(26);
+  });
+
+  it('should apply the same ordering logic for paragraph properties', () => {
+    const params = {
+      docx: {
+        'word/styles.xml': {
+          elements: [
+            {
+              elements: [
+                {
+                  name: 'w:docDefaults',
+                  elements: [
+                    {
+                      name: 'w:pPrDefault',
+                      elements: [
+                        {
+                          name: 'w:pPr',
+                          elements: [{ name: 'w:spacing', attributes: { 'w:after': '200' } }],
+                        },
+                      ],
+                    },
+                  ],
+                },
+                {
+                  name: 'w:style',
+                  attributes: { 'w:styleId': 'Normal', 'w:default': '1' },
+                  elements: [
+                    {
+                      name: 'w:pPr',
+                      elements: [{ name: 'w:spacing', attributes: { 'w:after': '160' } }],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+      numbering: { definitions: {}, abstracts: {} },
+    };
+
+    const result = resolveParagraphProperties(params, {}, false, false, null);
+
+    // When Normal is default, Normal comes last in chain and wins
+    expect(result.spacing?.after).toBe(160);
   });
 });

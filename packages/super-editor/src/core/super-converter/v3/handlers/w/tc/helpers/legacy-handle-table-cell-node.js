@@ -14,6 +14,9 @@ export function handleTableCellNode({
   columnIndex,
   columnWidth = null,
   allColumnWidths = [],
+  rowIndex = 0,
+  totalRows = 1,
+  totalColumns,
   _referencedStyles,
 }) {
   const { nodeListHandler } = params;
@@ -25,22 +28,72 @@ export function handleTableCellNode({
   const tableCellProperties = tcPr ? (tcPrTranslator.encode({ ...params, nodes: [tcPr] }) ?? {}) : {};
   attributes['tableCellProperties'] = tableCellProperties;
 
-  // Borders
-  if (rowBorders?.insideH) {
-    rowBorders['bottom'] = rowBorders.insideH;
-    delete rowBorders.insideH;
+  // Determine cell position for border application
+  // Fall back to allColumnWidths.length if totalColumns not provided
+  // Fall back to counting table rows if totalRows not provided
+  const effectiveTotalColumns = totalColumns ?? (allColumnWidths.length || 1);
+  const effectiveTotalRows = totalRows ?? (table?.elements?.filter((el) => el.name === 'w:tr').length || 1);
+  const colspan = parseInt(tableCellProperties.gridSpan || 1, 10);
+  const isFirstRow = rowIndex === 0;
+  const isLastRow = rowIndex === effectiveTotalRows - 1;
+  const isFirstColumn = columnIndex === 0;
+  const isLastColumn = columnIndex + colspan >= effectiveTotalColumns;
+
+  // Build cell borders based on position
+  // Table-level borders (top, bottom, left, right) only apply to outer edges
+  // insideH applies as bottom to all rows except the last
+  // insideV applies as right to all columns except the last
+  //
+  // IMPORTANT: For outer borders, val='none' is ALWAYS applied regardless of position.
+  // This is needed for border-collapse: when tblPrEx sets borders to 'none', cells need
+  // explicit 'border-X: none' to counter adjacent cells' borders.
+  const cellBorders = {};
+  if (rowBorders) {
+    // OUTER BORDERS: Apply 'none' always, position-check only for actual borders
+    if (rowBorders.top?.val === 'none') {
+      cellBorders.top = rowBorders.top;
+    } else if (isFirstRow && rowBorders.top) {
+      cellBorders.top = rowBorders.top;
+    }
+
+    if (rowBorders.bottom?.val === 'none') {
+      cellBorders.bottom = rowBorders.bottom;
+    } else if (isLastRow && rowBorders.bottom) {
+      cellBorders.bottom = rowBorders.bottom;
+    }
+
+    if (rowBorders.left?.val === 'none') {
+      cellBorders.left = rowBorders.left;
+    } else if (isFirstColumn && rowBorders.left) {
+      cellBorders.left = rowBorders.left;
+    }
+
+    if (rowBorders.right?.val === 'none') {
+      cellBorders.right = rowBorders.right;
+    } else if (isLastColumn && rowBorders.right) {
+      cellBorders.right = rowBorders.right;
+    }
+
+    // INNER BORDERS: Position-based (including for 'none' values)
+    // insideH creates horizontal lines between rows (applied as bottom border to non-last rows)
+    if (!isLastRow && rowBorders.insideH) {
+      cellBorders.bottom = rowBorders.insideH;
+    }
+    // insideV creates vertical lines between columns (applied as right border to non-last columns)
+    if (!isLastColumn && rowBorders.insideV) {
+      cellBorders.right = rowBorders.insideV;
+    }
   }
-  if (rowBorders?.insideV) {
-    rowBorders['right'] = rowBorders.insideV;
-    delete rowBorders?.insideV;
-  }
-  if (rowBorders) attributes['borders'] = { ...rowBorders };
-  const inlineBorders = processInlineCellBorders(tableCellProperties.borders, rowBorders);
-  if (inlineBorders) attributes['borders'] = Object.assign(attributes['borders'] || {}, inlineBorders);
+  // Always set borders to override the schema default (which adds borders to all cells)
+  // Start with position-based borders, then apply inline overrides
+  attributes['borders'] = cellBorders;
+
+  // Process inline cell borders (cell-level overrides)
+  const inlineBorders = processInlineCellBorders(tableCellProperties.borders, cellBorders);
+  if (inlineBorders) attributes['borders'] = Object.assign(attributes['borders'], inlineBorders);
 
   // Colspan
-  const colspan = tableCellProperties.gridSpan;
-  if (colspan && !isNaN(parseInt(colspan, 10))) attributes['colspan'] = parseInt(colspan, 10);
+  if (colspan > 1) attributes['colspan'] = colspan;
 
   // Width
   let width = tableCellProperties.cellWidth?.value ? twipsToPixels(tableCellProperties.cellWidth?.value) : null;
@@ -54,12 +107,11 @@ export function handleTableCellNode({
 
     const defaultColWidths = allColumnWidths;
     const hasDefaultColWidths = allColumnWidths && allColumnWidths.length > 0;
-    const colspanNum = parseInt(colspan || 1, 10);
 
-    if (colspanNum && colspanNum > 1 && hasDefaultColWidths) {
+    if (colspan > 1 && hasDefaultColWidths) {
       let colwidth = [];
 
-      for (let i = 0; i < colspanNum; i++) {
+      for (let i = 0; i < colspan; i++) {
         let colwidthValue = defaultColWidths[columnIndex + i];
         let defaultColwidth = 100;
 
@@ -251,22 +303,20 @@ const processInlineCellBorders = (borders, rowBorders) => {
     const borderAttrs = borders[direction];
     const rowBorderAttrs = rowBorders[direction];
 
-    if (borderAttrs && borderAttrs['val'] !== 'nil') {
+    if (borderAttrs && borderAttrs['val'] !== 'none') {
       const color = borderAttrs['color'];
       let size = borderAttrs['size'];
       if (size) size = eighthPointsToPixels(size);
       acc[direction] = { color, size, val: borderAttrs['val'] };
       return acc;
     }
-    if (borderAttrs && borderAttrs['val'] === 'nil') {
+    if (borderAttrs && borderAttrs['val'] === 'none') {
+      // When inline border explicitly says 'none', always create an entry to disable the border
+      // Copy base border attrs if available, but always set val='none'
       const border = Object.assign({}, rowBorderAttrs || {});
-      if (!Object.keys(border).length) {
-        return acc;
-      } else {
-        border['val'] = 'none';
-        acc[direction] = border;
-        return acc;
-      }
+      border['val'] = 'none';
+      acc[direction] = border;
+      return acc;
     }
     return acc;
   }, {});

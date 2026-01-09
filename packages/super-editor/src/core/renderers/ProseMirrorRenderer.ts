@@ -96,11 +96,10 @@ export class ProseMirrorRenderer implements EditorRenderer {
 
     // Validate that editorProps is an object before spreading
     // This prevents runtime errors if editorProps is accidentally null or a primitive
-    const validatedEditorProps: DirectEditorProps =
-      editorProps && typeof editorProps === 'object' ? (editorProps as DirectEditorProps) : {};
+    const validatedEditorProps = editorProps && typeof editorProps === 'object' ? editorProps : {};
 
     this.view = new EditorView(element, {
-      ...validatedEditorProps,
+      ...(validatedEditorProps as unknown as DirectEditorProps),
       dispatchTransaction,
       state,
       handleClick,

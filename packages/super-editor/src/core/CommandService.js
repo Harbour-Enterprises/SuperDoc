@@ -230,8 +230,6 @@ export class CommandService {
    * @returns {boolean} True if dispatch succeeded, false if editor was destroyed or unavailable.
    *
    * @throws {Error} Throws wrapped error with context: `[CommandService] Dispatch failed: <original error message>`
-   *
-   * @private
    */
   #dispatchWithFallback(tr, { editor, view }) {
     if (editor?.isDestroyed) {
@@ -250,7 +248,10 @@ export class CommandService {
       }
       return true;
     } catch (error) {
-      throw new Error(`[CommandService] Dispatch failed: ${error.message}`, { cause: error });
+      const err = new Error(`[CommandService] Dispatch failed: ${error.message}`);
+      // @ts-expect-error - cause is supported in modern environments
+      err.cause = error;
+      throw err;
     }
   }
 }

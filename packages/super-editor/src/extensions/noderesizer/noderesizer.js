@@ -64,6 +64,11 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
           return DecorationSet.empty;
         }
 
+        // Skip watermarks - they should not be interactive/resizable
+        if (node.attrs?.vmlWatermark === true) {
+          return DecorationSet.empty;
+        }
+
         const decorations = [];
 
         // Only create decoration if one of the resizable nodes is selected
@@ -171,6 +176,9 @@ const nodeResizer = (nodeNames = ['image'], editor) => {
 
     const node = view.state.doc.nodeAt(pos);
     if (!nodeNames.includes(node?.type.name)) return;
+
+    // Skip watermarks - they should not be interactive/resizable
+    if (node?.attrs?.vmlWatermark === true) return;
 
     // Store current wrapper for scroll updates
     currentWrapper = wrapper;

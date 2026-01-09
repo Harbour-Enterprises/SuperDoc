@@ -7,7 +7,7 @@ import { translator as wHyperlinkTranslator } from '../hyperlink/hyperlink-trans
 import { translator as wRPrTranslator } from '../rpr';
 import validXmlAttributes from './attributes/index.js';
 import { handleStyleChangeMarksV2 } from '../../../../v2/importer/markImporter.js';
-import { resolveRunProperties, encodeMarksFromRPr } from '@converter/styles.js';
+import { encodeMarksFromRPr, resolveRunProperties } from '../../../../styles.js';
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:r';
 
@@ -17,6 +17,21 @@ const XML_NODE_NAME = 'w:r';
  */
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
 const SD_KEY_NAME = 'run';
+
+/*
+ * Wraps the provided content in a SuperDoc run node.
+ */
+const createRunNodeWithContent = (content, encodedAttrs, runLevelMarks, runProperties) => {
+  const node = {
+    type: SD_KEY_NAME,
+    content,
+    attrs: { ...encodedAttrs, runProperties },
+  };
+  if (runLevelMarks.length) {
+    node.marks = runLevelMarks.map((mark) => cloneMark(mark));
+  }
+  return node;
+};
 
 const encode = (params, encodedAttrs = {}) => {
   const { nodes = [], nodeListHandler } = params || {};
@@ -34,7 +49,8 @@ const encode = (params, encodedAttrs = {}) => {
   const resolvedRunProperties = resolveRunProperties(params, runProperties ?? {}, paragraphProperties);
 
   // Parsing marks from run properties
-  const marks = encodeMarksFromRPr(resolvedRunProperties, params?.docx) || [];
+  const marksResult = encodeMarksFromRPr(resolvedRunProperties, params?.docx);
+  const marks = Array.isArray(marksResult) ? marksResult : [];
   const rPrChange = rPrNode?.elements?.find((el) => el.name === 'w:rPrChange');
   const styleChangeMarks = handleStyleChangeMarksV2(rPrChange, marks, params) || [];
 
@@ -50,7 +66,7 @@ const encode = (params, encodedAttrs = {}) => {
   const content = nodeListHandler?.handler(childParams) || [];
 
   // Applying marks to child nodes
-  const contentWithRunMarks = content.map((child) => {
+  const contentWithRunMarks = (Array.isArray(content) ? content : []).map((child) => {
     if (!child || typeof child !== 'object') return child;
 
     // Preserve existing marks on child nodes
@@ -84,17 +100,38 @@ const encode = (params, encodedAttrs = {}) => {
 
   const filtered = contentWithRunMarks.filter(Boolean);
 
-  const runNodeResult = {
-    type: SD_KEY_NAME,
-    content: filtered,
-    attrs: { ...encodedAttrs, runProperties },
-  };
-
-  if (runLevelMarks.length) {
-    runNodeResult.marks = runLevelMarks;
+  const containsBreakNodes = filtered.some((child) => child?.type === 'lineBreak');
+  if (!containsBreakNodes) {
+    const defaultNode = createRunNodeWithContent(filtered, encodedAttrs, runLevelMarks, runProperties);
+    return defaultNode;
   }
 
-  return runNodeResult;
+  const splitRuns = [];
+  let currentChunk = [];
+  /**
+   * OOXML sometimes bundles multiple <w:t> siblings and <w:br/> tags inside one <w:r>.
+   * Our renderer expects each break to be wrapped in its own run, so we finalize
+   * the accumulated text chunk before emitting a break run.
+   */
+  const finalizeTextChunk = () => {
+    if (!currentChunk.length) return;
+    const chunkNode = createRunNodeWithContent(currentChunk, encodedAttrs, runLevelMarks, runProperties);
+    if (chunkNode) splitRuns.push(chunkNode);
+    currentChunk = [];
+  };
+
+  filtered.forEach((child) => {
+    if (child?.type === 'lineBreak') {
+      finalizeTextChunk();
+      const breakNode = createRunNodeWithContent([child], encodedAttrs, runLevelMarks, runProperties);
+      if (breakNode) splitRuns.push(breakNode);
+    } else {
+      currentChunk.push(child);
+    }
+  });
+  finalizeTextChunk();
+
+  return splitRuns;
 };
 
 const decode = (params, decodedAttrs = {}) => {

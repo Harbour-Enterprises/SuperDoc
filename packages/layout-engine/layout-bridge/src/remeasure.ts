@@ -9,7 +9,11 @@ import type {
 } from '@superdoc/contracts';
 import { Engines } from '@superdoc/contracts';
 import type { WordParagraphLayoutOutput } from '@superdoc/word-layout';
-import { LIST_MARKER_GAP, SPACE_SUFFIX_GAP_PX, DEFAULT_TAB_INTERVAL_PX } from '@superdoc/common/layout-constants';
+import {
+  LIST_MARKER_GAP as _LIST_MARKER_GAP,
+  SPACE_SUFFIX_GAP_PX as _SPACE_SUFFIX_GAP_PX,
+  DEFAULT_TAB_INTERVAL_PX as _DEFAULT_TAB_INTERVAL_PX,
+} from '@superdoc/common/layout-constants';
 import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
 
 /**
@@ -673,6 +677,8 @@ export function remeasureParagraph(
       : typeof wordLayout?.textStartPx === 'number' && Number.isFinite(wordLayout.textStartPx)
         ? wordLayout.textStartPx
         : undefined;
+  // Track measured marker text width for returning in measure.marker
+  let measuredMarkerTextWidth: number | undefined;
   const resolvedTextStartPx = resolveListTextStartPx(
     wordLayout,
     indentLeft,
@@ -682,7 +688,9 @@ export function remeasureParagraph(
       const context = getCtx();
       if (!context) return 0;
       context.font = markerFontString(marker.run);
-      return context.measureText(markerText).width;
+      const width = context.measureText(markerText).width;
+      measuredMarkerTextWidth = width;
+      return width;
     },
   );
   const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
@@ -794,5 +802,17 @@ export function remeasureParagraph(
   }
 
   const totalHeight = lines.reduce((s, l) => s + l.lineHeight, 0);
-  return { kind: 'paragraph', lines, totalHeight };
+
+  // Build marker info if this is a list paragraph
+  const marker = wordLayout?.marker;
+  const markerInfo = marker
+    ? {
+        markerWidth: marker.markerBoxWidthPx ?? indentHanging ?? 0,
+        markerTextWidth: measuredMarkerTextWidth ?? 0,
+        indentLeft,
+        gutterWidth: marker.gutterWidthPx,
+      }
+    : undefined;
+
+  return { kind: 'paragraph', lines, totalHeight, marker: markerInfo };
 }

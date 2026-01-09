@@ -12,6 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/super-editor.es.js"
     },
+    "./types": {
+      "source": "./src/types.ts",
+      "types": "./dist/types.d.ts",
+      "import": "./dist/types.js"
+    },
     "./*": {
       "source": "./src/*"
     },
@@ -115,6 +120,7 @@
     "@superdoc/painter-dom": "workspace:*",
     "@superdoc/pm-adapter": "workspace:*",
     "@superdoc/preset-geometry": "workspace:*",
+    "@superdoc/style-engine": "workspace:*",
     "@superdoc/url-validation": "workspace:*",
     "@superdoc/word-layout": "workspace:*",
     "@vitejs/plugin-vue": "catalog:",

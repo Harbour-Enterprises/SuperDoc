@@ -602,4 +602,446 @@ describe('SuperEditor.vue', () => {
       vi.useRealTimers();
     });
   });
+
+  describe('zoom container sizing', () => {
+    it('should calculate container min-width based on default page size at zoom 1', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-default',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // At zoom 1 with default 8.5in page width: 8.5 * 96 = 816px
+      const container = wrapper.find('.super-editor-container');
+      expect(container.exists()).toBe(true);
+
+      // The containerStyle computed property should provide min-width
+      // Default: 8.5 * 96 * 1 = 816px
+      const style = container.element.style;
+      expect(style.minWidth).toBe('816px');
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should update container min-width when zoom changes', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-change',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom change event
+      // The initEditor function registers a zoomChange listener
+      // We need to capture and trigger it
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1.5 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 1.5 with default 8.5in page width: 8.5 * 96 * 1.5 = 1224px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1224px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should use page width from editor when available', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-custom-page-width',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Add getPageStyles to mock editor
+      instance.getPageStyles = vi.fn(() => ({
+        pageSize: { width: 11, height: 8.5 }, // Legal landscape
+        pageMargins: { left: 1, right: 1, top: 1, bottom: 1 },
+      }));
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Force recompute by triggering zoom change
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 1 with 11in page width: 11 * 96 = 1056px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1056px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should fall back to default width if getPageStyles returns invalid data', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-invalid-page-styles',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Add getPageStyles that returns invalid data
+      instance.getPageStyles = vi.fn(() => ({
+        pageSize: { width: null }, // Invalid width
+      }));
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Should fall back to default 8.5in = 816px
+      const container = wrapper.find('.super-editor-container');
+      expect(container.element.style.minWidth).toBe('816px');
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle zoom at 2x correctly', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-2x',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom to 2x
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 2 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 2 with default 8.5in page width: 8.5 * 96 * 2 = 1632px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1632px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should handle zoom at 0.5x correctly', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-zoom-half',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom to 0.5x
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 0.5 });
+        await wrapper.vm.$nextTick();
+
+        // At zoom 0.5 with default 8.5in page width: 8.5 * 96 * 0.5 = 408px
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('408px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should use max width from getPages() when pages have varying sizes', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-varying-page-sizes',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Add getPages method that returns mixed portrait/landscape pages
+      instance.getPages = vi.fn(() => [
+        { number: 1, size: { w: 612, h: 792 } }, // Portrait: 8.5x11
+        { number: 2, size: { w: 792, h: 612 } }, // Landscape: 11x8.5
+        { number: 3, size: { w: 612, h: 792 } }, // Portrait: 8.5x11
+      ]);
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Force recompute by triggering zoom change
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1 });
+        await wrapper.vm.$nextTick();
+
+        // Should use max width across all pages: 792 (from landscape page)
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('792px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should scale max width correctly when zoom changes with varying page sizes', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-varying-zoom',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Mixed page sizes
+      instance.getPages = vi.fn(() => [
+        { number: 1, size: { w: 612, h: 792 } }, // Portrait
+        { number: 2, size: { w: 792, h: 612 } }, // Landscape (widest)
+      ]);
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Simulate zoom to 1.5
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1.5 });
+        await wrapper.vm.$nextTick();
+
+        // maxWidth = 792, scaledWidth = 792 * 1.5 = 1188
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('1188px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should fall back to default width when getPages returns empty array', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-empty-pages',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Empty pages array
+      instance.getPages = vi.fn(() => []);
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      // Should fall back to default 8.5in = 816px
+      const container = wrapper.find('.super-editor-container');
+      expect(container.element.style.minWidth).toBe('816px');
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should ignore pages with invalid size properties', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-invalid-sizes',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Pages with invalid or missing size properties
+      instance.getPages = vi.fn(() => [
+        { number: 1, size: { w: 612, h: 792 } }, // Valid
+        { number: 2, size: { w: 0, h: 792 } }, // Invalid: zero width
+        { number: 3, size: { w: -100, h: 792 } }, // Invalid: negative width
+        { number: 4, size: null }, // Invalid: null size
+        { number: 5 }, // Invalid: missing size
+      ]);
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1 });
+        await wrapper.vm.$nextTick();
+
+        // Should use max of valid pages (612) and default (816), so 816
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('816px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+
+    it('should prefer getPages over getPageStyles when both exist', async () => {
+      vi.useFakeTimers();
+
+      EditorConstructor.loadXmlData.mockResolvedValueOnce(['<docx />', {}, {}, {}]);
+
+      const fileSource = new Blob([], { type: DOCX_MIME });
+      const wrapper = mount(SuperEditor, {
+        props: {
+          documentId: 'doc-both-methods',
+          fileSource,
+          options: {},
+        },
+      });
+
+      await flushPromises();
+
+      const instance = getEditorInstance();
+
+      // Both methods exist
+      instance.getPages = vi.fn(() => [
+        { number: 1, size: { w: 792, h: 612 } }, // 11in width from getPages
+      ]);
+      instance.getPageStyles = vi.fn(() => ({
+        pageSize: { width: 8.5, height: 11 }, // 8.5in width from getPageStyles
+      }));
+
+      instance.listeners.collaborationReady();
+      vi.runAllTimers();
+      await flushPromises();
+
+      const zoomChangeCall = instance.on.mock.calls.find(([event]) => event === 'zoomChange');
+      if (zoomChangeCall) {
+        const zoomChangeHandler = zoomChangeCall[1];
+        zoomChangeHandler({ zoom: 1 });
+        await wrapper.vm.$nextTick();
+
+        // Should prefer getPages (792px) over getPageStyles (816px)
+        const container = wrapper.find('.super-editor-container');
+        expect(container.element.style.minWidth).toBe('792px');
+      }
+
+      wrapper.unmount();
+      vi.useRealTimers();
+    });
+  });
 });

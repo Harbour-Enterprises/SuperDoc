@@ -3,12 +3,13 @@ import { pictNodeTypeStrategy } from './helpers/pict-node-type-strategy';
 import { translateShapeContainer } from './helpers/translate-shape-container';
 import { translateShapeTextbox } from './helpers/translate-shape-textbox';
 import { translateContentBlock } from './helpers/translate-content-block';
+import { translateVmlWatermark } from './helpers/translate-vml-watermark';
 
 /** @type {import('@translator').XmlNodeName} */
 const XML_NODE_NAME = 'w:pict';
 
 /** @type {import('@translator').SuperDocNodeOrKeyName} */
-const SD_NODE_NAME = ['shapeContainer', 'contentBlock'];
+const SD_NODE_NAME = ['shapeContainer', 'contentBlock', 'image'];
 
 /** @type {import('@translator').AttrConfig[]} */
 const validXmlAttributes = []; // No attrs for "w:pict".
@@ -49,6 +50,14 @@ function decode(params) {
     shapeContainer: () => translateShapeContainer(params),
     shapeTextbox: () => translateShapeTextbox(params),
     contentBlock: () => translateContentBlock(params),
+    image: () => {
+      // Only handle VML watermark images here
+      // Regular images are handled by wp:anchor/wp:inline translators
+      if (node.attrs?.vmlWatermark) {
+        return translateVmlWatermark(params);
+      }
+      return null;
+    },
     default: () => null,
   };
 
