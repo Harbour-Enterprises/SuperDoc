@@ -75,6 +75,27 @@ describe('w:t translator', () => {
       expect(result.text).toBe(`${nbsp} ${nbsp} ${nbsp} Address:`);
     });
 
+    it('keeps non-breaking space-only runs even when xml:space is not "preserve"', () => {
+      const nbsp = '\u00A0';
+      const params = {
+        extraParams: {
+          node: {
+            elements: [{ text: `${nbsp}${nbsp}` }],
+            type: 'text',
+            attributes: {},
+          },
+        },
+      };
+
+      const result = config.encode(params);
+      expect(result).toEqual({
+        type: 'text',
+        text: `${nbsp}${nbsp}`,
+        attrs: { type: 'text', attributes: {} },
+        marks: [],
+      });
+    });
+
     it('preserves whitespace when xml:space="preserve"', () => {
       const params = {
         extraParams: {

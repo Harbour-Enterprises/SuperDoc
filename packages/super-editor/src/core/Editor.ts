@@ -2103,12 +2103,11 @@ export class Editor extends EventEmitter<EditorEventMap> {
   getJSON(): ProseMirrorJSON {
     const json = this.state.doc.toJSON();
     try {
-      // Check if the document has bodySectPr in attrs, and add from converter if missing
+      // Always sync converter bodySectPr into doc attrs so layout/export see latest section defaults
       const jsonObj = json as ProseMirrorJSON;
       const attrs = jsonObj.attrs as Record<string, unknown> | undefined;
-      const hasBody = attrs && 'bodySectPr' in attrs;
       const converter = this.converter as unknown as { bodySectPr?: unknown };
-      if (!hasBody && converter && converter.bodySectPr) {
+      if (converter && converter.bodySectPr) {
         jsonObj.attrs = attrs || {};
         (jsonObj.attrs as Record<string, unknown>).bodySectPr = converter.bodySectPr;
       }

@@ -87,6 +87,18 @@ commentsStore.proxy = proxy;
 const { isHighContrastMode } = useHighContrastMode();
 const { uiFontFamily } = useUiFontFamily();
 
+const isViewingMode = () => proxy?.$superdoc?.config?.documentMode === 'viewing';
+const isViewingCommentsVisible = computed(
+  () => isViewingMode() && proxy?.$superdoc?.config?.comments?.visible === true,
+);
+const isViewingTrackChangesVisible = computed(
+  () => isViewingMode() && proxy?.$superdoc?.config?.trackChanges?.visible === true,
+);
+const shouldRenderCommentsInViewing = computed(() => {
+  if (!isViewingMode()) return true;
+  return isViewingCommentsVisible.value || isViewingTrackChangesVisible.value;
+});
+
 const commentsModuleConfig = computed(() => {
   const config = modules.comments;
   if (config === false || config == null) return null;
@@ -223,6 +235,10 @@ const onEditorReady = ({ editor, presentationEditor }) => {
     const commentsConfig = proxy.$superdoc.config.modules?.comments;
     if (!commentsConfig || commentsConfig === false) return;
     if (!positions || Object.keys(positions).length === 0) return;
+    if (!shouldRenderCommentsInViewing.value) {
+      commentsStore.clearEditorCommentPositions?.();
+      return;
+    }
 
     // Map PM positions to visual layout coordinates
     const mappedPositions = presentationEditor.getCommentBounds(positions, layers.value);
@@ -251,6 +267,14 @@ const onEditorSelectionChange = ({ editor, transaction }) => {
     // When comment is added selection will be equal to comment text
     // Should skip calculations to keep text selection for comments correct
     skipSelectionUpdate.value = false;
+    if (isViewingMode()) {
+      resetSelection();
+    }
+    return;
+  }
+
+  if (isViewingMode()) {
+    resetSelection();
     return;
   }
 
@@ -461,6 +485,8 @@ const editorOptions = (doc) => {
           ...(proxy.$superdoc.config.layoutEngineOptions || {}),
           debugLabel: proxy.$superdoc.config.layoutEngineOptions?.debugLabel ?? doc.name ?? doc.id,
           zoom: (activeZoom.value ?? 100) / 100,
+          emitCommentPositionsInViewing: isViewingMode() && shouldRenderCommentsInViewing.value,
+          enableCommentsInViewing: isViewingCommentsVisible.value,
         }
       : undefined,
     permissionResolver: (payload = {}) =>
@@ -487,6 +513,10 @@ const editorOptions = (doc) => {
 const onEditorCommentLocationsUpdate = (doc, { allCommentIds: activeThreadId, allCommentPositions } = {}) => {
   const commentsConfig = proxy.$superdoc.config.modules?.comments;
   if (!commentsConfig || commentsConfig === false) return;
+  if (!shouldRenderCommentsInViewing.value) {
+    commentsStore.clearEditorCommentPositions?.();
+    return;
+  }
 
   const presentation = PresentationEditor.getInstance(doc.id);
   if (!presentation) {
@@ -563,6 +593,7 @@ const onEditorTransaction = ({ editor, transaction, duration }) => {
 
 const isCommentsEnabled = computed(() => Boolean(commentsModuleConfig.value));
 const showCommentsSidebar = computed(() => {
+  if (!shouldRenderCommentsInViewing.value) return false;
   return (
     pendingComment.value ||
     (getFloatingComments.value?.length > 0 &&
@@ -575,7 +606,7 @@ const showCommentsSidebar = computed(() => {
 
 const showToolsFloatingMenu = computed(() => {
   if (!isCommentsEnabled.value) return false;
-  return toolsMenuPosition.top && !getConfig.value?.readOnly;
+  return selectionPosition.value && toolsMenuPosition.top && !getConfig.value?.readOnly;
 });
 const showActiveSelection = computed(() => {
   if (!isCommentsEnabled.value) return false;
@@ -637,6 +668,10 @@ const getSelectionPosition = computed(() => {
 });
 
 const handleSelectionChange = (selection) => {
+  if (isViewingMode()) {
+    resetSelection();
+    return;
+  }
   if (!selection.selectionBounds || !isCommentsEnabled.value) return;
 
   resetSelection();
@@ -670,6 +705,7 @@ const handleSelectionChange = (selection) => {
 
 const resetSelection = () => {
   selectionPosition.value = null;
+  toolsMenuPosition.top = null;
 };
 
 const updateSelection = ({ startX, startY, x, y, source }) => {
@@ -677,7 +713,8 @@ const updateSelection = ({ startX, startY, x, y, source }) => {
   const hasEndCoords = typeof x === 'number' || typeof y === 'number';
 
   if (!hasStartCoords && !hasEndCoords) {
-    return (selectionPosition.value = null);
+    resetSelection();
+    return;
   }
 
   // Initialize the selection position

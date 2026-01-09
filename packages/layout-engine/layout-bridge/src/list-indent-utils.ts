@@ -173,6 +173,8 @@ export type TextIndentCalculationParams = {
   isListItem: boolean;
   /** Measured marker width in pixels */
   markerWidth: number;
+  /** Measured marker text width in pixels (optional, falls back to markerWidth) */
+  markerTextWidth?: number;
   /** Left paragraph indent in pixels */
   paraIndentLeft: number;
   /** First-line indent in pixels (positive pushes first line right, negative pulls it left) */
@@ -221,31 +223,77 @@ export type TextIndentCalculationParams = {
  * ```
  */
 export function calculateTextStartIndent(params: TextIndentCalculationParams): number {
-  const { isFirstLine, isListItem, markerWidth, paraIndentLeft, firstLineIndent, hangingIndent, wordLayout } = params;
+  const {
+    isFirstLine,
+    isListItem,
+    markerWidth,
+    markerTextWidth,
+    paraIndentLeft,
+    firstLineIndent,
+    hangingIndent,
+    wordLayout,
+  } = params;
 
   // Calculate first-line offset (used for non-list paragraphs)
   const firstLineOffset = firstLineIndent - hangingIndent;
-
-  // Check if this uses first-line indent mode (input-rule-created lists)
-  const isFirstLineIndentMode = wordLayout?.firstLineIndentMode === true;
+  const effectiveMarkerTextWidth =
+    typeof markerTextWidth === 'number' && Number.isFinite(markerTextWidth) && markerTextWidth > 0
+      ? markerTextWidth
+      : markerWidth;
 
   // Start with paragraph left indent as the base
   let indentAdjust = paraIndentLeft;
 
-  if (isListItem && isFirstLine && isFirstLineIndentMode) {
-    // First-line indent mode: text starts after marker + tab/space, following painter rules.
+  if (isListItem && isFirstLine) {
+    // Resolve text start from wordLayout when present. This matches painter behavior,
+    // which uses textStartPx/marker.textStartX when available even if firstLineIndentMode is unset.
     const resolvedTextStart = resolveListTextStartPx(
       wordLayout as MinimalWordLayout | undefined,
       paraIndentLeft,
       Math.max(firstLineIndent, 0),
       Math.max(hangingIndent, 0),
-      () => markerWidth, // Use provided markerWidth since we don't have canvas access here
+      () => effectiveMarkerTextWidth, // Use measured marker text width when available
     );
-    const textStartFallback = paraIndentLeft + Math.max(firstLineIndent, 0) + markerWidth;
-    indentAdjust =
-      typeof resolvedTextStart === 'number' && Number.isFinite(resolvedTextStart)
-        ? resolvedTextStart
-        : textStartFallback;
+
+    if (typeof resolvedTextStart === 'number' && Number.isFinite(resolvedTextStart)) {
+      indentAdjust = resolvedTextStart;
+    } else {
+      // resolveListTextStartPx returned undefined - determine best text start position
+      const explicitTextStart = wordLayout?.marker?.textStartX ?? wordLayout?.textStartPx;
+      const isStandardHangingList = hangingIndent > 0 && wordLayout?.firstLineIndentMode !== true;
+
+      // For standard hanging lists, textStartPx == paraIndentLeft is likely wrong because
+      // text should start AFTER the marker (which sits in the hanging area before paraIndentLeft).
+      // Only trust explicitTextStart if it's beyond paraIndentLeft or not a standard hanging list.
+      const textStartLooksValid =
+        typeof explicitTextStart === 'number' &&
+        Number.isFinite(explicitTextStart) &&
+        (!isStandardHangingList || explicitTextStart > paraIndentLeft);
+
+      if (textStartLooksValid) {
+        // Honor explicit textStartPx/textStartX when it looks valid
+        indentAdjust = explicitTextStart;
+      } else if (wordLayout?.firstLineIndentMode === true) {
+        // Fallback for explicit firstLineIndentMode: marker in-flow, consume marker width + first-line indent.
+        indentAdjust = paraIndentLeft + Math.max(firstLineIndent, 0) + markerWidth;
+      } else if (isStandardHangingList && effectiveMarkerTextWidth > 0) {
+        // Fallback for standard hanging lists when resolveListTextStartPx couldn't compute
+        // (e.g., when wordLayout.marker is missing or textStartPx is wrong).
+        // Position caret after the marker.
+        // Standard hanging list layout: marker sits in hanging area, text starts after marker + gutter.
+        // markerStartPos = paraIndentLeft - hangingIndent + firstLineIndent
+        // textStart = markerStartPos + markerTextWidth + gutter
+        const markerStartPos = Math.max(0, paraIndentLeft - hangingIndent + firstLineIndent);
+        // Try to get gutterWidth from wordLayout (may be at top level or nested in marker)
+        const gutterWidthCandidate = wordLayout?.gutterWidthPx;
+        const gutterWidth =
+          typeof gutterWidthCandidate === 'number' && Number.isFinite(gutterWidthCandidate)
+            ? gutterWidthCandidate
+            : (wordLayout?.marker?.gutterWidthPx ?? LIST_MARKER_GAP);
+        indentAdjust = markerStartPos + effectiveMarkerTextWidth + gutterWidth;
+      }
+      // For non-hanging lists without wordLayout, leave indentAdjust as paraIndentLeft.
+    }
   } else if (isFirstLine && !isListItem) {
     // Non-list paragraph: apply first-line offset on the first line
     indentAdjust += firstLineOffset;

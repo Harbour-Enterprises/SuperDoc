@@ -148,6 +148,24 @@ export type LayoutOptions = {
    * Values are the actual content heights in pixels.
    */
   footerContentHeights?: Partial<Record<'default' | 'first' | 'even' | 'odd', number>>;
+  /**
+   * Actual measured header content heights per relationship ID.
+   * Used for multi-section documents where each section may have unique
+   * headers/footers referenced by their relationship IDs.
+   *
+   * Keys are relationship IDs (e.g., 'rId6', 'rId7')
+   * Values are the actual content heights in pixels.
+   */
+  headerContentHeightsByRId?: Map<string, number>;
+  /**
+   * Actual measured footer content heights per relationship ID.
+   * Used for multi-section documents where each section may have unique
+   * footers referenced by their relationship IDs.
+   *
+   * Keys are relationship IDs (e.g., 'rId8', 'rId9')
+   * Values are the actual content heights in pixels.
+   */
+  footerContentHeightsByRId?: Map<string, number>;
 };
 
 export type HeaderFooterConstraints = {
@@ -224,9 +242,118 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     return height;
   };
 
-  // Calculate the maximum header content height across all variants.
-  // This ensures body content always starts below header content, regardless of which variant is used.
+  // Store content heights for per-page margin calculation
   const headerContentHeights = options.headerContentHeights;
+  const footerContentHeights = options.footerContentHeights;
+  const headerContentHeightsByRId = options.headerContentHeightsByRId;
+  const footerContentHeightsByRId = options.footerContentHeightsByRId;
+
+  /**
+   * Determines the header/footer variant type for a given page based on section settings.
+   *
+   * @param sectionPageNumber - The page number within the current section (1-indexed)
+   * @param titlePgEnabled - Whether the section has "different first page" enabled
+   * @param alternateHeaders - Whether the section has odd/even differentiation enabled
+   * @returns The variant type: 'first', 'even', 'odd', or 'default'
+   */
+  const getVariantTypeForPage = (
+    sectionPageNumber: number,
+    titlePgEnabled: boolean,
+    alternateHeaders: boolean,
+  ): 'default' | 'first' | 'even' | 'odd' => {
+    // First page of section with titlePg enabled uses 'first' variant
+    if (sectionPageNumber === 1 && titlePgEnabled) {
+      return 'first';
+    }
+    // Alternate headers (even/odd differentiation)
+    if (alternateHeaders) {
+      return sectionPageNumber % 2 === 0 ? 'even' : 'odd';
+    }
+    return 'default';
+  };
+
+  /**
+   * Gets the header content height for a specific page, considering:
+   * 1. Per-rId heights (highest priority for multi-section documents)
+   * 2. Per-variant heights (fallback)
+   *
+   * @param variantType - The variant type ('first', 'default', 'even', 'odd')
+   * @param headerRef - Optional relationship ID from section's headerRefs
+   * @returns The appropriate header content height, or 0 if not found
+   */
+  const getHeaderHeightForPage = (variantType: 'default' | 'first' | 'even' | 'odd', headerRef?: string): number => {
+    // Priority 1: Check per-rId heights if we have a specific rId
+    if (headerRef && headerContentHeightsByRId?.has(headerRef)) {
+      return validateContentHeight(headerContentHeightsByRId.get(headerRef));
+    }
+    // Priority 2: Fall back to per-variant heights
+    if (headerContentHeights) {
+      return validateContentHeight(headerContentHeights[variantType]);
+    }
+    return 0;
+  };
+
+  /**
+   * Gets the footer content height for a specific page, considering:
+   * 1. Per-rId heights (highest priority for multi-section documents)
+   * 2. Per-variant heights (fallback)
+   *
+   * @param variantType - The variant type ('first', 'default', 'even', 'odd')
+   * @param footerRef - Optional relationship ID from section's footerRefs
+   * @returns The appropriate footer content height, or 0 if not found
+   */
+  const getFooterHeightForPage = (variantType: 'default' | 'first' | 'even' | 'odd', footerRef?: string): number => {
+    // Priority 1: Check per-rId heights if we have a specific rId
+    if (footerRef && footerContentHeightsByRId?.has(footerRef)) {
+      return validateContentHeight(footerContentHeightsByRId.get(footerRef));
+    }
+    // Priority 2: Fall back to per-variant heights
+    if (footerContentHeights) {
+      return validateContentHeight(footerContentHeights[variantType]);
+    }
+    return 0;
+  };
+
+  /**
+   * Calculates the effective top margin for a page based on its header content height.
+   *
+   * @param headerContentHeight - The actual header content height for this page
+   * @param currentHeaderDistance - The header distance from page top
+   * @param baseTopMargin - The base top margin from section/document settings
+   * @returns The effective top margin that prevents body/header overlap
+   */
+  const calculateEffectiveTopMargin = (
+    headerContentHeight: number,
+    currentHeaderDistance: number,
+    baseTopMargin: number,
+  ): number => {
+    if (headerContentHeight > 0) {
+      return Math.max(baseTopMargin, currentHeaderDistance + headerContentHeight);
+    }
+    return baseTopMargin;
+  };
+
+  /**
+   * Calculates the effective bottom margin for a page based on its footer content height.
+   *
+   * @param footerContentHeight - The actual footer content height for this page
+   * @param currentFooterDistance - The footer distance from page bottom
+   * @param baseBottomMargin - The base bottom margin from section/document settings
+   * @returns The effective bottom margin that prevents body/footer overlap
+   */
+  const calculateEffectiveBottomMargin = (
+    footerContentHeight: number,
+    currentFooterDistance: number,
+    baseBottomMargin: number,
+  ): number => {
+    if (footerContentHeight > 0) {
+      return Math.max(baseBottomMargin, currentFooterDistance + footerContentHeight);
+    }
+    return baseBottomMargin;
+  };
+
+  // Calculate the maximum header/footer content heights (used for fallback and section breaks)
+  // These are still needed for cases where we don't have per-page information
   const maxHeaderContentHeight = headerContentHeights
     ? Math.max(
         0,
@@ -236,17 +363,6 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
         validateContentHeight(headerContentHeights.odd),
       )
     : 0;
-
-  // Calculate effective top margin: ensure body content starts below header content.
-  // Word always positions header at headerDistance from page top, regardless of topMargin.
-  // Body content must start below headerDistance + header content height.
-  const headerDistance = margins.header ?? margins.top;
-  const effectiveTopMargin =
-    maxHeaderContentHeight > 0 ? Math.max(margins.top, headerDistance + maxHeaderContentHeight) : margins.top;
-
-  // Calculate the maximum footer content height across all variants.
-  // This ensures body content always ends above footer content, regardless of which variant is used.
-  const footerContentHeights = options.footerContentHeights;
   const maxFooterContentHeight = footerContentHeights
     ? Math.max(
         0,
@@ -257,12 +373,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       )
     : 0;
 
-  // Calculate effective bottom margin: ensure body content ends above footer content.
-  // Word always positions footer at footerDistance from page bottom, regardless of bottomMargin.
-  // Body content must end above footerDistance + footer content height.
+  // Initial effective margins use default variant (will be adjusted per-page)
+  const headerDistance = margins.header ?? margins.top;
   const footerDistance = margins.footer ?? margins.bottom;
-  const effectiveBottomMargin =
-    maxFooterContentHeight > 0 ? Math.max(margins.bottom, footerDistance + maxFooterContentHeight) : margins.bottom;
+  const defaultHeaderHeight = getHeaderHeightForPage('default', undefined);
+  const defaultFooterHeight = getFooterHeightForPage('default', undefined);
+  const effectiveTopMargin = calculateEffectiveTopMargin(defaultHeaderHeight, headerDistance, margins.top);
+  const effectiveBottomMargin = calculateEffectiveBottomMargin(defaultFooterHeight, footerDistance, margins.bottom);
 
   let activeTopMargin = effectiveTopMargin;
   let activeBottomMargin = effectiveBottomMargin;
@@ -272,6 +389,13 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let pendingBottomMargin: number | null = null;
   let pendingLeftMargin: number | null = null;
   let pendingRightMargin: number | null = null;
+  // Track section base margins (before header/footer inflation) for per-page adjustment.
+  // These represent the section's configured margins, not the effective margins after
+  // accounting for header/footer content height.
+  let activeSectionBaseTopMargin = margins.top;
+  let activeSectionBaseBottomMargin = margins.bottom;
+  let pendingSectionBaseTopMargin: number | null = null;
+  let pendingSectionBaseBottomMargin: number | null = null;
   let activeHeaderDistance = margins.header ?? margins.top;
   let pendingHeaderDistance: number | null = null;
   let activeFooterDistance = margins.footer ?? margins.bottom;
@@ -548,6 +672,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
   let activeSectionIndex: number = initialSectionMetadata?.sectionIndex ?? 0;
   let pendingSectionIndex: number | null = null;
 
+  // Track the first page number for each section (for determining 'first' variant)
+  // Map<sectionIndex, firstPageNumber>
+  const sectionFirstPageNumbers = new Map<number, number>();
+
   const paginator = createPaginator({
     margins: paginatorMargins,
     getActiveTopMargin: () => activeTopMargin,
@@ -562,6 +690,10 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
     onNewPage: (state?: PageState) => {
       // apply pending->active and invalidate columns cache (first callback)
       if (!state) {
+        // Track if we're entering a new section (pendingSectionIndex was just set)
+        const isEnteringNewSection = pendingSectionIndex !== null;
+        const newSectionIndex = isEnteringNewSection ? pendingSectionIndex : activeSectionIndex;
+
         const applied = applyPendingToActive({
           activeTopMargin,
           activeBottomMargin,
@@ -633,7 +765,105 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
           activeVAlign = pendingVAlign;
           pendingVAlign = null;
         }
+        // Apply pending section base margins
+        if (pendingSectionBaseTopMargin !== null) {
+          activeSectionBaseTopMargin = pendingSectionBaseTopMargin;
+          pendingSectionBaseTopMargin = null;
+        }
+        if (pendingSectionBaseBottomMargin !== null) {
+          activeSectionBaseBottomMargin = pendingSectionBaseBottomMargin;
+          pendingSectionBaseBottomMargin = null;
+        }
         pageCount += 1;
+
+        // Calculate the page number for this new page
+        const newPageNumber = pageCount;
+
+        // Track first page of section if this is a new section or the first page ever
+        if (isEnteringNewSection || !sectionFirstPageNumbers.has(activeSectionIndex)) {
+          sectionFirstPageNumbers.set(activeSectionIndex, newPageNumber);
+        }
+
+        // Calculate section-relative page number
+        const firstPageInSection = sectionFirstPageNumbers.get(activeSectionIndex) ?? newPageNumber;
+        const sectionPageNumber = newPageNumber - firstPageInSection + 1;
+
+        // Get section metadata for titlePg setting
+        const sectionMetadata = sectionMetadataList[activeSectionIndex];
+        const titlePgEnabled = sectionMetadata?.titlePg ?? false;
+        // TODO: Support alternateHeaders (odd/even) when needed
+        const alternateHeaders = false;
+
+        // Determine which header/footer variant applies to this page
+        const variantType = getVariantTypeForPage(sectionPageNumber, titlePgEnabled, alternateHeaders);
+
+        // Resolve header/footer refs for margin calculation using OOXML inheritance model.
+        // This must match the rendering logic in PresentationEditor to ensure margins
+        // are calculated based on the same header/footer content that will be rendered.
+        //
+        // Resolution order:
+        //   1. Current section's variant ref (e.g., 'first' for first page with titlePg)
+        //   2. Previous section's same variant ref (inheritance)
+        //   3. Current section's 'default' ref (final fallback)
+        let headerRef = activeSectionRefs?.headerRefs?.[variantType];
+        let footerRef = activeSectionRefs?.footerRefs?.[variantType];
+        let effectiveVariantType = variantType;
+
+        // Step 2: Inherit from previous section if variant not found
+        if (!headerRef && variantType !== 'default' && activeSectionIndex > 0) {
+          const prevSectionMetadata = sectionMetadataList[activeSectionIndex - 1];
+          if (prevSectionMetadata?.headerRefs?.[variantType]) {
+            headerRef = prevSectionMetadata.headerRefs[variantType];
+            layoutLog(
+              `[Layout] Page ${newPageNumber}: Inheriting header '${variantType}' from section ${activeSectionIndex - 1}: ${headerRef}`,
+            );
+          }
+        }
+        if (!footerRef && variantType !== 'default' && activeSectionIndex > 0) {
+          const prevSectionMetadata = sectionMetadataList[activeSectionIndex - 1];
+          if (prevSectionMetadata?.footerRefs?.[variantType]) {
+            footerRef = prevSectionMetadata.footerRefs[variantType];
+            layoutLog(
+              `[Layout] Page ${newPageNumber}: Inheriting footer '${variantType}' from section ${activeSectionIndex - 1}: ${footerRef}`,
+            );
+          }
+        }
+
+        // Step 3: Fall back to current section's 'default'
+        if (!headerRef && variantType !== 'default' && activeSectionRefs?.headerRefs?.default) {
+          headerRef = activeSectionRefs.headerRefs.default;
+          effectiveVariantType = 'default';
+        }
+        if (!footerRef && variantType !== 'default' && activeSectionRefs?.footerRefs?.default) {
+          footerRef = activeSectionRefs.footerRefs.default;
+        }
+
+        // Calculate the actual header/footer heights for this page's variant
+        // Use effectiveVariantType for header height lookup to match the fallback
+        const headerHeight = getHeaderHeightForPage(effectiveVariantType, headerRef);
+        const footerHeight = getFooterHeightForPage(
+          variantType !== 'default' && !activeSectionRefs?.footerRefs?.[variantType] ? 'default' : variantType,
+          footerRef,
+        );
+
+        // Adjust margins based on the actual header/footer for this page.
+        // Always recalculate to ensure pages without headers reset to base margin
+        // (not the inflated margin from a previous page with a header).
+        // Use section base margins, not document defaults, for correct per-section behavior.
+        activeTopMargin = calculateEffectiveTopMargin(headerHeight, activeHeaderDistance, activeSectionBaseTopMargin);
+        activeBottomMargin = calculateEffectiveBottomMargin(
+          footerHeight,
+          activeFooterDistance,
+          activeSectionBaseBottomMargin,
+        );
+
+        layoutLog(
+          `[Layout] Page ${newPageNumber}: Using variant '${variantType}' - headerHeight: ${headerHeight}, footerHeight: ${footerHeight}`,
+        );
+        layoutLog(
+          `[Layout] Page ${newPageNumber}: Adjusted margins - top: ${activeTopMargin}, bottom: ${activeBottomMargin} (base: ${activeSectionBaseTopMargin}, ${activeSectionBaseBottomMargin})`,
+        );
+
         return;
       }
 
@@ -739,257 +969,6 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
 
     // Note: We do NOT reset cursorY - content continues from current position
     // This creates the mid-page region effect
-  };
-
-  const _scheduleSectionBreak = (
-    block: SectionBreakBlock,
-  ): {
-    forcePageBreak: boolean;
-    forceMidPageRegion: boolean;
-    requiredParity?: 'even' | 'odd';
-  } => {
-    layoutLog('[Layout] scheduleSectionBreak block:', {
-      id: block.id,
-      type: block.type,
-      columns: block.columns,
-      sectionIndex: block.attrs?.sectionIndex,
-    });
-    const sectionIndexRaw = block.attrs?.sectionIndex;
-    const metadataIndex = typeof sectionIndexRaw === 'number' ? sectionIndexRaw : Number(sectionIndexRaw ?? NaN);
-    const sectionMetadata = Number.isFinite(metadataIndex) ? sectionMetadataList[metadataIndex] : undefined;
-    layoutLog(`[Layout] scheduleSectionBreak called:`, {
-      id: block.id,
-      type: block.type,
-      isFirstSection: block.attrs?.isFirstSection,
-      statesLength: states.length,
-      hasHeaderRefs: !!block.headerRefs,
-      hasFooterRefs: !!block.footerRefs,
-      headerRefs: block.headerRefs,
-      footerRefs: block.footerRefs,
-    });
-
-    // Special handling for first section break (appears before any content)
-    // Apply properties immediately to activePageSize before first page is created
-    if (block.attrs?.isFirstSection && states.length === 0) {
-      layoutLog(`[Layout] Processing FIRST section break:`, {
-        id: block.id,
-        hasHeaderRefs: !!block.headerRefs,
-        hasFooterRefs: !!block.footerRefs,
-        headerRefs: block.headerRefs,
-        footerRefs: block.footerRefs,
-      });
-
-      if (block.pageSize) {
-        activePageSize = { w: block.pageSize.w, h: block.pageSize.h };
-        pendingPageSize = null; // Clear pending since we applied directly
-      }
-      if (block.orientation) {
-        activeOrientation = block.orientation;
-        pendingOrientation = null; // Clear pending since we applied directly
-      }
-      if (block.margins?.header !== undefined) {
-        const headerDist = Math.max(0, block.margins.header);
-        activeHeaderDistance = headerDist;
-        pendingHeaderDistance = headerDist;
-      }
-      // Handle top margin - always recalculate with header content height if applicable
-      if (block.margins?.top !== undefined || block.margins?.header !== undefined) {
-        const sectionTop = block.margins?.top ?? margins.top;
-        const sectionHeader = block.margins?.header ?? activeHeaderDistance;
-        // Account for actual header content height when calculating top margin
-        const requiredTopMargin = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
-        activeTopMargin = Math.max(sectionTop, requiredTopMargin);
-        pendingTopMargin = activeTopMargin;
-      }
-      if (block.margins?.footer !== undefined) {
-        const footerDistance = Math.max(0, block.margins.footer);
-        activeFooterDistance = footerDistance;
-        pendingFooterDistance = footerDistance;
-        // Account for actual footer content height
-        const requiredBottomMargin =
-          maxFooterContentHeight > 0 ? footerDistance + maxFooterContentHeight : footerDistance;
-        activeBottomMargin = Math.max(margins.bottom, requiredBottomMargin);
-        pendingBottomMargin = activeBottomMargin;
-      }
-      if (block.margins?.left !== undefined) {
-        const leftMargin = Math.max(0, block.margins.left);
-        activeLeftMargin = leftMargin;
-        pendingLeftMargin = leftMargin;
-      }
-      if (block.margins?.right !== undefined) {
-        const rightMargin = Math.max(0, block.margins.right);
-        activeRightMargin = rightMargin;
-        pendingRightMargin = rightMargin;
-      }
-      if (block.columns) {
-        activeColumns = { count: block.columns.count, gap: block.columns.gap };
-        pendingColumns = null; // Clear pending since we applied directly
-      }
-      if (block.vAlign) {
-        activeVAlign = block.vAlign;
-        pendingVAlign = null; // Clear pending since we applied directly
-      }
-      // Initial numbering for very first page
-      if (sectionMetadata?.numbering) {
-        if (sectionMetadata.numbering.format) activeNumberFormat = sectionMetadata.numbering.format;
-        if (typeof sectionMetadata.numbering.start === 'number') {
-          activePageCounter = sectionMetadata.numbering.start;
-        }
-      }
-      // Set section index for first section
-      if (Number.isFinite(metadataIndex)) {
-        activeSectionIndex = metadataIndex;
-        layoutLog(`[Layout] First section break: Set activeSectionIndex:`, activeSectionIndex);
-      }
-      if (sectionMetadata?.headerRefs || sectionMetadata?.footerRefs) {
-        activeSectionRefs = {
-          ...(sectionMetadata.headerRefs && { headerRefs: sectionMetadata.headerRefs }),
-          ...(sectionMetadata.footerRefs && { footerRefs: sectionMetadata.footerRefs }),
-        };
-        layoutLog(`[Layout] First section break: Set activeSectionRefs:`, activeSectionRefs);
-      } else if (block.headerRefs || block.footerRefs) {
-        activeSectionRefs = {
-          ...(block.headerRefs && { headerRefs: block.headerRefs }),
-          ...(block.footerRefs && { footerRefs: block.footerRefs }),
-        };
-        layoutLog(`[Layout] First section break: Set activeSectionRefs from block:`, activeSectionRefs);
-      } else {
-        layoutLog(`[Layout] First section break: NO headerRefs/footerRefs in block or metadata!`);
-      }
-      return { forcePageBreak: false, forceMidPageRegion: false };
-    }
-
-    // First, schedule all pending properties to apply at the next page boundary.
-    // We process all properties before deciding whether to force a page break.
-    const headerPx = block.margins?.header;
-    const footerPx = block.margins?.footer;
-    const topPx = block.margins?.top;
-    const nextTop = pendingTopMargin ?? activeTopMargin;
-    const nextBottom = pendingBottomMargin ?? activeBottomMargin;
-    const nextHeader = pendingHeaderDistance ?? activeHeaderDistance;
-    const nextFooter = pendingFooterDistance ?? activeFooterDistance;
-
-    // Update header/footer distances first
-    pendingHeaderDistance = typeof headerPx === 'number' ? Math.max(0, headerPx) : nextHeader;
-    pendingFooterDistance = typeof footerPx === 'number' ? Math.max(0, footerPx) : nextFooter;
-
-    // Update pending margins (take max to ensure space for header/footer and header content)
-    // Recalculate if either top or header margin changes
-    if (typeof headerPx === 'number' || typeof topPx === 'number') {
-      const sectionTop = topPx ?? margins.top;
-      const sectionHeader = pendingHeaderDistance;
-      const requiredForHeader = maxHeaderContentHeight > 0 ? sectionHeader + maxHeaderContentHeight : sectionHeader;
-      pendingTopMargin = Math.max(sectionTop, requiredForHeader);
-    } else {
-      pendingTopMargin = nextTop;
-    }
-
-    // Account for actual footer content height when calculating bottom margin
-    if (typeof footerPx === 'number') {
-      const sectionFooter = pendingFooterDistance;
-      const requiredForFooter = maxFooterContentHeight > 0 ? sectionFooter + maxFooterContentHeight : sectionFooter;
-      pendingBottomMargin = Math.max(margins.bottom, requiredForFooter);
-    } else {
-      pendingBottomMargin = nextBottom;
-    }
-
-    // Schedule page size change if present
-    if (block.pageSize) {
-      pendingPageSize = { w: block.pageSize.w, h: block.pageSize.h };
-    }
-
-    // Schedule orientation change if present
-    if (block.orientation) {
-      pendingOrientation = block.orientation;
-    }
-
-    // Schedule vertical alignment change if present
-    if (block.vAlign) {
-      pendingVAlign = block.vAlign;
-    }
-
-    // Schedule numbering changes (apply at next page boundary)
-    if (sectionMetadata?.numbering) {
-      pendingNumbering = { ...sectionMetadata.numbering };
-    } else if (block.numbering) {
-      pendingNumbering = { ...block.numbering };
-    }
-
-    // Schedule section index change (apply at next page boundary)
-    if (Number.isFinite(metadataIndex)) {
-      pendingSectionIndex = metadataIndex;
-      layoutLog(`[Layout] Section break: Scheduled pendingSectionIndex:`, pendingSectionIndex);
-    }
-
-    // Schedule section refs changes (apply at next page boundary)
-    const refsFromMetadata =
-      sectionMetadata?.headerRefs || sectionMetadata?.footerRefs
-        ? {
-            ...(sectionMetadata.headerRefs && { headerRefs: sectionMetadata.headerRefs }),
-            ...(sectionMetadata.footerRefs && { footerRefs: sectionMetadata.footerRefs }),
-          }
-        : null;
-    const refsFromBlock =
-      block.headerRefs || block.footerRefs
-        ? {
-            ...(block.headerRefs && { headerRefs: block.headerRefs }),
-            ...(block.footerRefs && { footerRefs: block.footerRefs }),
-          }
-        : null;
-    const refsToSchedule = refsFromMetadata ?? refsFromBlock;
-    if (refsToSchedule) {
-      pendingSectionRefs = refsToSchedule;
-      layoutLog(`[Layout] Section break: Scheduled pendingSectionRefs:`, pendingSectionRefs);
-    }
-
-    // Determine if this section break should force a page break
-    const sectionType = block.type ?? 'continuous'; // Default to continuous if not specified
-
-    // Detect mid-page column changes for continuous section breaks
-    const isColumnsChanging =
-      block.columns != null && (block.columns.count !== activeColumns.count || block.columns.gap !== activeColumns.gap);
-
-    // Word behavior parity: If a paragraph-level sectPr introduces header/footer semantics
-    // that cannot apply mid-page (e.g., titlePg, changed header/footer refs/distances,
-    // page size/orientation), treat a 'continuous' break as an effective next-page break.
-    // The requirePageBoundary flag is set by the pm-adapter when it detects these conditions.
-    if (block.attrs?.requirePageBoundary) {
-      // Schedule column change for next page if columns are specified
-      if (block.columns) {
-        pendingColumns = { count: block.columns.count, gap: block.columns.gap };
-      }
-      return { forcePageBreak: true, forceMidPageRegion: false };
-    }
-
-    switch (sectionType) {
-      case 'nextPage':
-        // Schedule column change for next page
-        if (block.columns) {
-          pendingColumns = { count: block.columns.count, gap: block.columns.gap };
-        }
-        return { forcePageBreak: true, forceMidPageRegion: false };
-      case 'evenPage':
-        if (block.columns) {
-          pendingColumns = { count: block.columns.count, gap: block.columns.gap };
-        }
-        return { forcePageBreak: true, forceMidPageRegion: false, requiredParity: 'even' };
-      case 'oddPage':
-        if (block.columns) {
-          pendingColumns = { count: block.columns.count, gap: block.columns.gap };
-        }
-        return { forcePageBreak: true, forceMidPageRegion: false, requiredParity: 'odd' };
-      case 'continuous':
-      default:
-        // If continuous and columns are changing, force mid-page region
-        if (isColumnsChanging) {
-          return { forcePageBreak: false, forceMidPageRegion: true };
-        }
-        // For continuous without column changes, schedule for next page
-        if (block.columns) {
-          pendingColumns = { count: block.columns.count, gap: block.columns.gap };
-        }
-        return { forcePageBreak: false, forceMidPageRegion: false };
-    }
   };
 
   // Collect anchored drawings mapped to their anchor paragraphs
@@ -1181,6 +1160,25 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       activeOrientation = updatedState.activeOrientation;
       pendingOrientation = updatedState.pendingOrientation;
 
+      // Track section base margins (not part of SectionState, handled separately).
+      // These represent the section's configured margins before header/footer inflation.
+      const isFirstSection = effectiveBlock.attrs?.isFirstSection && states.length === 0;
+      const blockTopMargin = effectiveBlock.margins?.top;
+      const blockBottomMargin = effectiveBlock.margins?.bottom;
+      if (isFirstSection) {
+        // First section: apply immediately to active
+        activeSectionBaseTopMargin = typeof blockTopMargin === 'number' ? blockTopMargin : margins.top;
+        activeSectionBaseBottomMargin = typeof blockBottomMargin === 'number' ? blockBottomMargin : margins.bottom;
+      } else if (blockTopMargin !== undefined || blockBottomMargin !== undefined) {
+        // Non-first section with margin changes: schedule for next page
+        if (blockTopMargin !== undefined) {
+          pendingSectionBaseTopMargin = typeof blockTopMargin === 'number' ? blockTopMargin : margins.top;
+        }
+        if (blockBottomMargin !== undefined) {
+          pendingSectionBaseBottomMargin = typeof blockBottomMargin === 'number' ? blockBottomMargin : margins.bottom;
+        }
+      }
+
       // Handle vAlign from section break (not part of SectionState, handled separately)
       if (effectiveBlock.vAlign) {
         const isFirstSection = effectiveBlock.attrs?.isFirstSection && states.length === 0;
@@ -1206,7 +1204,7 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
       // Schedule section index and numbering (handled outside of SectionState since they're module-level vars)
       const sectionIndexRaw = effectiveBlock.attrs?.sectionIndex;
       const metadataIndex = typeof sectionIndexRaw === 'number' ? sectionIndexRaw : Number(sectionIndexRaw ?? NaN);
-      const isFirstSection = effectiveBlock.attrs?.isFirstSection && states.length === 0;
+      // Note: isFirstSection is already declared above for base margin tracking
       if (Number.isFinite(metadataIndex)) {
         if (isFirstSection) {
           // First section: apply immediately
@@ -1692,10 +1690,9 @@ export function layoutDocument(blocks: FlowBlock[], measures: Measure[], options
  *
  * Special handling for behindDoc anchored fragments:
  * - Anchored images/drawings with behindDoc=true are decorative background elements
- * - These fragments are excluded from height calculations if they fall outside a reasonable
- *   overflow range (4x the header/footer height or 192pt, whichever is larger)
- * - This prevents decorative elements with extreme offsets from inflating header/footer margins
- * - behindDoc fragments within the overflow range are still included to handle modest positioning
+ * - Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout
+ * - These fragments are ALWAYS excluded from height calculations, regardless of position
+ * - This matches Word behavior where behindDoc images never inflate header/footer margins
  * - All behindDoc fragments are still rendered in the layout; they're only excluded from height
  */
 export function layoutHeaderFooter(
@@ -1719,19 +1716,6 @@ export function layoutHeaderFooter(
   if (!Number.isFinite(height) || height <= 0) {
     return { pages: [], height: 0 };
   }
-
-  // Allow modest behindDoc overflow but ignore extreme offsets that shouldn't drive margins.
-  // Use a bounded base height so decorative assets far outside the header/footer band
-  // don't inflate layout height. Fallback to full height when no base is provided.
-  const overflowBase =
-    typeof constraints.overflowBaseHeight === 'number' &&
-    Number.isFinite(constraints.overflowBaseHeight) &&
-    constraints.overflowBaseHeight > 0
-      ? constraints.overflowBaseHeight
-      : height;
-  const maxBehindDocOverflow = Math.max(192, overflowBase * 4);
-  const minBehindDocY = -maxBehindDocOverflow;
-  const maxBehindDocY = height + maxBehindDocOverflow;
 
   // Transform page-relative anchor offsets to content-relative for correct positioning
   // Headers/footers are rendered within the content box, but page-relative anchors
@@ -1780,10 +1764,10 @@ export function layoutHeaderFooter(
       const block = blocks[idx];
       const measure = measures[idx];
 
-      // Exclude behindDoc anchored fragments with extreme offsets from height calculations.
-      // Decorative background images/drawings in headers/footers should not inflate margins.
+      // Exclude ALL behindDoc anchored fragments from height calculations.
+      // Per OOXML spec, behindDoc is purely a z-ordering directive that should NOT affect layout.
+      // These decorative background images/drawings render behind text but never inflate margins.
       // Fragments are still rendered in the layout; we only skip them when computing total height.
-      // We allow modest overflow (within maxBehindDocOverflow) to handle reasonable positioning.
       const isAnchoredFragment =
         (fragment.kind === 'image' || fragment.kind === 'drawing') && fragment.isAnchored === true;
       if (isAnchoredFragment) {
@@ -1794,12 +1778,8 @@ export function layoutHeaderFooter(
           );
         }
         const anchoredBlock = block as ImageBlock | DrawingBlock;
-        // Skip all behindDoc anchored images (like watermarks) from height calculation
+        // behindDoc images never affect layout - skip entirely from height calculation
         if (anchoredBlock.anchor?.behindDoc) {
-          continue;
-        }
-        // For non-behindDoc anchored images, only skip if they're extremely far outside the bounds
-        if (fragment.y < minBehindDocY || fragment.y > maxBehindDocY) {
           continue;
         }
       }

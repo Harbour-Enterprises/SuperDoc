@@ -15,5 +15,14 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "customConditions": ["source"]
-  }
+  },
+  "exclude": [
+    "**/*.test.js",
+    "**/*.test.ts",
+    "**/*.test.tsx",
+    "**/*.spec.js",
+    "**/*.spec.ts",
+    "**/*.spec.tsx",
+    "**/__tests__/**"
+  ]
 }

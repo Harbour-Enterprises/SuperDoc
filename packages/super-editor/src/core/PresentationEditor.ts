@@ -1,7 +1,8 @@
-import { NodeSelection, TextSelection } from 'prosemirror-state';
+import { NodeSelection, Selection, TextSelection } from 'prosemirror-state';
 import { CellSelection } from 'prosemirror-tables';
 import type { EditorState, Transaction } from 'prosemirror-state';
 import type { Node as ProseMirrorNode, Mark } from 'prosemirror-model';
+import type { Mapping } from 'prosemirror-transform';
 import { Editor } from './Editor.js';
 import { EventEmitter } from './EventEmitter.js';
 import { EpochPositionMapper } from './EpochPositionMapper.js';
@@ -294,6 +295,10 @@ export type LayoutEngineOptions = {
   debugLabel?: string;
   layoutMode?: LayoutMode;
   trackedChanges?: TrackedChangesOverrides;
+  /** Emit comment positions while in viewing mode (used to render comment highlights). */
+  emitCommentPositionsInViewing?: boolean;
+  /** Render comment highlights while in viewing mode. */
+  enableCommentsInViewing?: boolean;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
   /**
@@ -588,6 +593,7 @@ export class PresentationEditor extends EventEmitter {
   #telemetryEmitter: ((event: TelemetryEvent) => void) | null = null;
   #renderScheduled = false;
   #pendingDocChange = false;
+  #pendingMapping: Mapping | null = null;
   #isRerendering = false;
   #selectionSync = new SelectionSyncCoordinator();
   #remoteCursorUpdateScheduled = false;
@@ -643,6 +649,7 @@ export class PresentationEditor extends EventEmitter {
   #dragLastPointer: SelectionDebugHudState['lastPointer'] = null;
   #dragLastRawHit: PositionHit | null = null;
   #dragUsedPageNotMountedFallback = false;
+  #suppressFocusInFromDraggable = false;
 
   // Cell selection drag state
   // Tracks cell-specific context when drag starts in a table for multi-cell selection
@@ -722,6 +729,8 @@ export class PresentationEditor extends EventEmitter {
       debugLabel: options.layoutEngineOptions?.debugLabel,
       layoutMode: options.layoutEngineOptions?.layoutMode ?? 'vertical',
       trackedChanges: options.layoutEngineOptions?.trackedChanges,
+      emitCommentPositionsInViewing: options.layoutEngineOptions?.emitCommentPositionsInViewing,
+      enableCommentsInViewing: options.layoutEngineOptions?.enableCommentsInViewing,
       presence: validatedPresence,
     };
     this.#trackedChangesOverrides = options.layoutEngineOptions?.trackedChanges;
@@ -1337,12 +1346,15 @@ export class PresentationEditor extends EventEmitter {
     if (!validModes.includes(mode)) {
       throw new TypeError(`[PresentationEditor] Invalid mode "${mode}". Must be one of: ${validModes.join(', ')}`);
     }
+    const modeChanged = this.#documentMode !== mode;
     this.#documentMode = mode;
     this.#editor.setDocumentMode(mode);
     this.#syncDocumentModeClass();
     this.#syncHiddenEditorA11yAttributes();
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
-    if (trackedChangesChanged) {
+    // Re-render if mode changed OR tracked changes preferences changed.
+    // Mode change affects enableComments in toFlowBlocks even if tracked changes didn't change.
+    if (modeChanged || trackedChangesChanged) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
@@ -1365,9 +1377,10 @@ export class PresentationEditor extends EventEmitter {
       throw new TypeError('[PresentationEditor] setTrackedChangesOverrides expects an object or undefined');
     }
     if (overrides !== undefined) {
-      if (overrides.mode !== undefined && !['review', 'simple', 'original'].includes(overrides.mode as string)) {
+      const validModes = ['review', 'original', 'final', 'off'];
+      if (overrides.mode !== undefined && !validModes.includes(overrides.mode as string)) {
         throw new TypeError(
-          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: review, simple, original`,
+          `[PresentationEditor] Invalid tracked changes mode "${overrides.mode}". Must be one of: ${validModes.join(', ')}`,
         );
       }
       if (overrides.enabled !== undefined && typeof overrides.enabled !== 'boolean') {
@@ -2481,6 +2494,20 @@ export class PresentationEditor extends EventEmitter {
       }
       if (trackedChangesChanged || transaction?.docChanged) {
         this.#pendingDocChange = true;
+        // Store the mapping from this transaction for position updates during paint.
+        // Only stored for doc changes - other triggers don't have position shifts.
+        if (transaction?.docChanged) {
+          if (this.#pendingMapping !== null) {
+            // Multiple rapid transactions before rerender - compose the mappings.
+            // The painter's gate checks maps.length > 1 to trigger full rebuild,
+            // which is the safe fallback for complex/batched edits.
+            const combined = this.#pendingMapping.slice();
+            combined.appendMapping(transaction.mapping);
+            this.#pendingMapping = combined;
+          } else {
+            this.#pendingMapping = transaction.mapping;
+          }
+        }
         this.#selectionSync.onLayoutStart();
         this.#scheduleRerender();
       }
@@ -2532,6 +2559,23 @@ export class PresentationEditor extends EventEmitter {
     this.#editorListeners.push({
       event: 'collaborationReady',
       handler: handleCollaborationReady as (...args: unknown[]) => void,
+    });
+
+    // Handle remote header/footer changes from collaborators
+    const handleRemoteHeaderFooterChanged = (payload: {
+      type: 'header' | 'footer';
+      sectionId: string;
+      content: unknown;
+    }) => {
+      this.#headerFooterAdapter?.invalidate(payload.sectionId);
+      this.#headerFooterManager?.refresh();
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    };
+    this.#editor.on('remoteHeaderFooterChanged', handleRemoteHeaderFooterChanged);
+    this.#editorListeners.push({
+      event: 'remoteHeaderFooterChanged',
+      handler: handleRemoteHeaderFooterChanged as (...args: unknown[]) => void,
     });
   }
 
@@ -3027,6 +3071,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
+    this.#suppressFocusInFromDraggable = isDraggableAnnotation;
 
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
@@ -3423,7 +3468,12 @@ export class PresentationEditor extends EventEmitter {
 
     if (!handledByDepth) {
       try {
-        const tr = this.#editor.state.tr.setSelection(TextSelection.create(this.#editor.state.doc, hit.pos));
+        const doc = this.#editor.state.doc;
+        let nextSelection: Selection = TextSelection.create(doc, hit.pos);
+        if (!nextSelection.$from.parent.inlineContent) {
+          nextSelection = Selection.near(doc.resolve(hit.pos), 1);
+        }
+        const tr = this.#editor.state.tr.setSelection(nextSelection);
         this.#editor.view?.dispatch(tr);
       } catch {
         // Position may be invalid during layout updates (e.g., after drag-drop) - ignore
@@ -3970,6 +4020,11 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    if (this.#suppressFocusInFromDraggable) {
+      this.#suppressFocusInFromDraggable = false;
+      return;
+    }
+
     const target = event.target as Node | null;
     const activeTarget = this.#getActiveDomTarget();
     if (!activeTarget) {
@@ -4007,6 +4062,8 @@ export class PresentationEditor extends EventEmitter {
   };
 
   #handlePointerUp = (event: PointerEvent) => {
+    this.#suppressFocusInFromDraggable = false;
+
     if (!this.#isDragging) return;
 
     // Release pointer capture if we have it
@@ -4304,12 +4361,15 @@ export class PresentationEditor extends EventEmitter {
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
+        const commentsEnabled =
+          this.#documentMode !== 'viewing' || this.#layoutOptions.enableCommentsInViewing === true;
         const result = toFlowBlocks(docJson, {
           mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
           sectionMetadata,
           trackedChangesMode: this.#trackedChangesMode,
           enableTrackedChanges: this.#trackedChangesEnabled,
+          enableComments: commentsEnabled,
           enableRichHyperlinks: true,
           themeColors: this.#editor?.converter?.themeColors ?? undefined,
           converterContext,
@@ -4449,7 +4509,11 @@ export class PresentationEditor extends EventEmitter {
       );
       // Avoid MutationObserver overhead while repainting large DOM trees.
       this.#domIndexObserverManager?.pause();
-      painter.paint(layout, this.#painterHost);
+      // Pass the transaction mapping for efficient position attribute updates.
+      // Consumed here and cleared to prevent stale mappings on subsequent paints.
+      const mapping = this.#pendingMapping;
+      this.#pendingMapping = null;
+      painter.paint(layout, this.#painterHost, mapping ?? undefined);
       this.#applyVertAlignToLayout();
       this.#rebuildDomPositionIndex();
       this.#domIndexObserverManager?.resume();
@@ -4473,10 +4537,13 @@ export class PresentationEditor extends EventEmitter {
 
       // Emit fresh comment positions after layout completes.
       // This ensures positions are always in sync with the current document and layout.
-      const commentPositions = this.#collectCommentPositions();
-      const positionKeys = Object.keys(commentPositions);
-      if (positionKeys.length > 0) {
-        this.emit('commentPositions', { positions: commentPositions });
+      const allowViewingCommentPositions = this.#layoutOptions.emitCommentPositionsInViewing === true;
+      if (this.#documentMode !== 'viewing' || allowViewingCommentPositions) {
+        const commentPositions = this.#collectCommentPositions();
+        const positionKeys = Object.keys(commentPositions);
+        if (positionKeys.length > 0) {
+          this.emit('commentPositions', { positions: commentPositions });
+        }
       }
       if (this.#telemetryEmitter && metrics) {
         this.#telemetryEmitter({ type: 'layout', data: { layout, blocks, measures, metrics } });
@@ -4594,6 +4661,7 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
+    const { from, to } = selection;
     const docEpoch = this.#epochMapper.getCurrentEpoch();
     if (this.#layoutEpoch < docEpoch) {
       // The visible layout DOM does not match the current document state.
@@ -4616,7 +4684,6 @@ export class PresentationEditor extends EventEmitter {
       return;
     }
 
-    const { from, to } = selection;
     if (from === to) {
       const caretLayout = this.#computeCaretLayoutRect(from);
       if (!caretLayout) {
@@ -4943,12 +5010,37 @@ export class PresentationEditor extends EventEmitter {
         ? getHeaderFooterTypeForSection(pageNumber, sectionIndex, multiSectionId, { kind, sectionPageNumber })
         : getHeaderFooterType(pageNumber, legacyIdentifier, { kind });
 
-      const sectionRId =
-        page?.sectionRefs && kind === 'header'
-          ? (page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs] ?? undefined)
-          : page?.sectionRefs && kind === 'footer'
-            ? (page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs] ?? undefined)
-            : undefined;
+      // Resolve the section-specific rId for this header/footer variant.
+      // Implements Word's OOXML inheritance model:
+      //   1. Try current section's variant (e.g., 'first' header for first page with titlePg)
+      //   2. If not found, inherit from previous section's same variant
+      //   3. Final fallback: use current section's 'default' variant
+      // This ensures documents with multi-section layouts render correctly when sections
+      // don't explicitly define all header/footer variants (common in Word documents).
+      let sectionRId: string | undefined;
+      if (page?.sectionRefs && kind === 'header') {
+        sectionRId = page.sectionRefs.headerRefs?.[headerFooterType as keyof typeof page.sectionRefs.headerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionHeaderIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.headerRefs?.default;
+        }
+      } else if (page?.sectionRefs && kind === 'footer') {
+        sectionRId = page.sectionRefs.footerRefs?.[headerFooterType as keyof typeof page.sectionRefs.footerRefs];
+        // Step 2: Inherit from previous section if variant not found
+        if (!sectionRId && headerFooterType && headerFooterType !== 'default' && sectionIndex > 0 && multiSectionId) {
+          const prevSectionIds = multiSectionId.sectionFooterIds.get(sectionIndex - 1);
+          sectionRId = prevSectionIds?.[headerFooterType as keyof typeof prevSectionIds] ?? undefined;
+        }
+        // Step 3: Fall back to current section's 'default'
+        if (!sectionRId && headerFooterType !== 'default') {
+          sectionRId = page.sectionRefs.footerRefs?.default;
+        }
+      }
 
       if (!headerFooterType) {
         return null;
@@ -6263,7 +6355,8 @@ export class PresentationEditor extends EventEmitter {
     // Calculate actual document dimensions from per-page sizes.
     // Multi-section documents can have pages with different sizes (e.g., landscape pages).
     const pages = this.#layoutState.layout?.pages;
-    const pageGap = this.#layoutState.layout?.pageGap ?? this.#getEffectivePageGap();
+    // Always use current layout mode's gap - layout.pageGap may be stale if layoutMode changed
+    const pageGap = this.#getEffectivePageGap();
     const defaultWidth = this.#layoutOptions.pageSize?.w ?? DEFAULT_PAGE_SIZE.w;
     const defaultHeight = this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
 

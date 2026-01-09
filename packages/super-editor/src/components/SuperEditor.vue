@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { NSkeleton, useMessage } from 'naive-ui';
 import 'tippy.js/dist/tippy.css';
-import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, shallowRef, reactive, markRaw, computed, watch, nextTick } from 'vue';
 import { Editor } from '@superdoc/super-editor';
 import { PresentationEditor } from '@core/PresentationEditor.js';
 import { getStarterExtensions } from '@extensions/index.js';
@@ -93,6 +93,33 @@ watch(
   { immediate: true, deep: true },
 );
 
+watch(
+  () => props.options?.rulerContainer,
+  () => {
+    nextTick(() => {
+      syncRulerOffset();
+      setupRulerObservers();
+    });
+  },
+  { immediate: true },
+);
+
+watch(
+  rulersVisible,
+  (visible) => {
+    nextTick(() => {
+      if (visible) {
+        syncRulerOffset();
+        setupRulerObservers();
+      } else {
+        rulerHostStyle.value = {};
+        cleanupRulerObservers();
+      }
+    });
+  },
+  { immediate: true },
+);
+
 /**
  * Computed style for the container that scales min-width based on zoom.
  * Uses the maximum page width across all pages (for multi-section docs with landscape pages),
@@ -137,6 +164,91 @@ const containerStyle = computed(() => {
     minWidth: `${scaledWidth}px`,
   };
 });
+
+/**
+ * Inline style applied to the teleported ruler wrapper so it stays horizontally
+ * aligned with the visible document area (even when sidebars open/close).
+ */
+const rulerHostStyle = ref<Record<string, string>>({});
+const rulerContainerEl = ref<HTMLElement | null>(null);
+let editorResizeObserver: ResizeObserver | null = null;
+let rulerContainerResizeObserver: ResizeObserver | null = null;
+let layoutUpdatedHandler: (() => void) | null = null;
+
+const resolveRulerContainer = (): HTMLElement | null => {
+  const container = props.options?.rulerContainer;
+  if (!container) return null;
+
+  if (typeof container === 'string') {
+    const doc = editorWrapper.value?.ownerDocument ?? document;
+    return doc.querySelector(container);
+  }
+
+  return container instanceof HTMLElement ? container : null;
+};
+
+const getViewportRect = (): DOMRect | null => {
+  const host = editorWrapper.value;
+  if (!host) return null;
+  const viewport = host.querySelector('.presentation-editor__viewport') as HTMLElement | null;
+  const target = viewport ?? host;
+  return target.getBoundingClientRect();
+};
+
+const syncRulerOffset = () => {
+  if (!rulersVisible.value) {
+    rulerHostStyle.value = {};
+    return;
+  }
+
+  rulerContainerEl.value = resolveRulerContainer();
+  if (!rulerContainerEl.value) {
+    rulerHostStyle.value = {};
+    return;
+  }
+
+  const viewportRect = getViewportRect();
+  if (!viewportRect) return;
+
+  const hostRect = rulerContainerEl.value.getBoundingClientRect();
+  const paddingLeft = Math.max(0, viewportRect.left - hostRect.left);
+  const paddingRight = Math.max(0, hostRect.right - viewportRect.right);
+
+  rulerHostStyle.value = {
+    paddingLeft: `${paddingLeft}px`,
+    paddingRight: `${paddingRight}px`,
+  };
+};
+
+const cleanupRulerObservers = () => {
+  if (editorResizeObserver) {
+    editorResizeObserver.disconnect();
+    editorResizeObserver = null;
+  }
+
+  if (rulerContainerResizeObserver) {
+    rulerContainerResizeObserver.disconnect();
+    rulerContainerResizeObserver = null;
+  }
+};
+
+const setupRulerObservers = () => {
+  cleanupRulerObservers();
+  if (typeof ResizeObserver === 'undefined') return;
+
+  const viewportHost = editorWrapper.value;
+  const rulerHost = resolveRulerContainer();
+
+  if (viewportHost) {
+    editorResizeObserver = new ResizeObserver(() => syncRulerOffset());
+    editorResizeObserver.observe(viewportHost);
+  }
+
+  if (rulerHost) {
+    rulerContainerResizeObserver = new ResizeObserver(() => syncRulerOffset());
+    rulerContainerResizeObserver.observe(rulerHost);
+  }
+};
 
 const message = useMessage();
 
@@ -682,7 +794,7 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
       clearSelectedImage();
     });
 
-    presentationEditor.on('layoutUpdated', () => {
+    layoutUpdatedHandler = () => {
       if (imageResizeState.visible && imageResizeState.blockId) {
         // Re-acquire element reference (may have been recreated after re-render)
         const escapedBlockId = CSS.escape(imageResizeState.blockId);
@@ -720,17 +832,22 @@ const initEditor = async ({ content, media = {}, mediaFiles = {}, fonts = {} } =
           clearSelectedImage();
         }
       }
-    });
+
+      nextTick(() => syncRulerOffset());
+    };
+    presentationEditor.on('layoutUpdated', layoutUpdatedHandler);
 
     // Listen for zoom changes to update container sizing
     zoomChangeHandler = ({ zoom }) => {
       currentZoom.value = zoom;
+      nextTick(() => syncRulerOffset());
     };
     presentationEditor.on('zoomChange', zoomChangeHandler);
 
     // Initialize zoom from current state
     if (typeof presentationEditor.zoom === 'number') {
       currentZoom.value = presentationEditor.zoom;
+      nextTick(() => syncRulerOffset());
     }
   }
 
@@ -817,6 +934,11 @@ const handleSuperEditorClick = (event) => {
 onMounted(() => {
   initializeData();
   if (props.options?.suppressSkeletonLoader || !props.options?.collaborationProvider) editorReady.value = true;
+  window.addEventListener('resize', syncRulerOffset, { passive: true });
+  nextTick(() => {
+    syncRulerOffset();
+    setupRulerObservers();
+  });
 });
 
 /**
@@ -861,10 +983,29 @@ const handleMarginChange = ({ side, value }) => {
   const base = activeEditor.value;
   if (!base) return;
 
-  const pageStyles = base.getPageStyles();
-  const { pageMargins } = pageStyles;
-  const update = { ...pageMargins, [side]: value };
-  base?.updatePageStyle({ pageMargins: update });
+  const payload =
+    side === 'left'
+      ? { leftInches: value }
+      : side === 'right'
+        ? { rightInches: value }
+        : side === 'top'
+          ? { topInches: value }
+          : side === 'bottom'
+            ? { bottomInches: value }
+            : {};
+
+  const didUpdateSection =
+    typeof base.commands?.setSectionPageMarginsAtSelection === 'function'
+      ? base.commands.setSectionPageMarginsAtSelection(payload)
+      : false;
+
+  // Fallback to legacy behavior if section-aware command is unavailable or failed
+  if (!didUpdateSection) {
+    const pageStyles = base.getPageStyles();
+    const { pageMargins } = pageStyles;
+    const update = { ...pageMargins, [side]: value };
+    base?.updatePageStyle({ pageMargins: update });
+  }
 };
 
 onBeforeUnmount(() => {
@@ -876,6 +1017,13 @@ onBeforeUnmount(() => {
     editor.value.off('zoomChange', zoomChangeHandler);
     zoomChangeHandler = null;
   }
+  if (editor.value instanceof PresentationEditor && layoutUpdatedHandler) {
+    editor.value.off('layoutUpdated', layoutUpdatedHandler);
+    layoutUpdatedHandler = null;
+  }
+
+  cleanupRulerObservers();
+  window.removeEventListener('resize', syncRulerOffset);
 
   editor.value?.destroy();
   editor.value = null;
@@ -886,14 +1034,13 @@ onBeforeUnmount(() => {
   <div class="super-editor-container" :style="containerStyle">
     <!-- Ruler: teleport to external container if specified, otherwise render inline -->
     <Teleport v-if="options.rulerContainer && rulersVisible && !!activeEditor" :to="options.rulerContainer">
-      <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
+      <div class="ruler-host" :style="rulerHostStyle">
+        <Ruler class="ruler superdoc-ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
+      </div>
     </Teleport>
-    <Ruler
-      v-else-if="rulersVisible && !!activeEditor"
-      class="ruler"
-      :editor="activeEditor"
-      @margin-change="handleMarginChange"
-    />
+    <div v-else-if="rulersVisible && !!activeEditor" class="ruler-host" :style="rulerHostStyle">
+      <Ruler class="ruler" :editor="activeEditor" @margin-change="handleMarginChange" />
+    </div>
 
     <div
       class="super-editor"
@@ -983,6 +1130,13 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
+}
+
+.ruler-host {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .ruler {

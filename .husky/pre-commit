@@ -1,1 +1,1 @@
-npx lint-staged
+pnpm run type-check && npx lint-staged

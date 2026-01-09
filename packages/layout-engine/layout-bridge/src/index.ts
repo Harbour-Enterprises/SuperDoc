@@ -1489,6 +1489,7 @@ export function selectionToRects(
             isFirstLine,
             isListItem: isListItemFlag,
             markerWidth,
+            markerTextWidth: fragment.markerTextWidth ?? measure.marker?.markerTextWidth ?? undefined,
             paraIndentLeft: indent.left,
             firstLineIndent: indent.firstLine,
             hangingIndent: indent.hanging,
@@ -1715,6 +1716,7 @@ export function selectionToRects(
                   isFirstLine,
                   isListItem: cellIsListItem,
                   markerWidth: paragraphMarkerWidth,
+                  markerTextWidth: info.measure?.marker?.markerTextWidth ?? undefined,
                   paraIndentLeft: cellIndent.left,
                   firstLineIndent: cellIndent.firstLine,
                   hangingIndent: cellIndent.hanging,
@@ -2215,14 +2217,15 @@ const mapPointToPm = (
   const result = findCharacterAtX(block, line, x, range.pmStart, availableWidthOverride, alignmentOverride);
 
   // Handle RTL text by reversing the position
+  let pmPosition = result.pmPosition;
   if (isRTL) {
     const charOffset = result.charOffset;
     const charsInLine = Math.max(1, line.toChar - line.fromChar);
     const reversedOffset = Math.max(0, Math.min(charsInLine, charsInLine - charOffset));
-    return charOffsetToPm(block, line, reversedOffset, range.pmStart);
+    pmPosition = charOffsetToPm(block, line, reversedOffset, range.pmStart);
   }
 
-  return result.pmPosition;
+  return pmPosition;
 };
 
 /**
@@ -2263,14 +2266,29 @@ const mapPmToX = (
   // Type guard: Validate indent structure and ensure numeric values
   let paraIndentLeft = 0;
   let paraIndentRight = 0;
+  let effectiveLeft = 0;
   if (block.kind === 'paragraph') {
     const indentLeft = typeof block.attrs?.indent?.left === 'number' ? block.attrs.indent.left : 0;
     const indentRight = typeof block.attrs?.indent?.right === 'number' ? block.attrs.indent.right : 0;
     paraIndentLeft = Number.isFinite(indentLeft) ? indentLeft : 0;
     paraIndentRight = Number.isFinite(indentRight) ? indentRight : 0;
+    effectiveLeft = paraIndentLeft;
+    const wl = getWordLayoutConfig(block);
+    const isListParagraph = Boolean(block.attrs?.numberingProperties) || Boolean(wl?.marker);
+    if (isListParagraph) {
+      const explicitTextStart =
+        typeof wl?.marker?.textStartX === 'number' && Number.isFinite(wl.marker.textStartX)
+          ? wl.marker.textStartX
+          : typeof wl?.textStartPx === 'number' && Number.isFinite(wl.textStartPx)
+            ? wl.textStartPx
+            : undefined;
+      if (typeof explicitTextStart === 'number' && explicitTextStart > paraIndentLeft) {
+        effectiveLeft = explicitTextStart;
+      }
+    }
   }
 
-  const totalIndent = paraIndentLeft + paraIndentRight;
+  const totalIndent = effectiveLeft + paraIndentRight;
   const availableWidth = Math.max(0, fragmentWidth - totalIndent);
 
   // Validation: Warn when indents exceed fragment width (potential layout issue)

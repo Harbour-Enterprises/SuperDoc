@@ -657,9 +657,14 @@ const createOrUpdateTrackedChangeComment = ({ event, marks, deletionNodes, nodes
     if (hasMatchingId) nodesWithMark.push(node);
   });
 
+  const nodesToProcess = nodesWithMark.length ? nodesWithMark : node ? [node] : [];
+  if (!nodesToProcess.length) {
+    return;
+  }
+
   const { deletionText, trackedChangeText } = getTrackedChangeText({
     state: newEditorState,
-    nodes: nodesWithMark.length ? nodesWithMark : [node],
+    nodes: nodesToProcess,
     mark: trackedMark,
     marks,
     trackedChangeType,
@@ -711,6 +716,13 @@ function findRangeById(doc, id) {
     if (commentMark) {
       if (from === null || pos < from) from = pos;
       if (to === null || pos + node.nodeSize > to) to = pos + node.nodeSize;
+    }
+    // For resolved comments: check commentRangeStart/End nodes (marks are removed when resolved)
+    if (node.type.name === 'commentRangeStart' && node.attrs['w:id'] === id) {
+      from = pos;
+    }
+    if (node.type.name === 'commentRangeEnd' && node.attrs['w:id'] === id) {
+      to = pos;
     }
   });
   return from !== null && to !== null ? { from, to } : null;

@@ -624,6 +624,99 @@ describe('measureBlock', () => {
       expect(measure.lines[0].width).toBeGreaterThan(0);
     });
 
+    it('right-aligns multiple runs after an end tab stop as a group', async () => {
+      // This tests the "Page 1 of 2" footer scenario where multiple runs follow a right-aligned tab.
+      // All content after the tab should be treated as a unit for alignment purposes,
+      // matching Microsoft Word's behavior.
+      const multiRunBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'multi-run-end-tab',
+        runs: [
+          { kind: 'tab' } as Run,
+          { text: 'Page ', fontFamily: 'Arial', fontSize: 12 },
+          { text: '1', fontFamily: 'Arial', fontSize: 12, bold: true },
+          { text: ' of ', fontFamily: 'Arial', fontSize: 12 },
+          { text: '2', fontFamily: 'Arial', fontSize: 12, bold: true },
+        ],
+        attrs: {
+          tabs: [{ pos: 300, val: 'end' }],
+        },
+      };
+
+      // Single run version for comparison
+      const singleRunBlock: FlowBlock = {
+        kind: 'paragraph',
+        id: 'single-run-end-tab',
+        runs: [{ kind: 'tab' } as Run, { text: 'Page 1 of 2', fontFamily: 'Arial', fontSize: 12 }],
+        attrs: {
+          tabs: [{ pos: 300, val: 'end' }],
+        },
+      };
+
+      const multiRunMeasure = expectParagraphMeasure(await measureBlock(multiRunBlock, 400));
+      const singleRunMeasure = expectParagraphMeasure(await measureBlock(singleRunBlock, 400));
+
+      // Both should fit on a single line
+      expect(multiRunMeasure.lines).toHaveLength(1);
+      expect(singleRunMeasure.lines).toHaveLength(1);
+
+      // The line widths should be approximately equal (both end at the tab stop)
+      // The multi-run version should NOT wrap due to improper segment-by-segment alignment
+      expect(multiRunMeasure.lines[0].width).toBeCloseTo(singleRunMeasure.lines[0].width, 0);
+
+      // The first segment after the tab should have an explicit x position
+      const multiRunSegments = multiRunMeasure.lines[0].segments;
+      expect(multiRunSegments).toBeDefined();
+      expect(multiRunSegments!.length).toBeGreaterThan(1);
+
+      // Find the first text segment (after the tab run at index 0)
+      const firstTextSegment = multiRunSegments!.find((s) => s.runIndex > 0);
+      expect(firstTextSegment).toBeDefined();
+      expect(firstTextSegment!.x).toBeDefined();
+      // The x position should be less than the tab stop (content is right-aligned)
+      expect(firstTextSegment!.x).toBeLessThan(300);
+    });
+
+    it('positions leading spaces correctly in tab alignment groups', async () => {
+      // Regression test: leading spaces in runs after a tab must advance the X position.
+      // Bug: " of " run's leading space was positioned but didn't update activeTabGroup.currentX,
+      // causing "of " to overlap with the space at the same X position.
+      const block: FlowBlock = {
+        kind: 'paragraph',
+        id: 'space-positioning-test',
+        runs: [
+          { kind: 'tab' } as Run,
+          { text: 'A', fontFamily: 'Arial', fontSize: 12 },
+          { text: ' B', fontFamily: 'Arial', fontSize: 12 }, // Leading space before B
+        ],
+        attrs: {
+          tabs: [{ pos: 200, val: 'end' }],
+        },
+      };
+
+      const measure = expectParagraphMeasure(await measureBlock(block, 300));
+      expect(measure.lines).toHaveLength(1);
+
+      const segments = measure.lines[0].segments!;
+      // Should have: tab segment, "A" segment, " " (space) segment, "B" segment
+      // Find segments by content
+      const textSegments = segments.filter((s) => s.runIndex > 0);
+      expect(textSegments.length).toBeGreaterThanOrEqual(3); // A, space, B (at minimum)
+
+      // All text segments should have explicit X positions (in tab alignment group)
+      for (const seg of textSegments) {
+        expect(seg.x).toBeDefined();
+      }
+
+      // Verify segments don't overlap: each segment's X should be >= previous segment's X + width
+      for (let i = 1; i < textSegments.length; i++) {
+        const prev = textSegments[i - 1];
+        const curr = textSegments[i];
+        // Current X should be at or after previous segment ends
+        expect(curr.x).toBeGreaterThanOrEqual(prev.x! + prev.width - 0.5); // Allow small rounding tolerance
+      }
+    });
+
     it('converts spacing multipliers using the baseline line height', async () => {
       const fontSize = 16;
       const block: FlowBlock = {
@@ -673,7 +766,7 @@ describe('measureBlock', () => {
       expect(measure.lines[0].lineHeight).toBeCloseTo(2 * singleLineHeight, 1);
     });
 
-    it('treats large auto values as absolute pixel heights', async () => {
+    it('applies large auto values as multipliers', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'absolute-spacing',
@@ -690,7 +783,8 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      expect(measure.lines[0].lineHeight).toBeCloseTo(42, 3);
+      const singleLineHeight = 16 * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(42 * singleLineHeight, 1);
     });
 
     it('uses minimum line height for very small fonts', async () => {
