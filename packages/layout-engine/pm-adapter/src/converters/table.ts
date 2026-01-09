@@ -38,6 +38,7 @@ import { pickNumber, twipsToPx } from '../utilities.js';
 import { hydrateTableStyleAttrs } from './table-styles.js';
 import { collectTrackedChangeFromMarks } from '../marks/index.js';
 import { annotateBlockWithTrackedChange, shouldHideTrackedNode } from '../tracked-changes.js';
+import { resolveNodeSdtMetadata, applySdtMetadataToParagraphBlocks } from '../sdt/metadata.js';
 
 type ParagraphConverter = (
   node: PMNode,
@@ -317,6 +318,46 @@ const parseTableCell = (args: ParseTableCellArgs): TableCell | null => {
       if (drawingBlock && drawingBlock.kind === 'drawing') {
         blocks.push(drawingBlock);
       }
+      continue;
+    }
+
+    // Handle structuredContentBlock (SDT block-level content inside table cells)
+    if (childNode.type === 'structuredContentBlock' && Array.isArray(childNode.content)) {
+      if (!paragraphToFlowBlocks) continue;
+
+      // Resolve SDT metadata from the structuredContentBlock node
+      const sdtMetadata = resolveNodeSdtMetadata(childNode, 'structuredContentBlock');
+
+      // Process each child inside the structuredContentBlock
+      for (const sdtChild of childNode.content) {
+        if (sdtChild.type === 'paragraph') {
+          const paragraphBlocks = paragraphToFlowBlocks(
+            sdtChild,
+            context.nextBlockId,
+            context.positions,
+            context.defaultFont,
+            context.defaultSize,
+            context.styleContext,
+            listCounterContext,
+            context.trackedChanges,
+            context.bookmarks,
+            context.hyperlinkConfig,
+            context.themeColors,
+            cellConverterContext,
+          );
+          // Apply SDT metadata to the paragraph blocks
+          applySdtMetadataToParagraphBlocks(
+            paragraphBlocks.filter((b) => b.kind === 'paragraph') as ParagraphBlock[],
+            sdtMetadata,
+          );
+          paragraphBlocks.forEach((block) => {
+            if (block.kind === 'paragraph' || block.kind === 'image' || block.kind === 'drawing') {
+              blocks.push(block);
+            }
+          });
+        }
+      }
+      continue;
     }
   }
 

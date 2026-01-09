@@ -13,6 +13,7 @@ import { applyCellBorders } from './border-utils.js';
 import type { FragmentRenderContext } from '../renderer.js';
 import { applyParagraphBorderStyles, applyParagraphShadingStyles } from '../renderer.js';
 import { toCssFontFamily } from '@superdoc/font-utils';
+import { applySdtContainerStyling } from '../utils/sdt-helpers.js';
 
 /**
  * Default gap between list marker and text content in pixels.
@@ -550,6 +551,10 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
+
+        // Apply SDT container styling (document sections, structured content blocks)
+        applySdtContainerStyling(doc, paraWrapper, block.attrs?.sdt);
+
         applyParagraphBordersAndShading(paraWrapper, block as ParagraphBlock);
 
         // Apply paragraph-level border and shading styles (SD-1296)
