@@ -192,21 +192,22 @@ export const Image = Node.create({
       originalExtension: { rendered: false },
       originalSrc: { rendered: false },
 
-      shouldStretch: {
+      shouldCover: {
         default: false,
         rendered: false,
       },
 
       size: {
         default: {},
-        renderDOM: ({ size, shouldStretch }) => {
+        renderDOM: ({ size, shouldCover }) => {
           let style = '';
           let { width, height } = size ?? {};
           if (width) style += `width: ${width}px;`;
-          if (height && shouldStretch) {
-            // When shouldStretch is true (from <a:stretch><a:fillRect/>),
-            // stretch the image to fill both dimensions without preserving aspect ratio
-            style += `height: ${height}px; object-fit: fill;`;
+          if (height && shouldCover) {
+            // When shouldCover is true (from <a:stretch><a:fillRect/> with empty srcRect),
+            // scale the image to cover the extent and clip overflow (like MS Word)
+            // MS Word anchors to top-left corner, clipping from right/bottom
+            style += `height: ${height}px; object-fit: cover; object-position: left top;`;
           } else if (height) style += 'height: auto;';
           return { style };
         },

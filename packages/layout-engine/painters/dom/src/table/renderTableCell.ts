@@ -440,6 +440,10 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         imgEl.style.width = '100%';
         imgEl.style.height = '100%';
         imgEl.style.objectFit = block.objectFit ?? 'contain';
+        // MS Word anchors stretched images to top-left, clipping from right/bottom
+        if (block.objectFit === 'cover') {
+          imgEl.style.objectPosition = 'left top';
+        }
         imgEl.style.display = 'block';
 
         imageWrapper.appendChild(imgEl);
@@ -473,6 +477,10 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
           img.style.width = '100%';
           img.style.height = '100%';
           img.style.objectFit = block.objectFit ?? 'contain';
+          // MS Word anchors stretched images to top-left, clipping from right/bottom
+          if (block.objectFit === 'cover') {
+            img.style.objectPosition = 'left top';
+          }
           drawingInner.appendChild(img);
         } else if (renderDrawingContent) {
           // Use the callback for other drawing types (vectorShape, shapeGroup, etc.)

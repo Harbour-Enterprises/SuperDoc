@@ -2715,7 +2715,10 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
     ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
       (typeof block.margin?.top === 'number' && block.margin.top < 0));
 
-  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'fill';
+  // Bypass height constraint when:
+  // - Image has negative vertical positioning (designed to overflow container)
+  // - objectFit is 'cover' (image should render at exact extent dimensions, CSS handles content scaling/clipping)
+  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'cover';
 
   const maxHeight =
     shouldBypassHeightConstraint || !constraints.maxHeight || constraints.maxHeight <= 0

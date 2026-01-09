@@ -2505,16 +2505,17 @@ describe('measureBlock', () => {
         expect(measure.width).toBe(100);
       });
 
-      it('bypasses maxHeight when objectFit is set to fill', async () => {
+      it('bypasses maxHeight when objectFit is set to cover', async () => {
         const block: FlowBlock = {
           kind: 'image',
-          id: 'img-fill-fit',
+          id: 'img-cover-fit',
           src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
           width: 200,
           height: 100,
-          objectFit: 'fill',
+          objectFit: 'cover',
         };
 
+        // objectFit: cover should render at exact dimensions, CSS handles content scaling/clipping
         const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 40 }));
         expect(measure.width).toBe(200);
         expect(measure.height).toBe(100);

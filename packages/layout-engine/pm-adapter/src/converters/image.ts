@@ -247,13 +247,13 @@ export function imageNodeToBlock(
     explicitDisplay === 'inline' || explicitDisplay === 'block' ? explicitDisplay : isInline ? 'inline' : 'block';
 
   const explicitObjectFit = typeof attrs.objectFit === 'string' ? (attrs.objectFit as string) : undefined;
-  const shouldStretchFill = attrs.shouldStretch === true;
+  const shouldCover = attrs.shouldCover === true;
   const isAnchor = anchor?.isAnchored ?? (typeof attrs.isAnchor === 'boolean' ? attrs.isAnchor : false);
 
   const objectFit: 'contain' | 'cover' | 'fill' | 'scale-down' | undefined = isAllowedObjectFit(explicitObjectFit)
     ? explicitObjectFit
-    : shouldStretchFill
-      ? 'fill'
+    : shouldCover
+      ? 'cover'
       : display === 'inline'
         ? 'scale-down'
         : isAnchor
