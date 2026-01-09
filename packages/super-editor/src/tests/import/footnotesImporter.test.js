@@ -10,6 +10,23 @@ const collectNodeTypes = (node, types = []) => {
   return types;
 };
 
+const extractPlainText = (nodes) => {
+  if (!Array.isArray(nodes) || nodes.length === 0) return '';
+  const parts = [];
+  const walk = (node) => {
+    if (!node) return;
+    if (node.type === 'text' && typeof node.text === 'string') {
+      parts.push(node.text);
+      return;
+    }
+    if (Array.isArray(node.content)) {
+      node.content.forEach(walk);
+    }
+  };
+  nodes.forEach(walk);
+  return parts.join('').replace(/\s+/g, ' ').trim();
+};
+
 describe('footnotes import', () => {
   it('imports w:footnoteReference and loads matching footnotes.xml entry', () => {
     const documentXml =
@@ -40,17 +57,12 @@ describe('footnotes import', () => {
     expect(result).toBeTruthy();
 
     expect(Array.isArray(result.footnotes)).toBe(true);
-    expect(result.footnotes).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          id: '1',
-          text: 'Footnote text',
-        }),
-      ]),
-    );
+    const footnote = result.footnotes.find((f) => f?.id === '1');
+    expect(footnote).toBeTruthy();
+    expect(Array.isArray(footnote.content)).toBe(true);
+    expect(extractPlainText(footnote.content)).toBe('Footnote text');
 
     const types = collectNodeTypes(result.pmDoc);
     expect(types).toContain('footnoteReference');
   });
 });
-

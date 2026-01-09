@@ -31,7 +31,7 @@ const encode = (_, encodedAttrs) => {
  * @returns {import('@translator').SCDecoderResult}
  */
 const decode = (_params, decodedAttrs) => {
-  const ref = { name: XML_NODE_NAME };
+  const ref = { name: XML_NODE_NAME, elements: [] };
   if (decodedAttrs && Object.keys(decodedAttrs).length > 0) {
     ref.attributes = { ...decodedAttrs };
   }

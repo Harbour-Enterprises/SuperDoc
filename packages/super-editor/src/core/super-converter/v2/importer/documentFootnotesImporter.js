@@ -1,28 +1,6 @@
 import { defaultNodeListHandler } from './docxImporter';
 
 /**
- * Extract plain text from imported ProseMirror JSON nodes.
- * @param {Array<{type: string, text?: string, content?: any[]}>} nodes
- * @returns {string}
- */
-const extractPlainText = (nodes) => {
-  if (!Array.isArray(nodes) || nodes.length === 0) return '';
-  const parts = [];
-  const walk = (node) => {
-    if (!node) return;
-    if (node.type === 'text' && typeof node.text === 'string') {
-      parts.push(node.text);
-      return;
-    }
-    if (Array.isArray(node.content)) {
-      node.content.forEach(walk);
-    }
-  };
-  nodes.forEach(walk);
-  return parts.join('').replace(/\s+/g, ' ').trim();
-};
-
-/**
  * Remove w:footnoteRef placeholders from converted footnote content.
  * In OOXML footnotes, the first run often includes a w:footnoteRef marker which
  * Word uses to render the footnote number. We render numbering ourselves.
@@ -63,7 +41,7 @@ const stripFootnoteMarkerNodes = (nodes) => {
  * @param {SuperConverter} params.converter The super converter instance
  * @param {Editor} params.editor The editor instance
  * @param {Object} [params.numbering] Numbering definitions (optional)
- * @returns {Array<{id: string, content: any[], text: string}>}
+ * @returns {Array<{id: string, content: any[]}>}
  */
 export function importFootnoteData({ docx, editor, converter, nodeListHandler, numbering } = {}) {
   const handler = nodeListHandler || defaultNodeListHandler();
@@ -107,7 +85,6 @@ export function importFootnoteData({ docx, editor, converter, nodeListHandler, n
     results.push({
       id,
       content: stripped,
-      text: extractPlainText(stripped),
     });
   });
 
