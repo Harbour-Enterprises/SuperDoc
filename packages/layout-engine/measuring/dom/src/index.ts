@@ -671,9 +671,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const WIDTH_FUDGE_PX = 0.5;
   const WORD_WIDTH_TOLERANCE_PX = 12;
   const lines: Line[] = [];
-  const logLinePush = (line: Line, location: string): void => {
-    lines.push(line);
-  };
   const indent = block.attrs?.indent;
   const spacing = block.attrs?.spacing;
   // Use sanitizeIndent (not sanitizePositive) to allow negative values.
@@ -818,7 +815,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       ...metrics,
     };
     addBarTabsToLine(emptyLine);
-    logLinePush(emptyLine, 'emptyParagraph');
+    lines.push(emptyLine);
 
     return {
       kind: 'paragraph',
@@ -1065,7 +1062,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const lineBase = currentLine;
         const completedLine: Line = { ...lineBase, ...metrics };
         addBarTabsToLine(completedLine);
-        logLinePush(completedLine, 'break-with-currentLine');
+        lines.push(completedLine);
         currentLine = null;
       } else {
         const textRunWithSize = block.runs.find(
@@ -1084,7 +1081,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ...metrics,
         };
         addBarTabsToLine(emptyLine);
-        logLinePush(emptyLine, 'break-empty');
+        lines.push(emptyLine);
       }
       tabStopCursor = 0;
       pendingTabAlignment = null;
@@ -1102,7 +1099,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ...metrics,
         };
         addBarTabsToLine(completedLine);
-        logLinePush(completedLine, 'lineBreak-with-currentLine');
+        lines.push(completedLine);
       } else {
         // Line break at the start of paragraph (no currentLine yet):
         // Create an empty line to represent the leading line break
@@ -1118,7 +1115,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ...metrics,
         };
         addBarTabsToLine(emptyLine);
-        logLinePush(emptyLine, 'lineBreak-empty');
+        lines.push(emptyLine);
       }
 
       // Start a fresh (currently empty) line after the break. If no further content
@@ -1313,7 +1310,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ...metrics,
         };
         addBarTabsToLine(completedLine);
-        logLinePush(completedLine, 'image-wrap');
+        lines.push(completedLine);
         tabStopCursor = 0;
         pendingTabAlignment = null;
         lastAppliedTabAlign = null;
@@ -1445,7 +1442,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           ...metrics,
         };
         addBarTabsToLine(completedLine);
-        logLinePush(completedLine, 'annotation-wrap');
+        lines.push(completedLine);
         tabStopCursor = 0;
         pendingTabAlignment = null;
         lastAppliedTabAlign = null;
@@ -1549,7 +1546,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               ...metrics,
             };
             addBarTabsToLine(completedLine);
-            logLinePush(completedLine, 'space-wrap');
+            lines.push(completedLine);
             tabStopCursor = 0;
             pendingTabAlignment = null;
             lastAppliedTabAlign = null;
@@ -1661,7 +1658,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               const lineBase = currentLine;
               const completedLine: Line = { ...lineBase, ...metrics };
               addBarTabsToLine(completedLine);
-              logLinePush(completedLine, 'single-space-wrap');
+              lines.push(completedLine);
               tabStopCursor = 0;
               pendingTabAlignment = null;
               lastAppliedTabAlign = null;
@@ -1741,7 +1738,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             const lineBase = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
             addBarTabsToLine(completedLine);
-            logLinePush(completedLine, 'pre-long-word');
+            lines.push(completedLine);
             tabStopCursor = 0;
             pendingTabAlignment = null;
             currentLine = null;
@@ -1806,7 +1803,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
                 const lineBase = currentLine;
                 const completedLine: Line = { ...lineBase, ...metrics };
                 addBarTabsToLine(completedLine);
-                logLinePush(completedLine, 'long-word-chunk');
+                lines.push(completedLine);
                 tabStopCursor = 0;
                 pendingTabAlignment = null;
                 currentLine = null;
@@ -1854,7 +1851,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
                 ...metrics,
               };
               addBarTabsToLine(chunkLine);
-              logLinePush(chunkLine, 'long-word-standalone-chunk');
+              lines.push(chunkLine);
             }
             chunkCharOffset = chunkEndChar;
           }
@@ -1955,7 +1952,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             ...metrics,
           };
           addBarTabsToLine(completedLine);
-          logLinePush(completedLine, 'shouldBreak');
+          lines.push(completedLine);
           tabStopCursor = 0;
           pendingTabAlignment = null;
 
@@ -2019,7 +2016,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             const lineBase = currentLine;
             const completedLine: Line = { ...lineBase, ...metrics };
             addBarTabsToLine(completedLine);
-            logLinePush(completedLine, 'word-wrap-space');
+            lines.push(completedLine);
             tabStopCursor = 0;
             pendingTabAlignment = null;
             currentLine = null;
@@ -2129,114 +2126,6 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
-
-        // Note: Bar tabs are now added at paragraph-level via addBarTabsToLine()
-        // (OOXML spec: bars appear on all lines, not just where tab chars occur)
-
-        /* Build hyphen-aware segments: keep '-' with the left part to allow a wrap like "two-" | "column"
-      const parts = word.split('-');
-      const segments: string[] = [];
-      for (let i = 0; i < parts.length; i += 1) {
-        const last = i === parts.length - 1;
-        segments.push(last ? parts[i] : parts[i] + '-');
-      }
-
-      for (let segIndex = 0; segIndex < segments.length; segIndex++) {
-        const segText = segments[segIndex];
-        const isLastSegmentOfWord = segIndex === segments.length - 1;
-
-        // Width for fit check (no trailing space)
-        const segOnlyWidth = measureText(segText, font, ctx, fontFamily, letterSpacing);
-        // Width for commit: include trailing space only for last segment of a word that is not the last word
-        const fullSegmentText = isLastSegmentOfWord && !isLastWord ? segText + ' ' : segText;
-        const fullSegmentWidth = measureText(fullSegmentText, font, ctx, fontFamily, letterSpacing);
-
-        const segStartChar = charPosInRun;
-        const segEndChar = charPosInRun + fullSegmentText.length;
-
-        // Initialize line if needed
-        if (!currentLine) {
-          currentLine = {
-            fromRun: runIndex,
-            fromChar: segStartChar,
-            toRun: runIndex,
-            toChar: segEndChar,
-            width: fullSegmentWidth,
-            maxFontSize: run.fontSize,
-          };
-          charPosInRun = segEndChar;
-          continue;
-        }
-
-        const boundarySpacing = currentLine.width > 0 ? letterSpacing : 0;
-        // Small safety margin for floating-point precision and minor measurement variations
-        const SAFETY_MARGIN_PX = 0.25;
-        const wouldFit =
-          currentLine.width + boundarySpacing + segOnlyWidth + SAFETY_MARGIN_PX <= maxWidth ||
-          currentLine.width === 0;
-
-        if (!wouldFit) {
-          // Finish current line before adding this segment
-          trimTrailingSpace(currentLine);
-          const metrics = calculateTypographyMetrics(currentLine.maxFontSize);
-          const completedLine = {
-            ...currentLine,
-            ...metrics,
-          };
-          logLinePush(completedLine, 'segment-wrap');
-
-          // Start new line with this segment
-          currentLine = {
-            fromRun: runIndex,
-            fromChar: segStartChar,
-            toRun: runIndex,
-            toChar: segEndChar,
-            width: fullSegmentWidth,
-            maxFontSize: run.fontSize,
-          };
-        } else {
-          // Append segment to current line
-          const prevToRun = currentLine.toRun;
-          const prevToChar = currentLine.toChar;
-          const prevWidth = currentLine.width;
-
-          currentLine.toRun = runIndex;
-          currentLine.toChar = segEndChar;
-          currentLine.width += boundarySpacing + fullSegmentWidth;
-          currentLine.maxFontSize = Math.max(currentLine.maxFontSize, run.fontSize);
-
-          // Safety: if we exceeded maxWidth after appending (e.g., trailing space pushed us over),
-          // revert and wrap this segment to next line instead
-          if (currentLine.width > maxWidth) {
-            // Undo the append
-            currentLine.toRun = prevToRun;
-            currentLine.toChar = prevToChar;
-            currentLine.width = prevWidth;
-
-            // Finish current line
-            trimTrailingSpace(currentLine);
-            const metrics = calculateTypographyMetrics(currentLine.maxFontSize);
-            const completedLine = {
-              ...currentLine,
-              ...metrics,
-            };
-            logLinePush(completedLine, 'segment-overflow');
-
-            // Start new line with this segment
-            currentLine = {
-              fromRun: runIndex,
-              fromChar: segStartChar,
-              toRun: runIndex,
-              toChar: segEndChar,
-              width: fullSegmentWidth,
-              maxFontSize: run.fontSize,
-            };
-          }
-        }
-
-        // Advance position within the run
-        charPosInRun = segEndChar;
-*/
       }
     }
 
@@ -2256,7 +2145,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       ...metrics,
     };
     addBarTabsToLine(fallbackLine);
-    logLinePush(fallbackLine, 'fallback');
+    lines.push(fallbackLine);
   }
 
   if (currentLine) {
@@ -2267,7 +2156,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       ...metrics,
     };
     addBarTabsToLine(finalLine);
-    logLinePush(finalLine, 'final');
+    lines.push(finalLine);
   }
 
   const totalHeight = lines.reduce((sum, line) => sum + line.lineHeight, 0);
