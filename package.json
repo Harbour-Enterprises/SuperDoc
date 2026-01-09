@@ -11,7 +11,7 @@
     "test:editor": "vitest run --root ./packages/super-editor",
     "test:superdoc": "vitest run --root ./packages/superdoc",
     "test:cov": "node scripts/test-cov.mjs",
-    "type-check": "node ./scripts/type-check-all.mjs",
+    "type-check": "tsc -b tsconfig.references.json",
     "validate:commands": "node scripts/validate-command-types.mjs",
     "unzip": "bash packages/super-editor/src/tests/helpers/unzip.sh",
     "dev": "pnpm --prefix packages/superdoc run dev",
