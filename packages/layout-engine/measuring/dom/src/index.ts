@@ -755,7 +755,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return measureText(markerText, markerFont, ctx);
     },
   );
-  const effectiveTextStartPx = resolvedTextStartPx ?? textStartPx;
+  const effectiveTextStartPx =
+    typeof textStartPx === 'number' && Number.isFinite(textStartPx) ? textStartPx : resolvedTextStartPx;
 
   if (typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft) {
     // textStartPx indicates where text actually starts on the first line (after marker + tab/space).

@@ -3680,6 +3680,56 @@ describe('measureBlock', () => {
     });
   });
 
+  describe('Word-style first-line tolerance', () => {
+    const indentLeft = 48;
+    const baseText = '1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21 22 23 24 25 26 27 28 is a line';
+
+    const makeBlock = (text: string): FlowBlock => ({
+      kind: 'paragraph',
+      id: `word-first-line-${text.length}`,
+      runs: [
+        {
+          text,
+          fontFamily: 'Arial',
+          fontSize: 16,
+        },
+      ],
+      attrs: {
+        indent: { left: indentLeft },
+      },
+    });
+
+    it('allows slightly wider first lines to stay intact', async () => {
+      const wideBlock = makeBlock(baseText);
+      const wideMeasure = expectParagraphMeasure(await measureBlock(wideBlock, 2000));
+      const baseWidth = wideMeasure.lines[0].width;
+      const constrainedWidth = baseWidth - 6; // Requires >0.5px tolerance to keep on one line
+      const maxWidth = constrainedWidth + indentLeft;
+
+      const constrainedBlock = makeBlock(baseText);
+      const constrainedMeasure = expectParagraphMeasure(await measureBlock(constrainedBlock, maxWidth));
+      expect(constrainedMeasure.lines).toHaveLength(1);
+      expect(extractLineText(constrainedBlock, constrainedMeasure.lines[0]).trim()).toBe(baseText);
+      expect(constrainedMeasure.lines[0].width).toBeGreaterThan(constrainedMeasure.lines[0].maxWidth);
+      expect(constrainedMeasure.lines[0].maxWidth).toBeCloseTo(constrainedWidth, 1);
+    });
+
+    it('does not extend tolerance to the second line', async () => {
+      const baseBlock = makeBlock(baseText);
+      const block = makeBlock(`${baseText} ${baseText}`);
+      const wideMeasure = expectParagraphMeasure(await measureBlock(baseBlock, 2000));
+      const baseWidth = wideMeasure.lines[0].width;
+      const constrainedWidth = baseWidth - 6;
+      const maxWidth = constrainedWidth + indentLeft;
+
+      const measure = expectParagraphMeasure(await measureBlock(block, maxWidth));
+      expect(measure.lines.length).toBeGreaterThan(1);
+      expect(extractLineText(block, measure.lines[0]).trim()).toBe(baseText);
+      // Second line should not be able to keep the entire second copy (tolerance reset)
+      expect(measure.lines[1].width).toBeLessThan(baseWidth - 1);
+    });
+  });
+
   describe('percentage table width (SD-1239)', () => {
     it('scales column widths to 100% of available width when tableWidth type is pct with value 5000', async () => {
       const block: FlowBlock = {
