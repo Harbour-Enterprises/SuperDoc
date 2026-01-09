@@ -1,3 +1,25 @@
+# [1.4.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0...v1.4.0) (2026-01-09)
+
+
+### Bug Fixes
+
+* **ai:** use semver range for superdoc peer dependency ([#1684](https://github.com/Harbour-Enterprises/SuperDoc/issues/1684)) ([f9f9e20](https://github.com/Harbour-Enterprises/SuperDoc/commit/f9f9e20ed0c340b3bf009aa3598f98640a4971eb))
+* caret in lists ([#1683](https://github.com/Harbour-Enterprises/SuperDoc/issues/1683)) ([c7b9847](https://github.com/Harbour-Enterprises/SuperDoc/commit/c7b984783eee79698d74617e26c5f6eeb76d4a6d))
+* **comments:** preserve resolved comment status and range on export ([#1674](https://github.com/Harbour-Enterprises/SuperDoc/issues/1674)) ([390e40a](https://github.com/Harbour-Enterprises/SuperDoc/commit/390e40afc2358e7ad4f1f90e9c6ea3044f94ec73))
+* correctly position vector shape relative to paragraph ([#1687](https://github.com/Harbour-Enterprises/SuperDoc/issues/1687)) ([4c38cb9](https://github.com/Harbour-Enterprises/SuperDoc/commit/4c38cb9145c2256f2ff289338fb5cf58ecf3a4c7))
+* examples screenshots ([2867e4d](https://github.com/Harbour-Enterprises/SuperDoc/commit/2867e4d044b14f6cc5222cc757bfa9ec17859220))
+* examples tests ([#1691](https://github.com/Harbour-Enterprises/SuperDoc/issues/1691)) ([8abcdc1](https://github.com/Harbour-Enterprises/SuperDoc/commit/8abcdc106e00a85faa51063d8f68c362201a3730))
+* **layout:** treat auto line spacing as 240ths multipliers ([#1690](https://github.com/Harbour-Enterprises/SuperDoc/issues/1690)) ([1673543](https://github.com/Harbour-Enterprises/SuperDoc/commit/1673543580467a27af57791243999b77d1756a63))
+* pass w:vanish through to layout engine ([#1696](https://github.com/Harbour-Enterprises/SuperDoc/issues/1696)) ([2c0ba9c](https://github.com/Harbour-Enterprises/SuperDoc/commit/2c0ba9ceb783226ffe966547b39b1ea8a5a8da10))
+* performance - exclude pmStart/pmEnd from fragment change detection ([#1651](https://github.com/Harbour-Enterprises/SuperDoc/issues/1651)) ([4502422](https://github.com/Harbour-Enterprises/SuperDoc/commit/45024222ef98fe8bc808bce4cdfad7f0464df1cc))
+* tab spacing for toc ([#1695](https://github.com/Harbour-Enterprises/SuperDoc/issues/1695)) ([7e24eaa](https://github.com/Harbour-Enterprises/SuperDoc/commit/7e24eaa90f12ac08b57e75ee4901bac8ef7e4ec4))
+
+
+### Features
+
+* **comments:** add ability to view comments and tc in viewing mode ([#1688](https://github.com/Harbour-Enterprises/SuperDoc/issues/1688)) ([86d44f5](https://github.com/Harbour-Enterprises/SuperDoc/commit/86d44f5abdff5c9183c40a227471aae62e632b50))
+* render watermarks ([#1694](https://github.com/Harbour-Enterprises/SuperDoc/issues/1694)) ([01a25af](https://github.com/Harbour-Enterprises/SuperDoc/commit/01a25af9b0abb31d94ce9887d708a2d9dc4f11f8))
+
 # [1.4.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0-next.2...v1.4.0-next.3) (2026-01-09)
 
 
