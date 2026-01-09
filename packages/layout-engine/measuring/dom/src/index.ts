@@ -3165,7 +3165,8 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
   }
 
   const raw = spacing.line;
-  const treatAsMultiplier = (spacing.lineRule === 'auto' || spacing.lineRule == null) && raw > 0 && raw <= 10;
+  const isAuto = spacing.lineRule === 'auto';
+  const treatAsMultiplier = (isAuto || spacing.lineRule == null) && raw > 0 && (isAuto || raw <= 10);
 
   if (treatAsMultiplier) {
     return raw * baseLineHeight;

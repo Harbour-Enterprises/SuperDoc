@@ -1,3 +1,18 @@
+# [1.4.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.3...v1.4.0-next.1) (2026-01-09)
+
+
+### Bug Fixes
+
+* **ai:** use semver range for superdoc peer dependency ([#1684](https://github.com/Harbour-Enterprises/SuperDoc/issues/1684)) ([f9f9e20](https://github.com/Harbour-Enterprises/SuperDoc/commit/f9f9e20ed0c340b3bf009aa3598f98640a4971eb))
+* examples screenshots ([2867e4d](https://github.com/Harbour-Enterprises/SuperDoc/commit/2867e4d044b14f6cc5222cc757bfa9ec17859220))
+* examples tests ([#1691](https://github.com/Harbour-Enterprises/SuperDoc/issues/1691)) ([8abcdc1](https://github.com/Harbour-Enterprises/SuperDoc/commit/8abcdc106e00a85faa51063d8f68c362201a3730))
+* **layout:** treat auto line spacing as 240ths multipliers ([#1690](https://github.com/Harbour-Enterprises/SuperDoc/issues/1690)) ([1673543](https://github.com/Harbour-Enterprises/SuperDoc/commit/1673543580467a27af57791243999b77d1756a63))
+
+
+### Features
+
+* **comments:** add ability to view comments and tc in viewing mode ([#1688](https://github.com/Harbour-Enterprises/SuperDoc/issues/1688)) ([86d44f5](https://github.com/Harbour-Enterprises/SuperDoc/commit/86d44f5abdff5c9183c40a227471aae62e632b50))
+
 ## [1.3.1-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.1-next.2...v1.3.1-next.3) (2026-01-08)
 
 

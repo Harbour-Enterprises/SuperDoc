@@ -766,7 +766,7 @@ describe('measureBlock', () => {
       expect(measure.lines[0].lineHeight).toBeCloseTo(2 * singleLineHeight, 1);
     });
 
-    it('treats large auto values as absolute pixel heights', async () => {
+    it('applies large auto values as multipliers', async () => {
       const block: FlowBlock = {
         kind: 'paragraph',
         id: 'absolute-spacing',
@@ -783,7 +783,8 @@ describe('measureBlock', () => {
       };
 
       const measure = expectParagraphMeasure(await measureBlock(block, 400));
-      expect(measure.lines[0].lineHeight).toBeCloseTo(42, 3);
+      const singleLineHeight = 16 * 1.15;
+      expect(measure.lines[0].lineHeight).toBeCloseTo(42 * singleLineHeight, 1);
     });
 
     it('uses minimum line height for very small fonts', async () => {
