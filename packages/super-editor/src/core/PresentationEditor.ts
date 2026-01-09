@@ -2990,6 +2990,49 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  #resolveFieldAnnotationSelectionFromElement(
+    annotationEl: HTMLElement,
+  ): { node: ProseMirrorNode; pos: number } | null {
+    const pmStartRaw = annotationEl.dataset?.pmStart;
+    if (pmStartRaw == null) {
+      return null;
+    }
+
+    const pmStart = Number(pmStartRaw);
+    if (!Number.isFinite(pmStart)) {
+      return null;
+    }
+
+    const doc = this.#editor.state?.doc;
+    if (!doc) {
+      return null;
+    }
+
+    const layoutEpochRaw = annotationEl.dataset?.layoutEpoch;
+    const layoutEpoch = layoutEpochRaw != null ? Number(layoutEpochRaw) : NaN;
+    const effectiveEpoch = Number.isFinite(layoutEpoch) ? layoutEpoch : this.#epochMapper.getCurrentEpoch();
+    const mapped = this.#epochMapper.mapPosFromLayoutToCurrentDetailed(pmStart, effectiveEpoch, 1);
+    if (!mapped.ok) {
+      const fallbackPos = Math.max(0, Math.min(pmStart, doc.content.size));
+      const fallbackNode = doc.nodeAt(fallbackPos);
+      if (fallbackNode?.type?.name === 'fieldAnnotation') {
+        return { node: fallbackNode, pos: fallbackPos };
+      }
+
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+      return null;
+    }
+
+    const clampedPos = Math.max(0, Math.min(mapped.pos, doc.content.size));
+    const node = doc.nodeAt(clampedPos);
+    if (!node || node.type.name !== 'fieldAnnotation') {
+      return null;
+    }
+
+    return { node, pos: clampedPos };
+  }
+
   #setupInputBridge() {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
@@ -3104,8 +3147,33 @@ export class PresentationEditor extends EventEmitter {
       linkEl.dispatchEvent(linkClickEvent);
       return;
     }
+
+    const annotationEl = target?.closest?.('.annotation[data-pm-start]') as HTMLElement | null;
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
     this.#suppressFocusInFromDraggable = isDraggableAnnotation;
+
+    if (annotationEl) {
+      if (!this.#editor.isEditable) {
+        return;
+      }
+
+      const resolved = this.#resolveFieldAnnotationSelectionFromElement(annotationEl);
+      if (resolved) {
+        try {
+          const tr = this.#editor.state.tr.setSelection(NodeSelection.create(this.#editor.state.doc, resolved.pos));
+          this.#editor.view?.dispatch(tr);
+        } catch {}
+
+        this.#editor.emit('fieldAnnotationClicked', {
+          editor: this.#editor,
+          node: resolved.node,
+          nodePos: resolved.pos,
+          event,
+          currentTarget: annotationEl,
+        });
+      }
+      return;
+    }
 
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
