@@ -680,12 +680,10 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   const firstLine = indent?.firstLine ?? 0;
   const hanging = indent?.hanging ?? 0;
   const isWordLayoutList = Boolean(wordLayout?.marker);
+  const hasNonEmptyIndent = indentLeft !== 0 || indentRight !== 0 || firstLine !== 0 || hanging !== 0;
+  const hasEmptyLines = lines.length === 0;
   const resolveWidthTolerance = (): number =>
-    !isWordLayoutList &&
-    (indentLeft !== 0 || indentRight !== 0 || firstLine !== 0 || hanging !== 0) &&
-    lines.length === 0
-      ? -WORD_WIDTH_TOLERANCE_PX
-      : WIDTH_FUDGE_PX;
+    !isWordLayoutList && hasNonEmptyIndent && hasEmptyLines ? -WORD_WIDTH_TOLERANCE_PX : WIDTH_FUDGE_PX;
   // Word quirk: justified paragraphs ignore first-line indent. The pm-adapter sets
   // suppressFirstLineIndent=true for these cases.
   const suppressFirstLine = (block.attrs as Record<string, unknown>)?.suppressFirstLineIndent === true;
