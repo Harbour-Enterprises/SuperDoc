@@ -839,6 +839,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   let lastFontSize = 12;
   let tabStopCursor = 0;
   let pendingTabAlignment: { target: number; val: TabStop['val'] } | null = null;
+  let pendingRunSpacing = 0;
   // Remember the last applied tab alignment so we can clamp end-aligned
   // segments to the exact target after measuring to avoid 1px drift.
   let lastAppliedTabAlign: { target: number; val: TabStop['val'] } | null = null;
@@ -880,6 +881,11 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       return false;
     }
     return true;
+  };
+
+  const resolveBoundarySpacing = (lineWidth: number, isRunStart: boolean, run: TextRun): number => {
+    if (lineWidth <= 0) return 0;
+    return isRunStart ? pendingRunSpacing : (run.letterSpacing ?? 0);
   };
 
   /**
@@ -1067,6 +1073,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1119,6 +1126,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       tabStopCursor = 0;
       pendingTabAlignment = null;
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1144,10 +1152,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
       // Advance to next tab stop using the same logic as inline "\t" handling
       const originX = currentLine.width;
-      const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+      // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+      const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+      const absCurrentX = currentLine.width + effectiveIndent;
+      const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
       tabStopCursor = nextIndex;
-      const clampedTarget = Math.min(target, currentLine.maxWidth);
-      const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
+      const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+      const clampedTarget = Math.min(target, maxAbsWidth);
+      const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
       currentLine.width = roundValue(currentLine.width + tabAdvance);
       // Persist measured tab width on the TabRun for downstream consumers/tests
       (run as TabRun & { width?: number }).width = tabAdvance;
@@ -1159,8 +1171,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       // Emit leader decoration if requested
       if (stop && stop.leader && stop.leader !== 'none') {
         const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' | 'middleDot' = stop.leader;
-        const from = Math.min(originX, clampedTarget);
-        const to = Math.max(originX, clampedTarget);
+        const relativeTarget = clampedTarget - effectiveIndent;
+        const from = Math.min(originX, relativeTarget);
+        const to = Math.max(originX, relativeTarget);
         if (!currentLine.leaders) currentLine.leaders = [];
         currentLine.leaders.push({ from, to, style: leaderStyle });
       }
@@ -1176,17 +1189,18 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 
           if (groupMeasure.totalWidth > 0) {
             // Calculate the aligned starting X position based on total group width
+            const relativeTarget = clampedTarget - effectiveIndent;
             let groupStartX: number;
             if (stop.val === 'end') {
               // Right-align: position so right edge of group is at tab stop
-              groupStartX = Math.max(0, clampedTarget - groupMeasure.totalWidth);
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth);
             } else if (stop.val === 'center') {
               // Center-align: position so center of group is at tab stop
-              groupStartX = Math.max(0, clampedTarget - groupMeasure.totalWidth / 2);
+              groupStartX = Math.max(0, relativeTarget - groupMeasure.totalWidth / 2);
             } else {
               // Decimal-align: position so decimal point is at tab stop
               const beforeDecimal = groupMeasure.beforeDecimalWidth ?? groupMeasure.totalWidth;
-              groupStartX = Math.max(0, clampedTarget - beforeDecimal);
+              groupStartX = Math.max(0, relativeTarget - beforeDecimal);
             }
 
             // Set up active tab group for subsequent run processing
@@ -1194,7 +1208,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
               measure: groupMeasure,
               startX: groupStartX,
               currentX: groupStartX,
-              target: clampedTarget,
+              target: relativeTarget,
               val: stop.val,
             };
 
@@ -1207,12 +1221,12 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           pendingTabAlignment = null;
         } else {
           // For start-aligned tabs, use the existing pendingTabAlignment mechanism
-          pendingTabAlignment = { target: clampedTarget, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
         }
       } else {
         pendingTabAlignment = null;
       }
-
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1260,6 +1274,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
         // Check if we've reached the end of the tab group
         if (activeTabGroup && runIndex + 1 >= activeTabGroup.measure.endRunIndex) {
           activeTabGroup = null;
@@ -1336,6 +1351,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1398,6 +1414,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             },
           ],
         };
+        pendingRunSpacing = 0;
         continue;
       }
 
@@ -1458,6 +1475,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         currentLine.width = roundValue(tabAlign.target);
       }
       lastAppliedTabAlign = null;
+      pendingRunSpacing = 0;
 
       continue;
     }
@@ -1466,6 +1484,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
     // The remaining run must be TextRun (which has text, fontSize, etc.)
     if (!('text' in run) || !('fontSize' in run)) {
       // Safety check - skip if this isn't a TextRun
+      pendingRunSpacing = 0;
       continue;
     }
 
@@ -1480,6 +1499,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
       const segment = tabSegments[segmentIndex];
       const isLastSegment = segmentIndex === tabSegments.length - 1;
       if (/^[ ]+$/.test(segment)) {
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0;
         const spacesLength = segment.length;
         const spacesStartChar = charPosInRun;
         const spacesEndChar = charPosInRun + spacesLength;
@@ -1499,7 +1519,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
             spaceCount: spacesLength,
           };
         } else {
-          const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+          const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
           if (
             currentLine.width + boundarySpacing + spacesWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
             currentLine.width > 0
@@ -1593,6 +1613,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           const spaceStartChar = charPosInRun;
           const spaceEndChar = charPosInRun + 1;
           const singleSpaceWidth = measureRunWidth(' ', font, ctx, run, spaceStartChar);
+          const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
 
           if (!currentLine) {
             // Start a new line with just the space
@@ -1611,7 +1632,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           } else {
             // Add space to existing line
             // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-            const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+            const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
             if (
               currentLine.width + boundarySpacing + singleSpaceWidth > currentLine.maxWidth - WIDTH_FUDGE_PX &&
               currentLine.width > 0
@@ -1860,7 +1881,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         const isTocEntry = block.attrs?.isTocEntry;
         // Fit check uses word-only width and includes boundary letterSpacing when line is non-empty
         // Safe cast: only TextRuns produce word segments from split(), other run types are handled earlier
-        const boundarySpacing = currentLine.width > 0 ? ((run as TextRun).letterSpacing ?? 0) : 0;
+        const isRunStart = charPosInRun === 0 && segmentIndex === 0 && wordIndex === 0;
+        const boundarySpacing = resolveBoundarySpacing(currentLine.width, isRunStart, run as TextRun);
         // Check if paragraph has justified alignment
         const justifyAlignment = block.attrs?.alignment === 'justify';
         const totalWidthWithWord =
@@ -2052,10 +2074,14 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
           };
         }
         const originX = currentLine.width;
-        const { target, nextIndex, stop } = getNextTabStopPx(currentLine.width, tabStops, tabStopCursor);
+        // Use first-line effective indent (accounts for hanging) on first line, body indent otherwise
+        const effectiveIndent = lines.length === 0 ? indentLeft + rawFirstLineOffset : indentLeft;
+        const absCurrentX = currentLine.width + effectiveIndent;
+        const { target, nextIndex, stop } = getNextTabStopPx(absCurrentX, tabStops, tabStopCursor);
         tabStopCursor = nextIndex;
-        const clampedTarget = Math.min(target, currentLine.maxWidth);
-        const tabAdvance = Math.max(0, clampedTarget - currentLine.width);
+        const maxAbsWidth = currentLine.maxWidth + effectiveIndent;
+        const clampedTarget = Math.min(target, maxAbsWidth);
+        const tabAdvance = Math.max(0, clampedTarget - absCurrentX);
         currentLine.width = roundValue(currentLine.width + tabAdvance);
 
         currentLine.maxFontInfo = updateMaxFontInfo(currentLine.maxFontSize, currentLine.maxFontInfo, run);
@@ -2065,7 +2091,7 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         charPosInRun += 1;
         if (stop) {
           validateTabStopVal(stop);
-          pendingTabAlignment = { target: clampedTarget, val: stop.val };
+          pendingTabAlignment = { target: clampedTarget - effectiveIndent, val: stop.val };
         } else {
           pendingTabAlignment = null;
         }
@@ -2073,8 +2099,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
         // Emit leader decoration if requested
         if (stop && stop.leader && stop.leader !== 'none' && stop.leader !== 'middleDot') {
           const leaderStyle: 'heavy' | 'dot' | 'hyphen' | 'underscore' = stop.leader;
-          const from = Math.min(originX, clampedTarget);
-          const to = Math.max(originX, clampedTarget);
+          const relativeTarget = clampedTarget - effectiveIndent;
+          const from = Math.min(originX, relativeTarget);
+          const to = Math.max(originX, relativeTarget);
           if (!currentLine.leaders) currentLine.leaders = [];
           currentLine.leaders.push({ from, to, style: leaderStyle });
         }
@@ -2186,6 +2213,8 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
 */
       }
     }
+
+    pendingRunSpacing = (run as TextRun).letterSpacing ?? 0;
   }
 
   if (!currentLine && lines.length === 0) {
@@ -2669,7 +2698,14 @@ async function measureTableBlock(block: TableBlock, constraints: MeasureConstrai
 async function measureImageBlock(block: ImageBlock, constraints: MeasureConstraints): Promise<ImageMeasure> {
   const intrinsic = getIntrinsicImageSize(block, constraints.maxWidth);
 
-  const maxWidth = constraints.maxWidth > 0 ? constraints.maxWidth : intrinsic.width;
+  const isBlockBehindDoc = block.anchor?.behindDoc;
+  const isBlockWrapBehindDoc = block.wrap?.type === 'None' && block.wrap?.behindDoc;
+  const isPageRelativeAnchor =
+    block.anchor?.isAnchored && (block.anchor?.hRelativeFrom === 'page' || block.anchor?.hRelativeFrom === 'margin');
+  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc || isPageRelativeAnchor;
+  const isWidthConstraintBypassed = bypassWidthConstraint || constraints.maxWidth <= 0;
+
+  const maxWidth = isWidthConstraintBypassed ? intrinsic.width : constraints.maxWidth;
 
   // For anchored images with negative vertical positioning (designed to overflow their container),
   // bypass the height constraint. This matches MS Word behavior where images in headers/footers
@@ -2679,8 +2715,13 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
     ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
       (typeof block.margin?.top === 'number' && block.margin.top < 0));
 
+  // Bypass height constraint when:
+  // - Image has negative vertical positioning (designed to overflow container)
+  // - objectFit is 'cover' (image should render at exact extent dimensions, CSS handles content scaling/clipping)
+  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'cover';
+
   const maxHeight =
-    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+    shouldBypassHeightConstraint || !constraints.maxHeight || constraints.maxHeight <= 0
       ? Infinity
       : constraints.maxHeight;
 
@@ -3127,7 +3168,8 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
   }
 
   const raw = spacing.line;
-  const treatAsMultiplier = (spacing.lineRule === 'auto' || spacing.lineRule == null) && raw > 0 && raw <= 10;
+  const isAuto = spacing.lineRule === 'auto';
+  const treatAsMultiplier = (isAuto || spacing.lineRule == null) && raw > 0 && (isAuto || raw <= 10);
 
   if (treatAsMultiplier) {
     return raw * baseLineHeight;

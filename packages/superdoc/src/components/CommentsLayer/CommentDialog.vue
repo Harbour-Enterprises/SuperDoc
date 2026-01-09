@@ -117,12 +117,21 @@ const hasTextContent = computed(() => {
 });
 
 const setFocus = () => {
-  if (props.comment.resolvedTime) return;
   const editor = proxy.$superdoc.activeEditor;
-  activeComment.value = props.comment.commentId;
-  props.comment.setActive(proxy.$superdoc);
+
+  // Only set as active if not resolved (resolved comments can't be edited)
+  if (!props.comment.resolvedTime) {
+    activeComment.value = props.comment.commentId;
+    props.comment.setActive(proxy.$superdoc);
+  }
+
+  // Always allow scrolling to the comment location, even for resolved comments
   if (editor) {
-    const cursorId = props.comment.importedId || props.comment.commentId;
+    // For resolved comments, use commentId since prepareCommentsForImport rewrites
+    // commentRangeStart/End nodes' w:id to the internal commentId (not importedId)
+    const cursorId = props.comment.resolvedTime
+      ? props.comment.commentId
+      : props.comment.importedId || props.comment.commentId;
     editor.commands?.setCursorById(cursorId);
   }
 };

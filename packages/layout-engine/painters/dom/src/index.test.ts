@@ -1406,6 +1406,59 @@ describe('DomPainter', () => {
     expect(line?.textContent).toBe('\u00A0');
   });
 
+  it('annotates placeholder spans for empty lines with pm positions', () => {
+    const blockWithEmptyRun: FlowBlock = {
+      kind: 'paragraph',
+      id: 'empty-block',
+      runs: [{ text: '', fontFamily: 'Arial', fontSize: 16, pmStart: 1, pmEnd: 1 }],
+    };
+    const measureWithEmptyLine: Measure = {
+      kind: 'paragraph',
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: 0,
+          toChar: 0,
+          width: 0,
+          ascent: 0,
+          descent: 0,
+          lineHeight: 18,
+        },
+      ],
+      totalHeight: 18,
+    };
+    const emptyLayout: Layout = {
+      pageSize: layout.pageSize,
+      pages: [
+        {
+          number: 1,
+          fragments: [
+            {
+              kind: 'para',
+              blockId: 'empty-block',
+              fromLine: 0,
+              toLine: 1,
+              x: 10,
+              y: 10,
+              width: 200,
+            },
+          ],
+        },
+      ],
+    };
+
+    const painter = createDomPainter({
+      blocks: [blockWithEmptyRun],
+      measures: [measureWithEmptyLine],
+    });
+    painter.paint(emptyLayout, mount);
+
+    const emptySpan = mount.querySelector('.superdoc-line span.superdoc-empty-run') as HTMLElement | null;
+    expect(emptySpan?.dataset.pmStart).toBe('1');
+    expect(emptySpan?.dataset.pmEnd).toBe('1');
+  });
+
   it('renders image fragments', () => {
     const imageBlock: FlowBlock = {
       kind: 'image',
@@ -2433,6 +2486,155 @@ describe('DomPainter', () => {
     const headerEl = mount.querySelector('.superdoc-page-header');
     expect(headerEl).toBeTruthy();
     expect(headerEl?.textContent).toBe('Page 1 of 1');
+  });
+
+  it('renders behindDoc header images directly on page, not in header container', () => {
+    // Per OOXML spec, behindDoc images should render behind body content.
+    // This requires placing them directly on the page element (not in header container)
+    // because the header container has z-index: 1 which creates a stacking context.
+    const behindDocImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'behind-doc-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 200,
+      height: 100,
+      anchor: { behindDoc: true },
+    };
+    const behindDocImageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 100,
+    };
+
+    const normalImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'normal-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 50,
+      height: 30,
+    };
+    const normalImageMeasure: Measure = {
+      kind: 'image',
+      width: 50,
+      height: 30,
+    };
+
+    // behindDoc fragment has zIndex: 0 (set by layout engine)
+    const behindDocFragment = {
+      kind: 'image' as const,
+      blockId: 'behind-doc-img',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+      zIndex: 0, // behindDoc images get zIndex: 0
+      isAnchored: true,
+    };
+
+    // Normal fragment in header
+    const normalFragment = {
+      kind: 'image' as const,
+      blockId: 'normal-img',
+      x: 10,
+      y: 10,
+      width: 50,
+      height: 30,
+    };
+
+    const painter = createDomPainter({
+      blocks: [block, behindDocImageBlock, normalImageBlock],
+      measures: [measure, behindDocImageMeasure, normalImageMeasure],
+      headerProvider: () => ({
+        fragments: [behindDocFragment, normalFragment],
+        height: 100,
+      }),
+    });
+
+    painter.paint({ ...layout, pages: [{ ...layout.pages[0], number: 1 }] }, mount);
+
+    const headerEl = mount.querySelector('.superdoc-page-header');
+    expect(headerEl).toBeTruthy();
+
+    // behindDoc image should NOT be inside header container
+    const behindDocInHeader = headerEl?.querySelector('img[src*="base64"]');
+    // Normal image should be inside header container
+    const normalInHeader = headerEl?.querySelectorAll('.superdoc-fragment');
+
+    // The header should contain only the normal fragment, not the behindDoc one
+    // behindDoc fragment is rendered directly on the page element
+    expect(normalInHeader?.length).toBe(1);
+
+    // behindDoc image should be rendered directly on page with z-index: 0
+    const pageEl = mount.querySelector('.superdoc-page');
+    const allImagesOnPage = pageEl?.querySelectorAll(':scope > .superdoc-fragment img');
+    // One of these should be the behindDoc image rendered directly on the page
+    expect(allImagesOnPage?.length).toBeGreaterThanOrEqual(1);
+
+    // Find the behindDoc fragment on the page (direct child with z-index: 0 and data attribute)
+    const directFragments = pageEl?.querySelectorAll(':scope > .superdoc-fragment');
+    let foundBehindDoc = false;
+    directFragments?.forEach((frag) => {
+      const el = frag as HTMLElement;
+      if (el.style.zIndex === '0' && el.dataset.behindDocSection === 'header') {
+        foundBehindDoc = true;
+      }
+    });
+    expect(foundBehindDoc).toBe(true);
+  });
+
+  it('cleans up behindDoc fragments on re-render (no accumulation)', () => {
+    // This test verifies that behindDoc fragments don't accumulate across re-renders.
+    // Since they're inserted directly on the page (not in header container), they must
+    // be explicitly removed before re-rendering.
+    const behindDocImageBlock: FlowBlock = {
+      kind: 'image',
+      id: 'behind-doc-img',
+      src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      width: 200,
+      height: 100,
+      anchor: { behindDoc: true },
+    };
+    const behindDocImageMeasure: Measure = {
+      kind: 'image',
+      width: 200,
+      height: 100,
+    };
+
+    const behindDocFragment = {
+      kind: 'image' as const,
+      blockId: 'behind-doc-img',
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 100,
+      zIndex: 0,
+      isAnchored: true,
+    };
+
+    const painter = createDomPainter({
+      blocks: [block, behindDocImageBlock],
+      measures: [measure, behindDocImageMeasure],
+      headerProvider: () => ({
+        fragments: [behindDocFragment],
+        height: 100,
+      }),
+    });
+
+    const testLayout = { ...layout, pages: [{ ...layout.pages[0], number: 1 }] };
+
+    // First render
+    painter.paint(testLayout, mount);
+
+    // Second render (simulates incremental update)
+    painter.paint(testLayout, mount);
+
+    // Third render
+    painter.paint(testLayout, mount);
+
+    // Should only have ONE behindDoc fragment, not three
+    const pageEl = mount.querySelector('.superdoc-page');
+    const behindDocElements = pageEl?.querySelectorAll('[data-behind-doc-section="header"]');
+    expect(behindDocElements?.length).toBe(1);
   });
 
   it('applies track-change classes and metadata when rendering review mode', () => {
@@ -4885,6 +5087,199 @@ describe('DomPainter', () => {
         expect(metadata.minWidth).toBe(20);
         expect(metadata.minHeight).toBe(20);
       });
+    });
+  });
+});
+
+describe('ImageFragment (block-level images)', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    mount.remove();
+  });
+
+  describe('data-image-metadata attribute for watermarks', () => {
+    it('does NOT add data-image-metadata for watermark images (vmlWatermark: true)', () => {
+      const watermarkBlock: FlowBlock = {
+        kind: 'image',
+        id: 'watermark-img',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 200,
+        height: 100,
+        attrs: { vmlWatermark: true },
+      };
+
+      const watermarkMeasure: Measure = {
+        kind: 'image',
+        width: 200,
+        height: 100,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'watermark-img',
+        x: 50,
+        y: 50,
+        width: 200,
+        height: 100,
+        metadata: {
+          originalWidth: 200,
+          originalHeight: 100,
+          maxWidth: 600,
+          maxHeight: 300,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [watermarkBlock],
+        measures: [watermarkMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // Watermarks should NOT have data-image-metadata (makes them non-interactive)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeNull();
+    });
+
+    it('DOES add data-image-metadata for regular images (no vmlWatermark)', () => {
+      const regularBlock: FlowBlock = {
+        kind: 'image',
+        id: 'regular-img',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 200,
+        height: 100,
+      };
+
+      const regularMeasure: Measure = {
+        kind: 'image',
+        width: 200,
+        height: 100,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'regular-img',
+        x: 50,
+        y: 50,
+        width: 200,
+        height: 100,
+        metadata: {
+          originalWidth: 200,
+          originalHeight: 100,
+          maxWidth: 600,
+          maxHeight: 300,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [regularBlock],
+        measures: [regularMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // Regular images SHOULD have data-image-metadata (makes them interactive/resizable)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeTruthy();
+
+      const metadata = JSON.parse(metadataAttr!);
+      expect(metadata.originalWidth).toBe(200);
+      expect(metadata.originalHeight).toBe(100);
+    });
+
+    it('DOES add data-image-metadata for images with vmlWatermark: false explicitly set', () => {
+      // This test ensures that only vmlWatermark: true skips metadata, not false
+      const regularBlock: FlowBlock = {
+        kind: 'image',
+        id: 'regular-img-explicit',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 150,
+        height: 75,
+        attrs: { vmlWatermark: false },
+      };
+
+      const regularMeasure: Measure = {
+        kind: 'image',
+        width: 150,
+        height: 75,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'regular-img-explicit',
+        x: 50,
+        y: 50,
+        width: 150,
+        height: 75,
+        metadata: {
+          originalWidth: 150,
+          originalHeight: 75,
+          maxWidth: 450,
+          maxHeight: 225,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [regularBlock],
+        measures: [regularMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // vmlWatermark: false should still have metadata (interactive)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeTruthy();
     });
   });
 });

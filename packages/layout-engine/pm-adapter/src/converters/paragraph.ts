@@ -638,6 +638,16 @@ const applyBaseRunDefaults = (
   // in paragraphs with bold styles like Heading 1.
 };
 
+const applyInlineRunProperties = (
+  run: TextRun,
+  runProperties: (Record<string, unknown> & { letterSpacing?: number | null }) | null | undefined,
+): void => {
+  if (!runProperties) return;
+  if (runProperties?.letterSpacing != null) {
+    run.letterSpacing = twipsToPx(runProperties.letterSpacing);
+  }
+};
+
 /**
  * Converts a paragraph PM node to an array of FlowBlocks.
  *
@@ -658,6 +668,10 @@ const applyBaseRunDefaults = (
  * @param trackedChanges - Optional tracked changes configuration
  * @param bookmarks - Optional bookmark position map
  * @param hyperlinkConfig - Hyperlink configuration
+ * @param themeColors - Optional theme color palette for color resolution
+ * @param converters - Optional converter dependencies injected to avoid circular imports
+ * @param converterContext - Optional converter context with document styles
+ * @param enableComments - Whether to include comment marks in the output (defaults to true). Set to false for viewing modes where comments should be hidden.
  * @returns Array of FlowBlocks (paragraphs, images, drawings, page breaks, etc.)
  */
 export function paragraphToFlowBlocks(
@@ -721,6 +735,7 @@ export function paragraphToFlowBlocks(
     ) => FlowBlock | null;
   },
   converterContext?: ConverterContext,
+  enableComments = true,
 ): FlowBlock[] {
   const baseBlockId = nextBlockId('paragraph');
   const paragraphProps =
@@ -896,6 +911,20 @@ export function paragraphToFlowBlocks(
   let tabOrdinal = 0;
 
   const nextId = () => (partIndex === 0 ? baseBlockId : `${baseBlockId}-${partIndex}`);
+  const attachAnchorParagraphId = <T extends FlowBlock>(block: T, anchorParagraphId: string): T => {
+    const applicableKinds = new Set(['drawing', 'image', 'table']);
+    if (!applicableKinds.has(block.kind)) {
+      return block;
+    }
+    const blockWithAttrs = block as T & { attrs?: Record<string, unknown> };
+    return {
+      ...blockWithAttrs,
+      attrs: {
+        ...(blockWithAttrs.attrs ?? {}),
+        anchorParagraphId,
+      },
+    };
+  };
 
   const flushParagraph = () => {
     if (currentRuns.length === 0) {
@@ -936,6 +965,7 @@ export function paragraphToFlowBlocks(
     inheritedMarks: PMMark[] = [],
     activeSdt?: SdtMetadata,
     activeRunStyleId: string | null = null,
+    activeRunProperties?: Record<string, unknown> | null,
   ) => {
     if (node.type === 'text' && node.text) {
       // Apply styles in correct priority order:
@@ -959,6 +989,7 @@ export function paragraphToFlowBlocks(
       const inlineStyleId = getInlineStyleId(inheritedMarks);
       applyRunStyles(run, inlineStyleId, activeRunStyleId);
       applyBaseRunDefaults(run, baseRunDefaults, defaultFont, defaultSize);
+      applyInlineRunProperties(run, activeRunProperties);
       // Apply marks ONCE here - this ensures they override linked styles
       applyMarksToRun(
         run,
@@ -966,6 +997,7 @@ export function paragraphToFlowBlocks(
         hyperlinkConfig,
         themeColors,
         converterContext?.backgroundColor,
+        enableComments,
       );
       currentRuns.push(run);
       return;
@@ -973,8 +1005,13 @@ export function paragraphToFlowBlocks(
 
     if (node.type === 'run' && Array.isArray(node.content)) {
       const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
-      const nextRunStyleId = extractRunStyleId(node.attrs?.runProperties) ?? activeRunStyleId;
-      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId));
+      const runProperties =
+        typeof node.attrs?.runProperties === 'object' && node.attrs.runProperties !== null
+          ? (node.attrs.runProperties as Record<string, unknown>)
+          : null;
+      const nextRunStyleId = extractRunStyleId(runProperties) ?? activeRunStyleId;
+      const nextRunProperties = runProperties ?? activeRunProperties;
+      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId, nextRunProperties));
       return;
     }
 
@@ -982,7 +1019,7 @@ export function paragraphToFlowBlocks(
     if (node.type === 'structuredContent' && Array.isArray(node.content)) {
       const inlineMetadata = resolveNodeSdtMetadata(node, 'structuredContent');
       const nextSdt = inlineMetadata ?? activeSdt;
-      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId));
+      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId, activeRunProperties));
       return;
     }
 
@@ -1047,12 +1084,14 @@ export function paragraphToFlowBlocks(
         // Create token run with pageReference metadata
         // Get PM positions from the parent pageReference node (not the synthetic text node)
         const pageRefPos = positions.get(node);
+        // Pass empty marks to textNodeToRun to prevent double mark application.
+        // Marks will be applied AFTER linked styles to ensure proper priority and honor enableComments.
         const tokenRun = textNodeToRun(
           { type: 'text', text: fallbackText } as PMNode,
           positions,
           defaultFont,
           defaultSize,
-          mergedMarks,
+          [], // Empty marks - will be applied after linked styles
           activeSdt,
           hyperlinkConfig,
           themeColors,
@@ -1060,6 +1099,16 @@ export function paragraphToFlowBlocks(
         const inlineStyleId = getInlineStyleId(mergedMarks);
         applyRunStyles(tokenRun, inlineStyleId, activeRunStyleId);
         applyBaseRunDefaults(tokenRun, baseRunDefaults, defaultFont, defaultSize);
+        applyInlineRunProperties(tokenRun, activeRunProperties);
+        // Apply marks ONCE here - this ensures they override linked styles and honor enableComments
+        applyMarksToRun(
+          tokenRun,
+          mergedMarks,
+          hyperlinkConfig,
+          themeColors,
+          converterContext?.backgroundColor,
+          enableComments,
+        );
         // Copy PM positions from parent pageReference node
         if (pageRefPos) {
           (tokenRun as TextRun).pmStart = pageRefPos.start;
@@ -1076,7 +1125,9 @@ export function paragraphToFlowBlocks(
         currentRuns.push(tokenRun);
       } else if (Array.isArray(node.content)) {
         // No bookmark found, fall back to treating as transparent container
-        node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt));
+        node.content.forEach((child) =>
+          visitNode(child, mergedMarks, activeSdt, activeRunStyleId, activeRunProperties),
+        );
       }
       return;
     }
@@ -1094,7 +1145,9 @@ export function paragraphToFlowBlocks(
       }
       // Process any content inside the bookmark (usually empty)
       if (Array.isArray(node.content)) {
-        node.content.forEach((child) => visitNode(child, inheritedMarks, activeSdt));
+        node.content.forEach((child) =>
+          visitNode(child, inheritedMarks, activeSdt, activeRunStyleId, activeRunProperties),
+        );
       }
       return;
     }
@@ -1138,6 +1191,7 @@ export function paragraphToFlowBlocks(
             hyperlinkConfig,
             themeColors,
             converterContext?.backgroundColor,
+            enableComments,
           );
         }
         console.debug('[token-debug] paragraph-token-run', {
@@ -1148,6 +1202,7 @@ export function paragraphToFlowBlocks(
           runStyleId: activeRunStyleId,
           mergedMarksCount: mergedMarks.length,
         });
+        applyInlineRunProperties(tokenRun as TextRun, activeRunProperties);
         currentRuns.push(tokenRun);
       }
       return;
@@ -1168,6 +1223,7 @@ export function paragraphToFlowBlocks(
       }
 
       // Anchored/floating image: existing behavior (flush and create ImageBlock)
+      const anchorParagraphId = nextId();
       flushParagraph();
       const mergedMarks = [...(node.marks ?? []), ...(inheritedMarks ?? [])];
       const trackedMeta = trackedChanges?.enabled ? collectTrackedChangeFromMarks(mergedMarks) : undefined;
@@ -1178,7 +1234,7 @@ export function paragraphToFlowBlocks(
         const imageBlock = converters.imageNodeToBlock(node, nextBlockId, positions, trackedMeta, trackedChanges);
         if (imageBlock && imageBlock.kind === 'image') {
           annotateBlockWithTrackedChange(imageBlock, trackedMeta, trackedChanges);
-          blocks.push(imageBlock);
+          blocks.push(attachAnchorParagraphId(imageBlock, anchorParagraphId));
         }
       }
       return;
@@ -1187,6 +1243,7 @@ export function paragraphToFlowBlocks(
     if (node.type === 'contentBlock') {
       const attrs = node.attrs ?? {};
       if (attrs.horizontalRule === true) {
+        const anchorParagraphId = nextId();
         flushParagraph();
         const indent = paragraphAttrs?.indent;
         const hrIndentLeft = typeof indent?.left === 'number' ? indent.left : undefined;
@@ -1198,51 +1255,55 @@ export function paragraphToFlowBlocks(
         const convert = converters?.contentBlockNodeToDrawingBlock ?? contentBlockNodeToDrawingBlock;
         const drawingBlock = convert(hrNode, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'vectorShape') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.vectorShapeNodeToDrawingBlock) {
         const drawingBlock = converters.vectorShapeNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeGroup') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeGroupNodeToDrawingBlock) {
         const drawingBlock = converters.shapeGroupNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeContainer') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeContainerNodeToDrawingBlock) {
         const drawingBlock = converters.shapeContainerNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
     }
 
     if (node.type === 'shapeTextbox') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeTextboxNodeToDrawingBlock) {
         const drawingBlock = converters.shapeTextboxNodeToDrawingBlock(node, nextBlockId, positions);
         if (drawingBlock) {
-          blocks.push(drawingBlock);
+          blocks.push(attachAnchorParagraphId(drawingBlock, anchorParagraphId));
         }
       }
       return;
@@ -1250,6 +1311,7 @@ export function paragraphToFlowBlocks(
 
     // Tables may occasionally appear inline via wrappers; treat as block-level
     if (node.type === 'table') {
+      const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.tableNodeToBlock) {
         const tableBlock = converters.tableNodeToBlock(
@@ -1266,7 +1328,7 @@ export function paragraphToFlowBlocks(
           ...(converterContext !== undefined ? [converterContext] : []),
         );
         if (tableBlock) {
-          blocks.push(tableBlock);
+          blocks.push(attachAnchorParagraphId(tableBlock, anchorParagraphId));
         }
       }
       return;
@@ -1365,6 +1427,7 @@ export function paragraphToFlowBlocks(
       hyperlinkConfig,
       applyMarksToRun,
       themeColors,
+      enableComments,
     );
     if (trackedChanges.enabled && filteredRuns.length === 0) {
       return;

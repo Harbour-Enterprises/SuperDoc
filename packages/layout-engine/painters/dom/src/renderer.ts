@@ -43,6 +43,7 @@ import type {
   DropCapDescriptor,
   TableAttrs,
   TableCellAttrs,
+  PositionMapping,
 } from '@superdoc/contracts';
 import { calculateJustifySpacing, computeLinePmRange, shouldApplyJustify, SPACE_CHARS } from '@superdoc/contracts';
 import { getPresetShapeSvg } from '@superdoc/preset-geometry';
@@ -236,6 +237,7 @@ function isMinimalWordLayout(value: unknown): value is MinimalWordLayout {
  * - 'book': Book-style layout with facing pages
  */
 export type LayoutMode = 'vertical' | 'horizontal' | 'book';
+
 type PageDecorationPayload = {
   fragments: Fragment[];
   height: number;
@@ -791,6 +793,8 @@ export class DomPainter {
   private layoutVersion = 0;
   private layoutEpoch = 0;
   private processedLayoutVersion = -1;
+  /** Current transaction mapping for position updates (null if no mapping or complex transaction) */
+  private currentMapping: PositionMapping | null = null;
   private onScrollHandler: ((e: Event) => void) | null = null;
   private onWindowScrollHandler: ((e: Event) => void) | null = null;
   private onResizeHandler: ((e: Event) => void) | null = null;
@@ -937,7 +941,7 @@ export class DomPainter {
     this.changedBlocks = changed;
   }
 
-  public paint(layout: Layout, mount: HTMLElement): void {
+  public paint(layout: Layout, mount: HTMLElement, mapping?: PositionMapping): void {
     if (!(mount instanceof HTMLElement)) {
       throw new Error('DomPainter.paint requires a valid HTMLElement mount');
     }
@@ -947,6 +951,17 @@ export class DomPainter {
       throw new Error('DomPainter.paint requires a DOM-like document');
     }
     this.doc = doc;
+
+    // Simple transaction gate: only use position mapping optimization for single-step transactions.
+    // Complex transactions (paste, multi-step replace, etc.) fall back to full rebuild.
+    const isSimpleTransaction = mapping && mapping.maps.length === 1;
+    if (mapping && !isSimpleTransaction) {
+      // Complex transaction - force all fragments to rebuild (safe fallback)
+      this.blockLookup.forEach((_, id) => this.changedBlocks.add(id));
+      this.currentMapping = null;
+    } else {
+      this.currentMapping = mapping ?? null;
+    }
 
     ensurePrintStyles(doc);
     ensureLinkStyles(doc);
@@ -977,6 +992,7 @@ export class DomPainter {
       this.currentLayout = layout;
       this.pageStates = [];
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
     if (mode === 'book') {
@@ -985,6 +1001,7 @@ export class DomPainter {
       this.currentLayout = layout;
       this.pageStates = [];
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
 
@@ -997,6 +1014,7 @@ export class DomPainter {
       this.renderVirtualized(layout, mount);
       this.currentLayout = layout;
       this.changedBlocks.clear();
+      this.currentMapping = null;
       return;
     }
 
@@ -1010,6 +1028,7 @@ export class DomPainter {
 
     this.currentLayout = layout;
     this.changedBlocks.clear();
+    this.currentMapping = null;
   }
 
   // ----------------
@@ -1530,7 +1549,47 @@ export class DomPainter {
       pageNumberText: page.numberText,
     };
 
-    data.fragments.forEach((fragment) => {
+    // Separate behindDoc fragments (zIndex === 0) from normal fragments.
+    // behindDoc fragments need to render behind body content, so they must be
+    // placed directly on the page (not in the header container) with negative z-index.
+    const behindDocFragments: typeof data.fragments = [];
+    const normalFragments: typeof data.fragments = [];
+
+    for (const fragment of data.fragments) {
+      const isBehindDoc =
+        (fragment.kind === 'image' || fragment.kind === 'drawing') && 'zIndex' in fragment && fragment.zIndex === 0;
+      if (isBehindDoc) {
+        behindDocFragments.push(fragment);
+      } else {
+        normalFragments.push(fragment);
+      }
+    }
+
+    // Remove any previously rendered behindDoc fragments for this section before re-rendering.
+    // Unlike the header/footer container (which uses innerHTML = '' to clear), behindDoc
+    // fragments are placed directly on the page element and must be explicitly removed.
+    const behindDocSelector = `[data-behind-doc-section="${kind}"]`;
+    pageEl.querySelectorAll(behindDocSelector).forEach((el) => el.remove());
+
+    // Render behindDoc fragments directly on the page with z-index: 0
+    // and insert them at the beginning of the page so they render behind body content.
+    // We can't use z-index: -1 because that goes behind the page's white background.
+    // By inserting at the beginning and using z-index: 0, they render below body content
+    // which also has z-index values but comes later in DOM order.
+    behindDocFragments.forEach((fragment) => {
+      const fragEl = this.renderFragment(fragment, context);
+      // Adjust position: fragment.y is relative to header container, we need page-relative
+      const pageY = effectiveOffset + fragment.y + (kind === 'footer' ? footerYOffset : 0);
+      fragEl.style.top = `${pageY}px`;
+      fragEl.style.left = `${marginLeft + fragment.x}px`;
+      fragEl.style.zIndex = '0'; // Same level as page, but inserted first so renders behind
+      fragEl.dataset.behindDocSection = kind; // Track for cleanup on re-render
+      // Insert at beginning of page so it renders behind body content due to DOM order
+      pageEl.insertBefore(fragEl, pageEl.firstChild);
+    });
+
+    // Render normal fragments in the header/footer container
+    normalFragments.forEach((fragment) => {
       const fragEl = this.renderFragment(fragment, context);
       // Apply footer offset to push content to bottom
       if (footerYOffset > 0) {
@@ -1652,6 +1711,9 @@ export class DomPainter {
           pageEl.replaceChild(replacement, current.element);
           current.element = replacement;
           current.signature = fragmentSignature(fragment, this.blockLookup);
+        } else if (this.currentMapping) {
+          // Fragment NOT rebuilt - update position attributes to reflect document changes
+          this.updatePositionAttributes(current.element, this.currentMapping);
         }
 
         this.updateFragmentElement(current.element, fragment, contextBase.section);
@@ -1685,6 +1747,59 @@ export class DomPainter {
 
     state.fragments = nextFragments;
     this.renderDecorationsForPage(pageEl, page);
+  }
+
+  /**
+   * Updates data-pm-start/data-pm-end attributes on all elements within a fragment
+   * using the transaction's mapping. Skips header/footer content (separate PM coordinate space).
+   * Also skips fragments that end before the edit point (their positions don't change).
+   */
+  private updatePositionAttributes(fragmentEl: HTMLElement, mapping: PositionMapping): void {
+    // Skip header/footer elements (they use a separate PM coordinate space)
+    if (fragmentEl.closest('.superdoc-page-header, .superdoc-page-footer')) {
+      return;
+    }
+
+    // Wrap mapping logic in try-catch to prevent corrupted mappings from crashing paint cycle
+    try {
+      // Quick check: if the fragment's end position doesn't change, nothing inside needs updating.
+      // This happens for all content BEFORE the edit point.
+      const fragEnd = fragmentEl.dataset.pmEnd;
+      if (fragEnd !== undefined && fragEnd !== '') {
+        const endNum = Number(fragEnd);
+        if (Number.isFinite(endNum) && mapping.map(endNum, -1) === endNum) {
+          // Fragment ends before edit point - no position changes needed
+          return;
+        }
+      }
+
+      // Get all elements with position attributes (including the fragment element itself)
+      const elements = fragmentEl.querySelectorAll('[data-pm-start], [data-pm-end]');
+      const allElements = [fragmentEl, ...Array.from(elements)] as HTMLElement[];
+
+      for (const el of allElements) {
+        const oldStart = el.dataset.pmStart;
+        const oldEnd = el.dataset.pmEnd;
+
+        if (oldStart !== undefined && oldStart !== '') {
+          const num = Number(oldStart);
+          if (Number.isFinite(num)) {
+            el.dataset.pmStart = String(mapping.map(num));
+          }
+        }
+
+        if (oldEnd !== undefined && oldEnd !== '') {
+          const num = Number(oldEnd);
+          if (Number.isFinite(num)) {
+            // Use bias -1 for end positions to handle edge cases correctly
+            el.dataset.pmEnd = String(mapping.map(num, -1));
+          }
+        }
+      }
+    } catch (error) {
+      // Log the error but don't crash the paint cycle - corrupted mappings shouldn't break rendering
+      console.error('Error updating position attributes with mapping:', error);
+    }
   }
 
   private createPageState(page: Page, pageSize: { w: number; h: number }): PageDomState {
@@ -2553,8 +2668,8 @@ export class DomPainter {
         fragmentEl.dataset.pmEnd = String(fragment.pmEnd);
       }
 
-      // Add metadata for interactive image resizing
-      if (fragment.metadata) {
+      // Add metadata for interactive image resizing (skip watermarks - they should not be interactive)
+      if (fragment.metadata && !block.attrs?.vmlWatermark) {
         fragmentEl.setAttribute('data-image-metadata', JSON.stringify(fragment.metadata));
       }
 
@@ -2568,7 +2683,39 @@ export class DomPainter {
       img.style.width = '100%';
       img.style.height = '100%';
       img.style.objectFit = block.objectFit ?? 'contain';
+      // MS Word anchors stretched images to top-left, clipping from right/bottom
+      if (block.objectFit === 'cover') {
+        img.style.objectPosition = 'left top';
+      }
       img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
+
+      // Apply VML image adjustments (gain/blacklevel) as CSS filters for watermark effects
+      // conversion formulas calculated based on Libreoffice vml reader
+      // https://github.com/LibreOffice/core/blob/951a74d047cfddff78014225f55ecb2bbdcd9c4c/oox/source/vml/vmlshapecontext.cxx#L465C13-L493C1
+      const filters: string[] = [];
+      if (block.gain != null || block.blacklevel != null) {
+        // Convert VML gain to CSS contrast
+        // VML gain is a hex string like "19661f" - higher = more contrast
+        if (block.gain && typeof block.gain === 'string' && block.gain.endsWith('f')) {
+          const contrast = Math.max(0, parseInt(block.gain) / 65536);
+          if (contrast > 0) {
+            filters.push(`contrast(${contrast})`);
+          }
+        }
+
+        // Convert VML blacklevel (brightness) to CSS brightness
+        // VML blacklevel is a hex string like "22938f" - lower = less brightness
+        if (block.blacklevel && typeof block.blacklevel === 'string' && block.blacklevel.endsWith('f')) {
+          const brightness = Math.max(0, 1 + parseInt(block.blacklevel) / 327 / 100) + 0.5; // 0.5 factor added based on visual comparison.
+          if (brightness > 0) {
+            filters.push(`brightness(${brightness})`);
+          }
+        }
+
+        if (filters.length > 0) {
+          img.style.filter = filters.join(' ');
+        }
+      }
       fragmentEl.appendChild(img);
 
       return fragmentEl;
@@ -2659,6 +2806,10 @@ export class DomPainter {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = drawing.objectFit ?? 'contain';
+    // MS Word anchors stretched images to top-left, clipping from right/bottom
+    if (drawing.objectFit === 'cover') {
+      img.style.objectPosition = 'left top';
+    }
     img.style.display = 'block';
     return img;
   }
@@ -4025,10 +4176,16 @@ export class DomPainter {
     let runsForLine = sliceRunsForLine(block, line);
     const trackedConfig = this.resolveTrackedChangesConfig(block);
 
-    // Targeted debug removed now that issue is understood.
-
+    // Preserve PM positions for DOM caret mapping on empty lines.
     if (runsForLine.length === 0) {
       const span = this.doc.createElement('span');
+      span.classList.add('superdoc-empty-run');
+      if (lineRange.pmStart != null) {
+        span.dataset.pmStart = String(lineRange.pmStart);
+      }
+      if (lineRange.pmEnd != null) {
+        span.dataset.pmEnd = String(lineRange.pmEnd);
+      }
       span.innerHTML = '&nbsp;';
       el.appendChild(span);
     }
@@ -4952,12 +5109,11 @@ const fragmentKey = (fragment: Fragment): string => {
 const fragmentSignature = (fragment: Fragment, lookup: BlockLookup): string => {
   const base = lookup.get(fragment.blockId)?.version ?? 'missing';
   if (fragment.kind === 'para') {
+    // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
     return [
       base,
       fragment.fromLine,
       fragment.toLine,
-      fragment.pmStart ?? '',
-      fragment.pmEnd ?? '',
       fragment.continuesFromPrev ? 1 : 0,
       fragment.continuesOnNext ? 1 : 0,
       fragment.markerWidth ?? '', // Include markerWidth to trigger re-render when list status changes
@@ -5110,19 +5266,20 @@ const deriveBlockVersion = (block: FlowBlock): string => {
             imgRun.distBottom ?? '',
             imgRun.distLeft ?? '',
             imgRun.distRight ?? '',
-            imgRun.pmStart ?? '',
-            imgRun.pmEnd ?? '',
+            // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
           ].join(',');
         }
 
         // Handle LineBreakRun
         if (run.kind === 'lineBreak') {
-          return ['linebreak', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
+          return 'linebreak';
         }
 
         // Handle TabRun
         if (run.kind === 'tab') {
-          return [run.text ?? '', 'tab', run.pmStart ?? '', run.pmEnd ?? ''].join(',');
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
+          return [run.text ?? '', 'tab'].join(',');
         }
 
         // Handle TextRun (kind is 'text' or undefined)
@@ -5140,11 +5297,12 @@ const deriveBlockVersion = (block: FlowBlock): string => {
           textRun.strike ? 1 : 0,
           textRun.highlight ?? '',
           textRun.letterSpacing != null ? textRun.letterSpacing : '',
-          textRun.pmStart ?? '',
-          textRun.pmEnd ?? '',
+          // Note: pmStart/pmEnd intentionally excluded to prevent O(n) change detection
           textRun.token ?? '',
           // Tracked changes - force re-render when added or removed tracked change
           textRun.trackedChange ? 1 : 0,
+          // Comment annotations - force re-render when comments are enabled/disabled
+          textRun.comments?.length ?? 0,
         ].join(',');
       })
       .join('|');

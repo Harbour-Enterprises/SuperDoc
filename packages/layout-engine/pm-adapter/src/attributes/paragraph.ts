@@ -14,7 +14,7 @@ import type {
   DropCapRun,
 } from '@superdoc/contracts';
 import type { PMNode, StyleNode, StyleContext, ListCounterContext, ListRenderingAttrs } from '../types.js';
-import { resolveStyle } from '@superdoc/style-engine';
+import { resolveStyle, combineIndentProperties } from '@superdoc/style-engine';
 import type {
   WordParagraphLayoutOutput,
   ResolvedParagraphProperties,
@@ -1051,11 +1051,31 @@ export const computeParagraphAttrs = (
     if (!value || typeof value !== 'object') return;
     return normalizePxIndent(value) ?? convertIndentTwipsToPx(value);
   };
-  const normalizedIndent =
-    normalizeIndentObject(attrs.indent) ??
-    convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent) ??
-    convertIndentTwipsToPx(hydrated?.indent as ParagraphIndent) ??
-    normalizeParagraphIndent(attrs.textIndent);
+  /**
+   * Build indent chain with increasing priority order (lowest to highest):
+   * 1. hydratedIndentPx - from styles (docDefaults, paragraph styles)
+   * 2. paragraphIndentPx - from paragraphProperties.indent (inline paragraph properties)
+   * 3. textIndentPx - from attrs.textIndent (legacy/alternative format)
+   * 4. attrsIndentPx - from attrs.indent (direct paragraph attributes - highest priority)
+   *
+   * This follows the standard OOXML cascade: styles < inline properties < direct attributes.
+   * The `combineIndentProperties` function merges these in order, where later entries
+   * override earlier ones for the same property.
+   */
+  const hydratedIndentPx = convertIndentTwipsToPx(hydrated?.indent as ParagraphIndent);
+  const paragraphIndentPx = convertIndentTwipsToPx(paragraphProps.indent as ParagraphIndent);
+  const textIndentPx = normalizeParagraphIndent(attrs.textIndent);
+  const attrsIndentPx = normalizeIndentObject(attrs.indent);
+
+  const indentChain: Array<Record<string, unknown>> = [];
+  if (hydratedIndentPx) indentChain.push({ indent: hydratedIndentPx });
+  if (paragraphIndentPx) indentChain.push({ indent: paragraphIndentPx });
+  if (textIndentPx) indentChain.push({ indent: textIndentPx });
+  if (attrsIndentPx) indentChain.push({ indent: attrsIndentPx });
+
+  const normalizedIndent = indentChain.length
+    ? (combineIndentProperties(indentChain).indent as ParagraphIndent | undefined)
+    : undefined;
 
   /**
    * Unwraps and normalizes tab stop data structures from various formats.

@@ -50,6 +50,13 @@ describe('spacingPxToPt', () => {
     expect(result.line).toBe(15);
   });
 
+  it('should preserve auto line spacing multipliers', () => {
+    const spacing: ParagraphSpacing = { line: 1.15, lineRule: 'auto' };
+    const result = spacingPxToPt(spacing);
+    expect(result.line).toBe(1.15);
+    expect(result.lineRule).toBe('auto');
+  });
+
   it('should preserve lineRule', () => {
     const spacing: ParagraphSpacing = { line: 20, lineRule: 'exact' };
     const result = spacingPxToPt(spacing);
@@ -180,6 +187,14 @@ describe('spacingPtToPx', () => {
       const rawSpacing: ParagraphSpacing = { line: 20 };
       const result = spacingPtToPx(spacing, rawSpacing);
       expect(result?.line).toBe(20); // 15pt = 20px
+    });
+
+    it('should preserve auto line multipliers when present in rawSpacing', () => {
+      const spacing = { line: 1.15, lineRule: 'auto' as const };
+      const rawSpacing: ParagraphSpacing = { line: 20 };
+      const result = spacingPtToPx(spacing, rawSpacing);
+      expect(result?.line).toBe(1.15);
+      expect(result?.lineRule).toBe('auto');
     });
 
     it('should preserve lineRule when converting line', () => {
@@ -424,10 +439,10 @@ describe('normalizeParagraphSpacing', () => {
       expect(result?.line).toBe(1.5);
     });
 
-    it('should convert large auto line spacing values from twips', () => {
+    it('should convert auto line spacing values from 240ths of a line', () => {
       const input = { line: 480, lineRule: 'auto' };
       const result = normalizeParagraphSpacing(input);
-      expect(result?.line).toBeCloseTo(twipsToPx(480));
+      expect(result?.line).toBeCloseTo(2);
     });
 
     it('should handle zero values', () => {

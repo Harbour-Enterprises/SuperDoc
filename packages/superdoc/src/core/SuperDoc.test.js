@@ -611,6 +611,45 @@ describe('SuperDoc core', () => {
     expect(setDocumentMode).toHaveBeenLastCalledWith('editing');
   });
 
+  it('updates viewing comment options for presentation editors', async () => {
+    const { superdocStore } = createAppHarness();
+    const setViewingCommentOptions = vi.fn();
+    const setDocumentMode = vi.fn();
+    const presentationEditor = {
+      setViewingCommentOptions,
+      setDocumentMode,
+    };
+    const docStub = {
+      removeComments: vi.fn(),
+      restoreComments: vi.fn(),
+      getEditor: vi.fn(() => null),
+      getPresentationEditor: vi.fn(() => presentationEditor),
+    };
+
+    const instance = new SuperDoc({
+      selector: '#host',
+      document: 'https://example.com/doc.docx',
+      documents: [],
+      modules: { comments: {}, toolbar: {} },
+      comments: { visible: true },
+      trackChanges: { visible: true },
+      colors: ['red'],
+      role: 'editor',
+      user: { name: 'Jane', email: 'jane@example.com' },
+      onException: vi.fn(),
+    });
+    await flushMicrotasks();
+
+    superdocStore.documents = [docStub];
+
+    instance.setDocumentMode('viewing');
+
+    expect(setViewingCommentOptions).toHaveBeenCalledWith({
+      emitCommentPositionsInViewing: true,
+      enableCommentsInViewing: true,
+    });
+  });
+
   it('skips rendering comments list when role is viewer', async () => {
     createAppHarness();
 

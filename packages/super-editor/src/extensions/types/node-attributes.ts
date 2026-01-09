@@ -479,8 +479,8 @@ export interface ImageAttrs extends ShapeNodeAttributes {
   originalExtension?: string;
   /** @internal Original source */
   originalSrc?: string;
-  /** @internal Should stretch */
-  shouldStretch?: boolean;
+  /** @internal Should use cover+clip mode (from empty srcRect with stretch/fillRect) */
+  shouldCover?: boolean;
 }
 
 // ============================================

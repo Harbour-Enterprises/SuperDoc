@@ -1,4 +1,13 @@
-import type { FlowBlock, Fragment, Layout, Measure, Page, PainterDOM, PageMargins } from '@superdoc/contracts';
+import type {
+  FlowBlock,
+  Fragment,
+  Layout,
+  Measure,
+  Page,
+  PainterDOM,
+  PageMargins,
+  PositionMapping,
+} from '@superdoc/contracts';
 import { DomPainter } from './renderer.js';
 import type { PageStyles } from './styles.js';
 import type { RulerOptions } from './renderer.js';
@@ -117,8 +126,8 @@ export const createDomPainter = (
   });
 
   return {
-    paint(layout: Layout, mount: HTMLElement) {
-      painter.paint(layout, mount);
+    paint(layout: Layout, mount: HTMLElement, mapping?: PositionMapping) {
+      painter.paint(layout, mount, mapping);
     },
     setData(
       blocks: FlowBlock[],

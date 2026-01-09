@@ -156,9 +156,9 @@ describe('w:tbl translator', () => {
 
       // Check borders (merged from style and inline)
       expect(result.attrs.borders).toEqual({
-        top: { size: 0.5 }, // from style
-        insideH: { size: 0.25 }, // from style
-        bottom: { size: 1 }, // from inline
+        top: { size: 0.5, val: 'single' }, // from style
+        insideH: { size: 0.25, val: 'dashed' }, // from style
+        bottom: { size: 1, val: 'double' }, // from inline
       });
     });
 
@@ -351,7 +351,7 @@ describe('w:tbl translator', () => {
       expect(styles.justification).toBe('right');
       expect(styles.fonts).toEqual({ ascii: 'Calibri', hAnsi: undefined, cs: undefined });
       expect(styles.fontSize).toBe('11pt');
-      expect(styles.borders).toEqual({ top: { size: 1 } });
+      expect(styles.borders).toEqual({ top: { size: 1, val: 'single' } });
       expect(styles.cellMargins).toEqual({
         marginLeft: { value: 108, type: 'dxa' },
         marginRight: undefined,
@@ -393,7 +393,6 @@ describe('w:tbl translator', () => {
       expect(styles).toBeDefined();
       expect(styles?.name).toBeDefined();
       expect(styles?.borders).toBeUndefined();
-      expect(styles?.rowBorders).toBeUndefined();
       expect(styles?.cellMargins).toBeUndefined();
     });
   });

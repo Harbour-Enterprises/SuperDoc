@@ -76,6 +76,8 @@ export class SuperDoc extends EventEmitter {
     title: 'SuperDoc',
     conversations: [],
     isInternal: false,
+    comments: { visible: false },
+    trackChanges: { visible: false },
 
     // toolbar config
     toolbar: null, // Optional DOM element to render the toolbar in
@@ -133,6 +135,16 @@ export class SuperDoc extends EventEmitter {
       ...this.config,
       ...config,
     };
+    if (!this.config.comments || typeof this.config.comments !== 'object') {
+      this.config.comments = { visible: false };
+    } else if (typeof this.config.comments.visible !== 'boolean') {
+      this.config.comments.visible = false;
+    }
+    if (!this.config.trackChanges || typeof this.config.trackChanges !== 'object') {
+      this.config.trackChanges = { visible: false };
+    } else if (typeof this.config.trackChanges.visible !== 'boolean') {
+      this.config.trackChanges.visible = false;
+    }
 
     const incomingUser = this.config.user;
     if (!incomingUser || typeof incomingUser !== 'object') {
@@ -155,9 +167,10 @@ export class SuperDoc extends EventEmitter {
     if (!this.config.layoutEngineOptions.trackedChanges) {
       // Default: ON for editing/suggesting modes, OFF for viewing mode
       const isViewingMode = this.config.documentMode === 'viewing';
+      const viewingTrackedChangesVisible = isViewingMode && this.config.trackChanges?.visible === true;
       this.config.layoutEngineOptions.trackedChanges = {
-        mode: isViewingMode ? 'final' : 'review',
-        enabled: !isViewingMode,
+        mode: isViewingMode ? (viewingTrackedChangesVisible ? 'review' : 'original') : 'review',
+        enabled: true,
       };
     }
 
@@ -345,6 +358,7 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore.init(this.config);
     const commentsModuleConfig = this.config.modules.comments;
     this.commentsStore.init(commentsModuleConfig && commentsModuleConfig !== false ? commentsModuleConfig : {});
+    this.#syncViewingVisibility();
   }
 
   #initListeners() {
@@ -702,6 +716,7 @@ export class SuperDoc extends EventEmitter {
 
     type = type.toLowerCase();
     this.config.documentMode = type;
+    this.#syncViewingVisibility();
 
     const types = {
       viewing: () => this.#setModeViewing(),
@@ -797,11 +812,24 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Disable tracked changes for viewing mode (show original document without change markers)
-    this.setTrackedChangesPreferences({ mode: 'original', enabled: false });
+    const commentsVisible = this.config.comments?.visible === true;
+    const trackChangesVisible = this.config.trackChanges?.visible === true;
+
+    this.setTrackedChangesPreferences(
+      trackChangesVisible ? { mode: 'review', enabled: true } : { mode: 'original', enabled: true },
+    );
+
+    // Clear comment positions to hide floating comment bubbles in viewing mode
+    if (!commentsVisible && !trackChangesVisible) {
+      this.commentsStore?.clearEditorCommentPositions?.();
+    }
 
     this.superdocStore.documents.forEach((doc) => {
-      doc.removeComments();
+      if (commentsVisible || trackChangesVisible) {
+        doc.restoreComments();
+      } else {
+        doc.removeComments();
+      }
       this.#applyDocumentMode(doc, 'viewing');
     });
 
@@ -811,6 +839,32 @@ export class SuperDoc extends EventEmitter {
     }
   }
 
+  #syncViewingVisibility() {
+    const commentsVisible = this.config.comments?.visible === true;
+    const trackChangesVisible = this.config.trackChanges?.visible === true;
+    const isViewingMode = this.config.documentMode === 'viewing';
+    const shouldRenderCommentsInViewing = commentsVisible || trackChangesVisible;
+    if (this.commentsStore?.setViewingVisibility) {
+      this.commentsStore.setViewingVisibility({
+        documentMode: this.config.documentMode,
+        commentsVisible,
+        trackChangesVisible,
+      });
+    }
+
+    const docs = this.superdocStore?.documents;
+    if (Array.isArray(docs) && docs.length > 0) {
+      docs.forEach((doc) => {
+        const presentationEditor = typeof doc.getPresentationEditor === 'function' ? doc.getPresentationEditor() : null;
+        if (presentationEditor?.setViewingCommentOptions) {
+          presentationEditor.setViewingCommentOptions({
+            emitCommentPositionsInViewing: isViewingMode && shouldRenderCommentsInViewing,
+            enableCommentsInViewing: isViewingMode && commentsVisible,
+          });
+        }
+      });
+    }
+  }
   /**
    * Search for text or regex in the active editor
    * @param {string | RegExp} text The text or regex to search for

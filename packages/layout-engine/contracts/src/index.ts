@@ -530,6 +530,9 @@ export type ImageBlock = {
   anchor?: ImageAnchor;
   wrap?: ImageWrap;
   attrs?: ImageBlockAttrs;
+  // VML image adjustments for watermark effects
+  gain?: string | number; // Brightness/washout (VML hex string or number)
+  blacklevel?: string | number; // Contrast adjustment (VML hex string or number)
 };
 
 export type DrawingKind = 'image' | 'vectorShape' | 'shapeGroup';
@@ -1599,8 +1602,19 @@ export type Layout = {
   layoutEpoch?: number;
 };
 
+/**
+ * Interface for position mapping from ProseMirror transactions.
+ * Used to efficiently update DOM position attributes without full re-render.
+ */
+export interface PositionMapping {
+  /** Transform a position from old to new document coordinates */
+  map(pos: number, bias?: number): number;
+  /** Array of step maps - length indicates transaction complexity */
+  readonly maps: readonly unknown[];
+}
+
 export interface PainterDOM {
-  paint(layout: Layout, mount: HTMLElement): void;
+  paint(layout: Layout, mount: HTMLElement, mapping?: PositionMapping): void;
   /**
    * Updates the painter's internal block and measure data without reinstantiating.
    *

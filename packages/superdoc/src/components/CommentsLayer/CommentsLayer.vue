@@ -8,7 +8,8 @@ import useComment from './use-comment';
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
 const { COMMENT_EVENTS } = commentsStore;
-const { documentsWithConverations, activeComment, floatingCommentsOffset, commentsList } = storeToRefs(commentsStore);
+const { documentsWithConverations, activeComment, floatingCommentsOffset, getGroupedComments } =
+  storeToRefs(commentsStore);
 const { documents, activeZoom } = storeToRefs(superdocStore);
 const { proxy } = getCurrentInstance();
 
@@ -92,8 +93,7 @@ const activateComment = (comment, e) => {
 };
 
 const getCurrentComments = computed(() => {
-  return commentsList.value
-    .filter((c) => !c.parentCommentId)
+  return getGroupedComments.value?.parentComments
     .filter((c) => c.selection && c.selection.selectionBounds?.top)
     .filter((c) => !c.resolvedTime)
     .filter((c) => c.selection?.source !== 'super-editor');
