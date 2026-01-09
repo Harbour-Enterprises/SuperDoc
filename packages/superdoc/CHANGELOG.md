@@ -1,3 +1,10 @@
+## [1.4.1-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0...v1.4.1-next.1) (2026-01-09)
+
+
+### Bug Fixes
+
+* **comments:** improve comments on tracked changes imported from google docs and word [SD-1033] ([#1631](https://github.com/Harbour-Enterprises/SuperDoc/issues/1631)) ([1d8873a](https://github.com/Harbour-Enterprises/SuperDoc/commit/1d8873ae372a65d16c5f46c4dee9980e8159c6e2))
+
 # [1.4.0](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.3.0...v1.4.0) (2026-01-09)
 
 
