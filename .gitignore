@@ -6,6 +6,7 @@ logs
 node_modules
 dist
 dist-ssr
+dist-types
 *.local
 .env
 .npmrc
@@ -35,6 +36,10 @@ lerna-debug.log*
 .vitepress/dist
 
 packages/super-editor/src/tests/data/*/
+
+packages/word-layout/tests/**/*.js
+packages/word-layout/tests/**/*.d.ts
+packages/word-layout/tests/**/*.map
 
 # Playwright
 test-results
