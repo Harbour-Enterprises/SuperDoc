@@ -5094,6 +5094,7 @@ export class PresentationEditor extends EventEmitter {
           const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
           if (slotPage) {
             const fragments = slotPage.fragments ?? [];
+
             const pageHeight =
               page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
             const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
@@ -5156,6 +5157,7 @@ export class PresentationEditor extends EventEmitter {
         return null;
       }
       const fragments = slotPage.fragments ?? [];
+
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);
