@@ -3695,12 +3695,17 @@ export class DomPainter {
 
     // Pass isLink flag to skip applying inline color/decoration styles for links
     applyRunStyles(elem as HTMLElement, run, isActiveLink);
-    const commentColor = getCommentHighlight(run as TextRun);
-    if (commentColor && !(run as TextRun).highlight) {
+    const textRun = run as TextRun;
+    const commentAnnotations = textRun.comments;
+    const hasAnyComment = !!commentAnnotations?.length;
+    const hasHighlightableComment = !!commentAnnotations?.some((c) => !c.trackedChange);
+    const commentColor = getCommentHighlight(textRun);
+
+    if (commentColor && !textRun.highlight && hasHighlightableComment) {
       (elem as HTMLElement).style.backgroundColor = commentColor;
     }
-    const commentAnnotations = (run as TextRun).comments;
-    if (commentAnnotations?.length) {
+    // We still need to preserve the comment ids
+    if (hasAnyComment) {
       elem.dataset.commentIds = commentAnnotations.map((c) => c.commentId).join(',');
       if (commentAnnotations.some((c) => c.internal)) {
         elem.dataset.commentInternal = 'true';

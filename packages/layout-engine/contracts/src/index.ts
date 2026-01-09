@@ -181,6 +181,7 @@ export type TextRun = RunMarks & {
     commentId: string;
     importedId?: string;
     internal?: boolean;
+    trackedChange?: boolean;
   }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
