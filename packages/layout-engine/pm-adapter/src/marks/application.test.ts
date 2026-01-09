@@ -866,7 +866,9 @@ describe('mark application', () => {
       const run: TextRun = { text: 'Hello', fontFamily: 'Arial', fontSize: 12 };
       applyMarksToRun(run, [{ type: 'commentMark', attrs: { commentId: 'c-1', internal: true } }]);
 
-      expect(run.comments).toEqual([{ commentId: 'c-1', internal: true }]);
+      expect(run.comments).toEqual([
+        { commentId: 'c-1', importedId: undefined, internal: true, trackedChange: false },
+      ]);
     });
 
     it('dedupes comment annotations by id/importedId', () => {
@@ -877,7 +879,12 @@ describe('mark application', () => {
       ]);
 
       expect(run.comments).toHaveLength(1);
-      expect(run.comments?.[0]).toEqual({ commentId: 'c-1', importedId: 'imp-1', internal: false });
+      expect(run.comments?.[0]).toEqual({
+        commentId: 'c-1',
+        importedId: 'imp-1',
+        internal: false,
+        trackedChange: false,
+      });
     });
 
     it('applies underline mark with default style', () => {

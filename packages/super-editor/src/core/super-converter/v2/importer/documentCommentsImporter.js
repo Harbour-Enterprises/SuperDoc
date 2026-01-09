@@ -104,7 +104,10 @@ const generateCommentsWithExtendedData = ({ docx, comments, converter }) => {
   const commentsExtended = docx['word/commentsExtended.xml'];
   if (!commentsExtended) {
     const commentsWithThreading = detectThreadingFromRanges(comments, rangeData);
-    return commentsWithThreading.map((comment) => ({ ...comment, isDone: comment.isDone ?? false }));
+    return commentsWithThreading.map((comment) => ({
+      ...comment,
+      isDone: comment.isDone ?? false,
+    }));
   }
 
   const { elements: initialElements = [] } = commentsExtended;

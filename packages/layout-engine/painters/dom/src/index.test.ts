@@ -2475,6 +2475,66 @@ describe('DomPainter', () => {
     expect(span.dataset.trackChangeAuthorEmail).toBe('reviewer@example.com');
   });
 
+  it('keeps comment metadata but skips highlight styles for tracked-change comments', () => {
+    const trackedCommentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'tracked-comment-block',
+      runs: [
+        {
+          text: 'Replace me',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          comments: [{ commentId: 'comment-1', internal: false, trackedChange: true }],
+          trackedChange: {
+            kind: 'insert',
+            id: 'change-1',
+          },
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(
+      trackedCommentBlock.id,
+      trackedCommentBlock.runs[0].text.length,
+    );
+
+    const painter = createDomPainter({ blocks: [trackedCommentBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    const span = mount.querySelector('.superdoc-comment-highlight') as HTMLElement;
+    expect(span).toBeTruthy();
+    expect(span.dataset.commentIds).toBe('comment-1');
+    expect(span.style.backgroundColor).toBe('');
+  });
+
+  it('applies comment highlight styles for non-tracked-change comments', () => {
+    const commentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'comment-block',
+      runs: [
+        {
+          text: 'Commented text',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          comments: [{ commentId: 'comment-2', internal: false, trackedChange: false }],
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(
+      commentBlock.id,
+      commentBlock.runs[0].text.length,
+    );
+
+    const painter = createDomPainter({ blocks: [commentBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    const span = mount.querySelector('.superdoc-comment-highlight') as HTMLElement;
+    expect(span).toBeTruthy();
+    expect(span.dataset.commentIds).toBe('comment-2');
+    expect(span.style.backgroundColor).not.toBe('');
+  });
+
   it('respects trackedChangesMode modifiers for insertions', () => {
     const finalBlock: FlowBlock = {
       kind: 'paragraph',

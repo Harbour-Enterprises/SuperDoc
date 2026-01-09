@@ -369,10 +369,10 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
     const commentNodes = ['commentRangeStart', 'commentRangeEnd', 'commentReference'];
     if (!commentNodes.includes(type.name)) return;
 
-    const { resolvedCommentId, importedId, internal, matchingImportedComment } = resolveCommentMeta({
-      converter,
-      importedId: node.attrs['w:id'],
-    });
+    const { resolvedCommentId, importedId, internal, matchingImportedComment, trackedChange } = resolveCommentMeta({
+        converter,
+        importedId: node.attrs['w:id'],
+      });
     const isDone = !!matchingImportedComment?.isDone;
 
     // If the node is a commentRangeStart, record it so we can place a mark once we find the end.
@@ -382,6 +382,7 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
           commentId: resolvedCommentId,
           importedId,
           internal,
+          trackedChange,
           start: pos,
         });
       }
@@ -430,6 +431,7 @@ export const prepareCommentsForImport = (doc, tr, schema, converter) => {
         commentId: itemToMark.commentId,
         importedId,
         internal: itemToMark.internal,
+        trackedChange: itemToMark.trackedChange,
       };
 
       tr.addMark(start, pos + 1, schema.marks[CommentMarkName].create(markAttrs));
