@@ -628,6 +628,295 @@ describe('handleImageNode', () => {
       expect(result.attrs.wrap.attrs).toEqual({ behindDoc: false });
     });
   });
+
+  /**
+   * CRITICAL: srcRect/shouldCover tests
+   *
+   * These tests document the srcRect/shouldCover logic that determines whether images
+   * should be clipped (object-fit: cover) or not.
+   *
+   * In OOXML:
+   * - <a:stretch><a:fillRect/></a:stretch>: Scale image to fill extent rectangle
+   * - <a:srcRect>: Specifies source cropping/extension
+   *
+   * srcRect attribute behavior:
+   * - Positive values (e.g., r="84800"): Crop percentage from that edge (84.8% from right)
+   * - Negative values (e.g., b="-3978"): Word extended the source mapping
+   * - Empty/no srcRect: No pre-adjustment
+   *
+   * shouldCover is set to true when:
+   * - stretch+fillRect is present AND
+   * - srcRect has NO negative values (meaning we need CSS to handle clipping)
+   *
+   * Real-world examples:
+   * - whalar_tables_issue_tbl_only/word/header1.xml: <a:srcRect r="84800"/> → shouldCover=true
+   * - whalar_tables_issue_tbl_only/word/header2.xml: <a:srcRect/> (empty) → shouldCover=true
+   * - certn_logo_left/word/header2.xml: <a:srcRect b="-3978"/> → shouldCover=false
+   */
+  describe('srcRect/shouldCover behavior', () => {
+    const makeNodeWithBlipFill = (blipFillElements) => ({
+      attributes: {
+        distT: '1000',
+        distB: '2000',
+        distL: '3000',
+        distR: '4000',
+      },
+      elements: [
+        { name: 'wp:extent', attributes: { cx: '5000', cy: '6000' } },
+        {
+          name: 'a:graphic',
+          elements: [
+            {
+              name: 'a:graphicData',
+              attributes: { uri: 'pic' },
+              elements: [
+                {
+                  name: 'pic:pic',
+                  elements: [
+                    {
+                      name: 'pic:blipFill',
+                      elements: [{ name: 'a:blip', attributes: { 'r:embed': 'rId1' } }, ...blipFillElements],
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { name: 'wp:docPr', attributes: { id: '42', name: 'TestImage', descr: 'Test' } },
+      ],
+    });
+
+    it('sets shouldCover=true when stretch+fillRect with NO srcRect element', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        // No srcRect element
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(true);
+    });
+
+    it('sets shouldCover=true when stretch+fillRect with EMPTY srcRect', () => {
+      // Example: whalar header2.xml - <a:srcRect/>
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: {}, // Empty srcRect
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(true);
+    });
+
+    it('sets shouldCover=true when stretch+fillRect with POSITIVE srcRect values', () => {
+      // Example: whalar header1.xml - <a:srcRect r="84800"/>
+      // Positive value = crop 84.8% from right
+      // Since we don't implement actual srcRect cropping, CSS cover handles it
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { r: '84800' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(true);
+    });
+
+    it('sets shouldCover=true when stretch+fillRect with multiple positive srcRect values', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { l: '10000', r: '20000', t: '5000', b: '5000' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(true);
+    });
+
+    it('sets shouldCover=false when stretch+fillRect with NEGATIVE srcRect value', () => {
+      // Example: certn_logo_left header2.xml - <a:srcRect b="-3978"/>
+      // Negative value = Word extended the source mapping
+      // The image should NOT be clipped because Word already adjusted
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { b: '-3978' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('sets shouldCover=false when ANY srcRect value is negative', () => {
+      // Even if some values are positive, a negative value means Word adjusted
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { l: '10000', r: '20000', b: '-1000' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('sets shouldCover=false when stretch but NO fillRect', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [], // No fillRect
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('sets shouldCover=false when NO stretch element', () => {
+      const node = makeNodeWithBlipFill([
+        // No stretch element
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('handles srcRect with zero values as non-negative (shouldCover=true)', () => {
+      // Zero is not negative, so still needs cover mode
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { l: '0', r: '0', t: '0', b: '0' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(true);
+    });
+
+    it('handles srcRect with string number values (negative)', () => {
+      // OOXML attributes are strings, ensure parsing works
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { b: '-5000' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('handles srcRect with only left edge negative', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { l: '-500' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('handles srcRect with only top edge negative', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { t: '-1000' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+
+    it('handles srcRect with only right edge negative', () => {
+      const node = makeNodeWithBlipFill([
+        {
+          name: 'a:stretch',
+          elements: [{ name: 'a:fillRect' }],
+        },
+        {
+          name: 'a:srcRect',
+          attributes: { r: '-2000' },
+        },
+      ]);
+
+      const result = handleImageNode(node, makeParams(), false);
+
+      expect(result).not.toBeNull();
+      expect(result.attrs.shouldCover).toBe(false);
+    });
+  });
 });
 
 describe('getVectorShape', () => {

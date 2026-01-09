@@ -213,10 +213,30 @@ export function handleImageNode(node, params, isAnchor) {
     return null;
   }
 
-  // Check for stretch fill mode
+  // Check for stretch mode: <a:stretch><a:fillRect/></a:stretch>
+  // This tells Word to scale the image to fill the extent rectangle.
+  //
+  // srcRect behavior:
+  // - Positive values (e.g., r="84800"): actual cropping that Word applies to the source image
+  // - Negative values (e.g., b="-3978"): Word extended the mapping (image doesn't need clipping)
+  // - Empty/no srcRect: no pre-adjustment, use cover+clip for aspect ratio mismatch
+  //
+  // Since we don't implement actual srcRect cropping, we still need cover mode for positive values.
+  // Only skip cover mode when srcRect has negative values (Word already adjusted the mapping).
   const stretch = blipFill?.elements.find((el) => el.name === 'a:stretch');
   const fillRect = stretch?.elements.find((el) => el.name === 'a:fillRect');
+  const srcRect = blipFill?.elements.find((el) => el.name === 'a:srcRect');
+  const srcRectAttrs = srcRect?.attributes || {};
+
+  // Check if srcRect has negative values (indicating Word extended/adjusted the image mapping)
+  const srcRectHasNegativeValues = ['l', 't', 'r', 'b'].some((attr) => {
+    const val = srcRectAttrs[attr];
+    return val != null && parseFloat(val) < 0;
+  });
+
   const shouldStretch = Boolean(stretch && fillRect);
+  // Use cover mode when stretching, unless srcRect has negative values (Word already adjusted)
+  const shouldCover = shouldStretch && !srcRectHasNegativeValues;
 
   const spPr = picture.elements.find((el) => el.name === 'pic:spPr');
   if (spPr) {
@@ -318,7 +338,7 @@ export function handleImageNode(node, params, isAnchor) {
         }
       : {}),
     wrapTopAndBottom: wrap.type === 'TopAndBottom',
-    shouldStretch,
+    shouldCover,
     originalPadding: {
       distT: attributes['distT'],
       distB: attributes['distB'],

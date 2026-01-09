@@ -2683,6 +2683,10 @@ export class DomPainter {
       img.style.width = '100%';
       img.style.height = '100%';
       img.style.objectFit = block.objectFit ?? 'contain';
+      // MS Word anchors stretched images to top-left, clipping from right/bottom
+      if (block.objectFit === 'cover') {
+        img.style.objectPosition = 'left top';
+      }
       img.style.display = block.display === 'inline' ? 'inline-block' : 'block';
       fragmentEl.appendChild(img);
 
@@ -2774,6 +2778,10 @@ export class DomPainter {
     img.style.width = '100%';
     img.style.height = '100%';
     img.style.objectFit = drawing.objectFit ?? 'contain';
+    // MS Word anchors stretched images to top-left, clipping from right/bottom
+    if (drawing.objectFit === 'cover') {
+      img.style.objectPosition = 'left top';
+    }
     img.style.display = 'block';
     return img;
   }

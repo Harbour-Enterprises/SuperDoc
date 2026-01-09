@@ -2374,6 +2374,42 @@ describe('measureBlock', () => {
       expect(measure.height).toBe(200);
     });
 
+    it('bypasses maxWidth for page-relative anchored images', async () => {
+      const block: FlowBlock = {
+        kind: 'image',
+        id: 'img-page-anchor',
+        src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+        width: 800,
+        height: 400,
+        anchor: {
+          isAnchored: true,
+          hRelativeFrom: 'page',
+        },
+      };
+
+      const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 200, maxHeight: 400 }));
+      expect(measure.width).toBe(800);
+      expect(measure.height).toBe(400);
+    });
+
+    it('bypasses maxWidth for margin-relative anchored images', async () => {
+      const block: FlowBlock = {
+        kind: 'image',
+        id: 'img-margin-anchor',
+        src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+        width: 640,
+        height: 320,
+        anchor: {
+          isAnchored: true,
+          hRelativeFrom: 'margin',
+        },
+      };
+
+      const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 150, maxHeight: 400 }));
+      expect(measure.width).toBe(640);
+      expect(measure.height).toBe(320);
+    });
+
     it('respects maxHeight constraints', async () => {
       const block: FlowBlock = {
         kind: 'image',
@@ -2467,6 +2503,22 @@ describe('measureBlock', () => {
         const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 400, maxHeight: 50 }));
         expect(measure.height).toBe(50);
         expect(measure.width).toBe(100);
+      });
+
+      it('bypasses maxHeight when objectFit is set to cover', async () => {
+        const block: FlowBlock = {
+          kind: 'image',
+          id: 'img-cover-fit',
+          src: 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/',
+          width: 200,
+          height: 100,
+          objectFit: 'cover',
+        };
+
+        // objectFit: cover should render at exact dimensions, CSS handles content scaling/clipping
+        const measure = expectImageMeasure(await measureBlock(block, { maxWidth: 500, maxHeight: 40 }));
+        expect(measure.width).toBe(200);
+        expect(measure.height).toBe(100);
       });
     });
   });
