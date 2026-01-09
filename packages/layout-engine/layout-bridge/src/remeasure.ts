@@ -294,6 +294,7 @@ const TAB_EPSILON = 0.1;
  * - Prevents edge cases where measured text at 199.7px breaks on a 200px line
  */
 const WIDTH_FUDGE_PX = 0.5;
+const WORD_WIDTH_TOLERANCE_PX = 12;
 const twipsToPx = (twips: number): number => twips / TWIPS_PER_PX;
 const pxToTwips = (px: number): number => Math.round(px * TWIPS_PER_PX);
 
@@ -664,7 +665,16 @@ export function remeasureParagraph(
   const indentRight = Math.max(0, indent?.right ?? 0);
   const indentFirstLine = Math.max(0, indent?.firstLine ?? 0);
   const indentHanging = Math.max(0, indent?.hanging ?? 0);
-  const rawFirstLineOffset = Math.max(0, firstLineIndent || indentFirstLine - indentHanging);
+  const resolveWidthTolerance = (): number =>
+    !wordLayout?.marker &&
+    (indentLeft !== 0 || indentRight !== 0 || indentFirstLine !== 0 || indentHanging !== 0) &&
+    lines.length === 0
+      ? -WORD_WIDTH_TOLERANCE_PX
+      : WIDTH_FUDGE_PX;
+  const baseFirstLineOffset = firstLineIndent || indentFirstLine - indentHanging;
+  const clampedFirstLineOffset = Math.max(0, baseFirstLineOffset);
+  const allowNegativeFirstLineOffset = !wordLayout?.marker && baseFirstLineOffset < 0;
+  const effectiveFirstLineOffset = allowNegativeFirstLineOffset ? baseFirstLineOffset : clampedFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // Some producers provide `marker.textStartX` without setting top-level `textStartPx`.
   // Both values represent the same concept: where the first-line text begins after the marker/tab.
@@ -702,7 +712,7 @@ export function remeasureParagraph(
   const firstLineWidth =
     typeof effectiveTextStartPx === 'number' && effectiveTextStartPx > indentLeft && !treatAsHanging
       ? Math.max(1, maxWidth - effectiveTextStartPx - indentRight)
-      : Math.max(1, contentWidth - rawFirstLineOffset);
+      : Math.max(1, contentWidth - effectiveFirstLineOffset);
   const tabStops = buildTabStopsPx(indent as ParagraphIndent | undefined, attrs?.tabs, attrs?.tabIntervalTwips);
 
   let currentRun = 0;
@@ -744,7 +754,8 @@ export function remeasureParagraph(
       const start = r === currentRun ? currentChar : 0;
       for (let c = start; c < text.length; c += 1) {
         const w = measureRunSliceWidth(run, c, c + 1);
-        if (width + w > effectiveMaxWidth - WIDTH_FUDGE_PX && width > 0) {
+        const widthTolerance = resolveWidthTolerance();
+        if (width + w > effectiveMaxWidth - widthTolerance && width > 0) {
           // Break line
           if (lastBreakRun >= 0) {
             endRun = lastBreakRun;
