@@ -140,6 +140,12 @@ const init = async () => {
     toolbarGroups: ['center'],
     role: userRole,
     documentMode: 'editing',
+    comments: {
+      visible: true,
+    },
+    trackChanges: {
+      visible: true,
+    },
     toolbarGroups: ['left', 'center', 'right'],
     pagination: useLayoutEngine.value,
     rulers: true,

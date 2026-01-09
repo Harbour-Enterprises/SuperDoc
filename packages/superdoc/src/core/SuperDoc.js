@@ -76,6 +76,8 @@ export class SuperDoc extends EventEmitter {
     title: 'SuperDoc',
     conversations: [],
     isInternal: false,
+    comments: { visible: false },
+    trackChanges: { visible: false },
 
     // toolbar config
     toolbar: null, // Optional DOM element to render the toolbar in
@@ -133,6 +135,16 @@ export class SuperDoc extends EventEmitter {
       ...this.config,
       ...config,
     };
+    if (!this.config.comments || typeof this.config.comments !== 'object') {
+      this.config.comments = { visible: false };
+    } else if (typeof this.config.comments.visible !== 'boolean') {
+      this.config.comments.visible = false;
+    }
+    if (!this.config.trackChanges || typeof this.config.trackChanges !== 'object') {
+      this.config.trackChanges = { visible: false };
+    } else if (typeof this.config.trackChanges.visible !== 'boolean') {
+      this.config.trackChanges.visible = false;
+    }
 
     const incomingUser = this.config.user;
     if (!incomingUser || typeof incomingUser !== 'object') {
@@ -155,9 +167,10 @@ export class SuperDoc extends EventEmitter {
     if (!this.config.layoutEngineOptions.trackedChanges) {
       // Default: ON for editing/suggesting modes, OFF for viewing mode
       const isViewingMode = this.config.documentMode === 'viewing';
+      const viewingTrackedChangesVisible = isViewingMode && this.config.trackChanges?.visible === true;
       this.config.layoutEngineOptions.trackedChanges = {
-        mode: isViewingMode ? 'final' : 'review',
-        enabled: !isViewingMode,
+        mode: isViewingMode ? (viewingTrackedChangesVisible ? 'review' : 'original') : 'review',
+        enabled: true,
       };
     }
 
@@ -345,6 +358,7 @@ export class SuperDoc extends EventEmitter {
     this.superdocStore.init(this.config);
     const commentsModuleConfig = this.config.modules.comments;
     this.commentsStore.init(commentsModuleConfig && commentsModuleConfig !== false ? commentsModuleConfig : {});
+    this.#syncViewingVisibility();
   }
 
   #initListeners() {
@@ -702,6 +716,7 @@ export class SuperDoc extends EventEmitter {
 
     type = type.toLowerCase();
     this.config.documentMode = type;
+    this.#syncViewingVisibility();
 
     const types = {
       viewing: () => this.#setModeViewing(),
@@ -797,20 +812,42 @@ export class SuperDoc extends EventEmitter {
   #setModeViewing() {
     this.toolbar.activeEditor = null;
 
-    // Show the original document when viewing: hide insertions and render deletions as normal text
-    this.setTrackedChangesPreferences({ mode: 'original', enabled: true });
+    const commentsVisible = this.config.comments?.visible === true;
+    const trackChangesVisible = this.config.trackChanges?.visible === true;
+
+    this.setTrackedChangesPreferences(
+      trackChangesVisible ? { mode: 'review', enabled: true } : { mode: 'original', enabled: true },
+    );
 
     // Clear comment positions to hide floating comment bubbles in viewing mode
-    this.commentsStore?.clearEditorCommentPositions?.();
+    if (!commentsVisible && !trackChangesVisible) {
+      this.commentsStore?.clearEditorCommentPositions?.();
+    }
 
     this.superdocStore.documents.forEach((doc) => {
-      doc.removeComments();
+      if (commentsVisible || trackChangesVisible) {
+        doc.restoreComments();
+      } else {
+        doc.removeComments();
+      }
       this.#applyDocumentMode(doc, 'viewing');
     });
 
     if (this.toolbar) {
       this.toolbar.documentMode = 'viewing';
       this.toolbar.updateToolbarState();
+    }
+  }
+
+  #syncViewingVisibility() {
+    const commentsVisible = this.config.comments?.visible === true;
+    const trackChangesVisible = this.config.trackChanges?.visible === true;
+    if (this.commentsStore?.setViewingVisibility) {
+      this.commentsStore.setViewingVisibility({
+        documentMode: this.config.documentMode,
+        commentsVisible,
+        trackChangesVisible,
+      });
     }
   }
 
