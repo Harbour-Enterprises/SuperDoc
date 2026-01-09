@@ -1,3 +1,11 @@
+# [1.4.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0-next.2...v1.4.0-next.3) (2026-01-09)
+
+
+### Bug Fixes
+
+* pass w:vanish through to layout engine ([#1696](https://github.com/Harbour-Enterprises/SuperDoc/issues/1696)) ([2c0ba9c](https://github.com/Harbour-Enterprises/SuperDoc/commit/2c0ba9ceb783226ffe966547b39b1ea8a5a8da10))
+* tab spacing for toc ([#1695](https://github.com/Harbour-Enterprises/SuperDoc/issues/1695)) ([7e24eaa](https://github.com/Harbour-Enterprises/SuperDoc/commit/7e24eaa90f12ac08b57e75ee4901bac8ef7e4ec4))
+
 # [1.4.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.0-next.1...v1.4.0-next.2) (2026-01-09)
 
 
