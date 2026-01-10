@@ -2677,6 +2677,66 @@ describe('DomPainter', () => {
     expect(span.dataset.trackChangeAuthorEmail).toBe('reviewer@example.com');
   });
 
+  it('keeps comment metadata but skips highlight styles for tracked-change comments', () => {
+    const trackedCommentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'tracked-comment-block',
+      runs: [
+        {
+          text: 'Replace me',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          comments: [{ commentId: 'comment-1', internal: false, trackedChange: true }],
+          trackedChange: {
+            kind: 'insert',
+            id: 'change-1',
+          },
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(
+      trackedCommentBlock.id,
+      trackedCommentBlock.runs[0].text.length,
+    );
+
+    const painter = createDomPainter({ blocks: [trackedCommentBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    const span = mount.querySelector('.superdoc-comment-highlight') as HTMLElement;
+    expect(span).toBeTruthy();
+    expect(span.dataset.commentIds).toBe('comment-1');
+    expect(span.style.backgroundColor).toBe('');
+  });
+
+  it('applies comment highlight styles for non-tracked-change comments', () => {
+    const commentBlock: FlowBlock = {
+      kind: 'paragraph',
+      id: 'comment-block',
+      runs: [
+        {
+          text: 'Commented text',
+          fontFamily: 'Arial',
+          fontSize: 16,
+          comments: [{ commentId: 'comment-2', internal: false, trackedChange: false }],
+        },
+      ],
+    };
+
+    const { paragraphMeasure, paragraphLayout } = buildSingleParagraphData(
+      commentBlock.id,
+      commentBlock.runs[0].text.length,
+    );
+
+    const painter = createDomPainter({ blocks: [commentBlock], measures: [paragraphMeasure] });
+    painter.paint(paragraphLayout, mount);
+
+    const span = mount.querySelector('.superdoc-comment-highlight') as HTMLElement;
+    expect(span).toBeTruthy();
+    expect(span.dataset.commentIds).toBe('comment-2');
+    expect(span.style.backgroundColor).not.toBe('');
+  });
+
   it('respects trackedChangesMode modifiers for insertions', () => {
     const finalBlock: FlowBlock = {
       kind: 'paragraph',
@@ -5027,6 +5087,199 @@ describe('DomPainter', () => {
         expect(metadata.minWidth).toBe(20);
         expect(metadata.minHeight).toBe(20);
       });
+    });
+  });
+});
+
+describe('ImageFragment (block-level images)', () => {
+  let mount: HTMLElement;
+
+  beforeEach(() => {
+    mount = document.createElement('div');
+    document.body.appendChild(mount);
+  });
+
+  afterEach(() => {
+    mount.remove();
+  });
+
+  describe('data-image-metadata attribute for watermarks', () => {
+    it('does NOT add data-image-metadata for watermark images (vmlWatermark: true)', () => {
+      const watermarkBlock: FlowBlock = {
+        kind: 'image',
+        id: 'watermark-img',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 200,
+        height: 100,
+        attrs: { vmlWatermark: true },
+      };
+
+      const watermarkMeasure: Measure = {
+        kind: 'image',
+        width: 200,
+        height: 100,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'watermark-img',
+        x: 50,
+        y: 50,
+        width: 200,
+        height: 100,
+        metadata: {
+          originalWidth: 200,
+          originalHeight: 100,
+          maxWidth: 600,
+          maxHeight: 300,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [watermarkBlock],
+        measures: [watermarkMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // Watermarks should NOT have data-image-metadata (makes them non-interactive)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeNull();
+    });
+
+    it('DOES add data-image-metadata for regular images (no vmlWatermark)', () => {
+      const regularBlock: FlowBlock = {
+        kind: 'image',
+        id: 'regular-img',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 200,
+        height: 100,
+      };
+
+      const regularMeasure: Measure = {
+        kind: 'image',
+        width: 200,
+        height: 100,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'regular-img',
+        x: 50,
+        y: 50,
+        width: 200,
+        height: 100,
+        metadata: {
+          originalWidth: 200,
+          originalHeight: 100,
+          maxWidth: 600,
+          maxHeight: 300,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [regularBlock],
+        measures: [regularMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // Regular images SHOULD have data-image-metadata (makes them interactive/resizable)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeTruthy();
+
+      const metadata = JSON.parse(metadataAttr!);
+      expect(metadata.originalWidth).toBe(200);
+      expect(metadata.originalHeight).toBe(100);
+    });
+
+    it('DOES add data-image-metadata for images with vmlWatermark: false explicitly set', () => {
+      // This test ensures that only vmlWatermark: true skips metadata, not false
+      const regularBlock: FlowBlock = {
+        kind: 'image',
+        id: 'regular-img-explicit',
+        src: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 150,
+        height: 75,
+        attrs: { vmlWatermark: false },
+      };
+
+      const regularMeasure: Measure = {
+        kind: 'image',
+        width: 150,
+        height: 75,
+      };
+
+      const imageFragment = {
+        kind: 'image' as const,
+        blockId: 'regular-img-explicit',
+        x: 50,
+        y: 50,
+        width: 150,
+        height: 75,
+        metadata: {
+          originalWidth: 150,
+          originalHeight: 75,
+          maxWidth: 450,
+          maxHeight: 225,
+          aspectRatio: 2,
+          minWidth: 20,
+          minHeight: 20,
+        },
+      };
+
+      const imageLayout: Layout = {
+        pageSize: { w: 400, h: 500 },
+        pages: [
+          {
+            number: 1,
+            fragments: [imageFragment],
+          },
+        ],
+      };
+
+      const painter = createDomPainter({
+        blocks: [regularBlock],
+        measures: [regularMeasure],
+      });
+      painter.paint(imageLayout, mount);
+
+      const imageEl = mount.querySelector('.superdoc-image-fragment');
+      expect(imageEl).toBeTruthy();
+
+      // vmlWatermark: false should still have metadata (interactive)
+      const metadataAttr = imageEl?.getAttribute('data-image-metadata');
+      expect(metadataAttr).toBeTruthy();
     });
   });
 });
@@ -8788,6 +9041,102 @@ describe('applyRunDataAttributes', () => {
         // Should have container boundary markers
         expect(fragment.dataset.sdtContainerStart).toBe('true');
         expect(fragment.dataset.sdtContainerEnd).toBe('true');
+      });
+
+      it('updates block SDT boundaries when appending a new fragment during patch rendering', () => {
+        const sdtMetadata = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'scb-boundary-1',
+          alias: 'Boundary Control',
+        };
+
+        const buildParagraph = (id: string, text: string, pmStart: number) => {
+          const runLength = text.length;
+          const block: FlowBlock = {
+            kind: 'paragraph',
+            id,
+            runs: [{ text, fontFamily: 'Arial', fontSize: 16, pmStart, pmEnd: pmStart + runLength }],
+            attrs: { sdt: sdtMetadata },
+          };
+
+          const measure: Measure = {
+            kind: 'paragraph',
+            lines: [
+              {
+                fromRun: 0,
+                fromChar: 0,
+                toRun: 0,
+                toChar: runLength,
+                width: 160,
+                ascent: 12,
+                descent: 4,
+                lineHeight: 20,
+              },
+            ],
+            totalHeight: 20,
+          };
+
+          return { block, measure };
+        };
+
+        const paraA = buildParagraph('sdt-para-a', 'Alpha', 0);
+        const paraB = buildParagraph('sdt-para-b', 'Bravo', 5);
+        const paraC = buildParagraph('sdt-para-c', 'Charlie', 10);
+
+        const baseFragments = [
+          { kind: 'para' as const, blockId: paraA.block.id, fromLine: 0, toLine: 1, x: 20, y: 20, width: 320 },
+          { kind: 'para' as const, blockId: paraB.block.id, fromLine: 0, toLine: 1, x: 20, y: 40, width: 320 },
+          { kind: 'para' as const, blockId: paraC.block.id, fromLine: 0, toLine: 1, x: 20, y: 60, width: 320 },
+        ];
+
+        const initialLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [{ number: 1, fragments: baseFragments }],
+        };
+
+        const painter = createDomPainter({
+          blocks: [paraA.block, paraB.block, paraC.block],
+          measures: [paraA.measure, paraB.measure, paraC.measure],
+        });
+
+        painter.paint(initialLayout, mount);
+
+        const initialC = mount.querySelector('[data-block-id="sdt-para-c"]') as HTMLElement;
+        expect(initialC).toBeTruthy();
+        expect(initialC.dataset.sdtContainerStart).toBe('false');
+        expect(initialC.dataset.sdtContainerEnd).toBe('true');
+
+        const paraD = buildParagraph('sdt-para-d', 'Delta', 17);
+        const updatedLayout: Layout = {
+          pageSize: initialLayout.pageSize,
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                ...baseFragments,
+                { kind: 'para', blockId: paraD.block.id, fromLine: 0, toLine: 1, x: 20, y: 80, width: 320 },
+              ],
+            },
+          ],
+        };
+
+        painter.setData?.(
+          [paraA.block, paraB.block, paraC.block, paraD.block],
+          [paraA.measure, paraB.measure, paraC.measure, paraD.measure],
+        );
+        painter.paint(updatedLayout, mount);
+
+        const updatedC = mount.querySelector('[data-block-id="sdt-para-c"]') as HTMLElement;
+        const updatedD = mount.querySelector('[data-block-id="sdt-para-d"]') as HTMLElement;
+
+        expect(updatedC).toBeTruthy();
+        expect(updatedD).toBeTruthy();
+        expect(updatedC).not.toBe(initialC);
+        expect(updatedC.dataset.sdtContainerStart).toBe('false');
+        expect(updatedC.dataset.sdtContainerEnd).toBe('false');
+        expect(updatedD.dataset.sdtContainerStart).toBe('false');
+        expect(updatedD.dataset.sdtContainerEnd).toBe('true');
       });
 
       it('does not add block SDT styling for inline-scoped structuredContent', () => {

@@ -295,6 +295,10 @@ export type LayoutEngineOptions = {
   debugLabel?: string;
   layoutMode?: LayoutMode;
   trackedChanges?: TrackedChangesOverrides;
+  /** Emit comment positions while in viewing mode (used to render comment highlights). */
+  emitCommentPositionsInViewing?: boolean;
+  /** Render comment highlights while in viewing mode. */
+  enableCommentsInViewing?: boolean;
   /** Collaboration cursor/presence configuration */
   presence?: PresenceOptions;
   /**
@@ -725,6 +729,8 @@ export class PresentationEditor extends EventEmitter {
       debugLabel: options.layoutEngineOptions?.debugLabel,
       layoutMode: options.layoutEngineOptions?.layoutMode ?? 'vertical',
       trackedChanges: options.layoutEngineOptions?.trackedChanges,
+      emitCommentPositionsInViewing: options.layoutEngineOptions?.emitCommentPositionsInViewing,
+      enableCommentsInViewing: options.layoutEngineOptions?.enableCommentsInViewing,
       presence: validatedPresence,
     };
     this.#trackedChangesOverrides = options.layoutEngineOptions?.trackedChanges;
@@ -1385,6 +1391,40 @@ export class PresentationEditor extends EventEmitter {
     this.#layoutOptions.trackedChanges = overrides;
     const trackedChangesChanged = this.#syncTrackedChangesPreferences();
     if (trackedChangesChanged) {
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+    }
+  }
+
+  /**
+   * Update viewing-mode comment rendering behavior and re-render if needed.
+   *
+   * @param options - Viewing mode comment options.
+   */
+  setViewingCommentOptions(
+    options: { emitCommentPositionsInViewing?: boolean; enableCommentsInViewing?: boolean } = {},
+  ) {
+    if (options !== undefined && (typeof options !== 'object' || options === null || Array.isArray(options))) {
+      throw new TypeError('[PresentationEditor] setViewingCommentOptions expects an object or undefined');
+    }
+
+    let hasChanges = false;
+
+    if (typeof options.emitCommentPositionsInViewing === 'boolean') {
+      if (this.#layoutOptions.emitCommentPositionsInViewing !== options.emitCommentPositionsInViewing) {
+        this.#layoutOptions.emitCommentPositionsInViewing = options.emitCommentPositionsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (typeof options.enableCommentsInViewing === 'boolean') {
+      if (this.#layoutOptions.enableCommentsInViewing !== options.enableCommentsInViewing) {
+        this.#layoutOptions.enableCommentsInViewing = options.enableCommentsInViewing;
+        hasChanges = true;
+      }
+    }
+
+    if (hasChanges) {
       this.#pendingDocChange = true;
       this.#scheduleRerender();
     }
@@ -2181,6 +2221,48 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the painted DOM element that contains a document position (body only).
+   *
+   * Uses the DomPositionIndex which maps data-pm-start/end attributes to rendered
+   * elements. Returns null when the position is not currently mounted (virtualization)
+   * or when in header/footer mode.
+   *
+   * @param pos - Document position in the active editor
+   * @param options.forceRebuild - Rebuild the index before lookup
+   * @param options.fallbackToCoords - Use elementFromPoint with layout rects if index lookup fails
+   * @returns The nearest painted DOM element for the position, or null if unavailable
+   */
+  getElementAtPos(
+    pos: number,
+    options: { forceRebuild?: boolean; fallbackToCoords?: boolean } = {},
+  ): HTMLElement | null {
+    if (!Number.isFinite(pos)) return null;
+    if (!this.#painterHost) return null;
+    if (this.#session.mode !== 'body') return null;
+
+    if (options.forceRebuild || this.#domPositionIndex.size === 0) {
+      this.#rebuildDomPositionIndex();
+    }
+
+    const indexed = this.#domPositionIndex.findElementAtPosition(pos);
+    if (indexed) return indexed;
+
+    if (!options.fallbackToCoords) return null;
+    const rects = this.getRangeRects(pos, pos);
+    if (!rects.length) return null;
+
+    const doc = this.#visibleHost.ownerDocument ?? document;
+    for (const rect of rects) {
+      const el = doc.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (el instanceof HTMLElement && this.#painterHost.contains(el)) {
+        return (el.closest('[data-pm-start][data-pm-end]') as HTMLElement | null) ?? el;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Scroll the visible host so a given document position is brought into view.
    *
    * This is primarily used by commands like search navigation when running in
@@ -2950,6 +3032,49 @@ export class PresentationEditor extends EventEmitter {
     }
   }
 
+  #resolveFieldAnnotationSelectionFromElement(
+    annotationEl: HTMLElement,
+  ): { node: ProseMirrorNode; pos: number } | null {
+    const pmStartRaw = annotationEl.dataset?.pmStart;
+    if (pmStartRaw == null) {
+      return null;
+    }
+
+    const pmStart = Number(pmStartRaw);
+    if (!Number.isFinite(pmStart)) {
+      return null;
+    }
+
+    const doc = this.#editor.state?.doc;
+    if (!doc) {
+      return null;
+    }
+
+    const layoutEpochRaw = annotationEl.dataset?.layoutEpoch;
+    const layoutEpoch = layoutEpochRaw != null ? Number(layoutEpochRaw) : NaN;
+    const effectiveEpoch = Number.isFinite(layoutEpoch) ? layoutEpoch : this.#epochMapper.getCurrentEpoch();
+    const mapped = this.#epochMapper.mapPosFromLayoutToCurrentDetailed(pmStart, effectiveEpoch, 1);
+    if (!mapped.ok) {
+      const fallbackPos = Math.max(0, Math.min(pmStart, doc.content.size));
+      const fallbackNode = doc.nodeAt(fallbackPos);
+      if (fallbackNode?.type?.name === 'fieldAnnotation') {
+        return { node: fallbackNode, pos: fallbackPos };
+      }
+
+      this.#pendingDocChange = true;
+      this.#scheduleRerender();
+      return null;
+    }
+
+    const clampedPos = Math.max(0, Math.min(mapped.pos, doc.content.size));
+    const node = doc.nodeAt(clampedPos);
+    if (!node || node.type.name !== 'fieldAnnotation') {
+      return null;
+    }
+
+    return { node, pos: clampedPos };
+  }
+
   #setupInputBridge() {
     this.#inputBridge?.destroy();
     // Pass both window (for keyboard events that bubble) and visibleHost (for beforeinput events that don't)
@@ -3064,8 +3189,33 @@ export class PresentationEditor extends EventEmitter {
       linkEl.dispatchEvent(linkClickEvent);
       return;
     }
+
+    const annotationEl = target?.closest?.('.annotation[data-pm-start]') as HTMLElement | null;
     const isDraggableAnnotation = target?.closest?.('[data-draggable="true"]') != null;
     this.#suppressFocusInFromDraggable = isDraggableAnnotation;
+
+    if (annotationEl) {
+      if (!this.#editor.isEditable) {
+        return;
+      }
+
+      const resolved = this.#resolveFieldAnnotationSelectionFromElement(annotationEl);
+      if (resolved) {
+        try {
+          const tr = this.#editor.state.tr.setSelection(NodeSelection.create(this.#editor.state.doc, resolved.pos));
+          this.#editor.view?.dispatch(tr);
+        } catch {}
+
+        this.#editor.emit('fieldAnnotationClicked', {
+          editor: this.#editor,
+          node: resolved.node,
+          nodePos: resolved.pos,
+          event,
+          currentTarget: annotationEl,
+        });
+      }
+      return;
+    }
 
     if (!this.#layoutState.layout) {
       // Layout not ready yet, but still focus the editor and set cursor to start
@@ -4355,7 +4505,8 @@ export class PresentationEditor extends EventEmitter {
         const atomNodeTypes = getAtomNodeTypesFromSchema(this.#editor?.schema ?? null);
         const positionMap =
           this.#editor?.state?.doc && docJson ? buildPositionMapFromPmDoc(this.#editor.state.doc, docJson) : null;
-        const commentsEnabled = this.#documentMode !== 'viewing';
+        const commentsEnabled =
+          this.#documentMode !== 'viewing' || this.#layoutOptions.enableCommentsInViewing === true;
         const result = toFlowBlocks(docJson, {
           mediaFiles: (this.#editor?.storage?.image as { media?: Record<string, string> })?.media,
           emitSectionBreaks: true,
@@ -4530,7 +4681,8 @@ export class PresentationEditor extends EventEmitter {
 
       // Emit fresh comment positions after layout completes.
       // This ensures positions are always in sync with the current document and layout.
-      if (this.#documentMode !== 'viewing') {
+      const allowViewingCommentPositions = this.#layoutOptions.emitCommentPositionsInViewing === true;
+      if (this.#documentMode !== 'viewing' || allowViewingCommentPositions) {
         const commentPositions = this.#collectCommentPositions();
         const positionKeys = Object.keys(commentPositions);
         if (positionKeys.length > 0) {
@@ -5052,6 +5204,7 @@ export class PresentationEditor extends EventEmitter {
           const slotPage = this.#findHeaderFooterPageForPageNumber(rIdLayout.layout.pages, pageNumber);
           if (slotPage) {
             const fragments = slotPage.fragments ?? [];
+
             const pageHeight =
               page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
             const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
@@ -5114,6 +5267,7 @@ export class PresentationEditor extends EventEmitter {
         return null;
       }
       const fragments = slotPage.fragments ?? [];
+
       const pageHeight = page?.size?.h ?? layout.pageSize?.h ?? this.#layoutOptions.pageSize?.h ?? DEFAULT_PAGE_SIZE.h;
       const margins = pageMargins ?? layout.pages[0]?.margins ?? this.#layoutOptions.margins ?? DEFAULT_MARGINS;
       const box = this.#computeDecorationBox(kind, margins, pageHeight);

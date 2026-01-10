@@ -345,4 +345,53 @@ describe('comments-store', () => {
       expect(store.editorCommentPositions).toEqual({});
     });
   });
+
+  describe('viewing visibility filters', () => {
+    it('hides tracked change threads when viewing mode hides tracked changes', () => {
+      store.commentsList = [
+        { commentId: 'tc-parent', trackedChange: true, createdTime: 1 },
+        { commentId: 'tc-child', parentCommentId: 'tc-parent', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toEqual([]);
+      expect(store.getGroupedComments.resolvedComments).toEqual([]);
+    });
+
+    it('shows standard comment threads when viewing mode shows comments', () => {
+      store.commentsList = [
+        { commentId: 'c-parent', trackedChange: false, createdTime: 1 },
+        { commentId: 'c-child', parentCommentId: 'c-parent', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toHaveLength(1);
+      expect(store.getGroupedComments.parentComments[0].commentId).toBe('c-parent');
+    });
+
+    it('hides tracked change threads when children reference importedId', () => {
+      store.commentsList = [
+        { commentId: 'tc-parent', importedId: 'imp-1', trackedChange: true, createdTime: 1 },
+        { commentId: 'tc-child', parentCommentId: 'imp-1', createdTime: 2 },
+      ];
+
+      store.setViewingVisibility({
+        documentMode: 'viewing',
+        commentsVisible: true,
+        trackChangesVisible: false,
+      });
+
+      expect(store.getGroupedComments.parentComments).toEqual([]);
+    });
+  });
 });

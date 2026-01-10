@@ -648,6 +648,16 @@ const applyInlineRunProperties = (
   }
 };
 
+const getVanishValue = (runProperties: unknown): boolean | undefined => {
+  if (!runProperties || typeof runProperties !== 'object' || Array.isArray(runProperties)) {
+    return undefined;
+  }
+  if (!Object.prototype.hasOwnProperty.call(runProperties, 'vanish')) {
+    return undefined;
+  }
+  return (runProperties as Record<string, unknown>).vanish === true;
+};
+
 /**
  * Converts a paragraph PM node to an array of FlowBlocks.
  *
@@ -742,6 +752,7 @@ export function paragraphToFlowBlocks(
     typeof para.attrs?.paragraphProperties === 'object' && para.attrs.paragraphProperties !== null
       ? (para.attrs.paragraphProperties as Record<string, unknown>)
       : {};
+  const paragraphHiddenByVanish = getVanishValue(paragraphProps.runProperties) === true;
   const paragraphStyleId =
     typeof para.attrs?.styleId === 'string' && para.attrs.styleId.trim()
       ? para.attrs.styleId
@@ -874,6 +885,13 @@ export function paragraphToFlowBlocks(
 
   const linkedStyleResolver = createLinkedStyleResolver(converterContext?.linkedStyles);
   const blocks: FlowBlock[] = [];
+  const paraAttrs = (para.attrs ?? {}) as Record<string, unknown>;
+  const rawParagraphProps =
+    typeof paraAttrs.paragraphProperties === 'object' && paraAttrs.paragraphProperties !== null
+      ? (paraAttrs.paragraphProperties as Record<string, unknown>)
+      : undefined;
+  const hasSectPr = Boolean(rawParagraphProps?.sectPr);
+  const isSectPrMarker = hasSectPr || paraAttrs.pageBreakSource === 'sectPr';
 
   if (hasPageBreakBefore(para)) {
     blocks.push({
@@ -884,6 +902,9 @@ export function paragraphToFlowBlocks(
   }
 
   if (!para.content || para.content.length === 0) {
+    if (paragraphHiddenByVanish) {
+      return blocks;
+    }
     // Get the PM position of the empty paragraph for caret rendering
     const paraPos = positions.get(para);
     const emptyRun: TextRun = {
@@ -897,11 +918,19 @@ export function paragraphToFlowBlocks(
       emptyRun.pmStart = paraPos.start + 1;
       emptyRun.pmEnd = paraPos.start + 1;
     }
+    let emptyParagraphAttrs = cloneParagraphAttrs(paragraphAttrs);
+    if (isSectPrMarker) {
+      if (emptyParagraphAttrs) {
+        emptyParagraphAttrs.sectPrMarker = true;
+      } else {
+        emptyParagraphAttrs = { sectPrMarker: true };
+      }
+    }
     blocks.push({
       kind: 'paragraph',
       id: baseBlockId,
       runs: [emptyRun],
-      attrs: cloneParagraphAttrs(paragraphAttrs),
+      attrs: emptyParagraphAttrs,
     });
     return blocks;
   }
@@ -909,6 +938,7 @@ export function paragraphToFlowBlocks(
   let currentRuns: Run[] = [];
   let partIndex = 0;
   let tabOrdinal = 0;
+  let suppressedByVanish = false;
 
   const nextId = () => (partIndex === 0 ? baseBlockId : `${baseBlockId}-${partIndex}`);
   const attachAnchorParagraphId = <T extends FlowBlock>(block: T, anchorParagraphId: string): T => {
@@ -966,7 +996,12 @@ export function paragraphToFlowBlocks(
     activeSdt?: SdtMetadata,
     activeRunStyleId: string | null = null,
     activeRunProperties?: Record<string, unknown> | null,
+    activeHidden = false,
   ) => {
+    if (activeHidden && node.type !== 'run') {
+      suppressedByVanish = true;
+      return;
+    }
     if (node.type === 'text' && node.text) {
       // Apply styles in correct priority order:
       // 1. Create run with defaults (lowest priority) - textNodeToRun with empty marks
@@ -1009,9 +1044,17 @@ export function paragraphToFlowBlocks(
         typeof node.attrs?.runProperties === 'object' && node.attrs.runProperties !== null
           ? (node.attrs.runProperties as Record<string, unknown>)
           : null;
+      const runVanish = getVanishValue(runProperties);
+      const nextHidden = runVanish === undefined ? activeHidden : runVanish;
+      if (nextHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const nextRunStyleId = extractRunStyleId(runProperties) ?? activeRunStyleId;
       const nextRunProperties = runProperties ?? activeRunProperties;
-      node.content.forEach((child) => visitNode(child, mergedMarks, activeSdt, nextRunStyleId, nextRunProperties));
+      node.content.forEach((child) =>
+        visitNode(child, mergedMarks, activeSdt, nextRunStyleId, nextRunProperties, nextHidden),
+      );
       return;
     }
 
@@ -1019,12 +1062,18 @@ export function paragraphToFlowBlocks(
     if (node.type === 'structuredContent' && Array.isArray(node.content)) {
       const inlineMetadata = resolveNodeSdtMetadata(node, 'structuredContent');
       const nextSdt = inlineMetadata ?? activeSdt;
-      node.content.forEach((child) => visitNode(child, inheritedMarks, nextSdt, activeRunStyleId, activeRunProperties));
+      node.content.forEach((child) =>
+        visitNode(child, inheritedMarks, nextSdt, activeRunStyleId, activeRunProperties, activeHidden),
+      );
       return;
     }
 
     // SDT fieldAnnotation: create FieldAnnotationRun for pill-style rendering
     if (node.type === 'fieldAnnotation') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const fieldMetadata = resolveNodeSdtMetadata(node, 'fieldAnnotation') as FieldAnnotationMetadata | null;
 
       // If there's inner content, extract text to use as displayLabel override
@@ -1053,6 +1102,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'pageReference') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       // Create pageReference token run for dynamic resolution
       const instruction = getNodeInstruction(node) || '';
       const nodeAttrs =
@@ -1194,14 +1247,6 @@ export function paragraphToFlowBlocks(
             enableComments,
           );
         }
-        console.debug('[token-debug] paragraph-token-run', {
-          token: (tokenRun as TextRun).token,
-          fontFamily: (tokenRun as TextRun).fontFamily,
-          fontSize: (tokenRun as TextRun).fontSize,
-          inlineStyleId,
-          runStyleId: activeRunStyleId,
-          mergedMarksCount: mergedMarks.length,
-        });
         applyInlineRunProperties(tokenRun as TextRun, activeRunProperties);
         currentRuns.push(tokenRun);
       }
@@ -1209,6 +1254,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'image') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const isInline = isInlineImage(node);
 
       // Check if this image should be inline (ImageRun) or block (ImageBlock)
@@ -1241,6 +1290,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'contentBlock') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const attrs = node.attrs ?? {};
       if (attrs.horizontalRule === true) {
         const anchorParagraphId = nextId();
@@ -1262,6 +1315,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'vectorShape') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.vectorShapeNodeToDrawingBlock) {
@@ -1274,6 +1331,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'shapeGroup') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeGroupNodeToDrawingBlock) {
@@ -1286,6 +1347,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'shapeContainer') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeContainerNodeToDrawingBlock) {
@@ -1298,6 +1363,10 @@ export function paragraphToFlowBlocks(
     }
 
     if (node.type === 'shapeTextbox') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.shapeTextboxNodeToDrawingBlock) {
@@ -1311,6 +1380,10 @@ export function paragraphToFlowBlocks(
 
     // Tables may occasionally appear inline via wrappers; treat as block-level
     if (node.type === 'table') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const anchorParagraphId = nextId();
       flushParagraph();
       if (converters?.tableNodeToBlock) {
@@ -1336,6 +1409,10 @@ export function paragraphToFlowBlocks(
 
     // Hard / line breaks
     if (node.type === 'hardBreak' || node.type === 'lineBreak') {
+      if (activeHidden) {
+        suppressedByVanish = true;
+        return;
+      }
       const attrs = node.attrs ?? {};
       const breakType = attrs.pageBreakType ?? attrs.lineBreakType ?? 'line';
 
@@ -1382,12 +1459,12 @@ export function paragraphToFlowBlocks(
   };
 
   para.content.forEach((child) => {
-    visitNode(child, [], undefined, null);
+    visitNode(child, [], undefined, null, undefined);
   });
   flushParagraph();
 
   const hasParagraphBlock = blocks.some((block) => block.kind === 'paragraph');
-  if (!hasParagraphBlock) {
+  if (!hasParagraphBlock && !suppressedByVanish && !paragraphHiddenByVanish) {
     blocks.push({
       kind: 'paragraph',
       id: baseBlockId,

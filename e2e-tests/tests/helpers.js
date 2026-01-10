@@ -2,10 +2,11 @@ import { expect } from '@playwright/test';
 
 export const goToPageAndWaitForEditor = async (
   page,
-  { includeFontsResolved = false, includeComments = false, layout } = {
+  { includeFontsResolved = false, includeComments = false, layout, queryParams = {} } = {
     includeFontsResolved: false,
     includeComments: false,
     layout: undefined,
+    queryParams: {},
   },
 ) => {
   const params = new URLSearchParams();
@@ -18,6 +19,10 @@ export const goToPageAndWaitForEditor = async (
   if (layout === 0 || layout === 1) {
     params.set('layout', String(layout));
   }
+  Object.entries(queryParams).forEach(([key, value]) => {
+    if (value === undefined || value === null) return;
+    params.set(key, String(value));
+  });
 
   const url = params.toString() ? `http://localhost:4173/?${params.toString()}` : 'http://localhost:4173/';
 

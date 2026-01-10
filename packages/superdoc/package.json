@@ -1,7 +1,7 @@
 {
   "name": "superdoc",
   "type": "module",
-  "version": "1.3.1-next.3",
+  "version": "1.5.0-next.1",
   "license": "AGPL-3.0",
   "repository": {
     "type": "git",
@@ -52,6 +52,7 @@
     "clean": "rm -rf dist",
     "pack:local": "pnpm run pack",
     "pack": "pnpm run build:es && pnpm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
+    "pack:es": "pnpm run build:es && pnpm pack && mv $(ls superdoc-*.tgz) ./superdoc.tgz",
     "test": "vitest"
   },
   "dependencies": {

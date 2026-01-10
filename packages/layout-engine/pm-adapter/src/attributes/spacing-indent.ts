@@ -13,7 +13,7 @@ import { pxToPt, ptToPx, twipsToPx, pickNumber } from '../utilities.js';
  * Maximum line spacing multiplier for auto line spacing.
  *
  * OOXML auto line spacing uses multipliers (e.g., 1.5 for 1.5x line spacing).
- * Values above this threshold are assumed to be twips values instead.
+ * Values above this threshold are assumed to be OOXML "240ths of a line" values.
  *
  * Rationale: Typical multipliers are 1.0-3.0. The minimum meaningful twips
  * value for line spacing is ~240 (12pt font), so 10 provides a safe boundary.
@@ -51,7 +51,13 @@ export const spacingPxToPt = (spacing: ParagraphSpacing): ComputedParagraphStyle
   const result: ComputedParagraphStyle['spacing'] = {};
   if (spacing.before != null) result.before = pxToPt(spacing.before);
   if (spacing.after != null) result.after = pxToPt(spacing.after);
-  if (spacing.line != null) result.line = pxToPt(spacing.line);
+  if (spacing.line != null) {
+    if (spacing.lineRule === 'auto' && spacing.line > 0 && spacing.line <= MAX_AUTO_LINE_MULTIPLIER) {
+      result.line = spacing.line;
+    } else {
+      result.line = pxToPt(spacing.line);
+    }
+  }
   if (spacing.lineRule) result.lineRule = spacing.lineRule;
   return result;
 };
@@ -111,8 +117,17 @@ export const spacingPtToPx = (
       if (after != null) result.after = after;
     }
     if (rawSpacing.line != null) {
-      const line = ptToPx(spacing.line);
-      if (line != null) result.line = line;
+      const isAutoMultiplier =
+        spacing.lineRule === 'auto' &&
+        spacing.line != null &&
+        spacing.line > 0 &&
+        spacing.line <= MAX_AUTO_LINE_MULTIPLIER;
+      if (isAutoMultiplier) {
+        result.line = spacing.line;
+      } else {
+        const line = ptToPx(spacing.line);
+        if (line != null) result.line = line;
+      }
       if (spacing.lineRule) result.lineRule = spacing.lineRule;
     }
   }
@@ -205,7 +220,8 @@ export const normalizeAlignment = (value: unknown): NormalizedParagraphAlignment
  *
  * Converts spacing values from twips to pixels, handling both standard OOXML
  * properties (before, after, line) and alternative properties (lineSpaceBefore, lineSpaceAfter).
- * For auto line spacing, values <= 10 are treated as multipliers, larger values as twips.
+ * For auto line spacing, values <= 10 are treated as multipliers, larger values are treated as
+ * OOXML "240ths of a line" and converted to multipliers (e.g., 276 -> 1.15).
  *
  * @param value - Raw OOXML spacing object with properties like before, after, line, lineRule
  * @returns Normalized spacing object with values in pixels, or undefined if no valid spacing
@@ -272,7 +288,7 @@ const normalizeLineValue = (
     if (value > 0 && value <= MAX_AUTO_LINE_MULTIPLIER) {
       return value;
     }
-    return twipsToPx(value);
+    return value / 240;
   }
   return twipsToPx(value);
 };

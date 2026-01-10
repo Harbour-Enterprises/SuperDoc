@@ -247,15 +247,18 @@ export function imageNodeToBlock(
     explicitDisplay === 'inline' || explicitDisplay === 'block' ? explicitDisplay : isInline ? 'inline' : 'block';
 
   const explicitObjectFit = typeof attrs.objectFit === 'string' ? (attrs.objectFit as string) : undefined;
+  const shouldCover = attrs.shouldCover === true;
   const isAnchor = anchor?.isAnchored ?? (typeof attrs.isAnchor === 'boolean' ? attrs.isAnchor : false);
 
   const objectFit: 'contain' | 'cover' | 'fill' | 'scale-down' | undefined = isAllowedObjectFit(explicitObjectFit)
     ? explicitObjectFit
-    : display === 'inline'
-      ? 'scale-down'
-      : isAnchor
-        ? 'contain'
-        : 'contain';
+    : shouldCover
+      ? 'cover'
+      : display === 'inline'
+        ? 'scale-down'
+        : isAnchor
+          ? 'contain'
+          : 'contain';
 
   return {
     kind: 'image',
@@ -272,6 +275,10 @@ export function imageNodeToBlock(
     anchor,
     wrap: normalizedWrap,
     attrs: attrsWithPm,
+    // VML image adjustments for watermark effects
+    gain: typeof attrs.gain === 'string' || typeof attrs.gain === 'number' ? attrs.gain : undefined,
+    blacklevel:
+      typeof attrs.blacklevel === 'string' || typeof attrs.blacklevel === 'number' ? attrs.blacklevel : undefined,
   };
 }
 

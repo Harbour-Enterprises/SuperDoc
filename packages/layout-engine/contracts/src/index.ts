@@ -181,6 +181,7 @@ export type TextRun = RunMarks & {
     commentId: string;
     importedId?: string;
     internal?: boolean;
+    trackedChange?: boolean;
   }>;
   /**
    * Custom data attributes propagated from ProseMirror marks (keys must be data-*).
@@ -456,7 +457,7 @@ export type TableAttrs = {
 export type TableCell = {
   id: BlockId;
   /** Multi-block cell content (new feature) */
-  blocks?: (ParagraphBlock | ImageBlock | DrawingBlock)[];
+  blocks?: (ParagraphBlock | ImageBlock | DrawingBlock | TableBlock)[];
   /** Single paragraph (backward compatibility) */
   paragraph?: ParagraphBlock;
   rowSpan?: number;
@@ -529,6 +530,9 @@ export type ImageBlock = {
   anchor?: ImageAnchor;
   wrap?: ImageWrap;
   attrs?: ImageBlockAttrs;
+  // VML image adjustments for watermark effects
+  gain?: string | number; // Brightness/washout (VML hex string or number)
+  blacklevel?: string | number; // Contrast adjustment (VML hex string or number)
 };
 
 export type DrawingKind = 'image' | 'vectorShape' | 'shapeGroup';
@@ -1158,6 +1162,8 @@ export type ParagraphAttrs = {
   keepLines?: boolean;
   trackedChangesMode?: TrackedChangesMode;
   trackedChangesEnabled?: boolean;
+  /** Marks an empty paragraph that only exists to carry section properties. */
+  sectPrMarker?: boolean;
   direction?: 'ltr' | 'rtl';
   rtl?: boolean;
   isTocEntry?: boolean;

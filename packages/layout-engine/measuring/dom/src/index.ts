@@ -2599,7 +2599,9 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
 
   const isBlockBehindDoc = block.anchor?.behindDoc;
   const isBlockWrapBehindDoc = block.wrap?.type === 'None' && block.wrap?.behindDoc;
-  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc;
+  const isPageRelativeAnchor =
+    block.anchor?.isAnchored && (block.anchor?.hRelativeFrom === 'page' || block.anchor?.hRelativeFrom === 'margin');
+  const bypassWidthConstraint = isBlockBehindDoc || isBlockWrapBehindDoc || isPageRelativeAnchor;
   const isWidthConstraintBypassed = bypassWidthConstraint || constraints.maxWidth <= 0;
 
   const maxWidth = isWidthConstraintBypassed ? intrinsic.width : constraints.maxWidth;
@@ -2612,8 +2614,13 @@ async function measureImageBlock(block: ImageBlock, constraints: MeasureConstrai
     ((typeof block.anchor?.offsetV === 'number' && block.anchor.offsetV < 0) ||
       (typeof block.margin?.top === 'number' && block.margin.top < 0));
 
+  // Bypass height constraint when:
+  // - Image has negative vertical positioning (designed to overflow container)
+  // - objectFit is 'cover' (image should render at exact extent dimensions, CSS handles content scaling/clipping)
+  const shouldBypassHeightConstraint = hasNegativeVerticalPosition || block.objectFit === 'cover';
+
   const maxHeight =
-    hasNegativeVerticalPosition || !constraints.maxHeight || constraints.maxHeight <= 0
+    shouldBypassHeightConstraint || !constraints.maxHeight || constraints.maxHeight <= 0
       ? Infinity
       : constraints.maxHeight;
 
@@ -3060,7 +3067,8 @@ const resolveLineHeight = (spacing: ParagraphSpacing | undefined, baseLineHeight
   }
 
   const raw = spacing.line;
-  const treatAsMultiplier = (spacing.lineRule === 'auto' || spacing.lineRule == null) && raw > 0 && raw <= 10;
+  const isAuto = spacing.lineRule === 'auto';
+  const treatAsMultiplier = (isAuto || spacing.lineRule == null) && raw > 0 && (isAuto || raw <= 10);
 
   if (treatAsMultiplier) {
     return raw * baseLineHeight;
