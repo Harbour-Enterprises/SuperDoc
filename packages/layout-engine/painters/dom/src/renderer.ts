@@ -1724,6 +1724,9 @@ export class DomPainter {
         }
 
         this.updateFragmentElement(current.element, fragment, contextBase.section);
+        if (sdtBoundary?.widthOverride != null) {
+          current.element.style.width = `${sdtBoundary.widthOverride}px`;
+        }
         current.fragment = fragment;
         current.key = key;
         current.context = contextBase;
@@ -1870,7 +1873,7 @@ export class DomPainter {
       return this.renderDrawingFragment(fragment, context);
     }
     if (fragment.kind === 'table') {
-      return this.renderTableFragment(fragment, context);
+      return this.renderTableFragment(fragment, context, sdtBoundary);
     }
     throw new Error(`DomPainter: unsupported fragment kind ${(fragment as Fragment).kind}`);
   }
@@ -3488,7 +3491,11 @@ export class DomPainter {
     return placeholder;
   }
 
-  private renderTableFragment(fragment: TableFragment, context: FragmentRenderContext): HTMLElement {
+  private renderTableFragment(
+    fragment: TableFragment,
+    context: FragmentRenderContext,
+    sdtBoundary?: SdtBoundaryOptions,
+  ): HTMLElement {
     if (!this.doc) {
       throw new Error('DomPainter: document is not available');
     }
@@ -3556,6 +3563,7 @@ export class DomPainter {
       fragment,
       context,
       blockLookup: this.blockLookup,
+      sdtBoundary,
       renderLine: renderLineForTableCell,
       renderDrawingContent: renderDrawingContentForTableCell,
       applyFragmentFrame: applyFragmentFrameWithSection,
@@ -5285,6 +5293,11 @@ const getFragmentSdtContainerKey = (fragment: Fragment, blockLookup: BlockLookup
     return getSdtContainerKey(attrs?.sdt, attrs?.containerSdt);
   }
 
+  if (fragment.kind === 'table' && block.kind === 'table') {
+    const attrs = (block as { attrs?: { sdt?: SdtMetadata; containerSdt?: SdtMetadata } }).attrs;
+    return getSdtContainerKey(attrs?.sdt, attrs?.containerSdt);
+  }
+
   return null;
 };
 
@@ -5295,14 +5308,35 @@ const computeSdtBoundaries = (
   const boundaries = new Map<number, SdtBoundaryOptions>();
   const containerKeys = fragments.map((fragment) => getFragmentSdtContainerKey(fragment, blockLookup));
 
-  for (let i = 0; i < fragments.length; i += 1) {
+  let i = 0;
+  while (i < fragments.length) {
     const currentKey = containerKeys[i];
-    if (!currentKey) continue;
-    const prev = i > 0 ? containerKeys[i - 1] : null;
-    const next = i < fragments.length - 1 ? containerKeys[i + 1] : null;
-    const isStart = currentKey !== prev;
-    const isEnd = currentKey !== next;
-    boundaries.set(i, { isStart, isEnd });
+    if (!currentKey) {
+      i += 1;
+      continue;
+    }
+
+    let groupRight = fragments[i].x + fragments[i].width;
+    let j = i;
+
+    while (j + 1 < fragments.length && containerKeys[j + 1] === currentKey) {
+      j += 1;
+      const fragmentRight = fragments[j].x + fragments[j].width;
+      if (fragmentRight > groupRight) {
+        groupRight = fragmentRight;
+      }
+    }
+
+    for (let k = i; k <= j; k += 1) {
+      const fragment = fragments[k];
+      boundaries.set(k, {
+        isStart: k === i,
+        isEnd: k === j,
+        widthOverride: groupRight - fragment.x,
+      });
+    }
+
+    i = j + 1;
   }
 
   return boundaries;
