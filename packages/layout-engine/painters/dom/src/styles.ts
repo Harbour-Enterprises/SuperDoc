@@ -317,27 +317,33 @@ const SDT_CONTAINER_STYLES = `
   align-items: center;
 }
 
-/* Continuation styling: first fragment has top corners, last has bottom corners */
-.superdoc-document-section[data-sdt-container-start="true"] {
-  border-radius: 4px 4px 0 0;
-}
-
-.superdoc-document-section[data-sdt-container-end="true"] {
-  border-radius: 0 0 4px 4px;
-}
-
+/* Continuation styling: SDT container boundary handling for multi-fragment document sections */
+/* Single fragment (both start and end): full border radius */
 .superdoc-document-section[data-sdt-container-start="true"][data-sdt-container-end="true"] {
   border-radius: 4px;
+}
+
+/* First fragment of a multi-fragment SDT: top corners, no bottom border */
+.superdoc-document-section[data-sdt-container-start="true"]:not([data-sdt-container-end="true"]) {
+  border-radius: 4px 4px 0 0;
+  border-bottom: none;
+}
+
+/* Last fragment of a multi-fragment SDT: bottom corners, no top border */
+.superdoc-document-section[data-sdt-container-end="true"]:not([data-sdt-container-start="true"]) {
+  border-radius: 0 0 4px 4px;
+  border-top: none;
 }
 
 .superdoc-document-section[data-sdt-container-start="true"]:hover {
   border-radius: 0 4px 0 0;
 }
 
-/* Middle fragments have no border radius */
+/* Middle fragments (neither start nor end): no corners, no top/bottom borders */
 .superdoc-document-section:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
   border-radius: 0;
   border-top: none;
+  border-bottom: none;
 }
 
 /* Structured Content Block - Blue border container */
@@ -384,21 +390,28 @@ const SDT_CONTAINER_STYLES = `
 }
 
 /* Continuation styling for structured content blocks */
-.superdoc-structured-content-block[data-sdt-container-start="true"] {
-  border-radius: 4px 4px 0 0;
-}
-
-.superdoc-structured-content-block[data-sdt-container-end="true"] {
-  border-radius: 0 0 4px 4px;
-}
-
+/* Single fragment (both start and end): full border radius */
 .superdoc-structured-content-block[data-sdt-container-start="true"][data-sdt-container-end="true"] {
   border-radius: 4px;
 }
 
+/* First fragment of a multi-fragment SDT: top corners, no bottom border */
+.superdoc-structured-content-block[data-sdt-container-start="true"]:not([data-sdt-container-end="true"]) {
+  border-radius: 4px 4px 0 0;
+  border-bottom: none;
+}
+
+/* Last fragment of a multi-fragment SDT: bottom corners, no top border */
+.superdoc-structured-content-block[data-sdt-container-end="true"]:not([data-sdt-container-start="true"]) {
+  border-radius: 0 0 4px 4px;
+  border-top: none;
+}
+
+/* Middle fragment (neither start nor end): no corners, no top/bottom borders */
 .superdoc-structured-content-block:not([data-sdt-container-start="true"]):not([data-sdt-container-end="true"]) {
   border-radius: 0;
   border-top: none;
+  border-bottom: none;
 }
 
 /* Structured Content Inline - Inline wrapper with blue border */

@@ -69,7 +69,7 @@ import { DOM_CLASS_NAMES } from './constants.js';
 import { sanitizeHref, encodeTooltip } from '@superdoc/url-validation';
 import { renderTableFragment as renderTableFragmentElement } from './table/renderTableFragment.js';
 import { assertPmPositions, assertFragmentPmPositions } from './pm-position-validation.js';
-import { applySdtContainerStyling } from './utils/sdt-helpers.js';
+import { applySdtContainerStyling, getSdtContainerKey, type SdtBoundaryOptions } from './utils/sdt-helpers.js';
 import {
   generateRulerDefinitionFromPx,
   createRulerElement,
@@ -1384,8 +1384,11 @@ export class DomPainter {
       pageNumberText: page.numberText,
     };
 
-    page.fragments.forEach((fragment) => {
-      el.appendChild(this.renderFragment(fragment, contextBase));
+    const sdtBoundaries = computeSdtBoundaries(page.fragments, this.blockLookup);
+
+    page.fragments.forEach((fragment, index) => {
+      const sdtBoundary = sdtBoundaries.get(index);
+      el.appendChild(this.renderFragment(fragment, contextBase, sdtBoundary));
     });
     this.renderDecorationsForPage(el, page);
     return el;
@@ -1688,6 +1691,7 @@ export class DomPainter {
 
     const existing = new Map(state.fragments.map((frag) => [frag.key, frag]));
     const nextFragments: FragmentDomState[] = [];
+    const sdtBoundaries = computeSdtBoundaries(page.fragments, this.blockLookup);
 
     const contextBase: FragmentRenderContext = {
       pageNumber: page.number,
@@ -1699,15 +1703,18 @@ export class DomPainter {
     page.fragments.forEach((fragment, index) => {
       const key = fragmentKey(fragment);
       const current = existing.get(key);
+      const sdtBoundary = sdtBoundaries.get(index);
 
       if (current) {
         existing.delete(key);
+        const sdtBoundaryMismatch = shouldRebuildForSdtBoundary(current.element, sdtBoundary);
         const needsRebuild =
           this.changedBlocks.has(fragment.blockId) ||
-          current.signature !== fragmentSignature(fragment, this.blockLookup);
+          current.signature !== fragmentSignature(fragment, this.blockLookup) ||
+          sdtBoundaryMismatch;
 
         if (needsRebuild) {
-          const replacement = this.renderFragment(fragment, contextBase);
+          const replacement = this.renderFragment(fragment, contextBase, sdtBoundary);
           pageEl.replaceChild(replacement, current.element);
           current.element = replacement;
           current.signature = fragmentSignature(fragment, this.blockLookup);
@@ -1725,7 +1732,7 @@ export class DomPainter {
         return;
       }
 
-      const fresh = this.renderFragment(fragment, contextBase);
+      const fresh = this.renderFragment(fragment, contextBase, sdtBoundary);
       pageEl.insertBefore(fresh, pageEl.children[index] ?? null);
       nextFragments.push({
         key,
@@ -1817,8 +1824,11 @@ export class DomPainter {
       section: 'body',
     };
 
-    const fragments: FragmentDomState[] = page.fragments.map((fragment) => {
-      const fragmentEl = this.renderFragment(fragment, contextBase);
+    const sdtBoundaries = computeSdtBoundaries(page.fragments, this.blockLookup);
+
+    const fragments: FragmentDomState[] = page.fragments.map((fragment, index) => {
+      const sdtBoundary = sdtBoundaries.get(index);
+      const fragmentEl = this.renderFragment(fragment, contextBase, sdtBoundary);
       el.appendChild(fragmentEl);
       return {
         key: fragmentKey(fragment),
@@ -1842,12 +1852,16 @@ export class DomPainter {
     return this.options.pageStyles;
   }
 
-  private renderFragment(fragment: Fragment, context: FragmentRenderContext): HTMLElement {
+  private renderFragment(
+    fragment: Fragment,
+    context: FragmentRenderContext,
+    sdtBoundary?: SdtBoundaryOptions,
+  ): HTMLElement {
     if (fragment.kind === 'para') {
-      return this.renderParagraphFragment(fragment, context);
+      return this.renderParagraphFragment(fragment, context, sdtBoundary);
     }
     if (fragment.kind === 'list-item') {
-      return this.renderListItemFragment(fragment, context);
+      return this.renderListItemFragment(fragment, context, sdtBoundary);
     }
     if (fragment.kind === 'image') {
       return this.renderImageFragment(fragment, context);
@@ -1867,9 +1881,14 @@ export class DomPainter {
    *
    * @param fragment - The paragraph fragment to render
    * @param context - Rendering context with page and column information
+   * @param sdtBoundary - Optional SDT boundary overrides for multi-fragment containers
    * @returns HTMLElement containing the rendered fragment or error placeholder
    */
-  private renderParagraphFragment(fragment: ParaFragment, context: FragmentRenderContext): HTMLElement {
+  private renderParagraphFragment(
+    fragment: ParaFragment,
+    context: FragmentRenderContext,
+    sdtBoundary?: SdtBoundaryOptions,
+  ): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'paragraph' || lookup.measure.kind !== 'paragraph') {
@@ -1941,8 +1960,7 @@ export class DomPainter {
       this.applyContainerSdtDataset(fragmentEl, block.attrs?.containerSdt);
 
       // Apply SDT container styling (document sections, structured content blocks)
-      // TODO: Track actual container boundaries across fragments when same sdt.id spans multiple fragments
-      applySdtContainerStyling(this.doc, fragmentEl, block.attrs?.sdt, block.attrs?.containerSdt);
+      applySdtContainerStyling(this.doc, fragmentEl, block.attrs?.sdt, block.attrs?.containerSdt, sdtBoundary);
 
       // Render drop cap if present (only on the first fragment, not continuation)
       const dropCapDescriptor = block.attrs?.dropCapDescriptor;
@@ -2513,7 +2531,11 @@ export class DomPainter {
     return dropCapEl;
   }
 
-  private renderListItemFragment(fragment: ListItemFragment, context: FragmentRenderContext): HTMLElement {
+  private renderListItemFragment(
+    fragment: ListItemFragment,
+    context: FragmentRenderContext,
+    sdtBoundary?: SdtBoundaryOptions,
+  ): HTMLElement {
     try {
       const lookup = this.blockLookup.get(fragment.blockId);
       if (!lookup || lookup.block.kind !== 'list' || lookup.measure.kind !== 'list') {
@@ -2545,7 +2567,13 @@ export class DomPainter {
       this.applySdtDataset(fragmentEl, paragraphMetadata);
 
       // Apply SDT container styling (document sections, structured content blocks)
-      applySdtContainerStyling(this.doc, fragmentEl, paragraphMetadata, item.paragraph.attrs?.containerSdt);
+      applySdtContainerStyling(
+        this.doc,
+        fragmentEl,
+        paragraphMetadata,
+        item.paragraph.attrs?.containerSdt,
+        sdtBoundary,
+      );
 
       if (fragment.continuesFromPrev) {
         fragmentEl.dataset.continuesFromPrev = 'true';
@@ -5079,6 +5107,57 @@ export class DomPainter {
     // Other container types can be added here if needed
   }
 }
+
+const getFragmentSdtContainerKey = (fragment: Fragment, blockLookup: BlockLookup): string | null => {
+  const lookup = blockLookup.get(fragment.blockId);
+  if (!lookup) return null;
+  const block = lookup.block;
+
+  if (fragment.kind === 'para' && block.kind === 'paragraph') {
+    const attrs = (block as { attrs?: { sdt?: SdtMetadata; containerSdt?: SdtMetadata } }).attrs;
+    return getSdtContainerKey(attrs?.sdt, attrs?.containerSdt);
+  }
+
+  if (fragment.kind === 'list-item' && block.kind === 'list') {
+    const item = block.items.find((listItem) => listItem.id === fragment.itemId);
+    const attrs = item?.paragraph.attrs;
+    return getSdtContainerKey(attrs?.sdt, attrs?.containerSdt);
+  }
+
+  return null;
+};
+
+const computeSdtBoundaries = (
+  fragments: readonly Fragment[],
+  blockLookup: BlockLookup,
+): Map<number, SdtBoundaryOptions> => {
+  const boundaries = new Map<number, SdtBoundaryOptions>();
+  const containerKeys = fragments.map((fragment) => getFragmentSdtContainerKey(fragment, blockLookup));
+
+  for (let i = 0; i < fragments.length; i += 1) {
+    const currentKey = containerKeys[i];
+    if (!currentKey) continue;
+    const prev = i > 0 ? containerKeys[i - 1] : null;
+    const next = i < fragments.length - 1 ? containerKeys[i + 1] : null;
+    const isStart = currentKey !== prev;
+    const isEnd = currentKey !== next;
+    boundaries.set(i, { isStart, isEnd });
+  }
+
+  return boundaries;
+};
+
+const shouldRebuildForSdtBoundary = (element: HTMLElement, boundary: SdtBoundaryOptions | undefined): boolean => {
+  if (!boundary) return false;
+  const startAttr = element.dataset.sdtContainerStart;
+  const endAttr = element.dataset.sdtContainerEnd;
+  const expectedStart = String(boundary.isStart ?? true);
+  const expectedEnd = String(boundary.isEnd ?? true);
+  if (startAttr === undefined || endAttr === undefined) {
+    return true;
+  }
+  return startAttr !== expectedStart || endAttr !== expectedEnd;
+};
 
 const fragmentKey = (fragment: Fragment): string => {
   if (fragment.kind === 'para') {
