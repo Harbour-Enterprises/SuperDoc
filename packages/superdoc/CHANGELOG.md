@@ -1,3 +1,10 @@
+# [1.5.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.3...v1.5.0-next.4) (2026-01-10)
+
+
+### Bug Fixes
+
+* deleting tracked change in suggestion to match word ([#1710](https://github.com/Harbour-Enterprises/SuperDoc/issues/1710)) ([d6e780f](https://github.com/Harbour-Enterprises/SuperDoc/commit/d6e780f8fc753cb6cd94d4317f482c997b9bc9a5))
+
 # [1.5.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.2...v1.5.0-next.3) (2026-01-10)
 
 
