@@ -2221,6 +2221,48 @@ export class PresentationEditor extends EventEmitter {
   }
 
   /**
+   * Get the painted DOM element that contains a document position (body only).
+   *
+   * Uses the DomPositionIndex which maps data-pm-start/end attributes to rendered
+   * elements. Returns null when the position is not currently mounted (virtualization)
+   * or when in header/footer mode.
+   *
+   * @param pos - Document position in the active editor
+   * @param options.forceRebuild - Rebuild the index before lookup
+   * @param options.fallbackToCoords - Use elementFromPoint with layout rects if index lookup fails
+   * @returns The nearest painted DOM element for the position, or null if unavailable
+   */
+  getElementAtPos(
+    pos: number,
+    options: { forceRebuild?: boolean; fallbackToCoords?: boolean } = {},
+  ): HTMLElement | null {
+    if (!Number.isFinite(pos)) return null;
+    if (!this.#painterHost) return null;
+    if (this.#session.mode !== 'body') return null;
+
+    if (options.forceRebuild || this.#domPositionIndex.size === 0) {
+      this.#rebuildDomPositionIndex();
+    }
+
+    const indexed = this.#domPositionIndex.findElementAtPosition(pos);
+    if (indexed) return indexed;
+
+    if (!options.fallbackToCoords) return null;
+    const rects = this.getRangeRects(pos, pos);
+    if (!rects.length) return null;
+
+    const doc = this.#visibleHost.ownerDocument ?? document;
+    for (const rect of rects) {
+      const el = doc.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
+      if (el instanceof HTMLElement && this.#painterHost.contains(el)) {
+        return (el.closest('[data-pm-start][data-pm-end]') as HTMLElement | null) ?? el;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Scroll the visible host so a given document position is brought into view.
    *
    * This is primarily used by commands like search navigation when running in
