@@ -1,3 +1,18 @@
+# [1.5.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.3...v1.5.0-next.1) (2026-01-10)
+
+
+### Bug Fixes
+
+* editor type ([#1702](https://github.com/Harbour-Enterprises/SuperDoc/issues/1702)) ([902e745](https://github.com/Harbour-Enterprises/SuperDoc/commit/902e7456c3b8ac957d19c0b7d65fd3451ce48bd6))
+* new lines in sdts rendering incorrectly ([#1705](https://github.com/Harbour-Enterprises/SuperDoc/issues/1705)) ([777bc33](https://github.com/Harbour-Enterprises/SuperDoc/commit/777bc333fd55a64079be6fe4f620397d310ad979))
+* propagate SDT metadata to nested tables in cells ([#1704](https://github.com/Harbour-Enterprises/SuperDoc/issues/1704)) ([b5b74a1](https://github.com/Harbour-Enterprises/SuperDoc/commit/b5b74a1fca8d65c98c5d85363a90897271fe3efa))
+* some block sdts with nesting not displaying ([#1703](https://github.com/Harbour-Enterprises/SuperDoc/issues/1703)) ([e09d9d8](https://github.com/Harbour-Enterprises/SuperDoc/commit/e09d9d8fabb004645ad54fa13bbe4fbc2bc6e1c7))
+
+
+### Features
+
+* add getElementAtPos utility fn ([#1706](https://github.com/Harbour-Enterprises/SuperDoc/issues/1706)) ([0e34762](https://github.com/Harbour-Enterprises/SuperDoc/commit/0e34762e6cd2cc67b06d897c46bd6276714ff132))
+
 ## [1.4.1-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.2...v1.4.1-next.3) (2026-01-10)
 
 
