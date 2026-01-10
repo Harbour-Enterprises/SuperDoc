@@ -1,3 +1,10 @@
+# [1.5.0-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.2...v1.5.0-next.3) (2026-01-10)
+
+
+### Bug Fixes
+
+* adding table to sdt ([#1709](https://github.com/Harbour-Enterprises/SuperDoc/issues/1709)) ([260b987](https://github.com/Harbour-Enterprises/SuperDoc/commit/260b987e1a20ff3405f41b16d02ef936db023578))
+
 # [1.5.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.1...v1.5.0-next.2) (2026-01-10)
 
 
