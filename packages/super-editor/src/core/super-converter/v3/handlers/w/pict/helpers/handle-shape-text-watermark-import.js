@@ -50,7 +50,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
   };
 
   // Extract rotation (typically 315 degrees for diagonal watermarks)
-  const rotation = styleObj.rotation ? parseFloat(styleObj.rotation) : 0;
+  const rotation = parseFloat(styleObj.rotation) || 0;
 
   // Extract positioning attributes
   const hPosition = styleObj['mso-position-horizontal'] || 'center';
@@ -201,6 +201,61 @@ export function handleShapeTextWatermarkImport({ pict }) {
 }
 
 /**
+ * Sanitize font family name to prevent SVG injection.
+ * Only allows safe ASCII characters commonly used in font names.
+ * @param {string} fontFamily - Font family name
+ * @returns {string} Sanitized font family name
+ */
+function sanitizeFontFamily(fontFamily) {
+  if (!fontFamily || typeof fontFamily !== 'string') {
+    return 'Arial';
+  }
+  // Only allow alphanumeric, spaces, hyphens, and commas (for font lists)
+  // This prevents injection via quotes, angle brackets, parentheses, etc.
+  const sanitized = fontFamily.replace(/[^a-zA-Z0-9\s,\-]/g, '').trim();
+  return sanitized || 'Arial';
+}
+
+/**
+ * Sanitize color value to prevent SVG injection.
+ * Only allows safe ASCII characters commonly used in color values.
+ * @param {string} color - Color value
+ * @param {string} defaultColor - Default color if validation fails
+ * @returns {string} Sanitized color value
+ */
+function sanitizeColor(color, defaultColor = 'silver') {
+  if (!color || typeof color !== 'string') {
+    return defaultColor;
+  }
+  // Only allow alphanumeric, #, %, parentheses, commas, and dots for:
+  // - Hex colors: #rgb, #rrggbb
+  // - Named colors: red, blue, etc.
+  // - RGB/RGBA: rgb(r,g,b), rgba(r,g,b,a)
+  // This prevents injection via quotes, angle brackets, etc.
+  const sanitized = color.replace(/[^a-zA-Z0-9#%(),.]/g, '').trim();
+  return sanitized || defaultColor;
+}
+
+/**
+ * Validate and sanitize numeric value.
+ * @param {number|string} value - Numeric value
+ * @param {number} defaultValue - Default value if validation fails
+ * @param {number} min - Minimum allowed value
+ * @param {number} max - Maximum allowed value
+ * @returns {number} Validated numeric value
+ */
+function sanitizeNumeric(value, defaultValue, min = -Infinity, max = Infinity) {
+  const num = typeof value === 'number' ? value : parseFloat(value);
+
+  if (isNaN(num) || !isFinite(num)) {
+    return defaultValue;
+  }
+
+  // Clamp to min/max range
+  return Math.max(min, Math.min(max, num));
+}
+
+/**
  * Generate an SVG data URI for a text watermark with rotation.
  * Rotation must be baked into the SVG since the layout engine doesn't support
  * rotation for image fragments (only drawing fragments).
@@ -216,34 +271,37 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
   // It seems to be close to correct for text without rotation and slightly too low for text
   // with rotation.
   // Alternative: if explicit font size is given and not the typical 1pt, respect it
-  if (textStyle?.fontSize) {
+  // Only override if it's not the typical Word watermark 1pt
+  if (textStyle?.fontSize && textStyle.fontSize.trim() !== '1pt') {
     const match = textStyle.fontSize.match(/^([\d.]+)(pt|px)?$/);
     if (match) {
       const value = parseFloat(match[1]);
       const unit = match[2] || 'pt';
-      // Only override if it's not the typical Word watermark 1pt
-      if (unit !== 'pt' && value !== 1) {
-        fontSize = (unit === 'pt' ? value * (96 / 72) : value) * 50;
-      }
+      fontSize = (unit === 'pt' ? value * (96 / 72) : value) * 50;
     }
   }
   fontSize = Math.max(fontSize, 48); // Minimum visible size
 
-  const color = fill?.color || 'silver';
-  const opacity = fill?.opacity || 0.5;
-  const fontFamily = textStyle?.fontFamily || 'Arial';
+  // Sanitize all values from untrusted input
+  const color = sanitizeColor(fill?.color, 'silver');
+  const opacity = sanitizeNumeric(fill?.opacity, 0.5, 0, 1);
+  const fontFamily = sanitizeFontFamily(textStyle?.fontFamily);
+  const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
+  const sanitizedWidth = sanitizeNumeric(width, 100, 1, 10000);
+  const sanitizedHeight = sanitizeNumeric(height, 100, 1, 10000);
+  const sanitizedFontSize = sanitizeNumeric(fontSize, 48, 1, 1000);
 
   // Calculate rotated bounding box dimensions to prevent clipping
-  const radians = (rotation * Math.PI) / 180;
+  const radians = (sanitizedRotation * Math.PI) / 180;
   const cos = Math.abs(Math.cos(radians));
   const sin = Math.abs(Math.sin(radians));
 
-  const rotatedWidth = width * cos + height * sin;
-  const rotatedHeight = width * sin + height * cos;
+  const rotatedWidth = sanitizedWidth * cos + sanitizedHeight * sin;
+  const rotatedHeight = sanitizedWidth * sin + sanitizedHeight * cos;
 
   // Use larger dimensions to ensure rotated text isn't clipped
-  const svgWidth = Math.max(width, rotatedWidth);
-  const svgHeight = Math.max(height, rotatedHeight);
+  const svgWidth = Math.max(sanitizedWidth, rotatedWidth);
+  const svgHeight = Math.max(sanitizedHeight, rotatedHeight);
 
   // Center the rotation in the larger SVG canvas
   const centerX = svgWidth / 2;
@@ -256,11 +314,11 @@ function generateTextWatermarkSVG({ text, width, height, rotation, fill, textSty
     text-anchor="middle"
     dominant-baseline="middle"
     font-family="${fontFamily}"
-    font-size="${fontSize}px"
+    font-size="${sanitizedFontSize}px"
     font-weight="bold"
     fill="${color}"
     opacity="${opacity}"
-    transform="rotate(${rotation} ${centerX} ${centerY})">${escapeXml(text)}</text>
+    transform="rotate(${sanitizedRotation} ${centerX} ${centerY})">${escapeXml(text)}</text>
 </svg>`;
 
   return {

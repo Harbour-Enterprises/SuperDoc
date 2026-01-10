@@ -211,12 +211,20 @@ function buildVmlStyle(attrs, wmData) {
     }
   }
 
-  // Wrap style
-  if (attrs.wrap?.style) {
-    styles.push(`mso-wrap-style:${attrs.wrap.style}`);
-  } else {
-    styles.push('mso-wrap-style:none');
+  // Wrap style - map wrap.type to mso-wrap-style
+  // wrap.type can be: None, Square, TopAndBottom, Tight, Through
+  // mso-wrap-style can be: none, square, tight, through, top-and-bottom
+  const wrapType = attrs.wrap?.type;
+  let msoWrapStyle = 'none';
+  if (wrapType) {
+    const wrapTypeLower = wrapType.toLowerCase();
+    if (wrapTypeLower === 'topandbottom') {
+      msoWrapStyle = 'top-and-bottom';
+    } else if (['square', 'tight', 'through'].includes(wrapTypeLower)) {
+      msoWrapStyle = wrapTypeLower;
+    }
   }
+  styles.push(`mso-wrap-style:${msoWrapStyle}`);
 
   // Text anchor
   const textAnchor = wmData.textStyle?.textAnchor || attrs.textStyle?.textAnchor;

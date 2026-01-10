@@ -771,4 +771,299 @@ describe('handleShapeTextWatermarkImport', () => {
       expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Times New Roman');
     });
   });
+
+  describe('Security: SVG injection prevention', () => {
+    it('should sanitize malicious font-family with quotes and event handlers', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                  style: 'font-family:"Arial" onload="alert(1)"',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should strip out quotes and dangerous characters
+      expect(result.attrs.src).toBeDefined();
+      expect(result.attrs.src).not.toContain('onload');
+      expect(result.attrs.src).not.toContain('alert');
+      expect(result.attrs.src).not.toContain('"');
+      // fontFamily should be sanitized to just "Arial"
+      expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Arial');
+    });
+
+    it('should sanitize malicious font-family with angle brackets', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                  style: 'font-family:"Arial<script>alert(1)</script>"',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should strip out angle brackets and script tags
+      expect(result.attrs.src).not.toContain('<');
+      expect(result.attrs.src).not.toContain('>');
+      expect(result.attrs.src).not.toContain('script');
+      expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Arialscriptalert1script');
+    });
+
+    it('should sanitize malicious color with event handlers', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              fillcolor: 'red" onload="alert(1)"',
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should strip out quotes and dangerous characters
+      expect(result.attrs.src).not.toContain('onload');
+      expect(result.attrs.src).not.toContain('alert');
+      expect(result.attrs.src).not.toContain('"');
+      // Color should be sanitized
+      expect(result.attrs.textWatermarkData.fill.color).toBe('redonloadalert1');
+    });
+
+    it('should sanitize malicious color with angle brackets', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  color: 'blue</text><script>alert(1)</script>',
+                  opacity: '0.5',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should strip out angle brackets and script tags
+      expect(result.attrs.src).not.toContain('<');
+      expect(result.attrs.src).not.toContain('>');
+      expect(result.attrs.src).not.toContain('script');
+      expect(result.attrs.textWatermarkData.fill.color).toBe('bluetextscriptalert1script');
+    });
+
+    it('should handle malicious numeric values gracefully', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt;rotation:99999999',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: '999',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Rotation should be clamped to -360 to 360
+      expect(result.attrs.textWatermarkData.rotation).toBe(360);
+      // Opacity should be clamped to 0-1
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(1);
+    });
+
+    it('should handle NaN and Infinity numeric values', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt;rotation:NaN',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: 'Infinity',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should use defaults for invalid values
+      expect(result.attrs.textWatermarkData.rotation).toBe(0);
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+    });
+
+    it('should sanitize extreme dimension values', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:999999pt;height:999999pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Dimensions should be clamped to reasonable maximums
+      expect(result.attrs.size.width).toBeLessThanOrEqual(10000);
+      expect(result.attrs.size.height).toBeLessThanOrEqual(10000);
+    });
+
+    it('should escape XML special characters in watermark text', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: '<script>alert("XSS")</script> & "test" \'quotes\'',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // SVG should have escaped XML entities
+      expect(result.attrs.src).toContain('&lt;');
+      expect(result.attrs.src).toContain('&gt;');
+      expect(result.attrs.src).toContain('&amp;');
+      expect(result.attrs.src).toContain('&quot;');
+      expect(result.attrs.src).toContain('&apos;');
+      // But should not contain raw dangerous characters
+      expect(result.attrs.src).not.toMatch(/<script>/);
+      expect(result.attrs.src).not.toMatch(/alert\("XSS"\)/);
+    });
+
+    it('should handle empty or null malicious inputs', () => {
+      const pict = {
+        elements: [
+          {
+            name: 'v:shape',
+            attributes: {
+              fillcolor: null,
+              style: 'width:100pt;height:50pt',
+            },
+            elements: [
+              {
+                name: 'v:textpath',
+                attributes: {
+                  string: 'TEST',
+                  style: 'font-family:',
+                },
+              },
+              {
+                name: 'v:fill',
+                attributes: {
+                  opacity: '',
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      const result = handleShapeTextWatermarkImport({ params: {}, pict });
+
+      // Should use safe defaults
+      expect(result).not.toBeNull();
+      expect(result.attrs.textWatermarkData.textStyle.fontFamily).toBe('Arial');
+      expect(result.attrs.textWatermarkData.fill.color).toBe('silver');
+      expect(result.attrs.textWatermarkData.fill.opacity).toBe(0.5);
+    });
+  });
 });
