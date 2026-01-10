@@ -499,7 +499,7 @@ describe('translateTextWatermark', () => {
             vRelativeFrom: 'page',
           },
           wrap: {
-            style: 'square',
+            type: 'Square',
           },
         },
       };

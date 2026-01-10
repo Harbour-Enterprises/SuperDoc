@@ -64,8 +64,10 @@ export function handleShapeTextWatermarkImport({ pict }) {
   // Extract fill properties
   const fill = shape.elements?.find((el) => el.name === 'v:fill');
   const fillAttrs = fill?.attributes || {};
-  const fillColor = shapeAttrs.fillcolor || fillAttrs.color || 'silver';
-  const fillColor2 = fillAttrs.color2 || '#3f3f3f';
+  const rawFillColor = shapeAttrs.fillcolor || fillAttrs.color || 'silver';
+  const rawFillColor2 = fillAttrs.color2 || '#3f3f3f';
+  const fillColor = sanitizeColor(rawFillColor, 'silver');
+  const fillColor2 = sanitizeColor(rawFillColor2, '#3f3f3f');
   const opacity = fillAttrs.opacity || '0.5';
   const fillType = fillAttrs.type || 'solid';
 
@@ -80,7 +82,8 @@ export function handleShapeTextWatermarkImport({ pict }) {
   // Extract text formatting from textpath style
   const textpathStyle = textpathAttrs.style || '';
   const textStyleObj = parseVmlStyle(textpathStyle);
-  const fontFamily = textStyleObj['font-family']?.replace(/['"]/g, '') || 'Liberation Sans';
+  const rawFontFamily = textStyleObj['font-family']?.replace(/['"]/g, '');
+  const fontFamily = sanitizeFontFamily(rawFontFamily);
   const fontSize = textStyleObj['font-size'] || '1pt';
 
   // Extract other textpath attributes
@@ -103,14 +106,18 @@ export function handleShapeTextWatermarkImport({ pict }) {
   const widthPx = convertToPixels(width);
   const heightPx = convertToPixels(height);
 
+  // Sanitize numeric values before use
+  const sanitizedOpacity = sanitizeNumeric(parseFloat(opacity), 0.5, 0, 1);
+  const sanitizedRotation = sanitizeNumeric(rotation, 0, -360, 360);
+
   const svgResult = generateTextWatermarkSVG({
     text: watermarkText,
     width: widthPx,
     height: heightPx,
-    rotation,
+    rotation: sanitizedRotation,
     fill: {
       color: fillColor,
-      opacity: parseFloat(opacity),
+      opacity: sanitizedOpacity,
     },
     textStyle: {
       fontFamily,
@@ -169,7 +176,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
       // Store text watermark specific data for export
       textWatermarkData: {
         text: watermarkText,
-        rotation,
+        rotation: sanitizedRotation,
         textStyle: {
           fontFamily,
           fontSize,
@@ -178,7 +185,7 @@ export function handleShapeTextWatermarkImport({ pict }) {
         fill: {
           color: fillColor,
           color2: fillColor2,
-          opacity: parseFloat(opacity),
+          opacity: sanitizedOpacity,
           type: fillType,
         },
         stroke: {
