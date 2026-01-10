@@ -1162,6 +1162,8 @@ export type ParagraphAttrs = {
   keepLines?: boolean;
   trackedChangesMode?: TrackedChangesMode;
   trackedChangesEnabled?: boolean;
+  /** Marks an empty paragraph that only exists to carry section properties. */
+  sectPrMarker?: boolean;
   direction?: 'ltr' | 'rtl';
   rtl?: boolean;
   isTocEntry?: boolean;
