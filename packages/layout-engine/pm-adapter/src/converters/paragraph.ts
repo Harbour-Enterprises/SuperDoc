@@ -885,6 +885,13 @@ export function paragraphToFlowBlocks(
 
   const linkedStyleResolver = createLinkedStyleResolver(converterContext?.linkedStyles);
   const blocks: FlowBlock[] = [];
+  const paraAttrs = (para.attrs ?? {}) as Record<string, unknown>;
+  const rawParagraphProps =
+    typeof paraAttrs.paragraphProperties === 'object' && paraAttrs.paragraphProperties !== null
+      ? (paraAttrs.paragraphProperties as Record<string, unknown>)
+      : undefined;
+  const hasSectPr = Boolean(rawParagraphProps?.sectPr);
+  const isSectPrMarker = hasSectPr || paraAttrs.pageBreakSource === 'sectPr';
 
   if (hasPageBreakBefore(para)) {
     blocks.push({
@@ -911,11 +918,19 @@ export function paragraphToFlowBlocks(
       emptyRun.pmStart = paraPos.start + 1;
       emptyRun.pmEnd = paraPos.start + 1;
     }
+    let emptyParagraphAttrs = cloneParagraphAttrs(paragraphAttrs);
+    if (isSectPrMarker) {
+      if (emptyParagraphAttrs) {
+        emptyParagraphAttrs.sectPrMarker = true;
+      } else {
+        emptyParagraphAttrs = { sectPrMarker: true };
+      }
+    }
     blocks.push({
       kind: 'paragraph',
       id: baseBlockId,
       runs: [emptyRun],
-      attrs: cloneParagraphAttrs(paragraphAttrs),
+      attrs: emptyParagraphAttrs,
     });
     return blocks;
   }
