@@ -1247,14 +1247,6 @@ export function paragraphToFlowBlocks(
             enableComments,
           );
         }
-        console.debug('[token-debug] paragraph-token-run', {
-          token: (tokenRun as TextRun).token,
-          fontFamily: (tokenRun as TextRun).fontFamily,
-          fontSize: (tokenRun as TextRun).fontSize,
-          inlineStyleId,
-          runStyleId: activeRunStyleId,
-          mergedMarksCount: mergedMarks.length,
-        });
         applyInlineRunProperties(tokenRun as TextRun, activeRunProperties);
         currentRuns.push(tokenRun);
       }

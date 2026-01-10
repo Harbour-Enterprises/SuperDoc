@@ -19,6 +19,7 @@ import type {
   ImageRun,
   ParagraphBlock,
   Run,
+  TableBlock,
 } from '@superdoc/contracts';
 import type { PMNode, PositionMap, BlockIdGenerator } from './types.js';
 import { TWIPS_PER_INCH, PX_PER_INCH, PX_PER_PT, ATOMIC_INLINE_TYPES } from './constants.js';
@@ -1152,7 +1153,7 @@ export function hydrateImageBlocks(blocks: FlowBlock[], mediaFiles?: Record<stri
                 ...cell,
                 // Cast to expected type - hydrateBlock preserves block kinds, just hydrates image sources
                 blocks: (hydratedBlocks.length > 0 ? hydratedBlocks : cell.blocks) as
-                  | (ParagraphBlock | ImageBlock | DrawingBlock)[]
+                  | (ParagraphBlock | ImageBlock | DrawingBlock | TableBlock)[]
                   | undefined,
                 paragraph: hydratedParagraph,
               };
