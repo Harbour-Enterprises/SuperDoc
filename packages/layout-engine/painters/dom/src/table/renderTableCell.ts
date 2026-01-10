@@ -16,7 +16,12 @@ import type { FragmentRenderContext, BlockLookup } from '../renderer.js';
 import { applyParagraphBorderStyles, applyParagraphShadingStyles } from '../renderer.js';
 import { toCssFontFamily } from '@superdoc/font-utils';
 import { renderTableFragment as renderTableFragmentElement } from './renderTableFragment.js';
-import { applySdtContainerStyling, getSdtContainerConfig } from '../utils/sdt-helpers.js';
+import {
+  applySdtContainerStyling,
+  getSdtContainerConfig,
+  getSdtContainerKey,
+  type SdtBoundaryOptions,
+} from '../utils/sdt-helpers.js';
 
 /**
  * Default gap between list marker and text content in pixels.
@@ -505,7 +510,20 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   // Support multi-block cells with backward compatibility
   const cellBlocks = cell?.blocks ?? (cell?.paragraph ? [cell.paragraph] : []);
   const blockMeasures = cellMeasure?.blocks ?? (cellMeasure?.paragraph ? [cellMeasure.paragraph] : []);
+  const sdtContainerKeys = cellBlocks.map((block) => {
+    if (block.kind !== 'paragraph') {
+      return null;
+    }
+    const attrs = (block as { attrs?: { sdt?: SdtMetadata; containerSdt?: SdtMetadata } }).attrs;
+    return getSdtContainerKey(attrs?.sdt, attrs?.containerSdt);
+  });
 
+  const sdtBoundaries = sdtContainerKeys.map((key, index): SdtBoundaryOptions | undefined => {
+    if (!key) return undefined;
+    const prev = index > 0 ? sdtContainerKeys[index - 1] : null;
+    const next = index < sdtContainerKeys.length - 1 ? sdtContainerKeys[index + 1] : null;
+    return { isStart: key !== prev, isEnd: key !== next };
+  });
   /**
    * Determines if SDT container styling should be applied to a block.
    *
@@ -517,8 +535,17 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
    * @param containerSdt - The block's inherited container SDT metadata
    * @returns True if container styling should be applied
    */
-  const shouldApplySdtContainerStyling = (sdt?: SdtMetadata | null, containerSdt?: SdtMetadata | null): boolean => {
+  const tableSdtKey = tableSdt ? getSdtContainerKey(tableSdt, null) : null;
+  const shouldApplySdtContainerStyling = (
+    sdt?: SdtMetadata | null,
+    containerSdt?: SdtMetadata | null,
+    blockKey?: string | null,
+  ): boolean => {
+    const resolvedKey = blockKey ?? getSdtContainerKey(sdt, containerSdt);
     // Skip if this SDT is the same as the table's SDT (already styled at table level)
+    if (tableSdtKey && resolvedKey && tableSdtKey === resolvedKey) {
+      return false;
+    }
     if (tableSdt && (sdt === tableSdt || containerSdt === tableSdt)) {
       return false;
     }
@@ -526,9 +553,10 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   };
 
   // Check if any block in the cell has SDT container styling
-  const hasSdtContainer = cellBlocks.some((block) => {
+  const hasSdtContainer = cellBlocks.some((block, index) => {
     const attrs = (block as { attrs?: { sdt?: SdtMetadata; containerSdt?: SdtMetadata } }).attrs;
-    return shouldApplySdtContainerStyling(attrs?.sdt, attrs?.containerSdt);
+    const blockKey = sdtContainerKeys[index] ?? null;
+    return shouldApplySdtContainerStyling(attrs?.sdt, attrs?.containerSdt, blockKey);
   });
 
   // SDT containers display labels that extend above the content boundary.
@@ -536,7 +564,6 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
   if (hasSdtContainer) {
     cellEl.style.overflow = 'visible';
   }
-
   if (cellBlocks.length > 0 && blockMeasures.length > 0) {
     // Content is a child of the cell, positioned relative to it
     // Cell's overflow:hidden handles clipping, no explicit width needed
@@ -738,8 +765,10 @@ export const renderTableCell = (deps: TableCellRenderDependencies): TableCellRen
         paraWrapper.style.left = '0';
         paraWrapper.style.width = '100%';
         applySdtDataset(paraWrapper, block.attrs?.sdt);
-        if (shouldApplySdtContainerStyling(block.attrs?.sdt, block.attrs?.containerSdt)) {
-          applySdtContainerStyling(doc, paraWrapper, block.attrs?.sdt, block.attrs?.containerSdt);
+        const sdtBoundary = sdtBoundaries[i];
+        const blockKey = sdtContainerKeys[i] ?? null;
+        if (shouldApplySdtContainerStyling(block.attrs?.sdt, block.attrs?.containerSdt, blockKey)) {
+          applySdtContainerStyling(doc, paraWrapper, block.attrs?.sdt, block.attrs?.containerSdt, sdtBoundary);
         }
         applyParagraphBordersAndShading(paraWrapper, block as ParagraphBlock);
 

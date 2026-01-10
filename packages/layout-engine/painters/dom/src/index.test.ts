@@ -9043,6 +9043,102 @@ describe('applyRunDataAttributes', () => {
         expect(fragment.dataset.sdtContainerEnd).toBe('true');
       });
 
+      it('updates block SDT boundaries when appending a new fragment during patch rendering', () => {
+        const sdtMetadata = {
+          type: 'structuredContent' as const,
+          scope: 'block' as const,
+          id: 'scb-boundary-1',
+          alias: 'Boundary Control',
+        };
+
+        const buildParagraph = (id: string, text: string, pmStart: number) => {
+          const runLength = text.length;
+          const block: FlowBlock = {
+            kind: 'paragraph',
+            id,
+            runs: [{ text, fontFamily: 'Arial', fontSize: 16, pmStart, pmEnd: pmStart + runLength }],
+            attrs: { sdt: sdtMetadata },
+          };
+
+          const measure: Measure = {
+            kind: 'paragraph',
+            lines: [
+              {
+                fromRun: 0,
+                fromChar: 0,
+                toRun: 0,
+                toChar: runLength,
+                width: 160,
+                ascent: 12,
+                descent: 4,
+                lineHeight: 20,
+              },
+            ],
+            totalHeight: 20,
+          };
+
+          return { block, measure };
+        };
+
+        const paraA = buildParagraph('sdt-para-a', 'Alpha', 0);
+        const paraB = buildParagraph('sdt-para-b', 'Bravo', 5);
+        const paraC = buildParagraph('sdt-para-c', 'Charlie', 10);
+
+        const baseFragments = [
+          { kind: 'para' as const, blockId: paraA.block.id, fromLine: 0, toLine: 1, x: 20, y: 20, width: 320 },
+          { kind: 'para' as const, blockId: paraB.block.id, fromLine: 0, toLine: 1, x: 20, y: 40, width: 320 },
+          { kind: 'para' as const, blockId: paraC.block.id, fromLine: 0, toLine: 1, x: 20, y: 60, width: 320 },
+        ];
+
+        const initialLayout: Layout = {
+          pageSize: { w: 400, h: 500 },
+          pages: [{ number: 1, fragments: baseFragments }],
+        };
+
+        const painter = createDomPainter({
+          blocks: [paraA.block, paraB.block, paraC.block],
+          measures: [paraA.measure, paraB.measure, paraC.measure],
+        });
+
+        painter.paint(initialLayout, mount);
+
+        const initialC = mount.querySelector('[data-block-id="sdt-para-c"]') as HTMLElement;
+        expect(initialC).toBeTruthy();
+        expect(initialC.dataset.sdtContainerStart).toBe('false');
+        expect(initialC.dataset.sdtContainerEnd).toBe('true');
+
+        const paraD = buildParagraph('sdt-para-d', 'Delta', 17);
+        const updatedLayout: Layout = {
+          pageSize: initialLayout.pageSize,
+          pages: [
+            {
+              number: 1,
+              fragments: [
+                ...baseFragments,
+                { kind: 'para', blockId: paraD.block.id, fromLine: 0, toLine: 1, x: 20, y: 80, width: 320 },
+              ],
+            },
+          ],
+        };
+
+        painter.setData?.(
+          [paraA.block, paraB.block, paraC.block, paraD.block],
+          [paraA.measure, paraB.measure, paraC.measure, paraD.measure],
+        );
+        painter.paint(updatedLayout, mount);
+
+        const updatedC = mount.querySelector('[data-block-id="sdt-para-c"]') as HTMLElement;
+        const updatedD = mount.querySelector('[data-block-id="sdt-para-d"]') as HTMLElement;
+
+        expect(updatedC).toBeTruthy();
+        expect(updatedD).toBeTruthy();
+        expect(updatedC).not.toBe(initialC);
+        expect(updatedC.dataset.sdtContainerStart).toBe('false');
+        expect(updatedC.dataset.sdtContainerEnd).toBe('false');
+        expect(updatedD.dataset.sdtContainerStart).toBe('false');
+        expect(updatedD.dataset.sdtContainerEnd).toBe('true');
+      });
+
       it('does not add block SDT styling for inline-scoped structuredContent', () => {
         const inlineSdtBlock: FlowBlock = {
           kind: 'paragraph',
