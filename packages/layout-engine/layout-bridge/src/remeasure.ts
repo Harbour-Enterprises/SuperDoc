@@ -660,13 +660,16 @@ export function remeasureParagraph(
   const attrs = block.attrs as ParagraphBlockAttrs | undefined;
   const indent = attrs?.indent;
   const wordLayout = attrs?.wordLayout;
-  const indentLeft = Math.max(0, indent?.left ?? 0);
-  const indentRight = Math.max(0, indent?.right ?? 0);
+  const rawIndentLeft = indent?.left ?? 0;
+  const rawIndentRight = indent?.right ?? 0;
+  const indentLeft = Math.max(0, rawIndentLeft);
+  const indentRight = Math.max(0, rawIndentRight);
   const indentFirstLine = Math.max(0, indent?.firstLine ?? 0);
   const indentHanging = Math.max(0, indent?.hanging ?? 0);
   const baseFirstLineOffset = firstLineIndent || indentFirstLine - indentHanging;
   const clampedFirstLineOffset = Math.max(0, baseFirstLineOffset);
-  const allowNegativeFirstLineOffset = !wordLayout?.marker && baseFirstLineOffset < 0;
+  const hasNegativeIndent = rawIndentLeft < 0 || rawIndentRight < 0;
+  const allowNegativeFirstLineOffset = !wordLayout?.marker && !hasNegativeIndent && baseFirstLineOffset < 0;
   const effectiveFirstLineOffset = allowNegativeFirstLineOffset ? baseFirstLineOffset : clampedFirstLineOffset;
   const contentWidth = Math.max(1, maxWidth - indentLeft - indentRight);
   // Some producers provide `marker.textStartX` without setting top-level `textStartPx`.

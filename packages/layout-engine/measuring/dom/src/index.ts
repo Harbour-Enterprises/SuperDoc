@@ -687,7 +687,9 @@ async function measureParagraphBlock(block: ParagraphBlock, maxWidth: number): P
   // so keep the same available width as body lines. For normal paragraphs we must honor
   // negative offsets (hanging indent) so the first line can extend into the hanging region.
   const clampedFirstLineOffset = Math.max(0, rawFirstLineOffset);
-  const allowNegativeFirstLineOffset = !isWordLayoutList && rawFirstLineOffset < 0;
+  const hasNegativeIndent = indentLeft < 0 || indentRight < 0;
+  // Avoid widening the first line when negative indents already expand fragment width.
+  const allowNegativeFirstLineOffset = !isWordLayoutList && !hasNegativeIndent && rawFirstLineOffset < 0;
   const firstLineOffset = isWordLayoutList
     ? 0
     : allowNegativeFirstLineOffset
