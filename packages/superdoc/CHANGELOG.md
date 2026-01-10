@@ -1,3 +1,10 @@
+# [1.5.0-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.1...v1.5.0-next.2) (2026-01-10)
+
+
+### Bug Fixes
+
+* shapes ([#1708](https://github.com/Harbour-Enterprises/SuperDoc/issues/1708)) ([c1dd983](https://github.com/Harbour-Enterprises/SuperDoc/commit/c1dd9832bf86a77e57d258eb09782f3e3a4f3b11))
+
 # [1.5.0-next.1](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.3...v1.5.0-next.1) (2026-01-10)
 
 
