@@ -107,6 +107,11 @@ export function applySdtMetadataToTableBlock(tableBlock: FlowBlock | undefined, 
   table.attrs.sdt = metadata;
   table.rows?.forEach((row) => {
     row.cells?.forEach((cell) => {
+      const cellBlocks = cell.blocks;
+      if (cellBlocks && cellBlocks.length > 0) {
+        applySdtMetadataToParagraphBlocks(cellBlocks, metadata);
+        return;
+      }
       if (cell.paragraph) {
         applySdtMetadataToParagraphBlocks([cell.paragraph], metadata);
       }

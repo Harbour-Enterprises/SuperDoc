@@ -457,7 +457,7 @@ export type TableAttrs = {
 export type TableCell = {
   id: BlockId;
   /** Multi-block cell content (new feature) */
-  blocks?: (ParagraphBlock | ImageBlock | DrawingBlock)[];
+  blocks?: (ParagraphBlock | ImageBlock | DrawingBlock | TableBlock)[];
   /** Single paragraph (backward compatibility) */
   paragraph?: ParagraphBlock;
   rowSpan?: number;
