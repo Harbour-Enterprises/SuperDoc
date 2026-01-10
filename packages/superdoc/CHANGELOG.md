@@ -1,3 +1,10 @@
+## [1.4.1-next.3](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.2...v1.4.1-next.3) (2026-01-10)
+
+
+### Bug Fixes
+
+* sectPr handling of next page ([#1701](https://github.com/Harbour-Enterprises/SuperDoc/issues/1701)) ([7c96ae5](https://github.com/Harbour-Enterprises/SuperDoc/commit/7c96ae50da6dfa1bfc95d8aa6bf2dd2335700a88))
+
 ## [1.4.1-next.2](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.4.1-next.1...v1.4.1-next.2) (2026-01-09)
 
 
