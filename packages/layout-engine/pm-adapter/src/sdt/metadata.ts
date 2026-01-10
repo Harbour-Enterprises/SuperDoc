@@ -110,6 +110,11 @@ export function applySdtMetadataToTableBlock(tableBlock: FlowBlock | undefined, 
       const cellBlocks = cell.blocks;
       if (cellBlocks && cellBlocks.length > 0) {
         applySdtMetadataToParagraphBlocks(cellBlocks, metadata);
+        cellBlocks.forEach((block) => {
+          if (block.kind === 'table') {
+            applySdtMetadataToTableBlock(block, metadata);
+          }
+        });
         return;
       }
       if (cell.paragraph) {
