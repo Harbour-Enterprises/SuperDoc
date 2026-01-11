@@ -1,10 +1,3 @@
-# [1.5.0-next.5](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.4...v1.5.0-next.5) (2026-01-11)
-
-
-### Bug Fixes
-
-* latent styles crash ([#1711](https://github.com/Harbour-Enterprises/SuperDoc/issues/1711)) ([f96bced](https://github.com/Harbour-Enterprises/SuperDoc/commit/f96bced48f6b3932fd3573ed612d2d815c701efd))
-
 # [1.5.0-next.4](https://github.com/Harbour-Enterprises/SuperDoc/compare/v1.5.0-next.3...v1.5.0-next.4) (2026-01-10)
 
 
