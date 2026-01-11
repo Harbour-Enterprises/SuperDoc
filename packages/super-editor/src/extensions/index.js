@@ -73,6 +73,7 @@ import { PermEnd } from './perm-end/index.js';
 
 // Helpers
 import { trackChangesHelpers } from './track-changes/index.js';
+import { Diffing } from './diffing/index.js';
 
 const getRichTextExtensions = () => {
   return [
@@ -241,6 +242,7 @@ export {
   trackChangesHelpers,
   getStarterExtensions,
   getRichTextExtensions,
+  Diffing,
   AiMark,
   AiAnimationMark,
   AiLoaderNode,
