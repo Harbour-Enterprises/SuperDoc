@@ -33,7 +33,6 @@ import type {
   ShapeGroupDrawing,
   ShapeGroupChild,
   DrawingGeometry,
-  LineEnd,
   PositionedDrawingGeometry,
   VectorShapeStyle,
   FlowRunLink,
@@ -140,6 +139,29 @@ type MinimalWordLayout = {
   textStartPx?: number;
   /** Array of explicit tab stop positions in pixels. */
   tabsPx?: number[];
+};
+
+type LineEnd = {
+  type?: string;
+  width?: string;
+  length?: string;
+};
+
+type LineEnds = {
+  head?: LineEnd;
+  tail?: LineEnd;
+};
+
+type EffectExtent = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
+
+type VectorShapeDrawingWithEffects = VectorShapeDrawing & {
+  lineEnds?: LineEnds;
+  effectExtent?: EffectExtent;
 };
 
 /**
@@ -2843,7 +2865,7 @@ export class DomPainter {
   }
 
   private createVectorShapeElement(
-    block: VectorShapeDrawing,
+    block: VectorShapeDrawingWithEffects,
     geometry?: DrawingGeometry,
     applyTransforms = false,
     groupScaleX = 1,
@@ -3172,7 +3194,7 @@ export class DomPainter {
     sanitize(element);
   }
 
-  private getEffectExtentMetrics(block: VectorShapeDrawing): {
+  private getEffectExtentMetrics(block: VectorShapeDrawingWithEffects): {
     offsetX: number;
     offsetY: number;
     innerWidth: number;
@@ -3189,7 +3211,7 @@ export class DomPainter {
     return { offsetX: left, offsetY: top, innerWidth, innerHeight };
   }
 
-  private applyLineEnds(svgElement: SVGElement, block: VectorShapeDrawing): void {
+  private applyLineEnds(svgElement: SVGElement, block: VectorShapeDrawingWithEffects): void {
     const lineEnds = block.lineEnds;
     if (!lineEnds) return;
     if (block.strokeColor === null) return;
@@ -3256,7 +3278,7 @@ export class DomPainter {
     strokeColor: string,
     _strokeWidth: number,
     isStart: boolean,
-    effectExtent?: VectorShapeDrawing['effectExtent'],
+    effectExtent?: EffectExtent,
   ): void {
     if (defs.querySelector(`#${id}`)) return;
 
@@ -3433,6 +3455,7 @@ export class DomPainter {
           shapeName?: string;
           textContent?: ShapeTextContent;
           textAlign?: string;
+          lineEnds?: LineEnds;
         };
       const childGeometry = {
         width: attrs.width ?? 0,
@@ -3441,7 +3464,7 @@ export class DomPainter {
         flipH: attrs.flipH ?? false,
         flipV: attrs.flipV ?? false,
       };
-      const vectorChild: VectorShapeDrawing = {
+      const vectorChild: VectorShapeDrawingWithEffects = {
         drawingKind: 'vectorShape',
         kind: 'drawing',
         id: `${attrs.shapeId ?? child.shapeType}`,

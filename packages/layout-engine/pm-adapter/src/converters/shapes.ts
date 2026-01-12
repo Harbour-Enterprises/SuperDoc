@@ -7,6 +7,7 @@
 
 import type { DrawingBlock, ImageBlock, VectorShapeDrawing, ShapeGroupDrawing, ImageAnchor } from '@superdoc/contracts';
 import type { PMNode, NodeHandlerContext, BlockIdGenerator, PositionMap } from '../types.js';
+import type { EffectExtent, LineEnds } from '../utilities.js';
 import {
   pickNumber,
   isPlainObject,
@@ -322,7 +323,10 @@ export const buildDrawingBlock = (
   node: PMNode,
   geometry: ShapeDrawingGeometry,
   drawingKind: ShapeDrawingBlock['drawingKind'],
-  extraProps?: Partial<ShapeDrawingBlock>,
+  extraProps?: Partial<ShapeDrawingBlock> & {
+    lineEnds?: LineEnds;
+    effectExtent?: EffectExtent;
+  },
 ): ShapeDrawingBlock => {
   const normalizedWrap = normalizeWrap(rawAttrs.wrap);
   const baseAnchor = normalizeAnchorData(rawAttrs.anchorData, rawAttrs, normalizedWrap?.behindDoc);

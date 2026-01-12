@@ -9,10 +9,7 @@ import type {
   BoxSpacing,
   DrawingBlock,
   DrawingContentSnapshot,
-  EffectExtent,
   ImageBlock,
-  LineEnd,
-  LineEnds,
   ParagraphIndent,
   ShapeGroupChild,
   ShapeGroupDrawing,
@@ -26,6 +23,24 @@ import type {
 } from '@superdoc/contracts';
 import type { PMNode, PositionMap, BlockIdGenerator } from './types.js';
 import { TWIPS_PER_INCH, PX_PER_INCH, PX_PER_PT, ATOMIC_INLINE_TYPES } from './constants.js';
+
+export type LineEnd = {
+  type?: string;
+  width?: string;
+  length?: string;
+};
+
+export type LineEnds = {
+  head?: LineEnd;
+  tail?: LineEnd;
+};
+
+export type EffectExtent = {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+};
 
 // ============================================================================
 // Unit Conversion Utilities
