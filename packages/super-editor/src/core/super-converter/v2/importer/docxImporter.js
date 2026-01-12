@@ -18,9 +18,11 @@ import { autoPageHandlerEntity, autoTotalPageCountEntity } from './autoPageNumbe
 import { pageReferenceEntity } from './pageReferenceImporter.js';
 import { pictNodeHandlerEntity } from './pictNodeImporter.js';
 import { importCommentData } from './documentCommentsImporter.js';
+import { importFootnoteData } from './documentFootnotesImporter.js';
 import { getDefaultStyleDefinition } from '@converter/docx-helpers/index.js';
 import { pruneIgnoredNodes } from './ignoredNodes.js';
 import { tabNodeEntityHandler } from './tabImporter.js';
+import { footnoteReferenceHandlerEntity } from './footnoteReferenceImporter.js';
 import { tableNodeHandlerEntity } from './tableImporter.js';
 import { tableOfContentsHandlerEntity } from './tableOfContentsImporter.js';
 import { preProcessNodesForFldChar } from '../../field-references';
@@ -145,13 +147,14 @@ export const createDocumentJson = (docx, converter, editor) => {
 
     const contentElements = node.elements?.filter((n) => n.name !== 'w:sectPr') ?? [];
     const content = pruneIgnoredNodes(contentElements);
-    const comments = importCommentData({ docx, nodeListHandler, converter, editor });
 
     // Track imported lists
     const lists = {};
     const inlineDocumentFonts = [];
 
     const numbering = getNumberingDefinitions(docx);
+    const comments = importCommentData({ docx, nodeListHandler, converter, editor });
+    const footnotes = importFootnoteData({ docx, nodeListHandler, converter, editor, numbering });
     let parsedContent = nodeListHandler.handler({
       nodes: content,
       nodeListHandler,
@@ -191,6 +194,7 @@ export const createDocumentJson = (docx, converter, editor) => {
       savedTagsToRestore: node,
       pageStyles: getDocumentStyles(node, docx, converter, editor, numbering),
       comments,
+      footnotes,
       inlineDocumentFonts,
       linkedStyles: getStyleDefinitions(docx, converter, editor),
       numbering: getNumberingDefinitions(docx, converter),
@@ -217,6 +221,7 @@ export const defaultNodeListHandler = () => {
     drawingNodeHandlerEntity,
     trackChangeNodeHandlerEntity,
     tableNodeHandlerEntity,
+    footnoteReferenceHandlerEntity,
     tabNodeEntityHandler,
     tableOfContentsHandlerEntity,
     autoPageHandlerEntity,
@@ -741,6 +746,7 @@ export function filterOutRootInlineNodes(content = []) {
     'commentRangeStart',
     'commentRangeEnd',
     'commentReference',
+    'footnoteReference',
     'structuredContent',
   ]);
 

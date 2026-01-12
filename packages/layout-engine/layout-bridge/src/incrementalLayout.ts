@@ -42,6 +42,12 @@ export type IncrementalLayoutResult = {
   dirty: ReturnType<typeof computeDirtyRegions>;
   headers?: HeaderFooterLayoutResult[];
   footers?: HeaderFooterLayoutResult[];
+  /**
+   * Extra blocks/measures that should be added to the painter's lookup table.
+   * Used for rendering non-body fragments injected into the layout (e.g., footnotes).
+   */
+  extraBlocks?: FlowBlock[];
+  extraMeasures?: Measure[];
 };
 
 export const measureCache = new MeasureCache<Measure>();
@@ -55,6 +61,115 @@ const perfLog = (...args: unknown[]): void => {
   if (!layoutDebugEnabled) return;
 
   console.log(...args);
+};
+
+type FootnoteReference = { id: string; pos: number };
+type FootnotesLayoutInput = {
+  refs: FootnoteReference[];
+  blocksById: Map<string, FlowBlock[]>;
+  gap?: number;
+  topPadding?: number;
+  dividerHeight?: number;
+};
+
+const isFootnotesLayoutInput = (value: unknown): value is FootnotesLayoutInput => {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (!Array.isArray(v.refs)) return false;
+  if (!(v.blocksById instanceof Map)) return false;
+  return true;
+};
+
+const getMeasureHeight = (measure: Measure | undefined): number => {
+  if (!measure) return 0;
+  if (measure.kind === 'paragraph') return Math.max(0, measure.totalHeight ?? 0);
+  if (measure.kind === 'image') return Math.max(0, measure.height ?? 0);
+  if (measure.kind === 'drawing') return Math.max(0, measure.height ?? 0);
+  if (measure.kind === 'table') return Math.max(0, measure.totalHeight ?? 0);
+  if (measure.kind === 'list') return Math.max(0, measure.totalHeight ?? 0);
+  return 0;
+};
+
+const findPageIndexForPos = (layout: Layout, pos: number): number | null => {
+  if (!Number.isFinite(pos)) return null;
+  const fallbackRanges: Array<{ pageIndex: number; minStart: number; maxEnd: number } | null> = [];
+  for (let pageIndex = 0; pageIndex < layout.pages.length; pageIndex++) {
+    const page = layout.pages[pageIndex];
+    let minStart: number | null = null;
+    let maxEnd: number | null = null;
+    for (const fragment of page.fragments) {
+      const pmStart = (fragment as { pmStart?: number }).pmStart;
+      const pmEnd = (fragment as { pmEnd?: number }).pmEnd;
+      if (pmStart == null || pmEnd == null) continue;
+      if (minStart == null || pmStart < minStart) minStart = pmStart;
+      if (maxEnd == null || pmEnd > maxEnd) maxEnd = pmEnd;
+      if (pos >= pmStart && pos <= pmEnd) {
+        return pageIndex;
+      }
+    }
+    fallbackRanges[pageIndex] =
+      minStart != null && maxEnd != null ? { pageIndex, minStart, maxEnd } : null;
+  }
+
+  // Fallback: pick the closest page range when exact containment isn't found.
+  // This helps when pm ranges are sparse or use slightly different boundary semantics.
+  let best: { pageIndex: number; distance: number } | null = null;
+  for (const entry of fallbackRanges) {
+    if (!entry) continue;
+    const distance =
+      pos < entry.minStart ? entry.minStart - pos : pos > entry.maxEnd ? pos - entry.maxEnd : 0;
+    if (!best || distance < best.distance) {
+      best = { pageIndex: entry.pageIndex, distance };
+    }
+  }
+  if (best) return best.pageIndex;
+  if (layout.pages.length > 0) return layout.pages.length - 1;
+  return null;
+};
+
+const assignFootnotesToPages = (layout: Layout, refs: FootnoteReference[]): Map<number, string[]> => {
+  const result = new Map<number, string[]>();
+  const seenByPage = new Map<number, Set<string>>();
+  for (const ref of refs) {
+    const pageIndex = findPageIndexForPos(layout, ref.pos);
+    if (pageIndex == null) continue;
+    let seen = seenByPage.get(pageIndex);
+    if (!seen) {
+      seen = new Set();
+      seenByPage.set(pageIndex, seen);
+    }
+    if (seen.has(ref.id)) continue;
+    seen.add(ref.id);
+    const list = result.get(pageIndex) ?? [];
+    list.push(ref.id);
+    result.set(pageIndex, list);
+  }
+  return result;
+};
+
+const resolveFootnoteMeasurementWidth = (options: LayoutOptions, blocks?: FlowBlock[]): number => {
+  const pageSize = options.pageSize ?? DEFAULT_PAGE_SIZE;
+  const margins = {
+    right: normalizeMargin(options.margins?.right, DEFAULT_MARGINS.right),
+    left: normalizeMargin(options.margins?.left, DEFAULT_MARGINS.left),
+  };
+  let width = pageSize.w - (margins.left + margins.right);
+
+  if (blocks && blocks.length > 0) {
+    for (const block of blocks) {
+      if (block.kind !== 'sectionBreak') continue;
+      const sectionPageSize = block.pageSize ?? pageSize;
+      const sectionMargins = {
+        right: normalizeMargin(block.margins?.right, margins.right),
+        left: normalizeMargin(block.margins?.left, margins.left),
+      };
+      const w = sectionPageSize.w - (sectionMargins.left + sectionMargins.right);
+      if (w > 0 && w < width) width = w;
+    }
+  }
+
+  if (!Number.isFinite(width) || width <= 0) return 0;
+  return width;
 };
 
 /**
@@ -553,6 +668,241 @@ export async function incrementalLayout(
     });
   }
 
+  // Footnotes: reserve space per page and inject footnote fragments into the layout.
+  // 1) Assign footnote refs to pages using the current layout.
+  // 2) Measure footnote blocks and compute per-page reserved height.
+  // 3) Relayout with per-page bottom margin reserves, then inject fragments into the reserved band.
+  let extraBlocks: FlowBlock[] | undefined;
+  let extraMeasures: Measure[] | undefined;
+  const footnotesInput = isFootnotesLayoutInput(options.footnotes) ? options.footnotes : null;
+  if (footnotesInput && footnotesInput.refs.length > 0 && footnotesInput.blocksById.size > 0) {
+    const gap = typeof footnotesInput.gap === 'number' && Number.isFinite(footnotesInput.gap) ? footnotesInput.gap : 2;
+    const topPadding =
+      typeof footnotesInput.topPadding === 'number' && Number.isFinite(footnotesInput.topPadding)
+        ? footnotesInput.topPadding
+        : 6;
+    const dividerHeight =
+      typeof footnotesInput.dividerHeight === 'number' && Number.isFinite(footnotesInput.dividerHeight)
+        ? footnotesInput.dividerHeight
+        : 6;
+
+    const footnoteWidth = resolveFootnoteMeasurementWidth(options, currentBlocks);
+    if (footnoteWidth > 0) {
+      const footnoteConstraints = { maxWidth: footnoteWidth, maxHeight: measurementHeight };
+
+      const measureFootnoteBlocks = async (idsByPage: Map<number, string[]>) => {
+        const needed = new Map<string, FlowBlock>();
+        idsByPage.forEach((ids) => {
+          ids.forEach((id) => {
+            const blocks = footnotesInput.blocksById.get(id) ?? [];
+            blocks.forEach((block) => {
+              if (block?.id && !needed.has(block.id)) {
+                needed.set(block.id, block);
+              }
+            });
+          });
+        });
+
+        const blocks = Array.from(needed.values());
+        const measuresById = new Map<string, Measure>();
+        await Promise.all(
+          blocks.map(async (block) => {
+            const cached = measureCache.get(block, footnoteConstraints.maxWidth, footnoteConstraints.maxHeight);
+            if (cached) {
+              measuresById.set(block.id, cached);
+              return;
+            }
+            const measurement = await measureBlock(block, footnoteConstraints);
+            measureCache.set(block, footnoteConstraints.maxWidth, footnoteConstraints.maxHeight, measurement);
+            measuresById.set(block.id, measurement);
+          }),
+        );
+        return { blocks, measuresById };
+      };
+
+      const computeReserves = (
+        layoutForPages: Layout,
+        idsByPage: Map<number, string[]>,
+        measuresById: Map<string, Measure>,
+      ) => {
+        const reserves: number[] = [];
+        for (let pageIndex = 0; pageIndex < layoutForPages.pages.length; pageIndex++) {
+          const ids = idsByPage.get(pageIndex) ?? [];
+          if (ids.length === 0) {
+            reserves[pageIndex] = 0;
+            continue;
+          }
+          let height = dividerHeight + topPadding;
+          ids.forEach((id, idIndex) => {
+            const blocks = footnotesInput.blocksById.get(id) ?? [];
+            blocks.forEach((block) => {
+              height += getMeasureHeight(measuresById.get(block.id));
+            });
+            if (idIndex < ids.length - 1) {
+              height += gap;
+            }
+          });
+          reserves[pageIndex] = Math.max(0, Math.ceil(height));
+        }
+        return reserves;
+      };
+
+      const injectFragments = (
+        layoutForPages: Layout,
+        idsByPage: Map<number, string[]>,
+        measuresById: Map<string, Measure>,
+        reservesByPageIndex: number[],
+      ) => {
+        const decorativeBlocks: FlowBlock[] = [];
+        const decorativeMeasures: Measure[] = [];
+
+        for (let pageIndex = 0; pageIndex < layoutForPages.pages.length; pageIndex++) {
+          const page = layoutForPages.pages[pageIndex];
+          page.footnoteReserved = Math.max(0, reservesByPageIndex[pageIndex] ?? 0);
+          const ids = idsByPage.get(pageIndex) ?? [];
+          if (ids.length === 0) continue;
+          if (!page.margins) continue;
+
+          const pageSize = page.size ?? layoutForPages.pageSize;
+          const pageContentWidth = pageSize.w - ((page.margins.left ?? 0) + (page.margins.right ?? 0));
+          const contentWidth = Math.min(pageContentWidth, footnoteWidth);
+          if (!Number.isFinite(contentWidth) || contentWidth <= 0) continue;
+          const bandTopY = pageSize.h - (page.margins.bottom ?? 0);
+          const x = page.margins.left ?? 0;
+
+          // Optional visible separator line (Word-like). Uses a 1px filled rect.
+          let cursorY = bandTopY;
+          if (dividerHeight > 0 && contentWidth > 0) {
+            const separatorId = `footnote-separator-page-${page.number}`;
+            decorativeBlocks.push({
+              kind: 'drawing',
+              id: separatorId,
+              drawingKind: 'vectorShape',
+              geometry: { width: contentWidth, height: dividerHeight },
+              shapeKind: 'rect',
+              fillColor: '#000000',
+              strokeColor: null,
+              strokeWidth: 0,
+            });
+            decorativeMeasures.push({
+              kind: 'drawing',
+              drawingKind: 'vectorShape',
+              width: contentWidth,
+              height: dividerHeight,
+              scale: 1,
+              naturalWidth: contentWidth,
+              naturalHeight: dividerHeight,
+              geometry: { width: contentWidth, height: dividerHeight },
+            });
+            page.fragments.push({
+              kind: 'drawing',
+              blockId: separatorId,
+              drawingKind: 'vectorShape',
+              x,
+              y: cursorY,
+              width: contentWidth,
+              height: dividerHeight,
+              geometry: { width: contentWidth, height: dividerHeight },
+              scale: 1,
+            });
+            cursorY += dividerHeight;
+          }
+          cursorY += topPadding;
+
+          ids.forEach((id, idIndex) => {
+            const blocks = footnotesInput.blocksById.get(id) ?? [];
+            blocks.forEach((block) => {
+              const measure = measuresById.get(block.id);
+              if (!measure || measure.kind !== 'paragraph') return;
+              const linesCount = measure.lines?.length ?? 0;
+              if (linesCount === 0) return;
+              page.fragments.push({
+                kind: 'para',
+                blockId: block.id,
+                fromLine: 0,
+                toLine: linesCount,
+                x,
+                y: cursorY,
+                width: contentWidth,
+              });
+              cursorY += getMeasureHeight(measure);
+            });
+            if (idIndex < ids.length - 1) {
+              cursorY += gap;
+            }
+          });
+        }
+
+        return { decorativeBlocks, decorativeMeasures };
+      };
+
+      // Pass 1: assign + reserve from current layout.
+      let idsByPage = assignFootnotesToPages(layout, footnotesInput.refs);
+      let { blocks: measuredFootnoteBlocks, measuresById } = await measureFootnoteBlocks(idsByPage);
+      let reserves = computeReserves(layout, idsByPage, measuresById);
+
+      // If any reserves, relayout once, then re-assign and inject.
+      if (reserves.some((h) => h > 0)) {
+        layout = layoutDocument(currentBlocks, currentMeasures, {
+          ...options,
+          footnoteReservedByPageIndex: reserves,
+          headerContentHeights,
+          footerContentHeights,
+          remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+            remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
+        });
+
+        // Pass 2: recompute assignment and reserves for the updated pagination.
+        idsByPage = assignFootnotesToPages(layout, footnotesInput.refs);
+        ({ blocks: measuredFootnoteBlocks, measuresById } = await measureFootnoteBlocks(idsByPage));
+        reserves = computeReserves(layout, idsByPage, measuresById);
+
+        // Apply final reserves (best-effort second relayout) then inject fragments.
+        layout = layoutDocument(currentBlocks, currentMeasures, {
+          ...options,
+          footnoteReservedByPageIndex: reserves,
+          headerContentHeights,
+          footerContentHeights,
+          remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+            remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
+        });
+        let finalIdsByPage = assignFootnotesToPages(layout, footnotesInput.refs);
+        let { blocks: finalBlocks, measuresById: finalMeasuresById } = await measureFootnoteBlocks(finalIdsByPage);
+        const finalReserves = computeReserves(layout, finalIdsByPage, finalMeasuresById);
+        let reservesAppliedToLayout = reserves;
+        const reservesDiffer =
+          finalReserves.length !== reserves.length ||
+          finalReserves.some((h, i) => (reserves[i] ?? 0) !== h) ||
+          reserves.some((h, i) => (finalReserves[i] ?? 0) !== h);
+        if (reservesDiffer) {
+          layout = layoutDocument(currentBlocks, currentMeasures, {
+            ...options,
+            footnoteReservedByPageIndex: finalReserves,
+            headerContentHeights,
+            footerContentHeights,
+            remeasureParagraph: (block: FlowBlock, maxWidth: number, firstLineIndent?: number) =>
+              remeasureParagraph(block as ParagraphBlock, maxWidth, firstLineIndent),
+          });
+          reservesAppliedToLayout = finalReserves;
+          finalIdsByPage = assignFootnotesToPages(layout, footnotesInput.refs);
+          ({ blocks: finalBlocks, measuresById: finalMeasuresById } = await measureFootnoteBlocks(finalIdsByPage));
+        }
+        const injected = injectFragments(layout, finalIdsByPage, finalMeasuresById, reservesAppliedToLayout);
+
+        const alignedBlocks: FlowBlock[] = [];
+        const alignedMeasures: Measure[] = [];
+        finalBlocks.forEach((block) => {
+          const measure = finalMeasuresById.get(block.id);
+          if (!measure) return;
+          alignedBlocks.push(block);
+          alignedMeasures.push(measure);
+        });
+        extraBlocks = injected ? alignedBlocks.concat(injected.decorativeBlocks) : alignedBlocks;
+        extraMeasures = injected ? alignedMeasures.concat(injected.decorativeMeasures) : alignedMeasures;
+      }
+    }
+  }
+
   let headers: HeaderFooterLayoutResult[] | undefined;
   let footers: HeaderFooterLayoutResult[] | undefined;
 
@@ -626,6 +976,8 @@ export async function incrementalLayout(
     dirty,
     headers,
     footers,
+    extraBlocks,
+    extraMeasures,
   };
 }
 
