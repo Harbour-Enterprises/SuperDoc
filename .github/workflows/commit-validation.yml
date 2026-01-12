@@ -1,15 +1,13 @@
-name: PR Validation [auto]
+name: Commit Validation [auto]
 
 permissions:
   contents: read
 
-on:
-  pull_request:
-    branches: [main, 'release/**']
+on: push
 
 concurrency:
-  group: pr-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   validate-commits:
@@ -18,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # Pinned commit hash for @v4
 
@@ -44,17 +42,17 @@ jobs:
       
       - name: Validate commits
         run: |
-          BASE=$(git merge-base ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }})
+          BASE=$(git merge-base ${{ github.sha }} ${{ github.sha }})
           pnpx commitlint \
             --from "$BASE" \
-            --to ${{ github.event.pull_request.head.sha }}
+            --to ${{ github.sha }}
           
   run-unit-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # Pinned commit hash for @v4
 
@@ -96,7 +94,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # Pinned commit hash for @v4
 
@@ -161,7 +159,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
 
       - uses: pnpm/action-setup@41ff72655975bd51cab0327fa583b6e92b6d3061 # Pinned commit hash for @v4
 
