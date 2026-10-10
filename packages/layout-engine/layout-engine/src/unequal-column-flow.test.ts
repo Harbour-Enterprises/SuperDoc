@@ -271,7 +271,9 @@ it('preserves terminal-tab paint geometry when unequal section replay is unsuppo
     .at(-1)!;
   const line = (fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine)).at(-1)!;
   const tabWidth = line.width - (line.segments ?? []).reduce((width, segment) => width + segment.width, 0);
-  expect(paragraph.runs[1].kind === 'tab' && paragraph.runs[1].width).toBeCloseTo(tabWidth, 5);
+  expect(tabWidth).toBeGreaterThan(0);
+  expect(line.tabWidths?.[1]).toBeCloseTo(tabWidth, 5);
+  expect(paragraph.runs[1].kind === 'tab' && paragraph.runs[1].width).toBeUndefined();
 });
 
 it('addresses continuation tab paint widths by original run index', () => {
