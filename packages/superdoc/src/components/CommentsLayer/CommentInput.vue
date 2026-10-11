@@ -78,22 +78,24 @@ const htmlToText = (html) => {
   const value = String(html ?? '');
   if (!value || value === '<p></p>') return '';
   if (typeof document === 'undefined') {
-    return value.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+    return value
+      .replace(/<\/p>\s*<p\b[^>]*>/gi, '\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '');
   }
   const element = document.createElement('div');
   element.innerHTML = value;
-  return element.innerText || element.textContent || '';
+  element.querySelectorAll('br').forEach((br) => br.replaceWith('\n'));
+  element.querySelectorAll('p').forEach((paragraph, index) => {
+    if (index > 0) paragraph.before('\n');
+  });
+  return element.textContent || '';
 };
 
 const textToHtml = (value) => {
-  const normalized = String(value ?? '')
-    .replace(/\r\n/g, '\n')
-    .trim();
+  const normalized = String(value ?? '').replace(/\r\n/g, '\n');
   if (!normalized) return '<p></p>';
-  return normalized
-    .split(/\n{2,}/)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  return `<p>${escapeHtml(normalized).replace(/\n/g, '<br>')}</p>`;
 };
 
 const commentDraft = computed({

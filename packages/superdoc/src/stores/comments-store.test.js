@@ -3933,6 +3933,46 @@ describe('comments-store v2 pending document comments', () => {
     store = useCommentsStore();
   });
 
+  it.each([
+    ['repeated breaks', '<p>first &lt;&amp;&gt; line<br><br><br>last line</p>', 'first <&> line\n\n\nlast line'],
+    ['outer breaks', '<p><br>first line<br></p>', '\nfirst line\n'],
+    ['empty paragraphs', '<p>first</p><p></p><p></p><p>last</p>', 'first\n\n\nlast'],
+    ['nested block wrappers', '<div><p>first</p><p>last</p></div>', 'first\nlast'],
+    ['plain text breaks', '\nfirst\n\n\nlast\n', '\nfirst\n\n\nlast\n'],
+  ])('preserves %s through create, reply and edit', async (_name, html, text) => {
+    const adapter = {
+      documentId: 'doc-1',
+      commitPendingComment: vi.fn(async () => ({ ok: true, items: [] })),
+      reply: vi.fn(async () => ({ ok: true, items: [] })),
+      edit: vi.fn(async () => ({ ok: true, items: [] })),
+      mapV2CommentToUseCommentInput: vi.fn((item) => item),
+    };
+    const superdoc = makeSuperdoc(adapter);
+    store.setV2CommentsAdapter(adapter);
+    await store.addComment({ superdoc, comment: useComment({ fileId: 'doc-1', commentText: html }) });
+    await store.replyCommentV2({ superdoc, parentCommentId: 'c1', text: html });
+    await store.editCommentV2({ superdoc, commentId: 'c1', text: html });
+    expect(adapter.commitPendingComment).toHaveBeenCalledWith({ text, target: null });
+    expect(adapter.reply).toHaveBeenCalledWith({ parentCommentId: 'c1', text });
+    expect(adapter.edit).toHaveBeenCalledWith({ commentId: 'c1', text });
+  });
+
+  it('rejects whitespace-only reply and edit drafts without submitting', async () => {
+    const adapter = { documentId: 'doc-1', reply: vi.fn(), edit: vi.fn() };
+    const superdoc = makeSuperdoc(adapter);
+    store.setV2CommentsAdapter(adapter);
+    expect(await store.replyCommentV2({ superdoc, parentCommentId: 'c1', text: '<p><br> </p>' })).toEqual({
+      ok: false,
+      reason: 'comment-text-empty',
+    });
+    expect(await store.editCommentV2({ superdoc, commentId: 'c1', text: '<p><br> </p>' })).toEqual({
+      ok: false,
+      reason: 'comment-text-empty',
+    });
+    expect(adapter.reply).not.toHaveBeenCalled();
+    expect(adapter.edit).not.toHaveBeenCalled();
+  });
+
   it('submits a pending comment with the target captured when the card was opened', async () => {
     const target = {
       kind: 'text',

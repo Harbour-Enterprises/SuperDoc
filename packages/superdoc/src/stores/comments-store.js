@@ -37,6 +37,8 @@ const getTrackedChangeIndex = () => null;
 const resolveTrackedChangeInStory = () => null;
 const makeTrackedChangeAnchorKey = ({ storyKey, rawId }) => `tc::${storyKey}::${rawId}`;
 const COMMENT_DRAFT_BR_TAG = /<br(?:\s[^>]*)?\s*\/?>/gi;
+const COMMENT_DRAFT_BLOCK_BOUNDARY =
+  /(?:<\/(?:p|div|li|blockquote|pre|h[1-6])\s*>\s*)+(?:<(?:p|div|li|blockquote|pre|h[1-6])(?:\s[^>]*)?\s*\/?>)+/gi;
 const COMMENT_DRAFT_BLOCK_OPEN_TAG = /<(?:p|div|li|blockquote|pre|h[1-6])(?:\s[^>]*)?\s*\/?>/gi;
 const COMMENT_DRAFT_BLOCK_CLOSE_TAG = /<\/(?:p|div|li|blockquote|pre|h[1-6])\s*>/gi;
 const COMMENT_DRAFT_ANY_TAG = /<\/?[A-Za-z][A-Za-z0-9:-]*(?:\s[^>]*)?\s*\/?>/g;
@@ -149,14 +151,12 @@ const normalizeV2CommentDraftText = (value) => {
   if (!html || html === '<p></p>') return '';
   return decodeCommentDraftEntities(
     html
+      .replace(COMMENT_DRAFT_BLOCK_BOUNDARY, '\n')
       .replace(COMMENT_DRAFT_BR_TAG, '\n')
-      .replace(COMMENT_DRAFT_BLOCK_CLOSE_TAG, '\n')
+      .replace(COMMENT_DRAFT_BLOCK_CLOSE_TAG, '')
       .replace(COMMENT_DRAFT_BLOCK_OPEN_TAG, '')
       .replace(COMMENT_DRAFT_ANY_TAG, ''),
-  )
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/^\n+/, '')
-    .replace(/\n+$/, '');
+  );
 };
 
 const cloneV2TrackedChangeStory = (story) => {
@@ -2611,7 +2611,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const normalizedParent = parentCommentId != null ? String(parentCommentId) : null;
     if (!normalizedParent) return { ok: false, reason: 'parent-comment-id-missing' };
     const plainText = normalizeV2CommentDraftText(text);
-    if (plainText.length === 0) {
+    if (plainText.trim().length === 0) {
       return { ok: false, reason: 'comment-text-empty' };
     }
 
@@ -2688,7 +2688,7 @@ export const useCommentsStore = defineStore('comments', () => {
     const id = commentId != null ? String(commentId) : null;
     if (!id) return { ok: false, reason: 'comment-id-missing' };
     const plainText = normalizeV2CommentDraftText(text);
-    if (plainText.length === 0) {
+    if (plainText.trim().length === 0) {
       return { ok: false, reason: 'comment-text-empty' };
     }
 

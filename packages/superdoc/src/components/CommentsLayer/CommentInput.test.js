@@ -47,6 +47,21 @@ describe('CommentInput.vue', () => {
     expect(commentsStore.currentCommentText).toBe('<p>Line one<br>Line two</p>');
   });
 
+  it('keeps trailing breaks and spaces in the live draft', async () => {
+    const wrapper = mountInput();
+    const textarea = wrapper.find('textarea.superdoc-field');
+    for (const value of ['first ', 'first \n', 'first \n\n\n', 'first \n\n\nlast <&>']) {
+      await textarea.setValue(value);
+      expect(textarea.element.value).toBe(value);
+    }
+  });
+
+  it('reopens imported paragraph and empty-paragraph structure without losing breaks', async () => {
+    commentsStore.currentCommentText = '<p>first <strong>line</strong><br>continued</p><p></p><p>last &amp; line</p>';
+    const wrapper = mountInput();
+    expect(wrapper.find('textarea').element.value).toBe('first line\ncontinued\n\nlast & line');
+  });
+
   it('stores configured user selections as structured mention identities', async () => {
     const wrapper = mountInput([{ id: 'u1', name: 'Internal Reviewer', email: 'internal@example.com' }]);
     const textarea = wrapper.find('textarea.superdoc-field');

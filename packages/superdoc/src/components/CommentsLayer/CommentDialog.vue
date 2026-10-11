@@ -551,7 +551,7 @@ const shouldShowInternalExternal = computed(() => {
 });
 
 const hasTextContent = computed(() => {
-  return currentCommentText.value && currentCommentText.value !== '<p></p>';
+  return Boolean(currentCommentText.value?.replace(/<[^>]*>/g, '').trim());
 });
 
 const setFocus = async () => {
@@ -1674,6 +1674,7 @@ watch(isV2WriteDisabled, (isDisabled) => {
 .comment {
   font-size: var(--sd-ui-comments-body-size, 14px);
   line-height: 1.5;
+  white-space: pre-wrap;
   color: var(--sd-ui-comments-body-text, #212121);
   margin: 4px 0 0 0;
 }
