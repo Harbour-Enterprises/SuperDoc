@@ -28,6 +28,7 @@ import {
   getCellSpacingPx,
   buildLayoutSourceIdentity,
   resolveAnchoredGraphicY,
+  tableCellAlignmentOffset,
 } from '@superdoc/contracts';
 import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import type { MinimalWordLayout } from '@superdoc/common/list-marker-utils';
@@ -1310,14 +1311,12 @@ export function* renderTableCellWork(deps: TableCellRenderDependencies): RenderW
     // An exact-height row must therefore consume the larger measured footprint even
     // though the anchored object remains absolutely positioned.
     const measuredContentHeightPx = Math.max(0, cellMeasure.height - paddingTop - paddingBottom);
-    const alignmentContentHeight = Math.max(flowCursorY, measuredContentHeightPx);
-    const remainingSpace = contentHeightPx - alignmentContentHeight;
-    const alignmentOffsetY =
-      verticalAlign === 'center'
-        ? Math.max(0, remainingSpace / 2)
-        : verticalAlign === 'bottom'
-          ? Math.max(0, remainingSpace)
-          : 0;
+    const alignmentOffsetY = tableCellAlignmentOffset(
+      verticalAlign,
+      contentHeightPx,
+      flowCursorY,
+      measuredContentHeightPx,
+    );
 
     const wrapExclusions: WrapExclusion[] = [];
     for (const entry of anchoredBlocks) {

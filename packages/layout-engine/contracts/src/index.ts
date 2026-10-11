@@ -365,6 +365,16 @@ export type SdtMetadata =
   | DocPartMetadata;
 
 export const CONTRACTS_VERSION = '1.2.0';
+/** Match the cell painter's alignment footprint, including out-of-flow drawings. */
+export function tableCellAlignmentOffset(
+  verticalAlign: string | undefined,
+  contentHeight: number,
+  flowHeight: number,
+  measuredContentHeight: number,
+): number {
+  const freeSpace = Math.max(0, contentHeight - Math.max(flowHeight, measuredContentHeight));
+  return verticalAlign === 'center' ? freeSpace / 2 : verticalAlign === 'bottom' ? freeSpace : 0;
+}
 
 /** Unique identifier for a block in the document. Format: `${pos}-${type}`. */
 export type BlockId = string;

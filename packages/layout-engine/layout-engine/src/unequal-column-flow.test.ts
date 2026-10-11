@@ -255,6 +255,7 @@ it('preserves terminal-tab paint geometry when unequal section replay is unsuppo
     },
     tail,
   ];
+  const originalRuns = structuredClone(paragraph.runs);
   const measure = remeasureParagraph(paragraph, 100);
   const result = layoutDocument(
     blocks,
@@ -274,6 +275,7 @@ it('preserves terminal-tab paint geometry when unequal section replay is unsuppo
   expect(tabWidth).toBeGreaterThan(0);
   expect(line.tabWidths?.[1]).toBeCloseTo(tabWidth, 5);
   expect(paragraph.runs[1].kind === 'tab' && paragraph.runs[1].width).toBeUndefined();
+  expect(paragraph.runs).toEqual(originalRuns);
 });
 
 it('addresses continuation tab paint widths by original run index', () => {
