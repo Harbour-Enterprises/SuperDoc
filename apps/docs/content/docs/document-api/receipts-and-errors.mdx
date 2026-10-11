@@ -93,6 +93,20 @@ When a revision or target is stale, run the original query again and review its 
 
 Never remove `expectedRevision` just to make a retry pass. That guard prevents a valid operation from applying to an unintended document state.
 
+## 5. Cancel a browser call before you retry it
+
+On the browser worker Document API, `doc.insert`, `doc.mutations.apply`, and `doc.extract` accept a host-side `signal` or `timeoutMs`. A timer in your application only stops your wait. It does not cancel the engine call and it does not roll back a mutation.
+
+| Outcome                                  | What happened                                                                                         | Retry                                                                |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| The call resolves with a success receipt | The mutation committed                                                                                | Do not send that mutation again                                      |
+| `error.code === 'CANCELLED'`             | The command did not start. The document is unchanged                                                  | The same call is safe to retry                                       |
+| `error.code === 'INDETERMINATE'`         | The call stopped after the command may have started, or the document was replaced / the editor closed | Read the current document, or open the editor again, before retrying |
+
+An already-aborted `signal`, or `timeoutMs: 0`, finishes as `CANCELLED` and does not change the document. Aborting or expiring a deadline after the worker has started the command does not undo it. That call finishes as `INDETERMINATE` so the application stops waiting; a later receipt is not returned on that promise.
+
+SDK extract timeout and layout-readiness stay separate controls. This contract covers the browser worker calls above.
+
 <Callout variant='warning' title='Keep failures observable'>
   Log the operation name, failure code, and a safe correlation identifier. Do not log full document contents, private
   clauses, or complete mutation payloads by default.

@@ -11,6 +11,7 @@ import type { StoryLocator } from '../types/story.types.js';
 import { type BlockNodeAddress } from '../types/base.js';
 import { PLACEMENT_VALUES, type Placement } from '../types/placement.js';
 import { DocumentApiValidationError } from '../errors.js';
+import { assertOperationCanStart, type OperationCancellation } from '../write/operation-cancellation.js';
 import {
   isRecord,
   isBlockNodeAddress,
@@ -293,8 +294,9 @@ export function executeInsert(
   selectionAdapter: SelectionMutationAdapter,
   writeAdapter: WriteAdapter,
   input: InsertInput,
-  options?: RichContentMutationOptions,
+  options?: RichContentMutationOptions & OperationCancellation,
 ): SDMutationReceipt {
+  assertOperationCanStart(options);
   validateInsertInput(input);
 
   // Structural content path: returns SDMutationReceipt directly

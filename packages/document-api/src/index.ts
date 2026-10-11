@@ -407,6 +407,7 @@ export {
   executeTrackChangesDecide,
 } from './track-changes/track-changes.js';
 import type { MutationOptions, RevisionGuardOptions, RichContentMutationOptions, WriteAdapter } from './write/write.js';
+import { assertOperationCanStart, type OperationCancellation } from './write/operation-cancellation.js';
 import type { SelectionMutationAdapter } from './selection-mutation.js';
 import {
   executeCapabilities,
@@ -1140,6 +1141,13 @@ export type { GetHtmlAdapter, GetHtmlInput } from './get-html/get-html.js';
 export type { InfoAdapter, InfoInput } from './info/info.js';
 export type { ExtractAdapter, ExtractInput } from './extract/extract.js';
 export type { WriteAdapter, WriteRequest, RichContentMutationOptions } from './write/write.js';
+export type { OperationCancellation, OperationCancellationCode } from './write/operation-cancellation.js';
+export {
+  OperationCancellationError,
+  assertOperationCanStart,
+  indeterminateOperation,
+  splitOperationCancellation,
+} from './write/operation-cancellation.js';
 export type {
   FormatInlineAliasApi,
   FormatInlineAliasInput,
@@ -1866,7 +1874,11 @@ export interface QueryApi {
 }
 export interface MutationsApi {
   preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput>;
-  apply(input: MutationsApplyInput): Promise<PlanReceipt>;
+  /**
+   * Apply an atomic plan. `options` is host-side cancellation and is not part
+   * of the plan payload.
+   */
+  apply(input: MutationsApplyInput, options?: OperationCancellation): Promise<PlanReceipt>;
 }
 export interface RangesApi {
   resolve(input: ResolveRangeInput): ResolveRangeOutput;
@@ -1938,8 +1950,9 @@ export interface DocumentApiSurface {
   /**
    * Extract all document content with stable IDs for RAG pipelines.
    * Returns blocks with full text, comments, and tracked changes.
+   * `options` cancels or deadlines the browser call. It is not an extract filter.
    */
-  extract(input: ExtractInput): ExtractResult;
+  extract(input: ExtractInput, options?: OperationCancellation): ExtractResult;
   /**
    * Clear all document body content, leaving a single empty paragraph.
    */
@@ -1952,7 +1965,7 @@ export interface DocumentApiSurface {
    * Insert content at a target location.
    * If target is omitted, inserts at the end of the document.
    */
-  insert(input: InsertInput, options?: RichContentMutationOptions): SDMutationReceipt;
+  insert(input: InsertInput, options?: RichContentMutationOptions & OperationCancellation): SDMutationReceipt;
   /**
    * Replace text at a target range.
    */
@@ -2463,7 +2476,8 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
     info(input: InfoInput): DocumentInfo {
       return executeInfo(adapters.info, input);
     },
-    extract(input: ExtractInput): ExtractResult {
+    extract(input: ExtractInput, options?: OperationCancellation): ExtractResult {
+      assertOperationCanStart(options);
       return executeExtract(adapters.extract, input);
     },
     clearContent(input: ClearContentInput, options?: MutationOptions): Receipt {
@@ -2486,7 +2500,7 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
         return executeListComments(adapters.comments, query);
       },
     },
-    insert(input: InsertInput, options?: RichContentMutationOptions): SDMutationReceipt {
+    insert(input: InsertInput, options?: RichContentMutationOptions & OperationCancellation): SDMutationReceipt {
       return executeInsert(adapters.selectionMutation, adapters.write, input, options);
     },
     replace(input: ReplaceInput, options?: RichContentMutationOptions): SDMutationReceipt {
@@ -3846,7 +3860,8 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput> {
         return adapters.mutations.preview(input);
       },
-      apply(input: MutationsApplyInput): Promise<PlanReceipt> {
+      apply(input: MutationsApplyInput, options?: OperationCancellation): Promise<PlanReceipt> {
+        assertOperationCanStart(options);
         return adapters.mutations.apply(input);
       },
     },
