@@ -10,7 +10,7 @@ import {
 import * as commentsModule from './collaboration-comments.js';
 const { addYComment, updateYComment, deleteYComment, getCommentIndex } = commentsModule;
 import { SuperDoc } from '../SuperDoc.js';
-import { PERMISSIONS, isAllowed } from './permissions.js';
+import { PERMISSIONS, isAllowed, createTrackedChangePermissionResolver } from './permissions.js';
 import * as permissionsModule from './permissions.js';
 
 var awarenessStatesToArrayMock;
@@ -562,6 +562,28 @@ describe('syncCommentsToClients routing', () => {
 });
 
 describe('permissions', () => {
+  it('SD-5650 avoids comment-store lookups for the built-in matrix and preserves them for custom context', () => {
+    const storedComment = { commentText: 'Synthetic permission context' };
+    const getComment = vi.fn(() => storedComment);
+    const superdoc = {
+      config: { role: 'editor', isInternal: true, user: { name: 'Alice' } },
+      commentsStore: { getComment },
+      canPerformPermission: SuperDoc.prototype.canPerformPermission,
+    };
+    const resolver = createTrackedChangePermissionResolver(superdoc);
+    const trackedChange = { id: 'synthetic-change', linkedComments: { commentIds: ['synthetic-comment'] } };
+    expect(resolver({ permission: PERMISSIONS.RESOLVE_OTHER, trackedChange })).toBe(true);
+    expect(
+      getComment,
+      'the built-in matrix depends only on permission, role and internal/external status',
+    ).not.toHaveBeenCalled();
+    const custom = vi.fn(() => false);
+    superdoc.config.permissionResolver = custom;
+    expect(resolver({ permission: PERMISSIONS.RESOLVE_OTHER, trackedChange })).toBe(false);
+    expect(getComment).toHaveBeenCalledTimes(1);
+    expect(custom).toHaveBeenCalledWith(expect.objectContaining({ comment: storedComment, trackedChange }));
+  });
+
   it('exposes immutable list of permission keys', () => {
     expect(Object.keys(PERMISSIONS)).toEqual(expect.arrayContaining(['RESOLVE_OWN', 'VERSION_HISTORY']));
   });

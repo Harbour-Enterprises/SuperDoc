@@ -70,6 +70,29 @@ const pickResolver = (context = {}) => {
   return null;
 };
 
+const BUILT_IN_PERMISSION_METHOD = Symbol.for('superdoc.internal.permission-method.builtin');
+const BUILT_IN_PERMISSION_RESOLVER = Symbol.for('superdoc.internal.permission-resolver.builtin');
+
+/** Create the shell's internal, live tracked-change permission shim. */
+export const createTrackedChangePermissionResolver = (superdoc) => {
+  const isBuiltInPolicy = () =>
+    superdoc.canPerformPermission?.[BUILT_IN_PERMISSION_METHOD] === true && pickResolver({ superdoc }) === null;
+  const resolver = (payload = {}) =>
+    isBuiltInPolicy()
+      ? defaultDecisionFor(payload.permission, superdoc.config.role, superdoc.config.isInternal)
+      : superdoc.canPerformPermission({
+          ...payload,
+          role: superdoc.config.role,
+          isInternal: superdoc.config.isInternal,
+        });
+  // AIDEV-NOTE: A function alone is not proof of the built-in matrix. Runtime
+  // overrides withdraw the lean-read permission before and after worker awaits.
+  Object.defineProperty(resolver, BUILT_IN_PERMISSION_RESOLVER, {
+    value: isBuiltInPolicy,
+  });
+  return resolver;
+};
+
 const defaultDecisionFor = (permission, role, isInternal) => {
   const internalExternal = isInternal ? 'internal' : 'external';
   return PERMISSION_MATRIX[permission]?.[internalExternal]?.includes(role) ?? false;

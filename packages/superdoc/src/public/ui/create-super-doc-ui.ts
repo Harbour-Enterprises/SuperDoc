@@ -1113,8 +1113,12 @@ function selectionBlockRange(selection: SelectionSlice): { startBlockId: string;
  */
 function selectionBlockIds(selection: SelectionSlice): string[] {
   const ids: string[] = [];
+  const seen = new Set<string>();
   const push = (id: unknown) => {
-    if (typeof id === 'string' && id.length > 0 && !ids.includes(id)) ids.push(id);
+    if (typeof id === 'string' && id.length > 0 && !seen.has(id)) {
+      seen.add(id);
+      ids.push(id);
+    }
   };
   const target = selection.target as LooseRecord | null;
   const segments = target && Array.isArray(target.segments) ? (target.segments as LooseRecord[]) : [];

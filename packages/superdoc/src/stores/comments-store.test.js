@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { createPinia, setActivePinia } from 'pinia';
-import { isProxy, reactive } from 'vue';
+import { isProxy, markRaw, reactive } from 'vue';
 import { useCommentsStore } from './comments-store.js';
 import { useSuperdocStore } from './superdoc-store.js';
 import useComment from '../components/CommentsLayer/use-comment.js';
@@ -101,6 +101,276 @@ function compactTrackedChangeRows(store, rows) {
     pruneStale: false,
   });
 }
+
+describe('comments-store position alias lookup (SD-5650)', () => {
+  let store;
+  const position = (start, overrides = {}) => ({
+    kind: 'trackedChange',
+    storyKey: 'body',
+    pageIndex: 0,
+    start,
+    end: start + 1,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    store = useCommentsStore();
+    store.commentsList = [makeTrackedChangeRow({ commentId: 'row-a' }), makeTrackedChangeRow({ commentId: 'row-b' })];
+    store.editorCommentPositions = {
+      'tc::body::row-a': position(100),
+      'tc::body::row-b': position(200),
+    };
+  });
+
+  it('enumerates registered position aliases once across repeated permission misses', () => {
+    let enumerations = 0;
+    const positions = Object.fromEntries(
+      Array.from({ length: 512 }, (_, index) => [
+        `slot-${index}`,
+        position(index, { key: `anchor-${index}`, threadId: `thread-${index}` }),
+      ]),
+    );
+    store.commentsList = [];
+    store.editorCommentPositions = new Proxy(positions, {
+      ownKeys(target) {
+        enumerations++;
+        return Reflect.ownKeys(target);
+      },
+    });
+    enumerations = 0;
+
+    expect(store.getComment('missing-first')).toBeNull();
+    const firstLookupEnumerations = enumerations;
+    expect(firstLookupEnumerations).toBeGreaterThan(0);
+    for (let index = 0; index < 96; index++) {
+      expect(store.getComment(`missing-${index}`)).toBeNull();
+    }
+
+    expect(enumerations).toBe(firstLookupEnumerations);
+  });
+
+  it('preserves first alias matches and direct position key precedence', () => {
+    store.editorCommentPositions.first = position(100, { key: 'shared' });
+    store.editorCommentPositions.second = position(200, { threadId: 'shared' });
+    expect(store.getComment('shared')).toBe(store.commentsList[0]);
+
+    store.editorCommentPositions.shared = position(200);
+    expect(store.getComment('shared')).toBe(store.commentsList[1]);
+    delete store.editorCommentPositions.shared;
+    expect(store.getComment('shared')).toBe(store.commentsList[0]);
+    delete store.editorCommentPositions.first;
+    expect(store.getComment('shared')).toBe(store.commentsList[1]);
+  });
+
+  it('refreshes aliases synchronously after alias, entry, and dictionary changes', () => {
+    store.editorCommentPositions.slot = position(100, { key: 'old-key', threadId: 'old-thread' });
+    expect(store.getComment('old-key')).toBe(store.commentsList[0]);
+    expect(store.getComment('old-thread')).toBe(store.commentsList[0]);
+
+    store.editorCommentPositions.slot.key = 'new-key';
+    store.editorCommentPositions.slot.threadId = 'new-thread';
+    expect(store.getComment('old-key')).toBeNull();
+    expect(store.getComment('old-thread')).toBeNull();
+    expect(store.getComment('new-key')).toBe(store.commentsList[0]);
+    expect(store.getComment('new-thread')).toBe(store.commentsList[0]);
+
+    store.editorCommentPositions.slot = position(200, { key: 'new-key' });
+    expect(store.getComment('new-key')).toBe(store.commentsList[1]);
+    expect(store.getComment('new-thread')).toBeNull();
+    store.editorCommentPositions = {
+      'tc::body::row-a': position(100),
+      replacement: position(100, { key: 'replacement-key' }),
+    };
+    expect(store.getComment('new-key')).toBeNull();
+    expect(store.getComment('replacement-key')).toBe(store.commentsList[0]);
+  });
+
+  it('preserves numeric alias normalization and direct null or undefined entries', () => {
+    store.editorCommentPositions[20] = position(200, { threadId: 7 });
+    store.editorCommentPositions[10] = position(100, { key: '7' });
+    expect(store.getComment(7)).toBe(store.commentsList[0]);
+    expect(store.getComment('7')).toBe(store.commentsList[0]);
+    store.editorCommentPositions[7] = null;
+    expect(store.getComment(7)).toBeNull();
+    store.editorCommentPositions[7] = undefined;
+    expect(store.getComment(7)).toBe(store.commentsList[0]);
+  });
+
+  it('keeps geometry live without rescanning aliases and refuses ambiguous or cross-story matches', () => {
+    let enumerations = 0;
+    store.editorCommentPositions = new Proxy(
+      {
+        'tc::body::row-a': position(100),
+        'tc::body::row-b': position(200),
+        slot: position(100, { key: 'painted' }),
+      },
+      {
+        ownKeys(target) {
+          enumerations++;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+    enumerations = 0;
+    expect(store.getComment('painted')).toBe(store.commentsList[0]);
+    const firstLookupEnumerations = enumerations;
+    expect(firstLookupEnumerations).toBeGreaterThan(0);
+    store.editorCommentPositions.slot.start = 200;
+    store.editorCommentPositions.slot.end = 201;
+    expect(store.getComment('painted')).toBe(store.commentsList[1]);
+    store.editorCommentPositions.slot.storyKey = 'fn:1';
+    expect(store.getComment('painted')).toBeNull();
+    store.editorCommentPositions.slot.storyKey = 'body';
+    store.editorCommentPositions['tc::body::row-a'].start = 200;
+    store.editorCommentPositions['tc::body::row-a'].end = 201;
+    expect(store.getComment('painted')).toBeNull();
+    expect(enumerations).toBe(firstLookupEnumerations);
+  });
+});
+
+describe('comments-store comment identity lookup (SD-5650)', () => {
+  let store;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    store = useCommentsStore();
+  });
+
+  it('reads the reactive backing rows once across repeated permission misses and hits', () => {
+    let reads = 0;
+    const rows = Array.from({ length: 512 }, (_, index) => ({
+      commentId: `comment-${index}`,
+      importedId: `word-${index}`,
+      commentText: 'Body',
+    }));
+    store.commentsList = new Proxy(rows, {
+      get(target, key, receiver) {
+        if (typeof key === 'string' && /^\d+$/.test(key)) reads++;
+        return Reflect.get(target, key, receiver);
+      },
+    });
+    reads = 0;
+    expect(store.getComment('missing-first')).toBeNull();
+    const firstReads = reads;
+    expect(firstReads).toBeGreaterThan(0);
+    const last = store.commentsList[511];
+    const warmedReads = reads;
+    for (let index = 0; index < 64; index++) {
+      expect(store.getComment(`missing-${index}`)).toBeNull();
+      expect(store.getComment('comment-511')).toBe(last);
+      expect(store.getComment('word-511')).toBe(last);
+    }
+    expect(reads).toBe(warmedReads);
+    last.commentText = 'Updated body';
+    expect(store.getComment('comment-511').commentText).toBe('Updated body');
+    expect(reads).toBe(warmedReads);
+  });
+
+  it('preserves primary, earliest alias, and backing-list precedence', () => {
+    store.commentsList = [
+      { commentId: 'tracked', importedId: '2', trackedChange: true, trackedChangeAnchorKey: 'anchor' },
+      { commentId: '2', importedId: 'shared' },
+      { commentId: 'third', importedId: 'shared' },
+    ];
+    store.reviewDirectoryList = [{ commentId: 'shared' }, { commentId: 'directory', importedId: 'directory-alias' }];
+    expect(store.getComment('2')).toBe(store.commentsList[1]);
+    expect(store.getComment('shared')).toBe(store.commentsList[1]);
+    expect(store.getComment('imported:2')).toBe(store.commentsList[0]);
+    expect(store.getComment('anchor')).toBe(store.commentsList[0]);
+    expect(store.getComment('directory-alias')).toBe(store.reviewDirectoryList[1]);
+    store.commentsList.unshift({ commentId: '2' });
+    expect(store.getComment('2')).toBe(store.commentsList[0]);
+    store.commentsList.reverse();
+    expect(store.getComment('shared')).toBe(store.commentsList[0]);
+  });
+
+  it('refreshes identities, tracked aliases, row order and replacements in the same stack', () => {
+    store.commentsList = [
+      { commentId: 'old', importedId: 'word', trackedChange: false, trackedChangeAnchorKey: 'old-anchor' },
+    ];
+    const row = store.commentsList[0];
+    expect(store.getComment('old')).toBe(row);
+    row.commentId = 'new';
+    row.importedId = 'new-word';
+    row.trackedChangeAnchorKey = 'new-anchor';
+    expect(store.getComment('old')).toBeNull();
+    expect(store.getComment('word')).toBeNull();
+    expect(store.getComment('old-anchor')).toBeNull();
+    for (const id of ['new', 'new-word', 'new-anchor']) expect(store.getComment(id)).toBe(row);
+    expect(store.getComment('imported:new-word')).toBeNull();
+    row.trackedChange = true;
+    expect(store.getComment('imported:new-word')).toBe(row);
+    store.commentsList[0] = { commentId: 'new', commentText: 'Replacement' };
+    expect(store.getComment('new')).toBe(store.commentsList[0]);
+    expect(store.getComment('new-word')).toBeNull();
+    store.commentsList.splice(0, 1);
+    expect(store.getComment('new')).toBeNull();
+    store.commentsList = [{ commentId: 'reset' }];
+    expect(store.getComment('reset')).toBe(store.commentsList[0]);
+  });
+
+  it('preserves loose equality for nonstring queries and stored identities', () => {
+    store.commentsList = [
+      { commentId: '01' },
+      { commentId: 'second', importedId: 2 },
+      { commentId: 'zero', importedId: '' },
+    ];
+    expect(store.getComment(1)).toBe(store.commentsList[0]);
+    expect(store.getComment('01')).toBe(store.commentsList[0]);
+    expect(store.getComment('02')).toBe(store.commentsList[1]);
+    expect(store.getComment(false)).toBe(store.commentsList[2]);
+    expect(store.getComment({ valueOf: () => 1 })).toBe(store.commentsList[0]);
+    expect(store.getComment(null)).toBeNull();
+    expect(store.getComment(undefined)).toBeNull();
+    store.commentsList = [{ commentId: '01' }, { commentId: '1' }];
+    expect(store.getComment('1')).toBe(store.commentsList[1]);
+    expect(store.getComment(1)).toBe(store.commentsList[0]);
+  });
+
+  it('keeps raw rows and the shallow review directory live after in-place changes', () => {
+    const raw = markRaw({ commentId: 'raw-old' });
+    store.commentsList = [raw];
+    expect(store.getComment('raw-old')).toBe(raw);
+    raw.commentId = 'raw-new';
+    expect(store.getComment('raw-old')).toBeNull();
+    expect(store.getComment('raw-new')).toBe(raw);
+    store.reviewDirectoryList = [{ commentId: 'directory-old' }];
+    expect(store.getComment('directory-old')).toBe(store.reviewDirectoryList[0]);
+    store.reviewDirectoryList[0].commentId = 'directory-new';
+    store.reviewDirectoryList.push({ commentId: 'appended' });
+    expect(store.getComment('directory-old')).toBeNull();
+    expect(store.getComment('directory-new')).toBe(store.reviewDirectoryList[0]);
+    expect(store.getComment('appended')).toBe(store.reviewDirectoryList[1]);
+  });
+
+  it('keeps accessor-backed identity reads live without a reactive identity write', () => {
+    let id = 'accessor-old';
+    store.commentsList = [
+      reactive({
+        get commentId() {
+          return id;
+        },
+      }),
+    ];
+    const row = store.commentsList[0];
+    expect(store.getComment('accessor-old')).toBe(row);
+    id = 'accessor-new';
+    expect(store.getComment('accessor-old')).toBeNull();
+    expect(store.getComment('accessor-new')).toBe(row);
+  });
+
+  it('preserves empty identities and truthy tracked imported aliases', () => {
+    store.commentsList = [
+      { commentId: 'alias-empty', importedId: '' },
+      { commentId: '', trackedChange: false },
+      { commentId: 'tracked', importedId: 'imported:7', trackedChange: 'yes' },
+    ];
+    expect(store.getComment('')).toBe(store.commentsList[1]);
+    expect(store.getComment('imported:7')).toBe(store.commentsList[2]);
+    expect(store.getComment('imported:imported:7')).toBeNull();
+  });
+});
 
 describe('comments-store read-only mutation policy (SD-3164)', () => {
   let store;

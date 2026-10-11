@@ -4,6 +4,7 @@ import {
   isWorkflowRecordingEnabled,
   getWorkflowRecording,
 } from './internal/diagnostics/interaction-history.js';
+import { createTrackedChangePermissionResolver } from './core/collaboration/permissions.js';
 import { executeFirstPartyCommandAsync, registerFirstPartyCommandMutation } from './public/ui/create-super-doc-ui.js';
 import '@superdoc/common/styles/common-styles.css';
 import { superdocIcons } from './icons.js';
@@ -2429,12 +2430,7 @@ const editorOptions = (doc) => {
           ),
         }
       : undefined,
-    permissionResolver: (payload = {}) =>
-      proxy.$superdoc.canPerformPermission({
-        role: proxy.$superdoc.config.role,
-        isInternal: proxy.$superdoc.config.isInternal,
-        ...payload,
-      }),
+    permissionResolver: createTrackedChangePermissionResolver(proxy.$superdoc),
   };
 
   return options;

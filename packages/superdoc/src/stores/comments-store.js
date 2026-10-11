@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, shallowRef, reactive, computed, watch, toRaw } from 'vue';
+import { ref, shallowRef, reactive, computed, watch, toRaw, isReactive } from 'vue';
 import { comments_module_events } from '@superdoc/common';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { syncCommentsToClients } from '../core/collaboration/helpers.js';
@@ -443,6 +443,16 @@ export const useCommentsStore = defineStore('comments', () => {
     return normalizedId.startsWith('imported:') ? normalizedId : `imported:${normalizedId}`;
   };
 
+  const positionEntriesByAlias = computed(() => {
+    const aliases = new Map();
+    for (const [key, entry] of Object.entries(editorCommentPositions.value || {})) {
+      for (const alias of [normalizeCommentId(entry?.key), normalizeCommentId(entry?.threadId)]) {
+        if (alias && !aliases.has(alias)) aliases.set(alias, { key, entry });
+      }
+    }
+    return aliases;
+  });
+
   const getPositionEntryByAlias = (id) => {
     const normalizedId = normalizeCommentId(id);
     if (!normalizedId) return { key: null, entry: null };
@@ -452,15 +462,7 @@ export const useCommentsStore = defineStore('comments', () => {
       return { key: normalizedId, entry: positions[normalizedId] };
     }
 
-    for (const [key, entry] of Object.entries(positions)) {
-      const entryKey = normalizeCommentId(entry?.key);
-      const threadId = normalizeCommentId(entry?.threadId);
-      if (entryKey === normalizedId || threadId === normalizedId) {
-        return { key, entry };
-      }
-    }
-
-    return { key: null, entry: null };
+    return positionEntriesByAlias.value.get(normalizedId) ?? { key: null, entry: null };
   };
 
   const boundsOverlap = (a, b) => {
@@ -511,6 +513,28 @@ export const useCommentsStore = defineStore('comments', () => {
     return matches.length === 1 ? matches[0] : null;
   };
 
+  const commentIdentityIndex = computed(() => {
+    const list = commentsList.value;
+    if (!isReactive(list)) return null;
+    const primary = new Map();
+    const aliases = new Map();
+    for (const comment of list) {
+      if (!isReactive(comment)) return null;
+      for (const key of ['commentId', 'importedId', 'trackedChangeAnchorKey', 'trackedChange']) {
+        const descriptor = Object.getOwnPropertyDescriptor(comment, key);
+        if (descriptor?.get || descriptor?.set || (!descriptor && key in comment)) return null;
+      }
+      const ids = [comment.commentId, comment.importedId, comment.trackedChangeAnchorKey];
+      if (ids.some((id) => id != null && typeof id !== 'string')) return null;
+      if (ids[0] != null && !primary.has(ids[0])) primary.set(ids[0], comment);
+      const importedPositionId = comment.trackedChange ? buildTrackedChangeImportedPositionId(ids[1]) : null;
+      for (const alias of [ids[1], ids[2], importedPositionId]) {
+        if (alias != null && !aliases.has(alias)) aliases.set(alias, comment);
+      }
+    }
+    return { primary, aliases };
+  });
+
   /**
    * Get a comment by either ID or imported ID
    *
@@ -532,9 +556,9 @@ export const useCommentsStore = defineStore('comments', () => {
       c.trackedChangeAnchorKey == id ||
       (c?.trackedChange && buildTrackedChangeImportedPositionId(c.importedId) == id);
     const findIn = (list) => list.find(byPrimaryId) ?? list.find(byAliasId);
-    return (
-      findIn(commentsList.value) ?? findIn(reviewDirectoryList.value) ?? getTrackedChangeCommentByPositionAlias(id)
-    );
+    const index = typeof id === 'string' ? commentIdentityIndex.value : null;
+    const comment = index ? (index.primary.get(id) ?? index.aliases.get(id)) : findIn(commentsList.value);
+    return comment ?? findIn(reviewDirectoryList.value) ?? getTrackedChangeCommentByPositionAlias(id);
   };
 
   const getThreadParent = (comment) => {

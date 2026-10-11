@@ -53,6 +53,8 @@ interface Harness {
   setParagraphAlignment: (alignment: 'left' | 'center') => void;
   setForeground: (state: { active: number; pending: number }) => void;
   emitSelection: (snapshot: unknown) => void;
+  setSelection: (selection: Record<string, unknown>) => void;
+  hyperlinkInputs: () => unknown[];
   /** Per-policy-key issued-read counters. */
   countFor: (policyKey: string) => number;
   styleCatalogInputs: () => unknown[];
@@ -80,10 +82,19 @@ function makeHarness(
   const selectionListeners: Array<(snapshot: unknown) => void> = [];
   const loadingListeners: Array<(snapshot: { sourceStage: LoadStage }) => void> = [];
   const eventListeners: Array<(event: Record<string, unknown>) => void> = [];
+  let currentSelection: Record<string, unknown> = {
+    empty: false,
+    target: SELECTION_TARGET,
+    selectionTarget: SELECTION_SELECTION_TARGET,
+    activeMarks: [],
+    activeCommentIds: [],
+    activeChangeIds: [],
+    text: 'hello',
+  };
 
   const ccList = vi.fn(options.contentControlsList ?? (() => ({ items: [{ id: 'cc-1' }] })));
   const ccListInRange = vi.fn(() => ({ items: [{ id: 'cc-1' }] }));
-  const hyperlinksList = vi.fn(() => ({ items: [] }));
+  const hyperlinksList = vi.fn((_input: unknown) => ({ items: [] }));
   const stylesGetCatalog = vi.fn(() => ({
     styles: [],
     items: [],
@@ -112,18 +123,7 @@ function makeHarness(
   // shared asynchronous catalog transport.
   const trackChangesFeedList = vi.fn(() => Promise.resolve({ items: options.reviewWindowItems?.() ?? [] }));
 
-  const selectionCurrent = vi.fn(
-    options.selectionCurrent ??
-      (() => ({
-        empty: false,
-        target: SELECTION_TARGET,
-        selectionTarget: SELECTION_SELECTION_TARGET,
-        activeMarks: [],
-        activeCommentIds: [],
-        activeChangeIds: [],
-        text: 'hello',
-      })),
-  );
+  const selectionCurrent = vi.fn(options.selectionCurrent ?? (() => currentSelection));
   const doc = {
     getNodeById: () => ({
       node: { kind: 'paragraph', paragraph: { props: { alignment: paragraphAlignment } } },
@@ -272,6 +272,10 @@ function makeHarness(
     emitSelection: (snapshot) => {
       for (const listener of [...selectionListeners]) listener(snapshot);
     },
+    setSelection: (selection) => {
+      currentSelection = selection;
+    },
+    hyperlinkInputs: () => hyperlinksList.mock.calls.map(([input]) => input),
     countFor,
     styleCatalogInputs: () => stylesGetCatalog.mock.calls.map(([input]) => input),
     countAllStoryFallback: () =>
@@ -299,6 +303,120 @@ const RESERVED_POLICY_KEYS = new Set(['tables', 'sections']);
 
 afterEach(() => {
   vi.useRealTimers();
+});
+
+describe('public ui — document-wide selection work (SD-5650)', () => {
+  const wideSelection = (count: number) => {
+    const segments = Array.from({ length: count }, (_, i) => ({
+      blockId: `work-paragraph-${i}`,
+      range: { start: 0, end: 5 },
+    }));
+    return {
+      empty: false,
+      target: { kind: 'text', segments: [...segments, ...segments.slice(0, 3)] },
+      selectionTarget: {
+        kind: 'selection',
+        start: { kind: 'text', blockId: segments[0].blockId, offset: 0 },
+        end: { kind: 'text', blockId: segments.at(-1)!.blockId, offset: 5 },
+      },
+      activeMarks: [],
+      activeCommentIds: [],
+      activeChangeIds: [],
+      text: 'hello',
+    };
+  };
+
+  it('does not repeatedly scan the growing paragraph set during a wide command-state update', async () => {
+    vi.useFakeTimers();
+    const harness = makeHarness('source-complete');
+    await settle();
+    let candidateReads = 0;
+    const spies = (['includes', 'indexOf', 'lastIndexOf'] as const).map((method) => {
+      const original = Array.prototype[method];
+      return vi.spyOn(Array.prototype, method).mockImplementation(function (this: unknown[], ...args: unknown[]) {
+        const query = args[0];
+        if (
+          typeof query !== 'string' ||
+          !query.startsWith('work-paragraph-') ||
+          typeof this[0] !== 'string' ||
+          !this[0].startsWith('work-paragraph-')
+        ) {
+          return Reflect.apply(original, this, args);
+        }
+        const counted = new Proxy(this, {
+          get(target, key, receiver) {
+            if (typeof key === 'string' && /^\d+$/.test(key)) candidateReads++;
+            return Reflect.get(target, key, receiver);
+          },
+        });
+        return Reflect.apply(original, counted, args);
+      });
+    });
+    try {
+      // Calibrate the counter against the actual native membership operation.
+      expect(['work-paragraph-0'].includes('work-paragraph-missing')).toBe(false);
+      expect(candidateReads).toBe(1);
+      candidateReads = 0;
+      harness.setSelection(wideSelection(512));
+      harness.emitSelection({
+        anchor: { blockId: 'work-paragraph-0', blockOffset: 0 },
+        focus: { blockId: 'work-paragraph-511', blockOffset: 5 },
+      });
+      await settle();
+      expect(harness.ui.state.selection).toMatchObject({ status: 'ready', empty: false });
+      expect(candidateReads).toBeLessThanOrEqual(512 * 128);
+    } finally {
+      for (const spy of spies) spy.mockRestore();
+      harness.ui.destroy();
+    }
+  });
+
+  it('keeps the first segment order, ignores invalid IDs and appends unseen endpoints', async () => {
+    vi.useFakeTimers();
+    const harness = makeHarness('source-loading');
+    const selection = wideSelection(3);
+    selection.target.segments = [
+      { blockId: 'work-paragraph-1', range: { start: 0, end: 5 } },
+      { blockId: 'work-paragraph-0', range: { start: 0, end: 5 } },
+      { blockId: 'work-paragraph-1', range: { start: 0, end: 5 } },
+      { blockId: '', range: { start: 0, end: 5 } },
+      { blockId: 7 as never, range: { start: 0, end: 5 } },
+    ];
+    selection.selectionTarget.start.blockId = 'work-paragraph-2';
+    selection.selectionTarget.end.blockId = 'work-paragraph-0';
+    harness.setSelection(selection);
+    harness.emitSelection({
+      anchor: { blockId: 'work-paragraph-2', blockOffset: 0 },
+      focus: { blockId: 'work-paragraph-0', blockOffset: 5 },
+    });
+    harness.setStage('source-complete');
+    harness.emitLoading();
+    await settle(7_000);
+    const ids = harness.hyperlinkInputs().map((input) => (input as { within: { nodeId: string } }).within.nodeId);
+    expect([...new Set(ids)]).toEqual(['work-paragraph-1', 'work-paragraph-0', 'work-paragraph-2']);
+    harness.ui.destroy();
+  });
+
+  for (const count of [64, 65]) {
+    it(`preserves the reactive metadata boundary for ${count} unique blocks`, async () => {
+      vi.useFakeTimers();
+      const harness = makeHarness('source-loading');
+      harness.setSelection(wideSelection(count));
+      harness.emitSelection({
+        anchor: { blockId: 'work-paragraph-0', blockOffset: 0 },
+        focus: { blockId: `work-paragraph-${count - 1}`, blockOffset: 5 },
+      });
+      harness.setStage('source-complete');
+      harness.emitLoading();
+      await settle(7_000);
+      const ids = new Set(
+        harness.hyperlinkInputs().map((input) => (input as { within: { nodeId: string } }).within.nodeId),
+      );
+      expect(ids.size).toBe(count === 64 ? 64 : 0);
+      expect(harness.ui.state.selection).toMatchObject({ status: 'ready', empty: false });
+      harness.ui.destroy();
+    });
+  }
 });
 
 describe('public ui — heavy-read policy during source loading (table-driven over HEAVY_DOC_READ_POLICY)', () => {
