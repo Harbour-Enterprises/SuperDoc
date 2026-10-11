@@ -201,6 +201,10 @@ const handleEscape = (event) => {
   if (event.key === 'Escape') close();
 };
 
+const handleTriggerKeydown = (event) => {
+  if (event.key === 'Enter' || event.key === ' ') close();
+};
+
 watch(
   () => props.disabled,
   (disabled) => {
@@ -238,12 +242,15 @@ onBeforeUnmount(() => {
     @mouseleave="handleTriggerMouseLeave"
     @focusin="handleTriggerMouseEnter"
     @focusout="handleTriggerMouseLeave"
+    @click.capture="close"
+    @keydown.capture="handleTriggerKeydown"
   >
     <slot name="trigger" />
   </span>
 
   <Teleport to="body">
-    <Transition name="fade-in-scale-up-transition">
+    <!-- Remove closed tooltips immediately so they cannot cover or intercept dropdown options. -->
+    <Transition name="fade-in-scale-up-transition" :css="isOpen">
       <div
         v-if="isOpen && !disabled"
         ref="contentRef"
@@ -292,13 +299,11 @@ onBeforeUnmount(() => {
   top: -5px;
 }
 
-.fade-in-scale-up-transition-enter-active,
-.fade-in-scale-up-transition-leave-active {
+.fade-in-scale-up-transition-enter-active {
   transform-origin: bottom center;
 }
 
-.sd-tooltip-content[data-placement='bottom'].fade-in-scale-up-transition-enter-active,
-.sd-tooltip-content[data-placement='bottom'].fade-in-scale-up-transition-leave-active {
+.sd-tooltip-content[data-placement='bottom'].fade-in-scale-up-transition-enter-active {
   transform-origin: top center;
 }
 
@@ -308,19 +313,11 @@ onBeforeUnmount(() => {
     transform 0.2s cubic-bezier(0, 0, 0.2, 1);
 }
 
-.fade-in-scale-up-transition-leave-active {
-  transition:
-    opacity 0.2s cubic-bezier(0.4, 0, 1, 1),
-    transform 0.2s cubic-bezier(0.4, 0, 1, 1);
-}
-
-.fade-in-scale-up-transition-enter-from,
-.fade-in-scale-up-transition-leave-to {
+.fade-in-scale-up-transition-enter-from {
   opacity: 0;
   transform: scale(0.9);
 }
 
-.fade-in-scale-up-transition-leave-from,
 .fade-in-scale-up-transition-enter-to {
   opacity: 1;
   transform: scale(1);

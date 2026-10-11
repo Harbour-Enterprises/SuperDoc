@@ -50,6 +50,36 @@ describe('SdTooltip auto-dismiss', () => {
   });
 });
 
+describe('SdTooltip activation', () => {
+  it('dismisses when a trigger child stops click propagation', async () => {
+    wrapper = mountTooltip();
+    wrapper.get('button').element.addEventListener('click', (event) => event.stopPropagation());
+    await showTooltip();
+
+    await wrapper.get('button').trigger('click');
+    await nextTick();
+
+    expect(document.body.querySelector('.sd-tooltip-content')).toBeNull();
+  });
+
+  it('cancels a pending open when the trigger is activated before the hover delay', async () => {
+    wrapper = mountTooltip();
+    await wrapper.setProps({ delay: 100 });
+    await wrapper.get('.sd-tooltip-trigger').trigger('mouseenter');
+    await wrapper.get('button').trigger('click');
+
+    vi.advanceTimersByTime(150);
+    await nextTick();
+    expect(document.body.querySelector('.sd-tooltip-content')).toBeNull();
+
+    await wrapper.get('.sd-tooltip-trigger').trigger('mouseleave');
+    await wrapper.get('.sd-tooltip-trigger').trigger('mouseenter');
+    vi.advanceTimersByTime(150);
+    await nextTick();
+    expect(document.body.querySelector('.sd-tooltip-content')).not.toBeNull();
+  });
+});
+
 describe('SdTooltip positioning', () => {
   const TOOLTIP_WIDTH = 120;
   const TOOLTIP_HEIGHT = 34.1875;
