@@ -156,6 +156,11 @@ export type HeaderFooterMeasureFn = (
   constraints: { maxWidth: number; maxHeight: number },
 ) => Promise<Measure>;
 
+// Keep diagnostics outside serialized layout data. Completed layouts carry the
+// history for bridge callers; mounted hosts supply an owner that survives cold
+// relayouts and is replaced when another document opens.
+const footnoteWarningKeysByOwner = new WeakMap<object, Set<string>>();
+
 export type HeaderFooterLayoutResult = {
   kind: 'header' | 'footer';
   type: keyof HeaderFooterBatch;
@@ -2681,6 +2686,8 @@ async function incrementalLayoutComplete(
   // fontRuntime): the previous run's footnote reserve fixed point, if any.
   warmStart?: {
     footnoteReserveSeed?: FootnoteReserveSeed | null;
+    /** Per-open-document diagnostic lifetime, including cold relayouts. */
+    footnoteWarningOwner?: object;
     /** Host proved the authoritative note projection bundle was retained exactly. */
     noteMeasurePlaneRetainedExact?: true;
     /** Host proved this seed is an exact, geometry-equivalent subset of the current note plane. */
@@ -2704,6 +2711,10 @@ async function incrementalLayoutComplete(
   execution?: IncrementalLayoutExecutionControl,
 ): Promise<IncrementalLayoutResult> {
   const bridgeStartedAt = performance.now();
+  const warningOwner = warmStart?.footnoteWarningOwner ?? _previousLayout;
+  const emittedFootnoteWarningKeys =
+    (warningOwner && footnoteWarningKeysByOwner.get(warningOwner)) ?? new Set<string>();
+  if (warningOwner) footnoteWarningKeysByOwner.set(warningOwner, emittedFootnoteWarningKeys);
   // The mounted time-budget probe is deliberately allocation-free while the
   // current task remains under budget. Keep that fast path for callers that
   // only opt into time-aware cooperative measurement checkpoints. A scheduler
@@ -4538,11 +4549,6 @@ async function incrementalLayoutComplete(
         enumerable: true,
         value: true,
       });
-      // The fixed-point planner can rediscover the same cap/truncation on
-      // several internal passes. Console I/O is diagnostic only; emit each
-      // stable fact once per incrementalLayout invocation.
-      const emittedFootnoteWarningKeys = new Set<string>();
-
       const collectFootnoteIdsByColumn = (idsByColumn: Map<number, Map<number, string[]>>): Set<string> => {
         const ids = new Set<string>();
         idsByColumn.forEach((columns) => {
@@ -6745,6 +6751,7 @@ async function incrementalLayoutComplete(
           localizedSectionNumbering ? null : numberingCtx,
         )
       : layout;
+  footnoteWarningKeysByOwner.set(exposedLayout, emittedFootnoteWarningKeys);
   const layoutExposureTime = performance.now() - layoutExposureStart;
   const totalBridgeTime = performance.now() - bridgeStartedAt;
   const measureCallbackWallTime = computeTimingUnionMs(measureCallbackIntervals);
