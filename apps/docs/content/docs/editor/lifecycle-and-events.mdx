@@ -50,6 +50,12 @@ and avoid treating a diagnostic reason as a permanent capability check.
 The normalized cause excludes raw document text and receipt messages. Review other error details
 before sending them to your logging or support system.
 
+For a rejected edit inside a locked content control, the callback does not guarantee a lock-specific reason or
+rejecting-control ID. Selection and content-control snapshots can have different readiness states in the same
+callback. Use the [field-state and cached-context guidance](/editor/custom-ui/content-controls#read-active-fields-after-selection-changes)
+for ready active IDs and bounded synchronous lookup, including shared editing. Treat cached field context as
+context rather than evidence of the rejection's cause.
+
 ## Release what you own
 
 Call `unmountEditor()` when the owning route or component unmounts. It removes the button listener and calls

@@ -62,6 +62,62 @@ In `superdoc@2.12.0`, the observed catalog can remain stale after a programmatic
 `contentControls.list()` after mutations and observer notifications, ignoring older responses. A failed refresh reports
 that the document changed but the panel could not refresh; it does not report the mutation as failed.
 
+## Read active fields after selection changes
+
+`ui.selection` and `ui.contentControls` settle independently. Read each snapshot's `status`:
+
+| Status    | Meaning                                                                          |
+| --------- | -------------------------------------------------------------------------------- |
+| `pending` | The read has not settled; an empty list is an initial value.                     |
+| `stale`   | A refresh is running; the snapshot contains previously settled, best-known data. |
+| `ready`   | The underlying reads have settled for the current state.                         |
+
+A ready caret selection can coexist with a stale content-controls snapshot whose `activeIds` is empty, even when
+`items` lists an enclosing control. This can occur inside `onException` after a rejected keystroke in a locked field.
+Empty stale IDs do not establish that the caret is outside every control. Observe the controls slice becoming ready
+for current active IDs; another selection or document change can start a new refresh.
+
+```ts
+const stopObserving = ui.contentControls.observe((snapshot) => {
+  if (snapshot.status !== 'ready') return;
+  const activeFields = snapshot.activeIds.flatMap((id) => {
+    const field = ui.contentControls.get({ id });
+    return field ? [field] : [];
+  });
+  // Render activeFields in your application panel.
+});
+// Call stopObserving() when the panel is removed.
+```
+
+### Read cached context inside a rejection callback
+
+`getSnapshot()`, `list()`, and `get({ id })` read loaded controller state synchronously. They do not synchronously
+refresh the catalog or identify the cause of a rejected edit. The callback has no guaranteed lock-specific reason
+or rejecting-control ID. In particular, `INVALID_CONTEXT` has several causes, and an active field describes the
+selection rather than proving which control rejected an operation. See [Handle rejected edits](/editor/lifecycle-and-events#handle-rejected-edits).
+
+For a known, unchanged catalog, compare a ready caret with cached `selectionTarget` ranges to obtain field context.
+The helper below handles one unambiguous inline control in a body paragraph, strictly inside its text. It returns
+`null` for unknown freshness, missing targets, non-caret selections, other stories, multi-block controls, mismatched
+coordinate spaces, boundary carets, or multiple enclosing controls. An omitted story means body; an omitted coordinate
+space means visible.
+
+<include>../../../../snippets/editor/cached-control-at-caret.ts</include>
+
+Call `cachedControlAtCaret(ui.contentControls, ui.selection.getSnapshot(), catalogKnownCurrent)` inside your rejection
+handler. Set `catalogKnownCurrent` only when your integration knows the loaded IDs and ranges have not changed since
+a settled catalog was obtained. A previously ready snapshot alone cannot guarantee that after later edits. Leave it
+false if freshness is unknown. A returned field's `lockMode` supplies context for that field; it is not causal proof.
+For authoritative current field state, refresh through the Document API or observe a ready slice outside the
+synchronous callback.
+
+### Shared editing
+
+The same per-slice readiness and generic rejection contract applies in a supported V2 shared document. Content-control
+state refreshes when remote document changes are observed, so cached ranges also require freshness against remote
+edits. Each client's `activeIds` follows its own selection; another client's caret does not become locally active.
+A rejected keystroke inside a content-locked inline field leaves shared text unchanged on both clients.
+
 ## Highlight a field from your panel
 
 Use `highlight()` when a pointer enters a panel row, and `clearHighlight()` when it leaves:

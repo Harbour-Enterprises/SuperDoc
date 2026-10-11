@@ -27,6 +27,37 @@ async function loadSnippet(name, imports, globals = {}) {
   return exports;
 }
 
+test('cached field context requires known-current ranges and rejects ambiguous or boundary carets', async () => {
+  const { cachedControlAtCaret } = await loadSnippet('cached-control-at-caret.ts', {});
+  const point = (offset) => ({ kind: 'text', blockId: 'paragraph', offset });
+  const range = { kind: 'selection', start: point(0), end: point(18) };
+  const field = { id: 'field', kind: 'inline', lockMode: 'contentLocked', selectionTarget: range };
+  let items = [field];
+  let lookups = 0;
+  const controls = {
+    getSnapshot: () => ({ status: 'stale', activeIds: [], items }),
+    get: ({ id }) => { lookups++; return items.find((item) => item.id === id) ?? null; },
+  };
+  const selection = { status: 'ready', selectionTarget: { kind: 'selection', start: point(8), end: point(8) } };
+  assert.equal(cachedControlAtCaret(controls, selection, false), null);
+  assert.equal(lookups, 0, 'Unknown freshness must not produce cached field context');
+  assert.equal(cachedControlAtCaret(controls, selection, true), field);
+  for (const offset of [0, 18]) {
+    assert.equal(cachedControlAtCaret(controls, { ...selection, selectionTarget: { ...range, start: point(offset), end: point(offset) } }, true), null);
+  }
+  assert.equal(cachedControlAtCaret(controls, { ...selection, status: 'stale' }, true), null);
+  assert.equal(cachedControlAtCaret(controls, { ...selection, selectionTarget: range }, true), null);
+  assert.equal(cachedControlAtCaret(controls, { ...selection, selectionTarget: { ...selection.selectionTarget, story: { kind: 'story', storyType: 'header', headerFooterType: 'default' } } }, true), null);
+  items = [field, { ...field, id: 'nested' }];
+  assert.equal(cachedControlAtCaret(controls, selection, true), null);
+  items = [{ ...field, selectionTarget: null }];
+  assert.equal(cachedControlAtCaret(controls, selection, true), null);
+  items = [{ ...field, selectionTarget: { ...range, coordinateSpace: 'tracked' } }];
+  assert.equal(cachedControlAtCaret(controls, selection, true), null);
+  items = [{ ...field, selectionTarget: { ...range, end: { ...range.end, blockId: 'next-paragraph' } } }];
+  assert.equal(cachedControlAtCaret(controls, selection, true), null);
+});
+
 test('bulk-review status reports the latest decision without retaining an earlier denial', async (t) => {
   const window = new Window();
   t.after(() => window.happyDOM.close());
