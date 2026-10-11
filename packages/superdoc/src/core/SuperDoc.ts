@@ -19,7 +19,6 @@ import { DOM_CLASS_NAMES } from '@superdoc/dom-contract';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { computeAppliedFitZoom, resolveFitWidthOptions } from '../composables/use-viewport-fit.js';
 import { createSuperdocVueApp } from './create-app.js';
-import { shuffleArray } from '@superdoc/common/collaboration/awareness';
 import { createDownload, cleanName } from './helpers/export.js';
 import { initCollaborationComments } from './collaboration/helpers.js';
 import { setupAwarenessHandler } from './collaboration/collaboration.js';
@@ -1312,7 +1311,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       }
     }
 
-    this.config.colors = shuffleArray(this.config.colors as `#${string}`[]);
     this.userColorMap = new Map();
     this.colorIndex = 0;
 
@@ -1324,6 +1322,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     // Default to an empty palette when no colors are configured so downstream
     // assignment logic doesn't have to null-check on every access.
     this.colors = this.config.colors ?? [];
+    // V2 publishes presence while mounting, before external provider attachment.
+    this.#assignUserColor();
 
     // Preprocess document
     this.#initDocuments();
