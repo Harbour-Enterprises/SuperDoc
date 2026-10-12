@@ -1345,6 +1345,11 @@ const onV2EditorReady = (payload) => {
       commentsAdapter: commentsAdapter ?? null,
       trackedChangesAdapter: trackedChangesAdapter ?? null,
       resolveReviewWindow: (input) => host.resolveReviewWindow(input),
+      // SD-5008: internal, non-public batch read of a tracked move's
+      // physical fragment wIds, never exported through
+      // `@superdoc/document-api`. Same narrow-callback integration shape as
+      // `resolveReviewWindow` above.
+      moveFragmentWordIds: (ids) => host.getHandles().trackChanges.moveFragmentWordIds(ids),
     });
   }
   if (areDocumentsReady.value && !proxy.$superdoc.config.collaboration) {
