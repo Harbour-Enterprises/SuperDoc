@@ -85,7 +85,7 @@ describe('LinkInput', () => {
         href: 'https://example.com/',
         closePopover,
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'Original text' }),
           },
@@ -111,6 +111,68 @@ describe('LinkInput', () => {
     expect(closePopover).toHaveBeenCalled();
   });
 
+  it('waits for a settled Apply result, prevents duplicates, and retains the form on rejection', async () => {
+    let settle;
+    const executeAsync = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          settle = resolve;
+        }),
+    );
+    const closePopover = vi.fn();
+    const textTarget = {
+      kind: 'selection',
+      start: { kind: 'text', blockId: 'p1', offset: 0 },
+      end: { kind: 'text', blockId: 'p1', offset: 13 },
+    };
+    const wrapper = mount(LinkInput, {
+      props: {
+        textTarget,
+        selectedText: 'Original text',
+        closePopover,
+        ui: {
+          commands: { executeAsync },
+          selection: { getSnapshot: () => ({ quotedText: '' }) },
+          document: { getSnapshot: () => ({ mode: 'suggesting' }) },
+        },
+      },
+    });
+    await wrapper.get('input[name="link"]').setValue('https://example.com/');
+    expect(wrapper.get('input[name="text"]').element.value).toBe('Original text');
+    await wrapper.get('[data-item="btn-link-apply"]').trigger('click');
+    await wrapper.get('input[name="link"]').trigger('keydown.enter');
+    expect(executeAsync).toHaveBeenCalledTimes(1);
+    expect(executeAsync).toHaveBeenCalledWith(
+      'link',
+      expect.objectContaining({ textTarget, currentText: 'Original text' }),
+    );
+    expect(closePopover).not.toHaveBeenCalled();
+    settle({ success: false, failure: { code: 'INVALID_CONTEXT' } });
+    await vi.waitFor(() => expect(wrapper.get('[role="alert"]').text()).toContain('Could not apply link'));
+    expect(closePopover).not.toHaveBeenCalled();
+    await wrapper.get('[data-item="btn-link-apply"]').trigger('click');
+    settle({ success: true });
+    await vi.waitFor(() => expect(closePopover).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not dismiss the popover when Remove rejects', async () => {
+    const closePopover = vi.fn();
+    const wrapper = mount(LinkInput, {
+      props: {
+        href: 'https://example.com/',
+        closePopover,
+        ui: {
+          commands: { executeAsync: vi.fn().mockResolvedValue(false) },
+          document: { getSnapshot: () => ({ mode: 'editing' }) },
+        },
+      },
+    });
+    await wrapper.vm.$nextTick();
+    await wrapper.get('[data-item="btn-link-remove"]').trigger('click');
+    await vi.waitFor(() => expect(wrapper.get('[role="alert"]').text()).toContain('Could not apply link'));
+    expect(closePopover).not.toHaveBeenCalled();
+  });
+
   it('omits text when editing an existing link with empty link text', async () => {
     const execute = vi.fn(() => ({ success: true }));
     const closePopover = vi.fn();
@@ -119,7 +181,7 @@ describe('LinkInput', () => {
         href: 'https://example.com/',
         closePopover,
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'Original text' }),
           },
@@ -152,7 +214,7 @@ describe('LinkInput', () => {
         href: 'https://example.com/',
         closePopover,
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'Original text' }),
           },
@@ -187,7 +249,7 @@ describe('LinkInput', () => {
         hyperlinkTarget,
         closePopover,
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: '' }),
           },
@@ -215,7 +277,7 @@ describe('LinkInput', () => {
         hyperlinkTarget,
         closePopover,
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: '' }),
           },
@@ -246,7 +308,7 @@ describe('LinkInput', () => {
         restoreSelection,
         closePopover: vi.fn(),
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'world' }),
           },
@@ -273,7 +335,7 @@ describe('LinkInput', () => {
       props: {
         closePopover: vi.fn(),
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'world' }),
           },
@@ -305,7 +367,7 @@ describe('LinkInput', () => {
         textTarget,
         closePopover: vi.fn(),
         ui: {
-          commands: { execute },
+          commands: { executeAsync: execute },
           selection: {
             getSnapshot: () => ({ quotedText: 'world' }),
           },

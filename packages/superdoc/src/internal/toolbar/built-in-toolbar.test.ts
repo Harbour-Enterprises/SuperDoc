@@ -1542,7 +1542,7 @@ describe('BuiltInToolbar', () => {
     toolbar.destroy();
   });
 
-  it('returns focus to the V2 editor after applying a link', async () => {
+  it('keeps focus in the link form when a V2 link command cannot run', async () => {
     const toolbarContainer = document.createElement('div');
     document.body.append(toolbarContainer);
     const { editorSurface, focus, host } = makeFocusableHost();
@@ -1552,8 +1552,6 @@ describe('BuiltInToolbar', () => {
       groups: { center: ['link'] },
       hideButtons: false,
     });
-    const execute = vi.fn(() => true);
-    toolbar.ui.commands.execute = execute;
     toolbar.getToolbarItemByName('link')!.disabled.value = false;
     await nextTick();
 
@@ -1574,13 +1572,12 @@ describe('BuiltInToolbar', () => {
     document.querySelector<HTMLElement>('[data-item="btn-link-apply"]')?.click();
     await nextTick();
 
-    expect(execute).toHaveBeenCalledWith(
-      'link',
-      expect.objectContaining({ href: 'https://superdoc.dev', text: 'https://superdoc.dev' }),
+    await vi.waitFor(() =>
+      expect(document.querySelector('.link-input-ctn [role="alert"]')?.textContent).toContain('Could not apply link'),
     );
-    expect(toolbar.getToolbarItemByName('link')?.expand.value).toBe(false);
-    expect(focus).toHaveBeenCalled();
-    expect(document.activeElement).toBe(editorSurface);
+    expect(toolbar.getToolbarItemByName('link')?.expand.value).toBe(true);
+    expect(focus).not.toHaveBeenCalled();
+    expect(document.activeElement).not.toBe(editorSurface);
     toolbar.destroy();
   });
 

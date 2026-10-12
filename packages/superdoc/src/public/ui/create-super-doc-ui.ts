@@ -8805,6 +8805,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           return false;
         }
       }
+      if (requestedTextTarget && !collapsedTextAddressFromTarget(requestedTextTarget)) return false;
       const insert = trustedLinksApi?.insert as AnyFn | undefined;
       const text = readLinkPayloadText(payload, normalizedHref);
       if (typeof insert !== 'function' || text.trim() === '') return false;

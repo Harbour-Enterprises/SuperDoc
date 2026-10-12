@@ -3,6 +3,7 @@ import { ref, computed, onMounted } from 'vue';
 import { sanitizeHref } from './url-safety.js';
 import { toolbarIcons } from './toolbarIcons.js';
 import { useHighContrastMode } from '../../../composables/use-high-contrast-mode';
+import { executeFirstPartyCommandAsync } from '../../../public/ui/create-super-doc-ui.js';
 
 /**
  * Built-in link editing popover.
@@ -79,6 +80,10 @@ const props = defineProps({
     type: Object,
     default: null,
   },
+  selectedText: {
+    type: String,
+    default: null,
+  },
   /**
    * Re-applies the toolbar's pre-interaction selection capture before the link
    * command runs. LinkInput executes the command directly (bypassing Toolbar.vue's
@@ -98,9 +103,12 @@ const props = defineProps({
 const { isHighContrastMode } = useHighContrastMode();
 
 const urlError = ref(false);
+const commandError = ref('');
+const isSubmitting = ref(false);
 
 const readSelectedText = () => {
   if (typeof props.hyperlinkText === 'string' && props.hyperlinkText) return props.hyperlinkText;
+  if (typeof props.selectedText === 'string' && props.selectedText) return props.selectedText;
   const snapshot = props.ui?.selection?.getSnapshot?.();
   if (typeof snapshot?.quotedText === 'string' && snapshot.quotedText) return snapshot.quotedText;
   const clickedText = props.clickedElement?.innerText ?? props.clickedElement?.textContent;
@@ -143,7 +151,7 @@ const validUrl = computed(() => sanitizedUrl.value !== null);
 
 const hadExistingLink = ref(false);
 const isEditing = computed(() => !isAnchor.value && hadExistingLink.value);
-const isDisabled = computed(() => !validUrl.value);
+const isDisabled = computed(() => !validUrl.value || isSubmitting.value);
 const isViewingMode = computed(() => readDocumentMode() === 'viewing');
 
 const openLink = () => {
@@ -166,24 +174,45 @@ onMounted(() => {
   if (props.showInput && !isViewingMode.value) focusInput();
 });
 
-const runLinkCommand = (payload) => {
+const runLinkCommand = async (payload) => {
   const ui = props.ui;
-  if (!ui?.commands?.execute) return false;
+  if (!ui?.commands?.executeAsync) return false;
   // Restore the pre-interaction selection so the command targets the highlighted
   // text. The explicit `textTarget` payload pins the range too, but restoring keeps
   // the document selection consistent for follow-up commands and existing-link
   // routing inside executeLinkCommand.
   props.restoreSelection?.();
-  return ui.commands.execute('link', payload);
+  return executeFirstPartyCommandAsync(ui, 'link', payload);
 };
 
-const handleSubmit = () => {
-  if (isViewingMode.value) return;
+const applyLinkCommand = async (payload) => {
+  if (isSubmitting.value) return;
+  isSubmitting.value = true;
+  commandError.value = '';
+  try {
+    const result = await runLinkCommand(payload);
+    if (
+      result === false ||
+      result == null ||
+      (typeof result === 'object' && (result.success === false || result.status === 'rejected'))
+    ) {
+      commandError.value = 'Could not apply link. Check the selection and try again.';
+      return;
+    }
+    props.closePopover();
+  } catch {
+    commandError.value = 'Could not apply link. Check the selection and try again.';
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
+const handleSubmit = async () => {
+  if (isViewingMode.value || isSubmitting.value) return;
 
   // If the URL is cleared, simply remove the link.
   if (!rawUrl.value) {
-    runLinkCommand({ href: null, hyperlinkTarget: props.hyperlinkTarget });
-    props.closePopover();
+    await applyLinkCommand({ href: null, hyperlinkTarget: props.hyperlinkTarget });
     return;
   }
 
@@ -207,16 +236,15 @@ const handleSubmit = () => {
   // Blank edit text must omit `text`; otherwise the link command would replace the existing label with the URL.
   if (text.value) {
     payload.text = text.value;
-  } else if (!isEditing.value) {
+  } else if (!isEditing.value && !props.textTarget) {
     payload.text = href;
   }
-  runLinkCommand(payload);
-  props.closePopover();
+  await applyLinkCommand(payload);
 };
 
-const handleRemove = () => {
-  runLinkCommand({ href: null, hyperlinkTarget: props.hyperlinkTarget });
-  props.closePopover();
+const handleRemove = async () => {
+  if (isViewingMode.value || isSubmitting.value) return;
+  await applyLinkCommand({ href: null, hyperlinkTarget: props.hyperlinkTarget });
 };
 
 const navigateToAnchor = (anchorUrl) => {
@@ -255,6 +283,7 @@ const navigateToAnchor = (anchorUrl) => {
           :class="{ 'sd-error': urlError }"
           v-model="rawUrl"
           :readonly="isViewingMode"
+          @input="commandError = ''"
           @keydown.enter.stop.prevent="handleSubmit"
           @keydown="urlError = false"
         />
@@ -268,7 +297,13 @@ const navigateToAnchor = (anchorUrl) => {
         ></div>
       </div>
       <div class="input-row link-buttons" v-if="!isViewingMode">
-        <button class="remove-btn" @click="handleRemove" v-if="isEditing" data-item="btn-link-remove">
+        <button
+          class="remove-btn"
+          @click="handleRemove"
+          :disabled="isSubmitting"
+          v-if="isEditing"
+          data-item="btn-link-remove"
+        >
           <div class="remove-btn__icon" v-html="toolbarIcons.removeLink"></div>
           Remove
         </button>
@@ -276,11 +311,13 @@ const navigateToAnchor = (anchorUrl) => {
           class="sd-submit-btn"
           @click="handleSubmit"
           :class="{ 'disable-btn': isDisabled }"
+          :disabled="isSubmitting"
           data-item="btn-link-apply"
         >
           Apply
         </button>
       </div>
+      <div v-if="commandError" role="alert" class="sd-error">{{ commandError }}</div>
     </div>
 
     <div v-else-if="isAnchor" class="input-row go-to-anchor clickable">

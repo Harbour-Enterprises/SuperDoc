@@ -497,11 +497,18 @@ export const makeDefaultItems = ({
     // command wraps the highlighted text, not a stale/collapsed selection. Mirrors
     // the AI dropdown: `textTarget` pins the range explicitly and `restoreSelection`
     // re-applies the toolbar's pre-interaction capture before the command runs.
-    const selection = currentSelectionSnapshot(superToolbar);
-    const selectionTarget = selection?.selectionTarget ?? selectionTargetFromTextTarget(selection?.target);
+    const capture = superToolbar.pendingSelectionCapture;
+    const liveSelection = currentSelectionSnapshot(superToolbar);
+    const selection =
+      liveSelection?.quotedText &&
+      JSON.stringify(liveSelection.selectionTarget ?? liveSelection.target) !==
+        JSON.stringify(capture?.selectionTarget ?? capture?.target)
+        ? liveSelection
+        : (capture ?? liveSelection);
+    const selectionTarget =
+      selection?.selectionTarget ?? selectionTargetFromTextTarget(selection?.target) ?? selection?.target;
     const restoreSelection = () => {
-      const capture = superToolbar.pendingSelectionCapture;
-      if (capture && typeof superToolbar.ui?.selection?.restore === 'function') {
+      if (selection === capture && typeof superToolbar.ui?.selection?.restore === 'function') {
         superToolbar.ui.selection.restore(capture);
       }
     };
@@ -511,6 +518,7 @@ export const makeDefaultItems = ({
         ui: superToolbar.ui,
         linkItem: link,
         textTarget: selectionTarget,
+        selectedText: selection?.quotedText ?? null,
         restoreSelection,
         closePopover: () => {
           closeDropdown(link);

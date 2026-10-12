@@ -545,6 +545,7 @@ const resolveV2LinkWorkflowOpener = () => {
   return () => {
     const linkItem = toolbar.getToolbarItemByName('link');
     if (!linkItem || linkItem.disabled?.value === true) return;
+    toolbar.pendingSelectionCapture = toolbar.ui?.selection?.capture?.() ?? null;
     if (linkItem.expand && typeof linkItem.expand === 'object' && 'value' in linkItem.expand) {
       linkItem.expand.value = true;
     }
