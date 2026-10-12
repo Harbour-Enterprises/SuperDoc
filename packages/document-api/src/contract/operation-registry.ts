@@ -6,6 +6,11 @@
  * method. This keeps direct methods and `invoke()` on one TypeScript contract.
  */
 import type { DocumentApiSurface } from '../index.js';
+import type { PlainTextInsertInput } from '../insert/insert.js';
+import type { TextReplaceInput } from '../replace/replace.js';
+import type { BodyStoryLocator } from '../types/story.types.js';
+import type { OperationCancellation } from '../write/operation-cancellation.js';
+import type { TrackedTextMutationOptions } from '../write/write.js';
 import { OPERATION_DEFINITIONS } from './operation-definitions.js';
 import type { OperationId } from './types.js';
 
@@ -52,8 +57,7 @@ type UnresolvedOperationIds = {
 type AssertNoUnresolvedOperations<_OperationId extends never> = void;
 type _AllOperationPathsResolveToMethods = AssertNoUnresolvedOperations<UnresolvedOperationIds>;
 
-/** Typed invoke request narrowed by `operationId`. */
-export type InvokeRequest<T extends OperationId> = OperationRegistry[T]['options'] extends never
+type MethodInvokeRequest<T extends OperationId> = OperationRegistry[T]['options'] extends never
   ? {
       operationId: T;
       input: OperationRegistry[T]['input'];
@@ -64,6 +68,21 @@ export type InvokeRequest<T extends OperationId> = OperationRegistry[T]['options
       input: OperationRegistry[T]['input'];
       options?: OperationRegistry[T]['options'];
     };
+
+// MethodArguments projects the last direct overload. Preserve the earlier
+// authored-text overload's input/options correlation without authorizing rich content.
+type AttributedTextInvokeRequest<T extends OperationId> = T extends 'insert'
+  ? { operationId: T; input: PlainTextInsertInput; options: TrackedTextMutationOptions & OperationCancellation }
+  : T extends 'replace'
+    ? {
+        operationId: T;
+        input: Exclude<TextReplaceInput, { target: BodyStoryLocator }>;
+        options: TrackedTextMutationOptions;
+      }
+    : never;
+
+/** Typed invoke request narrowed by `operationId` and supported content shape. */
+export type InvokeRequest<T extends OperationId> = MethodInvokeRequest<T> | AttributedTextInvokeRequest<T>;
 
 /** Typed invoke result narrowed by `operationId`. */
 export type InvokeResult<T extends OperationId> = T extends 'mutations.preview' | 'mutations.apply'

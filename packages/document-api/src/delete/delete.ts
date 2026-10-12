@@ -7,10 +7,10 @@
 
 import type { SelectionTarget, DeleteBehavior, TargetLocator } from '../types/address.js';
 import type { TextMutationReceipt } from '../types/receipt.js';
-import type { MutationOptions } from '../types/mutation-plan.types.js';
+import type { TextMutationOptions } from '../write/write.js';
 import type { StoryLocator } from '../types/story.types.js';
 import type { SelectionMutationAdapter } from '../selection-mutation.js';
-import { normalizeMutationOptions } from '../write/write.js';
+import { normalizeTextMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
 import { isRecord, assertNoUnknownFields } from '../validation-primitives.js';
 import { isSelectionTarget } from '../validation/selection-target-validator.js';
@@ -100,12 +100,12 @@ function validateDeleteInput(input: unknown): asserts input is DeleteInput {
 export function executeDelete(
   adapter: SelectionMutationAdapter,
   input: DeleteInput,
-  options?: MutationOptions,
+  options?: TextMutationOptions,
 ): TextMutationReceipt {
   validateDeleteInput(input);
   const request = input.target
     ? { kind: 'delete' as const, target: input.target, behavior: input.behavior ?? 'selection', in: input.in }
     : { kind: 'delete' as const, ref: input.ref!, behavior: input.behavior ?? 'selection', in: input.in };
 
-  return adapter.execute(request, normalizeMutationOptions(options));
+  return adapter.execute(request, normalizeTextMutationOptions(options));
 }

@@ -102,6 +102,7 @@ export function textReceiptToSDReceipt(
 
   // Map known receipt failure codes to SDErrorCode
   const CODE_MAP: Record<string, SDError['code']> = {
+    INVALID_INPUT: 'INVALID_INPUT',
     INVALID_TARGET: 'INVALID_TARGET',
     TARGET_NOT_FOUND: 'TARGET_NOT_FOUND',
     MATCH_NOT_FOUND: 'TARGET_NOT_FOUND',

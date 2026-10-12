@@ -46,6 +46,40 @@ describe('executeInsert: input shape', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeInsert: ref validation', () => {
+  it('passes the copied author through targeted and append text paths', () => {
+    const selectionAdapter = createStubSelectionAdapter();
+    const writeAdapter = createStubWriteAdapter();
+    (selectionAdapter.execute as ReturnType<typeof vi.fn>).mockReturnValue({ success: true });
+    (writeAdapter.write as ReturnType<typeof vi.fn>).mockReturnValue({ success: true });
+    const author = { name: 'Automated Reviewer' };
+    executeInsert(selectionAdapter, writeAdapter, { value: 'text', ref: 'r1' }, { changeMode: 'tracked', author });
+    executeInsert(selectionAdapter, writeAdapter, { value: 'text' }, { changeMode: 'tracked', author });
+    expect(selectionAdapter.execute).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ author: { name: 'Automated Reviewer' } }),
+    );
+    expect(writeAdapter.write).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ author: { name: 'Automated Reviewer' } }),
+    );
+    author.name = 'Changed';
+    expect((selectionAdapter.execute as ReturnType<typeof vi.fn>).mock.calls[0]?.[1].author.name).toBe(
+      'Automated Reviewer',
+    );
+  });
+
+  it('rejects author on HTML before calling the adapter', () => {
+    const writeAdapter = createStubWriteAdapter();
+    expect(() =>
+      executeInsert(
+        createStubSelectionAdapter(),
+        writeAdapter,
+        { value: '<p>hi</p>', type: 'html' },
+        { changeMode: 'tracked', author: { name: 'Bot' } },
+      ),
+    ).toThrow(DocumentApiValidationError);
+    expect(writeAdapter.insertStructured).not.toHaveBeenCalled();
+  });
   it('rejects empty string ref', () => {
     expect(() => exec({ value: 'hello', ref: '' })).toThrow('ref must be a non-empty string');
   });

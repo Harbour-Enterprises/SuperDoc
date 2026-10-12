@@ -12,6 +12,7 @@ import type { BodyStoryLocator } from './story.types.js';
 // ---------------------------------------------------------------------------
 
 export type SDErrorCode =
+  | 'INVALID_INPUT'
   | 'INVALID_PAYLOAD'
   | 'INVALID_TARGET'
   | 'TARGET_NOT_FOUND'

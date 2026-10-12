@@ -10,7 +10,7 @@
  * replacements also accept `BlockNodeAddress`.
  */
 
-import type { RichContentMutationOptions } from '../write/write.js';
+import type { RichContentMutationOptions, TextMutationOptions } from '../write/write.js';
 import type { SelectionTarget } from '../types/address.js';
 import type { SDMutationReceipt } from '../types/sd-contract.js';
 import type { SDReplaceInput } from '../types/structural-input.js';
@@ -20,7 +20,7 @@ import type { BlockNodeAddress } from '../types/base.js';
 import type { NestingPolicy } from '../types/placement.js';
 import type { SelectionMutationAdapter } from '../selection-mutation.js';
 import type { WriteAdapter } from '../write/write.js';
-import { normalizeMutationOptions } from '../write/write.js';
+import { normalizeMutationOptions, normalizeTextMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
 import {
   isRecord,
@@ -352,9 +352,22 @@ export function executeReplace(
   selectionAdapter: SelectionMutationAdapter,
   writeAdapter: WriteAdapter,
   input: ReplaceInput,
-  options?: RichContentMutationOptions,
+  options?: RichContentMutationOptions | TextMutationOptions,
 ): SDMutationReceipt {
   validateReplaceInput(input);
+
+  if (
+    options &&
+    'author' in options &&
+    (isStructuralReplaceInput(input) ||
+      isRichContentReplaceInput(input) ||
+      (input.target && isBodyReplaceTarget(input.target)))
+  ) {
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'author is supported only for tracked plain-text replacements.',
+    );
+  }
 
   // Structural content path: returns SDMutationReceipt directly
   if (isStructuralReplaceInput(input)) {
@@ -378,6 +391,6 @@ export function executeReplace(
         ...(textInput.expectedText !== undefined ? { expectedText: textInput.expectedText } : {}),
       }
     : { kind: 'replace' as const, ref: textInput.ref!, text: textInput.text, in: textInput.in };
-  const textReceipt = selectionAdapter.execute(request, normalizeMutationOptions(options));
+  const textReceipt = selectionAdapter.execute(request, normalizeTextMutationOptions(options));
   return textReceiptToSDReceipt(textReceipt);
 }

@@ -406,7 +406,14 @@ export {
   executeTrackChangesList,
   executeTrackChangesDecide,
 } from './track-changes/track-changes.js';
-import type { MutationOptions, RevisionGuardOptions, RichContentMutationOptions, WriteAdapter } from './write/write.js';
+import type {
+  MutationOptions,
+  RevisionGuardOptions,
+  RichContentMutationOptions,
+  TrackedTextMutationOptions,
+  TextMutationOptions,
+  WriteAdapter,
+} from './write/write.js';
 import { assertOperationCanStart, type OperationCancellation } from './write/operation-cancellation.js';
 import type { SelectionMutationAdapter } from './selection-mutation.js';
 import {
@@ -1140,7 +1147,13 @@ export type { GetMarkdownAdapter, GetMarkdownInput } from './get-markdown/get-ma
 export type { GetHtmlAdapter, GetHtmlInput } from './get-html/get-html.js';
 export type { InfoAdapter, InfoInput } from './info/info.js';
 export type { ExtractAdapter, ExtractInput } from './extract/extract.js';
-export type { WriteAdapter, WriteRequest, RichContentMutationOptions } from './write/write.js';
+export type {
+  WriteAdapter,
+  WriteRequest,
+  RichContentMutationOptions,
+  TrackedTextMutationOptions,
+  TextMutationOptions,
+} from './write/write.js';
 export type { OperationCancellation, OperationCancellationCode } from './write/operation-cancellation.js';
 export {
   OperationCancellationError,
@@ -1793,6 +1806,7 @@ export type {
   InsertInput,
   InsertContentType,
   TextInsertInput,
+  PlainTextInsertInput,
   RichContentInsertInput,
   LegacyInsertInput,
 } from './insert/insert.js';
@@ -1965,15 +1979,26 @@ export interface DocumentApiSurface {
    * Insert content at a target location.
    * If target is omitted, inserts at the end of the document.
    */
+  insert(
+    input: import('./insert/insert.js').PlainTextInsertInput,
+    options: TrackedTextMutationOptions & OperationCancellation,
+  ): SDMutationReceipt;
   insert(input: InsertInput, options?: RichContentMutationOptions & OperationCancellation): SDMutationReceipt;
   /**
    * Replace text at a target range.
    */
+  replace(
+    input: Exclude<
+      import('./replace/replace.js').TextReplaceInput,
+      { target: import('./types/story.types.js').BodyStoryLocator }
+    >,
+    options: TrackedTextMutationOptions,
+  ): SDMutationReceipt;
   replace(input: ReplaceInput, options?: RichContentMutationOptions): SDMutationReceipt;
   /**
    * Delete text at a target range.
    */
-  delete(input: DeleteInput, options?: MutationOptions): TextMutationReceipt;
+  delete(input: DeleteInput, options?: TextMutationOptions): TextMutationReceipt;
   /**
    * Formatting operations (inline and paragraph direct formatting).
    */
@@ -2500,13 +2525,16 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
         return executeListComments(adapters.comments, query);
       },
     },
-    insert(input: InsertInput, options?: RichContentMutationOptions & OperationCancellation): SDMutationReceipt {
+    insert(
+      input: InsertInput,
+      options?: (RichContentMutationOptions | TrackedTextMutationOptions) & OperationCancellation,
+    ): SDMutationReceipt {
       return executeInsert(adapters.selectionMutation, adapters.write, input, options);
     },
-    replace(input: ReplaceInput, options?: RichContentMutationOptions): SDMutationReceipt {
+    replace(input: ReplaceInput, options?: RichContentMutationOptions | TrackedTextMutationOptions): SDMutationReceipt {
       return executeReplace(adapters.selectionMutation, adapters.write, input, options);
     },
-    delete(input: DeleteInput, options?: MutationOptions): TextMutationReceipt {
+    delete(input: DeleteInput, options?: TextMutationOptions): TextMutationReceipt {
       return executeDelete(adapters.selectionMutation, input, options);
     },
     formatRange(input: FormatRangeInput, options?: MutationOptions): TextMutationReceipt {

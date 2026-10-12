@@ -64,8 +64,38 @@ export interface MutationOptions extends RevisionGuardOptions {
 }
 
 export interface RichContentMutationOptions extends MutationOptions {
+  author?: never;
   /** Guard returned by `doc.capabilities.check` for an exact rich write. */
   supportCheck?: SDHtmlMarkdownCheckGuard;
+}
+
+/** Display-only attribution for one tracked plain-text mutation. */
+export interface TrackedTextMutationOptions extends MutationOptions {
+  changeMode: 'tracked';
+  author: { name: string };
+}
+
+export type TextMutationOptions = MutationOptions | TrackedTextMutationOptions;
+
+export function normalizeTextMutationOptions(
+  options?: RichContentMutationOptions | TextMutationOptions,
+): RichContentMutationOptions | TrackedTextMutationOptions {
+  const { author, ...mutationOptions } = (options ?? {}) as MutationOptions & { author?: unknown };
+  const normalized = normalizeMutationOptions(mutationOptions);
+  if (!options || !('author' in options)) return normalized;
+  if (
+    options.changeMode !== 'tracked' ||
+    !isRecord(author) ||
+    Object.keys(author).some((key) => key !== 'name') ||
+    typeof author.name !== 'string' ||
+    author.name.trim().length === 0
+  ) {
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'author requires changeMode: "tracked" and an object containing only a non-empty name.',
+    );
+  }
+  return { ...normalized, changeMode: 'tracked', author: { name: author.name } };
 }
 
 /**
@@ -93,7 +123,7 @@ export type WriteRequest = InsertWriteRequest;
  * `SelectionMutationAdapter` instead.
  */
 export interface WriteAdapter {
-  write(request: InsertWriteRequest, options?: MutationOptions): TextMutationReceipt;
+  write(request: InsertWriteRequest, options?: TextMutationOptions): TextMutationReceipt;
   /** Structured insert for SDFragment or markdown/html content. Returns SDMutationReceipt. */
   insertStructured(input: InsertInput, options?: RichContentMutationOptions): SDMutationReceipt;
   /** Structured replace for SDFragment or markdown/html content. Returns SDMutationReceipt. */
@@ -104,6 +134,12 @@ export function normalizeMutationOptions(
   options?: MutationOptions | RichContentMutationOptions,
   supportCheckOperation?: 'insert' | 'replace',
 ): RichContentMutationOptions {
+  if (options && typeof options === 'object' && 'author' in options) {
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'author is supported only for tracked plain-text doc.insert, doc.delete, and doc.replace calls.',
+    );
+  }
   validateChangeMode(options?.changeMode);
   const supportCheck = (options as RichContentMutationOptions | undefined)?.supportCheck;
   if (supportCheck !== undefined) {
@@ -175,7 +211,7 @@ function validateSupportCheckGuard(value: unknown, operation: 'insert' | 'replac
 export function executeWrite(
   adapter: WriteAdapter,
   request: InsertWriteRequest,
-  options?: MutationOptions,
+  options?: TextMutationOptions,
 ): TextMutationReceipt {
-  return adapter.write(request, normalizeMutationOptions(options));
+  return adapter.write(request, normalizeTextMutationOptions(options));
 }

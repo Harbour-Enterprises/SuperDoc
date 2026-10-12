@@ -32,6 +32,8 @@ Every plan requires:
 
 Check `doc.capabilities().planEngine.supportedStepOps` before constructing plans dynamically. The generated reference remains authoritative for each step shape.
 
+Mutation plans do not accept a per-call `author`, including on individual steps. Use separate tracked plain-text `doc.insert`, `doc.delete`, or `doc.replace` calls when edits need different display authors; unlike a plan, those calls are not atomic as a group.
+
 ## Replace a selected range with a locked block content control
 
 V2 supports `structural.replace` for a nonempty visible-text selection inside one ordinary body paragraph. Supply one block rich-text SDT whose content contains ordinary paragraphs. The operation replaces the selected text, preserves surrounding text, and produces one undoable change. Paragraph and run formatting in the supported fragment is retained through DOCX export and reopen.

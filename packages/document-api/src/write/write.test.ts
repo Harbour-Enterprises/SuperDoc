@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { normalizeMutationOptions, validateChangeMode } from './write.js';
+import { normalizeMutationOptions, normalizeTextMutationOptions, validateChangeMode } from './write.js';
 import { DocumentApiValidationError } from '../errors.js';
 
 describe('validateChangeMode', () => {
@@ -33,6 +33,31 @@ describe('validateChangeMode', () => {
         expect(error).toBeInstanceOf(DocumentApiValidationError);
         expect((error as DocumentApiValidationError).code).toBe('VALIDATION_ERROR');
         expect((error as DocumentApiValidationError).details?.field).toBe('changeMode');
+      }
+    }
+  });
+});
+
+describe('normalizeTextMutationOptions', () => {
+  it('copies the supplied name before the mutation can be queued', () => {
+    const author = { name: 'Automated Reviewer' };
+    const normalized = normalizeTextMutationOptions({ changeMode: 'tracked', author });
+    author.name = 'Someone Else';
+    expect(normalized).toMatchObject({ changeMode: 'tracked', author: { name: 'Automated Reviewer' } });
+  });
+
+  it('rejects a direct change, empty name, and additional author fields', () => {
+    for (const options of [
+      { changeMode: 'direct', author: { name: 'Bot' } },
+      { changeMode: 'tracked', author: { name: '  ' } },
+      { changeMode: 'tracked', author: { name: 'Bot', email: 'bot@example.com' } },
+    ]) {
+      try {
+        normalizeTextMutationOptions(options as never);
+        throw new Error('Expected INVALID_INPUT.');
+      } catch (error) {
+        expect(error).toBeInstanceOf(DocumentApiValidationError);
+        expect((error as DocumentApiValidationError).code).toBe('INVALID_INPUT');
       }
     }
   });

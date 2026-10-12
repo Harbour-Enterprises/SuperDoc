@@ -25,6 +25,7 @@ describe('operation cancellation before dispatch', () => {
         {
           signal: AbortSignal.abort(),
           changeMode: 'tracked',
+          author: { name: 'Automated Reviewer' },
         },
       ),
     ).toThrow(OperationCancellationError);
@@ -45,9 +46,18 @@ describe('operation cancellation before dispatch', () => {
       createStubSelectionAdapter(),
       write,
       { value: 'kept' },
-      { signal: new AbortController().signal, timeoutMs: 1_000 },
+      {
+        signal: new AbortController().signal,
+        timeoutMs: 1_000,
+        changeMode: 'tracked',
+        author: { name: 'Automated Reviewer' },
+      },
     );
     expect(receipt.success).toBe(true);
     expect(write.write).toHaveBeenCalledOnce();
+    expect(write.write).toHaveBeenCalledWith(
+      { kind: 'insert', text: 'kept' },
+      expect.objectContaining({ changeMode: 'tracked', author: { name: 'Automated Reviewer' } }),
+    );
   });
 });

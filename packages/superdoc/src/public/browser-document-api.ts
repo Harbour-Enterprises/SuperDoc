@@ -9,7 +9,17 @@
  * once per consumer. Its only dependency is `@superdoc/document-api`.
  */
 
-import type { DocumentApi } from '@superdoc/document-api';
+import type {
+  DocumentApi,
+  DynamicInvokeRequest,
+  InvokeRequest,
+  InvokeResult,
+  OperationId,
+  OperationCancellation,
+  PlainTextInsertInput,
+  TextReplaceInput,
+  TrackedTextMutationOptions,
+} from '@superdoc/document-api';
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -30,7 +40,18 @@ type BrowserDocumentApiValue<T> = T extends (...args: infer Args) => infer Retur
  * worker-backed runtime. SDK/headless callers should continue using the
  * synchronous `@superdoc/document-api` surface directly.
  */
-export type BrowserDocumentApi = BrowserDocumentApiObject<DocumentApi>;
+export type BrowserDocumentApi = Omit<BrowserDocumentApiObject<DocumentApi>, 'invoke'> & {
+  invoke<T extends OperationId>(request: InvokeRequest<T>): MaybePromise<Awaited<InvokeResult<T>>>;
+  invoke(request: DynamicInvokeRequest): unknown;
+  insert(
+    input: PlainTextInsertInput,
+    options: TrackedTextMutationOptions & OperationCancellation,
+  ): MaybePromise<Awaited<ReturnType<DocumentApi['insert']>>>;
+  replace(
+    input: Exclude<TextReplaceInput, { target: { kind: 'story'; storyType: 'body' } }>,
+    options: TrackedTextMutationOptions,
+  ): MaybePromise<Awaited<ReturnType<DocumentApi['replace']>>>;
+};
 
 /**
  * Every operation optional, at any depth.

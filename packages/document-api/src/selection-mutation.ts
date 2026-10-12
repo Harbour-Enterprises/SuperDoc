@@ -10,7 +10,7 @@
 
 import type { SelectionTarget, DeleteBehavior, TargetLocator } from './types/address.js';
 import type { TextMutationReceipt } from './types/receipt.js';
-import type { MutationOptions } from './types/mutation-plan.types.js';
+import type { TextMutationOptions } from './write/write.js';
 import type { InlineRunPatch } from './format/inline-run-patch.js';
 import type { StoryLocator } from './types/story.types.js';
 
@@ -72,5 +72,5 @@ export type SelectionMutationRequest =
  * single interface.
  */
 export interface SelectionMutationAdapter {
-  execute(request: SelectionMutationRequest, options?: MutationOptions): TextMutationReceipt;
+  execute(request: SelectionMutationRequest, options?: TextMutationOptions): TextMutationReceipt;
 }

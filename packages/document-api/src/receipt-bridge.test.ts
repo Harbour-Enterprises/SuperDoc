@@ -51,6 +51,14 @@ describe('receipt-bridge: failure code mapping', () => {
 });
 
 describe('receipt-bridge: created-content effects', () => {
+  it('preserves INVALID_INPUT from a rejected structural text write', () => {
+    const receipt = textReceiptToSDReceipt({
+      success: false,
+      failure: { code: 'INVALID_INPUT', message: 'Per-call author cannot stamp structural content.' },
+    });
+    expect(receipt).toMatchObject({ success: false, failure: { code: 'INVALID_INPUT' } });
+  });
+
   it('preserves effects from a successful text receipt onto the SDMutationReceipt', () => {
     const textReceipt: TextMutationReceipt = {
       success: true,

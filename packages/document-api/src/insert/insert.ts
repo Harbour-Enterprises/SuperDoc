@@ -1,7 +1,9 @@
 import {
   executeWrite,
   normalizeMutationOptions,
+  normalizeTextMutationOptions,
   type RichContentMutationOptions,
+  type TextMutationOptions,
   type WriteAdapter,
 } from '../write/write.js';
 import type { SelectionTarget, TargetLocator, SDMutationReceipt } from '../types/index.js';
@@ -74,6 +76,8 @@ export type LegacyInsertInput = TextInsertInput;
  * These are mutually exclusive: providing both is an error.
  */
 export type InsertInput = TextInsertInput | RichContentInsertInput | SDInsertInput;
+
+export type PlainTextInsertInput = TextInsertInput & { type?: 'text' };
 
 export function isRichContentInsertInput(input: InsertInput): input is RichContentInsertInput {
   return 'value' in input && (input.type === 'html' || input.type === 'markdown');
@@ -294,10 +298,18 @@ export function executeInsert(
   selectionAdapter: SelectionMutationAdapter,
   writeAdapter: WriteAdapter,
   input: InsertInput,
-  options?: RichContentMutationOptions & OperationCancellation,
+  options?: (RichContentMutationOptions | TextMutationOptions) & OperationCancellation,
 ): SDMutationReceipt {
   assertOperationCanStart(options);
   validateInsertInput(input);
+
+  if (
+    options &&
+    'author' in options &&
+    (isStructuralInsertInput(input) || input.type === 'html' || input.type === 'markdown')
+  ) {
+    throw new DocumentApiValidationError('INVALID_INPUT', 'author is supported only for tracked plain-text inserts.');
+  }
 
   // Structural content path: returns SDMutationReceipt directly
   if (isStructuralInsertInput(input)) {
@@ -319,7 +331,7 @@ export function executeInsert(
     const request = target
       ? { kind: 'insert' as const, target, text: value, ...(storyIn ? { in: storyIn } : {}) }
       : { kind: 'insert' as const, ref: ref!, text: value, ...(storyIn ? { in: storyIn } : {}) };
-    const textReceipt = selectionAdapter.execute(request, normalizeMutationOptions(options));
+    const textReceipt = selectionAdapter.execute(request, normalizeTextMutationOptions(options));
     return textReceiptToSDReceipt(textReceipt);
   }
 

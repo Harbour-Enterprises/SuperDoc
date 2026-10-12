@@ -797,7 +797,7 @@
       "failureMode": "runtime",
       "surface": "editor-internals",
       "symptom": "The call returns a Promise where the code expected a value, so reads look empty and downstream property access yields `undefined`.",
-      "notes": "The v2 browser facade can route reads and mutations through a worker even when the underlying operation is synchronous in headless Node, so the same code is sync in one host and async in the other. Await browser calls, or normalize shared browser and headless code with `await Promise.resolve(call)`, and keep author overrides or other scoped state active until an awaited mutation settles.",
+      "notes": "The v2 browser facade can route reads and mutations through a worker even when the underlying operation is synchronous in headless Node, so the same code is sync in one host and async in the other. Await browser calls, or normalize shared browser and headless code with `await Promise.resolve(call)`, and keep other scoped state active until an awaited mutation settles. Tracked plain-text author names are copied per call with `{ author: { name } }`; there is no session-wide author override to restore.",
       "docsPath": "/document-api/mental-model"
     },
     {
