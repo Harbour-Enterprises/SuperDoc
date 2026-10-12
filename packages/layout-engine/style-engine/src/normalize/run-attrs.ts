@@ -22,6 +22,8 @@ import { halfPointsToPx, twipsToPx } from './units.js';
 import type { TextRunStyleAttrs } from './types.js';
 
 export interface NormalizeRunAttrsContext {
+  /** Font track selected from the text segment, independently of run language. */
+  fontScript?: 'eastAsia';
   /** Compiled theme color palette from the Word style model. */
   themeColors?: WordThemeColorPalette;
   /** Compiled theme font scheme. */
@@ -75,7 +77,7 @@ export function normalizeRunAttrsFromOoxml(
   }
   if (props.smallCaps != null) out.smallCaps = props.smallCaps === true;
 
-  const fontFamily = resolveFontFamily(props, context.themeFontScheme);
+  const fontFamily = resolveFontFamily(props, context.themeFontScheme, context.fontScript);
   const fontKey = fontFamily?.trim().replace(/^["']|["']$/g, '');
   const metadata = fontKey ? (context.fontTable?.[fontKey] ?? context.fontTable?.[fontKey.toLowerCase()]) : undefined;
   const cssFontFamily = toCssFontFamily(fontFamily, { wordFamily: metadata?.family, pitch: metadata?.pitch });
@@ -140,12 +142,22 @@ function normalizeHorizontalScale(value: string | undefined): number | undefined
   return percent / 100;
 }
 
-function resolveFontFamily(props: RunProperties, fontScheme?: WordThemeFontScheme): string | undefined {
+function resolveFontFamily(
+  props: RunProperties,
+  fontScheme?: WordThemeFontScheme,
+  fontScript?: 'eastAsia',
+): string | undefined {
   const ff = props.fontFamily;
   if (!ff) return undefined;
+  if (fontScript === 'eastAsia') {
+    if (ff.eastAsia) return ff.eastAsia;
+    if (fontScheme && ff.eastAsiaTheme) {
+      const family = themeFontFromScheme(ff.eastAsiaTheme, fontScheme, 'ea');
+      if (family) return family;
+    }
+  }
   // Per ECMA-376 §17.3.2.26, each script slot is independent; for the
-  // ascii/hAnsi track (used by Latin text — the only thing v2 paints
-  // generically right now) the resolution order is:
+  // ascii/hAnsi track the resolution order is:
   //   ascii → hAnsi → asciiTheme(major/minor) → hAnsiTheme(major/minor)
   // We only fall back to eastAsia / cs slots when the Latin/hAnsi track
   // resolved to nothing. Skipping over the theme path because a sibling
@@ -307,4 +319,41 @@ function mapRunScriptContext(props: RunProperties): TextRunStyleAttrs['script'] 
     out.language = language;
   }
   return out;
+}
+
+/** East Asian text whose authored w:rFonts slot is independent of Latin fonts. */
+const EAST_ASIAN =
+  /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}\p{Script=Bopomofo}\u2e80-\u33ff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/u;
+const COMBINING_MARK = /\p{Mark}/u;
+
+interface FontScriptSegment {
+  text: string;
+  fontScript?: 'eastAsia';
+}
+
+/**
+ * Preserve Latin and East Asian font attribution across compatible text leaves.
+ * Iteration uses code points so supplementary Han and combining marks stay intact.
+ */
+export function splitEastAsianFontSegments(text: string, precedingFontScript?: 'eastAsia'): FontScriptSegment[] {
+  if (text.length === 0) return [{ text }];
+  if (!EAST_ASIAN.test(text) && !precedingFontScript) return [{ text }];
+  const segments: FontScriptSegment[] = [];
+  for (const character of text) {
+    const previous = segments.at(-1);
+    const fontScript =
+      COMBINING_MARK.test(character) && (previous || precedingFontScript)
+        ? previous
+          ? previous.fontScript
+          : precedingFontScript
+        : EAST_ASIAN.test(character)
+          ? 'eastAsia'
+          : undefined;
+    if (previous && previous.fontScript === fontScript) {
+      previous.text += character;
+    } else {
+      segments.push({ text: character, ...(fontScript ? { fontScript } : {}) });
+    }
+  }
+  return segments;
 }

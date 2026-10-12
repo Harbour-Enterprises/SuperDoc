@@ -8,7 +8,7 @@
  */
 
 export { normalizeParagraphAttrsFromOoxml } from './paragraph-attrs.js';
-export { normalizeRunAttrsFromOoxml, type NormalizeRunAttrsContext } from './run-attrs.js';
+export { normalizeRunAttrsFromOoxml, splitEastAsianFontSegments, type NormalizeRunAttrsContext } from './run-attrs.js';
 export type { TextRunStyleAttrs, ParagraphAttrs } from './types.js';
 export { applyThemeTintShade, normalizeHexColor, resolveThemeColor } from './colors.js';
 export {

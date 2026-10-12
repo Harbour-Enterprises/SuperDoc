@@ -1,3 +1,4 @@
+import { splitEastAsianFontSegments } from './run-attrs.js';
 import { describe, expect, it } from 'bun:test';
 
 import { resolveThemeColor } from './colors.js';
@@ -221,5 +222,58 @@ describe('normalizeRunAttrsFromOoxml', () => {
   it('uses implicit auto text color to preserve contrast on dark backgrounds', () => {
     expect(normalizeRunAttrsFromOoxml({}, { backgroundColor: '#000000' }).color).toBe('#FFFFFF');
     expect(normalizeRunAttrsFromOoxml({}, { backgroundColor: '#FAE2D5' }).color).toBeUndefined();
+  });
+});
+
+describe('East Asian font slot selection', () => {
+  it('selects the authored East Asian slot without changing the Latin track or emphasis', () => {
+    const props = {
+      fontFamily: { ascii: 'Calibri', hAnsi: 'Calibri', eastAsia: 'MS Mincho' },
+      fontSize: 24,
+      bold: true,
+      italic: true,
+    };
+    expect(normalizeRunAttrsFromOoxml(props).fontFamily).toBe('Calibri, sans-serif');
+    expect(normalizeRunAttrsFromOoxml(props, { fontScript: 'eastAsia' })).toMatchObject({
+      fontFamily: 'MS Mincho, sans-serif',
+      fontSize: 16,
+      bold: true,
+      italic: true,
+    });
+  });
+
+  it('keeps inherited Latin theme fonts independent from the East Asian slot', () => {
+    const props = { fontFamily: { asciiTheme: 'minorHAnsi', eastAsia: 'SimSun' } };
+    const themeFontScheme = {
+      minor: { latin: 'Calibri', ea: 'MS Mincho', cs: 'Arial' },
+      major: { latin: 'Cambria', ea: 'SimSun', cs: 'Arial' },
+    };
+    expect(normalizeRunAttrsFromOoxml(props, { themeFontScheme }).fontFamily).toBe('Calibri, sans-serif');
+    expect(normalizeRunAttrsFromOoxml(props, { themeFontScheme, fontScript: 'eastAsia' }).fontFamily).toBe(
+      'SimSun, sans-serif',
+    );
+  });
+
+  it('uses the ordinary resolved family when no East Asian family resolves', () => {
+    expect(normalizeRunAttrsFromOoxml({ fontFamily: { ascii: 'Arial' } }, { fontScript: 'eastAsia' }).fontFamily).toBe(
+      'Arial, sans-serif',
+    );
+  });
+});
+
+describe('font-script context across text leaves', () => {
+  it('keeps mark-only leaves with their preceding font track and preserves empty leaves', () => {
+    expect(splitEastAsianFontSegments('\u{E0100}', 'eastAsia')).toEqual([
+      { text: '\u{E0100}', fontScript: 'eastAsia' },
+    ]);
+    expect(splitEastAsianFontSegments('\u{E0100}')).toEqual([{ text: '\u{E0100}' }]);
+    expect(splitEastAsianFontSegments('', 'eastAsia')).toEqual([{ text: '' }]);
+  });
+  it('ends inherited context at the next Latin base', () => {
+    expect(splitEastAsianFontSegments('\u{E0100}A\u0301中', 'eastAsia')).toEqual([
+      { text: '\u{E0100}', fontScript: 'eastAsia' },
+      { text: 'A\u0301' },
+      { text: '中', fontScript: 'eastAsia' },
+    ]);
   });
 });
