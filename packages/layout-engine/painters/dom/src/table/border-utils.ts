@@ -68,6 +68,12 @@ const THIN_DOUBLE_BORDER_DATASET_KEY = 'superdocThinDoubleBorder';
 const THIN_DOUBLE_BORDER_CLASS_NAME = 'superdoc-thin-double-border';
 const SVG_NAMESPACE = 'http://www.w3.org/2000/svg';
 const SVG_CELL_BORDER_STYLES = new Set<BorderStyle>(['dotDash', 'triple', 'wave', 'dashDotStroked']);
+const needsCellBorderOverlay = (border?: BorderSpec): boolean => {
+  if (!border?.style || border.width === 0) return false;
+  const width = border.width ?? 1;
+  // Native CSS borders round positive subpixel widths up to one CSS pixel.
+  return SVG_CELL_BORDER_STYLES.has(border.style) || (border.style === 'single' && width > 0 && width < 1);
+};
 // V2 publishes the inverse of its CSS transform on the paint wrapper. Other
 // hosts fall back to 1, so the painter keeps the same one-screen-pixel floor.
 const RENDER_ZOOM_INVERSE_PROPERTY = '--sd-render-zoom-inverse';
@@ -304,14 +310,14 @@ export const applyCellBorders = (element: HTMLElement, borders?: CellBorders, us
   if (useSvgOverlay) {
     for (const side of BORDER_SIDES) {
       const border = borders[side.toLowerCase() as Lowercase<BorderSide>];
-      if (border?.style && SVG_CELL_BORDER_STYLES.has(border.style) && border.width !== 0) {
+      if (needsCellBorderOverlay(border)) {
         element.style[`border${side}Color`] = 'transparent';
       }
     }
   }
 };
 
-/** Paints cell-only border patterns that CSS borders cannot represent. */
+/** Paints cell border patterns and fractional strokes that native CSS cannot represent. */
 export const createCellBorderOverlay = (
   doc: Document,
   borders: CellBorders | undefined,
@@ -321,7 +327,7 @@ export const createCellBorderOverlay = (
   if (!borders || width <= 0 || height <= 0) return null;
   const sides = BORDER_SIDES.filter((side) => {
     const border = borders[side.toLowerCase() as Lowercase<BorderSide>];
-    return border?.style && SVG_CELL_BORDER_STYLES.has(border.style) && border.width !== 0;
+    return needsCellBorderOverlay(border);
   });
   const diagonals = (['tl2br', 'tr2bl'] as const).filter((side) => isPresentBorderContract(borders[side]));
   if (sides.length === 0 && diagonals.length === 0) return null;
@@ -371,7 +377,11 @@ export const createCellBorderOverlay = (
     group.setAttribute('transform', `translate(${x} ${y})${horizontal ? '' : ' rotate(90)'}`);
     svg.append(group);
 
-    if (border.style === 'triple') {
+    if (border.style === 'single') {
+      // Half-stroke caps keep independently rasterized cell edges connected at fractional joins.
+      group.setAttribute('stroke-linecap', 'square');
+      appendPath(group, `M 0 0 H ${length}`, color, size);
+    } else if (border.style === 'triple') {
       for (const offset of [-paintBand * 0.4, 0, paintBand * 0.4]) {
         appendPath(group, `M 0 ${offset} H ${length}`, color, Math.max(size / 5, 1));
       }

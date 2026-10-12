@@ -284,6 +284,22 @@ describe('applyCellBorders', () => {
     expect(element.style.borderBottomColor).toBe('transparent');
   });
 
+  it('reserves native cell geometry while deferring subpixel single ink to the overlay', () => {
+    applyCellBorders(
+      element,
+      {
+        top: { style: 'single', width: 2 / 3, color: '#000080' },
+        right: { style: 'single', width: 2, color: '#000080' },
+        bottom: { style: 'none', width: 0 },
+      },
+      true,
+    );
+    expect(element.style.borderTopWidth).toBe('0.666667px');
+    expect(element.style.borderTopColor).toBe('transparent');
+    expect(element.style.borderRightColor).not.toBe('transparent');
+    expect(element.style.borderBottomStyle).toBe('none');
+  });
+
   it('keeps the CSS fallback for callers without a cell SVG overlay', () => {
     applyCellBorders(element, { bottom: { style: 'dashDotStroked', width: 2, color: '#000080' } });
     expect(element.style.borderBottomColor).not.toBe('transparent');
@@ -292,6 +308,30 @@ describe('applyCellBorders', () => {
 
 describe('createCellBorderOverlay', () => {
   const geometry = { left: '10px', top: '20px', width: 100, height: 40 };
+
+  it('paints all four subpixel single sides without a screen-pixel floor', () => {
+    const border: BorderSpec = { style: 'single', width: 2 / 3, color: '#000080' };
+    const overlay = createCellBorderOverlay(
+      document,
+      {
+        top: border,
+        right: border,
+        bottom: border,
+        left: border,
+      },
+      geometry,
+    )!;
+    expect(overlay).not.toBeNull();
+    expect(overlay.querySelectorAll('path')).toHaveLength(4);
+    for (const path of overlay.querySelectorAll('path')) {
+      expect(Number(path.getAttribute('stroke-width'))).toBe(2 / 3);
+      expect(path.getAttribute('stroke')).toBe('#000080');
+    }
+    expect(overlay.querySelector('[data-side="right"]')?.getAttribute('transform')).toBe(
+      `translate(${100 - 1 / 3} 0) rotate(90)`,
+    );
+    expect(overlay.querySelector('[data-side="bottom"]')?.getAttribute('transform')).toBe(`translate(0 ${40 - 1 / 3})`);
+  });
 
   it('paints both diagonal directions at their authored width and color', () => {
     const overlay = createCellBorderOverlay(
