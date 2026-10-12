@@ -2528,7 +2528,7 @@ describe('resolveLayout', () => {
       expect(content.lines[0].isListFirstLine).toBe(true);
     });
 
-    it('uses resolved list text start as the first-line indent offset when a suffix tab lands before indentLeft', () => {
+    it.each([158, 58, undefined])('keeps resolved list text start and the measured width %s', (maxWidth) => {
       const layout: Layout = {
         pageSize: { w: 612, h: 792 },
         pages: [
@@ -2575,7 +2575,12 @@ describe('resolveLayout', () => {
       const measures: Measure[] = [
         {
           kind: 'paragraph',
-          lines: [makeLine({ maxWidth: 158, segments: [{ runIndex: 0, fromChar: 0, toChar: 14, width: 96, x: 0 }] })],
+          lines: [
+            makeLine({
+              maxWidth,
+              segments: [{ runIndex: 0, fromChar: 0, toChar: 14, width: 48, x: maxWidth === 58 ? 100 : 0 }],
+            }),
+          ],
           totalHeight: 20,
         },
       ];
@@ -2585,6 +2590,7 @@ describe('resolveLayout', () => {
 
       expect(content.lines[0].resolvedListTextStartPx).toBe(42);
       expect(content.lines[0].indentOffset).toBe(42);
+      expect(content.lines[0].availableWidth).toBe(maxWidth ?? 158);
     });
 
     it('preserves increasing first-line marker anchor for nested RTL list levels', () => {

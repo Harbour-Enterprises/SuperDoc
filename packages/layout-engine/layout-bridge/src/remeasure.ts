@@ -27,7 +27,7 @@ import {
   SPACE_SUFFIX_GAP_PX as _SPACE_SUFFIX_GAP_PX,
   DEFAULT_TAB_INTERVAL_PX as _DEFAULT_TAB_INTERVAL_PX,
 } from '@superdoc/common/layout-constants';
-import { resolveListTextStartPx } from '@superdoc/common/list-marker-utils';
+import { resolveListTextStartPx, resolveListMarkerGeometry } from '@superdoc/common/list-marker-utils';
 import { DEFAULT_FONT_MEASURE_CONTEXT, type FaceKey, type FontMeasureContext } from '@superdoc/font-system';
 import {
   getCalibratedNaturalSingleLine,
@@ -1823,6 +1823,33 @@ export function remeasureParagraph(
   // resolving inline tabs shifts every authored stop to the right by that amount.
   // Positive first-line list layouts still resolve tabs from their in-flow origin.
   const firstLineTabOffset = wordLayout?.marker && baseFirstLineOffset < 0 ? 0 : baseFirstLineOffset;
+  // A left float can displace the first-line list prefix. Keep split regions
+  // and other marker directions on their existing layout path.
+  const firstRegions = resolvedLineRegions?.[0];
+  const firstRegion = firstRegions?.length === 1 ? firstRegions[0] : undefined;
+  const floatingMarkerOffsetX =
+    firstRegion &&
+    firstRegion.offsetX > 0 &&
+    wordLayout?.marker &&
+    getParagraphInlineDirection(block.attrs) !== 'rtl' &&
+    (wordLayout.marker.justification ?? 'left') === 'left'
+      ? Math.max(0, firstRegion.offsetX + indentHanging - indentFirstLine)
+      : 0;
+  const floatingMarkerGeometry =
+    floatingMarkerOffsetX > 0
+      ? resolveListMarkerGeometry(
+          wordLayout,
+          indentLeft,
+          indentFirstLine,
+          indentHanging,
+          () => measuredMarkerTextWidth ?? 0,
+          floatingMarkerOffsetX,
+        )
+      : undefined;
+  const floatingTextInset =
+    floatingMarkerGeometry && firstRegion
+      ? Math.max(0, floatingMarkerGeometry.textStartPx - indentLeft - firstRegion.offsetX)
+      : 0;
 
   let currentRun = 0;
   let currentChar = 0;
@@ -1853,7 +1880,9 @@ export function remeasureParagraph(
     const regionWidth = regionsForLine?.reduce((sum, region) => sum + region.width, 0);
     const effectiveMaxWidth = Math.max(
       1,
-      regionWidth != null && regionWidth > 0 ? Math.min(ordinaryLineWidth, regionWidth) : ordinaryLineWidth,
+      regionWidth != null && regionWidth > 0
+        ? Math.min(ordinaryLineWidth, regionWidth - (isFirstLine ? floatingTextInset : 0))
+        : ordinaryLineWidth,
     );
     const effectiveIndent = isFirstLine ? indentLeft + firstLineTabOffset : indentLeft;
     const startRun = currentRun;
@@ -2293,8 +2322,9 @@ export function remeasureParagraph(
     lines.forEach((line, lineIndex) => {
       const regions = resolvedLineRegions?.[lineIndex];
       if (!regions || regions.length !== 1 || !line.segments?.length) return;
-      const offsetX = regions[0]?.offsetX ?? 0;
+      const offsetX = (regions[0]?.offsetX ?? 0) + (lineIndex === 0 ? floatingTextInset : 0);
       if (!Number.isFinite(offsetX) || Math.abs(offsetX) <= 0.01) return;
+      if (lineIndex === 0 && floatingMarkerOffsetX > 0) line.listMarkerOffsetX = floatingMarkerOffsetX;
 
       const firstSegment = line.segments[0];
       firstSegment.x = (firstSegment.x ?? 0) + offsetX;

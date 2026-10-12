@@ -1108,3 +1108,20 @@ describe('resolveListTextStartPx', () => {
     });
   });
 });
+
+describe('list prefixes displaced by float exclusions', () => {
+  const layout: MinimalWordLayout = {
+    textStartPx: 24,
+    marker: { markerText: '1.', glyphWidthPx: 12, markerBoxWidthPx: 18, suffix: 'tab', justification: 'left' },
+  };
+  it('keeps the marker visible and advances the suffix after the displaced origin', () => {
+    const original = resolveListMarkerGeometry(layout, 24, 0, 24, () => 12);
+    const displaced = resolveListMarkerGeometry(layout, 24, 0, 24, () => 12, 156);
+    expect(original).toMatchObject({ markerStartPx: 0, textStartPx: 24 });
+    expect(displaced).toMatchObject({ markerStartPx: 156, textStartPx: 204, suffixWidthPx: 36 });
+  });
+  it('preserves an authored numbering suffix stop that still clears the displaced marker', () => {
+    const displaced = resolveListMarkerGeometry({ ...layout, tabsPx: [24, 180] }, 24, 0, 24, () => 12, 156);
+    expect(displaced).toMatchObject({ markerStartPx: 156, textStartPx: 180, suffixWidthPx: 12 });
+  });
+});

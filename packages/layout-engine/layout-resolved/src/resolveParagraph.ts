@@ -49,6 +49,7 @@ function resolverListMarkerGeometry(
   hangingIndentPx: number,
   firstLineIndentPx: number,
   markerTextWidthPx: number | undefined,
+  markerOffsetX = 0,
 ) {
   return resolveListMarkerGeometry(
     wordLayout,
@@ -56,6 +57,7 @@ function resolverListMarkerGeometry(
     firstLineIndentPx,
     hangingIndentPx,
     (_markerText: string, marker: MinimalMarker) => resolveMarkerTextWidth(markerTextWidthPx, marker),
+    markerOffsetX,
   );
 }
 
@@ -121,6 +123,7 @@ export function resolveParagraphContent(
 
   // Compute lines for this fragment
   const lines: Line[] = fragment.lines ?? measure.lines.slice(fragment.fromLine, fragment.toLine);
+  const markerOffsetX = !fragment.continuesFromPrev ? (lines[0]?.listMarkerOffsetX ?? 0) : 0;
 
   // --- List marker resolution ---
   const hasMarker = !fragment.continuesFromPrev && fragment.markerWidth && wordLayout?.marker;
@@ -151,6 +154,7 @@ export function resolveParagraphContent(
         markerHanging,
         markerFirstLine,
         fragment.markerTextWidth,
+        markerOffsetX,
       )
     : undefined;
 
@@ -159,7 +163,7 @@ export function resolveParagraphContent(
   let markerStartPos = 0;
   if (hasMarker) {
     const markerTextWidth = fragment.markerTextWidth!;
-    const anchorPoint = paraMarkerAnchorIndent - markerHanging + markerFirstLine;
+    const anchorPoint = paraMarkerAnchorIndent - markerHanging + markerFirstLine + markerOffsetX;
     const markerJustification = wordLayout!.marker!.justification ?? 'left';
     let currentPos: number;
     if (markerJustification === 'left') {
@@ -195,7 +199,7 @@ export function resolveParagraphContent(
   if (hasMarker) {
     const m = wordLayout!.marker!;
     const justification = (m.justification ?? 'left') as 'left' | 'right' | 'center';
-    const firstLinePaddingLeftPx = paraMarkerAnchorIndent - markerHanging + markerFirstLine;
+    const firstLinePaddingLeftPx = paraMarkerAnchorIndent - markerHanging + markerFirstLine + markerOffsetX;
 
     let centerPaddingAdjustPx: number | undefined;
     if (justification === 'center') {
@@ -270,7 +274,8 @@ export function resolveParagraphContent(
       line.maxWidth != null ? Math.min(line.maxWidth, fallbackAvailableWidth) : fallbackAvailableWidth;
 
     if (shouldUseResolvedListTextStart) {
-      availableWidth = fragment.width - listFirstLineTextStartPx! - Math.max(0, paraIndentRight);
+      const listAvailableWidth = fragment.width - listFirstLineTextStartPx! - Math.max(0, paraIndentRight);
+      availableWidth = line.maxWidth != null ? Math.min(line.maxWidth, listAvailableWidth) : listAvailableWidth;
     }
 
     // --- Skip justify ---

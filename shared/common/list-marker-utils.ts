@@ -202,8 +202,8 @@ const getMarkerStartPx = (anchorPx: number, justification: string, markerTextWid
   return anchorPx;
 };
 
-const getNextDefaultTabStopPx = (currentPosPx: number): number => {
-  const remainderPx = currentPosPx % DEFAULT_TAB_INTERVAL_PX;
+const getNextDefaultTabStopPx = (currentPosPx: number, originPx = 0): number => {
+  const remainderPx = (currentPosPx - originPx) % DEFAULT_TAB_INTERVAL_PX;
   if (remainderPx === 0) {
     return currentPosPx + DEFAULT_TAB_INTERVAL_PX;
   }
@@ -217,6 +217,7 @@ const resolveExplicitStandardTextStartPx = (
   explicitTextStartPx: number | undefined,
   markerContentEndPx: number,
   gutterWidthPx: number,
+  originPx = 0,
 ): number | undefined => {
   if (explicitTextStartPx == null) {
     return undefined;
@@ -232,7 +233,7 @@ const resolveExplicitStandardTextStartPx = (
     // behavior: the suffix tab advances to the next default tab stop (every
     // 0.5"), NOT to a fixed small gutter. The minimum-readable gutter remains
     // as a safety floor when marker happens to land right on a tab stop.
-    const nextTabStopPx = getNextDefaultTabStopPx(markerContentEndPx);
+    const nextTabStopPx = getNextDefaultTabStopPx(markerContentEndPx, originPx);
     const minReadablePx = getMinimumReadableTextStartPx(markerContentEndPx, gutterWidthPx);
     return Math.max(nextTabStopPx, minReadablePx);
   }
@@ -244,6 +245,7 @@ const resolveExplicitStandardSuffixTabPx = (
   tabsPx: readonly number[] | undefined,
   markerContentEndPx: number,
   explicitTextStartPx: number | undefined,
+  originPx = 0,
 ): number | undefined => {
   if (explicitTextStartPx == null) {
     return undefined;
@@ -264,7 +266,7 @@ const resolveExplicitStandardSuffixTabPx = (
   }
 
   if (explicitTextStartPx > 0) {
-    const nextDefaultTabStopPx = getNextDefaultTabStopPx(markerContentEndPx);
+    const nextDefaultTabStopPx = getNextDefaultTabStopPx(markerContentEndPx, originPx);
     return explicitTabsAfterMarker.find((tabStopPx) => tabStopPx < nextDefaultTabStopPx);
   }
 
@@ -291,6 +293,7 @@ export function resolveListMarkerGeometry(
   firstLine: number,
   hanging: number,
   measureMarkerText: MarkerTextMeasurer,
+  markerOffsetX = 0,
 ): ResolvedListMarkerGeometry | undefined {
   const marker = wordLayout?.marker;
   if (!marker) {
@@ -301,8 +304,11 @@ export function resolveListMarkerGeometry(
   const markerBoxWidthPx = getMarkerBoxWidthPx(marker, markerTextWidthPx);
   const justification = marker.justification ?? 'left';
   const explicitFirstLineMarkerStartPx = getExplicitFirstLineMarkerStartPx(wordLayout, marker);
-  const anchorPx = getMarkerAnchorPx(indentLeft, firstLine, hanging);
-  const markerStartPx = explicitFirstLineMarkerStartPx ?? getMarkerStartPx(anchorPx, justification, markerTextWidthPx);
+  const anchorPx = getMarkerAnchorPx(indentLeft, firstLine, hanging) + markerOffsetX;
+  const markerStartPx =
+    explicitFirstLineMarkerStartPx != null
+      ? explicitFirstLineMarkerStartPx + markerOffsetX
+      : getMarkerStartPx(anchorPx, justification, markerTextWidthPx);
   const markerContentEndPx = markerStartPx + markerTextWidthPx;
   const suffix = marker.suffix ?? 'tab';
 
@@ -384,6 +390,7 @@ export function resolveListMarkerGeometry(
     wordLayout?.tabsPx,
     markerContentEndPx,
     wordTextStartPx,
+    markerOffsetX,
   );
   if (explicitSuffixTabPx != null) {
     return {
@@ -394,7 +401,12 @@ export function resolveListMarkerGeometry(
     };
   }
 
-  const explicitTextStartPx = resolveExplicitStandardTextStartPx(wordTextStartPx, markerContentEndPx, gutterWidthPx);
+  const explicitTextStartPx = resolveExplicitStandardTextStartPx(
+    wordTextStartPx,
+    markerContentEndPx,
+    gutterWidthPx,
+    markerOffsetX,
+  );
   if (explicitTextStartPx != null) {
     return {
       markerStartPx,
@@ -426,7 +438,7 @@ export function resolveListMarkerGeometry(
   const implicitTextStartPx = indentLeft + firstLine;
   let textStartPx = implicitTextStartPx;
   if (textStartPx <= markerBoxEndPx) {
-    textStartPx = getNextDefaultTabStopPx(markerBoxEndPx);
+    textStartPx = getNextDefaultTabStopPx(markerBoxEndPx, markerOffsetX);
   }
 
   return {

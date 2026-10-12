@@ -21,6 +21,7 @@ type PainterListTextStartParams = {
   hangingIndentPx: number;
   firstLineIndentPx: number;
   markerTextWidthPx?: number;
+  markerOffsetX?: number;
 };
 
 const getFiniteNonNegativeNumber = (value: unknown): number | undefined => {
@@ -45,6 +46,7 @@ export const resolvePainterListMarkerGeometry = ({
   hangingIndentPx,
   firstLineIndentPx,
   markerTextWidthPx,
+  markerOffsetX = 0,
 }: PainterListTextStartParams): ResolvedListMarkerGeometry | undefined =>
   resolveListMarkerGeometry(
     wordLayout,
@@ -52,6 +54,7 @@ export const resolvePainterListMarkerGeometry = ({
     firstLineIndentPx,
     hangingIndentPx,
     (_markerText: string, marker: MinimalMarker) => resolvePainterMarkerTextWidth(markerTextWidthPx, marker),
+    markerOffsetX,
   );
 
 export const resolvePainterListTextStartPx = ({
@@ -154,6 +157,7 @@ export const renderLegacyListMarker = (params: {
   markerLayout: MinimalMarker;
   markerMeasure: ParagraphMeasure['marker'];
   markerTextWidthPx?: number;
+  markerOffsetX?: number;
   indentLeftPx: number;
   hangingIndentPx: number;
   firstLineIndentPx: number;
@@ -169,6 +173,7 @@ export const renderLegacyListMarker = (params: {
     markerLayout,
     markerMeasure,
     markerTextWidthPx,
+    markerOffsetX = 0,
     indentLeftPx,
     hangingIndentPx,
     firstLineIndentPx,
@@ -191,10 +196,11 @@ export const renderLegacyListMarker = (params: {
         hangingIndentPx,
         firstLineIndentPx,
         markerTextWidthPx: markerTextWidth,
+        markerOffsetX,
       })
     : undefined;
 
-  const anchorPoint = indentLeftPx - hangingIndentPx + firstLineIndentPx;
+  const anchorPoint = indentLeftPx - hangingIndentPx + firstLineIndentPx + markerOffsetX;
   const markerJustification = markerLayout?.justification ?? 'left';
   let markerStartPos: number;
   let currentPos: number;

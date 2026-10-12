@@ -94,7 +94,8 @@ export const resolveAvailableWidthForLine = (params: {
   let availableWidth = line.maxWidth != null ? Math.min(line.maxWidth, fallbackAvailableWidth) : fallbackAvailableWidth;
 
   if (resolvedListTextStartPx != null) {
-    availableWidth = containerWidth - resolvedListTextStartPx - Math.max(0, indentRightPx);
+    const listAvailableWidth = containerWidth - resolvedListTextStartPx - Math.max(0, indentRightPx);
+    availableWidth = line.maxWidth != null ? Math.min(line.maxWidth, listAvailableWidth) : listAvailableWidth;
   }
 
   if (isFirstLine && !isListFirstLine && (line.hasExplicitTabStops !== true || line.justifyAfterHangingTab === true)) {

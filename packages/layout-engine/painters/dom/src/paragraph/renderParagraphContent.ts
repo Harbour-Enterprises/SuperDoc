@@ -960,6 +960,7 @@ function* renderMeasuredLines(
         markerLayout,
         markerMeasure,
         markerTextWidthPx: legacyMarkerTextWidth,
+        markerOffsetX: line.listMarkerOffsetX,
         indentLeftPx: containerKind === 'table-cell' ? tableMarkerIndentLeft : paraMarkerAnchorIndent,
         hangingIndentPx: markerHanging,
         firstLineIndentPx: markerFirstLine,

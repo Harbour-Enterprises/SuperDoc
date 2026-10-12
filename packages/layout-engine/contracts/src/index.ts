@@ -3122,6 +3122,8 @@ export type Line = {
   lineHeight: number;
   /** Maximum available width for this line (used during measurement). */
   maxWidth?: number;
+  /** First-line list prefix displacement imposed by a left float exclusion. */
+  listMarkerOffsetX?: number;
   /** Content width before justify compression (used for negative word-spacing calculation). */
   naturalWidth?: number;
   /** Number of spaces in the line (pre-computed for efficiency in justify calculations). */
