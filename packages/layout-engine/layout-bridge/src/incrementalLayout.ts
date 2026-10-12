@@ -9210,12 +9210,15 @@ async function layoutWithOptionalReuse(input: {
     if (isFootnotesLayoutInput(input.options.footnotes) && suffixFootnotesInput == null) {
       return full('m4-layout-reuse-disabled-footnote-reference-block-id-missing');
     }
+    const precedingSuffixBlock = input.blocks[suffixStartBlockIndex - 1];
     const suffixLayoutOptions: LayoutOptions = {
       ...input.options,
       ...(suffixFootnoteReserves ? { footnoteReservedByPageIndex: suffixFootnoteReserves } : {}),
       ...(suffixFootnotesInput ? { footnotes: suffixFootnotesInput } : {}),
       startContext: {
         pageNumberOffset: checkpointPageIndex,
+        startsAfterPageBreakBefore:
+          precedingSuffixBlock?.kind === 'pageBreak' && precedingSuffixBlock.attrs?.source === 'pageBreakBefore',
         activePageCounter,
         activeSectionIndex,
         activeSectionFirstPageNumber: activeSectionFirstPageIndex + 1,

@@ -705,6 +705,8 @@ export type LayoutOptions = {
   startContext?: {
     /** Physical page-number offset for emitted `Page.number` values. */
     pageNumberOffset?: number;
+    /** The resumed first paragraph follows an omitted authored pageBreakBefore block. */
+    startsAfterPageBreakBefore?: boolean;
     /** Display/effective page counter to stamp on the first emitted page. */
     activePageCounter?: number;
     /** Active section index at the page boundary. */
@@ -3706,8 +3708,13 @@ function* layoutDocumentSteps(
           }
 
           const checkpointState = paginator.ensurePage();
+          const previousBlock = blocks[index - 1];
+          const followsPageBreakBefore =
+            checkpointState.page.number > 1 &&
+            ((previousBlock?.kind === 'pageBreak' && previousBlock.attrs?.source === 'pageBreakBefore') ||
+              (index === 0 && options.startContext?.startsAfterPageBreakBefore === true));
           const suppressSpacingBefore =
-            checkpointState.page.number - 1 - pageNumberOffset !== preflightPageIndex &&
+            (checkpointState.page.number - 1 - pageNumberOffset !== preflightPageIndex || followsPageBreakBefore) &&
             Math.abs(checkpointState.cursorY - checkpointState.topMargin) < 1e-6;
           blockResumeCheckpoints.set(block.id, {
             blockId: block.id,

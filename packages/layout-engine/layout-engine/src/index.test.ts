@@ -3490,6 +3490,21 @@ describe('layoutDocument', () => {
       expect(layout.pages[1].fragments).toHaveLength(1);
     });
 
+    it('suppresses heading before-spacing after pageBreakBefore without changing its after-spacing', () => {
+      const blocks: FlowBlock[] = [
+        { kind: 'paragraph', id: 'first', runs: [] },
+        { kind: 'pageBreak', id: 'heading-break', attrs: { source: 'pageBreakBefore' } } as PageBreakBlock,
+        { kind: 'paragraph', id: 'heading', runs: [], attrs: { spacing: { before: 16, after: 16 } } },
+        { kind: 'paragraph', id: 'body', runs: [] },
+      ];
+      const measures: Measure[] = [makeMeasure([20]), { kind: 'pageBreak' }, makeMeasure([20]), makeMeasure([20])];
+      const layout = layoutDocument(blocks, measures, pageBreakBoundaryOptions);
+      expect(layout.pages).toHaveLength(2);
+      const top = pageBreakBoundaryOptions.margins!.top;
+      expect(layout.pages[1].fragments.find((fragment) => fragment.blockId === 'heading')?.y).toBe(top);
+      expect(layout.pages[1].fragments.find((fragment) => fragment.blockId === 'body')?.y).toBe(top + 36);
+    });
+
     it('still honors manual page breaks after a fresh page boundary', () => {
       const blocks: FlowBlock[] = [
         { kind: 'paragraph', id: 'p1', runs: [] },

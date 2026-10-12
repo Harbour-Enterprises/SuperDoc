@@ -385,6 +385,68 @@ describe('incrementalLayout deep checkpoint geometry (SD-3772 D2)', () => {
     expect(pageGeometry(incremental.layout)).toEqual(pageGeometry(cold.layout));
   });
 
+  it.each(['pageBreakBefore', 'manual', 'none'] as const)(
+    'preserves %s spacing when resuming at the heading',
+    async (breakKind) => {
+      const dirtyBlockId = breakKind === 'none' ? 'q41' : 'q40';
+      const measureHeadingBlock = async (block: FlowBlock) =>
+        block.kind === 'pageBreak' ? ({ kind: 'pageBreak' } as const) : measureBlock(block);
+      const headingBlocks = (edited: boolean) => {
+        const blocks = buildBlocks(edited, { dirtyBlockId });
+        const index = blocks.findIndex((block) => block.id === dirtyBlockId);
+        const heading = blocks[index] as ParagraphBlock;
+        heading.attrs = { spacing: { before: 16 } };
+        if (breakKind !== 'none') {
+          blocks.splice(index, 0, {
+            kind: 'pageBreak',
+            id: 'heading-break',
+            attrs: breakKind === 'pageBreakBefore' ? { source: 'pageBreakBefore' } : { lineBreakType: 'page' },
+          });
+        }
+        return blocks;
+      };
+      const previousBlocks = headingBlocks(false);
+      const previous = await incrementalLayout(
+        [],
+        null,
+        previousBlocks,
+        layoutOptions(),
+        measureHeadingBlock,
+        buildHeaderFooter(),
+      );
+      previous.layout.layoutEpoch = 1;
+      const nextBlocks = headingBlocks(true);
+      const incremental = await incrementalLayout(
+        previousBlocks,
+        previous.layout,
+        nextBlocks,
+        layoutOptions(),
+        measureHeadingBlock,
+        buildHeaderFooter(),
+        previous.measures,
+        undefined,
+        undefined,
+        buildReuseOptions(previous.layout, nextBlocks, dirtyBlockId),
+      );
+      expect(incremental.layoutReuse.mode).toBe('tail-splice');
+      const headingPage = previous.layout.pages.findIndex((page) =>
+        page.fragments.some((fragment) => fragment.blockId === dirtyBlockId),
+      );
+      if (breakKind !== 'none') expect(incremental.layoutReuse.checkpointPageIndex).toBe(headingPage);
+      expect(incremental.layoutReuse.checkpointPageIndex).toBeGreaterThan(0);
+      clearIncrementalModuleState();
+      const cold = await incrementalLayout(
+        [],
+        null,
+        nextBlocks,
+        layoutOptions(),
+        measureHeadingBlock,
+        buildHeaderFooter(),
+      );
+      expect(pageGeometry(incremental.layout)).toEqual(pageGeometry(cold.layout));
+    },
+  );
+
   it('resumes inside a continuous unequal-column section without changing its reflow boundary', async () => {
     const fixtureOptions = { dirtyBlockId: 'c15', unequalColumnParagraphCount: 20 };
     const previousBlocks = buildBlocks(false, fixtureOptions);
