@@ -66,6 +66,10 @@ export type OperationCapabilities = Record<OperationId, OperationRuntimeCapabili
 export interface PlanEngineCapabilities {
   /** Step op codes the engine can execute (e.g., 'text.rewrite', 'format.apply'). */
   supportedStepOps: readonly string[];
+  /** Proven targeting modes; operation-specific restrictions remain in unsupported cells. */
+  supportedTargets?: readonly string[];
+  /** Named unsupported combinations with stable, discoverable reasons. */
+  unsupported?: readonly { cell: string; reason: string }[];
   /** Non-uniform style resolution strategies available for `onNonUniform`. */
   supportedNonUniformStrategies: readonly string[];
   /** Mark names that `setMarks` can override (e.g., 'bold', 'italic'). */

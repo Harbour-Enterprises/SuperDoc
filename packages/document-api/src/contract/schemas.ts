@@ -2677,6 +2677,10 @@ const formatCapabilitiesSchema = objectSchema(
 const planEngineCapabilitiesSchema = objectSchema(
   {
     supportedStepOps: arraySchema({ type: 'string' }),
+    supportedTargets: arraySchema({ type: 'string' }),
+    unsupported: arraySchema(
+      objectSchema({ cell: { type: 'string' }, reason: { type: 'string' } }, ['cell', 'reason']),
+    ),
     supportedNonUniformStrategies: arraySchema({ type: 'string' }),
     supportedSetMarks: arraySchema({ type: 'string' }),
     regex: objectSchema(
@@ -7536,12 +7540,22 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['id', 'op', 'where', 'args'],
     );
+    const structuralReplaceStepSchema = objectSchema(
+      {
+        id: { type: 'string' },
+        op: { const: 'structural.replace', type: 'string' },
+        where: stepWhereSchema,
+        args: objectSchema({ content: sdFragmentSchema, nestingPolicy: nestingPolicySchema }, ['content']),
+      },
+      ['id', 'op', 'where', 'args'],
+    );
     const mutationStepSchema: JsonSchema = {
       oneOf: [
         textRewriteStepSchema,
         textInsertStepSchema,
         textDeleteStepSchema,
         formatApplyStepSchema,
+        structuralReplaceStepSchema,
         assertStepSchema,
       ],
     };
@@ -7565,7 +7579,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       steps: {
         ...arraySchema(mutationStepSchema),
         description:
-          "Ordered array of mutation steps. Each step needs 'op' (text.rewrite, text.insert, text.delete, format.apply, or assert) and a 'where' targeting clause.",
+          "Ordered array of mutation steps. Each step needs 'op' (text.rewrite, text.insert, text.delete, format.apply, structural.replace, or assert) and a 'where' targeting clause. Check runtime capabilities for operation-specific content and targeting restrictions.",
       },
     };
     const mutationsInputSchema = objectSchema(mutationsInputProperties, ['atomic', 'changeMode', 'steps']);

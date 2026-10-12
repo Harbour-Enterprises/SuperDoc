@@ -32,6 +32,57 @@ Every plan requires:
 
 Check `doc.capabilities().planEngine.supportedStepOps` before constructing plans dynamically. The generated reference remains authoritative for each step shape.
 
+## Replace a selected range with a locked block content control
+
+V2 supports `structural.replace` for a nonempty visible-text selection inside one ordinary body paragraph. Supply one block rich-text SDT whose content contains ordinary paragraphs. The operation replaces the selected text, preserves surrounding text, and produces one undoable change. Paragraph and run formatting in the supported fragment is retained through DOCX export and reopen.
+
+```ts
+const plan = {
+  atomic: true,
+  changeMode: 'direct',
+  steps: [
+    {
+      id: 'replace-selected-slash',
+      op: 'structural.replace',
+      where: {
+        by: 'target',
+        target: {
+          kind: 'selection',
+          start: { kind: 'text', blockId: paragraphId, offset: 0 },
+          end: { kind: 'text', blockId: paragraphId, offset: 1 },
+        },
+      },
+      args: {
+        content: {
+          kind: 'sdt',
+          sdt: {
+            scope: 'block',
+            type: 'richText',
+            tag: 'replacement',
+            lock: 'content',
+            content: [
+              {
+                kind: 'paragraph',
+                paragraph: {
+                  props: { spacing: { line: 30, lineRule: 'exact' } },
+                  inlines: [{ kind: 'run', run: { text: 'Replacement content' } }],
+                },
+              },
+            ],
+          },
+        },
+      },
+    },
+  ],
+} satisfies Parameters<typeof doc.mutations.apply>[0];
+const preview = await doc.mutations.preview(plan);
+if (preview.valid) await doc.mutations.apply(plan);
+```
+
+Exact line spacing uses points: `line: 30` serializes as `w:line="600"` twips. The locked control prevents content editing after creation. Standalone and supported shared browser rooms use the same operation.
+
+This structural replacement must be the only mutating step in its plan. Tracked mode, cross-paragraph targets, nested table/control targets, non-paragraph SDT children, linked assets, placeholder and appearance overrides remain unsupported. Existing paragraph styles may be referenced; this operation does not import new style definitions. Use `planEngine.supportedTargets` and `planEngine.unsupported` to discover supported targeting modes and named restrictions, then preview the concrete input. Invalid payloads, targets and revisions fail before mutation.
+
 ## Preview without changing the document
 
 `doc.mutations.preview(plan)` resolves targets and validates every step without applying document changes.

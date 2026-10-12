@@ -540,6 +540,21 @@ describe('document-api contract catalog', () => {
     expect(blockEffect.properties).toHaveProperty('sourcePath');
   });
 
+  it('publishes structural replacement and optional targeting restrictions in the schema', () => {
+    const schemas = buildInternalContractSchemas();
+    const input = schemas.operations['mutations.apply'].input as ContractTestSchemaShape;
+    const structural = input.properties!.steps.items!.oneOf!.find(
+      (step) => step.properties!.op.const === 'structural.replace',
+    )!;
+    expect(structural.required).toEqual(['id', 'op', 'where', 'args']);
+    expect(structural.properties!.where.oneOf!.some((where) => where.properties!.by.const === 'target')).toBe(true);
+    expect(structural.properties!.args.required).toEqual(['content']);
+    const capabilities = schemas.operations['capabilities.get'].output as ContractTestSchemaShape;
+    expect(capabilities.properties!.planEngine.properties!.supportedTargets.items!.type).toBe('string');
+    expect(capabilities.properties!.planEngine.required).not.toContain('supportedTargets');
+    expect(capabilities.properties!.planEngine.properties!.unsupported.items!.required).toEqual(['cell', 'reason']);
+  });
+
   it('publishes tracked and invalidated refs from mutation plans', () => {
     const operation = buildInternalContractSchemas().operations['mutations.apply'];
     for (const schema of [operation.output, operation.success] as ContractTestSchemaShape[]) {
