@@ -104,10 +104,17 @@ export const SD_CONVERSION_FRAGMENT_SCHEMA_DEFS: Record<string, JsonSchema> = {
     bottom: { type: 'number', minimum: 0 },
     left: { type: 'number', minimum: 0 },
   }),
+  SDInboundCellBorders: objectSchema({
+    top: { type: 'string' },
+    right: { type: 'string' },
+    bottom: { type: 'string' },
+    left: { type: 'string' },
+  }),
   SDInboundCellProps: objectSchema({
     verticalAlign: { enum: ['top', 'center', 'bottom'] },
     shading: ref('SDInboundColor'),
     padding: ref('SDInboundCellPadding'),
+    borders: ref('SDInboundCellBorders'),
   }),
   SDInboundRun: objectSchema(
     {

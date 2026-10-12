@@ -264,6 +264,15 @@ export interface SDPasteTableCell {
     bottomPt?: number;
     leftPt?: number;
   };
+  /** Direct vertical cell alignment. */
+  verticalAlign?: 'top' | 'center' | 'bottom';
+  /** Direct per-edge cell borders in OOXML-compatible form. */
+  borders?: {
+    top?: { lineStyle: string; lineWeightPt: number; color: string };
+    right?: { lineStyle: string; lineWeightPt: number; color: string };
+    bottom?: { lineStyle: string; lineWeightPt: number; color: string };
+    left?: { lineStyle: string; lineWeightPt: number; color: string };
+  };
   sourcePath?: readonly (string | number)[];
 }
 
