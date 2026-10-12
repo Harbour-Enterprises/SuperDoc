@@ -5,6 +5,7 @@
 import type { BlockId, TableAttrs, TableBlock, TableFragment, TableMeasure } from '@superdoc/contracts';
 import { describe, expect, it } from 'bun:test';
 import { layoutTableBlock } from './layout-table.js';
+import { createPaginator } from './paginator.js';
 
 /**
  * Creates a dummy table fragment for test scenarios where prior page content is needed.
@@ -5017,5 +5018,100 @@ describe('layoutTableBlock', () => {
       const lastBoundary = boundaries![boundaries!.length - 1];
       expect(lastBoundary.x + lastBoundary.width).toBe(fragment.width);
     });
+  });
+});
+
+describe('SD-5834 repeating header start', () => {
+  function paginateMidPageHeader(nextPageHeight = 100) {
+    const paginator = createPaginator({
+      margins: { left: 0, right: 0 },
+      getActiveTopMargin: () => 0,
+      getActiveBottomMargin: () => 0,
+      getActiveHeaderDistance: () => 0,
+      getActiveFooterDistance: () => 0,
+      getActivePageSize: () => ({ w: 400, h: paginator.pages.length === 0 ? 100 : nextPageHeight }),
+      getDefaultPageSize: () => ({ w: 400, h: 100 }),
+      getActiveColumns: () => ({ count: 2, gap: 0 }),
+      createPage: (number, margins, size) => ({ number, margins, size, fragments: [] }),
+    });
+    const state = paginator.ensurePage();
+    state.page.fragments.push(createDummyFragment());
+    state.cursorY = 80;
+    state.maxCursorY = 80;
+    state.constraintBoundaries = [{ y: 80, columns: { count: 2, gap: 0 } }];
+    state.activeConstraintIndex = 0;
+    layoutTableBlock({
+      block: createMockTableBlock(2, [{ repeatHeader: true }, {}]),
+      measure: createMockTableMeasure([100, 100], [40, 20], [[20, 20], [20]]),
+      columnWidth: 200,
+      ensurePage: paginator.ensurePage,
+      advanceColumn: paginator.advanceColumn,
+      columnX: (state) => state.columnIndex * 200,
+    });
+    return paginator.pages;
+  }
+
+  it('skips short mid-page columns until the whole repeating header fits', () => {
+    const pages = paginateMidPageHeader();
+    expect(pages[0].fragments).toHaveLength(1);
+    const first = pages[1].fragments[0] as TableFragment;
+    expect(first.fromRow).toBe(0);
+    expect(first.partialRow?.rowIndex).not.toBe(0);
+    expect(first.toRow).toBe(2);
+  });
+
+  it('retains partial-row progress if destination page geometry makes the header oversized', () => {
+    const pages = paginateMidPageHeader(30);
+    expect(pages[0].fragments).toHaveLength(1);
+    expect(pages.length).toBeGreaterThan(1);
+    const fragments = pages
+      .flatMap((page) => page.fragments)
+      .filter((fragment) => fragment.blockId === 'test-table') as TableFragment[];
+    expect(fragments.some((fragment) => fragment.partialRow?.rowIndex === 0)).toBe(true);
+    expect(fragments.at(-1)?.toRow).toBe(2);
+  });
+
+  function paginateHeader(rowHeights: number[], headerCount: number) {
+    const block = createMockTableBlock(
+      rowHeights.length,
+      rowHeights.map((_, index) => ({ repeatHeader: index < headerCount })),
+    );
+    const measure = createMockTableMeasure(
+      [100, 100],
+      rowHeights,
+      rowHeights.map((height) => Array.from({ length: height / 20 }, () => 20)),
+    );
+    const pages = [{ fragments: [createDummyFragment()] }];
+    let state = { page: pages[0], columnIndex: 0, cursorY: 80, contentBottom: 100, topMargin: 0 };
+    layoutTableBlock({
+      block,
+      measure,
+      columnWidth: 200,
+      ensurePage: () => state,
+      advanceColumn: () => {
+        const page = { fragments: [] as TableFragment[] };
+        pages.push(page);
+        state = { ...state, page, cursorY: 0 };
+        return state;
+      },
+      columnX: () => 0,
+    });
+    return pages;
+  }
+
+  it('moves a repeating two-line header intact to the next page', () => {
+    const pages = paginateHeader([40, 20, 20, 20, 20], 1);
+    expect(pages[0].fragments).toHaveLength(1);
+    expect(pages[1].fragments[0].fromRow).toBe(0);
+    expect(pages[1].fragments[0].partialRow?.rowIndex).not.toBe(0);
+    expect(pages[2].fragments[0].repeatHeaderCount).toBe(1);
+  });
+
+  it('moves the complete contiguous header group when it fits a fresh page', () => {
+    const pages = paginateHeader([20, 20, 20, 20, 20, 20], 2);
+    expect(pages[0].fragments).toHaveLength(1);
+    expect(pages[1].fragments[0].fromRow).toBe(0);
+    expect(pages[1].fragments[0].toRow).toBeGreaterThanOrEqual(2);
+    expect(pages[2].fragments[0].repeatHeaderCount).toBe(2);
   });
 });

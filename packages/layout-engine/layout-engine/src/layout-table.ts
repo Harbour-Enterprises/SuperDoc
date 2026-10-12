@@ -1507,6 +1507,7 @@ export function* layoutTableBlockSteps({
   // which would waste the remaining space on the current page.
   const hasPriorFragments = state.page.fragments.length > 0;
   const hasMeasuredRows = measure.rows.length > 0 && block.rows.length > 0;
+  const borderCollapse = block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse');
 
   if (!resumeCursor && hasMeasuredRows && hasPriorFragments) {
     // Decision tree for tables with measured rows and existing page content:
@@ -1515,8 +1516,20 @@ export function* layoutTableBlockSteps({
     const firstRowSlack = hasExplicitRowHeightSlack(block.rows[0], measure.rows[0]);
     const firstRowFitsPage = firstRowHeight <= state.contentBottom;
     const treatFirstRowAsCantSplit = firstRowCantSplit || (firstRowSlack && firstRowFitsPage);
+    const headerHeight = computeFragmentFitHeight(measure, 0, headerCount, 0, borderCollapse);
+    const fullPageHeight = state.contentBottom - (state.topMargin ?? 0);
 
-    if (treatFirstRowAsCantSplit) {
+    if (headerCount > 0 && headerHeight <= fullPageHeight && headerHeight > availableHeight) {
+      // Keep the initial repeating header together when it fits a fresh column.
+      // A continuous section can leave every remaining column equally short.
+      // Recheck destination geometry so oversized headers still make partial-row progress.
+      while (
+        headerHeight <= state.contentBottom - (state.topMargin ?? 0) &&
+        headerHeight > state.contentBottom - state.cursorY
+      ) {
+        state = advanceColumn(state);
+      }
+    } else if (treatFirstRowAsCantSplit) {
       // Branch 1: cantSplit row
       // Require the entire first row to fit on the current page.
       // If it doesn't fit, advance to a new page to avoid an immediate split.
@@ -1597,9 +1610,6 @@ export function* layoutTableBlockSteps({
     yield { index: 1, total: 1 };
     return;
   }
-
-  // Resolve border-collapse for fragment height (match measuring/render: only add borders when separate)
-  const borderCollapse = block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse');
 
   const getRepeatedHeaderHeight = (repeatCount: number): number => {
     const clampedCount = Math.max(0, Math.min(repeatCount, headerCount));
