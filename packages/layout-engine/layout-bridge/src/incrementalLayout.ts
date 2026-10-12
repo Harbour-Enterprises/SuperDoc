@@ -4536,7 +4536,8 @@ async function incrementalLayoutComplete(
     const continuationDividerHeight = safeDividerHeight;
     // §17.11.23 w:separator — "spans part of the width text extents"
     // §17.11.1  w:continuationSeparator — "spans the width of the main story's text extents"
-    const SEPARATOR_DEFAULT_WIDTH_FACTOR = 0.5;
+    // Word's standard separator is two inches at 96 CSS px/inch, independent of the column width.
+    const SEPARATOR_DEFAULT_WIDTH_PX = 2 * 96;
 
     const footnoteWidth =
       retainedFootnoteGeometry?.measurementWidth ?? resolveFootnoteMeasurementWidth(options, currentBlocks);
@@ -4957,9 +4958,7 @@ async function incrementalLayoutComplete(
             // Optional visible separator line (Word-like). Uses a 1px filled rect.
             let cursorY = bandTopY + Math.max(0, plan.separatorSpacingBefore);
             const separatorHeight = isContinuation ? continuationDividerHeight : safeDividerHeight;
-            const separatorWidth = isContinuation
-              ? contentWidth
-              : Math.max(0, contentWidth * SEPARATOR_DEFAULT_WIDTH_FACTOR);
+            const separatorWidth = isContinuation ? contentWidth : Math.min(contentWidth, SEPARATOR_DEFAULT_WIDTH_PX);
             if (separatorHeight > 0 && separatorWidth > 0) {
               const separatorId = isContinuation
                 ? `footnote-continuation-separator-page-${page.number}-col-${columnIndex}`

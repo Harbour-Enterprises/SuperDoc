@@ -1,9 +1,9 @@
 /**
- * SD-2985: separator widths must match ECMA-376 normative text.
+ * Footnote separator defaults: Word-compatible normal line and full-width continuation.
  *   - §17.11.23 w:separator — "a horizontal line which spans PART OF the width text extents"
  *   - §17.11.1  w:continuationSeparator — "a horizontal line which spans THE WIDTH of the main story's text extents"
  *
- * The default-content separator (no imported content overrides) renders at ~half column.
+ * The normal separator uses Word's two-inch default, capped to the column width.
  * The continuation separator renders at full column.
  */
 import { describe, it, expect, vi } from 'vite-plus/test';
@@ -38,13 +38,12 @@ const findSeparator = (page: { fragments: Frag[] }, kind: 'standard' | 'continua
   return page.fragments.find((f) => typeof f.blockId === 'string' && f.blockId.startsWith(needle));
 };
 
-describe('SD-2985: separator widths match ECMA-376 §17.11.1 / §17.11.23', () => {
-  it('standard separator spans roughly half the column width', async () => {
+describe('footnote separator widths', () => {
+  it.each([624, 468, 120])('standard separator retains two-inch width within a %ipx column', async (contentWidth) => {
     const body = makeParagraph('body-1', 'Body referencing a footnote.', 0);
     const ft = makeParagraph('footnote-1-0-paragraph', 'Note.', 0);
     const margins = { top: 72, right: 72, bottom: 72, left: 72 };
-    const pageW = 612;
-    const contentWidth = pageW - margins.left - margins.right;
+    const pageW = contentWidth + margins.left + margins.right;
 
     const result = await incrementalLayout(
       [],
@@ -65,8 +64,7 @@ describe('SD-2985: separator widths match ECMA-376 §17.11.1 / §17.11.23', () =
 
     const sep = findSeparator(result.layout.pages[0], 'standard');
     expect(sep).toBeDefined();
-    expect(sep!.width).toBeGreaterThan(0.4 * contentWidth);
-    expect(sep!.width).toBeLessThan(0.6 * contentWidth);
+    expect(sep!.width).toBeCloseTo(Math.min(192, contentWidth), 5);
   });
 
   it('continuation separator spans the full column width', async () => {
