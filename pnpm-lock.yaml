@@ -202,7 +202,7 @@ overrides:
   protobufjs@8: 8.6.4
   superdoc: workspace:*
   '@superdoc/react': workspace:*
-  '@superdoc/sdk': 2.20.0-next.12
+  '@superdoc/sdk': 2.20.0-next.13
   '@superdoc/common': workspace:*
   '@superdoc/contracts': workspace:*
   '@superdoc/dom-contract': workspace:*
@@ -364,8 +364,8 @@ importers:
         specifier: workspace:*
         version: link:../../packages/react
       '@superdoc/sdk':
-        specifier: 2.20.0-next.12
-        version: 2.20.0-next.12
+        specifier: 2.20.0-next.13
+        version: 2.20.0-next.13
       '@tailwindcss/postcss':
         specifier: ^4.3.3
         version: 4.3.3
@@ -549,8 +549,8 @@ importers:
   examples/document-comparison:
     dependencies:
       '@superdoc/sdk':
-        specifier: 2.20.0-next.12
-        version: 2.20.0-next.12
+        specifier: 2.20.0-next.13
+        version: 2.20.0-next.13
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -655,8 +655,8 @@ importers:
   examples/sdk-batch:
     dependencies:
       '@superdoc/sdk':
-        specifier: 2.20.0-next.12
-        version: 2.20.0-next.12
+        specifier: 2.20.0-next.13
+        version: 2.20.0-next.13
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -1035,8 +1035,8 @@ importers:
   packages/superdoc:
     dependencies:
       '@superdoc/docx-engine':
-        specifier: 0.22.0-next.12
-        version: 0.22.0-next.12(@hocuspocus/provider@2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30))(@liveblocks/client@3.15.5(@types/json-schema@7.0.15))(@liveblocks/yjs@3.15.5(@types/json-schema@7.0.15)(yjs@13.6.30))(vue@3.5.32(typescript@5.9.3))(y-websocket@3.0.0(yjs@13.6.30))(yjs@13.6.30)
+        specifier: 0.22.0-next.13
+        version: 0.22.0-next.13(@hocuspocus/provider@2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30))(@liveblocks/client@3.15.5(@types/json-schema@7.0.15))(@liveblocks/yjs@3.15.5(@types/json-schema@7.0.15)(yjs@13.6.30))(vue@3.5.32(typescript@5.9.3))(y-websocket@3.0.0(yjs@13.6.30))(yjs@13.6.30)
       '@types/mdast':
         specifier: 'catalog:'
         version: 4.0.4
@@ -3688,8 +3688,8 @@ packages:
   '@standard-schema/spec@1.1.0':
     resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
-  '@superdoc/docx-engine@0.22.0-next.12':
-    resolution: {integrity: sha512-7YmuU/8q1SLw0kQS7CUFRom7UVHzt9XT68aHyVBYSjCLyvDaHsYrEAxHWD8rQstEZyM23YUOgBTJXAgdXh7epQ==}
+  '@superdoc/docx-engine@0.22.0-next.13':
+    resolution: {integrity: sha512-UV/wPXFFbtutiIcFAK4ppR6evhUcLr9Mcbuzp3GUxUfO/h6oXRypIE/oIU4Yr9mxORW+oBiIUICUsoWzSFu8Hw==}
     peerDependencies:
       '@hocuspocus/provider': ^2.13.6
       '@liveblocks/client': ^3.15.5
@@ -3707,38 +3707,32 @@ packages:
       y-websocket:
         optional: true
 
-  '@superdoc/sdk-darwin-arm64@2.20.0-next.12':
-    resolution: {integrity: sha512-8Is8NQJQZoG0gLBTxDqOuZwKOgkJlCqAokKd6W4eNLiKF3tlP2vHjcjr0PzxDIq+nusliN47jPCwfye6aHZUbw==}
+  '@superdoc/sdk-darwin-arm64@2.20.0-next.13':
+    resolution: {integrity: sha512-bibsNDn2xerhGUv2GaukuGVQHTQlyPpuvG1iyPAdEKPyxxd4lQ64EdsoDq7yPXxueIZpSHOUgHkY7R5ZtrWbCw==}
     cpu: [arm64]
     os: [darwin]
     hasBin: true
 
-  '@superdoc/sdk-darwin-x64@2.20.0-next.12':
-    resolution: {integrity: sha512-m9lG15VLqHfmV4St1lCmTOKYV3hd7o5nb+5QGEToKVzflmSZBoqwVE69OWQEovvtHRL0bAohazYoiyvvwc+NDg==}
-    cpu: [x64]
-    os: [darwin]
-    hasBin: true
-
-  '@superdoc/sdk-linux-arm64@2.20.0-next.12':
-    resolution: {integrity: sha512-6wU1JTjA++nwgxWBNRT1FfA5U7iSZkfQi14WvvFCLsrWn3U29O23Xs3vmvU7F2J42ZsXSIqr+LOXCcc3HX3uuA==}
+  '@superdoc/sdk-linux-arm64@2.20.0-next.13':
+    resolution: {integrity: sha512-Oqx6A1WoK4Md3O8CrXHl8TDQJHcFEYKdXJjgmBjkVRQ6ZWZKWSe3LnhTmUeIaRDTA2lL5ZRqAodfGka1QRgPSA==}
     cpu: [arm64]
     os: [linux]
     hasBin: true
 
-  '@superdoc/sdk-linux-x64@2.20.0-next.12':
-    resolution: {integrity: sha512-DRnk20gB4MEYMnUpW5ZXuB6nhE6HAnRcHBEeDGHMuU5Z7UBPEdHL/QM2gYTeoORZTVaxs4yh3SlWeWMZyouqrw==}
+  '@superdoc/sdk-linux-x64@2.20.0-next.13':
+    resolution: {integrity: sha512-GjzMdh9steiWSL3XEcYKeRsDZTMyFhtRtM1m7j50ZdyyduWhUW5uFLjUL7Pvc6VemfMKRtkGcjFFZWwol13mRg==}
     cpu: [x64]
     os: [linux]
     hasBin: true
 
-  '@superdoc/sdk-windows-x64@2.20.0-next.12':
-    resolution: {integrity: sha512-U0A9GRtYhJsDaV/LPus+GoA5r5e5VBmMezsnMiFPwAcnV+i+7jhAiHW9hgmZBleCAHMcrlhpBAUT9y2GQ6SGvw==}
+  '@superdoc/sdk-windows-x64@2.20.0-next.13':
+    resolution: {integrity: sha512-0uDvK8mS+maU1rgXN7bGxdrejepW1itMjvD1i0YDRgy60Z2MttxXN9iThaI0IgiDCt3yLjYcQWDEiDnhyaQ8rw==}
     cpu: [x64]
     os: [win32]
     hasBin: true
 
-  '@superdoc/sdk@2.20.0-next.12':
-    resolution: {integrity: sha512-Umn54Heeu4NGfDo641nTVX8OXsHio1C8/MxY9MODZgc4ZULqosRuH4tGyaSiQzT5Qj5g+McT3iqpVWrhGVLIBQ==}
+  '@superdoc/sdk@2.20.0-next.13':
+    resolution: {integrity: sha512-JNhqxP3nzwpjAh021nJJ15KPAN1iIB5tCDq8PtTS2MyFXcfs1AYlANYVF3w0LhVrOfBWYt6YZFrvHFCWveVxiw==}
 
   '@swc/core-darwin-arm64@1.15.21':
     resolution: {integrity: sha512-SA8SFg9dp0qKRH8goWsax6bptFE2EdmPf2YRAQW9WoHGf3XKM1bX0nd5UdwxmC5hXsBUZAYf7xSciCler6/oyA==}
@@ -12393,7 +12387,7 @@ snapshots:
 
   '@standard-schema/spec@1.1.0': {}
 
-  '@superdoc/docx-engine@0.22.0-next.12(@hocuspocus/provider@2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30))(@liveblocks/client@3.15.5(@types/json-schema@7.0.15))(@liveblocks/yjs@3.15.5(@types/json-schema@7.0.15)(yjs@13.6.30))(vue@3.5.32(typescript@5.9.3))(y-websocket@3.0.0(yjs@13.6.30))(yjs@13.6.30)':
+  '@superdoc/docx-engine@0.22.0-next.13(@hocuspocus/provider@2.15.3(y-protocols@1.0.7(yjs@13.6.30))(yjs@13.6.30))(@liveblocks/client@3.15.5(@types/json-schema@7.0.15))(@liveblocks/yjs@3.15.5(@types/json-schema@7.0.15)(yjs@13.6.30))(vue@3.5.32(typescript@5.9.3))(y-websocket@3.0.0(yjs@13.6.30))(yjs@13.6.30)':
     dependencies:
       vue: 3.5.32(typescript@5.9.3)
       xml-js: 1.6.11
@@ -12404,28 +12398,24 @@ snapshots:
       '@liveblocks/yjs': 3.15.5(@types/json-schema@7.0.15)(yjs@13.6.30)
       y-websocket: 3.0.0(yjs@13.6.30)
 
-  '@superdoc/sdk-darwin-arm64@2.20.0-next.12':
+  '@superdoc/sdk-darwin-arm64@2.20.0-next.13':
     optional: true
 
-  '@superdoc/sdk-darwin-x64@2.20.0-next.12':
+  '@superdoc/sdk-linux-arm64@2.20.0-next.13':
     optional: true
 
-  '@superdoc/sdk-linux-arm64@2.20.0-next.12':
+  '@superdoc/sdk-linux-x64@2.20.0-next.13':
     optional: true
 
-  '@superdoc/sdk-linux-x64@2.20.0-next.12':
+  '@superdoc/sdk-windows-x64@2.20.0-next.13':
     optional: true
 
-  '@superdoc/sdk-windows-x64@2.20.0-next.12':
-    optional: true
-
-  '@superdoc/sdk@2.20.0-next.12':
+  '@superdoc/sdk@2.20.0-next.13':
     optionalDependencies:
-      '@superdoc/sdk-darwin-arm64': 2.20.0-next.12
-      '@superdoc/sdk-darwin-x64': 2.20.0-next.12
-      '@superdoc/sdk-linux-arm64': 2.20.0-next.12
-      '@superdoc/sdk-linux-x64': 2.20.0-next.12
-      '@superdoc/sdk-windows-x64': 2.20.0-next.12
+      '@superdoc/sdk-darwin-arm64': 2.20.0-next.13
+      '@superdoc/sdk-linux-arm64': 2.20.0-next.13
+      '@superdoc/sdk-linux-x64': 2.20.0-next.13
+      '@superdoc/sdk-windows-x64': 2.20.0-next.13
 
   '@swc/core-darwin-arm64@1.15.21':
     optional: true
