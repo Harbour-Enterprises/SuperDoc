@@ -18,6 +18,38 @@ const EFFECTS: ReceiptEffects = {
   ],
 };
 
+describe('receipt-bridge: failure code mapping', () => {
+  // Reproduces a real bug (reported against a live two-peer room on
+  // superdoc@2.20.0, re-localized here): root `doc.replace`/`doc.insert`
+  // under enforced document protection returned `INTERNAL_ERROR` instead of
+  // `PERMISSION_DENIED` — not because anything threw, but because
+  // `PERMISSION_DENIED` was simply absent from both `SDErrorCode` and this
+  // file's `CODE_MAP`, so the `?? 'INTERNAL_ERROR'` fallback silently caught
+  // it. `text.replace` (which returns the raw TextMutationReceipt directly,
+  // bypassing this bridge) was unaffected — only the root member paths that
+  // go through `textReceiptToSDReceipt` (`insert`, `replace`, and `delete`,
+  // which is implemented via `replace`) ever hit this translation.
+  it('maps a PERMISSION_DENIED text-mutation failure to PERMISSION_DENIED, not INTERNAL_ERROR', () => {
+    const textReceipt: TextMutationReceipt = {
+      success: false,
+      failure: {
+        code: 'PERMISSION_DENIED',
+        message: 'document protection permits edits only within an everyone permission range.',
+      },
+      resolution: {
+        target: { kind: 'text', blockId: '', range: { start: 0, end: 0 } },
+        range: { from: 0, to: 0 },
+        text: '',
+      },
+    };
+    const sdReceipt = textReceiptToSDReceipt(textReceipt);
+    expect(sdReceipt.success).toBe(false);
+    if (sdReceipt.success) return;
+    expect(sdReceipt.failure.code).toBe('PERMISSION_DENIED');
+    expect(sdReceipt.failure.message).toBe(textReceipt.failure.message);
+  });
+});
+
 describe('receipt-bridge: created-content effects', () => {
   it('preserves effects from a successful text receipt onto the SDMutationReceipt', () => {
     const textReceipt: TextMutationReceipt = {
