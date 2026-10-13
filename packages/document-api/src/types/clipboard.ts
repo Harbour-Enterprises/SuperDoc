@@ -80,6 +80,7 @@ export interface SDPasteRunMarks {
   italic?: boolean;
   underline?: boolean;
   strike?: boolean;
+  /** Six-digit RGB color, or `auto` to reset an inherited text color. */
   color?: string;
   highlight?: string;
   fontSizePt?: number;
@@ -90,6 +91,12 @@ export interface SDPasteRunMarks {
 export interface SDPasteRun {
   text: string;
   marks?: SDPasteRunMarks;
+  /**
+   * Named character style identity (`w:rStyle`) from the source run. Same-
+   * document paste must emit this reference rather than only baking the
+   * style's effective font/size/color into direct marks.
+   */
+  styleRef?: string;
   /** Transient conversion identity used to map mutation effects back to source nodes. */
   sourcePath?: readonly (string | number)[];
   /**
@@ -131,6 +138,8 @@ export type SDPasteLeafInline =
       kind: 'text';
       text: string;
       marks?: SDPasteRunMarks;
+      /** Named character style identity (`w:rStyle`) for this text leaf. */
+      styleRef?: string;
       sourcePath?: readonly (string | number)[];
       commentIds?: readonly string[];
       trackedInsertion?: boolean;
@@ -348,6 +357,14 @@ export interface ClipboardInsertPlan {
   fragment: SDPasteFragment;
   diagnostics: readonly ClipboardInsertDiagnostic[];
   summary: ClipboardInsertPlanSummary;
+  /**
+   * Style provenance retained by generated native clipboard plans. `null`
+   * denotes unknown source context. Conflicting contexts reject source-format
+   * insertion of named character references; use the original payload for
+   * portable HTML recovery when it can retain the content. Manually
+   * authored destination-local plans may omit this field.
+   */
+  sourceStyleContext?: { documentEpoch: string; digest: string } | null;
 }
 
 export type ClipboardTarget =

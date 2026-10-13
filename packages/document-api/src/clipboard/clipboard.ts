@@ -94,6 +94,20 @@ function validateClipboardPlan(plan: ClipboardInsertInput['plan'], operationName
   if (!Array.isArray(plan.diagnostics)) {
     throw new DocumentApiValidationError('INVALID_INPUT', `${operationName} plan.diagnostics must be an array.`);
   }
+  if (plan.sourceStyleContext !== undefined && plan.sourceStyleContext !== null) {
+    const source = plan.sourceStyleContext;
+    if (
+      typeof source !== 'object' ||
+      Array.isArray(source) ||
+      typeof source.documentEpoch !== 'string' ||
+      source.documentEpoch.length === 0 ||
+      source.documentEpoch.length > 255 ||
+      typeof source.digest !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(source.digest)
+    ) {
+      throw new DocumentApiValidationError('INVALID_INPUT', `${operationName} plan.sourceStyleContext is invalid.`);
+    }
+  }
 }
 
 function validatePasteFragment(fragment: ClipboardInsertInput['fragment'], operationName: string): void {
