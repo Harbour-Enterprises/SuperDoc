@@ -3316,6 +3316,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    */
   private registerEditorRuntime(runtime: EditorRuntime): void {
     this.#editorRuntimeRegistry.register(runtime);
+    const show = this.config.layoutEngineOptions?.showFormattingMarks;
+    if (typeof show === 'boolean') runtime.setShowFormattingMarks(show);
   }
 
   /**
@@ -3633,7 +3635,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   }
 
   /**
-   * Toggle nonprinting formatting marks (spaces, tabs, paragraph marks) in the
+   * Toggle nonprinting formatting marks (spaces, tabs, paragraph marks and manual line breaks) in the
    * rendered layout. This is a view-only setting and is not exported to DOCX.
    */
   setShowFormattingMarks(show = true) {
@@ -3643,6 +3645,11 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     layoutOptions.showFormattingMarks = nextValue;
 
     this.superdocStore?.documents?.forEach((doc: RuntimeDocument) => {
+      const runtimes = typeof doc.id === 'string' ? this.#editorRuntimeRegistry.getAllByDocumentId(doc.id) : [];
+      if (runtimes.length) {
+        for (const runtime of runtimes) runtime.setShowFormattingMarks(nextValue);
+        return;
+      }
       const documentRuntime = doc.getDocumentRuntime?.();
       documentRuntime?.setShowFormattingMarks?.(nextValue);
     });

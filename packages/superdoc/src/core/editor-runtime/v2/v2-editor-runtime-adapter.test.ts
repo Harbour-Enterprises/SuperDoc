@@ -17,6 +17,7 @@ function createReadyHost(overrides: Record<string, unknown> = {}) {
     getDocumentMode: () => 'editing',
     setDocumentMode: vi.fn(),
     setTrackedChangesRenderOptions: vi.fn(),
+    setShowFormattingMarks: vi.fn(),
     dispatch: vi.fn(async () => ({ status: 'committed', receipt: { success: true } })),
     save: vi.fn(async () => new ArrayBuffer(0)),
     dispose: vi.fn(async () => {}),
@@ -28,6 +29,19 @@ function createReadyHost(overrides: Record<string, unknown> = {}) {
 }
 
 describe('createV2EditorRuntimeAdapter viewing preferences route', () => {
+  it('routes local formatting marks to the mounted host without document commands', () => {
+    const host = createReadyHost();
+    const { runtime } = createV2EditorRuntimeAdapter({
+      id: 'v2-runtime',
+      documentId: 'doc-1',
+      root: document.createElement('div'),
+      host,
+    });
+    runtime.setShowFormattingMarks(true);
+    runtime.setShowFormattingMarks(false);
+    expect(host.setShowFormattingMarks.mock.calls).toEqual([[true], [false]]);
+    expect(host.dispatch).not.toHaveBeenCalled();
+  });
   it('routes live tracked-change display changes to the mounted v2 host', () => {
     const setTrackedChangesRenderOptions = vi.fn();
     const host = createReadyHost({ setTrackedChangesRenderOptions });

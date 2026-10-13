@@ -57,6 +57,43 @@ afterEach(() => {
 });
 
 describe('viewing options', () => {
+  it('delivers the latest pre-ready formatting preference when a runtime registers', () => {
+    const instance = mount();
+    instance.setShowFormattingMarks(true);
+    const { harness } = makeReady(instance, [{ id: 'doc-a' }] as RuntimeDocument[]);
+    const runtime = createFakeV2Runtime({ id: 'doc-a-runtime', documentId: 'doc-a' });
+    const apply = vi.spyOn(runtime, 'setShowFormattingMarks');
+    harness.registerEditorRuntime(runtime);
+    expect(apply).toHaveBeenCalledWith(true);
+    instance.setShowFormattingMarks(true);
+    expect(apply).toHaveBeenCalledTimes(1);
+  });
+  it('accepts a formatting-mark preference before ready and emits only on changes', () => {
+    const instance = mount();
+    const changed = vi.fn();
+    instance.on('formatting-marks-change', changed);
+    instance.setShowFormattingMarks(true);
+    instance.setShowFormattingMarks(true);
+    expect(instance.config.layoutEngineOptions?.showFormattingMarks).toBe(true);
+    expect(changed).toHaveBeenCalledTimes(1);
+    instance.setShowFormattingMarks(false);
+    expect(instance.config.layoutEngineOptions?.showFormattingMarks).toBe(false);
+    expect(changed).toHaveBeenLastCalledWith({ showFormattingMarks: false, superdoc: instance });
+  });
+
+  it('routes formatting-mark changes to every registered runtime of the document', () => {
+    const instance = mount();
+    const { harness } = makeReady(instance, [{ id: 'doc-a' }] as RuntimeDocument[]);
+    const runtime = createFakeV2Runtime({ id: 'doc-a-runtime', documentId: 'doc-a' });
+    const setShowFormattingMarks = vi.fn();
+    (runtime as unknown as { setShowFormattingMarks(show: boolean): void }).setShowFormattingMarks =
+      setShowFormattingMarks;
+    harness.registerEditorRuntime(runtime);
+    instance.setShowFormattingMarks(true);
+    instance.setShowFormattingMarks(false);
+    expect(setShowFormattingMarks.mock.calls).toEqual([[true], [false]]);
+  });
+
   it('normalizes the canonical startup config for the mounted renderer', () => {
     const instance = mount({
       documentMode: 'viewing',

@@ -36,6 +36,37 @@ export function ensureWebFlowStyles(doc: Document, styleNonce?: string): void {
   white-space: pre-wrap;
 }
 .${WEB_FLOW_CLASS_NAMES.run} { white-space: pre-wrap; }
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-paragraph-mark,
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-line-break {
+  display: inline;
+  position: absolute;
+  top: auto;
+  pointer-events: none;
+  user-select: none;
+  color: var(--sd-formatting-mark-color, var(--sd-ui-action, currentColor));
+}
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-space-mark,
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-web-flow-formatting-tab { position: relative; }
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-space-mark::after,
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-web-flow-formatting-tab::after {
+  content: "·";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  color: var(--sd-formatting-mark-color, var(--sd-ui-action, currentColor));
+  font-size: 0.75em;
+  line-height: 1;
+  pointer-events: none;
+}
+.${WEB_FLOW_CLASS_NAMES.root} .superdoc-web-flow-formatting-tab::after { content: "→"; }
+.${WEB_FLOW_CLASS_NAMES.root} [dir="rtl"] .superdoc-web-flow-formatting-tab::after { content: "←"; }
+@media print {
+  .${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-paragraph-mark,
+  .${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-line-break,
+  .${WEB_FLOW_CLASS_NAMES.root} .superdoc-formatting-space-mark::after,
+  .${WEB_FLOW_CLASS_NAMES.root} .superdoc-web-flow-formatting-tab::after { display: none; }
+}
 .${WEB_FLOW_CLASS_NAMES.listMarker} {
   display: inline-block;
   margin-inline-end: 0.5em;

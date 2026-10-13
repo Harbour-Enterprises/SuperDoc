@@ -55,6 +55,37 @@ function commit(painter: ReturnType<typeof createWebFlowPainter>, command: Param
 }
 
 describe('WebFlowPainter', () => {
+  it('commits formatting glyphs with the content transaction and rolls visibility back', async () => {
+    const root = mount();
+    const onUnownedMutation = vi.fn();
+    const painter = createWebFlowPainter(root, { onUnownedMutation });
+    const block = paragraph('marks', 'A  B');
+    block.runs.push({ kind: 'tab' }, { kind: 'lineBreak' }, { kind: 'text', text: 'C' });
+    const off = { stableDomKey: 'marks', renderFingerprint: 'off', block };
+    const on = { ...off, renderFingerprint: 'on', showFormattingMarks: true };
+    commit(painter, { kind: 'replace-all', epoch: 1, items: [off] });
+    const original = root.firstElementChild;
+    const transaction = painter.prepare({ kind: 'replace-all', epoch: 2, items: [on] });
+    expect(root.querySelector('.superdoc-formatting-paragraph-mark')).toBeNull();
+    transaction.apply();
+    expect(root.querySelectorAll('.superdoc-formatting-space-mark')).toHaveLength(2);
+    expect(root.querySelector('.superdoc-formatting-line-break')?.textContent).toBe('↵');
+    expect(root.querySelector('.superdoc-formatting-paragraph-mark')?.textContent).toBe('¶');
+    expect(root.querySelector('.superdoc-web-flow-formatting-tab')).not.toBeNull();
+    expect(root.querySelectorAll('[data-web-flow-visual-only="true"][aria-hidden="true"]')).toHaveLength(2);
+    transaction.rollback();
+    expect(root.firstElementChild).toBe(original);
+    expect(root.textContent).toBe('A  B\tC');
+    expect(root.querySelector('.superdoc-formatting-paragraph-mark')).toBeNull();
+    commit(painter, { kind: 'replace-all', epoch: 3, items: [on] });
+    const repaired = painter.restoreCommittedDomAfterUnownedMutation();
+    expect(repaired.bindings).toHaveLength(1);
+    expect(root.querySelector('.superdoc-formatting-line-break')?.textContent).toBe('↵');
+    commit(painter, { kind: 'replace-all', epoch: 4, items: [off] });
+    expect(root.querySelector('.superdoc-formatting-space-mark')).toBeNull();
+    await Promise.resolve();
+    expect(onUnownedMutation).not.toHaveBeenCalled();
+  });
   it('applies a nonce to its document stylesheet', () => {
     const doc = document.implementation.createHTMLDocument('web-flow-nonce');
 

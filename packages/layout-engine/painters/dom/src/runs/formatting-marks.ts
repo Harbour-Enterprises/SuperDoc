@@ -39,8 +39,54 @@ export const setTextContentWithFormattingSpaceMarks = (
   }
 };
 
-const findLastTextRun = (runs: Run[]): { run: TextRun; index: number } | null => {
-  for (let index = runs.length - 1; index >= 0; index -= 1) {
+export const appendFormattingLineBreakMark = (
+  lineEl: HTMLElement,
+  line: Line,
+  runs: Run[],
+  lineIndex: number,
+  leftOffsetPx: number,
+  availableWidth: number,
+  hasExplicitPositioning: boolean,
+  doc: Document,
+  showFormattingMarks: boolean,
+): void => {
+  if (!showFormattingMarks) return;
+  const isManualBreak = (run: Run | undefined): boolean =>
+    run?.kind === 'lineBreak' || (run?.kind === 'break' && (!run.breakType || run.breakType === 'line'));
+  const endRun = runs[line.toRun];
+  const endsRun = endRun && (!('text' in endRun) || line.toChar >= endRun.text.length);
+  // Measurement excludes a terminating break from a text line, and keeps
+  // its index for an empty line. A trailing placeholder is the next line.
+  const endsWithBreak =
+    (isManualBreak(endRun) && (line.fromRun !== line.toRun || lineIndex === 0)) ||
+    (endsRun && isManualBreak(runs[line.toRun + 1]));
+  if (!endsWithBreak) return;
+  const mark = doc.createElement('span');
+  mark.classList.add('superdoc-formatting-line-break');
+  mark.setAttribute('aria-hidden', 'true');
+  mark.textContent = '↵';
+  const textRun = findLastTextRun(runs, line.toRun)?.run ?? findLastTextRun(runs)?.run;
+  mark.style.fontSize = `${textRun?.fontSize ?? 16}px`;
+  if (textRun?.fontFamily) mark.style.fontFamily = toCssFontFamily(textRun.fontFamily) ?? textRun.fontFamily;
+  if (textRun?.bold) mark.style.fontWeight = 'bold';
+  if (textRun?.italic) mark.style.fontStyle = 'italic';
+  const lineWidth = line.naturalWidth ?? line.width ?? 0;
+  const slack = Math.max(0, availableWidth - lineWidth);
+  const alignmentOffset = hasExplicitPositioning
+    ? 0
+    : lineEl.style.textAlign === 'center'
+      ? slack / 2
+      : lineEl.style.textAlign === 'right'
+        ? slack
+        : 0;
+  const rtl = lineEl.dir === 'rtl' || lineEl.style.direction === 'rtl';
+  mark.style.left = `${Math.max(0, leftOffsetPx + alignmentOffset + (rtl ? 0 : lineWidth))}px`;
+  mark.style.lineHeight = `${line.lineHeight}px`;
+  lineEl.appendChild(mark);
+};
+
+const findLastTextRun = (runs: Run[], fromIndex = runs.length - 1): { run: TextRun; index: number } | null => {
+  for (let index = Math.min(fromIndex, runs.length - 1); index >= 0; index -= 1) {
     const run = runs[index];
     if (run && (run.kind === 'text' || run.kind === undefined) && 'text' in run) {
       return { run: run as TextRun, index };

@@ -143,6 +143,7 @@ export function createFakeV2Runtime(options: FakeV2RuntimeOptions = {}): EditorR
       return documentMode;
     },
     setTrackedChangesRenderOptions(): void {},
+    setShowFormattingMarks(): void {},
     getLegacyEditorProjection() {
       return {
         editorVersion: 2,

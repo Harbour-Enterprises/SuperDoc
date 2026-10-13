@@ -54,6 +54,27 @@ const BASELINE = join(dirname(fileURLToPath(import.meta.url)), 'ui-parity-baseli
 
 const COMMANDS = ['bullet-list', 'numbered-list', 'bold', 'italic', 'undo', 'redo'];
 
+describe('formatting-mark view state', () => {
+  it('refreshes command subscribers when the public setter event fires', () => {
+    const { host } = makeHost();
+    const ui = createSuperDocUI({ superdoc: host as never });
+    const command = ui.commands.get('formatting-marks');
+    const states: boolean[] = [];
+    command.observe((state) => states.push(state.active));
+    expect(command.getState().active).toBe(false);
+    const config = host.config as { layoutEngineOptions: { showFormattingMarks: boolean } };
+    config.layoutEngineOptions.showFormattingMarks = true;
+    (host.emit as (event: string) => void)('formatting-marks-change');
+    expect(command.getState().active).toBe(true);
+    expect(states.at(-1)).toBe(true);
+    config.layoutEngineOptions.showFormattingMarks = false;
+    (host.emit as (event: string) => void)('formatting-marks-change');
+    expect(command.getState().active).toBe(false);
+    expect(states.at(-1)).toBe(false);
+    ui.destroy();
+  });
+});
+
 type Snap = Record<string, unknown>;
 
 function makeHost() {

@@ -10,6 +10,7 @@ export interface WebFlowPaintItem {
   readonly layoutEpoch?: number;
   readonly layoutIdentities?: readonly LayoutSourceIdentity[];
   readonly editable?: boolean;
+  readonly showFormattingMarks?: boolean;
 }
 
 export type WebFlowPaintCommand =

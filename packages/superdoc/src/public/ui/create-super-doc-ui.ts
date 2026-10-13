@@ -294,6 +294,7 @@ const HOST_EVENTS = [
   // follows the live editor rather than the last one that started.
   'active-editor-change',
   'document-mode-change',
+  'formatting-marks-change',
   'zoomChange',
   // A programmatic setMeasurementUnit emits this; recompute so the
   // measurement-unit command value reflects the live unit immediately

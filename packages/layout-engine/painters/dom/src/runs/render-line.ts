@@ -20,7 +20,7 @@ import {
 import { CLASS_NAMES, lineStyles } from '../styles.js';
 import { applyRtlStyles } from '../features/inline-direction/index.js';
 import { applyTooltipAccessibility } from './links.js';
-import { appendFormattingParagraphMark } from './formatting-marks.js';
+import { appendFormattingLineBreakMark, appendFormattingParagraphMark } from './formatting-marks.js';
 import { textRunMergeSignature } from './hash.js';
 import { inlineBoxAdvanceBeforeOffset, markInlineBoxRun, paintInlineBoxes, splitInlineBoxRuns } from './inline-box.js';
 import { isBreakRun, isFieldAnnotationRun, isImageRun, isLineBreakRun, isMathRun, renderRun } from './render-run.js';
@@ -782,6 +782,17 @@ export function* renderLineWork({
     renderUnderlineSpans(underlineSpans, underlineOffsetFromLineTop(line, fallbackFontSize), el, runContext.doc);
   }
 
+  appendFormattingLineBreakMark(
+    el,
+    line,
+    expandedBlock.runs,
+    lineIndex ?? 0,
+    paragraphMarkLeftOffsetPx,
+    availableWidth,
+    hasExplicitPositioning ?? false,
+    runContext.doc,
+    runContext.showFormattingMarks,
+  );
   appendFormattingParagraphMark(
     el,
     line,

@@ -399,4 +399,34 @@ describe('DomPainter formatting marks', () => {
     expect(container.classList.contains('superdoc-show-formatting-marks')).toBe(false);
     expect(container.querySelector('.superdoc-formatting-paragraph-mark')).toBeNull();
   });
+
+  it.each([
+    { kind: 'lineBreak' as const, expected: 1 },
+    { kind: 'break' as const, breakType: 'line' as const, expected: 1 },
+    { kind: 'break' as const, breakType: 'page' as const, expected: 0 },
+    { kind: 'break' as const, breakType: 'column' as const, expected: 0 },
+  ])('renders only manual break glyphs for $kind $breakType', ({ expected, ...run }) => {
+    const block = createParagraphBlock('Before');
+    if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+    block.runs = [block.runs[0], { ...run, pmStart: 6, pmEnd: 7 }, { text: 'After', pmStart: 7, pmEnd: 12 }];
+    const measure: Measure = {
+      kind: 'paragraph',
+      totalHeight: 40,
+      lines: [
+        { fromRun: 0, fromChar: 0, toRun: 1, toChar: 0, width: 48, ascent: 12, descent: 4, lineHeight: 20 },
+        { fromRun: 2, fromChar: 0, toRun: 2, toChar: 5, width: 40, ascent: 12, descent: 4, lineHeight: 20 },
+      ],
+    };
+    const layout = createParagraphLayout();
+    layout.pages[0].fragments[0].toLine = 2;
+    const painter = createDomPainter({ blocks: [block], measures: [measure], showFormattingMarks: true });
+    painter.paint(layout, container);
+    const marks = container.querySelectorAll('.superdoc-formatting-line-break');
+    expect(marks).toHaveLength(expected);
+    if (expected) {
+      expect(marks[0].textContent).toBe('↵');
+      expect(marks[0].closest('.superdoc-line')).toBe(container.querySelector('.superdoc-line'));
+      expect(marks[0].getAttribute('aria-hidden')).toBe('true');
+    }
+  });
 });

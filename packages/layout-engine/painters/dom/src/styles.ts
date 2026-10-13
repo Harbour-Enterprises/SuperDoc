@@ -796,6 +796,15 @@ const FORMATTING_MARKS_STYLES = `
   z-index: 2;
 }
 
+.superdoc-formatting-line-break {
+  position: absolute;
+  top: 0;
+  color: var(--sd-formatting-mark-color, var(--sd-ui-action, currentColor));
+  pointer-events: none;
+  user-select: none;
+  white-space: pre;
+}
+
 .superdoc-layout.superdoc-show-formatting-marks .superdoc-formatting-paragraph-mark {
   display: inline;
 }
@@ -812,7 +821,8 @@ const FORMATTING_MARKS_STYLES = `
     display: none;
   }
 
-  .superdoc-layout.superdoc-show-formatting-marks .superdoc-formatting-paragraph-mark {
+  .superdoc-layout.superdoc-show-formatting-marks .superdoc-formatting-paragraph-mark,
+  .superdoc-layout .superdoc-formatting-line-break {
     display: none;
   }
 }

@@ -436,6 +436,7 @@ export interface EditorRuntime {
   setDocumentMode(mode: EditorRuntimeDocumentMode): void;
   getDocumentMode(): EditorRuntimeDocumentMode;
   setTrackedChangesRenderOptions(options?: { mode?: 'review' | 'original' | 'final' | 'off'; enabled?: boolean }): void;
+  setShowFormattingMarks(show: boolean): void;
 
   /**
    * Temporary compatibility path backing `SuperDoc.activeEditor`,

@@ -16,6 +16,7 @@ import { isValidImageDataUrl } from '@superdoc/url-validation';
 import { applyContainerSdtDataset, applySdtDataset } from '../sdt/dataset.js';
 import { applyParagraphBlockStyles } from '../paragraph/styles.js';
 import { applyRunStyles } from '../runs/text-run.js';
+import { setTextContentWithFormattingSpaceMarks } from '../runs/formatting-marks.js';
 import {
   applyLinkAttributes,
   applyLinkDataset,
@@ -38,6 +39,7 @@ import type { WebFlowPaintItem, WebFlowPainterOptions } from './types.js';
 interface RenderContext {
   readonly doc: Document;
   readonly options: WebFlowPainterOptions;
+  readonly showFormattingMarks: boolean;
   readonly layoutEpoch?: number;
   readonly layoutIdentities: ReadonlyMap<string, LayoutSourceIdentity>;
 }
@@ -97,7 +99,7 @@ function renderTextRun(run: TextRun, block: ParagraphBlock, context: RenderConte
   const link = run.link ? buildLinkRenderData(run.link) : null;
   const element = link && !link.blocked ? context.doc.createElement('a') : context.doc.createElement('span');
   element.classList.add(WEB_FLOW_CLASS_NAMES.run, 'superdoc-text-run');
-  element.textContent = run.vanish ? '' : run.text;
+  setTextContentWithFormattingSpaceMarks(element, run.vanish ? '' : run.text, context.doc, context.showFormattingMarks);
   if (run.vanish) {
     element.setAttribute('aria-hidden', 'true');
     element.style.display = 'none';
@@ -176,7 +178,12 @@ function renderRun(run: Run, runIndex: number, block: ParagraphBlock, context: R
   if (run.kind === 'lineBreak' || (run.kind === 'break' && (!run.breakType || run.breakType === 'line'))) {
     const br = context.doc.createElement('br');
     applyPositionRange(br, run);
-    return stamp(br);
+    stamp(br);
+    if (!context.showFormattingMarks) return br;
+    const fragment = context.doc.createDocumentFragment();
+    fragment.appendChild(formattingMark(context, 'line-break', '↵'));
+    fragment.appendChild(br);
+    return fragment;
   }
   if (run.kind === 'break') {
     if (run.breakType !== 'column') return context.doc.createDocumentFragment();
@@ -188,6 +195,8 @@ function renderRun(run: Run, runIndex: number, block: ParagraphBlock, context: R
   element.classList.add(WEB_FLOW_CLASS_NAMES.run);
   if (run.kind === 'tab') {
     element.textContent = '\t';
+    element.classList.add('superdoc-tab');
+    if (context.showFormattingMarks) element.classList.add('superdoc-web-flow-formatting-tab');
   } else if (run.kind === 'fieldAnnotation') {
     element.textContent = run.displayLabel;
     element.dataset.fieldId = run.fieldId ?? '';
@@ -201,6 +210,15 @@ function renderRun(run: Run, runIndex: number, block: ParagraphBlock, context: R
   }
   applyPositionRange(element, run);
   return stamp(element);
+}
+
+function formattingMark(context: RenderContext, kind: 'paragraph-mark' | 'line-break', text: string): HTMLElement {
+  const mark = context.doc.createElement('span');
+  mark.classList.add(`superdoc-formatting-${kind}`);
+  mark.textContent = text;
+  mark.setAttribute('aria-hidden', 'true');
+  mark.dataset.webFlowVisualOnly = 'true';
+  return mark;
 }
 
 function renderParagraph(block: ParagraphBlock, context: RenderContext, includeWordMarker = true): HTMLElement {
@@ -237,6 +255,7 @@ function renderParagraph(block: ParagraphBlock, context: RenderContext, includeW
   }
   block.runs.forEach((run, runIndex) => element.appendChild(renderRun(run, runIndex, block, context)));
   if (element.childNodes.length === 0) element.appendChild(context.doc.createElement('br'));
+  if (context.showFormattingMarks) element.appendChild(formattingMark(context, 'paragraph-mark', '¶'));
   return element;
 }
 
@@ -400,6 +419,7 @@ export function renderWebFlowItem(
   const node = renderFlowBlock(item.block, {
     doc,
     options,
+    showFormattingMarks: item.showFormattingMarks === true,
     ...(item.layoutEpoch != null ? { layoutEpoch: item.layoutEpoch } : {}),
     layoutIdentities: new Map(item.layoutIdentities?.map((identity) => [identity.blockRef, identity]) ?? []),
   });
