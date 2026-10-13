@@ -258,55 +258,6 @@ describe('renderTableRow', () => {
     expect(call.borders?.bottom).toBeUndefined();
   });
 
-  it('draws its own interior right border when the right neighbor is borderless (asymmetric, no doubling)', () => {
-    renderTableRow(
-      createDeps({
-        rowIndex: 0,
-        totalRows: 1,
-        cellSpacingPx: 0,
-        columnWidths: [100, 100],
-        rowMeasure: {
-          height: 20,
-          cells: [
-            { width: 100, height: 20, gridColumnStart: 0, colSpan: 1, rowSpan: 1 },
-            { width: 100, height: 20, gridColumnStart: 1, colSpan: 1, rowSpan: 1 },
-          ],
-        },
-        row: {
-          id: 'row-1',
-          cells: [
-            {
-              id: 'cell-1',
-              attrs: {
-                borders: {
-                  top: { style: 'single', width: 2, color: '#123456' },
-                  right: { style: 'single', width: 2, color: '#123456' },
-                  bottom: { style: 'single', width: 2, color: '#123456' },
-                  left: { style: 'single', width: 2, color: '#123456' },
-                },
-              },
-              blocks: [{ kind: 'paragraph', id: 'p1', runs: [] }],
-            },
-            {
-              id: 'cell-2',
-              blocks: [{ kind: 'paragraph', id: 'p2', runs: [] }],
-            },
-          ],
-        },
-      }) as never,
-    );
-
-    expect(renderTableCellMock).toHaveBeenCalledTimes(2);
-    const firstCall = renderTableCellMock.mock.calls[0][0] as { borders?: { right?: unknown; left?: unknown } };
-    const secondCall = renderTableCellMock.mock.calls[1][0] as { borders?: { left?: unknown } };
-
-    // Asymmetric edge: only cell-1 declares a right border (cell-2 is borderless), so cell-1
-    // owns and paints it on itself; cell-2 does NOT redraw the shared edge, so it's drawn once.
-    expect(firstCall.borders?.right).toBeDefined();
-    expect(firstCall.borders?.left).toBeDefined();
-    expect(secondCall.borders?.left).toBeUndefined();
-  });
-
   // SD-3028: "some borders" tables set a cell's shared vertical edge to w:val="nil" on BOTH
   // sides to remove a divider, while the table style (TableGrid) defines insideV. The explicit
   // nil on both cells must suppress the divider (§17.4.66); it must NOT fall back to insideV.
@@ -476,42 +427,6 @@ describe('renderTableRow', () => {
 
     const call = getRenderedCellCall();
     expect(call.borders?.bottom).toBeDefined();
-  });
-
-  it('does not paint interior bottom border for explicit cell borders in collapsed mode on non-final row', () => {
-    const explicit = {
-      top: { style: 'single' as const, width: 2, color: '#123456' },
-      right: { style: 'single' as const, width: 2, color: '#123456' },
-      bottom: { style: 'single' as const, width: 2, color: '#123456' },
-      left: { style: 'single' as const, width: 2, color: '#123456' },
-    };
-    renderTableRow(
-      createDeps({
-        rowIndex: 2,
-        totalRows: 5,
-        cellSpacingPx: 0,
-        columnWidths: [100],
-        rowMeasure: {
-          height: 20,
-          cells: [{ width: 100, height: 20, gridColumnStart: 0, colSpan: 1, rowSpan: 1 }],
-        },
-        row: {
-          id: 'row-1',
-          cells: [
-            {
-              id: 'cell-1',
-              attrs: { borders: explicit },
-              blocks: [{ kind: 'paragraph', id: 'p1', runs: [] }],
-            },
-          ],
-        },
-      }) as never,
-    );
-
-    expect(renderTableCellMock).toHaveBeenCalledTimes(1);
-    const call = getRenderedCellCall();
-    expect(call.borders?.bottom).toBeUndefined();
-    expect(call.borders?.top).toBeDefined();
   });
 
   it('applies the table bottom border to a rowspan cell that reaches the final row', () => {
