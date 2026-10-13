@@ -3630,6 +3630,10 @@ export type TableFragment = {
   continuesOnNext?: boolean;
   repeatHeaderCount?: number;
   partialRow?: PartialRowInfo;
+  /** Content slices for vertically merged cells crossing this fragment's body rows. */
+  mergedCellContent?: Array<{ rowIndex: number; cellIndex: number; fromLine: number; toLine: number }>;
+  /** Sparse row heights extended to fit remaining merged-cell content. */
+  rowHeightOverrides?: Record<number, number>;
   metadata?: TableFragmentMetadata;
   pmStart?: number;
   pmEnd?: number;

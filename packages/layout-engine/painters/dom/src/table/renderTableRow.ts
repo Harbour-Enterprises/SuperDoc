@@ -11,6 +11,7 @@ import type {
   TableBlock,
   TableBorders,
   TableMeasure,
+  TableFragment,
 } from '@superdoc/contracts';
 import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import { renderTableCellWork } from './renderTableCell.js';
@@ -320,6 +321,9 @@ type TableRowRenderDependencies = {
   columnWidths: number[];
   /** All row heights for calculating rowspan cell heights */
   allRowHeights: number[];
+  /** Exclusive end of the body rows rendered in this page fragment. */
+  fragmentEndRow?: number;
+  mergedCellContent?: TableFragment['mergedCellContent'];
   /** Table indent in pixels (applied to table fragment positioning) */
   tableIndent?: number;
   /** Whether the table is visually right-to-left (w:bidiVisual, ECMA-376 §17.4.1) */
@@ -441,6 +445,8 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
     tableBorders,
     columnWidths,
     allRowHeights,
+    fragmentEndRow = allRowHeights.length,
+    mergedCellContent,
     tableIndent,
     isRtl,
     context,
@@ -589,10 +595,15 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
    * calculateRowspanHeight(3, 5) // Returns: 80 (safe - only row 3 exists)
    * ```
    */
-  const calculateRowspanHeight = (startRowIndex: number, rowSpan: number): number => {
+  const calculateRowspanHeight = (
+    startRowIndex: number,
+    rowSpan: number,
+    fragmentEnd = allRowHeights.length,
+  ): number => {
     let totalHeight = 0;
-    for (let i = 0; i < rowSpan && startRowIndex + i < allRowHeights.length; i++) {
-      totalHeight += allRowHeights[startRowIndex + i];
+    const endRow = Math.min(startRowIndex + rowSpan, allRowHeights.length, fragmentEnd);
+    for (let row = startRowIndex; row < endRow; row++) {
+      totalHeight += allRowHeights[row];
     }
     return totalHeight;
   };
@@ -754,19 +765,25 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
 
     // Calculate cell height - use rowspan height if cell spans multiple rows
     // For partial rows, use the partial height instead
+    const mergedSlice = mergedCellContent?.find(
+      (slice) => slice.rowIndex === rowIndex && slice.cellIndex === cellIndex,
+    );
     let cellHeight: number;
     if (partialRow) {
       // Use partial row height for mid-row splits
       cellHeight = partialRow.partialHeight;
     } else if (rowSpan > 1) {
-      cellHeight = calculateRowspanHeight(rowIndex, rowSpan);
+      const spanHeight = calculateRowspanHeight(rowIndex, rowSpan);
+      const fragmentHeight = calculateRowspanHeight(rowIndex, rowSpan, fragmentEndRow);
+      // Keep the existing content budget when merged-content continuation is unavailable.
+      cellHeight = mergedSlice ? fragmentHeight : Math.min(spanHeight, Math.max(fragmentHeight, cellMeasure.height));
     } else {
       cellHeight = rowMeasure.height;
     }
 
     // Get per-cell line range for partial row rendering
-    const fromLine = partialRow?.fromLineByCell?.[cellIndex];
-    const toLine = partialRow?.toLineByCell?.[cellIndex];
+    const fromLine = mergedSlice?.fromLine ?? partialRow?.fromLineByCell?.[cellIndex];
+    const toLine = mergedSlice?.toLine ?? partialRow?.toLineByCell?.[cellIndex];
 
     // Compute cell width from rescaled columnWidths (SD-1859: mixed-orientation docs
     // where cellMeasure.width may reflect landscape measurement but the fragment renders

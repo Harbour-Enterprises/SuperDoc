@@ -15,6 +15,8 @@ import type { ResolvePhysicalFamily } from '@superdoc/font-system';
 import { CLASS_NAMES, fragmentStyles } from '../styles.js';
 import { DOM_CLASS_NAMES } from '../constants.js';
 import type { FragmentRenderContext } from '../renderer.js';
+import { TABLE_ROW_ROLE_ATTRIBUTE } from './row-role.js';
+import { renderTableCellWork } from './renderTableCell.js';
 import { renderTableRowWork } from './renderTableRow.js';
 import {
   applySdtContainerChrome,
@@ -308,7 +310,9 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
       const rowMeasure = measure.rows[r];
       if (!rowMeasure) break;
       const isPartialRow = fragment.partialRow && fragment.partialRow.rowIndex === r;
-      const actualHeight = isPartialRow ? fragment.partialRow!.partialHeight : rowMeasure.height;
+      const actualHeight = isPartialRow
+        ? fragment.partialRow!.partialHeight
+        : (fragment.rowHeightOverrides?.[r] ?? rowMeasure.height);
       renderedRows.push({ rowIndex: r, height: actualHeight });
     }
 
@@ -443,7 +447,7 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
       // Use partial height for the split row
       return fragment.partialRow.partialHeight;
     }
-    return r?.height ?? 0;
+    return fragment.rowHeightOverrides?.[idx] ?? r?.height ?? 0;
   });
 
   // Per-row rightmost occupied grid column (exclusive), INCLUDING cells that span into a row
@@ -571,13 +575,41 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
         const effectiveEnd = Math.min(spanEndRow, fragment.toRow);
         let ghostHeight = 0;
         for (let ri = fragment.fromRow; ri < effectiveEnd; ri++) {
-          ghostHeight += allRowHeights[ri] ?? 0;
+          ghostHeight +=
+            fragment.partialRow?.rowIndex === ri ? fragment.partialRow.partialHeight : (allRowHeights[ri] ?? 0);
         }
 
         if (ghostWidth <= 0 || ghostHeight <= 0) continue;
 
-        // Create ghost cell
-        const ghostDiv = doc.createElement('div');
+        const srcCell = block.rows[r]?.cells?.[ci];
+        const slice = fragment.mergedCellContent?.find((item) => item.rowIndex === r && item.cellIndex === ci);
+        const ghostDiv = slice
+          ? (yield* renderTableCellWork({
+              doc,
+              x: ghostX,
+              y,
+              rowHeight: ghostHeight,
+              cellWidth: ghostWidth,
+              cellMeasure: srcCellMeasure,
+              cell: srcCell,
+              fromLine: slice.fromLine,
+              toLine: slice.toLine,
+              renderLine,
+              captureLineSnapshot,
+              renderDrawingContent,
+              context,
+              applySdtDataset,
+              ancestorContainerKey: nextAncestorContainerKey,
+              ancestorContainerSdt: nextAncestorContainerSdt,
+              ancestorContainerKeys: nextAncestorContainerKeys,
+              ancestorContainerSdts: nextAncestorContainerSdts,
+              onSdtContainerChrome,
+              chrome,
+              resolvePhysical,
+              isRtl,
+            })).cellElement
+          : doc.createElement('div');
+        ghostDiv.setAttribute(TABLE_ROW_ROLE_ATTRIBUTE, 'body');
         ghostDiv.style.position = 'absolute';
         ghostDiv.style.left = `${ghostX}px`;
         ghostDiv.style.top = `${y}px`;
@@ -587,7 +619,6 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
         ghostDiv.style.overflow = 'hidden';
 
         // Resolve borders for the ghost cell
-        const srcCell = block.rows[r]?.cells?.[ci];
         const cellBordersAttr = srcCell?.attrs?.borders;
         const explicit = hasExplicitCellBorders(cellBordersAttr);
         const cellBounds = getTableCellGridBounds({
@@ -599,6 +630,9 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
           totalCols: effectiveColumnWidths.length,
         });
         const cellEndsWithinFragment = effectiveEnd <= fragment.toRow && spanEndRow <= fragment.toRow;
+        // A page break is an outer edge even when the logical merge continues.
+        const touchesFragmentBottom =
+          cellSpacingPx === 0 && spanEndRow >= fragment.toRow && fragment.continuesOnNext === true;
 
         if (tableBorders) {
           // Resolve borders using logical positions
@@ -609,10 +643,13 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
           let rightB =
             (explicit ? cellBordersAttr.right : undefined) ??
             borderValueToSpec(cellBounds.touchesRightEdge ? tableBorders.right : tableBorders.insideV);
-          const bottomB = cellEndsWithinFragment
-            ? ((explicit ? cellBordersAttr.bottom : undefined) ??
-              borderValueToSpec(cellBounds.touchesBottomEdge ? tableBorders.bottom : tableBorders.insideH))
-            : undefined;
+          const bottomB =
+            cellEndsWithinFragment || touchesFragmentBottom
+              ? ((explicit ? cellBordersAttr.bottom : undefined) ??
+                borderValueToSpec(
+                  cellBounds.touchesBottomEdge || touchesFragmentBottom ? tableBorders.bottom : tableBorders.insideH,
+                ))
+              : undefined;
 
           // RTL: swap resolved left↔right so CSS matches visual edges
           if (isRtl) {
@@ -649,7 +686,7 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
     // Check if this row has partial row data (mid-row split)
     const isPartialRow = fragment.partialRow && fragment.partialRow.rowIndex === r;
     const partialRowData = isPartialRow ? fragment.partialRow : undefined;
-    const actualRowHeight = partialRowData ? partialRowData.partialHeight : rowMeasure.height;
+    const actualRowHeight = partialRowData ? partialRowData.partialHeight : allRowHeights[r];
 
     yield* renderTableRowWork({
       doc,
@@ -657,7 +694,8 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
       rowIndex: r,
       rowRole: 'body',
       y,
-      rowMeasure,
+      rowMeasure:
+        fragment.rowHeightOverrides?.[r] !== undefined ? { ...rowMeasure, height: allRowHeights[r] } : rowMeasure,
       row: block.rows[r],
       prevRow: r > 0 ? block.rows[r - 1] : undefined,
       prevRowMeasure: r > 0 ? measure.rows[r - 1] : undefined,
@@ -669,6 +707,8 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
       tableBorders,
       columnWidths: effectiveColumnWidths,
       allRowHeights,
+      fragmentEndRow: fragment.toRow,
+      mergedCellContent: fragment.mergedCellContent,
       tableIndent,
       isRtl,
       context,

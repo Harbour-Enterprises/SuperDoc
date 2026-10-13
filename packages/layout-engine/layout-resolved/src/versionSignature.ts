@@ -813,7 +813,7 @@ const tableBorderDependencyRows = (painted: readonly number[], rowCount: number)
 };
 
 const renderedTableRowIndices = (fragment: TableFragment, rowCount: number): number[] => {
-  const indices = new Set<number>();
+  const indices = new Set<number>(fragment.mergedCellContent?.map((slice) => slice.rowIndex));
   const repeatHeaderCount = Math.min(fragment.repeatHeaderCount ?? 0, rowCount);
   for (let rowIndex = 0; rowIndex < repeatHeaderCount; rowIndex += 1) indices.add(rowIndex);
   const fromRow = Math.max(0, fragment.fromRow);
@@ -992,14 +992,21 @@ export const deriveTableFragmentPmInteriorVersion = (block: TableBlock, fragment
     return derivePmInteriorVersionFromPositions(positions);
   };
   const repeatHeaderCount = Math.min(fragment.repeatHeaderCount ?? 0, block.rows.length);
-  const bodyRowIndices: number[] = [];
+  const bodyRowIndices: number[] = [
+    ...new Set(
+      (fragment.mergedCellContent ?? [])
+        .map((slice) => slice.rowIndex)
+        .filter((rowIndex) => rowIndex >= repeatHeaderCount && rowIndex < block.rows.length),
+    ),
+  ];
   for (
     let rowIndex = Math.max(0, fragment.fromRow);
     rowIndex < Math.min(fragment.toRow, block.rows.length);
     rowIndex += 1
   ) {
-    bodyRowIndices.push(rowIndex);
+    if (!bodyRowIndices.includes(rowIndex)) bodyRowIndices.push(rowIndex);
   }
+  bodyRowIndices.sort((a, b) => a - b);
   const bodyVersion = collectRows(bodyRowIndices);
   if (repeatHeaderCount === 0) return bodyVersion;
 
@@ -1077,6 +1084,8 @@ export const fragmentSignature = (fragment: Fragment, blockVersion: string): str
       fragment.continuesOnNext ? 1 : 0,
       fragment.repeatHeaderCount ?? 0,
       partialSig,
+      stableSerializeEvidenceValue(fragment.mergedCellContent),
+      stableSerializeEvidenceValue(fragment.rowHeightOverrides),
     ].join('|');
   }
   return blockVersion;

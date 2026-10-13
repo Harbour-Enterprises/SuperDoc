@@ -104,6 +104,171 @@ describe('renderTableFragment', () => {
     };
   });
 
+  it.each(['inherited', 'explicit', 'none'] as const)(
+    'closes a merged continuation at the page edge with %s bottom borders',
+    (border) => {
+      const block = createTestTableBlock();
+      block.attrs = {
+        borders: {
+          bottom: { style: 'single', width: 2, color: '#334455' },
+          insideH: { style: 'single', width: 1, color: '#998877' },
+        },
+      };
+      block.rows = Array.from({ length: 6 }, (_, index) => ({
+        id: `row-${index}` as BlockId,
+        cells:
+          index === 0
+            ? [
+                {
+                  ...createTestTableBlock().rows[0].cells[0],
+                  attrs: {
+                    rowspan: 6,
+                    ...(border === 'inherited'
+                      ? {}
+                      : {
+                          borders: {
+                            bottom: { style: border === 'none' ? 'none' : 'single', width: 3, color: '#AABBCC' },
+                          },
+                        }),
+                  },
+                },
+              ]
+            : [],
+      }));
+      const measure = createTestTableMeasure();
+      measure.totalHeight = 120;
+      measure.rows = Array.from({ length: 6 }, (_, index) => ({
+        height: 20,
+        cells: index === 0 ? [{ ...measure.rows[0].cells[0], rowSpan: 6, gridColumnStart: 0 }] : [],
+      }));
+      const element = renderTableFragment({
+        doc,
+        fragment: {
+          ...createTestTableFragment(),
+          fromRow: 2,
+          toRow: 4,
+          height: 40,
+          continuesFromPrev: true,
+          continuesOnNext: true,
+        },
+        context,
+        block,
+        measure,
+        cellSpacingPx: 0,
+        effectiveColumnWidths: measure.columnWidths,
+        renderLine: () => doc.createElement('div'),
+        applyFragmentFrame: () => {},
+        applySdtDataset: () => {},
+        applyStyles: () => {},
+      });
+      const cell = element.querySelector<HTMLElement>('[data-superdoc-table-row-role="body"]')!;
+      expect(cell.style.height).toBe('40px');
+      expect(cell.style.borderBottomStyle).toBe(border === 'none' ? 'none' : 'solid');
+      if (border !== 'none') {
+        expect(cell.style.borderBottomWidth).toBe(border === 'inherited' ? '2px' : '3px');
+        const expectedColor = doc.createElement('div');
+        expectedColor.style.color = border === 'inherited' ? '#334455' : '#AABBCC';
+        expect(cell.style.borderBottomColor).toBe(expectedColor.style.color);
+      }
+    },
+  );
+
+  it.each([false, true])('bounds merged origin and continuation cells to rendered rows (partial=%s)', (partial) => {
+    const block: TableBlock = {
+      kind: 'table',
+      id: 'merged' as BlockId,
+      rows: Array.from({ length: 4 }, (_, row) => ({
+        id: `row-${row}` as BlockId,
+        cells: (row === 0 ? [0, 1] : [1]).map((column) => ({
+          id: `cell-${row}-${column}` as BlockId,
+          paragraph: { kind: 'paragraph' as const, id: `p-${row}-${column}` as BlockId, runs: [] },
+          ...(column === 0 ? { attrs: { rowspan: 4, background: '#D9E2F3' } } : {}),
+        })),
+      })),
+    };
+    const measure: TableMeasure = {
+      kind: 'table',
+      columnWidths: [100, 100],
+      totalWidth: 200,
+      totalHeight: 80,
+      rows: block.rows.map((row, index) => ({
+        height: 20,
+        cells: row.cells.map((_cell, cellIndex) => ({
+          width: 100,
+          height: 20,
+          gridColumnStart: index === 0 ? cellIndex : 1,
+          colSpan: 1,
+          rowSpan: index === 0 && cellIndex === 0 ? 4 : 1,
+          paragraph: { kind: 'paragraph' as const, lines: [], totalHeight: 20 },
+        })),
+      })),
+    };
+    const render = (fragment: TableFragment) =>
+      renderTableFragment({
+        doc,
+        fragment,
+        context,
+        block,
+        measure,
+        cellSpacingPx: 0,
+        effectiveColumnWidths: measure.columnWidths,
+        renderLine: () => doc.createElement('div'),
+        applyFragmentFrame: () => {},
+        applySdtDataset: () => {},
+        applyStyles: () => {},
+      });
+    const height = partial ? 30 : 40;
+    const first: TableFragment = {
+      kind: 'table',
+      blockId: block.id,
+      fromRow: 0,
+      toRow: 2,
+      x: 0,
+      y: 0,
+      width: 200,
+      height,
+      continuesOnNext: true,
+      ...(partial
+        ? {
+            partialRow: {
+              rowIndex: 1,
+              partialHeight: 10,
+              fromLineByCell: [0],
+              toLineByCell: [-1],
+              isFirstPart: true,
+              isLastPart: false,
+            },
+          }
+        : {}),
+    };
+    expect(render(first).querySelector<HTMLElement>('[data-superdoc-table-row-role]')!.style.height).toBe(
+      `${height}px`,
+    );
+    const last = render({
+      ...first,
+      fromRow: 2,
+      toRow: 4,
+      height: 40,
+      partialRow: undefined,
+      continuesFromPrev: true,
+      continuesOnNext: false,
+    });
+    expect(last.firstElementChild?.getAttribute('style')).toContain('height: 40px');
+    expect(
+      render({
+        ...first,
+        toRow: 4,
+        height: 80,
+        partialRow: undefined,
+        continuesOnNext: false,
+      }).querySelector<HTMLElement>('[data-superdoc-table-row-role]')!.style.height,
+    ).toBe('80px');
+    // Content taller than the local fragment keeps its existing paint budget
+    // until pagination provides merged-content continuation.
+    measure.rows[0].cells[0].height = 60;
+    expect(render(first).querySelector<HTMLElement>('[data-superdoc-table-row-role]')!.style.height).toBe('60px');
+  });
+
   it('writes PM range attributes on the table fragment wrapper', () => {
     const fragment = {
       ...createTestTableFragment(),

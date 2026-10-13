@@ -19,7 +19,12 @@ import {
 } from '@superdoc/contracts';
 import { breakParagraphAdjacency, type PageState } from './paginator.js';
 import { computeFragmentPmRange, extractBlockPmRange } from './layout-utils.js';
-import { describeCellRenderBlocks, createCellSliceCursor, computeFullCellContentHeight } from './table-cell-slice.js';
+import {
+  describeCellRenderBlocks,
+  createCellSliceCursor,
+  computeFullCellContentHeight,
+  computeCellSliceContentHeight,
+} from './table-cell-slice.js';
 import { isAnchoredTableFullWidth } from './floating-table-anchor.js';
 
 export { ANCHORED_TABLE_FULL_WIDTH_RATIO, isAnchoredTableFullWidth } from './floating-table-anchor.js';
@@ -42,6 +47,8 @@ export type TableLayoutCursor = {
   pendingPartialRow: PartialRowInfo | null;
   samePagePartialContinuation: boolean;
   retryWithoutHeaders: boolean;
+  mergedCellProgress?: Record<string, number>;
+  rowHeightOverrides?: Record<number, number>;
 };
 
 export type TableLayoutStep = {
@@ -61,6 +68,8 @@ const clonePartialRow = (partialRow: PartialRowInfo | null): PartialRowInfo | nu
 const cloneTableLayoutCursor = (cursor: TableLayoutCursor): TableLayoutCursor => ({
   ...cursor,
   pendingPartialRow: clonePartialRow(cursor.pendingPartialRow),
+  mergedCellProgress: { ...cursor.mergedCellProgress },
+  rowHeightOverrides: { ...cursor.rowHeightOverrides },
 });
 
 /**
@@ -1024,6 +1033,13 @@ function computeTableFragmentPmRange(
  */
 function applyTableFragmentPmRange(fragment: TableFragment, block: TableBlock, measure: TableMeasure): void {
   const range = computeTableFragmentPmRange(block, measure, fragment.fromRow, fragment.toRow, fragment.partialRow);
+  for (const slice of fragment.mergedCellContent ?? []) {
+    if (slice.fromLine === slice.toLine) continue;
+    const mergedRange = computeTableFragmentPmRange(block, measure, slice.rowIndex, slice.rowIndex + 1);
+    if (mergedRange.pmStart != null)
+      range.pmStart = Math.min(range.pmStart ?? mergedRange.pmStart, mergedRange.pmStart);
+    if (mergedRange.pmEnd != null) range.pmEnd = Math.max(range.pmEnd ?? mergedRange.pmEnd, mergedRange.pmEnd);
+  }
   if (range.pmStart != null) {
     fragment.pmStart = range.pmStart;
   }
@@ -1204,6 +1220,7 @@ function findSplitPoint(
   availableHeight: number,
   fullPageHeight?: number,
   _pendingPartialRow?: PartialRowInfo | null,
+  includeMergedTails?: (partial: PartialRowInfo, startRow: number, budget: number, fullPageHeight?: number) => boolean,
 ): SplitPointResult {
   let lastFitRow = startRow; // Last row that fit completely (exclusive end index)
   const borderCollapse = block.attrs?.borderCollapse ?? (block.attrs?.cellSpacing != null ? 'separate' : 'collapse');
@@ -1260,6 +1277,7 @@ function findSplitPoint(
       // This handles edge case where a row is taller than an entire page
       if (fullPageHeight && rowHeight > fullPageHeight) {
         const partialRow = computePartialRow(i, block.rows[i], measure, remainingHeight, undefined, fullPageHeight);
+        includeMergedTails?.(partialRow, startRow, remainingHeight, fullPageHeight);
         return { endRow: i + 1, partialRow };
       }
 
@@ -1279,9 +1297,12 @@ function findSplitPoint(
         const partialRow = computePartialRow(i, block.rows[i], measure, remainingHeight, undefined, fullPageHeight);
 
         // Check if we can actually fit any lines
-        const hasContent = partialRow.toLineByCell.some(
-          (cutLine: number, idx: number) => cutLine > (partialRow.fromLineByCell[idx] || 0),
-        );
+        const mergedProgress = includeMergedTails?.(partialRow, startRow, remainingHeight, fullPageHeight) ?? false;
+        const hasContent =
+          mergedProgress ||
+          partialRow.toLineByCell.some(
+            (cutLine: number, idx: number) => cutLine > (partialRow.fromLineByCell[idx] || 0),
+          );
 
         if (hasContent) {
           // We can fit some content - do mid-row split
@@ -1421,6 +1442,73 @@ function layoutMonolithicTable(context: TableLayoutContext): void {
   state.maxCursorY = Math.max(state.maxCursorY, state.cursorY);
 }
 
+type MergedCellSource = { rowIndex: number; cellIndex: number; spanEnd: number };
+
+// Twip padding and reserved row sums can round an exact content budget down.
+// Keep that arithmetic noise from dropping the final merged line.
+const MERGED_CELL_FIT_EPSILON = 1e-7;
+
+function indexMergedCells(measure: TableMeasure): MergedCellSource[] {
+  const cells: MergedCellSource[] = [];
+  measure.rows.forEach((row, rowIndex) =>
+    row.cells.forEach((cell, cellIndex) => {
+      const rowSpan = cell.rowSpan ?? 1;
+      if (rowSpan > 1 && !cell.verticalText)
+        cells.push({ rowIndex, cellIndex, spanEnd: Math.min(measure.rows.length, rowIndex + rowSpan) });
+    }),
+  );
+  return cells;
+}
+
+/** Allocate merged-cell lines using the same rendered-height fitter as partial rows. */
+function sliceMergedCellContent(
+  fragment: TableFragment,
+  block: TableBlock,
+  measure: TableMeasure,
+  progress: Record<string, number>,
+  mergedCells: MergedCellSource[],
+  rowHeightOverrides: Record<number, number>,
+  fullPageHeight?: number,
+): void {
+  if (Object.keys(rowHeightOverrides).length > 0) fragment.rowHeightOverrides = { ...rowHeightOverrides };
+  const slices: NonNullable<TableFragment['mergedCellContent']> = [];
+  const headerCount = fragment.repeatHeaderCount ?? 0;
+  for (const { rowIndex, cellIndex, spanEnd } of mergedCells) {
+    if (rowIndex < headerCount || rowIndex >= fragment.toRow || spanEnd <= fragment.fromRow) continue;
+    const row = measure.rows[rowIndex];
+    const key = `${rowIndex}:${cellIndex}`;
+    if (spanEnd <= fragment.toRow && progress[key] === undefined && !fragment.partialRow) continue;
+    let height = 0;
+    for (let r = Math.max(rowIndex, fragment.fromRow); r < Math.min(spanEnd, fragment.toRow); r++) {
+      height += fragment.partialRow?.rowIndex === r ? fragment.partialRow.partialHeight : measure.rows[r].height;
+    }
+    const fromLine =
+      progress[key] ??
+      (fragment.partialRow?.rowIndex === rowIndex ? fragment.partialRow.fromLineByCell[cellIndex] : 0) ??
+      0;
+    let toLine: number;
+    if (fragment.partialRow?.rowIndex === rowIndex) {
+      toLine = fragment.partialRow.toLineByCell[cellIndex];
+    } else {
+      const starts = row.cells.map((_, index) => (index === cellIndex ? fromLine : 0));
+      const padding = getCellPadding(cellIndex, block.rows[rowIndex]);
+      const fullContentPageHeight =
+        fullPageHeight == null ? undefined : Math.max(0, fullPageHeight - padding.top - padding.bottom);
+      toLine = computePartialRow(
+        rowIndex,
+        block.rows[rowIndex],
+        measure,
+        height + MERGED_CELL_FIT_EPSILON,
+        starts,
+        fullContentPageHeight,
+      ).toLineByCell[cellIndex];
+    }
+    slices.push({ rowIndex, cellIndex, fromLine, toLine });
+    progress[key] = toLine;
+  }
+  if (slices.length > 0) fragment.mergedCellContent = slices;
+}
+
 /**
  * Layout a table block with row-boundary and mid-row splitting.
  *
@@ -1476,6 +1564,12 @@ export function* layoutTableBlockSteps({
     return;
   }
 
+  const mergedCells = indexMergedCells(measure);
+  const rowHeightOverrides = { ...resumeCursor?.rowHeightOverrides };
+  measure = {
+    ...measure,
+    rows: measure.rows.map((row, index) => ({ ...row, height: rowHeightOverrides[index] ?? row.height })),
+  };
   const generateMetadata = createFragmentMetadataGenerator(measure, block);
 
   // 2. Count header rows. A header row's cell may vertically merge (rowSpan)
@@ -1566,6 +1660,7 @@ export function* layoutTableBlockSteps({
     }
   }
 
+  const mergedCellProgress = { ...resumeCursor?.mergedCellProgress };
   let currentRow = resumeCursor?.currentRow ?? 0;
   let isTableContinuation = resumeCursor?.isTableContinuation ?? false;
   let pendingPartialRow: PartialRowInfo | null = clonePartialRow(resumeCursor?.pendingPartialRow ?? null);
@@ -1596,6 +1691,7 @@ export function* layoutTableBlockSteps({
       columnWidths,
       sourceAnchor: block.sourceAnchor,
     };
+    sliceMergedCellContent(fragment, block, measure, mergedCellProgress, mergedCells, rowHeightOverrides);
     applyTableFragmentPmRange(fragment, block, measure);
     onFragmentStart?.(state, {
       currentRow,
@@ -1633,8 +1729,70 @@ export function* layoutTableBlockSteps({
   // with zero content height.
   let retryWithoutHeaders = resumeCursor?.retryWithoutHeaders ?? false;
 
+  // A final span row must remain pending while its merged origin still has lines.
+  // Fit the origin over the whole fragment, including preceding full rows, so
+  // padding and block spacing are charged once for the painted merged cell.
+  const includeMergedTails = (
+    partial: PartialRowInfo,
+    startRow: number,
+    budget: number,
+    fullPageHeight?: number,
+  ): boolean => {
+    let madeProgress = false;
+    for (const { rowIndex, cellIndex, spanEnd } of mergedCells) {
+      if (rowIndex >= partial.rowIndex || spanEnd !== partial.rowIndex + 1) continue;
+      const fromLine = mergedCellProgress[`${rowIndex}:${cellIndex}`] ?? 0;
+      const cell = measure.rows[rowIndex].cells[cellIndex];
+      const totalLines = getCellTotalLines(cell);
+      if (fromLine >= totalLines) continue;
+      const precedingHeight = sumRowHeights(measure.rows, Math.max(rowIndex, startRow), partial.rowIndex);
+      const starts = measure.rows[rowIndex].cells.map((_, index) => (index === cellIndex ? fromLine : 0));
+      const padding = getCellPadding(cellIndex, block.rows[rowIndex]);
+      const fullContentPageHeight =
+        fullPageHeight == null ? undefined : Math.max(0, fullPageHeight - padding.top - padding.bottom);
+      const fitted = computePartialRow(
+        rowIndex,
+        block.rows[rowIndex],
+        measure,
+        precedingHeight + budget + MERGED_CELL_FIT_EPSILON,
+        starts,
+        fullContentPageHeight,
+      );
+      const toLine = fitted.toLineByCell[cellIndex];
+      if (toLine > fromLine) {
+        madeProgress = true;
+        const blocks = describeCellRenderBlocks(cell, block.rows[rowIndex].cells[cellIndex], padding);
+        const paintedHeight = computeCellSliceContentHeight(blocks, fromLine, toLine) + padding.top + padding.bottom;
+        partial.partialHeight = Math.max(
+          partial.partialHeight,
+          Math.min(paintedHeight, precedingHeight + budget) - precedingHeight,
+        );
+      }
+      if (toLine < totalLines) partial.isLastPart = false;
+    }
+    return madeProgress;
+  };
+
   // 4. Loop until all rows processed (including pending partial rows)
   while (currentRow < block.rows.length || pendingPartialRow !== null) {
+    // Page slicing consumes padding and can leave less than one line unused.
+    // Reserve the remaining content at the merge's final row before fitting it.
+    for (const { rowIndex, cellIndex, spanEnd } of mergedCells) {
+      const fromLine = mergedCellProgress[`${rowIndex}:${cellIndex}`];
+      if (fromLine === undefined || rowIndex >= currentRow || spanEnd <= currentRow) continue;
+      const padding = getCellPadding(cellIndex, block.rows[rowIndex]);
+      const cell = measure.rows[rowIndex].cells[cellIndex];
+      if (fromLine >= getCellTotalLines(cell)) continue;
+      const blocks = describeCellRenderBlocks(cell, block.rows[rowIndex].cells[cellIndex], padding);
+      const remaining =
+        computeCellSliceContentHeight(blocks, fromLine, getCellTotalLines(cell)) + padding.top + padding.bottom;
+      const available = sumRowHeights(measure.rows, currentRow, spanEnd);
+      if (remaining > available) {
+        const lastRow = spanEnd - 1;
+        measure.rows[lastRow].height += remaining - available;
+        rowHeightOverrides[lastRow] = measure.rows[lastRow].height;
+      }
+    }
     state = ensurePage();
     const availableHeight = state.contentBottom - state.cursorY;
     const fragmentCursor = cloneTableLayoutCursor({
@@ -1643,6 +1801,8 @@ export function* layoutTableBlockSteps({
       pendingPartialRow,
       samePagePartialContinuation,
       retryWithoutHeaders,
+      mergedCellProgress,
+      rowHeightOverrides,
     });
 
     // Determine repeat header count for this fragment
@@ -1723,21 +1883,29 @@ export function* layoutTableBlockSteps({
         fullPageHeightForBody,
       );
 
-      const madeProgress = continuationPartialRow.toLineByCell.some(
-        (toLine: number, idx: number) => toLine > (fromLineByCell[idx] || 0),
+      const mergedProgress = includeMergedTails(
+        continuationPartialRow,
+        rowIndex,
+        availableForBody,
+        fullPageHeightForBody,
       );
+      const madeProgress =
+        mergedProgress ||
+        continuationPartialRow.toLineByCell.some((toLine: number, idx: number) => toLine > (fromLineByCell[idx] || 0));
 
-      const hasRemainingLinesAfterContinuation = continuationPartialRow.toLineByCell.some(
-        (toLine: number, idx: number) => {
+      const hasRemainingLinesAfterContinuation =
+        !continuationPartialRow.isLastPart ||
+        continuationPartialRow.toLineByCell.some((toLine: number, idx: number) => {
           const totalLines = getCellTotalLines(measure.rows[rowIndex].cells[idx]);
           return toLine < totalLines;
-        },
-      );
+        });
 
-      const hadRemainingLinesBefore = fromLineByCell.some((fromLine: number, idx: number) => {
-        const totalLines = getCellTotalLines(measure.rows[rowIndex].cells[idx]);
-        return fromLine < totalLines;
-      });
+      const hadRemainingLinesBefore =
+        !pendingPartialRow.isLastPart ||
+        fromLineByCell.some((fromLine: number, idx: number) => {
+          const totalLines = getCellTotalLines(measure.rows[rowIndex].cells[idx]);
+          return fromLine < totalLines;
+        });
 
       const fragmentHeight = computeFragmentHeight(
         measure,
@@ -1775,6 +1943,15 @@ export function* layoutTableBlockSteps({
           sourceAnchor: block.sourceAnchor,
         };
 
+        sliceMergedCellContent(
+          fragment,
+          block,
+          measure,
+          mergedCellProgress,
+          mergedCells,
+          rowHeightOverrides,
+          fullPageHeightForBody,
+        );
         applyTableFragmentPmRange(fragment, block, measure);
         onFragmentStart?.(state, fragmentCursor);
         state.page.fragments.push(fragment);
@@ -1823,6 +2000,8 @@ export function* layoutTableBlockSteps({
       bodyStartRow,
       availableForBody,
       fullPageHeightForBody,
+      undefined,
+      includeMergedTails,
     );
 
     // If no rows fit and page has content, advance
@@ -1846,7 +2025,13 @@ export function* layoutTableBlockSteps({
       // Guard against zero-line-progress fragments. With block-aware height,
       // spacing alone can exceed available space. If no lines were rendered,
       // creating a fragment would cause an infinite loop of blank fragments.
-      const forcedMadeProgress = forcedPartialRow.toLineByCell.some((cutLine: number) => cutLine > 0);
+      const mergedProgress = includeMergedTails(
+        forcedPartialRow,
+        bodyStartRow,
+        availableForBody,
+        fullPageHeightForBody,
+      );
+      const forcedMadeProgress = mergedProgress || forcedPartialRow.toLineByCell.some((cutLine: number) => cutLine > 0);
       if (!forcedMadeProgress) {
         if (repeatHeaderCount > 0) {
           // Headers consumed the body budget. Retry this page without headers.
@@ -1891,6 +2076,15 @@ export function* layoutTableBlockSteps({
         sourceAnchor: block.sourceAnchor,
       };
 
+      sliceMergedCellContent(
+        fragment,
+        block,
+        measure,
+        mergedCellProgress,
+        mergedCells,
+        rowHeightOverrides,
+        fullPageHeightForBody,
+      );
       applyTableFragmentPmRange(fragment, block, measure);
       onFragmentStart?.(state, fragmentCursor);
       state.page.fragments.push(fragment);
@@ -1937,6 +2131,15 @@ export function* layoutTableBlockSteps({
       sourceAnchor: block.sourceAnchor,
     };
 
+    sliceMergedCellContent(
+      fragment,
+      block,
+      measure,
+      mergedCellProgress,
+      mergedCells,
+      rowHeightOverrides,
+      fullPageHeightForBody,
+    );
     applyTableFragmentPmRange(fragment, block, measure);
     onFragmentStart?.(state, fragmentCursor);
     state.page.fragments.push(fragment);
