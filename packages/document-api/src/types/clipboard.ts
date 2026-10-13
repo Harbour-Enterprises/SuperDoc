@@ -264,6 +264,8 @@ export interface SDPasteTableCell {
   blocks: readonly SDPasteParagraphBlock[];
   /** Horizontal merge span (colspan). */
   gridSpan?: number;
+  /** Vertical merge carrier: start a merged cell or continue the preceding row's merge. */
+  vMerge?: 'restart' | 'continue';
   /** Direct cell shading fill as canonical hex RRGGBB. */
   shadingColor?: string;
   /** Direct cell padding in points. At least one side must be present. */
@@ -302,6 +304,12 @@ export interface SDPasteTableBlock {
   blockSdts?: readonly SDPasteBlockSdt[];
   /** Direct between-cell spacing in points (not cell padding). */
   cellSpacingPt?: number;
+  /**
+   * Positive finite relative shares for the table's grid columns. The shares
+   * scale to the destination section's content width, rather than source page
+   * dimensions. One share is required per grid column when supplied.
+   */
+  columnWidthShares?: readonly number[];
   rows: readonly SDPasteTableRow[];
   sourcePath?: readonly (string | number)[];
 }
