@@ -61,7 +61,7 @@ export interface Query {
   offset?: number;
   /**
    * Cardinality requirement for the result set.
-   * Used for future enforcement: currently passed through without behavioral change.
+   * `any` permits no matches; `all` and `exactlyOne` fail when there are no matches.
    */
   require?: 'any' | 'first' | 'exactlyOne' | 'all';
   /**
