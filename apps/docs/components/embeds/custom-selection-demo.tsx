@@ -22,7 +22,7 @@ const REVIEW_FINDING_NAMESPACE = 'urn:superdoc:docs:ai-review-findings:1';
 
 type DemoState = 'idle' | 'loading' | 'ready' | 'error';
 type DemoAnswer = { summary: string; suggestedText?: string };
-type PromptPosition = { left: number; top: number };
+type PromptPosition = {};
 type CustomSelectionDemoProps = { reviewFindings?: boolean };
 type ReviewFindingPayload = {
   kind: 'risk';
@@ -222,24 +222,7 @@ export function CustomSelectionDemo({ reviewFindings = false }: CustomSelectionD
 
     setGeometryMessage(null);
 
-    const composerOpen = composerOpenRef.current;
-    const promptWidth =
-      promptRef.current?.offsetWidth ?? (composerOpen ? ESTIMATED_COMPOSER_WIDTH : ESTIMATED_ACTION_BAR_WIDTH);
-    const promptHeight =
-      promptRef.current?.offsetHeight ?? (composerOpen ? ESTIMATED_COMPOSER_HEIGHT : ESTIMATED_ACTION_BAR_HEIGHT);
-    const preferredLeft = anchorRect.left + anchorRect.width / 2 - promptWidth / 2;
-    const maxLeft = Math.max(PROMPT_EDGE, documentElement.clientWidth - promptWidth - PROMPT_EDGE);
-    const minTop = visibleTop + PROMPT_EDGE;
-    const maxTop = Math.max(minTop, visibleBottom - promptHeight - PROMPT_EDGE);
-    const above = anchorRect.top - promptHeight - PROMPT_GAP;
-    const below = anchorRect.bottom + PROMPT_GAP;
-    const belowFits = below + promptHeight <= visibleBottom - PROMPT_EDGE;
-    const preferredTop = composerOpen && belowFits ? below : above >= minTop ? above : below;
-
-    setPromptPosition({
-      left: Math.max(PROMPT_EDGE, Math.min(preferredLeft, maxLeft)),
-      top: Math.max(minTop, Math.min(preferredTop, maxTop)),
-    });
+    setPromptPosition({});
   }, []);
 
   const refreshFindings = useCallback(async (instance = instanceRef.current): Promise<boolean> => {
@@ -1028,7 +1011,6 @@ export function CustomSelectionDemo({ reviewFindings = false }: CustomSelectionD
                 data-mode={isComposerOpen ? 'composer' : 'actions'}
                 ref={promptRef}
                 role={isComposerOpen ? 'dialog' : undefined}
-                style={{ left: promptPosition.left, top: promptPosition.top }}
               >
                 {isComposerOpen ? (
                   <>

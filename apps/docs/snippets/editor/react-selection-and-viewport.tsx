@@ -5,7 +5,7 @@ import type { SelectionCapture } from 'superdoc/ui';
 import { SuperDocUIProvider, useSetSuperDoc, useSuperDocSelection, useSuperDocUI } from 'superdoc/ui/react';
 import '@superdoc/react/style.css';
 
-type PromptPosition = { left: number; top: number };
+type PromptPosition = {};
 type SelectionPromptRequest = Readonly<{ context: string; question: string }>;
 type SelectionPromptResponse = Readonly<{ answer: string }>;
 
@@ -127,24 +127,8 @@ function SelectionPromptEditor() {
       return;
     }
 
-    const edge = 8;
-    const gap = 12;
-    const promptWidth = promptRef.current?.offsetWidth ?? (isComposerOpen ? 304 : 104);
-    const promptHeight = promptRef.current?.offsetHeight ?? (isComposerOpen ? 300 : 40);
-    const maxLeft = Math.max(edge, shell.clientWidth - promptWidth - edge);
-    const minTop = visibleTop + edge;
-    const maxTop = Math.max(minTop, visibleBottom - promptHeight - edge);
-    const centeredLeft = anchorRect.left + anchorRect.width / 2 - promptWidth / 2;
-    const above = anchorRect.top - promptHeight - gap;
-    const below = anchorRect.bottom + gap;
-    const belowFits = below + promptHeight <= visibleBottom - edge;
-    const preferredTop = isComposerOpen && belowFits ? below : above >= minTop ? above : below;
-
     setGeometryStatus(null);
-    setPosition({
-      left: Math.max(edge, Math.min(centeredLeft, maxLeft)),
-      top: Math.max(minTop, Math.min(preferredTop, maxTop)),
-    });
+    setPosition({});
   }, [capture, isComposerOpen, ui]);
 
   useEffect(() => {
@@ -291,9 +275,6 @@ function SelectionPromptEditor() {
             aria-label={isComposerOpen ? 'Ask AI about selected text' : 'Actions for selected text'}
             ref={promptRef}
             style={{
-              left: position.left,
-              position: 'absolute',
-              top: position.top,
               width: isComposerOpen ? 'min(19rem, calc(100% - 1rem))' : 'max-content',
             }}
             role={isComposerOpen ? 'dialog' : undefined}

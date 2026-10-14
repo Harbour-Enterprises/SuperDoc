@@ -66,21 +66,45 @@ stabilize_github_apt_mirrors() {
   if [ "${GITHUB_ACTIONS:-}" != "true" ] || [ ! -f "${apt_mirror_file}" ]; then
     return 0
   fi
-  if ! grep -qF 'azure.archive.ubuntu.com' "${apt_mirror_file}"; then
+  local has_canonical=false
+  if grep -Eq '^[[:space:]]*https?://(archive|security)\.ubuntu\.com/ubuntu/([[:space:]]|$)' "${apt_mirror_file}"; then
+    has_canonical=true
+  fi
+  if ! grep -qF 'azure.archive.ubuntu.com' "${apt_mirror_file}" && [ "${has_canonical}" != true ]; then
     return 0
   fi
-  if ! grep -Eq 'https?://((archive|security)\.ubuntu\.com|mirrors\.edge\.kernel\.org)/ubuntu/' "${apt_mirror_file}"; then
+  if ! grep -Eq '^[[:space:]]*https?://((archive|security)\.ubuntu\.com|mirrors\.edge\.kernel\.org)/ubuntu/([[:space:]]|$)' "${apt_mirror_file}"; then
     echo "::warning::Azure apt mirror is configured without a known Ubuntu fallback; leaving it unchanged."
     return 0
   fi
 
   local filtered_mirrors
   filtered_mirrors="$(mktemp)"
-  awk '!/azure\.archive\.ubuntu\.com/' "${apt_mirror_file}" |
-    sed -E 's#http://(archive\.ubuntu\.com|security\.ubuntu\.com|mirrors\.edge\.kernel\.org)/ubuntu/#https://\1/ubuntu/#g' > "${filtered_mirrors}"
+  # A responding but slow mirror does not trigger apt's connection timeout.
+  # Prefer the canonical archives and retain kernel.org as a lower-priority fallback.
+  awk -v canonical="${has_canonical}" '
+    function with_priority(line, priority) {
+      if (match(line, /[[:space:]]priority:[^[:space:]]+/)) {
+        return substr(line, 1, RSTART) "priority:" priority substr(line, RSTART + RLENGTH)
+      }
+      return line (index(line, "\t") ? " " : "\t") "priority:" priority
+    }
+    {
+      uri = $1
+      if (uri ~ /^https?:\/\/azure\.archive\.ubuntu\.com\/ubuntu\/$/) next
+      line = $0
+      if (uri ~ /^https?:\/\/((archive|security)\.ubuntu\.com|mirrors\.edge\.kernel\.org)\/ubuntu\/$/) {
+        sub(/http:\/\//, "https://", line)
+        if (canonical == "true") {
+          line = with_priority(line, uri ~ /\/\/(archive|security)\.ubuntu\.com\// ? 1 : 2)
+        }
+      }
+      print line
+    }
+  ' "${apt_mirror_file}" > "${filtered_mirrors}"
   sudo cp "${filtered_mirrors}" "${apt_mirror_file}"
   rm -f "${filtered_mirrors}"
-  echo "::notice::Bypassing the unhealthy Azure apt mirror; using HTTPS Ubuntu fallbacks."
+  echo "::notice::Using HTTPS Ubuntu fallbacks with canonical archives preferred over kernel.org."
 }
 
 select_active_ubuntu_mirror_file() {
