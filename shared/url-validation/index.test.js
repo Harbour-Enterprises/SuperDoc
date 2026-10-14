@@ -76,6 +76,16 @@ describe('url-validation', () => {
       expect(result).toEqual({ href: '#section-1', protocol: null, isExternal: false });
     });
 
+    it('preserves equals in imported bookmark fragment destinations', () => {
+      expect(sanitizeHref('#_heading=h198104667')).toEqual({
+        href: '#_heading=h198104667',
+        protocol: null,
+        isExternal: false,
+      });
+      expect(sanitizeHref('#bad=\" onclick=\"alert(1)')).toBeNull();
+      expect(sanitizeHref('#bad=<script>')).toBeNull();
+    });
+
     it('SECURITY: rejects anchors with colons to prevent ambiguity', () => {
       // Colons removed from ANCHOR_NAME_PATTERN to align with DOM painter
       expect(sanitizeHref('#section:1')).toBeNull();

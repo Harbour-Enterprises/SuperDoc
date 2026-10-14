@@ -193,7 +193,7 @@ export const isValidImageDataUrl = (src) => {
 export const DEFAULT_TOOLTIP_MAX_LENGTH = 500;
 // SECURITY: Anchor names must only contain safe characters to prevent HTML attribute injection
 // Removed colon (:) to align with DOM painter's SAFE_ANCHOR_PATTERN and prevent ambiguity
-const ANCHOR_NAME_PATTERN = /^[A-Za-z0-9._-]+$/;
+const ANCHOR_NAME_PATTERN = /^[A-Za-z0-9._=-]+$/;
 
 /**
  * Control characters and whitespace tricks that can smuggle payloads
@@ -366,7 +366,7 @@ function normalizeBlocklist(values) {
  *
  * SECURITY:
  * - Rejects empty anchors (standalone '#')
- * - Only allows alphanumeric, dots, hyphens, and underscores
+ * - Only allows alphanumeric, dots, hyphens, underscores, and equals signs
  * - Colons explicitly rejected to prevent ambiguity with protocols (e.g., '#http:evil')
  * - Prevents special characters that could break HTML attributes
  *

@@ -11,8 +11,8 @@ const LINK_DATASET_KEYS = {
 } as const;
 
 const MAX_HREF_LENGTH = 2048;
-const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._-]+$/;
-const SAFE_WORD_BOOKMARK_ANCHOR_PATTERN = /^[A-Za-z0-9._\-[\]]+$/;
+const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._=-]+$/;
+const SAFE_WORD_BOOKMARK_ANCHOR_PATTERN = /^[A-Za-z0-9._=\-[\]]+$/;
 const AMBIGUOUS_LINK_PATTERNS = /^(click here|read more|more|link|here|this|download|view)$/i;
 const INVALID_TARGET_CHARS = /[\u0000-\u001F\u007F]/;
 
@@ -65,7 +65,7 @@ export function sanitizeUrl(href: string): string | null {
  * @returns Normalized anchor with leading '#' (e.g., '#section-1'), or null if invalid
  *
  * @remarks
- * SECURITY: Allows raw safe characters (A-Z, a-z, 0-9, ., _, -) and percent-encodes square
+ * SECURITY: Allows raw safe characters (A-Z, a-z, 0-9, ., _, =, -) and percent-encodes square
  * brackets used by Word bookmark names. Rejects quotes, angle brackets, colons, and spaces that
  * could break HTML structure or enable XSS attacks when used in href attributes.
  *
@@ -97,7 +97,7 @@ const normalizeAnchor = (value: string | null | undefined): string | null => {
 
 /**
  * Check if a fragment string contains only safe anchor characters.
- * Safe characters are alphanumeric, dots, underscores, and hyphens.
+ * Safe characters are alphanumeric, dots, underscores, equals signs, and hyphens.
  *
  * @param {string} fragment - Fragment to validate
  * @returns {boolean} True if fragment matches safe pattern
