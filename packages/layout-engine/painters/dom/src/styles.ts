@@ -127,6 +127,30 @@ const PRINT_STYLES = `
 `;
 
 const DOCUMENT_SURFACE_STYLES = `
+/* A native base-font strut keeps script-only regions on the ordinary baseline.
+ * Generated content adds no DOM text, source carrier, or editable character.
+ */
+.${CLASS_NAMES.container} .superdoc-inline-text-group::before {
+  content: "\\200b";
+  font-size: var(--sd-inline-text-base-size, 0px);
+  font-weight: inherit;
+  font-style: inherit;
+  line-height: normal;
+  visibility: hidden;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Inline struts preserve WebKit's base-font baseline without editable DOM text.
+ * Block boxes suppress the strut's leading to match ordinary text box extents. */
+.${CLASS_NAMES.container} .superdoc-inline-script-baseline::before {
+  content: "\\200b";
+  line-height: var(--sd-inline-script-strut-line-height, normal);
+  visibility: hidden;
+  user-select: none;
+  pointer-events: none;
+}
+
 /* Document paint isolation.
  *
  * The rendered page is document content, not host chrome. Establish a page
@@ -144,6 +168,9 @@ const DOCUMENT_SURFACE_STYLES = `
 .${CLASS_NAMES.container} .${CLASS_NAMES.pageFooter},
 .${CLASS_NAMES.container} .${CLASS_NAMES.fragment},
 .${CLASS_NAMES.container} .${CLASS_NAMES.line},
+.${CLASS_NAMES.container} .superdoc-inline-text-group,
+.${CLASS_NAMES.container} .superdoc-inline-script-baseline,
+.${CLASS_NAMES.container} .superdoc-scaled-inline-advance,
 .${CLASS_NAMES.container} .superdoc-list-content,
 .${CLASS_NAMES.container} .${DOM_CLASS_NAMES.LIST_MARKER} {
   color: inherit;

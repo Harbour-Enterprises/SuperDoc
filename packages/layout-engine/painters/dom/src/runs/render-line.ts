@@ -1,5 +1,6 @@
 import { completeRenderWork, type RenderWork } from '../render-work.js';
 import type { ImageRun, Line, LineSegment, ParagraphAttrs, ParagraphBlock, Run, TextRun } from '@superdoc/contracts';
+import { resolvePhysicalFamily, type ResolvePhysicalFamily } from '@superdoc/font-system';
 import {
   calculateJustifySpacing,
   calculateInterCharacterJustifySpacing,
@@ -8,6 +9,7 @@ import {
   isEmptyInlineSdtPlaceholderRun,
   isEmptySdtPlaceholderRun,
   normalizeBaselineShift,
+  resolveBaseFontSizeForVerticalText,
   shouldApplyJustify,
   sliceRunsForLine,
   SPACE_CHARS,
@@ -91,15 +93,60 @@ const alignNormalTextBesideLineExpandingImage = (
   element: HTMLElement,
   run: Run,
   lineContainsLineExpandingImage: boolean,
+  useTextBaselineBoxes: boolean,
 ): void => {
   if (!lineContainsLineExpandingImage) return;
   if ((run.kind !== 'text' && run.kind !== undefined) || !('text' in run)) return;
 
   const textRun = run as TextRun;
-  if (normalizeBaselineShift(textRun.baselineShift) != null || textRun.vertAlign != null) return;
+  if (textRun.vanish && element.textContent === '') return;
+  if (
+    normalizeBaselineShift(textRun.baselineShift) != null ||
+    (textRun.vertAlign != null && (textRun.vertAlign !== 'baseline' || !useTextBaselineBoxes))
+  )
+    return;
 
   element.style.lineHeight = 'normal';
   element.style.verticalAlign = 'bottom';
+};
+
+const wrapShiftedTextWithBaseBaseline = (
+  element: HTMLElement,
+  run: Run,
+  runContext: RenderLineParams['runContext'],
+): HTMLElement => {
+  if (!isTextRun(run) || (run.vanish && element.textContent === '')) return element;
+  if (
+    normalizeBaselineShift(run.baselineShift) == null &&
+    run.vertAlign !== 'subscript' &&
+    run.vertAlign !== 'superscript'
+  )
+    return element;
+
+  const wrapper = runContext.doc.createElement('span');
+  wrapper.classList.add('superdoc-inline-script-baseline');
+  applyRunTypographyStyles(
+    wrapper,
+    {
+      text: '',
+      fontFamily: run.fontFamily,
+      fontSize: resolveBaseFontSizeForVerticalText(run.fontSize, run),
+      bold: run.bold,
+      italic: run.italic,
+    },
+    runContext.resolvePhysical,
+  );
+  // AIDEV-NOTE: inline wrappers leave separately authored digits in native bidi
+  // flow. The base-font strut owns the box; relative glyph shifts cannot grow it.
+  wrapper.style.display = 'inline';
+  wrapper.style.lineHeight = 'normal';
+  wrapper.style.verticalAlign = 'bottom';
+  const shift = element.style.verticalAlign;
+  element.style.verticalAlign = 'baseline';
+  element.style.position = 'relative';
+  element.style.top = `calc(-1 * ${shift})`;
+  wrapper.appendChild(element);
+  return wrapper;
 };
 
 const LINE_EXPANDING_IMAGE_TOLERANCE_PX = 0.5;
@@ -411,11 +458,14 @@ const wrapScaledRtlRunWithMeasuredAdvance = (
   wrapper.style.display = 'inline-block';
   wrapper.style.width = `${Math.max(0, measuredAdvance)}px`;
   wrapper.style.textAlign = 'right';
+  if (element.classList.contains('superdoc-inline-script-baseline')) {
+    wrapper.style.setProperty('--sd-inline-script-strut-line-height', '0');
+  }
   if (element.style.verticalAlign) {
+    if (element.style.verticalAlign === 'bottom') wrapper.style.lineHeight = 'normal';
     wrapper.style.verticalAlign = element.style.verticalAlign;
     element.style.verticalAlign = 'baseline';
   }
-  element.style.transformOrigin = 'right center';
   wrapper.appendChild(element);
   return wrapper;
 };
@@ -656,6 +706,17 @@ export function* renderLineWork({
   // Only a top-aligned, line-expanding image triggers the Word text-bottom
   // workaround. Glyph-like baseline images leave the surrounding text alone.
   const lineContainsLineExpandingImage = runsForLine.some((run) => isLineExpandingImageRun(run, line));
+  // AIDEV-NOTE: keep incompatible native metrics and effect/inline-box extents
+  // on their existing path. Both grouped and bidi baseline boxes need this guard.
+  const useTextBaselineBoxes =
+    lineContainsLineExpandingImage &&
+    !line.inlineBoxes?.length &&
+    !runsForLine.some((run) => isTextRun(run) && run.textEffects?.reflection) &&
+    hasUniformTextGroupBaseTypography(
+      runsForLine,
+      runContext.showFormattingMarks === true && trackedConfig?.enabled === true && trackedConfig.mode !== 'off',
+      runContext.resolvePhysical,
+    );
   // CSS inline baseline alignment has no font strut when a line contains only
   // an image (the line container intentionally uses font-size: 0). Route that
   // structural case through the deterministic measured-baseline painter used
@@ -745,6 +806,7 @@ export function* renderLineWork({
       runContext,
       trackedConfig,
       lineContainsLineExpandingImage,
+      useTextBaselineBoxes,
       useLineUnderlineOverlay,
       underlineSpanCollector: useLineUnderlineOverlay ? underlineSpans : undefined,
     });
@@ -761,6 +823,7 @@ export function* renderLineWork({
       runContext,
       trackedConfig,
       lineContainsLineExpandingImage,
+      useTextBaselineBoxes,
       useLineUnderlineOverlay,
       isRtl,
       spacingPerSpace,
@@ -826,6 +889,7 @@ type RunRenderBranchParams = {
   runContext: RenderLineParams['runContext'];
   trackedConfig: ReturnType<RenderLineParams['runContext']['resolveTrackedChangesConfig']>;
   lineContainsLineExpandingImage: boolean;
+  useTextBaselineBoxes: boolean;
 };
 
 function* renderExplicitlyPositionedRuns({
@@ -839,6 +903,7 @@ function* renderExplicitlyPositionedRuns({
   runContext,
   trackedConfig,
   lineContainsLineExpandingImage,
+  useTextBaselineBoxes,
   useLineUnderlineOverlay,
   underlineSpanCollector,
 }: RunRenderBranchParams & {
@@ -972,7 +1037,7 @@ function* renderExplicitlyPositionedRuns({
       runContext.syncInlineSdtWrapperTypography(geoSdtWrapper, runForSdt);
       geoSdtWrapper.style.lineHeight = `${line.lineHeight}px`;
       elem.style.left = `${elemLeftPx - geoSdtWrapperLeft}px`;
-      elem.style.top = '0px';
+      if (!elem.style.bottom) elem.style.top = '0px';
       geoSdtMaxRight = Math.max(geoSdtMaxRight, elemLeftPx + elemWidthPx);
       runContext.expandSdtWrapperPmRange(geoSdtWrapper, (runForSdt as TextRun).pmStart, (runForSdt as TextRun).pmEnd);
       geoSdtWrapper.appendChild(elem);
@@ -1193,7 +1258,10 @@ function* renderExplicitlyPositionedRuns({
         if (styleId) {
           elem.setAttribute('styleid', styleId);
         }
-        alignNormalTextBesideLineExpandingImage(elem, segmentRun, lineContainsLineExpandingImage);
+        alignNormalTextBesideLineExpandingImage(elem, segmentRun, lineContainsLineExpandingImage, useTextBaselineBoxes);
+        const positionedElement = useTextBaselineBoxes
+          ? wrapShiftedTextWithBaseBaseline(elem, segmentRun, runContext)
+          : elem;
         // Determine X position for this segment
         // Layout positions are relative to content area start (0).
         // Add indentOffset to position content at the correct paragraph indent.
@@ -1201,9 +1269,16 @@ function* renderExplicitlyPositionedRuns({
         const positionedX = baseX + inlineBoxAdvanceBeforeOffset(line.inlineBoxes, segmentOffset);
         const xPos = positionedX + indentOffset;
 
-        elem.style.position = 'absolute';
-        elem.style.left = `${xPos}px`;
-        appendToLineGeo(elem, segmentRun, xPos, segment.width);
+        positionedElement.style.position = 'absolute';
+        positionedElement.style.left = `${xPos}px`;
+        if (positionedElement !== elem) {
+          positionedElement.style.setProperty('--sd-inline-script-strut-line-height', '0');
+        }
+        if (useTextBaselineBoxes && positionedElement.style.verticalAlign === 'bottom') {
+          positionedElement.style.bottom = '0px';
+          positionedElement.style.top = 'auto';
+        }
+        appendToLineGeo(positionedElement, segmentRun, xPos, segment.width);
 
         // Advance cumulative X by the resolved segment width. LineSegment.width is the
         // sole source of truth. The painter does not measure inline elements (SD-2957).
@@ -1245,6 +1320,51 @@ const buildTabWidthByRun = (block: ParagraphBlock, line: import('@superdoc/contr
   return map;
 };
 
+// Conservatively retain native bidi composition for the RTL-reserved ranges,
+// including unassigned characters, from Unicode 17 DerivedBidiClass.txt:
+// https://www.unicode.org/Public/17.0.0/ucd/extracted/DerivedBidiClass.txt
+// Directional controls can span images even when all visible letters are LTR.
+const TEXT_GROUP_BIDI_GUARD_RE =
+  /[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}\p{Bidi_Control}]/u;
+
+const hasUniformTextGroupBaseTypography = (
+  runs: Run[],
+  showTrackedParagraphMarks: boolean,
+  resolvePhysical: ResolvePhysicalFamily = resolvePhysicalFamily,
+): boolean => {
+  let commonSize: number | undefined;
+  let commonFamily: string | undefined;
+  let commonFace: string | undefined;
+  for (const run of runs) {
+    if (!isTextRun(run) || !run.text || run.fontSize <= 0) continue;
+    if (
+      run.vanish &&
+      !(
+        showTrackedParagraphMarks &&
+        isParagraphMarkDeletionAnchorRun(run) &&
+        (run.trackedChange || run.trackedChanges?.length)
+      )
+    ) {
+      continue;
+    }
+    const size = resolveBaseFontSizeForVerticalText(run.fontSize, run);
+    if (!Number.isFinite(size)) return false;
+    commonSize ??= size;
+    // Recovering the authored size from scaled scripts can introduce rounding.
+    if (Math.abs(size - commonSize) > 0.001) return false;
+    const weight = run.bold ? '700' : '400';
+    const style = run.italic ? 'italic' : 'normal';
+    const family = resolvePhysical(run.fontFamily, { weight, style }).toLowerCase();
+    commonFamily ??= family;
+    if (family !== commonFamily) return false;
+    // Faces in one resolved family can still have incompatible native descents.
+    const face = `${weight}/${style}`;
+    commonFace ??= face;
+    if (face !== commonFace) return false;
+  }
+  return true;
+};
+
 function* renderInlineRuns({
   block,
   runsForLine,
@@ -1255,6 +1375,7 @@ function* renderInlineRuns({
   runContext,
   trackedConfig,
   lineContainsLineExpandingImage,
+  useTextBaselineBoxes,
   useLineUnderlineOverlay,
   tabWidthByRun,
   isRtl,
@@ -1271,6 +1392,13 @@ function* renderInlineRuns({
   // Track current inline SDT wrapper to group adjacent runs with the same SDT id
   let currentInlineSdtWrapper: HTMLElement | null = null;
   let currentInlineSdtId: string | null = null;
+  let currentTextGroup: HTMLElement | null = null;
+  // Atomic inline blocks hide their strong characters from paragraph bidi
+  // ordering. Keep mixed-direction lines on the existing native inline path.
+  const useNativeTextGroups =
+    useTextBaselineBoxes &&
+    !isRtl &&
+    !runsForLine.some((run) => isTextRun(run) && (run.bidi?.rtl || TEXT_GROUP_BIDI_GUARD_RE.test(run.text)));
   const segmentsByRun = new Map<number, LineSegment[]>();
   line.segments?.forEach((segment) => {
     const segments = segmentsByRun.get(segment.runIndex);
@@ -1279,6 +1407,7 @@ function* renderInlineRuns({
   });
 
   const closeCurrentWrapper = () => {
+    currentTextGroup = null;
     if (currentInlineSdtWrapper) {
       el.appendChild(currentInlineSdtWrapper);
       currentInlineSdtWrapper = null;
@@ -1288,6 +1417,7 @@ function* renderInlineRuns({
 
   for (const run of runsForLine) {
     yield;
+    if (!isTextRun(run)) currentTextGroup = null;
     // Check if this run has inline structuredContent SDT
     const resolved = runContext.resolveRunSdtId(run);
     const runSdtId = resolved?.sdtId ?? null;
@@ -1324,7 +1454,18 @@ function* renderInlineRuns({
       if (styleId) {
         elem.setAttribute('styleid', styleId);
       }
-      alignNormalTextBesideLineExpandingImage(elem, runForRender, lineContainsLineExpandingImage);
+      if (!useNativeTextGroups) {
+        alignNormalTextBesideLineExpandingImage(
+          elem,
+          runForRender,
+          lineContainsLineExpandingImage,
+          useTextBaselineBoxes,
+        );
+      }
+      const alignedElement =
+        !useNativeTextGroups && useTextBaselineBoxes
+          ? wrapShiftedTextWithBaseBaseline(elem, runForRender, runContext)
+          : elem;
       const measuredAdvance =
         isRtl &&
         isTextRun(run) &&
@@ -1334,8 +1475,13 @@ function* renderInlineRuns({
         run.horizontalScale !== 1
           ? measuredInlineTextAdvance(run, block, line, segmentsByRun, spacingPerSpace)
           : null;
+      if (measuredAdvance != null) {
+        elem.style.transformOrigin = 'right center';
+      }
       const inlineElement =
-        measuredAdvance == null ? elem : wrapScaledRtlRunWithMeasuredAdvance(elem, measuredAdvance, runContext.doc);
+        measuredAdvance == null
+          ? alignedElement
+          : wrapScaledRtlRunWithMeasuredAdvance(alignedElement, measuredAdvance, runContext.doc);
 
       // If this run has inline SDT, add to or create wrapper
       if (resolved) {
@@ -1353,9 +1499,44 @@ function* renderInlineRuns({
         // Typography is set when wrapper is created from the first run.
         // Follow-up (SD-2744): define a deterministic mixed-typography rule.
         runContext.expandSdtWrapperPmRange(currentInlineSdtWrapper, run.pmStart, run.pmEnd);
-        currentInlineSdtWrapper.appendChild(inlineElement);
+      }
+      const parent = currentInlineSdtWrapper ?? el;
+      if (useNativeTextGroups && isTextRun(run)) {
+        if (!currentTextGroup) {
+          // Keep the native base-font baseline even when this region contains
+          // only scripts. The CSS strut has no source or editable DOM text.
+          currentTextGroup = runContext.doc.createElement('span');
+          currentTextGroup.classList.add('superdoc-inline-text-group');
+          currentTextGroup.style.display = 'inline-block';
+          currentTextGroup.style.verticalAlign = 'bottom';
+          currentTextGroup.style.fontSize = '0px';
+          currentTextGroup.style.lineHeight = 'normal';
+          parent.appendChild(currentTextGroup);
+        }
+        if (!currentTextGroup.style.getPropertyValue('--sd-inline-text-base-size') && elem.style.fontSize !== '0px') {
+          currentTextGroup.style.setProperty(
+            '--sd-inline-text-base-size',
+            `${resolveBaseFontSizeForVerticalText(run.fontSize, run)}px`,
+          );
+          currentTextGroup.style.fontFamily = elem.style.fontFamily;
+          currentTextGroup.style.fontWeight = elem.style.fontWeight || 'normal';
+          currentTextGroup.style.fontStyle = elem.style.fontStyle || 'normal';
+        }
+        // Let the base-font strut set the group extent. Native fallback glyph
+        // fonts can otherwise give identically styled regions different descents.
+        elem.style.lineHeight = '0';
+        // Numeric vertical-align changes the native line extent as well as the
+        // glyph position. Move only the glyph so lowered runs cannot lift the
+        // whole region's ordinary baseline away from adjacent text.
+        const shift = /^(-?\d+(?:\.\d+)?)(px|pt)$/.exec(elem.style.verticalAlign);
+        if (shift) {
+          elem.style.position = 'relative';
+          elem.style.top = `${-Number(shift[1])}${shift[2]}`;
+          elem.style.verticalAlign = 'baseline';
+        }
+        currentTextGroup.appendChild(inlineElement);
       } else {
-        el.appendChild(inlineElement);
+        parent.appendChild(inlineElement);
       }
     }
   }

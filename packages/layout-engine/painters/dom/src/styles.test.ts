@@ -72,6 +72,19 @@ describe('ensureFootnoteStyles', () => {
 });
 
 describe('ensureDocumentSurfaceStyles', () => {
+  it('provides an unselectable base-font strut without authored text', () => {
+    ensureDocumentSurfaceStyles(document);
+    const cssText = document.querySelector('[data-superdoc-document-surface-styles="true"]')?.textContent ?? '';
+    expect(cssText).toContain('.superdoc-layout .superdoc-inline-text-group::before');
+    expect(cssText).toContain('.superdoc-layout .superdoc-inline-script-baseline::before');
+    expect(cssText).toContain('content: "\\200b";');
+    expect(cssText).toContain('font-size: var(--sd-inline-text-base-size, 0px);');
+    expect(cssText).toContain('font-weight: inherit;');
+    expect(cssText).toContain('font-style: inherit;');
+    expect(cssText).toContain('visibility: hidden;');
+    expect(cssText).toContain('user-select: none;');
+  });
+
   it('injects scoped foreground isolation without using important overrides', () => {
     ensureDocumentSurfaceStyles(document);
 
@@ -79,6 +92,9 @@ describe('ensureDocumentSurfaceStyles', () => {
     const cssText = styleEl?.textContent ?? '';
 
     expect(cssText).toContain('color: var(--sd-layout-page-color, #000000);');
+    expect(cssText).toContain('.superdoc-layout .superdoc-inline-text-group,');
+    expect(cssText).toContain('.superdoc-layout .superdoc-inline-script-baseline,');
+    expect(cssText).toContain('.superdoc-layout .superdoc-scaled-inline-advance,');
     expect(cssText).toContain('.superdoc-layout .superdoc-page .superdoc-text-run');
     expect(cssText).toContain(':not([data-bookmark-marker])');
     expect(cssText).toContain('.superdoc-layout .superdoc-thin-double-border');

@@ -10967,7 +10967,7 @@ describe('DomPainter', () => {
       painter.paint(imageLayout, mount);
     };
 
-    it('bottom-aligns normal text runs on lines containing inline images', () => {
+    it('bottom-aligns native text groups on lines containing expanding inline images', () => {
       renderInlineImageTextLine([
         { text: 'Before ', fontFamily: 'Arial', fontSize: 16, pmStart: 0, pmEnd: 7 },
         { kind: 'image', src: inlineImageSrc, width: 40, height: 40, pmStart: 7, pmEnd: 8 },
@@ -10980,6 +10980,11 @@ describe('DomPainter', () => {
       expect(textSpans[0]?.style.verticalAlign).toBe('bottom');
       expect(textSpans[1]?.style.lineHeight).toBe('normal');
       expect(textSpans[1]?.style.verticalAlign).toBe('bottom');
+      expect(textSpans.every((span) => span.classList.contains('superdoc-inline-text-group'))).toBe(true);
+      for (const leaf of mount.querySelectorAll<HTMLElement>('.superdoc-text-run')) {
+        expect(leaf.style.verticalAlign).toBe('');
+        expect(leaf.style.lineHeight).toBe('0');
+      }
 
       const img = mount.querySelector('img') as HTMLImageElement | null;
       expect(img?.style.verticalAlign).toBe('top');
@@ -11063,12 +11068,15 @@ describe('DomPainter', () => {
         },
       ]);
 
-      const textSpans = Array.from(mount.querySelectorAll('.superdoc-line > span')) as HTMLElement[];
+      const groups = Array.from(mount.querySelectorAll<HTMLElement>('.superdoc-inline-text-group'));
+      const textSpans = Array.from(mount.querySelectorAll<HTMLElement>('.superdoc-text-run'));
       expect(textSpans.map((span) => span.textContent)).toEqual(['Base ', '2']);
-      expect(textSpans[0]?.style.lineHeight).toBe('normal');
-      expect(textSpans[0]?.style.verticalAlign).toBe('bottom');
-      expect(textSpans[1]?.style.lineHeight).toBe('1');
-      expect(textSpans[1]?.style.verticalAlign).toBe('5.28px');
+      expect(groups.map((group) => group.style.verticalAlign)).toEqual(['bottom', 'bottom']);
+      expect(textSpans[0]?.style.lineHeight).toBe('0');
+      expect(textSpans[0]?.style.verticalAlign).toBe('');
+      expect(textSpans[1]?.style.lineHeight).toBe('0');
+      expect(textSpans[1]?.style.verticalAlign).toBe('baseline');
+      expect(textSpans[1]?.style.top).toBe('-5.28px');
     });
 
     // Flexible variant that lets a test supply measured line overrides
