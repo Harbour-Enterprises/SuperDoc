@@ -34,10 +34,55 @@ if (trackedEligibility?.status !== 'candidate') {
   throw new Error(`Tracked apply is blocked: ${JSON.stringify(trackedEligibility?.blockers ?? [])}`);
 }
 
-const result = await baseDoc.diff.apply({ diff, changeMode: 'tracked' });
+try {
+  const result = await baseDoc.diff.apply({ diff, changeMode: 'tracked' });
+  // Inspect result, then save and review the returned change items.
+} catch (error) {
+  // Keep the base and report the error's code, message, and details.
+  throw error;
+}
 ```
 
+`candidate` means no known comparison-time blocker was found. Apply still checks the live base, structural context and native replay preconditions; it can refuse a candidate. Keep the base open through apply, handle that refusal, and save only a successful result. A candidate does not guarantee that every change in an arbitrary DOCX pair can become a native Word revision.
+
 A blocker names the affected families and a stable code (for example `structural-paragraph-unsupported` or `header-footer-tracked-lifecycle-unsupported`). `diff.apply` enforces the same boundary at apply time: an unsupported family fails the whole call closed, with no partial output and no mutation, rather than silently applying a broader replacement than requested. See the [`diff.apply` reference](/document-api/reference/diff/apply) for every documented family and blocker code.
+
+## Definitions and replay limits
+
+Style, settings and numbering definitions are shared across the document. Their replacement is not represented by native tracked body revisions. The default tracked policy refuses a changed definition with `definition-replay-tracked-unsupported`, including any accompanying body edit. To adopt changed styles directly while tracking supported body edits, explicitly consent on both calls:
+
+```ts
+const diff = await baseDoc.diff.compare({
+  targetSnapshot,
+  styleChangeMode: 'direct',
+});
+const result = await baseDoc.diff.apply({
+  diff,
+  changeMode: 'tracked',
+  styleChangeMode: 'direct',
+});
+```
+
+The result reports direct style adoption separately. Rejecting the tracked body text keeps those adopted styles. This option covers styles; it does not enable tracked settings or numbering replacement. An insertion-only body change creates an insertion revision without requiring a deletion revision.
+
+In standalone sessions, supported table-property replay includes repeating-header flags, cell shading and table borders when the table and cell identities remain stable. Those changes use native property revisions containing the previous properties; they remain subject to other family blockers and live apply preconditions. Native review can accept or reject the property change without changing unchanged cell text or linked content controls. Joined collaboration sessions refuse this property replay before mutation in both modes; use a standalone session for this input. Ordinary paragraph-text edits have a separate collaboration path.
+
+Some precise input boundaries remain:
+
+| Input shape                                                                                    | Tracked compare/apply boundary                                                                                                                                                                                    |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multiple new comments in one comparison                                                        | Refused before mutation: `comment-replay-unsafe`, because multiple creations require revision-stable anchor replay. Lossless first-comment carryover is direct and has no independently tracked comment revision. |
+| Existing comment topology or an empty retained comment part changes                            | Refused when anchors and target comment parts cannot be replayed losslessly. Keep the comment topology diagnostic and the original pair.                                                                          |
+| A text edit inside a paragraph carrying a field, or before ambiguous repeated identical fields | Refused when field identity, placement or run structure cannot be replayed safely. A separate-paragraph edit with retained, unambiguous fields is a different input shape.                                        |
+| Clearing pretty-printed paragraph or cell content                                              | A whitespace-only target run fragment is refused with an explicit XML-whitespace diagnostic. Compact-XML and nonempty-edit controls do not establish support for clearing that shape.                             |
+| Editing a typed digit in a run with `w:noBreakHyphen`                                          | Refused as unsupported inline replay for that carrier; editing a separate paragraph does not qualify the digit edit.                                                                                              |
+| Removing a row that carries a bookmark                                                         | Refused when the removed bookmark has no replayable range. Unbookmarked row deletion does not establish support for whole bookmarked-table deletion.                                                              |
+| Editing an earlier table shifts identities in later repeated tables                            | Refused when row or table identities are reassigned. Edits in the last table and single-table controls have different identity boundaries.                                                                        |
+| Removing a paragraph immediately before or terminally after a table                            | Some inputs reach the native compiler and refuse `unsupported-context`; other inputs fail earlier table-identity checks. Distant and nonterminal paragraph deletion controls do not qualify these arrangements.   |
+
+A native `base-revision-drift` can mean the live base changed, but it also requires investigating the replay step that reported it. It does not by itself establish a collaboration race. Refresh a genuinely stale comparison; retain an unchanged failing pair and its diagnostic for unsupported replay. The same applies to a candidate refused with `unsupported-context`: report the specific operation and input arrangement instead of treating candidate status as an apply promise.
+
+A document-level proposal or versioned review session has different review semantics from native Word redlines. Use that API only when its preview, accept/reject behavior and preservation of the relevant document structures have been verified for the input. A recommendation in an error message does not qualify a replacement workflow.
 
 ## Review and decide
 
@@ -52,13 +97,13 @@ A comparison-generated change is reviewed and decided exactly like an authored o
 
 ## Supported-case matrix
 
-This matrix states current, version-qualified support; each row is checked against this version's actual behavior, not a completed feature's original intent.
+This historical matrix records the version-qualified support listed below. The precise limits and policy above apply to the current comparison contract; verify the SDK and engine versions you deploy against your saved input pairs.
 
 | Shape                                                | Current behavior                                                                                                                                                                       | Owning issue     |
 | ---------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | Localized, repeated, or separated body-text changes  | Supported in direct and tracked modes. Tracked replacements retain independent comparison-hunk review groups.                                                                          | SD-4953, SD-5189 |
 | Body run-formatting changes                          | Supported in direct and tracked modes for verified run-formatting cases; unsupported surrounding structures still fail closed.                                                         | SD-5130          |
-| Tables                                               | Supported in verified direct and tracked cases; eligibility remains authoritative for the exact table shape.                                                                           | SD-5130          |
+| Tables                                               | Supported in verified direct and tracked cases; eligibility identifies known blockers for the exact table shape, while apply validates live replay preconditions.                      | SD-5130          |
 | Header/footer in-place content edits                 | Supported in direct and tracked modes.                                                                                                                                                 | SD-3647          |
 | Header/footer slot repointing or topology changes    | Supported in direct mode. Tracked mode remains unsupported and fails closed.                                                                                                           | SD-3647          |
 | Existing footnote/endnote content                    | Supported in direct and tracked modes.                                                                                                                                                 | SD-5227          |
