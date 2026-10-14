@@ -37,13 +37,17 @@ const AUTO_HIDE_DELAY = 2500;
 const isOpen = ref(false);
 const triggerRef = ref(null);
 const contentRef = ref(null);
-const position = ref({ top: '0px', left: '0px' });
+const position = ref({ top: '0px', left: '0px', below: false });
 
 let closeTimeout = null;
 let openTimeout = null;
 let autoHideTimeout = null;
 
-const mergedContentClass = computed(() => ['sd-tooltip-content', attrs.class]);
+const mergedContentClass = computed(() => [
+  'sd-tooltip-content',
+  position.value.below && 'sd-tooltip-below',
+  attrs.class,
+]);
 const contentStyle = computed(() => ({
   ...props.contentStyle,
   ...(attrs.style || {}),
@@ -51,6 +55,7 @@ const contentStyle = computed(() => ({
   top: position.value.top,
   left: position.value.left,
   zIndex: 2100,
+  transformOrigin: position.value.below ? 'top center' : 'bottom center',
 }));
 
 const clearCloseTimeout = () => {
@@ -89,14 +94,21 @@ const updatePosition = () => {
   const contentWidth = contentRef.value.offsetWidth;
   const contentHeight = contentRef.value.offsetHeight;
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth || 0;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight || 0;
   const gutter = 8;
 
   let left = triggerRect.left + triggerRect.width / 2 - contentWidth / 2;
   left = Math.max(gutter, Math.min(left, viewportWidth - contentWidth - gutter));
 
+  const aboveTop = triggerRect.top - contentHeight - 10;
+  const below = aboveTop < gutter;
+  const preferredTop = below ? triggerRect.bottom + 10 : aboveTop;
+  const top = Math.max(gutter, Math.min(preferredTop, viewportHeight - contentHeight - gutter));
+
   position.value = {
-    top: `${triggerRect.top - contentHeight - 10}px`,
+    top: `${top}px`,
     left: `${left}px`,
+    below,
   };
 };
 
@@ -261,8 +273,9 @@ onBeforeUnmount(() => {
   transform: translateX(-50%) rotate(45deg);
 }
 
-.fade-in-scale-up-transition-enter-active {
-  transform-origin: bottom center;
+.sd-tooltip-below .sd-tooltip-arrow {
+  top: -5px;
+  bottom: auto;
 }
 
 .fade-in-scale-up-transition-enter-active {
