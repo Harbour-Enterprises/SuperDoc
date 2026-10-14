@@ -551,6 +551,13 @@ export function executeContentControlsSetLockMode(
 ): ContentControlMutationResult {
   validateCCInput(input, 'contentControls.setLockMode');
   validateCCTarget(input.target, 'contentControls.setLockMode');
+  if (input.addToHistory !== undefined && typeof input.addToHistory !== 'boolean') {
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'contentControls.setLockMode addToHistory must be a boolean.',
+      { field: 'addToHistory', value: input.addToHistory },
+    );
+  }
   if (!VALID_LOCK_MODES.has(input.lockMode as string)) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',

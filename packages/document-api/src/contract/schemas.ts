@@ -3638,6 +3638,11 @@ function buildContentControlSchemas(): Record<ContentControlOperationId, Operati
         {
           target: contentControlTargetSchema,
           lockMode: { enum: ['unlocked', 'sdtLocked', 'contentLocked', 'sdtContentLocked'] },
+          addToHistory: {
+            type: 'boolean',
+            description:
+              'Exclude this lock change from history when false (non-collaborative V2 only). Defaults to true.',
+          },
         },
         ['target', 'lockMode'],
       ),

@@ -388,6 +388,11 @@ export interface ContentControlsPatchInput {
 export interface ContentControlsSetLockModeInput {
   target: ContentControlTarget;
   lockMode: LockMode;
+  /**
+   * When false, preserve this lock mode across retained Undo/Redo without adding
+   * a history entry. Supported by non-collaborative V2 sessions; defaults to true.
+   */
+  addToHistory?: boolean;
 }
 
 export interface ContentControlsSetTypeInput {

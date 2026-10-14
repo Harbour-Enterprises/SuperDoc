@@ -5202,7 +5202,8 @@ export const OPERATION_DEFINITIONS = {
   },
   'contentControls.setLockMode': {
     memberPath: 'contentControls.setLockMode',
-    description: 'Set the lock mode on a content control.',
+    description:
+      'Set the lock mode on a content control. In non-collaborative V2 sessions, addToHistory: false excludes this lock change while retaining the lock across Undo/Redo.',
     expectedResult: 'Returns a ContentControlMutationResult; reports NO_OP if lock mode unchanged.',
     requiresDocumentContext: true,
     metadata: mutationOperation({
