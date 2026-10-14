@@ -15,6 +15,7 @@ import CommentHeader from './CommentHeader.vue';
 import CommentInput from './CommentInput.vue';
 import { COMMENT_RECONCILIATION_TOKEN } from './use-comment.js';
 import Avatar from '@superdoc/components/general/Avatar.vue';
+import { renderCommentHtml } from './comment-urls.js';
 
 const emit = defineEmits(['click-outside', 'ready', 'dialog-exit', 'resize']);
 const props = defineProps({
@@ -395,6 +396,16 @@ const comments = computed(() => {
     return a.createdTime - b.createdTime;
   });
 });
+
+const renderedCommentTexts = computed(
+  () => new Map(comments.value.map((comment) => [comment.commentId, renderCommentHtml(comment.commentText)])),
+);
+
+const handleDialogClick = (event) => {
+  if (event.target instanceof Element && event.target.closest('.comment a[href]')) return;
+  event.preventDefault();
+  return setFocus();
+};
 
 const dialogAccessibleLabel = computed(() => {
   if (props.comment.trackedChangeLabel) return props.comment.trackedChangeLabel;
@@ -1315,7 +1326,7 @@ watch(isV2WriteDisabled, (isDisabled) => {
     class="comments-dialog"
     :class="{ 'is-active': isDialogActive || isPendingNewComment, 'is-resolved': props.comment.resolvedTime }"
     v-click-outside="handleClickOutside"
-    @click.stop.prevent="setFocus"
+    @click.stop="handleDialogClick"
     :style="getSidebarCommentStyle"
     ref="commentDialogElement"
     role="dialog"
@@ -1506,7 +1517,7 @@ watch(isV2WriteDisabled, (isDisabled) => {
             class="comment"
             :class="index === 0 ? bodyOverflowClass : undefined"
             :ref="index === 0 ? setParentBodyRef : undefined"
-            v-html="comment.commentText"
+            v-html="renderedCommentTexts.get(comment.commentId)"
           ></div>
           <div v-else-if="isDebugging && !isEditingThisComment(comment)" class="comment">
             {{
@@ -1680,6 +1691,10 @@ watch(isV2WriteDisabled, (isDisabled) => {
 }
 .comment :deep(p) {
   margin: 0;
+}
+.comment :deep(a) {
+  color: var(--sd-ui-action, #1354ff);
+  text-decoration: underline;
 }
 
 .tracked-change {

@@ -66,6 +66,91 @@ describe('CommentDialog', () => {
     };
   });
 
+  describe('posted comment URLs', () => {
+    it('renders a long closing-delimiter suffix promptly while preserving the comment', () => {
+      const target = 'https://example.test/a_(b)';
+      const text = target + ')'.repeat(30_000);
+      const comment = useComment({ commentId: 'long-url', fileId: 'doc-1', commentText: text });
+      commentsStore.commentsList = [comment];
+      const start = performance.now();
+      const wrapper = mountDialog(comment);
+      const elapsedMs = performance.now() - start;
+      try {
+        expect(wrapper.find('.comment a').attributes('href')).toBe(target);
+        expect(wrapper.find('.comment').text()).toBe(text);
+        expect(comment.commentText).toBe(text);
+        expect(elapsedMs).toBeLessThan(1_000);
+      } finally {
+        wrapper.unmount();
+      }
+    });
+
+    it('renders a web URL without changing stored rich text', () => {
+      const text = '<p>Read <strong>this</strong>: https://example.com/a?x=1&amp;y=2.</p>';
+      const comment = useComment({ commentId: 'url', fileId: 'doc-1', commentText: text });
+      commentsStore.commentsList = [comment];
+      const wrapper = mountDialog(comment);
+      try {
+        const link = wrapper.find('.comment a');
+        expect(link.attributes('href')).toBe('https://example.com/a?x=1&y=2');
+        expect(link.attributes('target')).toBe('_blank');
+        expect(link.attributes('rel')).toBe('noopener noreferrer');
+        expect(wrapper.find('.comment strong').text()).toBe('this');
+        expect(wrapper.find('.comment').text()).toBe('Read this: https://example.com/a?x=1&y=2.');
+        expect(comment.commentText).toBe(text);
+      } finally {
+        wrapper.unmount();
+      }
+    });
+
+    it('keeps existing web links single and removes unsupported link actions', () => {
+      const comment = useComment({
+        commentId: 'existing-urls',
+        fileId: 'doc-1',
+        commentText:
+          '<p><a href="https://example.com">Existing web link</a> <a href="mailto:review@example.test">Email</a> <a href="javascript:alert(1)">Unsafe text</a></p>',
+      });
+      commentsStore.commentsList = [comment];
+      const wrapper = mountDialog(comment);
+      try {
+        expect(wrapper.findAll('.comment a')).toHaveLength(2);
+        expect(wrapper.find('.comment a[href="mailto:review@example.test"]').text()).toBe('Email');
+        expect(wrapper.find('.comment a').attributes('target')).toBe('_blank');
+        expect(wrapper.find('.comment a').attributes('rel')).toBe('noopener noreferrer');
+        expect(wrapper.find('.comment').text()).toBe('Existing web link Email Unsafe text');
+      } finally {
+        wrapper.unmount();
+      }
+    });
+
+    it('allows the native action when a posted comment link is clicked', () => {
+      const comment = useComment({
+        commentId: 'native-link',
+        fileId: 'doc-1',
+        commentText: '<p><a href="https://example.com">Existing web link</a></p>',
+      });
+      commentsStore.commentsList = [comment];
+      const wrapper = mountDialog(comment);
+      try {
+        const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+        let defaultPreventedByDialog;
+        wrapper.element.addEventListener(
+          'click',
+          (event) => {
+            defaultPreventedByDialog = event.defaultPrevented;
+            // Observe the component first, then keep the DOM test from navigating.
+            event.preventDefault();
+          },
+          { once: true },
+        );
+        wrapper.find('.comment a').element.dispatchEvent(click);
+        expect(defaultPreventedByDialog).toBe(false);
+      } finally {
+        wrapper.unmount();
+      }
+    });
+  });
+
   describe('read-only mutation defense (SD-3164)', () => {
     it('rejects stale tracked-change resolve/reject events before the store', async () => {
       commentsStore.init({ readOnly: true });
