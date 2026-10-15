@@ -1,5 +1,5 @@
 <script setup>
-import { computed, ref, getCurrentInstance, onMounted, nextTick, watch } from 'vue';
+import { computed, ref, getCurrentInstance, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { storeToRefs } from 'pinia';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
@@ -839,15 +839,42 @@ const handleAddComment = async () => {
     });
 };
 
-const isV2Mode = computed(() => proxy.$superdoc?.activeEditor?.editorVersion === 2);
-const v2CommentsAdapter = computed(() => (isV2Mode.value ? (proxy.$superdoc?.activeEditor?.v2Comments ?? null) : null));
+const activeEditorRevision = ref(0);
+const v2CapabilityRevision = ref(0);
+const refreshActiveEditor = () => {
+  activeEditorRevision.value += 1;
+};
+const isV2Mode = computed(() => {
+  void activeEditorRevision.value;
+  return proxy.$superdoc?.activeEditor?.editorVersion === 2;
+});
+const v2CommentsAdapter = computed(() => {
+  void activeEditorRevision.value;
+  return isV2Mode.value ? (proxy.$superdoc?.activeEditor?.v2Comments ?? null) : null;
+});
 // ui-phase3-003: v2 tracked-change adapter accessor. Mutation-plane
 // consolidation: accept/reject route through the adapter's compatibility
 // wrappers, which delegate to `activeEditor.doc.trackChanges.decide(...)`.
-const v2TrackedChangesAdapter = computed(() =>
-  isV2Mode.value ? (proxy.$superdoc?.activeEditor?.v2TrackedChanges ?? null) : null,
+const v2TrackedChangesAdapter = computed(() => {
+  void activeEditorRevision.value;
+  return isV2Mode.value ? (proxy.$superdoc?.activeEditor?.v2TrackedChanges ?? null) : null;
+});
+watch(
+  () => {
+    void activeEditorRevision.value;
+    return isV2Mode.value ? (proxy.$superdoc?.activeEditor?.host ?? null) : null;
+  },
+  (host, _previous, onCleanup) => {
+    v2CapabilityRevision.value += 1;
+    const unsubscribe = host?.subscribe?.(() => {
+      v2CapabilityRevision.value += 1;
+    });
+    onCleanup(() => unsubscribe?.());
+  },
+  { immediate: true },
 );
 const v2WriteCapability = computed(() => {
+  void v2CapabilityRevision.value;
   if (!v2CommentsAdapter.value) return null;
   const documentMode = commentsStore.viewingVisibility.documentMode;
   const command = isPendingNewComment.value ? 'comments.createFromSelection' : null;
@@ -869,6 +896,7 @@ const v2ReplyDisabledReason = computed(() => {
   return v2WriteCapability.value?.reason ?? 'v2-write-unavailable';
 });
 const v2TrackedChangeCapability = computed(() => {
+  void v2CapabilityRevision.value;
   if (!v2TrackedChangesAdapter.value) return null;
   const documentMode = commentsStore.viewingVisibility.documentMode;
   const capability = v2TrackedChangesAdapter.value.getCapabilityState?.() ?? null;
@@ -1253,6 +1281,7 @@ const usersFiltered = computed(() => {
 });
 
 onMounted(() => {
+  proxy.$superdoc?.on?.('active-editor-change', refreshActiveEditor);
   if (props.autoFocus) {
     nextTick(() => setFocus());
   }
@@ -1271,6 +1300,10 @@ onMounted(() => {
     emit('ready', { commentId, elementRef: commentDialogElement });
     checkOverflow();
   });
+});
+
+onBeforeUnmount(() => {
+  proxy.$superdoc?.off?.('active-editor-change', refreshActiveEditor);
 });
 
 watch(

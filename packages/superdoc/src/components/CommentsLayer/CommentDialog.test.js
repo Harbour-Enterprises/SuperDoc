@@ -827,6 +827,113 @@ describe('CommentDialog', () => {
     }
   });
 
+  it.each([true, false])(
+    'refreshes v2 review controls when saving finishes without changing the adapter or document mode (tracked: %s)',
+    async (tracked) => {
+      let snapshot = { state: 'saving' };
+      const listeners = new Set();
+      const unsubscribe = vi.fn((listener) => listeners.delete(listener));
+      superdocStub.activeEditor.editorVersion = 2;
+      superdocStub.activeEditor.host = {
+        getSnapshot: () => snapshot,
+        subscribe: (listener) => {
+          listeners.add(listener);
+          return () => unsubscribe(listener);
+        },
+      };
+      superdocStub.activeEditor.v2TrackedChanges = {
+        getCapabilityState: () => ({
+          canDecide: snapshot.state === 'editing-ready',
+          reason: snapshot.state === 'editing-ready' ? null : `host-state:${snapshot.state}`,
+        }),
+      };
+      superdocStub.activeEditor.v2Comments = {
+        getCapabilityState: () => ({
+          canWrite: snapshot.state === 'editing-ready',
+          reason: snapshot.state === 'editing-ready' ? null : `host-state:${snapshot.state}`,
+        }),
+      };
+      const trackedChange = useComment({
+        commentId: 'tc-save-completion',
+        fileId: 'doc-1',
+        commentText: '',
+        trackedChange: tracked,
+        trackedChangeType: 'insert',
+        trackedChangeDisplayType: 'insert',
+        trackedChangeText: 'saved revision',
+      });
+      commentsStore.commentsList = [trackedChange];
+      const wrapper = mountDialog(trackedChange);
+      try {
+        const header = wrapper.findComponent({ name: 'CommentHeader' });
+        expect(header.props('resolveDisabledReason')).toBe('host-state:saving');
+        expect(header.props('rejectDisabledReason')).toBe('host-state:saving');
+
+        snapshot = { state: 'editing-ready' };
+        for (const listener of listeners) listener(snapshot);
+        await flushPromises();
+        expect(header.props('resolveDisabledReason')).toBeNull();
+        expect(header.props('rejectDisabledReason')).toBeNull();
+
+        snapshot = { state: 'saving' };
+        for (const listener of listeners) listener(snapshot);
+        await flushPromises();
+        expect(header.props('resolveDisabledReason')).toBe('host-state:saving');
+        expect(header.props('rejectDisabledReason')).toBe('host-state:saving');
+      } finally {
+        wrapper.unmount();
+      }
+      expect(unsubscribe).toHaveBeenCalledOnce();
+      expect(listeners.size).toBe(0);
+    },
+  );
+
+  it('releases the previous v2 host subscription when the active editor is replaced or cleared', async () => {
+    const events = new Map();
+    superdocStub.on = vi.fn((name, listener) => events.set(name, listener));
+    superdocStub.off = vi.fn((name, listener) => {
+      if (events.get(name) === listener) events.delete(name);
+    });
+    const previousUnsubscribe = vi.fn();
+    const nextUnsubscribe = vi.fn();
+    superdocStub.activeEditor = {
+      editorVersion: 2,
+      host: { subscribe: vi.fn(() => previousUnsubscribe) },
+      v2TrackedChanges: { getCapabilityState: () => ({ canDecide: false, reason: 'host-state:saving' }) },
+    };
+    const comment = useComment({ commentId: 'tc-host-replacement', fileId: 'doc-1', trackedChange: true });
+    commentsStore.commentsList = [comment];
+    const wrapper = mountDialog(comment);
+    try {
+      const header = wrapper.findComponent({ name: 'CommentHeader' });
+      expect(header.props('rejectDisabledReason')).toBe('host-state:saving');
+      const nextHost = { subscribe: vi.fn(() => nextUnsubscribe) };
+      superdocStub.activeEditor = {
+        editorVersion: 2,
+        host: nextHost,
+        v2TrackedChanges: { getCapabilityState: () => ({ canDecide: true, reason: null }) },
+      };
+      events.get('active-editor-change')();
+      await flushPromises();
+      expect(previousUnsubscribe).toHaveBeenCalledOnce();
+      expect(nextHost.subscribe).toHaveBeenCalledOnce();
+      expect(header.props('rejectDisabledReason')).toBeNull();
+
+      superdocStub.activeEditor = { editorVersion: 1 };
+      events.get('active-editor-change')();
+      await flushPromises();
+      expect(nextUnsubscribe).toHaveBeenCalledOnce();
+      superdocStub.activeEditor = null;
+      events.get('active-editor-change')();
+      await flushPromises();
+    } finally {
+      wrapper.unmount();
+    }
+    expect(events.size).toBe(0);
+    expect(previousUnsubscribe).toHaveBeenCalledOnce();
+    expect(nextUnsubscribe).toHaveBeenCalledOnce();
+  });
+
   it('reactively disables v2 tracked-change decisions when document mode switches to viewing', async () => {
     superdocStub.activeEditor.editorVersion = 2;
     superdocStub.activeEditor.v2TrackedChanges = {
