@@ -13,6 +13,7 @@ const LINK_DATASET_KEYS = {
 const MAX_HREF_LENGTH = 2048;
 const SAFE_ANCHOR_PATTERN = /^[A-Za-z0-9._=-]+$/;
 const SAFE_WORD_BOOKMARK_ANCHOR_PATTERN = /^[A-Za-z0-9._=\-[\]]+$/;
+const VALID_BOOKMARK_ANCHOR_PATTERN = /^\p{L}[\p{L}\p{Mn}\p{Mc}\p{Nd}_]*$/u;
 const AMBIGUOUS_LINK_PATTERNS = /^(click here|read more|more|link|here|this|download|view)$/i;
 const INVALID_TARGET_CHARS = /[\u0000-\u001F\u007F]/;
 
@@ -65,9 +66,8 @@ export function sanitizeUrl(href: string): string | null {
  * @returns Normalized anchor with leading '#' (e.g., '#section-1'), or null if invalid
  *
  * @remarks
- * SECURITY: Allows raw safe characters (A-Z, a-z, 0-9, ., _, =, -) and percent-encodes square
- * brackets used by Word bookmark names. Rejects quotes, angle brackets, colons, and spaces that
- * could break HTML structure or enable XSS attacks when used in href attributes.
+ * SECURITY: Preserves existing safe ASCII and Word bookmark punctuation (including equals), and percent-encodes
+ * valid Unicode bookmark names. Rejects controls, quotes, angle brackets, colons, and spaces.
  *
  * @example
  * normalizeAnchor('section-1') // Returns: '#section-1'
@@ -76,18 +76,20 @@ export function sanitizeUrl(href: string): string | null {
  * normalizeAnchor('  whitespace  ') // Returns: null
  */
 const normalizeAnchor = (value: string | null | undefined): string | null => {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed) return null;
+  if (typeof value !== 'string' || !value) return null;
 
-  // Remove leading # if present, then validate
-  const anchor = trimmed.startsWith('#') ? trimmed.slice(1) : trimmed;
-
-  if (SAFE_ANCHOR_PATTERN.test(anchor)) {
-    return `#${anchor}`;
+  // Retain legacy whitespace handling for safe ASCII and imported Word punctuation.
+  const legacyValue = value.trim();
+  const legacyAnchor = legacyValue.startsWith('#') ? legacyValue.slice(1) : legacyValue;
+  if (SAFE_ANCHOR_PATTERN.test(legacyAnchor)) return `#${legacyAnchor}`;
+  if (SAFE_WORD_BOOKMARK_ANCHOR_PATTERN.test(legacyAnchor)) {
+    const encoded = encodeFragment(legacyAnchor);
+    return encoded ? `#${encoded}` : null;
   }
 
-  if (SAFE_WORD_BOOKMARK_ANCHOR_PATTERN.test(anchor)) {
+  // Valid Unicode bookmark names retain exact identity; never trim or normalize them.
+  const anchor = value.startsWith('#') ? value.slice(1) : value;
+  if (anchor.length <= 40 && VALID_BOOKMARK_ANCHOR_PATTERN.test(anchor)) {
     const encoded = encodeFragment(anchor);
     return encoded ? `#${encoded}` : null;
   }

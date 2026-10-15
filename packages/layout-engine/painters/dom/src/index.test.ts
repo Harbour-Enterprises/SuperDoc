@@ -13241,6 +13241,54 @@ describe('normalizeAnchor XSS protection', () => {
     expect(anchor?.getAttribute('href')).toBe('#valid-anchor_123');
   });
 
+  it('paints exact valid Unicode bookmark names as encoded internal links', () => {
+    for (const name of ['école', 'e\u0301cole', 'A١_2', '𐐀'.repeat(20)]) {
+      mount = document.createElement('div');
+      const block = createFlowBlockWithLink({ version: 2, anchor: name });
+      painter = createTestPainter({ blocks: [block], measures: [createMeasureForBlock()] });
+      painter.paint(createLayout(), mount);
+      expect(mount.querySelector('a')?.getAttribute('href')).toBe(`#${encodeURIComponent(name)}`);
+      expect(mount.querySelector('span[data-link-blocked="true"]')).toBeNull();
+    }
+  });
+
+  it('preserves legacy trimming for safe imported ASCII and Word bookmark anchors', () => {
+    for (const [raw, expected] of [
+      ['  Legacy  ', '#Legacy'],
+      ['  #Target[1].Clause  ', '#Target%5B1%5D.Clause'],
+    ] as const) {
+      mount = document.createElement('div');
+      const block = createFlowBlockWithLink({ version: 2, anchor: raw });
+      painter = createTestPainter({ blocks: [block], measures: [createMeasureForBlock()] });
+      painter.paint(createLayout(), mount);
+      expect(mount.querySelector('a')?.getAttribute('href')).toBe(expected);
+      expect(mount.querySelector('span[data-link-blocked="true"]')).toBeNull();
+    }
+  });
+
+  it('does not trim or paint invalid Unicode-like bookmark anchors', () => {
+    for (const name of [
+      ' école',
+      'école ',
+      'é:cole',
+      'é\u0001cole',
+      'é\n',
+      'é\r\n',
+      'é\u2028',
+      'é"cole',
+      'é<cole',
+      '𐐀'.repeat(21),
+      'A\uD800',
+    ]) {
+      mount = document.createElement('div');
+      const block = createFlowBlockWithLink({ version: 2, anchor: name });
+      painter = createTestPainter({ blocks: [block], measures: [createMeasureForBlock()] });
+      painter.paint(createLayout(), mount);
+      expect(mount.querySelector('a')).toBeNull();
+      expect(mount.querySelector('span[data-link-blocked="true"]')).toBeTruthy();
+    }
+  });
+
   it('URL-encodes Word bookmark anchor names with square brackets', () => {
     const link = {
       version: 2,
