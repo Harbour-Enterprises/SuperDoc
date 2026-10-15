@@ -1,6 +1,6 @@
 import type { TextMutationReceipt, SDMutationReceipt } from '../types/index.js';
 import type { InsertInput } from '../insert/insert.js';
-import type { ReplaceInput } from '../replace/replace.js';
+import type { ReplaceMutationOptions, ReplaceInput } from '../replace/replace.js';
 import type { StoryLocator } from '../types/story.types.js';
 import { DocumentApiValidationError } from '../errors.js';
 import type { SDHtmlMarkdownCheckGuard } from '../capabilities/html-markdown-support.js';
@@ -123,11 +123,13 @@ export type WriteRequest = InsertWriteRequest;
  * `SelectionMutationAdapter` instead.
  */
 export interface WriteAdapter {
+  readonly supportsParagraphContents?: boolean;
+  readonly supportsNativeOoxml?: boolean;
   write(request: InsertWriteRequest, options?: TextMutationOptions): TextMutationReceipt;
   /** Structured insert for SDFragment or markdown/html content. Returns SDMutationReceipt. */
   insertStructured(input: InsertInput, options?: RichContentMutationOptions): SDMutationReceipt;
   /** Structured replace for SDFragment or markdown/html content. Returns SDMutationReceipt. */
-  replaceStructured(input: ReplaceInput, options?: RichContentMutationOptions): SDMutationReceipt;
+  replaceStructured(input: ReplaceInput, options?: ReplaceMutationOptions): SDMutationReceipt;
 }
 
 export function normalizeMutationOptions(

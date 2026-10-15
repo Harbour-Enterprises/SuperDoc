@@ -70,7 +70,11 @@ Table captures also include `fragment.table`, which describes the selected cells
 
 ## Using the captured XML later
 
-The result is a capture, not a DOCX file or an insertion command. If your application later inserts it into a document, that operation must support its `fragment.placement` and remap any `dependencies`. The existing `contentControls.replaceContent({ format: 'ooxml' })` operation supports inline content, so it cannot restore every possible capture, such as a multi-paragraph or table selection.
+The result is a capture, not a DOCX file. Pass the whole manifest to `doc.insert({ target, capture })` or `doc.replace({ target, capture })` for a native copy. These operations import supporting parts and remap paragraph, review, drawing and relationship identities. The copy route supports bounded ordinary paragraph/run, hyperlink, image, local text-revision/comment and table markup. Unsupported fields, controls, notes, moves, structural revisions, malformed nesting or incomplete dependencies are rejected atomically. Broader extraction support does not imply that every capture is currently insertable.
+
+For exact same-session restoration of a complete direct body paragraph, heading or list item, add `retain: true` to its before/after node-edge selection. The result includes an opaque `snapshotId`, and `source.packageRevision` identifies the package read for committed review UI pairing. Use the handle with `doc.replace({ target, snapshotId }, { replaceMode: 'contents', expectedSnapshotId, changeMode: 'direct' })`; release unused handles through `doc.selection.releaseSnapshot({ snapshotId })`. Handles are not portable across documents or serialized sessions. See [paragraph alternatives](/document-api/replace-delete-content#paragraph-alternatives-with-exact-review-restoration) for the complete lifecycle and restrictions.
+
+The existing `contentControls.replaceContent({ format: 'ooxml' })` remains an inline content-control operation with its own target semantics.
 
 An empty selection, an address that no longer resolves, or invalid source data produces a structured validation error. Captures above the resource limits fail with `RESOURCE_LIMIT` and return no partial result: one referenced part can be at most 64 MiB, encoded dependency source bytes can total at most 128 MiB, and a capture can include at most 1,024 relationships.
 

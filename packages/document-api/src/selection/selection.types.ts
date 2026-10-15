@@ -29,8 +29,8 @@ export interface TableSelectionInfo {
 }
 
 export type SelectionExtractOoxmlInput =
-  | { at: SelectionTarget | SelectionTableCellsTarget; selection?: never }
-  | { selection: 'current'; at?: never };
+  | { at: SelectionTarget | SelectionTableCellsTarget; selection?: never; retain?: boolean }
+  | { selection: 'current'; at?: never; retain?: boolean };
 
 export interface SelectionOoxmlDependency {
   sourcePartUri: string;
@@ -46,6 +46,8 @@ export interface SelectionOoxmlDependency {
 export interface SelectionExtractOoxmlResult {
   /** Version of the serialized selection-capture manifest. */
   formatVersion: 1;
+  /** Same-session exact restoration handle, present only for retain:true. Release when unused. */
+  snapshotId?: string;
   at: SelectionTarget | SelectionTableCellsTarget;
   /** Source revision for provenance, never a read precondition. */
   evaluatedRevision: string;
@@ -66,6 +68,8 @@ export interface SelectionExtractOoxmlResult {
     story: SelectionTarget['story'] | null;
     partUri: string;
     paragraphStyleId: string | null;
+    /** Exact opaque package coordinate for a retained capture, for pairing with committed review UI. */
+    packageRevision?: string;
   };
   /** Source structure outside the selected visible content needed to interpret it. */
   context: {
@@ -179,4 +183,21 @@ export interface SelectionInfo {
    * Undefined otherwise.
    */
   text?: string;
+}
+
+/** Native source shared by insert and replace; portable captures copy with fresh identities. */
+export type OoxmlContentSource =
+  | {
+      type: 'ooxml';
+      value: string;
+      namespaces: Record<string, string>;
+      dependencies?: SelectionOoxmlDependency[];
+      sourcePartUri?: string;
+    }
+  | { capture: SelectionExtractOoxmlResult };
+export interface SelectionReleaseSnapshotInput {
+  snapshotId: string;
+}
+export interface SelectionReleaseSnapshotResult {
+  released: boolean;
 }

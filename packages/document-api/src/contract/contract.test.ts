@@ -301,9 +301,9 @@ describe('document-api contract catalog', () => {
     };
 
     expect(Array.isArray(insertInputSchema.oneOf)).toBe(true);
-    expect(insertInputSchema.oneOf).toHaveLength(3);
+    expect(insertInputSchema.oneOf).toHaveLength(5);
 
-    const [textVariant, richVariant, structuralVariant] = insertInputSchema.oneOf!;
+    const [, , textVariant, richVariant, structuralVariant] = insertInputSchema.oneOf!;
 
     expect(Array.isArray(textVariant.oneOf)).toBe(true);
     expect(textVariant.oneOf).toHaveLength(3);
@@ -378,8 +378,8 @@ describe('document-api contract catalog', () => {
       }>;
     };
 
-    expect(replaceInput.oneOf).toHaveLength(4);
-    const rich = replaceInput.oneOf?.[3];
+    expect(replaceInput.oneOf).toHaveLength(8);
+    const rich = replaceInput.oneOf?.[7];
     expect(rich?.oneOf).toHaveLength(3);
     const [targetVariant, refVariant, bodyVariant] = rich!.oneOf!;
     expect(Object.keys(targetVariant.properties!).sort()).toEqual(['in', 'nestingPolicy', 'target', 'type', 'value']);
@@ -742,7 +742,7 @@ describe('document-api contract catalog', () => {
   it('preserves the broad public SDFragment union for structural insert content', () => {
     const schemas = buildInternalContractSchemas();
     const insertInput = schemas.operations.insert.input as { oneOf?: Array<{ properties?: Record<string, unknown> }> };
-    const structuralVariant = insertInput.oneOf![2];
+    const structuralVariant = insertInput.oneOf!.find((v) => v.properties?.content)!;
     const contentSchema = structuralVariant.properties!.content as ContractTestSchemaShape;
 
     expectBroadSDFragmentSchema(contentSchema);
@@ -759,7 +759,7 @@ describe('document-api contract catalog', () => {
     const replaceInput = schemas.operations.replace.input as {
       oneOf?: Array<{ oneOf?: Array<{ properties?: Record<string, unknown> }> }>;
     };
-    const structuralBranch = replaceInput.oneOf![2] as { oneOf?: Array<{ properties?: Record<string, unknown> }> };
+    const structuralBranch = replaceInput.oneOf![6] as { oneOf?: Array<{ properties?: Record<string, unknown> }> };
 
     for (const variant of structuralBranch.oneOf!) {
       expectBroadSDFragmentSchema(variant.properties!.content as ContractTestSchemaShape);

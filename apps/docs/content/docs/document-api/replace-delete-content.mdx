@@ -21,6 +21,42 @@ const receipt = await doc.replace(
 
 The body target also accepts `text` or a preconverted `content` fragment. It is main-body-only and direct-mode-only. Tracked whole-body replacement fails with `CAPABILITY_UNSUPPORTED`; use a selection or block target when the replacement must remain a review suggestion. To open a different DOCX package, use the editor's file replacement flow instead.
 
+## Paragraph alternatives with exact review restoration
+
+Use the existing `selection.extractOoxml()` and `replace()` operations for paragraph alternatives. On a non-collaborative v2 session, `replaceMode: 'contents'` replaces one direct body paragraph's inlines while keeping its stable block identity and exact paragraph properties, including numbering. `changeMode: 'direct'` bypasses Suggesting for this call without changing the editor's mode. Every actual choice is one native Undo entry; an identical restore creates none.
+
+Retain the original before applying an alternate:
+
+```ts
+const at = {
+  kind: 'selection',
+  start: { kind: 'nodeEdge', node: target, edge: 'before' },
+  end: { kind: 'nodeEdge', node: target, edge: 'after' },
+} as const;
+const original = await doc.selection.extractOoxml({ at, retain: true });
+const replaced = await doc.replace(
+  { target, type: 'markdown', value: 'Alternate **clause**.' },
+  { replaceMode: 'contents', expectedSnapshotId: original.snapshotId, changeMode: 'direct' },
+);
+if (!replaced.success) throw new Error(replaced.failure.message);
+const current = await doc.selection.extractOoxml({ at, retain: true });
+const restored = await doc.replace(
+  { target, snapshotId: original.snapshotId },
+  { replaceMode: 'contents', expectedSnapshotId: current.snapshotId, changeMode: 'direct' },
+);
+if (!restored.success) throw new Error(restored.failure.message);
+await doc.selection.releaseSnapshot({ snapshotId: current.snapshotId });
+await doc.selection.releaseSnapshot({ snapshotId: original.snapshotId });
+```
+
+The capture remains a portable Word XML manifest. Its optional `snapshotId` is a separate, session-owned exact restoration handle. Restoration retains original revision wrappers, local comment anchors, complete comment threads and metadata. Passing a portable `capture` instead copies content and remints identities; it does not restore the original.
+
+`expectedSnapshotId` compares the live paragraph and its owned review data with a retained unchanged choice, so unrelated paragraph and comment edits can survive restoration. Snapshot restoration requires this guard. `expectedRevision` adds an optional global check. Repeated captures may reuse an opaque handle; each read returns fresh provenance. Retained captures expose `source.packageRevision` for pairing with a committed review window. It is an opaque package coordinate, distinct from the public `evaluatedRevision`; do not parse or interchange them.
+
+Contents replacement accepts plain text, one HTML/Markdown or canonical `SDFragment` paragraph, and supported native OOXML. Text cannot contain tabs, line breaks or controls. A rich alternative cannot change the retained container's paragraph properties or list identity. Native paragraph properties may be omitted or match the retained properties exactly. Conflicting properties, multiple paragraphs, fields, content controls, moves, structural/formatting revisions and cross-paragraph comments fail before mutation. Ordinary hyperlinks and image drawings are supported with dependency guards. This route is direct-mode-only, supports `dryRun`, and currently requires a direct body paragraph (including a heading or list item) in a non-collaborative session.
+
+Handles expire on whole-file replacement or disposal, remain usable through Undo/Redo, and are limited to 64 unique snapshots and 4 MiB per session. Release unused handles; an identical current capture can reuse the original's handle, so keep shared handles until no choice needs them. Edited local content, changed dependency definitions, missing metadata or identity collisions reject restoration rather than overwriting new work. After Undo/Redo, take a fresh scoped capture to reconcile the selected radio choice.
+
 This guide uses the [tracked-changes fixture](/fixtures/tracked-changes.docx). Serve it from `/contract.docx` in your app, or update the document URL in the example.
 
 ## 1. Run two targeted mutations

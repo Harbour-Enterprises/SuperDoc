@@ -39,11 +39,18 @@ export type {
   SelectionExtractOoxmlInput,
   SelectionExtractOoxmlResult,
   SelectionOoxmlDependency,
+  OoxmlContentSource,
+  SelectionReleaseSnapshotInput,
+  SelectionReleaseSnapshotResult,
   SelectionTableCellsTarget,
   TableSelectionInfo,
   SelectionInfo,
 } from './selection/selection.js';
-export { executeSelectionCurrent, executeSelectionExtractOoxml } from './selection/selection.js';
+export {
+  executeSelectionCurrent,
+  executeSelectionExtractOoxml,
+  executeSelectionReleaseSnapshot,
+} from './selection/selection.js';
 export type { HeaderFootersAdapter, HeaderFootersApi } from './header-footers/header-footers.js';
 export * from './header-footers/header-footers.types.js';
 export type { WatermarksAdapter, WatermarksApi } from './watermarks/watermarks.js';
@@ -183,7 +190,11 @@ import type { InsertInput } from './insert/insert.js';
 import { executeDelete } from './delete/delete.js';
 import { executeResolveRange } from './ranges/resolve.js';
 import type { RangeResolverAdapter, ResolveRangeInput, ResolveRangeOutput } from './ranges/ranges.types.js';
-import { executeSelectionCurrent, executeSelectionExtractOoxml } from './selection/selection.js';
+import {
+  executeSelectionCurrent,
+  executeSelectionExtractOoxml,
+  executeSelectionReleaseSnapshot,
+} from './selection/selection.js';
 import type {
   SelectionApi,
   SelectionAdapter,
@@ -302,7 +313,7 @@ import {
   executeListsRestartV2,
   executeListsRemoveV2,
 } from './lists/lists.js';
-import { executeReplace, type ReplaceInput } from './replace/replace.js';
+import { executeReplace, type ReplaceInput, type ReplaceMutationOptions } from './replace/replace.js';
 import type { CreateAdapter, CreateApi } from './create/create.js';
 import {
   executeCreateParagraph,
@@ -1808,10 +1819,19 @@ export type {
   TextInsertInput,
   PlainTextInsertInput,
   RichContentInsertInput,
+  NativeOoxmlInsertInput,
   LegacyInsertInput,
 } from './insert/insert.js';
 export { isStructuralInsertInput } from './insert/insert.js';
-export type { ReplaceInput, TextReplaceInput, RichContentReplaceInput } from './replace/replace.js';
+export type {
+  ReplaceInput,
+  TextReplaceInput,
+  RichContentReplaceInput,
+  ReplaceMutationOptions,
+  NativeOoxmlReplaceInput,
+  SnapshotReplaceInput,
+  ParagraphTextReplaceInput,
+} from './replace/replace.js';
 export { executeReplace, isStructuralReplaceInput, isRichContentReplaceInput } from './replace/replace.js';
 export { executeFind } from './find/find.js';
 export { validateDocumentFragment, validateSDFragment } from './validation/fragment-validator.js';
@@ -1910,6 +1930,7 @@ export interface MutationsAdapter {
 /**
  * The Document API interface for querying and inspecting document nodes.
  */
+
 export interface DocumentApiSurface {
   /**
    * Read the full document as an SDDocument structure.
@@ -1994,7 +2015,7 @@ export interface DocumentApiSurface {
     >,
     options: TrackedTextMutationOptions,
   ): SDMutationReceipt;
-  replace(input: ReplaceInput, options?: RichContentMutationOptions): SDMutationReceipt;
+  replace(input: ReplaceInput, options?: ReplaceMutationOptions): SDMutationReceipt;
   /**
    * Delete text at a target range.
    */
@@ -2531,7 +2552,7 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
     ): SDMutationReceipt {
       return executeInsert(adapters.selectionMutation, adapters.write, input, options);
     },
-    replace(input: ReplaceInput, options?: RichContentMutationOptions | TrackedTextMutationOptions): SDMutationReceipt {
+    replace(input: ReplaceInput, options?: ReplaceMutationOptions | TrackedTextMutationOptions): SDMutationReceipt {
       return executeReplace(adapters.selectionMutation, adapters.write, input, options);
     },
     delete(input: DeleteInput, options?: TextMutationOptions): TextMutationReceipt {
@@ -3866,6 +3887,11 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       },
     },
     selection: {
+      releaseSnapshot(input) {
+        if (!adapters.selection)
+          throw new DocumentApiValidationError('SELECTION_ADAPTER_UNAVAILABLE', 'No selection adapter was registered.');
+        return executeSelectionReleaseSnapshot(adapters.selection, input);
+      },
       current(input?: SelectionCurrentInput): SelectionInfo {
         const adapter = adapters.selection;
         if (!adapter) {

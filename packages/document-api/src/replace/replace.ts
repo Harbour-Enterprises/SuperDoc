@@ -1,15 +1,18 @@
 /**
  * Replace operation: replaces content at a contiguous document selection.
  *
- * Three mutually exclusive shapes:
+ * Mutually exclusive input shapes:
  * - Text replacement (`text` field): routes through SelectionMutationAdapter.
  * - Rich HTML/Markdown replacement (`value` field): routes through WriteAdapter.replaceStructured.
  * - Structural replacement (`content` field): routes through WriteAdapter.replaceStructured.
+ * - Native OOXML (`value`/`capture`) and retained restoration (`snapshotId`): share the structured writer.
  *
  * Text replacement accepts `SelectionTarget` or `ref`. Rich and structural
  * replacements also accept `BlockNodeAddress`.
  */
 
+import { isOoxmlContentSource, validateOoxmlContentSource } from '../selection/selection.js';
+import type { OoxmlContentSource } from '../selection/selection.types.js';
 import type { RichContentMutationOptions, TextMutationOptions } from '../write/write.js';
 import type { SelectionTarget } from '../types/address.js';
 import type { SDMutationReceipt } from '../types/sd-contract.js';
@@ -89,9 +92,31 @@ export type RichContentReplaceInput =
 /**
  * Input payload for the `doc.replace` operation.
  *
- * Discrimination: `text` (plain), `value` (HTML/Markdown), or `content` (SDFragment).
+ * Discrimination: `text`, typed `value`, `content`, portable `capture`, or retained `snapshotId`.
  */
-export type ReplaceInput = TextReplaceInput | RichContentReplaceInput | SDReplaceInput;
+export type NativeOoxmlReplaceInput = OoxmlContentSource & {
+  target: SelectionTarget | BlockNodeAddress;
+  in?: StoryLocator;
+  nestingPolicy?: NestingPolicy;
+};
+export type SnapshotReplaceInput = { target: BlockNodeAddress; snapshotId: string; in?: never };
+export type ParagraphTextReplaceInput = { target: BlockNodeAddress; text: string; in?: never };
+export interface ReplaceMutationOptions extends RichContentMutationOptions {
+  /** Replace one paragraph's contents, retaining its identity and exact paragraph properties. */
+  replaceMode?: 'contents';
+  /** Compare the addressed paragraph with an unchanged retained snapshot before committing. */
+  expectedSnapshotId?: string;
+}
+type ReplaceExecutionOptions =
+  | ReplaceMutationOptions
+  | (TextMutationOptions & { replaceMode?: never; expectedSnapshotId?: never });
+export type ReplaceInput =
+  | TextReplaceInput
+  | RichContentReplaceInput
+  | SDReplaceInput
+  | NativeOoxmlReplaceInput
+  | SnapshotReplaceInput
+  | ParagraphTextReplaceInput;
 
 // ---------------------------------------------------------------------------
 // Allowlists
@@ -119,7 +144,7 @@ export function isRichContentReplaceInput(input: ReplaceInput): input is RichCon
 // Shared target validation for text path
 // ---------------------------------------------------------------------------
 
-function validateTargetLocator(input: Record<string, unknown>, operation: string): void {
+function validateTargetLocator(input: Record<string, unknown>, operation: string, contents = false): void {
   const hasTarget = input.target !== undefined;
   const hasRef = input.ref !== undefined;
 
@@ -137,7 +162,12 @@ function validateTargetLocator(input: Record<string, unknown>, operation: string
     });
   }
 
-  if (hasTarget && !isSelectionTarget(input.target) && !isBodyReplaceTarget(input.target)) {
+  if (
+    hasTarget &&
+    !isSelectionTarget(input.target) &&
+    !isBodyReplaceTarget(input.target) &&
+    !(contents && isBlockNodeAddress(input.target))
+  ) {
     throw new DocumentApiValidationError('INVALID_TARGET', 'target must be a SelectionTarget or body StoryLocator.', {
       field: 'target',
       value: input.target,
@@ -156,11 +186,66 @@ function validateTargetLocator(input: Record<string, unknown>, operation: string
 // Validation
 // ---------------------------------------------------------------------------
 
-export function validateReplaceInput(input: unknown): asserts input is ReplaceInput {
+export function validateReplaceInput(input: unknown, options?: ReplaceExecutionOptions): asserts input is ReplaceInput {
   if (!isRecord(input)) {
     throw new DocumentApiValidationError('INVALID_TARGET', 'Replace input must be a non-null object.');
   }
 
+  if (options?.replaceMode !== undefined && options.replaceMode !== 'contents')
+    throw new DocumentApiValidationError('INVALID_INPUT', 'replaceMode must be contents when provided.');
+  if (
+    options?.expectedSnapshotId !== undefined &&
+    (options.replaceMode !== 'contents' ||
+      typeof options.expectedSnapshotId !== 'string' ||
+      !options.expectedSnapshotId)
+  )
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'expectedSnapshotId requires contents mode and a nonempty handle.',
+    );
+  if (
+    options?.replaceMode === 'contents' &&
+    (!isBlockNodeAddress(input.target) ||
+      !['paragraph', 'heading', 'listItem'].includes(input.target.nodeType) ||
+      input.ref !== undefined ||
+      input.in !== undefined)
+  )
+    throw new DocumentApiValidationError(
+      'INVALID_TARGET',
+      'Contents replacement requires an explicit paragraph, heading, or listItem block.',
+    );
+  if (input.snapshotId !== undefined) {
+    assertNoUnknownFields(input, new Set(['target', 'snapshotId']), 'replace');
+    if (
+      options?.replaceMode !== 'contents' ||
+      !options.expectedSnapshotId ||
+      typeof input.snapshotId !== 'string' ||
+      !input.snapshotId
+    )
+      throw new DocumentApiValidationError(
+        'INVALID_INPUT',
+        'Snapshot restore requires contents mode and expectedSnapshotId.',
+      );
+    return;
+  }
+  if (isOoxmlContentSource(input)) {
+    assertNoUnknownFields(
+      input,
+      new Set([
+        'target',
+        'in',
+        'nestingPolicy',
+        ...('capture' in input ? ['capture'] : ['value', 'type', 'namespaces', 'dependencies', 'sourcePartUri']),
+      ]),
+      'replace',
+    );
+    if (!isBlockNodeAddress(input.target) && !isSelectionTarget(input.target))
+      throw new DocumentApiValidationError('INVALID_TARGET', 'Native replace requires a block or selection target.');
+    validateStoryLocator(input.in, 'in');
+    validateNestingPolicyValue(input.nestingPolicy);
+    validateOoxmlContentSource(input);
+    return;
+  }
   const hasText = 'text' in input && input.text !== undefined;
   const hasContent = 'content' in input && input.content !== undefined;
   const hasValue = 'value' in input && input.value !== undefined;
@@ -189,7 +274,7 @@ export function validateReplaceInput(input: unknown): asserts input is ReplaceIn
   } else if (hasValue) {
     validateRichContentReplaceInput(input);
   } else {
-    validateTextReplaceInput(input);
+    validateTextReplaceInput(input, options?.replaceMode === 'contents');
   }
 }
 
@@ -240,7 +325,7 @@ function validateRichContentReplaceInput(input: Record<string, unknown>): void {
 }
 
 /** Validates the text replacement path (SelectionTarget / ref + text). */
-function validateTextReplaceInput(input: Record<string, unknown>): void {
+function validateTextReplaceInput(input: Record<string, unknown>, contents = false): void {
   if ('nestingPolicy' in input && input.nestingPolicy !== undefined) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',
@@ -250,7 +335,7 @@ function validateTextReplaceInput(input: Record<string, unknown>): void {
   }
 
   assertNoUnknownFields(input, TEXT_REPLACE_ALLOWED_KEYS, 'replace', 'doc.replace');
-  validateTargetLocator(input, 'replace');
+  validateTargetLocator(input, 'replace', contents);
   validateBodyReplaceShape(input);
 
   if (input.expectedText !== undefined) {
@@ -352,9 +437,24 @@ export function executeReplace(
   selectionAdapter: SelectionMutationAdapter,
   writeAdapter: WriteAdapter,
   input: ReplaceInput,
-  options?: RichContentMutationOptions | TextMutationOptions,
+  options?: ReplaceExecutionOptions,
 ): SDMutationReceipt {
-  validateReplaceInput(input);
+  validateReplaceInput(input, options);
+  if (
+    (options?.replaceMode === 'contents' && !writeAdapter.supportsParagraphContents) ||
+    (isOoxmlContentSource(input) && !writeAdapter.supportsNativeOoxml)
+  )
+    throw new DocumentApiValidationError(
+      'CAPABILITY_UNAVAILABLE',
+      'This runtime does not support the requested contents/native replacement.',
+    );
+  if (options?.replaceMode === 'contents' || isOoxmlContentSource(input)) {
+    return writeAdapter.replaceStructured(input, {
+      ...normalizeMutationOptions(options, isRichContentReplaceInput(input) ? 'replace' : undefined),
+      ...(options?.replaceMode ? { replaceMode: options.replaceMode } : {}),
+      ...(options?.expectedSnapshotId ? { expectedSnapshotId: options.expectedSnapshotId } : {}),
+    });
+  }
 
   if (
     options &&
@@ -378,7 +478,7 @@ export function executeReplace(
   }
 
   // Text replacement path: route through SelectionMutationAdapter
-  const textInput = input;
+  const textInput = input as TextReplaceInput;
   if (isBodyReplaceTarget(textInput.target)) {
     return writeAdapter.replaceStructured(textInput, normalizeMutationOptions(options));
   }

@@ -429,6 +429,7 @@
     "/document-api/reference/selection/",
     "/document-api/reference/selection/current/",
     "/document-api/reference/selection/extract-ooxml/",
+    "/document-api/reference/selection/release-snapshot/",
     "/document-api/reference/styles/",
     "/document-api/reference/styles/apply/",
     "/document-api/reference/styles/get-catalog/",

@@ -1,5 +1,5 @@
 import type { RichContentInsertInput } from '../insert/insert.js';
-import type { RichContentReplaceInput } from '../replace/replace.js';
+import type { RichContentReplaceInput, ReplaceMutationOptions } from '../replace/replace.js';
 import type { ChangeMode } from '../write/write.js';
 import type {
   ProjectHtmlInput,
@@ -33,7 +33,11 @@ export interface SDHtmlMarkdownCheckGuard {
 
 export type SDHtmlMarkdownSupportCheckInput =
   | { operation: 'insert'; input: RichContentInsertInput; options?: { changeMode?: ChangeMode } }
-  | { operation: 'replace'; input: RichContentReplaceInput; options?: { changeMode?: ChangeMode } }
+  | {
+      operation: 'replace';
+      input: RichContentReplaceInput;
+      options?: Pick<ReplaceMutationOptions, 'changeMode' | 'replaceMode' | 'expectedSnapshotId'>;
+    }
   | { operation: 'projectHtml'; input?: ProjectHtmlInput }
   | { operation: 'projectMarkdown'; input?: ProjectMarkdownInput };
 
@@ -94,7 +98,7 @@ export function validateSDHtmlMarkdownSupportCheckInput(
   if (input.operation === 'insert' || input.operation === 'replace') {
     assertNoUnknownFields(input, WRITE_REQUEST_FIELDS, 'capabilities.check');
     if (input.operation === 'insert') validateInsertInput(input.input);
-    else validateReplaceInput(input.input);
+    else validateReplaceInput(input.input, input.options as ReplaceMutationOptions | undefined);
     const richInput: unknown = input.input;
     const rich =
       isRecord(richInput) &&
@@ -110,7 +114,13 @@ export function validateSDHtmlMarkdownSupportCheckInput(
       if (!isRecord(input.options)) {
         throw new DocumentApiValidationError('INVALID_INPUT', 'capabilities.check options must be an object.');
       }
-      assertNoUnknownFields(input.options, WRITE_OPTION_FIELDS, 'capabilities.check options');
+      assertNoUnknownFields(
+        input.options,
+        input.operation === 'replace'
+          ? new Set(['changeMode', 'replaceMode', 'expectedSnapshotId'])
+          : WRITE_OPTION_FIELDS,
+        'capabilities.check options',
+      );
       validateChangeMode(input.options.changeMode);
     }
     return;

@@ -478,6 +478,61 @@ describe('superdoc.ui — sole owner', () => {
    * that never arrives and every one of those tests still passes.
    */
   describe('replaceFile signals a document replacement', () => {
+    it.each(['bytes', 'buffer', 'blob'] as const)(
+      'shares the confirmed %s source identity between the V2 host and document store',
+      async (kind) => {
+        const { superdoc, storedData } = mountWithStoredDocument('editing-ready');
+        Object.assign(superdoc.activeEditor!, { editorVersion: 2 });
+        const bytes = new Uint8Array([0, 1, 2, 3, 0]).subarray(1, 4);
+        const source = kind === 'bytes' ? bytes : kind === 'buffer' ? bytes.slice().buffer : new Blob([bytes]);
+        let hostSource: unknown;
+        Object.defineProperty(superdoc.activeEditor, 'replaceFile', {
+          value: async (input: unknown) => {
+            hostSource = input;
+            return { state: 'editing-ready' };
+          },
+        });
+        const replaced = vi.fn();
+        superdoc.on('document-replaced', replaced);
+
+        expect(await superdoc.replaceDocument(source)).toEqual({ ok: true });
+
+        expect(storedData()).toBe(hostSource);
+        expect(hostSource).toBeInstanceOf(Blob);
+        expect(new Uint8Array(await (hostSource as Blob).arrayBuffer())).toEqual(new Uint8Array([1, 2, 3]));
+        expect(replaced).toHaveBeenCalledOnce();
+      },
+    );
+
+    it('persists a deferred replacement only to its originating document after an active-editor switch', async () => {
+      const { superdoc } = mountWithStoredDocument('editing-ready');
+      Object.assign(superdoc.activeEditor!, { editorVersion: 2 });
+      const origin = superdoc.activeEditor;
+      const replacement = new Blob(['next']);
+      const nextDocument = { id: 'doc-2', type: 'docx', data: new Blob(['other']) };
+      superdoc.config.documents.push(nextDocument as never);
+      let finish!: (value: unknown) => void;
+      Object.defineProperty(origin, 'replaceFile', {
+        value: () =>
+          new Promise((resolve) => {
+            finish = resolve;
+          }),
+      });
+      const replaced = vi.fn();
+      superdoc.on('document-replaced', replaced);
+      const pending = superdoc.replaceDocument(replacement);
+      const nextEditor = { editorVersion: 2, options: { documentId: 'doc-2' } };
+      Object.defineProperty(superdoc, 'activeEditor', { value: nextEditor, configurable: true });
+      finish({ state: 'editing-ready' });
+
+      expect(await pending).toEqual({ ok: true });
+      expect(superdoc.config.documents[0]!.data).toBe(replacement);
+      expect(superdoc.config.documents[1]).toBe(nextDocument);
+      expect(nextDocument.data).not.toBe(replacement);
+      expect(superdoc.activeEditor).toBe(nextEditor);
+      expect(replaced).toHaveBeenCalledWith(expect.objectContaining({ editor: origin }));
+    });
+
     it.each([undefined, null, true, 'ok', {}, { state: 'editing-ready' }])(
       'keeps legacy raw results and exposes the same confirmation: %j',
       async (raw) => {

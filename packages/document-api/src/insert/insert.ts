@@ -1,3 +1,5 @@
+import { isOoxmlContentSource, validateOoxmlContentSource } from '../selection/selection.js';
+import type { OoxmlContentSource } from '../selection/selection.types.js';
 import {
   executeWrite,
   normalizeMutationOptions,
@@ -75,7 +77,12 @@ export type LegacyInsertInput = TextInsertInput;
  * Discrimination: presence of `content` (structural) vs `value` (text string).
  * These are mutually exclusive: providing both is an error.
  */
-export type InsertInput = TextInsertInput | RichContentInsertInput | SDInsertInput;
+export type NativeOoxmlInsertInput = OoxmlContentSource & {
+  target?: SelectionTarget | BlockNodeAddress;
+  placement?: Placement;
+  in?: StoryLocator;
+};
+export type InsertInput = TextInsertInput | RichContentInsertInput | SDInsertInput | NativeOoxmlInsertInput;
 
 export type PlainTextInsertInput = TextInsertInput & { type?: 'text' };
 
@@ -121,6 +128,25 @@ export function validateInsertInput(input: unknown): asserts input is InsertInpu
     throw new DocumentApiValidationError('INVALID_TARGET', 'Insert input must be a non-null object.');
   }
 
+  if (isOoxmlContentSource(input)) {
+    assertNoUnknownFields(
+      input,
+      new Set([
+        'target',
+        'placement',
+        'in',
+        ...('capture' in input ? ['capture'] : ['value', 'type', 'namespaces', 'dependencies', 'sourcePartUri']),
+      ]),
+      'insert',
+    );
+    if (input.target !== undefined && !isBlockNodeAddress(input.target) && !isSelectionTarget(input.target))
+      throw new DocumentApiValidationError('INVALID_TARGET', 'Native insert target must be a block or selection.');
+    if (input.placement !== undefined && !PLACEMENT_VALUES.has(input.placement as Placement))
+      throw new DocumentApiValidationError('INVALID_INPUT', 'Invalid native insertion placement.');
+    validateStoryLocator(input.in, 'in');
+    validateOoxmlContentSource(input);
+    return;
+  }
   const hasValue = 'value' in input && input.value !== undefined;
   const hasContent = 'content' in input && input.content !== undefined;
 
@@ -302,6 +328,12 @@ export function executeInsert(
 ): SDMutationReceipt {
   assertOperationCanStart(options);
   validateInsertInput(input);
+  if (isOoxmlContentSource(input) && !writeAdapter.supportsNativeOoxml)
+    throw new DocumentApiValidationError(
+      'CAPABILITY_UNAVAILABLE',
+      'This runtime does not support native OOXML insertion.',
+    );
+  if (isOoxmlContentSource(input)) return writeAdapter.insertStructured(input, normalizeMutationOptions(options));
 
   if (
     options &&

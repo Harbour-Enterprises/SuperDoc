@@ -48,6 +48,32 @@ Use `dryRun: true` to resolve and preflight without creating IDs, history, or do
 
 Successful raw-source receipts include the final `outcome` and a `conversion` report. They may also include created entity identities, source-path effects, affected stories, text-range shifts, and a transaction ID. Check `success` before using any success-only field.
 
+## Native Word XML
+
+Use the same `insert()` and `replace()` APIs for native Word markup:
+
+```ts
+const captured = await doc.selection.extractOoxml({ at: sourceSelection });
+const copied = await doc.insert(
+  { target: destinationParagraph, placement: 'after', capture: captured },
+  { changeMode: 'direct' },
+);
+
+const replaced = await doc.replace(
+  {
+    target: destinationParagraph,
+    type: 'ooxml',
+    value: '<w:p><w:r><w:t>Native alternative</w:t></w:r></w:p>',
+    namespaces: { w: 'http://schemas.openxmlformats.org/wordprocessingml/2006/main' },
+  },
+  { replaceMode: 'contents', changeMode: 'direct' },
+);
+```
+
+Raw OOXML accepts namespace bindings, optional `sourcePartUri` and the same `dependencies` as a portable capture. Native block insertion supports before/after or append; a visible single-paragraph text selection supports inline insertion/replacement. Cross-paragraph selection writes, tracked mode and collaboration are currently unavailable. `replaceMode: 'contents'` preserves an explicitly addressed paragraph/heading/list item's container; ordinary replacement keeps its existing structural semantics.
+
+Native writes validate supported nesting, resolve dependencies and remap identities before one atomic commit. Unsupported markup is rejected rather than stripped. Limits are 4 MiB of main XML, 50,000 elements, 256 dependency relationships and 16 MiB of total decoded input. The native subset is narrower than selection extraction; see [capture selection as OOXML](/document-api/selection-ooxml). Native copies remint review identities. Exact original restoration uses a retained handle, as described in [replace and delete content](/document-api/replace-delete-content).
+
 ## Supported inbound constructs
 
 | Source construct                                                                                          | Result                                                                  |

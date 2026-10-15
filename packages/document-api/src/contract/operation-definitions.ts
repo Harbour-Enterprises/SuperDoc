@@ -103,6 +103,7 @@ export interface IntentGroupMeta {
 }
 
 export const V1_RUNTIME_UNAVAILABLE_OPERATION_IDS = [
+  'selection.releaseSnapshot',
   'blocks.split',
   'blocks.merge',
   'blocks.move',
@@ -958,11 +959,11 @@ export const OPERATION_DEFINITIONS = {
   insert: {
     memberPath: 'insert',
     description:
-      'Insert content into the document. Two input shapes: ' +
+      'Insert content into the document. Text, rich, structural, and native OOXML input shapes: ' +
       'text-based (value + type) inserts inline content at a SelectionTarget or ref position within an existing block; ' +
       'structural SDFragment (content) inserts one or more blocks as siblings relative to a BlockNodeAddress target. ' +
       'When target/ref is omitted, content appends at the end of the document. ' +
-      'Text mode supports text (default), markdown, and html content types via the `type` field. ' +
+      'Text mode supports text (default), markdown, and html. Native type:ooxml accepts namespaces and dependency manifests, or capture accepts a portable selection.extractOoxml result. Native copies remap package and review identities and require direct mode. ' +
       'Rich markdown/html and structural modes use `placement` (before/after/insideStart/insideEnd) to position relative to a block target.',
     expectedResult:
       'Returns an SDMutationReceipt with applied status; resolution reports the resolved insertion point/target. Created visible text and structural blocks are reported through effects.insertedText and effects.insertedBlocks when available. Receipt reports NO_OP if the insertion point is invalid or content is empty.',
@@ -970,7 +971,7 @@ export const OPERATION_DEFINITIONS = {
     metadata: mutationOperation({
       idempotency: 'non-idempotent',
       supportsDryRun: true,
-      trackedSupport: 'always',
+      trackedSupport: 'conditional',
       possibleFailureCodes: [
         'INVALID_TARGET',
         'NO_OP',
@@ -1013,6 +1014,7 @@ export const OPERATION_DEFINITIONS = {
   replace: {
     memberPath: 'replace',
     description:
+      'Optional replaceMode:contents retains one paragraph, heading, or listItem container while applying text, HTML, Markdown, SDFragment, or native OOXML inlines. A retained snapshotId source restores exact same-session original markup with an expectedSnapshotId local precondition. These writes require direct mode; existing selection and structural behavior is unchanged. ' +
       'Replace content at a contiguous document selection. ' +
       'Text path accepts a SelectionTarget or ref plus replacement text. ' +
       'For explicit single-paragraph text selections, expectedText rejects mismatches with PRECONDITION_FAILED before mutation. ' +
@@ -1025,7 +1027,7 @@ export const OPERATION_DEFINITIONS = {
     metadata: mutationOperation({
       idempotency: 'conditional',
       supportsDryRun: true,
-      trackedSupport: 'always',
+      trackedSupport: 'conditional',
       possibleFailureCodes: [
         'INVALID_TARGET',
         'NO_OP',
@@ -3018,10 +3020,22 @@ export const OPERATION_DEFINITIONS = {
     referenceDocPath: 'selection/current.mdx',
     referenceGroup: 'selection',
   },
+  'selection.releaseSnapshot': {
+    memberPath: 'selection.releaseSnapshot',
+    description: v2BackedOnlyDescription(
+      'Release a retained exact-selection snapshot without changing document content or Undo history.',
+    ),
+    expectedResult: 'Returns released=true when a same-session handle was removed; otherwise false.',
+    requiresDocumentContext: true,
+    metadata: readOperation({ throws: ['CAPABILITY_UNAVAILABLE', 'INVALID_INPUT'] }),
+    referenceDocPath: 'selection/release-snapshot.mdx',
+    referenceGroup: 'selection',
+    batchable: false,
+  },
   'selection.extractOoxml': {
     memberPath: 'selection.extractOoxml',
     description:
-      'Capture a nonempty current or addressed selection as OOXML with its structure, context, and package dependencies.',
+      'Capture a nonempty current or addressed selection as portable OOXML with native dependencies. Optional retain:true keeps an exact same-session restoration handle for one complete standalone body paragraph; release it when unused. Unsupported retained contexts and collaboration reject.',
     expectedResult:
       'Returns the selected OOXML, structural placement, source provenance, and required relationships and parts without changing the document.',
     requiresDocumentContext: true,

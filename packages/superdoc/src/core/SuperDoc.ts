@@ -4267,11 +4267,12 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
   ): Promise<{ raw: unknown; confirmed: boolean }> {
     const activeEditor = this.activeEditor as ActiveEditor | null;
     if (isV2ActiveEditorFacade(activeEditor) && typeof activeEditor.replaceFile === 'function') {
-      const result = await activeEditor.replaceFile(source);
+      const replacementSource = this.#savedDocxToBlob(source);
+      const result = await activeEditor.replaceFile(replacementSource);
       const state = result && typeof result === 'object' ? (result as { state?: unknown }).state : null;
       const confirmed = state === null || state === 'review-ready' || state === 'editing-ready';
       if (confirmed) {
-        this.#replaceActiveDocumentData(activeEditor, source);
+        this.#replaceActiveDocumentData(activeEditor, replacementSource);
         this.emit('document-replaced', { editor: activeEditor, host: (activeEditor as { host?: unknown })?.host });
       }
       return { raw: result, confirmed };
