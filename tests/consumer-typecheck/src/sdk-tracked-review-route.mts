@@ -1,6 +1,6 @@
-import { runTrackedComparisonReview, type SuperDocDocument } from '../../../packages/sdk/langs/node/dist/index.js';
+import { runTrackedComparisonReview, type SuperDocClient } from '../../../packages/sdk/langs/node/dist/index.js';
 
-declare const client: { open: (input: { doc: string; runtime: string }) => Promise<SuperDocDocument> };
+declare const client: Pick<SuperDocClient, 'open'>;
 declare const baseBytes: Uint8Array;
 declare const targetBytes: Uint8Array;
 

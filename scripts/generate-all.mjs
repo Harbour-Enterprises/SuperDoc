@@ -16,7 +16,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { readdir, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
@@ -46,32 +46,11 @@ async function run(command, args) {
   }
 }
 
-/**
- * Remove all .json files from a directory while preserving non-json files
- * (e.g. __init__.py in packages/sdk/tools/).
- */
-async function cleanJsonFiles(dir) {
-  let entries;
-  try {
-    entries = await readdir(dir);
-  } catch {
-    return; // directory doesn't exist yet
-  }
-  await Promise.all(
-    entries.filter((name) => name.endsWith('.json')).map((name) => rm(path.join(dir, name), { force: true })),
-  );
-}
-
 async function clean() {
   console.log('Cleaning gitignored generated output directories...');
   await Promise.all([
     rm(path.join(REPO_ROOT, 'packages/document-api/generated'), { recursive: true, force: true }),
     rm(path.join(REPO_ROOT, 'apps/cli/generated'), { recursive: true, force: true }),
-    rm(path.join(REPO_ROOT, 'packages/sdk/langs/node/src/generated'), { recursive: true, force: true }),
-    rm(path.join(REPO_ROOT, 'packages/sdk/langs/node/src/embedded-prompts.generated.ts'), { force: true }),
-    rm(path.join(REPO_ROOT, 'packages/sdk/langs/node/src/embedded-tools.generated.ts'), { force: true }),
-    rm(path.join(REPO_ROOT, 'packages/sdk/langs/python/superdoc/generated'), { recursive: true, force: true }),
-    cleanJsonFiles(path.join(REPO_ROOT, 'packages/sdk/tools')),
   ]);
 }
 
@@ -85,15 +64,13 @@ async function main() {
   console.log('\n--- Phase 1: docapi:sync ---');
   await run('pnpm', ['run', 'docapi:sync']);
 
-  // Phase 2: CLI SDK contract export
-  console.log('\n--- Phase 2: cli:export-sdk-contract ---');
-  await run('pnpm', ['exec', 'tsx', path.join(REPO_ROOT, 'apps/cli/scripts/export-sdk-contract.ts')]);
-
-  // Phase 3: SDK codegen (Node + Python clients + tool catalogs)
-  console.log('\n--- Phase 3: sdk codegen ---');
-  await run('node', [path.join(REPO_ROOT, 'packages/sdk/codegen/src/generate-all.mjs')]);
-  await run('node', [path.join(REPO_ROOT, 'packages/sdk/langs/node/scripts/embed-prompts.mjs')]);
-  await run('node', [path.join(REPO_ROOT, 'packages/sdk/langs/node/scripts/embed-tools.mjs')]);
+  // The SDK graph owns contract export, all projections, embeddings, and cleanup.
+  // CI checks tracked SDK projections before writing its ignored build inputs.
+  console.log('\n--- Phase 2-3: SDK generation ---');
+  await run('node', [
+    path.join(REPO_ROOT, 'packages/sdk/scripts/sdk-generate.mjs'),
+    ...(process.argv.includes('--prepare-ci') ? ['--prepare-ci'] : []),
+  ]);
 
   // Phase 4: @superdoc/fonts derived sources: bundled asset URLs (from the asset dir) plus curatable
   // family names (from font-system offerings). Kept out of the package's build/prepare lifecycle so a
