@@ -45,3 +45,12 @@ doc.selection.extractOoxml({ at: { kind: 'text' } });
 
 // @ts-expect-error A document-wide revision is not an extraction precondition.
 doc.selection.extractOoxml({ at: capture.at, expectedRevision: revision });
+
+const selectionReadInput: Parameters<BrowserDocumentApi['selection']['current']>[0] = { includeText: true };
+const rangeDecisionSupported: boolean | undefined = (
+  {} as Awaited<ReturnType<BrowserDocumentApi['selection']['current']>>
+).trackedChangeRangeDecisionSupported;
+const changesWhollySelected: boolean | undefined = (
+  {} as Awaited<ReturnType<BrowserDocumentApi['selection']['current']>>
+).trackedChangesWhollySelected;
+void [selectionReadInput, rangeDecisionSupported, changesWhollySelected];

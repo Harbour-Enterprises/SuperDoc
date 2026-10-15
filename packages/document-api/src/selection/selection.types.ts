@@ -120,6 +120,12 @@ export interface SelectionInfo {
    * full selection.
    */
   target: TextTarget | null;
+  /** Deletion-inclusive multi-block text coverage for range review decisions, when resolvable. */
+  trackedTarget?: TextTarget | null;
+  /** Whether this exact text range supports tracked-change decisions; excludes permissions. */
+  trackedChangeRangeDecisionSupported?: boolean;
+  /** Whether the selection covers every tracked-text fragment of each active change. */
+  trackedChangesWhollySelected?: boolean;
   /**
    * Explicit selection envelope for the current live selection, or `null` when
    * the runtime cannot project one truthfully.

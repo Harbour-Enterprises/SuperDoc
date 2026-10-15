@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
+import { isAllowed } from '../../core/collaboration/permissions.js';
 import { createSuperDocUI } from './create-super-doc-ui.js';
 
 const change = { id: 'tc-1', type: 'insert', author: 'Alice' };
@@ -208,5 +209,71 @@ describe('tracked-change permission reads (SD-5019)', () => {
     await settle();
     h.refresh();
     expect(h.ui.commands.get('track-changes-accept-selection').getState().enabled).toBe(true);
+  });
+});
+
+describe('SD-5713 unknown ownership', () => {
+  it.each(['accept', 'reject'] as const)('allows %s when both ownership permissions allow', async (decision) => {
+    const h = mount(async () => ({ items: [] }), ['tc-off-window'], []);
+    h.canPerformPermission.mockImplementation(({ permission }) => isAllowed(permission, 'editor', false));
+    h.refresh();
+    expect(h.ui.commands.get(`track-changes-${decision}-selection`).getState().enabled).toBe(true);
+    expect(await h.ui.toolbar.execute(`track-changes-${decision}-selection`)).toEqual({ success: true });
+    expect(h.decide).toHaveBeenCalledTimes(1);
+    const prefix = decision === 'accept' ? 'RESOLVE' : 'REJECT';
+    expect(h.canPerformPermission).toHaveBeenCalledWith(expect.objectContaining({ permission: `${prefix}_OWN` }));
+    expect(h.canPerformPermission).toHaveBeenCalledWith(expect.objectContaining({ permission: `${prefix}_OTHER` }));
+    expect(h.list).not.toHaveBeenCalled();
+  });
+  it.each(['OWN', 'OTHER'])('keeps unknown ownership blocked when %s is denied', async (ownership) => {
+    const h = mount(async () => ({ items: [] }), ['tc-off-window'], []);
+    h.canPerformPermission.mockImplementation(({ permission }) => !permission.endsWith(`_${ownership}`));
+    h.refresh();
+    for (const decision of ['accept', 'reject']) {
+      expect(h.ui.commands.get(`track-changes-${decision}-selection`).getState()).toMatchObject({
+        enabled: false,
+        reason: 'permission-denied',
+      });
+      expect(await h.ui.toolbar.execute(`track-changes-${decision}-selection`)).toBe(false);
+    }
+    expect(h.decide).not.toHaveBeenCalled();
+    expect(h.list).not.toHaveBeenCalled();
+  });
+});
+
+describe('SD-5713 unsupported range commands', () => {
+  it.each([1, 2])('disables both decisions for an unsplittable selection over %s changes', async (count) => {
+    const ids = ['tc-1', 'tc-2'].slice(0, count);
+    const rows = ids.map((id) => ({
+      ...change,
+      id,
+      type: 'insertion',
+      grouping: 'standalone',
+      insertedText: 'alpha omega',
+    }));
+    const h = mount(() => ({ items: rows }), ids, rows);
+    h.canPerformPermission.mockImplementation(() => true);
+    h.editor.doc.selection.current = () => ({
+      empty: false,
+      activeChangeIds: ids,
+      activeCommentIds: [],
+      activeMarks: [],
+      text: 'al',
+      selectionTarget: {
+        kind: 'selection',
+        start: { kind: 'text', blockId: 'P1', offset: 0 },
+        end: { kind: 'text', blockId: 'P1', offset: 2 },
+      },
+      trackedChangeRangeDecisionSupported: false,
+    });
+    h.emitMutation();
+    h.refresh();
+    for (const decision of ['accept', 'reject']) {
+      expect(h.ui.commands.get(`track-changes-${decision}-selection`).getState()).toMatchObject({
+        enabled: false,
+        reason: 'operation-unavailable',
+      });
+    }
+    expect(h.decide).not.toHaveBeenCalled();
   });
 });

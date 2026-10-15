@@ -818,6 +818,293 @@ describe('public facade (ui)', () => {
     });
   });
 
+  it.each(
+    [
+      ['accept', BUILT_IN_COMMAND_IDS.acceptChange],
+      ['reject', BUILT_IN_COMMAND_IDS.rejectChange],
+    ].flatMap(([decision, commandId]) =>
+      [false, true].flatMap((pending) =>
+        [false, true].map((hasTrackedTarget) => [decision, commandId, pending, hasTrackedTarget] as const),
+      ),
+    ),
+  )(
+    'checks a multi-block single-change selection for %s via %s (catalog pending: %s, tracked target: %s)',
+    async (decision, commandId, pending, hasTrackedTarget) => {
+      const story = { kind: 'story', storyType: 'body' } as const;
+      const trackedTarget = {
+        kind: 'text',
+        story,
+        coordinateSpace: 'tracked',
+        segments: [
+          { blockId: '57130001', range: { start: 0, end: 4 } },
+          { blockId: '57130002', range: { start: 0, end: 3 } },
+        ],
+      };
+      const decide = vi.fn(() => ({ success: true }));
+      const ui = createSuperDocUI({
+        superdoc: {
+          activeEditor: {
+            doc: {
+              comments: { list: () => ({ items: [] }) },
+              selection: {
+                current: () => ({
+                  empty: false,
+                  target: {
+                    kind: 'text',
+                    story,
+                    segments: [
+                      { blockId: '57130001', range: { start: 0, end: 4 } },
+                      { blockId: '57130002', range: { start: 0, end: 1 } },
+                    ],
+                  },
+                  trackedTarget: hasTrackedTarget ? trackedTarget : null,
+                  selectionTarget: {
+                    kind: 'selection',
+                    story,
+                    coordinateSpace: 'tracked',
+                    start: { kind: 'text', blockId: '57130001', offset: 0, story },
+                    end: { kind: 'text', blockId: '57130002', offset: 3, story },
+                  },
+                  activeMarks: [],
+                  activeCommentIds: [],
+                  activeChangeIds: ['tc-1'],
+                  text: 'Lead\nA',
+                }),
+              },
+              trackChanges: {
+                list: () =>
+                  pending
+                    ? new Promise<never>(() => {})
+                    : { items: [{ id: 'tc-1', type: 'replacement', grouping: 'replacement-pair' }] },
+                decide,
+              },
+            },
+          },
+          config: { documentMode: 'editing' },
+          on: vi.fn(),
+          off: vi.fn(),
+        },
+      });
+
+      if (!hasTrackedTarget) {
+        expect(ui.commands.get(commandId).getState()).toMatchObject({
+          enabled: false,
+          reason: SUPERDOC_UI_REASONS.targetUnresolved,
+        });
+        expect(await ui.toolbar.execute(commandId)).toBe(false);
+        expect(decide).not.toHaveBeenCalled();
+        return;
+      }
+      expect(ui.commands.get(commandId).getState()).toMatchObject({ enabled: true });
+      expect(await ui.toolbar.execute(commandId)).toEqual({ success: true });
+      expect(decide).toHaveBeenCalledExactlyOnceWith({
+        decision,
+        target: { kind: 'range', coordinateSpace: 'tracked', range: trackedTarget },
+      });
+    },
+  );
+
+  function reviewSelectionUi(info: Record<string, unknown>, items: unknown[]) {
+    const story = { kind: 'story', storyType: 'body' } as const;
+    const decide = vi.fn(() => ({ success: true }));
+    const ui = createSuperDocUI({
+      superdoc: {
+        activeEditor: {
+          doc: {
+            comments: { list: () => ({ items: [] }) },
+            selection: {
+              current: () => ({
+                empty: false,
+                target: { kind: 'text', story, segments: [{ blockId: '57130001', range: { start: 0, end: 4 } }] },
+                activeMarks: [],
+                activeCommentIds: [],
+                ...info,
+              }),
+            },
+            trackChanges: { list: () => ({ items }), decide },
+          },
+        },
+        config: { documentMode: 'editing' },
+        on: vi.fn(),
+        off: vi.fn(),
+      },
+    });
+    return { ui, decide, story };
+  }
+
+  it.each(
+    (['accept', 'reject'] as const).flatMap((decision) =>
+      (['cells', 'table'] as const).map((type) => ({ decision, type })),
+    ),
+  )('blocks toolbar $decision for a rectangular $type selection', async ({ decision, type }) => {
+    const story = { kind: 'story', storyType: 'body' } as const;
+    const { ui, decide } = reviewSelectionUi(
+      {
+        activeChangeIds: ['tc-1'],
+        tableSelection: { kind: 'tableCells', type, tableId: 'T1', cells: [] },
+        selectionTarget: {
+          kind: 'selection',
+          story,
+          start: { kind: 'text', blockId: '57130001', offset: 0, story },
+          end: { kind: 'text', blockId: '57130001', offset: 4, story },
+        },
+        text: 'Lead',
+      },
+      [{ id: 'tc-1', type: 'insertion', grouping: 'standalone' }],
+    );
+    const commandId = decision === 'accept' ? BUILT_IN_COMMAND_IDS.acceptChange : BUILT_IN_COMMAND_IDS.rejectChange;
+    expect(ui.commands.get(commandId).getState()).toMatchObject({
+      enabled: false,
+      reason: SUPERDOC_UI_REASONS.operationUnavailable,
+    });
+    expect(await ui.toolbar.execute(commandId)).toBe(false);
+    expect(decide).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['accept', BUILT_IN_COMMAND_IDS.acceptChange],
+    ['reject', BUILT_IN_COMMAND_IDS.rejectChange],
+  ] as const)('decides wholly selected unsplittable changes by id for %s via %s', async (decision, commandId) => {
+    const story = { kind: 'story', storyType: 'body' } as const;
+    const { ui, decide } = reviewSelectionUi(
+      {
+        activeChangeIds: ['tc-ins', 'tc-move'],
+        trackedChangeRangeDecisionSupported: false,
+        trackedChangesWhollySelected: true,
+        selectionTarget: {
+          kind: 'selection',
+          story,
+          start: { kind: 'text', blockId: '57130001', offset: 0, story },
+          end: { kind: 'text', blockId: '57130001', offset: 9, story },
+        },
+        text: 'new moved',
+      },
+      [
+        { id: 'tc-ins', type: 'insertion', grouping: 'standalone' },
+        { id: 'tc-move', type: 'move' },
+      ],
+    );
+    expect(ui.commands.get(commandId).getState()).toMatchObject({ enabled: true });
+    expect(await ui.toolbar.execute(commandId)).toEqual({ success: true });
+    expect(decide).toHaveBeenCalledExactlyOnceWith({ decision, target: { kind: 'ids', ids: ['tc-ins', 'tc-move'] } });
+  });
+
+  it.each([
+    ['accept', BUILT_IN_COMMAND_IDS.acceptChange],
+    ['reject', BUILT_IN_COMMAND_IDS.rejectChange],
+  ] as const)(
+    'decides a fully selected cross-block change by id without a tracked target for %s via %s',
+    async (decision, commandId) => {
+      const story = { kind: 'story', storyType: 'body' } as const;
+      const { ui, decide } = reviewSelectionUi(
+        {
+          activeChangeIds: ['tc-1'],
+          trackedTarget: null,
+          selectionTarget: {
+            kind: 'selection',
+            story,
+            start: { kind: 'text', blockId: '57130001', offset: 0, story },
+            end: { kind: 'text', blockId: '57130002', offset: 3, story },
+          },
+          text: 'Lead\nnew',
+        },
+        [{ id: 'tc-1', type: 'insertion', grouping: 'standalone', insertedText: 'Lead new' }],
+      );
+      expect(ui.commands.get(commandId).getState()).toMatchObject({ enabled: true });
+      expect(await ui.toolbar.execute(commandId)).toEqual({ success: true });
+      expect(decide).toHaveBeenCalledExactlyOnceWith({ decision, target: { kind: 'id', id: 'tc-1' } });
+    },
+  );
+
+  it.each(
+    [
+      ['accept', BUILT_IN_COMMAND_IDS.acceptChange],
+      ['reject', BUILT_IN_COMMAND_IDS.rejectChange],
+    ].flatMap(([decision, commandId]) => [false, true].map((pending) => [decision, commandId, pending] as const)),
+  )(
+    'blocks decisions with unresolved ownership for %s via %s (catalog pending: %s)',
+    async (decision, commandId, pending) => {
+      const story = { kind: 'story', storyType: 'body' } as const;
+      const trackedTarget = {
+        kind: 'text',
+        story,
+        coordinateSpace: 'tracked',
+        segments: [
+          { blockId: '57130001', range: { start: 0, end: 4 } },
+          { blockId: '57130002', range: { start: 0, end: 3 } },
+        ],
+      };
+      const decide = vi.fn(() => ({ success: true }));
+      const ui = createSuperDocUI({
+        superdoc: {
+          activeEditor: {
+            doc: {
+              comments: { list: () => ({ items: [] }) },
+              selection: {
+                current: () => ({
+                  empty: false,
+                  target: {
+                    kind: 'text',
+                    story,
+                    segments: [
+                      { blockId: '57130001', range: { start: 0, end: 4 } },
+                      { blockId: '57130002', range: { start: 0, end: 1 } },
+                    ],
+                  },
+                  trackedTarget,
+                  selectionTarget: {
+                    kind: 'selection',
+                    story,
+                    coordinateSpace: 'tracked',
+                    start: { kind: 'text', blockId: '57130001', offset: 0, story },
+                    end: { kind: 'text', blockId: '57130002', offset: 3, story },
+                  },
+                  activeMarks: [],
+                  activeCommentIds: [],
+                  activeChangeIds: ['tc-1'],
+                  text: 'Lead\nA',
+                }),
+              },
+              trackChanges: {
+                list: () =>
+                  pending
+                    ? new Promise<never>(() => {})
+                    : {
+                        items: [
+                          {
+                            id: 'tc-1',
+                            type: 'replacement',
+                            grouping: 'replacement-pair',
+                            author: 'Bob',
+                            authorEmail: 'bob@example.test',
+                          },
+                        ],
+                      },
+                decide,
+              },
+            },
+          },
+          config: { documentMode: 'editing', user: { email: 'alice@example.test', name: 'Alice' } },
+          canPerformPermission: ({ permission }: { permission: string }) => !permission.endsWith('_OWN'),
+          on: vi.fn(),
+          off: vi.fn(),
+        },
+      });
+
+      expect(ui.commands.get(commandId).getState()).toMatchObject({ enabled: !pending });
+      if (pending) {
+        expect(await ui.toolbar.execute(commandId)).toBe(false);
+        expect(decide).not.toHaveBeenCalled();
+        return;
+      }
+      expect(await ui.toolbar.execute(commandId)).toEqual({ success: true });
+      expect(decide).toHaveBeenCalledExactlyOnceWith({
+        decision,
+        target: { kind: 'range', coordinateSpace: 'tracked', range: trackedTarget },
+      });
+    },
+  );
+
   it('routes a body partial decision while the all-story catalog is pending', async () => {
     const story = { kind: 'story', storyType: 'body' } as const;
     const decide = vi.fn(() => ({ success: true }));
@@ -876,7 +1163,7 @@ describe('public facade (ui)', () => {
     });
   });
 
-  it('falls back to the active tracked-change id when a range decision is not accepted', async () => {
+  it('never widens a failed range decision to the whole change', async () => {
     const story = { kind: 'story', storyType: 'body' } as const;
     const decide = vi
       .fn()
@@ -915,8 +1202,11 @@ describe('public facade (ui)', () => {
 
     const ui = createSuperDocUI({ superdoc });
 
-    expect(await ui.toolbar.execute(BUILT_IN_COMMAND_IDS.acceptChange)).toEqual({ success: true });
-    expect(decide).toHaveBeenCalledTimes(2);
+    expect(await ui.toolbar.execute(BUILT_IN_COMMAND_IDS.acceptChange)).toEqual({
+      success: false,
+      failure: { code: 'NO_MATCH' },
+    });
+    expect(decide).toHaveBeenCalledTimes(1);
     expect(decide).toHaveBeenNthCalledWith(1, {
       decision: 'accept',
       target: {
@@ -929,13 +1219,9 @@ describe('public facade (ui)', () => {
         },
       },
     });
-    expect(decide).toHaveBeenNthCalledWith(2, {
-      decision: 'accept',
-      target: { kind: 'id', id: 'tc-1' },
-    });
   });
 
-  it('keeps the selected story when falling back from a failed range decision to the active id', async () => {
+  it('never widens a failed non-body range decision to the whole change', async () => {
     const story = { kind: 'story', storyType: 'footnote', noteId: '7' } as const;
     const decide = vi
       .fn()
@@ -977,8 +1263,11 @@ describe('public facade (ui)', () => {
 
     const ui = createSuperDocUI({ superdoc });
 
-    expect(await ui.toolbar.execute(BUILT_IN_COMMAND_IDS.acceptChange)).toEqual({ success: true });
-    expect(decide).toHaveBeenCalledTimes(2);
+    expect(await ui.toolbar.execute(BUILT_IN_COMMAND_IDS.acceptChange)).toEqual({
+      success: false,
+      failure: { code: 'NO_MATCH' },
+    });
+    expect(decide).toHaveBeenCalledTimes(1);
     expect(decide).toHaveBeenNthCalledWith(1, {
       decision: 'accept',
       target: {
@@ -990,10 +1279,6 @@ describe('public facade (ui)', () => {
           segments: [{ blockId: 'FN-P1', range: { start: 20, end: 24 } }],
         },
       },
-    });
-    expect(decide).toHaveBeenNthCalledWith(2, {
-      decision: 'accept',
-      target: { kind: 'id', id: 'tc-1', story },
     });
     expect(accept).not.toHaveBeenCalled();
   });
@@ -1821,6 +2106,11 @@ describe('public facade (ui)', () => {
           selection: {
             current: () => ({
               empty: false,
+              selectionTarget: {
+                kind: 'selection',
+                start: { kind: 'text', blockId: 'P1', offset: 0 },
+                end: { kind: 'text', blockId: 'P1', offset: 12 },
+              },
               activeMarks: [],
               activeCommentIds: [],
               activeChangeIds: ['tc-1', 'tc-2'],
@@ -1849,7 +2139,11 @@ describe('public facade (ui)', () => {
     expect(decide).toHaveBeenCalledTimes(1);
     expect(decide).toHaveBeenCalledWith({
       decision,
-      target: { kind: 'ids', ids: ['tc-1', 'tc-2'] },
+      target: {
+        kind: 'range',
+        coordinateSpace: 'visible',
+        range: { kind: 'text', segments: [{ blockId: 'P1', range: { start: 0, end: 12 } }] },
+      },
     });
   });
 
@@ -1889,6 +2183,7 @@ describe('public facade (ui)', () => {
       info?: unknown;
       getSelectionAnchorRect?: (input?: unknown) => unknown;
       apply?: (target: unknown) => unknown;
+      getHostSelection?: () => unknown;
     } = {},
   ) {
     const current = vi.fn((_input?: { includeText?: boolean }) =>
@@ -1905,7 +2200,15 @@ describe('public facade (ui)', () => {
     );
     const apply = vi.fn(overrides.apply ?? (() => ({ ok: true, mode: 'range' })));
     const host = {
-      getHandles: () => ({ editing: { selection: { subscribe: () => () => {} }, selectionTargets: { apply } } }),
+      getHandles: () => ({
+        editing: {
+          selection: {
+            subscribe: () => () => {},
+            ...(overrides.getHostSelection ? { getSnapshot: overrides.getHostSelection } : {}),
+          },
+          selectionTargets: { apply },
+        },
+      }),
       ...(overrides.getSelectionAnchorRect ? { getSelectionAnchorRect: overrides.getSelectionAnchorRect } : {}),
     };
     const superdoc = {
@@ -2042,6 +2345,50 @@ describe('public facade (ui)', () => {
       end: { kind: 'text', blockId: 'P1', offset: 11 },
     });
   });
+
+  it.each([
+    ['unchanged', 'never', 0],
+    ['moved after capture', 'after', 1],
+    ['moved before capture with a pending refresh', 'before', 1],
+  ] as const)(
+    'restore of a tracked-space selection whose host selection is %s applies %s host updates',
+    async (_label, move, applyCount) => {
+      const story = { kind: 'story', storyType: 'body' } as const;
+      const selectionTarget = {
+        kind: 'selection',
+        story,
+        coordinateSpace: 'tracked',
+        start: { kind: 'text', blockId: 'P1', offset: 0, story },
+        end: { kind: 'text', blockId: 'P2', offset: 27, story },
+      };
+      let hostSelection = {
+        anchor: { blockId: 'P1', blockOffset: 0 },
+        focus: { blockId: 'P2', blockOffset: 22, trackedBlockOffset: 27 },
+      };
+      const { superdoc, apply } = makeSelectionSuperdoc({
+        info: {
+          empty: false,
+          target: TARGET,
+          selectionTarget,
+          activeMarks: [],
+          activeCommentIds: [],
+          activeChangeIds: [],
+          text: 'x',
+        },
+        getHostSelection: () => hostSelection,
+      });
+      const ui = createSuperDocUI({ superdoc });
+      // The cached UI selection keeps reporting the read range; only the host moves.
+      const moveHost = () => {
+        hostSelection = { ...hostSelection, focus: { blockId: 'P2', blockOffset: 3 } };
+      };
+      if (move === 'before') moveHost();
+      const capture = ui.selection.capture()!;
+      if (move === 'after') moveHost();
+      expect(ui.selection.restore(capture)).toEqual({ ok: true, success: true });
+      expect(apply).toHaveBeenCalledTimes(applyCount);
+    },
+  );
 
   it('restore rebuilds a multi-segment same-story selection when the source exposes only a text target', async () => {
     const { superdoc, apply } = makeSelectionSuperdoc({
@@ -3697,6 +4044,120 @@ describe('public ui — command reason taxonomy', () => {
     expect(await ui.toolbar.execute('track-changes-accept-selection')).toBe(false);
     expect(decide).not.toHaveBeenCalled();
   });
+
+  it.each(
+    (['accept', 'reject'] as const).flatMap((decision) =>
+      (['editing', 'viewing'] as const).flatMap((mode) =>
+        [1, 2].flatMap((count) =>
+          ['allow-all', 'deny-own', 'deny-other'].map((policy) => ({ decision, mode, count, policy })),
+        ),
+      ),
+    ),
+  )(
+    'checks multi-block review $decision with $count changes in $mode under $policy',
+    async ({ decision, mode, count, policy }) => {
+      const story = { kind: 'story', storyType: 'body' } as const;
+      const segments = [
+        { blockId: '57130001', range: { start: 0, end: 4 } },
+        { blockId: '57130002', range: { start: 0, end: 3 } },
+      ];
+      const trackedTarget = { kind: 'text', story, coordinateSpace: 'tracked', segments };
+      const items = [
+        { id: 'tc-own', type: 'deletion', grouping: 'standalone', author: 'Alice', deletedText: 'deleted' },
+        { id: 'tc-other', type: 'insertion', grouping: 'standalone', author: 'Bob', insertedText: 'inserted' },
+      ].slice(0, count);
+      const decide = vi.fn(() => ({ success: true }));
+      const canPerformPermission = vi.fn(
+        ({ permission }) => policy === 'allow-all' || !permission.endsWith(policy === 'deny-own' ? '_OWN' : '_OTHER'),
+      );
+      const ui = createSuperDocUI({
+        superdoc: {
+          ...makeDocSuperdoc({
+            doc: baseDoc({
+              selection: {
+                current: () => ({
+                  empty: false,
+                  target: { kind: 'text', story, segments },
+                  trackedTarget,
+                  selectionTarget: {
+                    kind: 'selection',
+                    story,
+                    coordinateSpace: 'tracked',
+                    start: { kind: 'text', blockId: '57130001', offset: 0, story },
+                    end: { kind: 'text', blockId: '57130002', offset: 3, story },
+                  },
+                  activeMarks: [],
+                  activeCommentIds: [],
+                  activeChangeIds: items.map((item) => item.id),
+                  text: 'Lead\nA',
+                }),
+              },
+              trackChanges: { list: () => ({ items }), decide },
+            }),
+            mode,
+          }),
+          config: { documentMode: mode, user: { name: 'Alice' } },
+          canPerformPermission,
+        },
+      });
+      const commandId = decision === 'accept' ? BUILT_IN_COMMAND_IDS.acceptChange : BUILT_IN_COMMAND_IDS.rejectChange;
+      const allowed = mode === 'editing' && (policy === 'allow-all' || (count === 1 && policy === 'deny-other'));
+      expect(ui.commands.get(commandId).getState().enabled).toBe(allowed);
+      const result = await ui.toolbar.execute(commandId);
+      if (!allowed) {
+        expect(result).toBe(false);
+        expect(decide).not.toHaveBeenCalled();
+      } else {
+        expect(result).toEqual({ success: true });
+        expect(decide).toHaveBeenCalledExactlyOnceWith({
+          decision,
+          target: { kind: 'range', coordinateSpace: 'tracked', range: trackedTarget },
+        });
+      }
+    },
+  );
+
+  it.each(['accept', 'reject'] as const)(
+    'keeps an explicit %s range independent of the current selection',
+    async (decision) => {
+      const decide = vi.fn(() => ({ success: true }));
+      const target = {
+        kind: 'range',
+        coordinateSpace: 'tracked',
+        range: {
+          kind: 'text',
+          segments: [{ blockId: 'explicit-block', range: { start: 0, end: 3 } }],
+        },
+      };
+      const ui = createSuperDocUI({
+        superdoc: {
+          ...makeDocSuperdoc({
+            doc: baseDoc({
+              selection: {
+                current: () => ({
+                  empty: true,
+                  activeMarks: [],
+                  activeCommentIds: [],
+                  activeChangeIds: ['unrelated'],
+                  text: '',
+                }),
+              },
+              trackChanges: {
+                list: () => ({ items: [{ id: 'unrelated', type: 'deletion', author: 'Alice' }] }),
+                decide,
+              },
+            }),
+            mode: 'editing',
+          }),
+          config: { documentMode: 'editing', user: { name: 'Alice' } },
+          canPerformPermission: () => false,
+        },
+      });
+      const commandId = decision === 'accept' ? BUILT_IN_COMMAND_IDS.acceptChange : BUILT_IN_COMMAND_IDS.rejectChange;
+      expect(await ui.commands.executeAsync(commandId, { target })).toEqual({ success: true });
+      expect(decide).toHaveBeenCalledExactlyOnceWith({ decision, target });
+    },
+  );
 
   it('reports table cell-context commands as a named context-facade gap when no table context resolves', async () => {
     const superdoc = makeDocSuperdoc({ doc: baseDoc() });

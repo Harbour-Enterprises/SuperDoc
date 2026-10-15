@@ -692,6 +692,12 @@ export interface SelectionSlice {
   empty: boolean;
   /** Resolved text target for the selection, when available. */
   target: TextTarget | null;
+  /** Deletion-inclusive multi-block coverage for range review decisions, when available. */
+  trackedTarget?: TextTarget | null;
+  /** Whether this exact text range supports tracked-change decisions; excludes permissions. */
+  trackedChangeRangeDecisionSupported?: boolean;
+  /** Whether the selection covers every tracked-text fragment of each active change. */
+  trackedChangesWhollySelected?: boolean;
   /** Explicit start/end selection target, when available. */
   selectionTarget: SelectionTarget | null;
   /** Table/cell identities from the settled public selection read, when supported. */

@@ -797,6 +797,21 @@ function isNonCollapsedHostSelection(snapshot: unknown): boolean {
  * move side ids and their `wordId`s), plus the `imported:<id>` painter form, back
  * to the item's public id. Ported from v1 SD-3469 (`buildTrackedChangeCanonicalIdMap`).
  */
+/** Selection-derived review decision shared by the command gate and execution. */
+type SelectionTrackDecisionPlan =
+  | { kind: 'ids'; ids: readonly string[] }
+  | { kind: 'id'; id: string; story?: unknown }
+  | {
+      kind: 'range';
+      target: LooseRecord;
+      changeId: string | null;
+      story?: unknown;
+      permissionIds?: readonly string[];
+    }
+  | { kind: 'blocked'; reason: SuperDocUIReason }
+  /** The active change's catalog row has not loaded; the command stays enabled but cannot run yet. */
+  | { kind: 'unavailable' };
+
 interface TrackedChangeIdContext {
   /** Map a painted/raw tracked-change id to the public list id, or `null`. */
   toPublicId(rawId: string): string | null;
@@ -2336,6 +2351,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const editor = getEditor();
     const host = editor?.host;
     return host && typeof host === 'object' ? (host as LooseRecord) : null;
+  };
+
+  /**
+   * The host selection snapshot a selection read, slice, or capture was
+   * resolved from. The host replaces its snapshot object on every selection
+   * change, so an identical object means the selection has not moved since.
+   */
+  const selectionHostSnapshots = new WeakMap<object, object>();
+  const readHostSelectionSnapshot = (): object | null => {
+    const handles = safeCall<LooseRecord | null>(() => getHost()?.getHandles?.() ?? null, null);
+    const selectionHandle = (handles?.editing as LooseRecord | undefined)?.selection as LooseRecord | undefined;
+    if (typeof selectionHandle?.getSnapshot !== 'function') return null;
+    const snapshot = safeCall<unknown>(() => selectionHandle.getSnapshot(), null);
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
   };
 
   const createFirstPartyCommandDoc = (): LooseRecord | null => {
@@ -3912,12 +3941,22 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const selectionSliceFromInfo = (info: SelectionInfo | null, status: SliceStatus): SelectionSlice => {
     if (!info) return { ...EMPTY_SELECTION, status };
+    const slice = buildSelectionSlice(info, status);
+    const hostSelection = selectionHostSnapshots.get(info);
+    if (hostSelection) selectionHostSnapshots.set(slice, hostSelection);
+    return slice;
+  };
+
+  const buildSelectionSlice = (info: SelectionInfo, status: SliceStatus): SelectionSlice => {
     const target = (info.target ?? null) as SelectionSlice['target'];
     const quotedText = typeof info.text === 'string' ? info.text : '';
     return {
       status,
       empty: info.empty === true,
       target,
+      trackedTarget: info.trackedTarget ?? null,
+      trackedChangeRangeDecisionSupported: info.trackedChangeRangeDecisionSupported,
+      trackedChangesWhollySelected: info.trackedChangesWhollySelected,
       selectionTarget: (info.selectionTarget ?? null) as SelectionSlice['selectionTarget'],
       tableSelection: info.tableSelection ?? null,
       activeMarks: Array.isArray(info.activeMarks) ? (info.activeMarks as string[]) : [],
@@ -3927,16 +3966,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     };
   };
 
-  const readSelectionInfoLive = (): { value: SelectionInfo | null; status: SliceStatus } => {
-    const doc = getDoc();
-    const selectionApi = doc?.selection as LooseRecord | undefined;
-    return readAsync<SelectionInfo>(
-      'selection',
-      selectionReadToken(),
-      () => (selectionApi?.current ? selectionApi.current({ includeText: true }) : undefined),
-      normalizeSelectionInfo,
-    );
-  };
+  const readSelectionInfoLive = (): { value: SelectionInfo | null; status: SliceStatus } =>
+    readAsync<SelectionInfo>('selection', selectionReadToken(), selectionCurrentRun, normalizeSelectionInfo);
 
   const computeSelection = (): SelectionSlice => {
     // Request the model-backed quoted text so `quotedText` is truthful and the
@@ -3948,10 +3979,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return selectionSliceFromInfo(info, status);
   };
 
-  const selectionCurrentRun = (): unknown => {
+  function selectionCurrentRun(): unknown {
     const selectionApi = getDoc()?.selection as LooseRecord | undefined;
-    return selectionApi?.current ? selectionApi.current({ includeText: true }) : undefined;
-  };
+    if (!selectionApi?.current) return undefined;
+    // Record the host selection this read resolves, before any await.
+    const hostSelection = readHostSelectionSnapshot();
+    const tag = (info: unknown): unknown => {
+      if (hostSelection && info && typeof info === 'object') selectionHostSnapshots.set(info, hostSelection);
+      return info;
+    };
+    const result = selectionApi.current({ includeText: true });
+    return isPromiseLike(result) ? Promise.resolve(result).then(tag) : tag(result);
+  }
 
   /** True when a host sync snapshot is a resolved collapsed caret (not a range). */
   const isCollapsedCaretSnapshot = (info: SelectionInfo): boolean => {
@@ -5342,6 +5381,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (command.scope !== 'all' && selection.activeChangeIds.length === 0) {
       return SUPERDOC_UI_REASONS.selectionRequired;
     }
+    if (command.scope !== 'all') {
+      const plan = planSelectionTrackDecision(selection, true);
+      if (plan?.kind === 'blocked') return plan.reason;
+    }
     return undefined;
   };
 
@@ -5376,17 +5419,28 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         ? ((superdoc.config as LooseRecord).user as LooseRecord | null)
         : null;
     for (const id of ids) {
-      const trackedChange = findTrackChangeForPermission(id) ?? { id };
-      const isOwn = trackedChangeOwnedByCurrentUser(trackedChange, currentUser);
+      const trackedChange = findTrackChangeForPermission(id);
+      const isOwn = trackedChange ? trackedChangeOwnedByCurrentUser(trackedChange, currentUser) : false;
       const permission =
         kind === 'accept' ? (isOwn ? 'RESOLVE_OWN' : 'RESOLVE_OTHER') : isOwn ? 'REJECT_OWN' : 'REJECT_OTHER';
-      let allowed: unknown;
-      try {
-        allowed = canPerform.call(superdoc, { permission, trackedChange, comment: null });
-      } catch {
-        return undefined;
+      const permissions = trackedChange
+        ? [permission]
+        : kind === 'accept'
+          ? ['RESOLVE_OWN', 'RESOLVE_OTHER']
+          : ['REJECT_OWN', 'REJECT_OTHER'];
+      for (const candidate of permissions) {
+        let allowed: unknown;
+        try {
+          allowed = canPerform.call(superdoc, {
+            permission: candidate,
+            trackedChange: trackedChange ?? { id },
+            comment: null,
+          });
+        } catch {
+          return trackedChange ? undefined : SUPERDOC_UI_REASONS.permissionDenied;
+        }
+        if (allowed === false || (!trackedChange && allowed !== true)) return SUPERDOC_UI_REASONS.permissionDenied;
       }
-      if (allowed === false) return SUPERDOC_UI_REASONS.permissionDenied;
     }
     return undefined;
   };
@@ -7574,14 +7628,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * ordinary/insertion selections are visible-space, while a selection that
    * reaches painted deleted text is projected in tracked space by the host.
    *
-   * A cross-block or malformed selection fails closed. Its intermediate block
-   * coverage cannot be reconstructed from two endpoints without guessing.
+   * Cross-block coverage must come from the model-backed tracked target;
+   * intermediate block lengths cannot be inferred from the endpoints.
    */
   function trackDecisionRangeFromSelection(selection: SelectionSlice): LooseRecord | null {
     if (selection.empty) return null;
     const explicit = selection.selectionTarget as LooseRecord | null;
     const start = explicit?.start as LooseRecord | undefined;
     const end = explicit?.end as LooseRecord | undefined;
+    if (start?.kind === 'text' && end?.kind === 'text' && start.blockId !== end.blockId) {
+      const range = selection.trackedTarget;
+      return range ? { kind: 'range', coordinateSpace: 'tracked', range } : null;
+    }
     if (
       explicit?.kind !== 'selection' ||
       start?.kind !== 'text' ||
@@ -7637,13 +7695,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
   }
 
-  function activeChangePartialDecisionRoute(): 'range' | 'id' | 'unavailable' {
-    const activeId = state.selection.activeChangeIds[0];
+  function activeChangePartialDecisionRoute(
+    selection: SelectionSlice = state.selection,
+  ): 'range' | 'id' | 'unavailable' {
+    const activeId = selection.activeChangeIds[0];
     if (!activeId) return 'unavailable';
-    const story = selectionStoryLocator(state.selection);
+    const story = selectionStoryLocator(selection);
+    // The command gate can run during the first state computation, before
+    // `state` exists; the catalog reads below cover that case.
+    const trackChanges = state?.trackChanges;
     const bodyItem =
-      state.trackChanges.status === 'ready'
-        ? state.trackChanges.items.find((candidate) => entityRowMatchesRequest(candidate, activeId, story))
+      trackChanges?.status === 'ready'
+        ? trackChanges.items.find((candidate) => entityRowMatchesRequest(candidate, activeId, story))
         : undefined;
     const item =
       bodyItem ??
@@ -7653,36 +7716,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const change = trackChangesItemPayload(item);
     const type = change.type;
     const grouping = change.grouping;
-    if (selectedTextCoversTrackChangeText(state.selection, item)) return 'id';
+    if (selectedTextCoversTrackChangeText(selection, item)) return 'id';
     if (type === 'replacement' && grouping === 'replacement-pair') return 'range';
     return (type === 'insertion' || type === 'deletion' || type === 'insert' || type === 'delete') &&
       grouping === 'standalone'
       ? 'range'
       : 'id';
-  }
-
-  function executeTrackDecisionRangeWithIdFallback(
-    kind: 'accept' | 'reject',
-    rangeTarget: LooseRecord,
-    changeId: string,
-    story?: unknown,
-  ): CommandExecutionResult {
-    const fallback = () => callTrackDecisionTarget(kind, trackDecisionIdTarget(changeId, story), changeId, story);
-    try {
-      const result = callTrackDecisionTarget(kind, rangeTarget, changeId, story);
-      if (isPromiseLike(result)) {
-        return settleCommandExecution(
-          Promise.resolve(result).then((settled) => {
-            const commandResult = commandResultFromOperationResult(settled);
-            return commandResultSucceeded(commandResult) ? settled : fallback();
-          }),
-        );
-      }
-      const commandResult = commandResultFromOperationResult(result);
-      return settleCommandExecution(commandResultSucceeded(commandResult) ? result : fallback());
-    } catch {
-      return false;
-    }
   }
 
   /** A decision target carried by the payload itself, independent of the selection. */
@@ -7718,35 +7757,82 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return selectedId ? { target: trackDecisionIdTarget(selectedId, story), changeId: selectedId, story } : null;
   }
 
+  /**
+   * The selection-derived decision for a review command. The command gate and
+   * execution share these rules so an enabled command always has a target.
+   * `null` means the selection does not drive the decision (no active change
+   * or a collapsed caret) and the caller falls back to the active change id.
+   * `gateOnly` stops after the blocking rules and returns only a block or null.
+   */
+  function planSelectionTrackDecision(selection: SelectionSlice, gateOnly = false): SelectionTrackDecisionPlan | null {
+    if (
+      selection.tableSelection?.kind === 'tableCells' &&
+      (selection.tableSelection.type === 'cells' || selection.tableSelection.type === 'table')
+    ) {
+      return { kind: 'blocked', reason: SUPERDOC_UI_REASONS.operationUnavailable };
+    }
+    const ids = selection.activeChangeIds;
+    if (ids.length > 1) {
+      // Wholly selected changes are decided by id so move and grouped
+      // revisions keep their atomic id semantics; a range would refuse them.
+      if (selection.empty || selection.trackedChangesWhollySelected === true) return { kind: 'ids', ids };
+      if (selection.trackedChangeRangeDecisionSupported === false) {
+        return { kind: 'blocked', reason: SUPERDOC_UI_REASONS.operationUnavailable };
+      }
+      const target = trackDecisionRangeFromSelection(selection);
+      return target
+        ? { kind: 'range', target, changeId: null, permissionIds: ids }
+        : { kind: 'blocked', reason: SUPERDOC_UI_REASONS.targetUnresolved };
+    }
+    if (ids.length !== 1 || selection.empty) return null;
+    const activeId = ids[0]!;
+    // The route may read the catalog, so the gate resolves it only when a
+    // blocking rule depends on it.
+    let routeValue: 'range' | 'id' | 'unavailable' | undefined;
+    const route = () =>
+      (routeValue ??=
+        selection.trackedChangesWhollySelected === true ? 'id' : activeChangePartialDecisionRoute(selection));
+    if (selection.trackedChangeRangeDecisionSupported === false && route() !== 'id') {
+      return { kind: 'blocked', reason: SUPERDOC_UI_REASONS.operationUnavailable };
+    }
+    if (!selection.selectionTarget) return null;
+    const target = trackDecisionRangeFromSelection(selection);
+    if (!target && route() !== 'id') {
+      return { kind: 'blocked', reason: SUPERDOC_UI_REASONS.targetUnresolved };
+    }
+    if (gateOnly) return null;
+    if (route() === 'id') {
+      const selectedStory = selectionStoryLocator(selection);
+      // Whole-change id routes need the non-body story to avoid the legacy
+      // unscoped mutation path. Body routes intentionally omit it.
+      const story =
+        selectedStory && storyLocatorSignature(selectedStory) !== storyLocatorSignature(null)
+          ? selectedStory
+          : undefined;
+      return { kind: 'id', id: activeId, story };
+    }
+    if (route() === 'unavailable' && !selection.trackedTarget) return { kind: 'unavailable' };
+    return target
+      ? { kind: 'range', target, changeId: activeId, story: nonBodySelectionStoryLocator(selection) }
+      : { kind: 'blocked', reason: SUPERDOC_UI_REASONS.targetUnresolved };
+  }
+
   function executeTrackDecisionCommand(
     command: { kind: 'accept' | 'reject'; scope: 'id' | 'all' },
     payload: unknown,
   ): CommandExecutionResult {
     if (command.scope === 'id' && payload == null) {
-      if (state.selection.activeChangeIds.length > 1) {
-        return executeTrackDecisionTarget(command.kind, { kind: 'ids', ids: state.selection.activeChangeIds }, null);
-      }
-      if (state.selection.activeChangeIds.length === 1 && !state.selection.empty && state.selection.selectionTarget) {
-        const route = activeChangePartialDecisionRoute();
-        if (route === 'unavailable') return false;
-        if (route === 'range') {
-          const target = trackDecisionRangeFromSelection(state.selection);
-          const story = nonBodySelectionStoryLocator(state.selection);
-          return target
-            ? executeTrackDecisionRangeWithIdFallback(command.kind, target, state.selection.activeChangeIds[0]!, story)
-            : false;
-        }
-        if (route === 'id') {
-          const activeId = state.selection.activeChangeIds[0];
-          const selectedStory = selectionStoryLocator(state.selection);
-          const story =
-            selectedStory && storyLocatorSignature(selectedStory) !== storyLocatorSignature(null)
-              ? selectedStory
-              : undefined;
-          // All whole-change ID routes need the non-body story to avoid the
-          // legacy unscoped mutation path. Body routes intentionally omit it.
-          return executeTrackDecision(command.kind, story ? { id: activeId, story } : activeId);
-        }
+      const plan = planSelectionTrackDecision(state.selection);
+      switch (plan?.kind) {
+        case 'blocked':
+        case 'unavailable':
+          return false;
+        case 'ids':
+          return executeTrackDecisionTarget(command.kind, { kind: 'ids', ids: plan.ids }, null, undefined, plan.ids);
+        case 'range':
+          return executeTrackDecisionTarget(command.kind, plan.target, plan.changeId, plan.story, plan.permissionIds);
+        case 'id':
+          return executeTrackDecision(command.kind, plan.story ? { id: plan.id, story: plan.story } : plan.id);
       }
     }
     const resolved = resolveTrackDecisionTarget(command, payload);
@@ -9965,11 +10051,16 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (snapshot.empty) return null;
       const cells = currentCellSelectionTarget();
       if (!snapshot.target && !snapshot.selectionTarget && !cells) return null;
-      return {
+      const capture: SelectionCapture = {
         ...snapshot,
         capturedAt: Date.now(),
         ...(cells ? { _tableCellSelectionTarget: cells } : {}),
       };
+      // Record the host selection the captured slice was resolved from, not
+      // the current one: a pending refresh can leave the slice behind the host.
+      const hostSelection = selectionHostSnapshots.get(snapshot);
+      if (hostSelection) selectionHostSnapshots.set(capture, hostSelection);
+      return capture;
     },
     restore: (capture: SelectionCapture): SelectionRestoreResult => {
       // Best-effort: re-apply the captured selection target onto the live v2
@@ -9993,6 +10084,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (hasCellTarget && !cellTarget) return done({ ok: false, reason: SUPERDOC_UI_REASONS.targetUnresolved });
       const target = cellTarget ?? selectionTargetForRestore(capture);
       if (!target) return done({ ok: false, reason: SUPERDOC_UI_REASONS.targetUnresolved });
+      // A tracked-space range whose host selection is still the one it was
+      // resolved from is already restored. Rebuilding it from public offsets
+      // would drop the dual visible/tracked endpoints the host keeps for a
+      // range that touches deleted text. Any host movement fails the identity
+      // check and falls through to a normal re-apply.
+      const heldHostSelection = selectionHostSnapshots.get(capture);
+      if (
+        !hasCellTarget &&
+        target.coordinateSpace === 'tracked' &&
+        heldHostSelection !== undefined &&
+        readHostSelectionSnapshot() === heldHostSelection
+      ) {
+        return done({ ok: true });
+      }
       const resolved = getSelectionApplyHelper();
       if (!('helper' in resolved)) return done({ ok: false, reason: resolved.reason });
       try {
@@ -11062,9 +11167,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     target: LooseRecord,
     changeId: string | null,
     story?: unknown,
+    selectionChangeIds?: readonly string[],
   ): CommandExecutionResult => {
     try {
-      return settleCommandExecution(callTrackDecisionTarget(kind, target, changeId, story));
+      return settleCommandExecution(callTrackDecisionTarget(kind, target, changeId, story, selectionChangeIds));
     } catch {
       return false;
     }
@@ -11075,6 +11181,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     target: LooseRecord,
     changeId: string | null,
     story?: unknown,
+    selectionChangeIds?: readonly string[],
   ): unknown => {
     if (trackedChangeDecisionsAreDisabled()) return false;
     const doc = getDoc();
@@ -11084,11 +11191,12 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const isMultiIdTarget = target.kind === 'ids';
     const permissionIds = isAllTarget
       ? []
-      : isMultiIdTarget && Array.isArray(target.ids)
-        ? target.ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
-        : changeId
-          ? [changeId]
-          : [];
+      : (selectionChangeIds ??
+        (isMultiIdTarget && Array.isArray(target.ids)
+          ? target.ids.filter((id): id is string => typeof id === 'string' && id.length > 0)
+          : changeId
+            ? [changeId]
+            : []));
     if (permissionIds.length > 0 && trackedChangeDecisionPermissionReason(kind, permissionIds)) return false;
     const bulkBlocked = bulkTrackDecisionBlockedReason({ kind, scope: isAllTarget ? 'all' : 'id' }, tcApi);
     if (bulkBlocked) return false;
