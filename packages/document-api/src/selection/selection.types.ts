@@ -2,18 +2,30 @@ import type { SelectionTarget, TextTarget } from '../types/address.js';
 
 export interface SelectionTableCellsTarget {
   kind: 'tableCells';
+  selectionMode?: 'cells';
+  isRectangular?: true;
   tableId: string;
   start: { rowIndex: number; columnIndex: number };
   end: { rowIndex: number; columnIndex: number };
   story?: SelectionTarget['story'];
 }
 
-/** Table identity for a caret, rectangular cell selection, or whole-grid selection. */
-export interface TableSelectionInfo extends SelectionTableCellsTarget {
-  /** `cell` includes a caret or text range contained in one cell. */
+/** Table/cell context for the selection; bounds alone are not an editing target. */
+export interface TableSelectionInfo {
+  kind: 'tableCells';
+  tableId: string;
+  story?: SelectionTarget['story'];
+  /** Inclusive logical bounds, including each selected owner's span. */
+  start: { rowIndex: number; columnIndex: number };
+  end: { rowIndex: number; columnIndex: number };
+  /** Whole-table identity requires whole-cell selection intent. */
   type: 'table' | 'cell' | 'cells';
-  /** Selected cells in row-major order, using opaque Document API node IDs. */
-  cells: { nodeId: string; rowIndex: number; columnIndex: number }[];
+  /** Text context preserves exact character targets; cells denotes whole-cell intent. */
+  selectionMode: 'text' | 'cells';
+  /** Whether the exact cells fill the bounding rectangle without holes. */
+  isRectangular: boolean;
+  /** Exact logical owners in row-major order; vertical continuations are deduplicated. */
+  cells: { nodeId: string; rowIndex: number; columnIndex: number; rowspan: number; colspan: number }[];
 }
 
 export type SelectionExtractOoxmlInput =
@@ -117,10 +129,11 @@ export interface SelectionInfo {
    */
   selectionTarget?: SelectionTarget | null;
   /**
-   * V2 browser table selection with inclusive, zero-based grid coordinates.
-   * Rectangles in unmerged tables clear `target` and `selectionTarget`.
-   * Rectangles in tables containing merged cells return null and empty text.
-   * A single-cell caret/text range preserves its text targets and `empty` value.
+   * V2 browser cell context with inclusive, zero-based logical bounds.
+   * Whole-cell selections clear text targets. Character selections preserve
+   * their targets and include the containing cells, including endpoint cells.
+   * Exact cell IDs and spans describe merged or nonrectangular selections;
+   * only rectangular whole-cell metadata can become a table-cells target.
    */
   tableSelection?: TableSelectionInfo | null;
   /**

@@ -1397,6 +1397,14 @@ export interface MetadataHandle {
  * through; custom UIs read it to enable / label their own table controls.
  */
 export interface TableContextInfo {
+  /** Runtime always supplies status; stale/pending snapshots carry no previous cell IDs. */
+  status?: SliceStatus;
+  /** Inclusive logical bounding geometry; use tableSelection for exact membership. */
+  cellRange?: {
+    start: { rowIndex: number; columnIndex: number };
+    end: { rowIndex: number; columnIndex: number };
+  } | null;
+  tableSelection?: SelectionInfo['tableSelection'];
   /** Whether the current selection is inside a table. */
   inTable: boolean;
   /** Stable node id of the enclosing table, when resolved. */
@@ -1417,6 +1425,8 @@ export interface TableContextInfo {
 export interface TablesHandle {
   /** Read the current table context snapshot. */
   getContext(): TableContextInfo;
+  /** Resolve fresh, bounded table context for immediate context-menu callbacks. */
+  getContextAsync(): Promise<TableContextInfo>;
   /** Convenience: whether the current selection is inside a table. */
   isInTable(): boolean;
 }

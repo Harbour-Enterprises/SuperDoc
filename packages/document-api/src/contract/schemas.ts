@@ -7692,6 +7692,8 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                   {
                     kind: { const: 'tableCells' },
                     type: { enum: ['table', 'cell', 'cells'] },
+                    selectionMode: { enum: ['text', 'cells'] },
+                    isRectangular: { type: 'boolean' },
                     tableId: { type: 'string', minLength: 1 },
                     story: storyLocatorSchema,
                     start: objectSchema(
@@ -7708,12 +7710,14 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                           nodeId: { type: 'string', minLength: 1 },
                           rowIndex: { type: 'integer', minimum: 0 },
                           columnIndex: { type: 'integer', minimum: 0 },
+                          rowspan: { type: 'integer', minimum: 1 },
+                          colspan: { type: 'integer', minimum: 1 },
                         },
-                        ['nodeId', 'rowIndex', 'columnIndex'],
+                        ['nodeId', 'rowIndex', 'columnIndex', 'rowspan', 'colspan'],
                       ),
                     ),
                   },
-                  ['kind', 'type', 'tableId', 'start', 'end', 'cells'],
+                  ['kind', 'type', 'selectionMode', 'isRectangular', 'tableId', 'start', 'end', 'cells'],
                 ),
                 { type: 'null' },
               ],
@@ -7737,6 +7741,8 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                     objectSchema(
                       {
                         kind: { const: 'tableCells' },
+                        selectionMode: { const: 'cells' },
+                        isRectangular: { const: true },
                         tableId: { type: 'string', minLength: 1 },
                         start: objectSchema(
                           { rowIndex: { type: 'integer', minimum: 0 }, columnIndex: { type: 'integer', minimum: 0 } },
@@ -7767,6 +7773,8 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
                 objectSchema(
                   {
                     kind: { const: 'tableCells' },
+                    selectionMode: { const: 'cells' },
+                    isRectangular: { const: true },
                     tableId: { type: 'string' },
                     start: objectSchema({ rowIndex: { type: 'integer' }, columnIndex: { type: 'integer' } }, [
                       'rowIndex',

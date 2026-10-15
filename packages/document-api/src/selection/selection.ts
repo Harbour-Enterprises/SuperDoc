@@ -84,6 +84,8 @@ export function executeSelectionExtractOoxml(
       Number.isSafeInteger(point.columnIndex) &&
       (point.columnIndex as number) >= 0;
     if (
+      (input.at.selectionMode !== undefined && input.at.selectionMode !== 'cells') ||
+      (input.at.isRectangular !== undefined && input.at.isRectangular !== true) ||
       typeof input.at.tableId !== 'string' ||
       !input.at.tableId ||
       !validPoint(input.at.start) ||

@@ -72,6 +72,8 @@ export type {
   MetadataHandle,
   // Handles
   SelectionHandle,
+  TablesHandle,
+  TableContextInfo,
   ToolbarHandle,
   BuiltInCommandId,
   ToolbarCommandId,

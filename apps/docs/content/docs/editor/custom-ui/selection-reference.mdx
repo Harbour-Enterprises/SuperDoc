@@ -27,33 +27,45 @@ position. Use [Context menu](/editor/custom-ui/context-menus) for a complete poi
 allows the geometry fallback `selectionTarget ?? target`, but only `selectionTarget` is accepted by
 `apply()`. Read it directly and handle `null` rather than reusing that geometry fallback.
 
-## Read table and cell selection identities
+## Read table and cell context
 
-In the V2 browser editor, `doc.selection.current()` includes `tableSelection` for a caret or text range inside one cell,
-a rectangular selection in an unmerged table, and a whole-grid selection. The same metadata is available in the settled
-`ui.viewport.contextAt(point).selection` slice for custom menu predicates and actions:
+In the V2 browser editor, `doc.selection.current()` and
+`ui.viewport.contextAt({ x, y }).selection` expose `tableSelection` with opaque
+table and cell IDs, inclusive logical row/column bounds, and each cell's spans.
+`selectionMode` distinguishes character selection (`text`) from whole-cell
+selection (`cells`). Character selection includes its containing cells, including
+endpoint cells, while preserving its exact text targets. Only whole-cell intent
+can produce `type: 'table'`.
+
+Merged, ragged, and nested tables return exact cell owners. Vertical merge
+continuations appear through their owner once. `isRectangular` says whether those
+owners fill the bounding range. A nonrectangular range can include unselected
+cells inside its bounds, so use `cells` to identify actual membership.
+
+For a context menu, await a fresh bounded context read at the click:
 
 ```ts
-const context = ui.viewport.contextAt({ x: event.clientX, y: event.clientY });
-if (context.selection.status === 'ready' && context.selection.tableSelection) {
-  const selected = context.selection.tableSelection;
-  console.info(
-    selected.type,
-    selected.tableId,
-    selected.cells.map((cell) => cell.nodeId),
-  );
-}
+editorShell.addEventListener('contextmenu', async (event) => {
+  event.preventDefault();
+  const context = await ui.tables.getContextAsync();
+  if (context.status !== 'ready' || !context.tableSelection) return;
+  const selectedCellIds = context.tableSelection.cells.map((cell) => cell.nodeId);
+  openTableMenu({ x: event.clientX, y: event.clientY, selectedCellIds });
+});
 ```
 
-`type` is `cell`, `cells`, or `table`. `start` and `end` are inclusive, zero-based grid coordinates. Cell IDs are opaque
-Document API node IDs, returned in row-major order. A caret inside one cell keeps `empty: true` and its existing text targets.
-For a rectangular or whole-grid selection, `target` and `selectionTarget` are `null`; `text` (when requested) contains the
-selected cell texts separated by tabs. The UI slice exposes that text as `quotedText`.
+`ui.tables.getContext()` returns the cached snapshot with `status`, `cellRange`,
+and `tableSelection`. Pending or stale snapshots carry no previous cell IDs.
+The async method resolves current context without reading the full document or
+extracting cell text. Use `selection.current({ includeText: true })` when you also
+need selected text. Whole-cell text is joined by tabs; character text retains
+its character offsets.
 
-Rectangles in tables containing merged cells or omitted grid positions currently return `tableSelection: null`, null text targets, and empty text.
-These selected cell ranges still report `empty: false`; unavailable metadata does not mean that no cells are selected.
-A caret inside a merged cell still returns that cell's identity. This metadata does not add table editing commands or change
-which targets existing write operations accept.
+Table metadata does not change the target types accepted by editing operations.
+To capture whole-cell OOXML, construct a `tableCells` target only when
+`selectionMode === 'cells'` and `isRectangular === true`; text and nonrectangular
+metadata are rejected as rectangular capture targets. For character selection,
+use its `selectionTarget`.
 
 ## Resolve entities under a point
 

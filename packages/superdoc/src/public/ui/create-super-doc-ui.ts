@@ -2113,6 +2113,7 @@ function buildInlineFormatInput(
  * current cell node id and a multi-cell selection range for merge.
  */
 interface ResolvedTableContext {
+  canMerge: boolean;
   tableNodeId: string;
   rowIndex: number;
   columnIndex: number;
@@ -2167,6 +2168,7 @@ function buildTableCommandInput(action: TableCommandSpec['action'], context: Res
     case 'delete-table':
       return { nodeId };
     case 'merge-cells': {
+      if (!context.canMerge) return null;
       const range = mergeRange ?? {
         start: { rowIndex, columnIndex },
         end: { rowIndex, columnIndex },
@@ -2543,7 +2545,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const resolveTableContext = (): ResolvedTableContext | null => {
     const snapshot = readHostTableContext();
-    if (!snapshot || snapshot.inTable !== true) return null;
+    if (!snapshot || snapshot.inTable !== true || (snapshot.status && snapshot.status !== 'ready')) return null;
     const table = snapshot.table as LooseRecord | undefined;
     const tableNodeId = typeof table?.nodeId === 'string' && table.nodeId.length > 0 ? table.nodeId : null;
     if (!tableNodeId) return null;
@@ -2556,7 +2558,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const cellNodeId = typeof cell?.nodeId === 'string' && cell.nodeId.length > 0 ? cell.nodeId : null;
     const range = snapshot.cellRange as LooseRecord | undefined;
     const mergeRange = readMergeRange(range);
-    return { tableNodeId, rowIndex, columnIndex, cellNodeId, mergeRange };
+    const metadata = snapshot.tableSelection as SelectionInfo['tableSelection'];
+    const canMerge = metadata == null || (metadata.selectionMode === 'cells' && metadata.isRectangular === true);
+    return { tableNodeId, rowIndex, columnIndex, cellNodeId, mergeRange, canMerge };
   };
 
   // -- consumer-registered commands -----------------------------------------
@@ -6458,7 +6462,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // resolved cell for split). Report it before the route-availability check so
     // a custom UI sees the precise, named context reason.
     const context = resolveTableContext();
-    const ready = context != null && (!descriptor.table!.requiresCell || context.cellNodeId != null);
+    const ready =
+      context != null &&
+      (!descriptor.table!.requiresCell || context.cellNodeId != null) &&
+      (descriptor.table!.action !== 'merge-cells' || context.canMerge);
     if (!ready) {
       return normalizeCommandState(
         { enabled: false, active: false, supported: true, reason: SUPERDOC_UI_REASONS.tableContextUnavailable },
@@ -11570,7 +11577,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return {
       point,
       entities: validInput ? entityAt(point) : [],
-      selection: state.selection,
+      selection: (() => {
+        const current = computeSelection();
+        return current.status === 'ready' ? current : { ...current, tableSelection: null };
+      })(),
       position: null,
       insideSelection: false,
     };
@@ -11882,22 +11892,53 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     cellNodeId: null,
     rows: null,
     columns: null,
+    status: 'ready',
+    cellRange: null,
+    tableSelection: null,
+  };
+  const publicTableContext = (snapshot: LooseRecord | null): TableContextInfo => {
+    const status: SliceStatus =
+      snapshot?.status === 'pending' || snapshot?.status === 'stale' ? snapshot.status : 'ready';
+    if (!snapshot || snapshot.inTable !== true || status !== 'ready') return { ...EMPTY_TABLE_CONTEXT, status };
+    const table = snapshot.table as LooseRecord | undefined;
+    const row = snapshot.row as LooseRecord | undefined;
+    const column = snapshot.column as LooseRecord | undefined;
+    const cell = snapshot.cell as LooseRecord | undefined;
+    if (typeof table?.nodeId !== 'string') return { ...EMPTY_TABLE_CONTEXT, status };
+    return {
+      inTable: true,
+      status,
+      tableNodeId: table.nodeId,
+      rowIndex: typeof row?.index === 'number' ? row.index : null,
+      columnIndex: typeof column?.index === 'number' ? column.index : null,
+      cellNodeId: typeof cell?.nodeId === 'string' ? cell.nodeId : null,
+      rows: typeof table.rows === 'number' ? table.rows : null,
+      columns: typeof table.columns === 'number' ? table.columns : null,
+      cellRange: readMergeRange(snapshot.cellRange as LooseRecord | undefined),
+      tableSelection: (snapshot.tableSelection as SelectionInfo['tableSelection']) ?? null,
+    };
   };
   const tables: TablesHandle = {
-    getContext: (): TableContextInfo => {
-      const context = resolveTableContext();
-      if (!context) return { ...EMPTY_TABLE_CONTEXT };
-      const snapshot = readHostTableContext();
-      const table = snapshot?.table as LooseRecord | undefined;
-      return {
-        inTable: true,
-        tableNodeId: context.tableNodeId,
-        rowIndex: context.rowIndex,
-        columnIndex: context.columnIndex,
-        cellNodeId: context.cellNodeId,
-        rows: typeof table?.rows === 'number' ? table.rows : null,
-        columns: typeof table?.columns === 'number' ? table.columns : null,
-      };
+    getContext: () => publicTableContext(readHostTableContext()),
+    getContextAsync: async () => {
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const token = selectionReadToken();
+        const host = getHost();
+        const read = host?.getTableContextAsync;
+        if (typeof read !== 'function') return publicTableContext(readHostTableContext());
+        let snapshot: LooseRecord | null = null;
+        try {
+          snapshot = await read.call(host);
+        } catch {
+          return { ...EMPTY_TABLE_CONTEXT, status: 'pending' };
+        }
+        if (disposed) return { ...EMPTY_TABLE_CONTEXT, status: 'pending' };
+        if (token !== selectionReadToken() || host !== getHost()) continue;
+        const context = publicTableContext(snapshot);
+        if (context.status === 'stale') continue;
+        return context;
+      }
+      return { ...EMPTY_TABLE_CONTEXT, status: 'stale' };
     },
     isInTable: (): boolean => resolveTableContext() != null,
   };
