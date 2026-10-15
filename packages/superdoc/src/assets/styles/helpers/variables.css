@@ -279,6 +279,9 @@
   --sd-ui-surface-content-padding: 16px 20px 20px;
   --sd-ui-dialog-backdrop: rgba(0, 0, 0, 0.4);
   --sd-ui-dialog-max-width: 480px;
+  --sd-ui-cross-reference-max-width: 480px;
+  --sd-ui-cross-reference-list-height: 320px;
+  --sd-ui-cross-reference-selected-bg: color-mix(in srgb, var(--sd-ui-action) 8%, var(--sd-ui-surface-bg));
   --sd-ui-floating-width: 360px;
   --sd-ui-floating-max-width: 480px;
   --sd-ui-floating-max-height: min(60vh, calc(100% - 32px));

@@ -54,6 +54,15 @@ variables. `font` sets the inherited UI font, but mounted Editor and toolbar roo
 
 ## Override one component
 
+The cross-reference picker shares the dialog background, border, typography, and action colors used by the other built-in dialogs.
+Its destination list and width also support these CSS variables:
+
+| Variable                              | Default                                        | Controls                                          |
+| ------------------------------------- | ---------------------------------------------- | ------------------------------------------------- |
+| `--sd-ui-cross-reference-max-width`   | `480px`                                        | Dialog width, bounded by the viewport             |
+| `--sd-ui-cross-reference-list-height` | `320px`                                        | Maximum height of the scrollable destination list |
+| `--sd-ui-cross-reference-selected-bg` | Action color mixed into the surface background | Selected destination background                   |
+
 Set semantic values first so related controls stay consistent. Use `vars` only when one component needs to differ:
 
 ```ts

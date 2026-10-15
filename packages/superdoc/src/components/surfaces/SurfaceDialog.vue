@@ -41,7 +41,8 @@ function trapFocus(event) {
 
 function setInitialFocus() {
   if (!dialogRef.value) return;
-  const firstFocusable = dialogRef.value.querySelector(FOCUSABLE_SELECTOR);
+  const firstFocusable =
+    dialogRef.value.querySelector('[data-sd-autofocus]') ?? dialogRef.value.querySelector(FOCUSABLE_SELECTOR);
   if (firstFocusable) {
     firstFocusable.focus();
   } else {

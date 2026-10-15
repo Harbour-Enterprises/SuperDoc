@@ -247,8 +247,14 @@ const handleRemove = async () => {
   await applyLinkCommand({ href: null, hyperlinkTarget: props.hyperlinkTarget });
 };
 
-const navigateToAnchor = (anchorUrl) => {
-  if (props.goToAnchor) props.goToAnchor(anchorUrl);
+const navigationError = ref('');
+const navigateToAnchor = async (anchorUrl) => {
+  navigationError.value = '';
+  try {
+    if ((await props.goToAnchor?.(anchorUrl)) === false) navigationError.value = 'Reference target is unavailable';
+  } catch {
+    navigationError.value = 'Reference target is unavailable';
+  }
 };
 </script>
 
@@ -325,6 +331,7 @@ const navigateToAnchor = (anchorUrl) => {
         >Go to {{ rawUrl.startsWith('#_') ? rawUrl.substring(2) : rawUrl }}</a
       >
     </div>
+    <div v-if="navigationError" role="status" class="sd-error">{{ navigationError }}</div>
   </div>
 </template>
 

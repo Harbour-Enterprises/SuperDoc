@@ -102,7 +102,8 @@ import { scrollToElement } from '../internal/toolbar/built-in/scroll-helpers.js'
  * which keeps anchor navigation scoped to body targets.
  * @typedef {Object} BookmarkGetResult
  * @property {{ story?: { kind?: string, storyType?: string } }} [address]
- * @property {{ from?: { blockId?: string } }} [range]
+ * @property {{ from?: { blockId?: string, offset?: number } }} [range]
+ * @property {{ colFirst: number, colLast: number }} [tableColumn]
  */
 
 /**
@@ -116,7 +117,7 @@ import { scrollToElement } from '../internal/toolbar/built-in/scroll-helpers.js'
  * @property {{ list?: () => BlocksListResult | null | undefined } | null} [blocks]
  * @property {{ match?: (query: { select: { type: 'text', pattern: string, caseSensitive: boolean }, require: 'any' }) => QueryMatchResult | null | undefined } | null} [query]
  * @property {{ list?: () => HyperlinksListResult | Promise<HyperlinksListResult | null | undefined> | null | undefined, get?: (input: { storyId: string, hyperlinkNodeId: string }) => HyperlinkGetResult | Promise<HyperlinkGetResult | null | undefined> | null | undefined } | null} [hyperlinks]
- * @property {{ get?: (input: { target: { kind: 'entity', entityType: 'bookmark', name: string } }) => BookmarkGetResult | Promise<BookmarkGetResult | null | undefined> | null | undefined } | null} [bookmarks]
+ * @property {{ list?: () => Promise<{ items: Array<{ name: string }> }> | { items: Array<{ name: string }> }, get?: (input: { target: { kind: 'entity', entityType: 'bookmark', name: string } }) => BookmarkGetResult | Promise<BookmarkGetResult | null | undefined> | null | undefined } | null} [bookmarks]
  */
 
 /**
@@ -602,12 +603,12 @@ export function useLinkPopover({
    * editing/suggesting via `placeCaret`.
    * @param {string} blockId
    */
-  async function placeCaretAtHeadingStart(blockId) {
+  async function placeCaretAtBookmark(blockId, offset) {
     const setSelectionTarget = getActiveEditor()?.authoring?.setSelectionTarget;
     if (typeof setSelectionTarget !== 'function') return;
 
     const story = { kind: 'story', storyType: 'body' };
-    const anchor = { kind: 'text', blockId, offset: 0, story };
+    const anchor = { kind: 'text', blockId, offset, story };
     const target = { kind: 'selection', start: anchor, end: anchor, story };
     try {
       await Promise.resolve(setSelectionTarget({ target, collapse: 'start', focus: true }));
@@ -623,21 +624,27 @@ export function useLinkPopover({
    * @param {{ placeCaret?: boolean }} [options]
    */
   async function navigateToAnchor(anchorUrl, { placeCaret = false } = {}) {
-    if (typeof anchorUrl !== 'string' || !anchorUrl.startsWith('#')) return;
+    if (typeof anchorUrl !== 'string' || !anchorUrl.startsWith('#')) return false;
     const anchorName = decodeAnchorFragment(anchorUrl.slice(1));
-
+    const editor = getActiveEditor();
+    const generation = openGeneration;
     /** @type {LinkPopoverDocumentApi | null | undefined} */
-    const doc = getActiveEditor()?.doc;
+    const doc = editor?.doc;
     const bookmarkGet = doc?.bookmarks?.get;
     if (typeof bookmarkGet !== 'function') {
       const mountedAnchor = findMountedAnchor(getUi()?.viewport?.getHost?.() ?? null, cssEscape(anchorName));
-      if (mountedAnchor) scrollToElement(mountedAnchor, { block: 'start', behavior: 'instant' });
-      return;
+      if (!mountedAnchor) return false;
+      scrollToElement(mountedAnchor, { block: 'start', behavior: 'instant' });
+      return true;
     }
-
     /** @type {BookmarkGetResult | null} */
     let bookmark = null;
     try {
+      const list = doc?.bookmarks?.list;
+      if (typeof list === 'function') {
+        const catalog = await Promise.resolve(list.call(doc.bookmarks));
+        if (catalog?.items?.filter((item) => item.name === anchorName).length !== 1) return false;
+      }
       bookmark = await Promise.resolve(
         bookmarkGet.call(doc.bookmarks, {
           target: { kind: 'entity', entityType: 'bookmark', name: anchorName },
@@ -645,33 +652,33 @@ export function useLinkPopover({
       );
       bookmark ??= null;
     } catch {
-      return;
+      return false;
     }
+    if (editor !== getActiveEditor() || generation !== openGeneration) return false;
     const story = bookmark?.address?.story;
-    if (story && story.storyType !== 'body') return;
+    if ((story && story.storyType !== 'body') || bookmark?.tableColumn) return false;
     const blockId = bookmark?.range?.from?.blockId;
-    if (typeof blockId !== 'string') return;
-
-    if (placeCaret) await placeCaretAtHeadingStart(blockId);
-
+    const offset = bookmark?.range?.from?.offset ?? 0;
+    if (typeof blockId !== 'string' || !Number.isInteger(offset) || offset < 0) return false;
+    if (placeCaret) await placeCaretAtBookmark(blockId, offset);
     const viewport = getUi()?.viewport;
     const scrollIntoView = viewport?.scrollIntoView;
-    if (typeof scrollIntoView !== 'function') return;
-    const target = { kind: 'text', blockId, range: { start: 0, end: 0 } };
+    if (typeof scrollIntoView !== 'function') return false;
+    const target = { kind: 'text', blockId, range: { start: offset, end: offset } };
     for (let step = 0; step < MAX_ANCHOR_NAVIGATION_STEPS; step += 1) {
       try {
         const result = await Promise.resolve(
-          scrollIntoView.call(viewport, {
-            target,
-            block: 'start',
-            behavior: 'instant',
-          }),
+          scrollIntoView.call(viewport, { target, block: 'start', behavior: 'instant' }),
         );
-        if (result?.success !== false) return;
+        if (editor !== getActiveEditor() || generation !== openGeneration) return false;
+        if (result?.success !== false) {
+          return true;
+        }
       } catch {
-        return;
+        return false;
       }
     }
+    return false;
   }
 
   /**
@@ -844,9 +851,10 @@ export function useLinkPopover({
 
     const closePopover = () => closeCurrentPopover('closed');
     /** @param {string | null | undefined} anchorUrl */
-    const goToAnchor = (anchorUrl) => {
-      closePopover();
-      void navigateToAnchor(anchorUrl, { placeCaret: true });
+    const goToAnchor = async (anchorUrl) => {
+      const success = await navigateToAnchor(anchorUrl, { placeCaret: ctx.documentMode !== 'viewing' });
+      if (success) closePopover();
+      return success;
     };
     const generation = openGeneration;
     /** @param {ResolvedHyperlinkTarget | null} hyperlinkTarget */
