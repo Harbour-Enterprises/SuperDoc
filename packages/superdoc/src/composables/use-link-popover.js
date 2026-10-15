@@ -462,6 +462,12 @@ function isTocEntryLinkElement(element) {
   return Boolean(element && typeof element.closest === 'function' && element.closest('.superdoc-toc-entry'));
 }
 
+/** @param {Element | null | undefined} element */
+function isNoteCrossReferenceLinkElement(element) {
+  const kind = element?.getAttribute('data-sd-note-cross-reference');
+  return (kind === 'ref' || kind === 'noteRef') && Boolean(element?.closest('[data-sd-note-role="body"]'));
+}
+
 /**
  * @param {Object} options
  * @param {() => SurfaceManager | null | undefined} options.getSurfaceManager
@@ -621,9 +627,9 @@ export function useLinkPopover({
    * Navigate to a body bookmark through its model address. A mounted-anchor
    * fallback is reserved for runtimes without a callable bookmark model.
    * @param {string | null | undefined} anchorUrl
-   * @param {{ placeCaret?: boolean }} [options]
+   * @param {{ placeCaret?: boolean, revalidateCaretAfterReveal?: boolean }} [options]
    */
-  async function navigateToAnchor(anchorUrl, { placeCaret = false } = {}) {
+  async function navigateToAnchor(anchorUrl, { placeCaret = false, revalidateCaretAfterReveal = false } = {}) {
     if (typeof anchorUrl !== 'string' || !anchorUrl.startsWith('#')) return false;
     const anchorName = decodeAnchorFragment(anchorUrl.slice(1));
     const editor = getActiveEditor();
@@ -637,41 +643,57 @@ export function useLinkPopover({
       scrollToElement(mountedAnchor, { block: 'start', behavior: 'instant' });
       return true;
     }
-    /** @type {BookmarkGetResult | null} */
-    let bookmark = null;
-    try {
-      const list = doc?.bookmarks?.list;
-      if (typeof list === 'function') {
-        const catalog = await Promise.resolve(list.call(doc.bookmarks));
-        if (catalog?.items?.filter((item) => item.name === anchorName).length !== 1) return false;
+    async function readBodyBookmark() {
+      try {
+        const list = doc?.bookmarks?.list;
+        if (typeof list === 'function') {
+          const catalog = await Promise.resolve(list.call(doc.bookmarks));
+          if (catalog?.items?.filter((item) => item.name === anchorName).length !== 1) return null;
+        }
+        const bookmark = await Promise.resolve(
+          bookmarkGet.call(doc.bookmarks, {
+            target: { kind: 'entity', entityType: 'bookmark', name: anchorName },
+          }),
+        );
+        if (editor !== getActiveEditor() || generation !== openGeneration) return null;
+        const story = bookmark?.address?.story;
+        if ((story && story.storyType !== 'body') || bookmark?.tableColumn) return null;
+        const blockId = bookmark?.range?.from?.blockId;
+        const offset = bookmark?.range?.from?.offset ?? 0;
+        if (typeof blockId !== 'string' || !Number.isInteger(offset) || offset < 0) return null;
+        return { blockId, offset };
+      } catch {
+        return null;
       }
-      bookmark = await Promise.resolve(
-        bookmarkGet.call(doc.bookmarks, {
-          target: { kind: 'entity', entityType: 'bookmark', name: anchorName },
-        }),
-      );
-      bookmark ??= null;
-    } catch {
-      return false;
     }
-    if (editor !== getActiveEditor() || generation !== openGeneration) return false;
-    const story = bookmark?.address?.story;
-    if ((story && story.storyType !== 'body') || bookmark?.tableColumn) return false;
-    const blockId = bookmark?.range?.from?.blockId;
-    const offset = bookmark?.range?.from?.offset ?? 0;
-    if (typeof blockId !== 'string' || !Number.isInteger(offset) || offset < 0) return false;
-    if (placeCaret) await placeCaretAtBookmark(blockId, offset);
+    let position = await readBodyBookmark();
+    if (!position) return false;
+    if (placeCaret && !revalidateCaretAfterReveal) await placeCaretAtBookmark(position.blockId, position.offset);
     const viewport = getUi()?.viewport;
     const scrollIntoView = viewport?.scrollIntoView;
     if (typeof scrollIntoView !== 'function') return false;
-    const target = { kind: 'text', blockId, range: { start: offset, end: offset } };
     for (let step = 0; step < MAX_ANCHOR_NAVIGATION_STEPS; step += 1) {
       try {
+        const target = {
+          kind: 'text',
+          blockId: position.blockId,
+          range: { start: position.offset, end: position.offset },
+        };
         const result = await Promise.resolve(
           scrollIntoView.call(viewport, { target, block: 'start', behavior: 'instant' }),
         );
         if (editor !== getActiveEditor() || generation !== openGeneration) return false;
         if (result?.success !== false) {
+          if (revalidateCaretAfterReveal) {
+            const current = await readBodyBookmark();
+            if (!current) return false;
+            if (current.blockId !== position.blockId || current.offset !== position.offset) {
+              position = current;
+              continue;
+            }
+            if (placeCaret) await placeCaretAtBookmark(current.blockId, current.offset);
+            if (editor !== getActiveEditor() || generation !== openGeneration) return false;
+          }
           return true;
         }
       } catch {
@@ -834,7 +856,11 @@ export function useLinkPopover({
 
     if (ctx.defaultAction === 'navigate') {
       if (ctx.isAnchorLink) {
-        void navigateToAnchor(ctx.href);
+        const noteReference = isNoteCrossReferenceLinkElement(ctx.element);
+        void navigateToAnchor(ctx.href, {
+          placeCaret: noteReference && ctx.documentMode !== 'viewing',
+          revalidateCaretAfterReveal: noteReference && ctx.documentMode !== 'viewing',
+        });
       } else if (ctx.href) {
         const target = ctx.target || '_self';
         const features = linkOpenFeaturesForTarget(ctx.rel, target);
