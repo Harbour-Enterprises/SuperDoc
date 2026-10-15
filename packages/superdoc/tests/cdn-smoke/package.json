@@ -6,6 +6,7 @@
   },
   "devDependencies": {
     "@playwright/test": "catalog:",
+    "@hocuspocus/server": "catalog:",
     "serve": "^14.2.0"
   }
 }

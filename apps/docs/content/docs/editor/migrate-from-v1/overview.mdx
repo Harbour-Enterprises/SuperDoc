@@ -501,8 +501,16 @@ The [preview API](/editor/collaboration/connect-two-editors#configure-your-appli
 
 #### Split-origin worker assets
 
-If your JavaScript bundle is served from a different origin than the application, copy the three emitted v2 worker
-assets to the application's origin and pass their URLs explicitly:
+If your JavaScript bundle is served from a different origin than the application, copy the three v2 worker files to
+the application's origin and pass their URLs explicitly. The files ship in `@superdoc/docx-engine/dist/assets/`:
+
+| `workerUrls` key | File                                   |
+| ---------------- | -------------------------------------- |
+| `document`       | `browser-worker-entry-<hash>.js`       |
+| `collaboration`  | `collaboration-worker-entry-<hash>.js` |
+| `reviewIndex`    | `review-index-worker-entry-<hash>.js`  |
+
+The hash changes with each engine version, so copy the files as part of your build rather than by hand.
 
 ```ts
 new SuperDoc({

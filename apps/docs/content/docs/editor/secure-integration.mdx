@@ -29,6 +29,21 @@ configuration decisions. The [Editor license](/editor/license) is client-visible
 
 Use HTTPS, restrictive CORS, and a Content Security Policy that permits only the scripts, workers, connections, images, and fonts your deployment needs. Avoid unversioned third-party runtime dependencies, and decide whether Editor assets are self-hosted before production.
 
+### Load the Editor from a CDN
+
+The script-tag build loads the DOCX Engine from `https://cdn.jsdelivr.net`. Browsers do not start a module worker from
+another origin, so SuperDoc starts each worker from a `blob:` URL on your page's origin and imports the engine's
+worker file from the CDN. A page with a Content Security Policy must allow both:
+
+```http
+Content-Security-Policy: script-src 'self' https://cdn.jsdelivr.net; worker-src 'self' blob:; style-src-elem 'self' https://cdn.jsdelivr.net
+```
+
+Pin an exact `superdoc` version in the script URL. To serve the engine yourself, set
+`window.SUPERDOC_ENGINE_CDN_BASE_URL` before the SuperDoc script and serve the `@superdoc/docx-engine` package with
+CORS enabled. If your policy cannot allow `blob:` workers, install from npm and serve the workers from your own origin
+with [`workerUrls`](/editor/migrate-from-v1/overview#split-origin-worker-assets).
+
 ## Pass a nonce to runtime styles
 
 Leave `cspNonce` unset unless the page's CSP requires a nonce for `<style>` elements. SuperDoc creates layout and caret styles at runtime. The browser blocks those styles when their nonce does not match the page's policy.
