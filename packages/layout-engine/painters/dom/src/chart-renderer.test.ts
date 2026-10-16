@@ -112,6 +112,77 @@ describe('formatTickValue', () => {
 });
 
 describe('createChartElement', () => {
+  it('uses horizontal value geometry and vertical category labels for bar direction', () => {
+    const chart = makeBarChart({
+      barDirection: 'bar',
+      legendPosition: undefined,
+      series: [{ name: 'Values', categories: ['Alpha', 'Beta', 'Gamma'], values: [2, 5, 8] }],
+    });
+    const horizontal = createChartElement(doc, chart, defaultGeometry);
+    const columns = createChartElement(doc, { ...chart, barDirection: 'col' }, defaultGeometry);
+    const bars = Array.from(horizontal.querySelectorAll('svg rect'));
+    const number = (el: Element, attr: string) => Number(el.getAttribute(attr));
+    expect(bars).toHaveLength(3);
+    expect(bars.map((bar) => number(bar, 'x'))).toEqual([60, 60, 60]);
+    expect(number(bars[1]!, 'width') / number(bars[0]!, 'width')).toBeCloseTo(5 / 2);
+    expect(number(bars[2]!, 'width') / number(bars[0]!, 'width')).toBeCloseTo(8 / 2);
+    expect(number(bars[0]!, 'y')).toBeGreaterThan(number(bars[1]!, 'y'));
+    expect(number(bars[1]!, 'y')).toBeGreaterThan(number(bars[2]!, 'y'));
+    const labels = Array.from(horizontal.querySelectorAll('text')).filter((el) =>
+      chart.series[0]!.categories.includes(el.textContent!),
+    );
+    expect(labels.map((label) => label.textContent)).toEqual(['Alpha', 'Beta', 'Gamma']);
+    expect(new Set(labels.map((label) => label.getAttribute('x'))).size).toBe(1);
+    const ticks = Array.from(horizontal.querySelectorAll('text')).filter(
+      (el) => !chart.series[0]!.categories.includes(el.textContent!),
+    );
+    expect(new Set(ticks.map((label) => label.getAttribute('y'))).size).toBe(1);
+    expect(number(ticks[0]!, 'x')).toBeLessThan(number(ticks.at(-1)!, 'x'));
+    expect(horizontal.outerHTML).not.toEqual(columns.outerHTML);
+    const columnBars = Array.from(columns.querySelectorAll('svg rect'));
+    expect(new Set(columnBars.map((bar) => bar.getAttribute('width'))).size).toBe(1);
+    expect(new Set(columnBars.map((bar) => bar.getAttribute('x'))).size).toBe(3);
+    expect(chart.series[0]!.values).toEqual([2, 5, 8]);
+  });
+
+  it('keeps grouped horizontal series and negative values on their side of zero', () => {
+    const chart = makeBarChart({
+      barDirection: 'bar',
+      legendPosition: undefined,
+      series: [
+        { name: 'First', categories: ['A', 'B'], values: [-2, 4] },
+        { name: 'Second', categories: ['A', 'B'], values: [2, -4] },
+      ],
+    });
+    const el = createChartElement(doc, chart, defaultGeometry);
+    const bars = Array.from(el.querySelectorAll('svg rect'));
+    const x = (index: number) => Number(bars[index]!.getAttribute('x'));
+    const right = (index: number) => x(index) + Number(bars[index]!.getAttribute('width'));
+    expect(bars).toHaveLength(4);
+    expect(right(0)).toBeCloseTo(x(1));
+    expect(right(3)).toBeCloseTo(x(2));
+    expect(x(1)).toBeCloseTo(x(2));
+    expect(bars[0]!.getAttribute('y')).not.toBe(bars[2]!.getAttribute('y'));
+    expect(bars[0]!.getAttribute('fill')).toBe(bars[1]!.getAttribute('fill'));
+    expect(bars[2]!.getAttribute('fill')).not.toBe(bars[0]!.getAttribute('fill'));
+  });
+
+  it('maps reversed horizontal axes without changing data order', () => {
+    const chart = makeBarChart({
+      barDirection: 'bar',
+      legendPosition: undefined,
+      categoryAxis: { orientation: 'maxMin' },
+      valueAxis: { orientation: 'maxMin' },
+      series: [{ name: 'Values', categories: ['A', 'B'], values: [2, 5] }],
+    });
+    const el = createChartElement(doc, chart, defaultGeometry);
+    const bars = Array.from(el.querySelectorAll('svg rect'));
+    expect(Number(bars[0]!.getAttribute('y'))).toBeLessThan(Number(bars[1]!.getAttribute('y')));
+    expect(Number(bars[0]!.getAttribute('x'))).toBeGreaterThan(Number(bars[1]!.getAttribute('x')));
+    expect(Number(bars[0]!.getAttribute('x')) + Number(bars[0]!.getAttribute('width'))).toBeCloseTo(380);
+    expect(chart.series[0]!.categories).toEqual(['A', 'B']);
+  });
+
   it('renders a bar chart as SVG', () => {
     const el = createChartElement(doc, makeBarChart(), defaultGeometry);
     expect(el.classList.contains('superdoc-chart')).toBe(true);
