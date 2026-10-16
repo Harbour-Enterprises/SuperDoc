@@ -160,7 +160,7 @@ A removed subpath fails module resolution in every module system, because it is 
 
 v1 exported ${MIGRATION_CATALOG.v1ExportCount} runtime values from the package root. v2 exports ${surviving.runtimeExports.length}: ${survivingExports}.
 
-Everything below was removed. \`defineSuperDocExtension\` is the one value v2 adds.
+Everything below was removed.
 
 ${surfaceSections}
 

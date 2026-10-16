@@ -25,7 +25,7 @@ export type ProtectionAdapter = ProtectionApi;
 // Input validation
 // ---------------------------------------------------------------------------
 
-const VALID_SET_MODES = new Set(['readOnly'] as const);
+const VALID_SET_MODES = new Set<string>(['readOnly', 'comments', 'trackedChanges', 'forms']);
 
 function validateSetEditingRestrictionInput(input: unknown): asserts input is SetEditingRestrictionInput {
   if (!input || typeof input !== 'object') {
@@ -36,10 +36,10 @@ function validateSetEditingRestrictionInput(input: unknown): asserts input is Se
   }
 
   const { mode } = input as Record<string, unknown>;
-  if (!VALID_SET_MODES.has(mode as 'readOnly')) {
+  if (typeof mode !== 'string' || !VALID_SET_MODES.has(mode)) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',
-      `protection.setEditingRestriction mode must be 'readOnly'. Received: '${String(mode)}'.`,
+      `protection.setEditingRestriction mode must be 'readOnly', 'comments', 'trackedChanges', or 'forms'. Received: '${String(mode)}'.`,
     );
   }
 }

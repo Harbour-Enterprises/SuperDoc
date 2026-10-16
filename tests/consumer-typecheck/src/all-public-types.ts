@@ -596,3 +596,8 @@ const _real_InteractionHistoryConfig: AssertNotAny<InteractionHistoryConfig> = t
 const _real_InteractionHistoryEvent: AssertNotAny<InteractionHistoryEvent> = true;
 const _real_InteractionHistorySnapshot: AssertNotAny<InteractionHistorySnapshot> = true;
 const _real_SuperDocDiagnostics: AssertNotAny<SuperDocDiagnostics> = true;
+
+import type { PermissionRangeEditor, PermissionRangeEditorResolution, SetEditingRestrictionInput } from 'superdoc';
+const _real_PermissionRangeEditor: AssertNotAny<PermissionRangeEditor> = true;
+const _real_PermissionRangeEditorResolution: AssertNotAny<PermissionRangeEditorResolution> = true;
+const _real_SetEditingRestrictionInput: AssertNotAny<SetEditingRestrictionInput> = true;

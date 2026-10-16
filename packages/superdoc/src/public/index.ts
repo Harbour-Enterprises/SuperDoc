@@ -67,6 +67,12 @@ export type {
 } from '@superdoc/document-api';
 export type { DocumentMode } from '../core/types/index.js';
 export type { DocumentProtectionState } from '@superdoc/document-api';
+export { listPermissionRangeEditors, resolvePermissionRangeEditor } from '@superdoc/document-api';
+export type {
+  PermissionRangeEditor,
+  PermissionRangeEditorResolution,
+  SetEditingRestrictionInput,
+} from '@superdoc/document-api';
 export type { EntityAddress } from '@superdoc/document-api';
 export type { EditorSurface } from '../core/types/index.js';
 export type { EditorTransactionEvent } from '../core/types/index.js';

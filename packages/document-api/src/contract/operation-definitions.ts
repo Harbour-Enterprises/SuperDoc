@@ -6912,7 +6912,8 @@ export const OPERATION_DEFINITIONS = {
   },
   'protection.setEditingRestriction': {
     memberPath: 'protection.setEditingRestriction',
-    description: 'Enable Word-style editing restriction on the document. Only readOnly mode is supported in v1.',
+    description:
+      'Author a Word readOnly, comments, trackedChanges, or forms restriction. Inspect runtimeEnforced in the returned state: V2 currently enforces readOnly; the other modes are saved for Word and are not enforced in SuperDoc.',
     expectedResult: 'Returns a ProtectionMutationResult with the updated protection state on success.',
     requiresDocumentContext: true,
     metadata: mutationOperation({

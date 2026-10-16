@@ -69,8 +69,8 @@ export type ProtectionGetInput = Record<string, never> | undefined;
 
 /** Input for `protection.setEditingRestriction`. */
 export interface SetEditingRestrictionInput {
-  /** Only `'readOnly'` is accepted in v1. */
-  mode: 'readOnly';
+  /** Word restriction to author. Inspect `runtimeEnforced` before relying on engine enforcement. */
+  mode: Exclude<EditingRestrictionMode, 'none'>;
   /** Whether to restrict formatting changes. Defaults to false. */
   formattingRestricted?: boolean;
 }

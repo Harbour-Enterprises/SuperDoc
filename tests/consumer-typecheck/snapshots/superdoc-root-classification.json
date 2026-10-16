@@ -1,13 +1,13 @@
 {
   "generatedAt": "2026-09-02T00:00:00.000Z",
   "summary": {
-    "total": 291,
+    "total": 296,
     "byBucket": {
       "legacy-root": 3,
-      "supported-root": 288
+      "supported-root": 293
     },
     "byConfidence": {
-      "high": 241,
+      "high": 246,
       "medium": 50
     }
   },
@@ -3212,6 +3212,61 @@
       "inDcts": true,
       "inEsm": false,
       "inCjs": false
+    },
+    {
+      "name": "PermissionRangeEditor",
+      "bucket": "supported-root",
+      "rationale": "Host-owned editor resolution and Word restriction authoring supported by SD-6011.",
+      "confidence": "high",
+      "source": "doc-api",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "PermissionRangeEditorResolution",
+      "bucket": "supported-root",
+      "rationale": "Host-owned editor resolution and Word restriction authoring supported by SD-6011.",
+      "confidence": "high",
+      "source": "doc-api",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "SetEditingRestrictionInput",
+      "bucket": "supported-root",
+      "rationale": "Host-owned editor resolution and Word restriction authoring supported by SD-6011.",
+      "confidence": "high",
+      "source": "doc-api",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "listPermissionRangeEditors",
+      "bucket": "supported-root",
+      "rationale": "Host-owned editor resolution and Word restriction authoring supported by SD-6011.",
+      "confidence": "high",
+      "source": "doc-api",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": true,
+      "inCjs": true
+    },
+    {
+      "name": "resolvePermissionRangeEditor",
+      "bucket": "supported-root",
+      "rationale": "Host-owned editor resolution and Word restriction authoring supported by SD-6011.",
+      "confidence": "high",
+      "source": "doc-api",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": true,
+      "inCjs": true
     }
   ]
 }

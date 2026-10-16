@@ -10,6 +10,22 @@ import type { StoryLocator } from '../types/story.types.js';
 
 export type PermissionRangePrincipal = { kind: 'everyone' } | { kind: 'editor'; id: string };
 
+/** Trusted host roster entry. Names are display labels, never permission identities. */
+export interface PermissionRangeEditor {
+  id?: string | null;
+  email?: string | null;
+  name?: string | null;
+}
+
+export type PermissionRangeEditorResolution =
+  | {
+      status: 'resolved';
+      id: string;
+      editor: PermissionRangeEditor;
+      principal: Extract<PermissionRangePrincipal, { kind: 'editor' }>;
+    }
+  | { status: 'unknown' | 'ambiguous'; id: string };
+
 // ---------------------------------------------------------------------------
 // Range kind
 // ---------------------------------------------------------------------------

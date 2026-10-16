@@ -11110,7 +11110,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   'protection.setEditingRestriction': {
     input: objectSchema(
       {
-        mode: { type: 'string', enum: ['readOnly'] },
+        mode: { type: 'string', enum: ['readOnly', 'comments', 'trackedChanges', 'forms'] },
         formattingRestricted: { type: 'boolean' },
       },
       ['mode'],

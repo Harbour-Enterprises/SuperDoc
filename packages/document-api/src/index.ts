@@ -1420,6 +1420,7 @@ export type { AnchoredMetadataApi, AnchoredMetadataAdapter } from './metadata/an
 export type { ProtectionApi, ProtectionAdapter } from './protection/protection.js';
 export * from './protection/protection.types.js';
 export type { PermissionRangesApi, PermissionRangesAdapter } from './permission-ranges/permission-ranges.js';
+export { listPermissionRangeEditors, resolvePermissionRangeEditor } from './permission-ranges/permission-ranges.js';
 export type * from './permission-ranges/permission-ranges.types.js';
 export type { FootnotesApi, FootnotesAdapter } from './footnotes/footnotes.js';
 export type { ClipboardApi, ClipboardAdapter } from './clipboard/clipboard.js';

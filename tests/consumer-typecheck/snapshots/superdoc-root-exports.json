@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-09-23T20:57:16.057Z",
+  "generatedAt": "2026-10-16T04:44:48.967Z",
   "ticket": "SD-3212 PR A0",
   "package": "superdoc",
   "rootExport": {
@@ -120,6 +120,8 @@
         "PasswordPromptHandle",
         "PasswordPromptRenderContext",
         "PasswordPromptResolution",
+        "PermissionRangeEditor",
+        "PermissionRangeEditorResolution",
         "PermissionResolver",
         "PermissionResolverParams",
         "ResolveRangeOutput",
@@ -133,6 +135,7 @@
         "SearchStrings",
         "SelectionHandle",
         "SelectionInfo",
+        "SetEditingRestrictionInput",
         "StoryLocator",
         "StructuredDocumentSource",
         "SuperDoc",
@@ -304,7 +307,9 @@
         "compareVersions",
         "createTheme",
         "defineSuperDocExtension",
-        "getFileObject"
+        "getFileObject",
+        "listPermissionRangeEditors",
+        "resolvePermissionRangeEditor"
       ],
       "error": null
     },
@@ -417,6 +422,8 @@
         "PasswordPromptHandle",
         "PasswordPromptRenderContext",
         "PasswordPromptResolution",
+        "PermissionRangeEditor",
+        "PermissionRangeEditorResolution",
         "PermissionResolver",
         "PermissionResolverParams",
         "ResolveRangeOutput",
@@ -430,6 +437,7 @@
         "SearchStrings",
         "SelectionHandle",
         "SelectionInfo",
+        "SetEditingRestrictionInput",
         "StoryLocator",
         "StructuredDocumentSource",
         "SuperDoc",
@@ -601,7 +609,9 @@
         "compareVersions",
         "createTheme",
         "defineSuperDocExtension",
-        "getFileObject"
+        "getFileObject",
+        "listPermissionRangeEditors",
+        "resolvePermissionRangeEditor"
       ],
       "error": null
     },
@@ -617,7 +627,9 @@
         "compareVersions",
         "createTheme",
         "defineSuperDocExtension",
-        "getFileObject"
+        "getFileObject",
+        "listPermissionRangeEditors",
+        "resolvePermissionRangeEditor"
       ],
       "error": null
     },
@@ -633,17 +645,19 @@
         "compareVersions",
         "createTheme",
         "defineSuperDocExtension",
-        "getFileObject"
+        "getFileObject",
+        "listPermissionRangeEditors",
+        "resolvePermissionRangeEditor"
       ],
       "error": null
     }
   },
   "counts": {
-    "types.import": 291,
-    "types.require": 291,
-    "import": 10,
-    "require": 10,
-    "union": 291
+    "types.import": 296,
+    "types.require": 296,
+    "import": 12,
+    "require": 12,
+    "union": 296
   },
   "divergences": {
     "typesImportVsRequire": {
@@ -758,6 +772,8 @@
         "PasswordPromptHandle",
         "PasswordPromptRenderContext",
         "PasswordPromptResolution",
+        "PermissionRangeEditor",
+        "PermissionRangeEditorResolution",
         "PermissionResolver",
         "PermissionResolverParams",
         "ResolveRangeOutput",
@@ -771,6 +787,7 @@
         "SearchStrings",
         "SelectionHandle",
         "SelectionInfo",
+        "SetEditingRestrictionInput",
         "StoryLocator",
         "StructuredDocumentSource",
         "SuperDocActiveEditorExtensions",

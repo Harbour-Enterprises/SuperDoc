@@ -12,7 +12,49 @@ import type {
   PermissionRangeMutationResult,
   PermissionRangeRemoveResult,
   PermissionRangePrincipal,
+  PermissionRangeEditor,
+  PermissionRangeEditorResolution,
 } from './permission-ranges.types.js';
+
+function editorKey(editor: PermissionRangeEditor): string | undefined {
+  return editor.id?.trim() ? editor.id : editor.email?.trim() || undefined;
+}
+
+function editorMatches(editor: PermissionRangeEditor, id: string): boolean {
+  return (
+    Boolean(id.trim()) &&
+    (editor.id === id || Boolean(editor.email?.trim() && editor.email.trim().toLowerCase() === id.toLowerCase()))
+  );
+}
+
+/**
+ * Resolve a host ID or imported Word email against an explicitly supplied roster.
+ * Word receives the email when available; opaque IDs remain host-specific.
+ * Duplicate IDs/emails are ambiguous. This does not authenticate a user.
+ */
+export function resolvePermissionRangeEditor(
+  editors: readonly PermissionRangeEditor[],
+  id: string,
+): PermissionRangeEditorResolution {
+  const matches = editors.filter((editor) => editorMatches(editor, id));
+  if (matches.length === 0) return { status: 'unknown', id };
+  if (matches.length !== 1) return { status: 'ambiguous', id };
+  const editor = matches[0]!;
+  const wordId = editor.email?.trim() || editor.id!;
+  // A unique application ID must not serialize an email/ID shared by another user.
+  if (editors.filter((candidate) => editorMatches(candidate, wordId)).length !== 1) {
+    return { status: 'ambiguous', id };
+  }
+  return { status: 'resolved', id, editor: { ...editor }, principal: { kind: 'editor', id: wordId } };
+}
+
+/** Enumerate the host roster for an editor picker, including ambiguous entries. */
+export function listPermissionRangeEditors(
+  editors: readonly PermissionRangeEditor[],
+): PermissionRangeEditorResolution[] {
+  const ids = new Set(editors.map(editorKey).filter((id): id is string => id !== undefined));
+  return Array.from(ids, (id) => resolvePermissionRangeEditor(editors, id));
+}
 
 // ---------------------------------------------------------------------------
 // API / Adapter interfaces

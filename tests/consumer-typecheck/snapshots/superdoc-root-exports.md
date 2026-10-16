@@ -1,17 +1,17 @@
 # superdoc root export inventory (SD-3212 PR A0)
 
-Generated: 2026-09-23T20:57:16.057Z
+Generated: 2026-10-16T04:44:48.967Z
 Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 
 ## Counts
 
 | Source | Path | Count |
 |---|---|---|
-| types.import | `./dist/superdoc/src/public/index.d.ts` | 288 |
-| types.require | `./dist/superdoc/src/public/index.d.cts` | 288 |
-| import | `./dist/superdoc.es.js` | 10 |
-| require | `./dist/superdoc.cjs` | 10 |
-| **union** |  | **288** |
+| types.import | `./dist/superdoc/src/public/index.d.ts` | 296 |
+| types.require | `./dist/superdoc/src/public/index.d.cts` | 296 |
+| import | `./dist/superdoc.es.js` | 12 |
+| require | `./dist/superdoc.cjs` | 12 |
+| **union** |  | **296** |
 
 ## Divergences
 
@@ -19,7 +19,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - types.require only (not in types.import): 0
 - ESM only (not in CJS): 0
 - CJS only (not in ESM): 0
-- typed but no runtime export (phantom risk): 278
+- typed but no runtime export (phantom risk): 284
 - runtime export but not typed (silent shadow on root): 0
 
 ### Type-only names (no runtime)
@@ -126,6 +126,8 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - `PasswordPromptHandle`
 - `PasswordPromptRenderContext`
 - `PasswordPromptResolution`
+- `PermissionRangeEditor`
+- `PermissionRangeEditorResolution`
 - `PermissionResolver`
 - `PermissionResolverParams`
 - `ResolveRangeOutput`
@@ -139,6 +141,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - `SearchStrings`
 - `SelectionHandle`
 - `SelectionInfo`
+- `SetEditingRestrictionInput`
 - `StoryLocator`
 - `StructuredDocumentSource`
 - `SuperDocActiveEditorExtensions`
@@ -151,6 +154,9 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 - `SuperDocAnchorTarget`
 - `SuperDocAwarenessUpdatePayload`
 - `SuperDocCharRange`
+- `SuperDocCollaborationConnectionChangePayload`
+- `SuperDocCollaborationConnectionKind`
+- `SuperDocCollaborationConnectionState`
 - `SuperDocCollaborationUpgradeError`
 - `SuperDocCommandApi`
 - `SuperDocCommandExecuteContext`
@@ -309,7 +315,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 |---|---|---|---|---|---|---|---|---|---|
 | `AwarenessState` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `AwarenessUser` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `BlankDOCX` | ✓ | ✓ | ✓ | ✓ | 1 |   | 1 | 2 | 0 |
+| `BlankDOCX` | ✓ | ✓ | ✓ | ✓ | 1 |   | 1 | 2 | 3 |
 | `BlockNavigationAddress` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `BlocksListResult` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `BookmarkAddress` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
@@ -325,7 +331,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `CommentsLayout` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `CommentsResponsiveConfig` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `CommentsType` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `Config` | ✓ | ✓ |   |   | 35 |   | 14 | 3 | 0 |
+| `Config` | ✓ | ✓ |   |   | 36 |   | 16 | 2 | 0 |
 | `ContentControlActiveChangePayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ContentControlClickPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ContentControlRef` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
@@ -340,21 +346,21 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `ContextMenuSelectContext` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ContextMenuSelectPayload` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `ContextMenuSelectReadiness` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `DOCX` | ✓ | ✓ | ✓ | ✓ | 1 |   | 378 | 73 | 0 |
+| `DOCX` | ✓ | ✓ | ✓ | ✓ | 1 |   | 410 | 71 | 2 |
 | `DiagnosticsConfig` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DiffApplyEligibility` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DiffApplyEligibilityBlocker` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DiffApplyEligibilityBlockerCode` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DiffApplyModeEligibility` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DiffApplyOperationReceipt` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
-| `DiffApplyResult` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
+| `DiffApplyResult` | ✓ | ✓ |   |   | 3 |   | 0 | 0 | 0 |
 | `DiffApplyReviewItem` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
-| `DiffPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
+| `DiffPayload` | ✓ | ✓ |   |   | 3 |   | 0 | 0 | 0 |
 | `DirectSurfaceRequest` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `DocRange` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `Document` | ✓ | ✓ |   |   | 3 |   | 96 | 18 | 0 |
-| `DocumentApi` | ✓ | ✓ |   |   | 4 |   | 2 | 0 | 0 |
-| `DocumentCollaborationConfig` | ✓ | ✓ |   |   | 2 |   | 7 | 0 | 0 |
+| `Document` | ✓ | ✓ |   |   | 3 |   | 113 | 22 | 6 |
+| `DocumentApi` | ✓ | ✓ |   |   | 6 |   | 2 | 0 | 0 |
+| `DocumentCollaborationConfig` | ✓ | ✓ |   |   | 3 |   | 11 | 0 | 0 |
 | `DocumentDataSource` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `DocumentMode` | ✓ | ✓ |   |   | 4 |   | 1 | 2 | 0 |
 | `DocumentProtectionState` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
@@ -382,7 +388,7 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `FontsChangedSource` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `FontsConfig` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `FontsResolvedPayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
-| `HTML` | ✓ | ✓ | ✓ | ✓ | 1 |   | 45 | 0 | 0 |
+| `HTML` | ✓ | ✓ | ✓ | ✓ | 1 |   | 53 | 0 | 0 |
 | `HyperlinkActivationContext` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `HyperlinkActivationHandler` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `HyperlinkActivationResult` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
@@ -413,6 +419,8 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `PasswordPromptHandle` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `PasswordPromptRenderContext` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `PasswordPromptResolution` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
+| `PermissionRangeEditor` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
+| `PermissionRangeEditorResolution` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `PermissionResolver` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `PermissionResolverParams` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ResolveRangeOutput` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
@@ -425,10 +433,11 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SearchMatch` | ✓ | ✓ |   |   | 3 |   | 0 | 0 | 0 |
 | `SearchStrings` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `SelectionHandle` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `SelectionInfo` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `StoryLocator` | ✓ | ✓ |   |   | 1 |   | 2 | 0 | 0 |
+| `SelectionInfo` | ✓ | ✓ |   |   | 1 |   | 1 | 0 | 0 |
+| `SetEditingRestrictionInput` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
+| `StoryLocator` | ✓ | ✓ |   |   | 1 |   | 4 | 0 | 0 |
 | `StructuredDocumentSource` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
-| `SuperDoc` | ✓ | ✓ | ✓ | ✓ | 34 |   | 296 | 44 | 0 |
+| `SuperDoc` | ✓ | ✓ | ✓ | ✓ | 39 |   | 335 | 43 | 9 |
 | `SuperDocActiveEditorExtensions` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `SuperDocActiveEditorExtensionsCommands` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `SuperDocActiveEditorExtensionsDiagnostics` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
@@ -439,6 +448,9 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SuperDocAnchorTarget` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `SuperDocAwarenessUpdatePayload` | ✓ | ✓ |   |   | 1 |   | 0 | 2 | 0 |
 | `SuperDocCharRange` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
+| `SuperDocCollaborationConnectionChangePayload` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
+| `SuperDocCollaborationConnectionKind` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
+| `SuperDocCollaborationConnectionState` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `SuperDocCollaborationUpgradeError` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `SuperDocCommandApi` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `SuperDocCommandExecuteContext` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
@@ -538,15 +550,15 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `SurfaceResolver` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `SurfacesConfig` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
 | `SurfacesModuleConfig` | ✓ | ✓ |   |   | 1 |   | 0 | 0 | 0 |
-| `TextAddress` | ✓ | ✓ |   |   | 1 |   | 7 | 0 | 0 |
+| `TextAddress` | ✓ | ✓ |   |   | 1 |   | 9 | 0 | 0 |
 | `TextSegment` | ✓ | ✓ |   |   | 1 |   | 1 | 0 | 0 |
-| `TextTarget` | ✓ | ✓ |   |   | 1 |   | 11 | 0 | 0 |
+| `TextTarget` | ✓ | ✓ |   |   | 1 |   | 12 | 0 | 0 |
 | `ThemeColors` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ThemeConfig` | ✓ | ✓ |   |   | 2 |   | 1 | 0 | 0 |
 | `ThemeResult` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ThemeVariableOverrides` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ToolbarCommandId` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
-| `ToolbarConfig` | ✓ | ✓ |   |   | 3 |   | 1 | 0 | 0 |
+| `ToolbarConfig` | ✓ | ✓ |   |   | 4 |   | 1 | 0 | 0 |
 | `ToolbarCustomButton` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ToolbarCustomButtonCommand` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
 | `ToolbarCustomButtonCommandId` | ✓ | ✓ |   |   | 2 |   | 0 | 0 | 0 |
@@ -595,3 +607,5 @@ Source: packed and installed `tests/consumer-typecheck/node_modules/superdoc`
 | `createTheme` | ✓ | ✓ | ✓ | ✓ | 2 |   | 5 | 0 | 0 |
 | `defineSuperDocExtension` | ✓ | ✓ | ✓ | ✓ | 1 |   | 6 | 0 | 0 |
 | `getFileObject` | ✓ | ✓ | ✓ | ✓ | 1 |   | 1 | 0 | 0 |
+| `listPermissionRangeEditors` | ✓ | ✓ | ✓ | ✓ | 1 |   | 2 | 0 | 0 |
+| `resolvePermissionRangeEditor` | ✓ | ✓ | ✓ | ✓ | 1 |   | 2 | 0 | 0 |
