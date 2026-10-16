@@ -235,3 +235,30 @@ describe('receipt-bridge: created-content effects', () => {
     expect(receipt).not.toHaveProperty('txId');
   });
 });
+
+describe('receipt-bridge: shared tracked and no-op metadata', () => {
+  it('preserves false, zero, empty refs and authored refs on both success paths', () => {
+    const target = { kind: 'text' as const, blockId: 'B1', range: { start: 0, end: 0 } };
+    const range = { from: 0, to: 0 };
+    for (const metadata of [
+      { changed: false, trackedChangeCount: 0, trackedChangeRefs: [] },
+      {
+        changed: true,
+        trackedChangeCount: 1,
+        trackedChangeRefs: [{ kind: 'entity' as const, entityType: 'trackedChange' as const, entityId: 'change-1' }],
+      },
+    ]) {
+      const textReceipt: TextMutationReceipt = { success: true, resolution: { target, range, text: '' }, ...metadata };
+      expect(textReceiptToSDReceipt(textReceipt)).toMatchObject(metadata);
+      expect(buildStructuralReceipt(true, { target, range, ...metadata })).toMatchObject(metadata);
+      const failed = buildStructuralReceipt(
+        false,
+        { target, range, ...metadata },
+        { code: 'INVALID_INPUT', message: 'Rejected' },
+      );
+      expect(failed).not.toHaveProperty('changed');
+      expect(failed).not.toHaveProperty('trackedChangeCount');
+      expect(failed).not.toHaveProperty('trackedChangeRefs');
+    }
+  });
+});

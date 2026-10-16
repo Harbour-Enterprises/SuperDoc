@@ -85,6 +85,21 @@ function expectValidationError(fn: () => void, code: string, messagePattern?: Re
 // ---------------------------------------------------------------------------
 
 describe('executeHyperlinksList', () => {
+  it('projects adapter-only story catalogs while preserving discovery data and future validation visibility', () => {
+    const canonical: HyperlinksListResult = {
+      evaluatedRevision: '7',
+      total: 0,
+      items: [],
+      page: { limit: 10, offset: 0, returned: 0 },
+    };
+    const privateResult = { ...canonical, stories: [{ storyId: 'main', hyperlinks: [] }], unknownResultField: true };
+    const adapter = makeAdapter({ list: mock(() => privateResult) });
+    const actual = executeHyperlinksList(adapter);
+    expect(actual).toEqual({ ...canonical, unknownResultField: true });
+    expect(actual).not.toHaveProperty('stories');
+    expect(privateResult.stories).toHaveLength(1);
+  });
+
   it('delegates to adapter.list', () => {
     const adapter = makeAdapter();
     executeHyperlinksList(adapter);

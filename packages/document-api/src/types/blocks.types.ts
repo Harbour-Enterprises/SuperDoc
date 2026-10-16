@@ -165,7 +165,7 @@ export interface BlocksSplitInput {
   /** Include deleted tracked text in the offset ruler. Defaults to `visible`. */
   coordinateSpace?: 'visible' | 'tracked';
 }
-export interface BlocksSplitSuccessResult {
+export interface BlocksSplitSuccessResult extends Omit<ReceiptSuccess, 'inserted'> {
   success: true;
   appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Address of the new paragraph created by the split (the tail). */
@@ -194,7 +194,7 @@ export interface BlocksMergeInput {
   /** Paragraph immediately after `first` in the same story. */
   second: BlockNodeAddress;
 }
-export interface BlocksMergeSuccessResult {
+export interface BlocksMergeSuccessResult extends Omit<ReceiptSuccess, 'removed'> {
   success: true;
   appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Address of the paragraph that was removed (the second paragraph). */

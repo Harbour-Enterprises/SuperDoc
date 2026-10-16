@@ -402,10 +402,18 @@ export type TrackChangeTarget =
   | {
       kind: 'text';
       address: TrackedChangeAddress;
+      /** Resolved text geometry when available. */
+      segments?: TextTarget['segments'];
+      /** Story containing the resolved geometry. */
+      story?: TextTarget['story'];
     }
   | {
       kind: 'replacement';
       address: TrackedChangeAddress;
+      /** Resolved text geometry when available. */
+      segments?: TextTarget['segments'];
+      /** Story containing the resolved geometry. */
+      story?: TextTarget['story'];
     }
   | {
       kind: 'formatting';

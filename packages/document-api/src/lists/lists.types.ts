@@ -3,6 +3,7 @@ import type {
   BlockNodeType,
   ReceiptFailure,
   ReceiptInsert,
+  ReceiptSuccess,
   StoryLocator,
   TextAddress,
   TextRangeShift,
@@ -447,14 +448,14 @@ export type ListsCaptureTemplateResult = ListsCaptureTemplateSuccessResult | Lis
 // ---------------------------------------------------------------------------
 // Result types
 // ---------------------------------------------------------------------------
-export interface ListsInsertSuccessResult {
+export interface ListsInsertSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   item: ListItemAddress;
   insertionPoint: TextAddress;
   trackedChangeRefs?: ReceiptInsert[];
 }
-export interface ListsMutateItemSuccessResult {
+export interface ListsMutateItemSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   item: ListItemAddress;
@@ -466,38 +467,38 @@ export interface ListsMutateItemSuccessResult {
   txId?: string;
   changed?: boolean;
 }
-export interface ListsCreateSuccessResult {
+export interface ListsCreateSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   item: ListItemAddress;
 }
-export interface ListsJoinSuccessResult {
+export interface ListsJoinSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
 }
-export interface ListsSeparateSuccessResult {
+export interface ListsSeparateSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   numId: number;
 }
-export interface ListsMergeSuccessResult {
+export interface ListsMergeSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   absorbedCount: number;
   removedEmptyBlocks: number;
 }
-export interface ListsSplitSuccessResult {
+export interface ListsSplitSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   numId: number;
   restartedAt: number | null;
 }
-export interface ListsDetachSuccessResult {
+export interface ListsDetachSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   paragraph: {
@@ -506,7 +507,7 @@ export interface ListsDetachSuccessResult {
     nodeId: string;
   };
 }
-export interface ListsConvertToTextSuccessResult {
+export interface ListsConvertToTextSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   paragraph: {
@@ -538,7 +539,7 @@ export type ListsMergeResult = ListsMergeSuccessResult | ListsFailureResult;
 export type ListsSplitResult = ListsSplitSuccessResult | ListsFailureResult;
 export type ListsDetachResult = ListsDetachSuccessResult | ListsFailureResult;
 export type ListsConvertToTextResult = ListsConvertToTextSuccessResult | ListsFailureResult;
-export interface ListsDeleteSuccessResult {
+export interface ListsDeleteSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   /** Number of list items removed. */

@@ -135,7 +135,10 @@ function validatePatch(patch: unknown, operationName: string): asserts patch is 
 // ---------------------------------------------------------------------------
 
 export function executeHyperlinksList(adapter: HyperlinksAdapter, query?: HyperlinksListQuery): HyperlinksListResult {
-  return adapter.list(query);
+  const result = { ...adapter.list(query) } as HyperlinksListResult & { stories?: unknown };
+  // Adapter-only story catalogs belong to the host surface, outside discovery.
+  delete result.stories;
+  return result;
 }
 
 export function executeHyperlinksGet(adapter: HyperlinksAdapter, input: HyperlinksGetInput): HyperlinkInfo {

@@ -1,7 +1,7 @@
 import type { BlockNodeAddress, InlineNodeAddress, NodeAddress } from '../types/base.js';
 import type { TextAddress } from '../types/address.js';
 import type { DiscoveryOutput } from '../types/discovery.js';
-import type { ReceiptFailure } from '../types/receipt.js';
+import type { ReceiptFailure, ReceiptSuccess } from '../types/receipt.js';
 
 // ---------------------------------------------------------------------------
 // Addressing
@@ -100,10 +100,17 @@ export interface HyperlinkInfo {
 // Mutation results
 // ---------------------------------------------------------------------------
 
-export interface HyperlinkMutationSuccess {
+export interface HyperlinkMutationSuccess extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   hyperlink: HyperlinkTarget;
+  /** Legacy native identifier for the mutated hyperlink, null after removal. */
+  hyperlinkNodeId?: string | null;
+  /** Package parts created or modified by the mutation. */
+  partsCreated?: readonly string[];
+  partsModified?: readonly string[];
+  /** Relationship identity created for an external destination, when present. */
+  createdRId?: string;
 }
 
 export interface HyperlinkMutationFailure {

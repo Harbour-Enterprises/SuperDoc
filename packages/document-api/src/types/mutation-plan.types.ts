@@ -12,7 +12,7 @@ import type { InsertStylePolicy, StylePolicy } from './style-policy.types.js';
 import type { InlineRunPatch } from '../format/inline-run-patch.js';
 import type { SDFragment } from './fragment.js';
 import type { Placement, NestingPolicy } from './placement.js';
-import type { AffectedRef } from './receipt.js';
+import type { AffectedRef, ReceiptSuccess } from './receipt.js';
 
 // ---------------------------------------------------------------------------
 // Universal targeting model
@@ -300,7 +300,7 @@ export type StepOutcome = {
   data: StepOutcomeData;
 };
 
-export type PlanReceipt = {
+export type PlanReceipt = ReceiptSuccess & {
   success: true;
   /** Effective mode when every committed step used the same mode. */
   appliedChangeMode?: ChangeMode;

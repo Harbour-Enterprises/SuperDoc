@@ -74,6 +74,9 @@ export interface SDMutationReceipt {
   outcome?: SDHtmlMarkdownOutcome;
   failure?: SDError;
   evaluatedRevision?: { before: string; after: string };
+  changed?: ReceiptSuccess['changed'];
+  trackedChangeRefs?: ReceiptSuccess['trackedChangeRefs'];
+  trackedChangeCount?: ReceiptSuccess['trackedChangeCount'];
   id?: ReceiptSuccess['id'];
   inserted?: ReceiptSuccess['inserted'];
   updated?: ReceiptSuccess['updated'];

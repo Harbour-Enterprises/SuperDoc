@@ -8,7 +8,7 @@
 import type { BlockNodeAddress, NodeKind } from '../types/base.js';
 import type { SelectionTarget } from '../types/address.js';
 import type { SDFragment } from '../types/fragment.js';
-import type { ReceiptFailure, ReceiptInsert } from '../types/receipt.js';
+import type { ReceiptFailure, ReceiptInsert, ReceiptSuccess } from '../types/receipt.js';
 import type { StoryLocator } from '../types/story.types.js';
 
 // ---------------------------------------------------------------------------
@@ -227,11 +227,13 @@ export interface ContentControlInfo {
 // Mutation result envelope
 // ---------------------------------------------------------------------------
 
-export interface ContentControlMutationSuccess {
+export interface ContentControlMutationSuccess extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   contentControl: ContentControlTarget;
   updatedRef?: ContentControlTarget;
+  /** Identity of the block created by an adjacent-content insertion. */
+  createdBlockId?: string;
   affectedStories?: StoryLocator[];
   trackedChangeRefs?: ReceiptInsert[];
 }

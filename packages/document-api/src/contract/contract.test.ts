@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'bun:test';
 import { COMMAND_CATALOG, OPERATION_DESCRIPTION_MAP, OPERATION_EXPECTED_RESULT_MAP } from './command-catalog.js';
 import { OPERATION_DEFINITIONS, type ReferenceGroupKey } from './operation-definitions.js';
@@ -266,12 +267,20 @@ describe('document-api contract catalog', () => {
       'affectedStories',
       'appliedChangeMode',
       'changed',
+      'effects',
+      'id',
+      'inserted',
+      'invalidatedRefs',
       'item',
       'remappedRefs',
+      'removed',
       'success',
       'textRangeShifts',
+      'trackedChangeCount',
       'trackedChangeRefs',
       'txId',
+      'updated',
+      'warnings',
     ]);
     expect(
       collectUnknownPropertySchemaErrors(successSchema, {
@@ -504,6 +513,7 @@ describe('document-api contract catalog', () => {
     const expectedSuccessKeys = [
       'affectedStories',
       'appliedChangeMode',
+      'changed',
       'conversion',
       'effects',
       'evaluatedRevision',
@@ -516,6 +526,8 @@ describe('document-api contract catalog', () => {
       'resolution',
       'success',
       'textRangeShifts',
+      'trackedChangeCount',
+      'trackedChangeRefs',
       'txId',
       'updated',
       'warnings',
@@ -949,6 +961,75 @@ describe('document-api contract catalog', () => {
     }
   });
 
+  it('accepts the complete retained native comment and tracked-change read inventory', () => {
+    const schemas = buildInternalContractSchemas();
+    const rows = JSON.parse(
+      readFileSync(new URL('../../../sdk/langs/rust/tests/fixtures/native-results.json', import.meta.url), 'utf8'),
+    ) as Array<{ mode: string; operationId: string; stage: string; value: unknown }>;
+    const readFamilies = ['doc.comments.list', 'doc.comments.get', 'doc.trackChanges.list', 'doc.trackChanges.get'];
+    const reads = rows.filter(({ operationId }) => readFamilies.includes(operationId));
+    const expected = ['cli', 'document'].flatMap((mode) => [
+      ...readFamilies.map((operationId) => `${mode}:${operationId}:live`),
+      `${mode}:doc.comments.list:saved`,
+    ]);
+    expect(reads.map(({ mode, operationId, stage }) => `${mode}:${operationId}:${stage}`).sort()).toEqual(
+      expected.sort(),
+    );
+    for (const row of reads) {
+      const operation = schemas.operations[row.operationId.slice(4) as keyof typeof schemas.operations];
+      expect(
+        collectUnknownPropertySchemaErrors(operation.output as ContractTestSchemaShape, row.value),
+        row.operationId,
+      ).toEqual([]);
+    }
+    for (const output of [
+      schemas.operations['comments.get'].output,
+      (schemas.operations['comments.list'].output as ContractTestSchemaShape).properties!.items.items!,
+    ]) {
+      const properties = (output as ContractTestSchemaShape).properties!;
+      for (const name of ['commentId', 'rootCommentId', 'replyCount', 'origin', 'imported'])
+        expect(properties).toHaveProperty(name);
+    }
+  });
+
+  it('declares rich tracked-change targets and review metadata for typed consumers', () => {
+    const schemas = buildInternalContractSchemas();
+    const get = schemas.operations['trackChanges.get'].output as ContractTestSchemaShape;
+    const list = (schemas.operations['trackChanges.list'].output as ContractTestSchemaShape).properties!.items.items!;
+    for (const schema of [get, list]) {
+      const properties = schema.properties!;
+      for (const name of [
+        'target',
+        'navigationTarget',
+        'structuralDescriptor',
+        'splitFromId',
+        'move',
+        'moveDirection',
+        'linkedComments',
+        'imagePreview',
+      ])
+        expect(properties).toHaveProperty(name);
+      expect(
+        properties.target.oneOf!.map((branch) => branch.properties!.kind.const ?? branch.properties!.kind.enum![0]),
+      ).toEqual(['text', 'replacement', 'formatting', 'structural', 'move']);
+      expect(properties.structuralDescriptor.required).toEqual([
+        'operation',
+        'granularity',
+        'decisionPolicy',
+        'before',
+        'after',
+        'affectedStories',
+        'sourceIds',
+        'exportCarrier',
+      ]);
+      expect(properties.move.properties!.source.oneOf!.some((branch) => branch.type === 'null')).toBe(true);
+      expect(properties.navigationTarget.required).toEqual(['kind', 'story', 'blockId', 'role']);
+      expect(properties.imagePreview.required).toEqual(['src', 'contentType', 'role']);
+    }
+    expect(get.properties!.before.properties).toHaveProperty('structural');
+    expect(get.properties!.after.properties).toHaveProperty('structural');
+  });
+
   it('requires id on comments.create success receipts', () => {
     const schemas = buildInternalContractSchemas();
     const createOutputSchema = schemas.operations['comments.create'].output as {
@@ -968,6 +1049,23 @@ describe('document-api contract catalog', () => {
     expect(successSchema?.$ref).toBe('#/$defs/CommentsCreateSuccess');
     expect(defs.CommentsCreateSuccess?.properties).toHaveProperty('id');
     expect(defs.CommentsCreateSuccess?.required).toEqual(expect.arrayContaining(['success', 'id']));
+  });
+
+  it('accepts native comment receipt metadata while requiring the generated id', () => {
+    const schemas = buildInternalContractSchemas();
+    const defs = schemas.$defs as Record<string, ContractTestSchemaShape>;
+    const success = defs.CommentsCreateSuccess;
+    const nativeReceipt = {
+      success: true,
+      id: 'synthetic-comment',
+      inserted: [{ kind: 'comment', commentId: 'synthetic-comment' }],
+      affectedStories: [{ kind: 'story', storyType: 'body' }],
+      txId: 'synthetic-comment-create',
+    };
+    expect(collectUnknownPropertySchemaErrors(success, nativeReceipt)).toEqual([]);
+    expect(Object.keys(success.properties!).sort()).toEqual(Object.keys(defs.ReceiptSuccess.properties!).sort());
+    expect(success.additionalProperties).toBe(false);
+    expect(success.required).toEqual(expect.arrayContaining(['success', 'id']));
   });
 
   it('declares UNSUPPORTED_ENVIRONMENT for insert metadata and generated failure schema', () => {
@@ -1608,5 +1706,123 @@ describe('document-api contract catalog', () => {
       const value = COMMAND_CATALOG[id].returnsPromise;
       expect(value === true || value === undefined, `${id} returnsPromise must be true or undefined`).toBe(true);
     }
+  });
+});
+
+describe('public mutation result vocabulary', () => {
+  it('preserves complete receipt metadata across text, image, list, hyperlink, plan and structural results', () => {
+    const schemas = buildInternalContractSchemas();
+    const defs = schemas.$defs as Record<string, ContractTestSchemaShape>;
+    const metadata = {
+      txId: 'transaction-1',
+      affectedStories: [{ kind: 'story', storyType: 'body' }],
+      invalidatedRefs: [],
+      remappedRefs: [],
+      textRangeShifts: [],
+      trackedChangeRefs: [{ kind: 'entity', entityType: 'trackedChange', entityId: 'change-1' }],
+      trackedChangeCount: 1,
+      changed: true,
+    };
+    const cases = [
+      'delete',
+      'create.image',
+      'images.setLockAspectRatio',
+      'lists.create',
+      'lists.join',
+      'lists.separate',
+      'lists.merge',
+      'lists.split',
+      'lists.detach',
+      'lists.convertToText',
+      'lists.delete',
+      'hyperlinks.insert',
+      'contentControls.insertAfter',
+      'blocks.split',
+      'blocks.merge',
+      'mutations.apply',
+    ] as const;
+    for (const id of cases) {
+      const operation = schemas.operations[id];
+      const declared = operation.success as ContractTestSchemaShape;
+      const success = declared.$ref ? defs[declared.$ref.split('/').at(-1)!] : declared;
+      expect(success.additionalProperties, id).toBe(false);
+      expect(collectUnknownPropertySchemaErrors(success, metadata), id).toEqual([]);
+      expect(collectUnknownPropertySchemaErrors(success, { ...metadata, unknownMutationField: true }), id).toContain(
+        '$.unknownMutationField: unknown property',
+      );
+      expect(operation.failure, `${id} retains its failure schema`).toBeDefined();
+    }
+    expect(defs.TextMutationSuccess.properties?.resolution?.$ref).toBe('#/$defs/TextMutationResolution');
+    expect(defs.TextMutationSuccess.required).toEqual(['success', 'resolution']);
+    expect(defs.TextMutationSuccess.properties?.trackedChangeOutcomes?.items?.additionalProperties).toBe(false);
+    for (const id of ['blocks.split', 'blocks.merge'] as const) {
+      const success = schemas.operations[id].success as ContractTestSchemaShape;
+      expect(success.properties?.anchor).toBeDefined();
+      expect(success.properties?.trackedChangeRefs).toBeDefined();
+    }
+    expect((schemas.operations['blocks.merge'].success as ContractTestSchemaShape).properties?.joinOffset).toEqual({
+      type: 'integer',
+      minimum: 0,
+    });
+    expect(
+      (schemas.operations['contentControls.insertAfter'].success as ContractTestSchemaShape).properties?.createdBlockId,
+    ).toEqual({ type: 'string' });
+    const hyperlink = schemas.operations['hyperlinks.insert'].success as ContractTestSchemaShape;
+    for (const field of ['hyperlinkNodeId', 'partsCreated', 'partsModified', 'createdRId'])
+      expect(hyperlink.properties, field).toHaveProperty(field);
+  });
+
+  it('types clipboard insertion plans and diagnostics while rejecting nested unknown fields', () => {
+    const schema = buildInternalContractSchemas().operations['clipboard.insert'].success as ContractTestSchemaShape;
+    const sample = {
+      success: true,
+      txId: 'clipboard-1',
+      affectedStories: [{ kind: 'story', storyType: 'body' }],
+      plan: { sourceKind: 'plain-text', blockCount: 1, assetCount: 0, imageRefCount: 0, plainFallback: false },
+      diagnostics: [
+        {
+          code: 'paste-empty',
+          severity: 'warning',
+          message: 'Empty source',
+          reason: 'paste-empty',
+          sourceKind: 'empty',
+        },
+      ],
+    };
+    expect(collectUnknownPropertySchemaErrors(schema, sample)).toEqual([]);
+    expect(schema.required).toEqual(['success', 'plan', 'diagnostics']);
+    expect(schema.properties?.plan?.additionalProperties).toBe(false);
+    expect(schema.properties?.diagnostics?.items?.additionalProperties).toBe(false);
+    expect(
+      collectUnknownPropertySchemaErrors(schema, { ...sample, plan: { ...sample.plan, unknownPlanField: true } }),
+    ).toContain('$.plan.unknownPlanField: unknown property');
+    expect(
+      collectUnknownPropertySchemaErrors(schema, {
+        ...sample,
+        diagnostics: [{ ...sample.diagnostics[0], unknownDiagnosticField: true }],
+      }),
+    ).toContain('$.diagnostics[0].unknownDiagnosticField: unknown property');
+  });
+
+  it('keeps nonempty discovery items closed with identity and handles and types reader metadata', () => {
+    const schemas = buildInternalContractSchemas();
+    for (const id of ['watermarks.list', 'hyperlinks.list'] as const) {
+      const output = schemas.operations[id].output as ContractTestSchemaShape;
+      const item = output.properties?.items?.items;
+      expect(item?.required).toContain('id');
+      expect(item?.required).toContain('handle');
+      expect(item?.properties?.handle?.$ref).toBe('#/$defs/ResolvedHandle');
+      expect(item?.additionalProperties).toBe(false);
+      expect(collectUnknownPropertySchemaErrors(item, { unknownDiscoveryField: true })).toContain(
+        '$.unknownDiscoveryField: unknown property',
+      );
+      expect(output.required).toEqual(['evaluatedRevision', 'total', 'items', 'page']);
+    }
+    const capability = (schemas.operations['capabilities.get'].output as ContractTestSchemaShape).properties?.operations
+      ?.properties?.['format.apply'];
+    expect(capability?.properties?.trackedSupport?.enum).toEqual(['always', 'conditional', 'never']);
+    const toc = schemas.operations['toc.get'].output as ContractTestSchemaShape;
+    expect(toc.properties?.text).toEqual({ type: 'string' });
+    expect(toc.additionalProperties).toBe(false);
   });
 });

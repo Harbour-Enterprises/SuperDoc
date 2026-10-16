@@ -216,6 +216,12 @@ export interface ReceiptEffects {
 
 export type ReceiptSuccess = {
   success: true;
+  /** Whether a successful request changed the document; false represents a no-op commit. */
+  changed?: boolean;
+  /** Tracked changes authored by this mutation. */
+  trackedChangeRefs?: ReceiptInsert[];
+  /** Number of tracked changes authored by this mutation. */
+  trackedChangeCount?: number;
   /**
    * Mode in which this call's document content was committed. An edit folded
    * into the author's existing insertion is tracked; auxiliary style and
@@ -307,5 +313,9 @@ export type TextMutationResolution = {
   selectionTarget?: SelectionTarget;
 };
 export type TextMutationReceipt =
-  | (ReceiptSuccess & { resolution: TextMutationResolution })
+  | (ReceiptSuccess & {
+      resolution: TextMutationResolution;
+      /** Per-edit tracked-change results for atomic multi-edit mutations. */
+      trackedChangeOutcomes?: { editIndex: number; trackedChangeCount: number; trackedChangeRefs: ReceiptInsert[] }[];
+    })
   | (ReceiptFailureResult & { resolution: TextMutationResolution });

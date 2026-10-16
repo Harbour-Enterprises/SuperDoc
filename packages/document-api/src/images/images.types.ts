@@ -1,5 +1,5 @@
 import type { BlockNodeAddress } from '../types/index.js';
-import type { ReceiptInsert } from '../types/receipt.js';
+import type { ReceiptInsert, ReceiptSuccess } from '../types/receipt.js';
 import type { StoryLocator } from '../types/story.types.js';
 import type { ContentControlTarget } from '../content-controls/content-controls.types.js';
 import type {
@@ -274,7 +274,7 @@ export interface SetZOrderInput {
 // Operation outputs
 // ---------------------------------------------------------------------------
 
-export interface CreateImageSuccessResult {
+export interface CreateImageSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   image: ImageAddress;
@@ -295,7 +295,7 @@ export interface ImagesListResult {
   items: ImageSummary[];
 }
 
-export interface ImagesMutationSuccessResult {
+export interface ImagesMutationSuccessResult extends ReceiptSuccess {
   success: true;
   appliedChangeMode?: 'direct' | 'tracked';
   image: ImageAddress;

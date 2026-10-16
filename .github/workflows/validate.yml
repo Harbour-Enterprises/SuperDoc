@@ -125,6 +125,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      - name: Install pinned Rust SDK toolchains
+        shell: bash
+        working-directory: ${{ github.workspace }}
+        run: |
+          rustup toolchain install 1.96.1 --profile minimal --component rustfmt --component clippy
+          rustup toolchain install 1.85.0 --profile minimal
+
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0

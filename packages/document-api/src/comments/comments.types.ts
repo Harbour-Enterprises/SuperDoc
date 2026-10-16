@@ -236,6 +236,8 @@ export interface CommentsListQuery {
  */
 export interface CommentDomain {
   address: CommentAddress;
+  /** Canonical comment id alias returned by native runtimes. */
+  commentId?: string;
   /** See {@link CommentInfo.externalId}. */
   externalId?: string;
   /** See {@link CommentInfo.metadata}. */

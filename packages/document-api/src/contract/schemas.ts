@@ -164,7 +164,82 @@ const receiptSuccessMetadataProperties: Record<string, JsonSchema> = {
   txId: { type: 'string' },
   warnings: arraySchema(ref('ReviewWarning')),
   effects: ref('ReceiptEffects'),
+  trackedChangeRefs: arraySchema(ref('TrackedChangeAddress')),
+  trackedChangeCount: { type: 'integer', minimum: 0 },
+  changed: { type: 'boolean' },
 };
+function mutationSuccessSchema(properties: Record<string, JsonSchema>, required: readonly string[]): JsonSchema {
+  return objectSchema({ ...receiptSuccessMetadataProperties, ...properties }, required);
+}
+const clipboardInsertSuccessSchema = mutationSuccessSchema(
+  {
+    success: { const: true },
+    plan: objectSchema(
+      {
+        sourceKind: {
+          enum: [
+            'superdoc-v2-fragment',
+            'superdoc-v1-slice',
+            'html',
+            'rtf',
+            'image',
+            'file',
+            'plain-text',
+            'empty',
+            'unknown',
+          ],
+        },
+        blockCount: { type: 'integer', minimum: 0 },
+        assetCount: { type: 'integer', minimum: 0 },
+        imageRefCount: { type: 'integer', minimum: 0 },
+        plainFallback: { type: 'boolean' },
+      },
+      ['sourceKind', 'blockCount', 'assetCount', 'imageRefCount', 'plainFallback'],
+    ),
+    diagnostics: arraySchema(
+      objectSchema(
+        {
+          ...diagnosticProperties,
+          reason: {
+            enum: [
+              'paste-empty',
+              'paste-payload-too-large',
+              'paste-depth-exceeded',
+              'paste-source-unsupported',
+              'paste-fragment-version-unsupported',
+              'paste-no-faithful-representation',
+              'paste-structure-unsupported',
+              'paste-media-unsupported-type',
+              'paste-media-bad-magic',
+              'paste-media-too-large',
+              'paste-tracked-structural-unsupported',
+              'paste-cross-story-unsupported',
+              'paste-target-unsupported',
+              'paste-legacy-slice-unsupported',
+              'paste-security-rejected',
+            ],
+          },
+          sourceKind: {
+            enum: [
+              'superdoc-v2-fragment',
+              'superdoc-v1-slice',
+              'html',
+              'rtf',
+              'image',
+              'file',
+              'plain-text',
+              'empty',
+              'unknown',
+            ],
+          },
+          cause: sdConversionDiagnosticSchema,
+        },
+        ['code', 'severity', 'message', 'reason'],
+      ),
+    ),
+  },
+  ['success', 'plan', 'diagnostics'],
+);
 /**
  * Builds a `oneOf` schema that merges each TargetLocator branch with additional
  * payload properties. This avoids the `allOf` + `additionalProperties: false`
@@ -242,15 +317,12 @@ function imagesMutationSchemaSet(inputSchema: JsonSchema): OperationSchemaSet {
   return {
     input: inputSchema,
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -835,10 +907,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
   CommentsCreateSuccess: objectSchema(
     {
       success: { const: true },
-      id: { type: 'string' },
-      inserted: arraySchema(ref('EntityAddress')),
-      updated: arraySchema(ref('EntityAddress')),
-      removed: arraySchema(ref('EntityAddress')),
+      ...receiptSuccessMetadataProperties,
     },
     ['success', 'id'],
   ),
@@ -872,10 +941,17 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
       success: { const: true },
       appliedChangeMode: { enum: ['direct', 'tracked'] },
       resolution: ref('TextMutationResolution'),
-      inserted: arraySchema(ref('EntityAddress')),
-      updated: arraySchema(ref('EntityAddress')),
-      removed: arraySchema(ref('EntityAddress')),
-      effects: ref('ReceiptEffects'),
+      ...receiptSuccessMetadataProperties,
+      trackedChangeOutcomes: arraySchema(
+        objectSchema(
+          {
+            editIndex: { type: 'integer', minimum: 0 },
+            trackedChangeCount: { type: 'integer', minimum: 0 },
+            trackedChangeRefs: arraySchema(ref('TrackedChangeAddress')),
+          },
+          ['editIndex', 'trackedChangeCount', 'trackedChangeRefs'],
+        ),
+      ),
     },
     ['success', 'resolution'],
   ),
@@ -1563,7 +1639,7 @@ function createHeadingResultSchemaFor(operationId: OperationId): JsonSchema {
 }
 const createHeadingLevelSchema: JsonSchema = { type: 'integer', minimum: 1, maximum: 6 };
 const semanticHeadingLevelSchema: JsonSchema = { type: 'integer', minimum: 1, maximum: 9 };
-const listsInsertSuccessSchema = objectSchema(
+const listsInsertSuccessSchema = mutationSuccessSchema(
   {
     success: { const: true },
     appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -1573,7 +1649,7 @@ const listsInsertSuccessSchema = objectSchema(
   },
   ['success', 'item', 'insertionPoint'],
 );
-const listsMutateItemSuccessSchema = objectSchema(
+const listsMutateItemSuccessSchema = mutationSuccessSchema(
   {
     success: { const: true },
     appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -1590,7 +1666,7 @@ const listsMutateItemSuccessSchema = objectSchema(
   },
   ['success', 'item'],
 );
-const listsExitSuccessSchema = objectSchema(
+const listsExitSuccessSchema = mutationSuccessSchema(
   {
     success: { const: true },
     appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -2169,6 +2245,12 @@ const commentMetadataSchema: JsonSchema = {
   additionalProperties: true,
   description: 'Caller-owned JSON metadata persisted with the comment.',
 };
+const commentReadMetadataProperties: Record<string, JsonSchema> = {
+  rootCommentId: { type: 'string' },
+  replyCount: { type: 'number' },
+  origin: { enum: ['word', 'google-docs', 'superdoc', 'custom', 'unknown'] },
+  imported: { type: 'boolean' },
+};
 const commentInfoSchema = objectSchema(
   {
     address: commentAddressSchema,
@@ -2190,6 +2272,7 @@ const commentInfoSchema = objectSchema(
         'Zero-based source occurrence among comments that share the same rawOoxmlId in comments.xml. Present only for duplicate raw OOXML ids.',
     },
     parentCommentId: { type: 'string' },
+    ...commentReadMetadataProperties,
     trackedChangeParentId: {
       type: 'string',
       description:
@@ -2230,6 +2313,7 @@ const commentInfoSchema = objectSchema(
 const commentDomainItemSchema = discoveryItemSchema(
   {
     address: commentAddressSchema,
+    commentId: { type: 'string', description: 'Canonical comment id alias returned by native runtimes.' },
     externalId: {
       type: 'string',
       description: 'Caller-owned durable integration id, distinct from the Word-compatible comment id.',
@@ -2247,6 +2331,7 @@ const commentDomainItemSchema = discoveryItemSchema(
         'Zero-based source occurrence among comments that share the same rawOoxmlId in comments.xml. Present only for duplicate raw OOXML ids.',
     },
     parentCommentId: { type: 'string' },
+    ...commentReadMetadataProperties,
     trackedChangeParentId: {
       type: 'string',
       description:
@@ -2464,12 +2549,99 @@ const trackChangeListDeltaSummarySchema: JsonSchema = objectSchema(
   },
   ['uniformKind', 'counts'],
 );
+const trackChangeStructuralTargetKinds = [
+  'paragraph',
+  'paragraph-mark',
+  'list-item',
+  'table',
+  'row',
+  'column',
+  'cell',
+  'image',
+  'drawing',
+  'field',
+  'content-control',
+  'section-break',
+  'footnote',
+  'endnote',
+  'note-story',
+] as const;
+const trackChangeStructuralSnapshotSchema = objectSchema(
+  {
+    targetKind: { enum: [...trackChangeStructuralTargetKinds] },
+    structuralKind: { type: 'string' },
+    state: { enum: ['present', 'absent'] },
+    xml: { oneOf: [{ type: 'string' }, { type: 'null' }] },
+    markerXml: { type: 'string' },
+    innerXml: { type: 'string' },
+  },
+  ['targetKind', 'structuralKind', 'state', 'xml'],
+);
+const trackChangeStructuralDescriptorSchema = objectSchema(
+  {
+    operation: { enum: ['insert', 'delete', 'replace', 'split', 'merge', 'move', 'story-edit'] },
+    granularity: { enum: ['whole-object', 'range', 'story-part'] },
+    decisionPolicy: { enum: ['atomic', 'range-divisible', 'child-addressable', 'unsupported-fail-closed'] },
+    before: trackChangeStructuralSnapshotSchema,
+    after: trackChangeStructuralSnapshotSchema,
+    affectedStories: arraySchema(storyLocatorSchema),
+    sourceIds: trackChangeSourceIdsSchema,
+    exportCarrier: arraySchema({ type: 'string' }),
+    childOwnership: objectSchema(
+      {
+        ownsContainedInlineChanges: { type: 'boolean' },
+        childChangeIds: arraySchema({ type: 'string' }),
+        duplicateDisplayPolicy: { enum: ['subsumed', 'child-addressable'] },
+      },
+      ['ownsContainedInlineChanges', 'childChangeIds', 'duplicateDisplayPolicy'],
+    ),
+  },
+  ['operation', 'granularity', 'decisionPolicy', 'before', 'after', 'affectedStories', 'sourceIds', 'exportCarrier'],
+);
+const trackChangeNavigationTargetSchema = objectSchema(
+  {
+    kind: { const: 'block' },
+    story: storyLocatorSchema,
+    blockId: { type: 'string' },
+    role: { enum: ['primary', 'move-source', 'move-destination', 'formatting-carrier', 'structural-carrier'] },
+  },
+  ['kind', 'story', 'blockId', 'role'],
+);
+const trackChangeReadMetadataProperties: Record<string, JsonSchema> = {
+  navigationTarget: trackChangeNavigationTargetSchema,
+  structuralDescriptor: trackChangeStructuralDescriptorSchema,
+  move: objectSchema(
+    {
+      source: { oneOf: [trackChangeReplacementSideSchema, { type: 'null' }] },
+      destination: { oneOf: [trackChangeReplacementSideSchema, { type: 'null' }] },
+      pairId: { type: 'string' },
+    },
+    ['source', 'destination'],
+  ),
+  moveDirection: { enum: ['up', 'down'] },
+  linkedComments: objectSchema({ count: { type: 'number' }, commentIds: arraySchema({ type: 'string' }) }, ['count']),
+  imagePreview: objectSchema(
+    {
+      src: { type: 'string' },
+      contentType: { type: 'string' },
+      role: { enum: ['deleted', 'inserted', 'before', 'after'] },
+      partUri: { type: 'string' },
+      relationshipId: { type: 'string' },
+      width: { type: 'number' },
+      height: { type: 'number' },
+      alt: { type: 'string' },
+    },
+    ['src', 'contentType', 'role'],
+  ),
+};
 const trackChangeTargetSchema: JsonSchema = {
   oneOf: [
     objectSchema(
       {
         kind: { enum: ['text'] },
         address: trackedChangeAddressSchema,
+        segments: { type: 'array', items: ref('TextSegment'), minItems: 1 },
+        story: storyLocatorSchema,
       },
       ['kind', 'address'],
     ),
@@ -2477,6 +2649,8 @@ const trackChangeTargetSchema: JsonSchema = {
       {
         kind: { enum: ['replacement'] },
         address: trackedChangeAddressSchema,
+        segments: { type: 'array', items: ref('TextSegment'), minItems: 1 },
+        story: storyLocatorSchema,
       },
       ['kind', 'address'],
     ),
@@ -2484,15 +2658,38 @@ const trackChangeTargetSchema: JsonSchema = {
       {
         kind: { enum: ['formatting'] },
         address: trackedChangeAddressSchema,
-        subtype: { enum: ['run', 'paragraph', 'list', 'table', 'row', 'cell', 'section'] },
+        subtype: { enum: ['run', 'paragraph', 'list', 'table', 'row', 'cell', 'section', 'content-control', 'image'] },
+        targetKind: { enum: ['run', 'paragraph', 'list-item', 'table', 'row', 'cell', 'section', 'content-control'] },
+        semanticSubtype: { type: 'string' },
+        changedKeys: arraySchema({ type: 'string' }),
+        carriers: arraySchema({ type: 'string' }),
       },
       ['kind', 'address', 'subtype'],
+    ),
+    objectSchema(
+      {
+        kind: { const: 'structural' },
+        address: trackedChangeAddressSchema,
+        targetKind: { enum: [...trackChangeStructuralTargetKinds] },
+        semanticSubtype: { type: 'string' },
+      },
+      ['kind', 'address', 'targetKind'],
+    ),
+    objectSchema(
+      {
+        kind: { const: 'move' },
+        address: trackedChangeAddressSchema,
+        source: { oneOf: [textTargetSchema, { type: 'null' }] },
+        destination: { oneOf: [textTargetSchema, { type: 'null' }] },
+      },
+      ['kind', 'address', 'source', 'destination'],
     ),
   ],
 };
 const trackChangeSnapshotSchema: JsonSchema = objectSchema({
   text: { type: 'string', description: 'Visible text snapshot when the affected revision is text-shaped.' },
   formatting: trackChangeFormattingSnapshotSchema,
+  structural: trackChangeStructuralSnapshotSchema,
 });
 const trackChangeCustomAttributeSchema: JsonSchema = objectSchema(
   {
@@ -2559,6 +2756,7 @@ const trackChangeInfoSchema = objectSchema(
     type: { enum: [...trackChangeBroadTypeEnum] },
     subtype: { type: 'string' },
     state: { enum: ['open', 'accepted', 'rejected'] },
+    ...trackChangeReadMetadataProperties,
     target: trackChangeTargetSchema,
     before: trackChangeSnapshotSchema,
     after: trackChangeSnapshotSchema,
@@ -2616,9 +2814,12 @@ const trackChangeInfoSchema = objectSchema(
 const trackChangeDomainItemSchema = discoveryItemSchema(
   {
     address: trackedChangeAddressSchema,
+    target: trackChangeTargetSchema,
+    splitFromId: { oneOf: [{ type: 'string' }, { type: 'null' }] },
     type: { enum: [...trackChangeBroadTypeEnum] },
     subtype: { type: 'string' },
     state: { enum: ['open', 'accepted', 'rejected'] },
+    ...trackChangeReadMetadataProperties,
     sourceIds: trackChangeSourceIdsSchema,
     wordRevisionIds: trackChangeWordRevisionIdsSchema,
     revisionGroupId: { type: 'string' },
@@ -2729,6 +2930,7 @@ const operationRuntimeCapabilitySchema = objectSchema(
   {
     available: { type: 'boolean' },
     tracked: { type: 'boolean' },
+    trackedSupport: { enum: ['always', 'conditional', 'never'] },
     dryRun: { type: 'boolean' },
     reasons: capabilityReasonsSchema,
   },
@@ -3591,8 +3793,15 @@ const hyperlinkDomainSchema: JsonSchema = objectSchema(
   },
   ['address', 'properties'],
 );
-const hyperlinkMutationSuccessSchema: JsonSchema = objectSchema(
-  { success: { const: true }, hyperlink: hyperlinkTargetSchema, appliedChangeMode: { enum: ['direct', 'tracked'] } },
+const hyperlinkMutationSuccessSchema: JsonSchema = mutationSuccessSchema(
+  {
+    success: { const: true },
+    hyperlink: hyperlinkTargetSchema,
+    hyperlinkNodeId: { type: ['string', 'null'] },
+    partsCreated: arraySchema({ type: 'string' }),
+    partsModified: arraySchema({ type: 'string' }),
+    createdRId: { type: 'string' },
+  },
   ['success', 'hyperlink'],
 );
 const hyperlinkMutationFailureCodes = [
@@ -3651,11 +3860,12 @@ const contentControlMoveDestinationSchema: JsonSchema = {
     ),
   ],
 };
-const contentControlMutationSuccessSchema = objectSchema(
+const contentControlMutationSuccessSchema = mutationSuccessSchema(
   {
     success: { const: true },
     appliedChangeMode: { enum: ['direct', 'tracked'] },
     contentControl: contentControlTargetSchema,
+    createdBlockId: { type: 'string' },
     updatedRef: contentControlTargetSchema,
     affectedStories: arraySchema(ref('StoryLocator')),
     trackedChangeRefs: arraySchema(trackChangeRefSchema),
@@ -4536,23 +4746,7 @@ const diffApplyResultSchema: JsonSchema = objectSchema(
                     id: { type: 'string' },
                     story: storyLocatorSchema,
                     address: trackedChangeAddressSchema,
-                    navigationTarget: objectSchema(
-                      {
-                        kind: { const: 'block' },
-                        story: storyLocatorSchema,
-                        blockId: { type: 'string' },
-                        role: {
-                          enum: [
-                            'primary',
-                            'move-source',
-                            'move-destination',
-                            'formatting-carrier',
-                            'structural-carrier',
-                          ],
-                        },
-                      },
-                      ['kind', 'story', 'blockId', 'role'],
-                    ),
+                    navigationTarget: trackChangeNavigationTargetSchema,
                   },
                   ['id', 'story', 'address'],
                 ),
@@ -5283,8 +5477,10 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: objectSchema(
       {
+        ...receiptSuccessMetadataProperties,
         success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        anchor: blockNodeAddressSchema,
+        trackedChangeRefs: arraySchema(trackChangeRefSchema),
         inserted: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5295,8 +5491,10 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     success: objectSchema(
       {
+        ...receiptSuccessMetadataProperties,
         success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        anchor: blockNodeAddressSchema,
+        trackedChangeRefs: arraySchema(trackChangeRefSchema),
         inserted: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5317,9 +5515,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: objectSchema(
       {
+        ...receiptSuccessMetadataProperties,
         success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        anchor: blockNodeAddressSchema,
+        trackedChangeRefs: arraySchema(trackChangeRefSchema),
         removed: blockNodeAddressSchema,
+        joinOffset: { type: 'integer', minimum: 0 },
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
         textRangeShifts: arraySchema(ref('TextRangeShift')),
@@ -5329,9 +5530,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     success: objectSchema(
       {
+        ...receiptSuccessMetadataProperties,
         success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        anchor: blockNodeAddressSchema,
+        trackedChangeRefs: arraySchema(trackChangeRefSchema),
         removed: blockNodeAddressSchema,
+        joinOffset: { type: 'integer', minimum: 0 },
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
         textRangeShifts: arraySchema(ref('TextRangeShift')),
@@ -6617,25 +6821,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     },
     output: {
       oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            appliedChangeMode: { enum: ['direct', 'tracked'] },
-            listId: { type: 'string' },
-            item: listItemAddressSchema,
-          },
-          ['success', 'listId', 'item'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, listId: { type: 'string' }, item: listItemAddressSchema }, [
+          'success',
+          'listId',
+          'item',
+        ]),
         listsFailureSchemaFor('lists.create'),
       ],
     },
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        listId: { type: 'string' },
-        item: listItemAddressSchema,
-      },
+    success: mutationSuccessSchema(
+      { success: { const: true }, listId: { type: 'string' }, item: listItemAddressSchema },
       ['success', 'listId', 'item'],
     ),
     failure: listsFailureSchemaFor('lists.create'),
@@ -6662,25 +6857,17 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            appliedChangeMode: { enum: ['direct', 'tracked'] },
-            paragraph: ref('ParagraphAddress'),
-          },
-          ['success', 'paragraph'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, [
+          'success',
+          'paragraph',
+        ]),
         listsFailureSchemaFor('lists.detach'),
       ],
     },
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        paragraph: ref('ParagraphAddress'),
-      },
-      ['success', 'paragraph'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, [
+      'success',
+      'paragraph',
+    ]),
     failure: listsFailureSchemaFor('lists.detach'),
   },
   'lists.delete': {
@@ -6692,25 +6879,17 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            appliedChangeMode: { enum: ['direct', 'tracked'] },
-            deletedCount: { type: 'integer', minimum: 0 },
-          },
-          ['success', 'deletedCount'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, deletedCount: { type: 'integer', minimum: 0 } }, [
+          'success',
+          'deletedCount',
+        ]),
         listsFailureSchemaFor('lists.delete'),
       ],
     },
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        deletedCount: { type: 'integer', minimum: 0 },
-      },
-      ['success', 'deletedCount'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, deletedCount: { type: 'integer', minimum: 0 } }, [
+      'success',
+      'deletedCount',
+    ]),
     failure: listsFailureSchemaFor('lists.delete'),
   },
   'lists.indent': {
@@ -6745,17 +6924,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
-          { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, listId: { type: 'string' } },
-          ['success', 'listId'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, listId: { type: 'string' } }, ['success', 'listId']),
         listsFailureSchemaFor('lists.join'),
       ],
     },
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, listId: { type: 'string' } },
-      ['success', 'listId'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, listId: { type: 'string' } }, ['success', 'listId']),
     failure: listsFailureSchemaFor('lists.join'),
   },
   'lists.canJoin': {
@@ -6785,25 +6958,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            appliedChangeMode: { enum: ['direct', 'tracked'] },
-            listId: { type: 'string' },
-            numId: { type: 'integer' },
-          },
-          ['success', 'listId', 'numId'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, listId: { type: 'string' }, numId: { type: 'integer' } }, [
+          'success',
+          'listId',
+          'numId',
+        ]),
         listsFailureSchemaFor('lists.separate'),
       ],
     },
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        listId: { type: 'string' },
-        numId: { type: 'integer' },
-      },
+    success: mutationSuccessSchema(
+      { success: { const: true }, listId: { type: 'string' }, numId: { type: 'integer' } },
       ['success', 'listId', 'numId'],
     ),
     failure: listsFailureSchemaFor('lists.separate'),
@@ -6818,7 +6982,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
+        mutationSuccessSchema(
           {
             success: { const: true },
             appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -6831,7 +6995,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         listsFailureSchemaFor('lists.merge'),
       ],
     },
-    success: objectSchema(
+    success: mutationSuccessSchema(
       {
         success: { const: true },
         appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -6853,7 +7017,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
+        mutationSuccessSchema(
           {
             success: { const: true },
             appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -6866,7 +7030,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         listsFailureSchemaFor('lists.split'),
       ],
     },
-    success: objectSchema(
+    success: mutationSuccessSchema(
       {
         success: { const: true },
         appliedChangeMode: { enum: ['direct', 'tracked'] },
@@ -6953,25 +7117,17 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema(
-          {
-            success: { const: true },
-            appliedChangeMode: { enum: ['direct', 'tracked'] },
-            paragraph: ref('ParagraphAddress'),
-          },
-          ['success', 'paragraph'],
-        ),
+        mutationSuccessSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, [
+          'success',
+          'paragraph',
+        ]),
         listsFailureSchemaFor('lists.convertToText'),
       ],
     },
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        paragraph: ref('ParagraphAddress'),
-      },
-      ['success', 'paragraph'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, [
+      'success',
+      'paragraph',
+    ]),
     failure: listsFailureSchemaFor('lists.convertToText'),
   },
   // SD-1973: List formatting and templates
@@ -8259,6 +8415,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         input: mutationsInputSchema,
         output: objectSchema(
           {
+            ...receiptSuccessMetadataProperties,
             success: { const: true },
             appliedChangeMode: { enum: ['direct', 'tracked'] },
             revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
@@ -8271,6 +8428,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         ),
         success: objectSchema(
           {
+            ...receiptSuccessMetadataProperties,
             success: { const: true },
             appliedChangeMode: { enum: ['direct', 'tracked'] },
             revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
@@ -9405,6 +9563,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       {
         nodeType: { const: 'tableOfContents' },
         kind: { const: 'block' },
+        text: { type: 'string' },
         properties: objectSchema(
           {
             instruction: { type: 'string' },
@@ -9586,19 +9745,15 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['src'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
       appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
       trackedChangeRefs: arraySchema(trackChangeRefSchema),
     }),
-    success: objectSchema(
-      {
-        success: { const: true },
-        appliedChangeMode: { enum: ['direct', 'tracked'] },
-        image: { type: 'object' },
-        trackedChangeRefs: arraySchema(trackChangeRefSchema),
-      },
+    success: mutationSuccessSchema(
+      { success: { const: true }, image: { type: 'object' }, trackedChangeRefs: arraySchema(trackChangeRefSchema) },
       ['success', 'image'],
     ),
     failure: objectSchema(
@@ -9623,15 +9778,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   'images.delete': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9660,15 +9812,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'to'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9680,15 +9829,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   'images.convertToInline': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9700,15 +9846,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   'images.convertToFloating': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9733,15 +9876,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'size'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9759,15 +9899,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'type'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9782,15 +9919,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'side'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9813,15 +9947,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'distances'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9848,15 +9979,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'position'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9880,15 +10008,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       ['imageId', 'options'],
     ),
     output: objectSchema({
+      ...receiptSuccessMetadataProperties,
       success: { type: 'boolean' },
-      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
     }),
-    success: objectSchema(
-      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
-      ['success', 'image'],
-    ),
+    success: mutationSuccessSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9999,7 +10124,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       limit: { type: 'integer' },
       offset: { type: 'integer' },
     }),
-    output: discoveryResultSchema(hyperlinkDomainSchema),
+    output: discoveryResultSchema(
+      discoveryItemSchema(
+        hyperlinkDomainSchema.properties as Record<string, JsonSchema>,
+        hyperlinkDomainSchema.required as string[],
+      ),
+    ),
   },
   'hyperlinks.get': {
     input: objectSchema({ target: hyperlinkTargetSchema }, ['target']),
@@ -10418,7 +10548,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       limit: { type: 'integer', minimum: 1 },
       offset: { type: 'integer', minimum: 0 },
     }),
-    output: discoveryResultSchema(watermarkInfoSchema),
+    output: discoveryResultSchema(
+      discoveryItemSchema(
+        watermarkInfoSchema.properties as Record<string, JsonSchema>,
+        watermarkInfoSchema.required as string[],
+      ),
+    ),
   },
   'watermarks.insert': {
     input: objectSchema(
@@ -11156,8 +11291,8 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       changeMode: { enum: ['direct', 'tracked'] },
       fallback: { enum: ['reject-rich', 'plain-with-warning'] },
     }),
-    output: receiptResultSchemaFor('clipboard.insert'),
-    success: receiptSuccessSchema,
+    output: { oneOf: [clipboardInsertSuccessSchema, receiptFailureResultSchemaFor('clipboard.insert')] },
+    success: clipboardInsertSuccessSchema,
     failure: receiptFailureResultSchemaFor('clipboard.insert'),
   },
   'clipboard.serializeSelection': {
