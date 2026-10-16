@@ -16,7 +16,8 @@ export interface GetAdapter {
  *
  * @param adapter - Engine-specific get adapter.
  * @param input - Canonical get input object.
- * @returns An SDDocument with body content projected into SDM/1 canonical shapes.
+ * @returns An SDDocument with body content projected into SDM/1 canonical shapes,
+ *   plus the document's authored styles, theme, docDefaults and diagnostics.
  */
 export function executeGet(adapter: GetAdapter, input: SDGetInput): SDDocument {
   return adapter.get(input);

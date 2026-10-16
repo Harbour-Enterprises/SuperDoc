@@ -778,7 +778,8 @@ export const OPERATION_DEFINITIONS = {
   get: {
     memberPath: 'get',
     description: 'Read the full document as an SDDocument structure.',
-    expectedResult: 'Returns an SDDocument with body content projected into SDM/1 canonical shapes.',
+    expectedResult:
+      "Returns an SDDocument with body content projected into SDM/1 canonical shapes, plus the document's authored styles, theme (labeled document or fallback), docDefaults, and diagnostics for missing or unreadable style parts.",
     requiresDocumentContext: true,
     metadata: readOperation({
       idempotency: 'idempotent',
@@ -1295,6 +1296,35 @@ export const OPERATION_DEFINITIONS = {
     referenceDocPath: 'styles/apply.mdx',
     referenceGroup: 'styles',
   },
+  'styles.create': {
+    memberPath: 'styles.create',
+    description:
+      'Define or redefine a named paragraph or character style in the Style Definitions part. Replaces the definition rather than merging into it, and decides conflicts on both styleId and name, because Word keys its Styles gallery on the name. Linked style pairs and table/numbering styles are out of scope.',
+    expectedResult:
+      'Returns a StylesCreateReceipt reporting whether the style was created or redefined, with per-channel before/after state for the paragraph and run properties.',
+    requiresDocumentContext: true,
+    metadata: mutationOperation({
+      // Conditional, not idempotent: under the default conflictPolicy 'fail' a
+      // second identical call fails, and only 'replace' makes it repeatable.
+      // Publishing 'idempotent' would invite an orchestrator to replay the call
+      // after a transport timeout and take a hard conflict, or clobber a style
+      // edited in between.
+      idempotency: 'conditional',
+      supportsDryRun: true,
+      trackedSupport: 'never',
+      // DUPLICATE_ID: the id exists under conflictPolicy 'fail'. STYLE_CONFLICT:
+      // another style (or, under 'fail', a latent style) has the name.
+      // PRECONDITION_FAILED: unresolved or wrong-type basedOn/next, a basedOn
+      // cycle, a type change or linked style on redefinition, or no styles part.
+      possibleFailureCodes: ['DUPLICATE_ID', 'STYLE_CONFLICT', 'PRECONDITION_FAILED'],
+      throws: ['INVALID_INPUT', 'CAPABILITY_UNAVAILABLE', 'REVISION_MISMATCH'],
+      // Writes word/styles.xml outside the document history, exactly as
+      // styles.apply does.
+      historyUnsafe: true,
+    }),
+    referenceDocPath: 'styles/create.mdx',
+    referenceGroup: 'styles',
+  },
   'styles.getCatalog': {
     memberPath: 'styles.getCatalog',
     description:
@@ -1304,6 +1334,17 @@ export const OPERATION_DEFINITIONS = {
     requiresDocumentContext: true,
     metadata: readOperation({ idempotency: 'idempotent', throws: ['INVALID_INPUT', 'CAPABILITY_UNAVAILABLE'] }),
     referenceDocPath: 'styles/get-catalog.mdx',
+    referenceGroup: 'styles',
+  },
+  'styles.getTheme': {
+    memberPath: 'styles.getTheme',
+    description:
+      "Read the document theme: its 12 theme colors, major and minor fonts, and the color mapping from settings.xml. A missing or malformed theme part returns the default Office theme labeled source 'fallback', with part status and diagnostics. Same theme as doc.get().theme, without the rest of the document.",
+    expectedResult:
+      'Returns a StylesGetThemeResult with the theme (always present, labeled document or fallback), the theme and settings part status, and diagnostics.',
+    requiresDocumentContext: true,
+    metadata: readOperation({ idempotency: 'idempotent', throws: ['INVALID_INPUT', 'CAPABILITY_UNAVAILABLE'] }),
+    referenceDocPath: 'styles/get-theme.mdx',
     referenceGroup: 'styles',
   },
   'templates.apply': {

@@ -1,0 +1,112 @@
+---
+title: Apply a template to an existing document
+navTitle: Templates
+description: Adopt the styles, numbering, theme, headers, footers, and page setup of a template DOCX into an open document, preview the change with a dry run, and read what was applied.
+---
+
+`templates.apply` adopts the style system of a source DOCX into the document you have open. Use it to reuse a style guide or house template: generate or supply a template package, then apply it to an existing draft. The open document keeps its own text. Content from the source document body is never copied.
+
+The operation reads the source package and detects which parts it carries. You do not pass a list of scopes.
+
+## Preview, then apply
+
+Run a dry run first. It returns the same receipt the real apply would return, without changing the document:
+
+```ts
+const source = { kind: 'path', path: './house-style.docx' } as const;
+
+const preview = await doc.templates.apply({ source }, { dryRun: true });
+if (!preview.success) throw new Error(preview.failure.message);
+
+console.log(preview.appliedScopes); // what would change
+console.log(preview.unsupportedItems); // what the source carries that will not be applied
+
+const result = await doc.templates.apply({ source });
+```
+
+`templates.apply` returns a Promise in every environment. Await it.
+
+A `path` source is read from the file system, so it works server-side (the Node SDK, the Python SDK, and the CLI). The browser editor has no file system: pass the template as base64 instead. A `path` source in the browser returns a `CAPABILITY_UNAVAILABLE` failure receipt.
+
+```ts
+const bytes = new Uint8Array(await templateFile.arrayBuffer());
+let binary = '';
+for (const byte of bytes) binary += String.fromCharCode(byte);
+
+const result = await editor.doc.templates.apply({
+  source: { kind: 'base64', data: btoa(binary), filename: templateFile.name },
+});
+```
+
+From the SDKs, the dry-run flag is part of the call's parameters:
+
+```ts
+// Node SDK
+const preview = await document.templates.apply({
+  source: { kind: 'path', path: './house-style.docx' },
+  dryRun: true,
+});
+```
+
+```python
+# Python SDK
+preview = document.templates.apply(
+    {"source": {"kind": "path", "path": "./house-style.docx"}, "dryRun": True}
+)
+```
+
+## What is adopted
+
+Each scope is applied only when the source package contains it. A scope the source does not contain is reported as skipped with `NOT_PRESENT_IN_SOURCE`, and the open document's version is left alone.
+
+| Scope             | Source part                       | How it is adopted                                                                                                                                                                                               |
+| ----------------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `styles`          | `word/styles.xml`                 | A style defined in both documents takes the source definition under the same style id. Source-only styles are added. Every style that exists only in the open document is kept. Document defaults are replaced. |
+| `numbering`       | `word/numbering.xml`              | Every source list definition is added. Ids that collide with the open document's are renumbered, and imported styles follow the new ids. Existing lists keep their own definitions.                             |
+| `settings`        | `word/settings.xml`               | Layout settings such as the default tab stop are adopted. Identity and workflow settings, such as document ids, protection, and revision state, are kept from the open document.                                |
+| `theme`           | `word/theme/theme1.xml`           | Replaced by the source theme.                                                                                                                                                                                   |
+| `fontTable`       | `word/fontTable.xml`              | Replaced by the source font table.                                                                                                                                                                              |
+| `webSettings`     | `word/webSettings.xml`            | Replaced by the source web settings.                                                                                                                                                                            |
+| `headersFooters`  | `word/header*.xml`, `footer*.xml` | Every source header and footer is imported with its images. Colliding part names and relationship ids are renamed.                                                                                              |
+| `sectionDefaults` | first section in the source body  | The page size, margins, and header/footer setup of the source's first section become the open document's final section. Earlier sections keep their page geometry and take the source's header/footer setup.    |
+
+Body text, tables, and images in the open document are never replaced. The open document's `word/document.xml` changes only to adopt section defaults.
+
+## What is never applied
+
+Some source content is outside the operation. It is reported in the receipt and never written to the open document:
+
+- `customXml` parts, also reported in `skippedScopes` with `OUT_OF_SCOPE`
+- document properties (`docProps`)
+- comments, footnotes, endnotes, and comment authors (`people`)
+- the glossary (building blocks), signatures, and embedded objects
+- images used by the source document body (`bodyMedia`)
+
+Each entry in `unsupportedItems` names the source part and its category, so you can tell a user what their template contained that did not carry over.
+
+## Read the receipt
+
+| Field              | Meaning                                                                                       |
+| ------------------ | --------------------------------------------------------------------------------------------- |
+| `detectedScopes`   | Scopes found in the source package.                                                           |
+| `appliedScopes`    | Scopes that changed the open document.                                                        |
+| `skippedScopes`    | Scopes not applied, with a reason: `NOT_PRESENT_IN_SOURCE`, `NO_CHANGE`, `OUT_OF_SCOPE`.      |
+| `unsupportedItems` | Source parts that are never applied.                                                          |
+| `changedParts`     | Each package part written, and whether it was `created`, `replaced`, `merged`, or `imported`. |
+| `idMappings`       | Renamed numbering ids and header/footer relationship ids, as `from` → `to`.                   |
+| `warnings`         | Notable side effects, such as `DOC_DEFAULTS_ADOPTED` when document defaults were replaced.    |
+
+A failure receipt has `success: false` and one of `UNSUPPORTED_SOURCE`, `INVALID_PACKAGE`, `CAPABILITY_UNAVAILABLE`, or `UNSUPPORTED_TEMPLATE_CONTENT`. A failed apply changes nothing. Invalid input, a stale `expectedRevision`, or `changeMode: 'tracked'` throws before the source is read. See [Receipts and errors](/document-api/receipts-and-errors).
+
+## Applying the same template again
+
+Styles, settings, theme, font table, and web settings are updated in place, and an unchanged scope reports `NO_CHANGE`. Headers, footers, and list definitions are not: applying the same template a second time imports them again under new names and ids. The document still renders with the latest copies, but each repeat adds unused parts to the file. Apply a template once per document, and use a dry run to see what a repeat would add.
+
+## Limits
+
+- **Tracked changes.** The adoption cannot be recorded as a tracked change. `changeMode: 'tracked'` throws `CAPABILITY_UNAVAILABLE`.
+- **Mutation plans.** `templates.apply` cannot run inside [`plan.execute`](/document-api/mutation-plans). Call it on its own.
+- **Signed documents.** A digitally signed open document rejects the mutation.
+- **Collaboration.** `templates.apply` is not available in a shared room. Both a dry run and an apply throw `CAPABILITY_UNAVAILABLE`, and no peer changes. Apply the template before the document joins a room.
+
+See the [`templates.apply` reference](/document-api/reference/templates/apply) for the full input and receipt schema.

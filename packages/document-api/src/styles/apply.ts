@@ -12,6 +12,7 @@ import type { StylesChannel } from './registry.js';
 import { XML_PATH_BY_CHANNEL } from './registry.js';
 import { validateStylesApplyInput, validateStylesApplyOptions } from './validation.js';
 import type { StylesGetCatalogInput, StylesGetCatalogResult } from './catalog.js';
+import type { StylesGetThemeInput, StylesGetThemeResult } from './theme.js';
 
 // ---------------------------------------------------------------------------
 // State Types (before/after receipts)
@@ -176,6 +177,8 @@ export interface StylesAdapter {
   apply(input: StylesApplyInput, options: NormalizedStylesApplyOptions): StylesApplyReceipt;
   /** Read the normalized style catalogue. See `styles/catalog.ts`. */
   getCatalog?(input?: StylesGetCatalogInput): StylesGetCatalogResult;
+  /** Read the document theme. See `styles/theme.ts`. */
+  getTheme?(input?: StylesGetThemeInput): StylesGetThemeResult;
 }
 
 export interface NormalizedStylesApplyOptions {
@@ -193,6 +196,8 @@ export interface StylesApi {
   apply(input: StylesApplyInput, options?: StylesApplyOptions): StylesApplyReceipt;
   /** Read the normalized style catalogue for discovery and quick-gallery UI. */
   getCatalog(input?: StylesGetCatalogInput): StylesGetCatalogResult;
+  /** Read the document theme: colors, fonts and color mapping. */
+  getTheme(input?: StylesGetThemeInput): StylesGetThemeResult;
 }
 
 // ---------------------------------------------------------------------------

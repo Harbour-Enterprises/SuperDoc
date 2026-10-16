@@ -1,0 +1,115 @@
+---
+title: Extract and reuse a style guide
+navTitle: Style guides
+description: Read a DOCX's theme, document defaults, and styles into an editable guide, write the edits back, and apply the result to new drafts as a template.
+---
+
+A firm's own documents already define its house style: the theme, the document defaults, and the named styles. This guide reads them into an editable style guide, writes the guide's edits back, saves the result as a template package, and applies that template to a draft.
+
+Every step uses the Document API. Nothing in it unzips the DOCX or parses XML.
+
+## Run the complete workflow
+
+The example runs server-side with the Node SDK. Put the firm's document next to it as `firm-document.docx` and a draft as `draft.docx`:
+
+<include>../../../snippets/headless/style-guide.mjs</include>
+
+It writes three files:
+
+| File                        | Contents                                                    |
+| --------------------------- | ----------------------------------------------------------- |
+| `style-guide.json`          | The extracted guide, before edits                           |
+| `style-guide-template.docx` | The firm's document with the guide edits applied            |
+| `draft.styled.docx`         | The draft with the template adopted. Its text is unchanged. |
+
+The guide format is the example's own. Keep the fields your application needs.
+
+## Raw, resolved, and provenance values
+
+`doc.get()` returns `styles`, `theme`, and `docDefaults` next to the body. Read options decide how much of each style you get:
+
+| Field                         | Present with              | Contents                                                                                                                              |
+| ----------------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `props`, `runProps`           | always                    | What the style itself sets. Theme references stay raw, such as `asciiTheme: 'majorHAnsi'` and `{ model: 'theme', theme: 'accent1' }`. |
+| `resolved`, `resolvedRun`     | `includeResolved: true`   | The value after `basedOn`, document defaults, and the theme. A theme font becomes a family name and a theme color becomes RGB.        |
+| `provenance`, `runProvenance` | `includeProvenance: true` | For each resolved value: `source` (`style`, `docDefaults`, ...), `sourceRef`, and the `basedOn` chain.                                |
+
+Keep the raw value when the guide should stay tied to the theme, so a later theme change carries through. Show the resolved value to a person. Use provenance to tell a style's own setting from an inherited one.
+
+`docDefaults` follows the same pattern: `run` and `paragraph` as authored, and `resolvedRun` and `resolvedParagraph` with `includeResolved`.
+
+## Theme fonts and colors
+
+`styles.getTheme()` returns the theme on its own: the color scheme as six-digit hex values, the major and minor fonts, and the color mapping from `word/settings.xml`. It is the same theme `doc.get()` returns.
+
+Check `theme.source`. When the document has no theme part or the part cannot be read, the result is the default Office theme, labeled `fallback`, and `diagnostics` says why. A guide built from a fallback theme describes Office defaults, not the firm.
+
+`styles.getCatalog({ includePreview: true })` adds CSS-ready values to each style. `preview.sources` says where `fontFamily` and `color` came from:
+
+```json
+{
+  "css": { "fontFamily": "Georgia", "color": "#0B6E4F", "fontSize": "16pt" },
+  "sources": {
+    "fontFamily": { "origin": "theme", "themeFont": "majorHAnsi" },
+    "color": { "origin": "theme", "themeColor": "accent1" }
+  }
+}
+```
+
+A literal value reports `{ "origin": "literal" }`. A theme color with a tint or shade carries `tint` or `shade`, a byte from 0 to 255. A value resolved against the fallback theme carries `fallback: true`.
+
+## Effective formatting of real text
+
+The style definitions say what a style sets. `query.match()` says what a run of text actually renders with, after its paragraph style, character style, direct formatting, document defaults, and the theme:
+
+```ts
+const match = await doc.query.match({
+  select: { type: 'text', pattern: 'Master Services Agreement' },
+  require: 'first',
+});
+const run = match.items[0].blocks[0].runs[0];
+
+run.styles.effective; // { bold: false, fontFamily: 'Georgia', color: '#0b6e4f', fontSizePt: 16, sources: { ... } }
+run.styles.direct; // what the run sets itself: { bold: 'clear', italic: 'clear', ... }
+```
+
+`match.meta.effectiveResolved` is `true` when the effective values went through the style cascade. Top-level values such as `run.styles.fontFamily` stay direct-only.
+
+## Write the edits back
+
+Two operations write a guide back to a document:
+
+- `styles.apply` changes the document defaults. It takes a patch and changes only the keys you send.
+- `styles.create` defines or redefines a paragraph or character style. With `conflictPolicy: 'replace'`, the input replaces the whole definition: a property you leave out is removed. Send every property the style should keep, including its metadata.
+
+Reads report points and `SDColorRef` values. Writes take the units Word stores:
+
+| Value               | Read as                                            | Write as                                      |
+| ------------------- | -------------------------------------------------- | --------------------------------------------- |
+| Font size           | points: `12`                                       | half-points: `24`                             |
+| Spacing and indents | points: `6`                                        | twentieths of a point: `120`                  |
+| RGB color           | `{ model: 'rgb', value: '1F3864' }`                | `{ val: '1F3864' }`                           |
+| Theme color         | `{ model: 'theme', theme: 'accent2', shade: 191 }` | `{ themeColor: 'accent2', themeShade: 'BF' }` |
+| Theme font          | `fonts: { asciiTheme: 'majorHAnsi' }`              | `fontFamily: { asciiTheme: 'majorHAnsi' }`    |
+
+The example converts the properties it uses and throws on any other, so a property it does not know is never dropped without notice.
+
+## Apply the template
+
+The example saves the edited firm document as the template. `templates.apply` adopts its styles, numbering, settings, theme, font table, headers and footers, and page setup into the draft. It never copies body content.
+
+Preview first. A dry run returns the receipt the apply would return and leaves the draft unchanged. Check `appliedScopes`, `skippedScopes`, `unsupportedItems`, and `warnings` before applying. `DOC_DEFAULTS_ADOPTED` means the draft's document defaults were replaced. [Apply a template](/document-api/templates) covers each scope and receipt field.
+
+After applying, read the draft the same way you read the firm's document. `query.match()` on a heading shows whether it now renders with the guide's font and color.
+
+## Limits
+
+- **Linked styles.** `styles.create` cannot redefine half of a linked pair. Word links Heading 1 to Heading 1 Char, so built-in headings cannot be edited through the guide yet. The catalog's `link` field names the other half. The example marks those styles read-only.
+- **Theme edits.** No operation writes the theme. The template carries the firm document's theme unchanged.
+- **Table styles.** `doc.get()` reads table styles, including conditional formatting per region. `styles.create` writes paragraph and character styles only.
+- **Headers and footers.** The template's headers and footers are adopted with the rest. Use a source document without them if drafts should keep their own.
+- **Applying again.** Applying the same template a second time adds another copy of its headers, footers, and list definitions. Apply it once per draft.
+- **Shared rooms.** `templates.apply` is not available in a shared room. Apply the template before the draft joins a room.
+- **Browser.** In the browser editor, pass the template as base64. A `path` source needs a file system.
+
+See the reference for [`doc.get`](/document-api/reference/get), [`styles.getTheme`](/document-api/reference/styles/get-theme), [`styles.getCatalog`](/document-api/reference/styles/get-catalog), [`query.match`](/document-api/reference/query/match), [`styles.apply`](/document-api/reference/styles/apply), [`styles.create`](/document-api/reference/styles/create), and [`templates.apply`](/document-api/reference/templates/apply).

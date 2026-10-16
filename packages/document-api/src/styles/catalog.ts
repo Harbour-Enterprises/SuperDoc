@@ -19,6 +19,7 @@
  */
 
 import { DocumentApiValidationError } from '../errors.js';
+import type { SDThemeColorName, SDThemeFontRef } from '../types/sd-props.js';
 import { isRecord } from '../validation-primitives.js';
 
 // ---------------------------------------------------------------------------
@@ -97,10 +98,38 @@ export interface StyleCatalogItemUsage {
   numberingCount?: number;
 }
 
+/**
+ * Where a preview font came from. `theme` names the theme font slot it was
+ * resolved from; `fallback: true` means the document has no usable theme and
+ * the value is the default Office theme's.
+ */
+export type StyleCatalogPreviewFontSource =
+  | { origin: 'literal' }
+  | { origin: 'theme'; themeFont: SDThemeFontRef; fallback?: true };
+
+/**
+ * Where a preview color came from. `theme` names the theme color and the
+ * tint/shade bytes (0-255) applied to it, as in `SDColorRef`.
+ */
+export type StyleCatalogPreviewColorSource =
+  | { origin: 'literal' }
+  | { origin: 'theme'; themeColor: SDThemeColorName; tint?: number; shade?: number; fallback?: true }
+  /** The document sets no color (Word's automatic color); the value is the black text renders with. */
+  | { origin: 'default' };
+
+/** Origin of the theme-capable preview tokens. A token without a source is absent from `css`. */
+export interface StyleCatalogPreviewSources {
+  fontFamily?: StyleCatalogPreviewFontSource;
+  color?: StyleCatalogPreviewColorSource;
+}
+
 /** Optional resolved preview tokens. Present when `includePreview` is requested. */
 export interface StyleCatalogItemPreview {
   available: boolean;
+  /** UI-safe CSS tokens. Theme fonts and colors are already resolved. */
   css?: Record<string, string | number>;
+  /** Whether `css.fontFamily` and `css.color` came from the theme or were set directly. */
+  sources?: StyleCatalogPreviewSources;
   unsupportedReason?: string;
 }
 
@@ -149,6 +178,8 @@ export interface StyleCatalogDiagnostic {
 export interface StyleCatalogSourceStatus {
   styles: StyleSourcePartStatus;
   settings: StyleSourcePartStatus;
+  /** The theme part that theme-backed preview fonts and colors resolve against. */
+  theme?: StyleSourcePartStatus;
   usage: StyleCatalogUsageStatus;
   preview: StyleCatalogPreviewStatus;
   view: StyleCatalogViewStatus;

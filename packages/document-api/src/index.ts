@@ -145,10 +145,22 @@ import type {
   StylesApplyInput,
   StylesApplyOptions,
   StylesApplyReceipt,
+  StylesCreateAdapter,
+  StylesCreateApi,
+  StylesCreateInput,
+  StylesCreateOptions,
+  StylesCreateReceipt,
   StylesGetCatalogInput,
   StylesGetCatalogResult,
+  StylesGetThemeInput,
+  StylesGetThemeResult,
 } from './styles/index.js';
-import { executeStylesApply, executeStylesGetCatalog } from './styles/index.js';
+import {
+  executeStylesApply,
+  executeStylesCreate,
+  executeStylesGetCatalog,
+  executeStylesGetTheme,
+} from './styles/index.js';
 import type {
   TemplatesAdapter,
   TemplatesApi,
@@ -1251,6 +1263,9 @@ export type {
   StyleCatalogItemVisibility,
   StyleCatalogItemUsage,
   StyleCatalogItemPreview,
+  StyleCatalogPreviewFontSource,
+  StyleCatalogPreviewColorSource,
+  StyleCatalogPreviewSources,
   StyleCatalogItem,
   StyleCatalogDefaults,
   StyleCatalogDiagnostic,
@@ -1258,12 +1273,45 @@ export type {
   StylesGetCatalogInput,
   StylesGetCatalogResult,
   StylesGetCatalogAdapter,
+  StylesGetThemeInput,
+  StylesThemeSourceStatus,
+  StylesGetThemeResult,
+  StylesGetThemeAdapter,
 } from './styles/index.js';
 export {
   STYLE_CATALOG_VIEWS,
   STYLE_CATALOG_FILTER_TYPES,
   executeStylesGetCatalog,
   validateStylesGetCatalogInput,
+  executeStylesGetTheme,
+  validateStylesGetThemeInput,
+} from './styles/index.js';
+export type {
+  StylesScope,
+  StyleRunPatch,
+  StyleConflictPolicy,
+  StyleChannelState,
+  StylesCreateAdapter,
+  StylesCreateApi,
+  StylesCreateInput,
+  StylesCreateParagraphInput,
+  StylesCreateCharacterInput,
+  StylesCreateOptions,
+  NormalizedStylesCreateOptions,
+  StylesCreateResolution,
+  StylesCreateReceipt,
+  StylesCreateReceiptSuccess,
+  StylesCreateReceiptFailure,
+} from './styles/index.js';
+export {
+  STYLE_EXCLUDED_KEYS,
+  EXCLUDED_KEYS_BY_SCOPE,
+  SCOPE_LABEL,
+  STYLE_XML_PATH,
+  executeStylesCreate,
+  validateStylesCreateInput,
+  validateStylesCreateOptions,
+  validatePatchObject,
 } from './styles/index.js';
 export type {
   TemplatesAdapter,
@@ -1935,7 +1983,8 @@ export interface DocumentApiSurface {
   /**
    * Read the full document as an SDDocument structure.
    * @param input - Get input with optional read options.
-   * @returns An SDDocument with body content projected into SDM/1 canonical shapes.
+   * @returns An SDDocument with body content projected into SDM/1 canonical shapes,
+   *   plus the document's authored styles, theme, docDefaults and diagnostics.
    */
   get(input: SDGetInput): SDDocument;
   /**
@@ -2033,7 +2082,7 @@ export interface DocumentApiSurface {
   /**
    * Stylesheet operations (docDefaults, style definitions, paragraph style references).
    */
-  styles: StylesApi & { paragraph: ParagraphStylesApi };
+  styles: StylesApi & StylesCreateApi & { paragraph: ParagraphStylesApi };
   /**
    * Template/substrate operations (apply detected DOCX substrate from a source package).
    */
@@ -2219,7 +2268,7 @@ export interface DocumentApiAdapters {
   comments: CommentsAdapter;
   write: WriteAdapter;
   selectionMutation: SelectionMutationAdapter;
-  styles: StylesAdapter;
+  styles: StylesAdapter & Partial<StylesCreateAdapter>;
   templates: TemplatesAdapter;
   trackChanges: TrackChangesAdapter;
   create: CreateAdapter;
@@ -2393,6 +2442,23 @@ const ADAPTER_GATED_PREFIXES = [
   'watermarks',
 ] as const;
 
+/**
+ * Operations gated on one optional *method* of a namespace adapter that is
+ * itself present, so {@link ADAPTER_GATED_PREFIXES} cannot reach them.
+ *
+ * Without this the snapshot advertises an operation whose only possible answer
+ * is `CAPABILITY_UNAVAILABLE`, and a caller selecting capabilities from it
+ * picks an operation that cannot run. Only operations this package adds are
+ * listed: changing what an already-shipped operation advertises is a separate
+ * change, not a side effect of this one.
+ */
+const HOOK_GATED_OPERATIONS: ReadonlyArray<{
+  readonly operationId: OperationId;
+  readonly hasHook: (adapters: DocumentApiAdapters) => boolean;
+  // Optional chaining despite the required type: the namespace loop above
+  // tolerates a missing adapter, and a JavaScript host can pass one.
+}> = [{ operationId: 'styles.create', hasHook: (a) => typeof a.styles?.create === 'function' }];
+
 function assertCapabilityDecision(
   operationId: OperationId,
   capability: 'available' | 'tracked' | 'dryRun',
@@ -2476,6 +2542,18 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
         cap.dryRun = false;
         cap.reasons = [...(cap.reasons ?? []), 'NAMESPACE_UNAVAILABLE'];
       }
+    }
+    // Then the same gate one level down, for a hook rather than a namespace.
+    for (const { operationId, hasHook } of HOOK_GATED_OPERATIONS) {
+      if (hasHook(adapters)) continue;
+      // An engine older than the operation reports no entry for it at all,
+      // which already says unavailable; there is nothing to correct.
+      const cap = caps.operations[operationId];
+      if (!cap) continue;
+      cap.available = false;
+      cap.tracked = false;
+      cap.dryRun = false;
+      cap.reasons = [...(cap.reasons ?? []), 'OPERATION_UNAVAILABLE'];
     }
     return caps;
   };
@@ -2655,8 +2733,14 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       apply(input: StylesApplyInput, options?: StylesApplyOptions): StylesApplyReceipt {
         return executeStylesApply(adapters.styles, input, options);
       },
+      create(input: StylesCreateInput, options?: StylesCreateOptions): StylesCreateReceipt {
+        return executeStylesCreate(adapters.styles, input, options);
+      },
       getCatalog(input?: StylesGetCatalogInput): StylesGetCatalogResult {
         return executeStylesGetCatalog(adapters.styles, input);
+      },
+      getTheme(input?: StylesGetThemeInput): StylesGetThemeResult {
+        return executeStylesGetTheme(adapters.styles, input);
       },
       paragraph: {
         setStyle(input: ParagraphsSetStyleInput, options?: MutationOptions): ParagraphMutationResult {

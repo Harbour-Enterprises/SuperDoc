@@ -3,19 +3,17 @@
  *
  * Adopts a source DOCX's template **style system and reusable template assets**
  * onto the currently open document while preserving the open document's
- * body/story content (`word/document.xml` is never replaced). This is template
- * adoption, not a blind substrate transplant. The adoption semantics are:
+ * body/story content. Source body content is never copied; `word/document.xml`
+ * is rewritten only to adopt section defaults. The adoption semantics are:
  *
  * - `styles`: source-authoritative overlap. For a `styleId` defined in both
  *   documents the source definition wins **in place** under the original id
  *   (no `*-tmpl` rename). The source `w:docDefaults` and `w:latentStyles`
- *   singletons replace the target's. Source-only styles are imported; target-only
- *   styles still required by preserved content are retained.
- * - `numbering`: reconciled as a dependency graph (not a flat append / blind
- *   replace). The `w:num`/`w:abstractNum` graph required by imported
- *   numbering-bearing styles is imported, colliding ids are remapped
- *   deterministically, and references are rewritten coherently in both
- *   `numbering.xml` and `styles.xml`.
+ *   singletons replace the target's. Source-only styles are imported; all
+ *   target-only styles are retained.
+ * - `numbering`: every source `w:abstractNum`/`w:num` is appended. Colliding
+ *   ids are remapped deterministically, and imported styles are rewritten to
+ *   the remapped ids. Re-applying the same source appends the definitions again.
  * - `settings`: bounded reconciliation — layout/style-affecting settings (e.g.
  *   default tab stop) are adopted; identity/workflow settings (`rsid*`, `docId`,
  *   protection/revision state, `attachedTemplate`) are preserved.
@@ -24,7 +22,8 @@
  *   imported as reusable template assets (even ones the page-1 governing
  *   section does not reference), together with their `.rels` and transitive
  *   media closure; colliding part names / relationship ids / media names are
- *   reallocated and references rewritten consistently.
+ *   reallocated and references rewritten consistently. Re-applying the same
+ *   source imports the parts again under new names.
  * - `sectionDefaults`: the source `w:sectPr` that governs page 1 is adopted as
  *   the current document's active/final section-default model. On multi-section
  *   targets, its header/footer visibility model (`headerReference`,
@@ -32,11 +31,10 @@
  *   sections without overwriting their own page geometry. Intermediate / later
  *   source sections are not imported.
  *
- * Selected non-body package sidecars (`customXml`, `docProps/custom.xml`,
- * comments, notes, people, keymap customizations, and `settings.xml.rels`) are
- * imported when present so reconstructed content can reuse the source package
- * substrate faithfully. Source body content, glossary, signatures, embeddings,
- * and body media remain out of scope and are reported, never applied.
+ * Other source parts are never applied. `customXml` is reported as an
+ * out-of-scope skipped scope. `customXml`, `docProps`, comments, notes, people,
+ * glossary, signatures, embeddings, and body media are reported in
+ * `unsupportedItems`.
  *
  * Engine-agnostic contract + execution entry point. No ProseMirror/converter imports.
  */

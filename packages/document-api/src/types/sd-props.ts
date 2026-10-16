@@ -10,6 +10,8 @@
 // Color and font primitives
 // ---------------------------------------------------------------------------
 
+import type { ST_HIGHLIGHT_VALUES } from '../inline-semantics/token-sets.js';
+
 export type SDThemeFontRef =
   | 'majorAscii'
   | 'majorHAnsi'
@@ -61,24 +63,7 @@ export type SDColorRef =
 // Inline formatting primitives
 // ---------------------------------------------------------------------------
 
-export type SDHighlightColor =
-  | 'black'
-  | 'blue'
-  | 'cyan'
-  | 'green'
-  | 'magenta'
-  | 'red'
-  | 'yellow'
-  | 'white'
-  | 'darkBlue'
-  | 'darkCyan'
-  | 'darkGreen'
-  | 'darkMagenta'
-  | 'darkRed'
-  | 'darkYellow'
-  | 'darkGray'
-  | 'lightGray'
-  | 'none';
+export type SDHighlightColor = (typeof ST_HIGHLIGHT_VALUES)[number];
 
 export type SDUnderlineStyle =
   | 'none'
@@ -113,7 +98,9 @@ export interface SDShading {
 
 export interface SDRunBorder {
   style?: string;
+  /** Line width in points. */
   width?: number;
+  /** Spacing from the content in points. */
   space?: number;
   color?: SDColorRef;
   frame?: boolean;
@@ -301,10 +288,33 @@ export type SDTableWidth =
   | { kind: 'percent'; value: number }
   | { kind: 'none' };
 
+/** Table border lines; `width` and `space` in points. */
+export interface SDTableBorders {
+  top?: SDRunBorder;
+  right?: SDRunBorder;
+  bottom?: SDRunBorder;
+  left?: SDRunBorder;
+  start?: SDRunBorder;
+  end?: SDRunBorder;
+  insideH?: SDRunBorder;
+  insideV?: SDRunBorder;
+}
+
+/** Cell padding in points. */
+export interface SDCellPadding {
+  top?: number;
+  right?: number;
+  bottom?: number;
+  left?: number;
+  start?: number;
+  end?: number;
+}
+
 export interface SDTableProps {
   width?: SDTableWidth;
   layout?: 'fixed' | 'autofit';
   alignment?: 'left' | 'center' | 'right' | 'inside' | 'outside';
+  /** Normalized CSS-like edge borders retained for document and fragment compatibility. */
   borders?: {
     top?: string;
     right?: string;
@@ -313,25 +323,56 @@ export interface SDTableProps {
     insideH?: string;
     insideV?: string;
   };
+  /** Leading-edge indent in points. */
+  indent?: number;
+  /** Spacing between cells in points. */
+  cellSpacing?: number;
+  /** Default cell padding in points. */
+  cellPadding?: SDCellPadding;
+  shading?: SDShading;
+  /** Right-to-left visual column order (`w:bidiVisual`). */
+  bidiVisual?: boolean;
+}
+
+/** Table formatting authored on a table style. Borders are structured lines, not strings. */
+export interface SDTableStyleProps extends Omit<SDTableProps, 'borders'> {
+  borders?: SDTableBorders;
 }
 
 export interface SDRowProps {
   /** Minimum row height in points. */
   minHeight?: number;
   cantSplit?: boolean;
+  /** Repeat this row as a header row on each page (`w:tblHeader`). */
+  repeatHeader?: boolean;
+}
+
+/** Cell border lines; `width` and `space` in points. */
+export interface SDCellBorders extends SDTableBorders {
+  /** Diagonal from top-left to bottom-right. */
+  tl2br?: SDRunBorder;
+  /** Diagonal from top-right to bottom-left. */
+  tr2bl?: SDRunBorder;
 }
 
 export interface SDCellProps {
   verticalAlign?: 'top' | 'center' | 'bottom';
   shading?: SDColorRef;
   /** Cell padding in points. */
-  padding?: { top?: number; right?: number; bottom?: number; left?: number };
+  padding?: SDCellPadding;
+  /** Normalized CSS-like edge borders, such as `'single 1pt #000000'` or `'none'`. */
   borders?: {
     top?: string;
     right?: string;
     bottom?: string;
     left?: string;
   };
+  noWrap?: boolean;
+}
+
+/** Cell formatting authored on a table style. Borders are structured lines, not strings. */
+export interface SDTableStyleCellProps extends Omit<SDCellProps, 'borders'> {
+  borders?: SDCellBorders;
 }
 
 // ---------------------------------------------------------------------------

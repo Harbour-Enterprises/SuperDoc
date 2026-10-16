@@ -20,6 +20,7 @@ import type { SDContentNode } from './sd-nodes.js';
 import type { SDStyles, SDDocDefaults, SDTheme } from './sd-styles.js';
 import type { SDNumberingCatalog, SDSection, SDReferenceCatalogs, SDAnnotations } from './sd-sections.js';
 import type { SDDocumentMeta } from './sd-props.js';
+import type { SDDiagnostic } from './sd-contract.js';
 
 // ---------------------------------------------------------------------------
 // SDFragment: the payload for insert/replace
@@ -44,6 +45,8 @@ export interface SDDocument {
   referenceCatalogs?: SDReferenceCatalogs;
   annotations?: SDAnnotations;
   metadata?: SDDocumentMeta;
+  /** Missing, malformed or fallback package parts, and read options not honored yet. */
+  diagnostics?: SDDiagnostic[];
 }
 
 // ---------------------------------------------------------------------------

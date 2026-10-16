@@ -119,6 +119,23 @@ const diagnosticProperties: Record<string, JsonSchema> = {
   source: conversionSourceSchema,
 };
 const sdDiagnosticSchema = objectSchema(diagnosticProperties, ['code', 'severity', 'message']);
+/** `SDTheme`, shared by `get` and `styles.getTheme`. */
+const sdThemeProperties: Record<string, JsonSchema> = {
+  source: { enum: ['document', 'fallback'] },
+  colorScheme: { type: 'object' },
+  fontScheme: { type: 'object' },
+  colorSchemeMapping: { type: 'object' },
+};
+const stylePartStatusSchema: JsonSchema = { enum: ['present', 'missing', 'malformed'] };
+const styleDiagnosticSchema = objectSchema(
+  {
+    severity: { enum: ['info', 'warning', 'error'] },
+    code: { type: 'string' },
+    part: { type: 'string' },
+    message: { type: 'string' },
+  },
+  ['severity', 'code', 'message'],
+);
 const sdConversionDiagnosticSchema = objectSchema(
   {
     ...diagnosticProperties,
@@ -263,6 +280,55 @@ const knownTargetKindValues = [
   'sdt',
   'field',
 ] as const;
+// Origin of a resolved font or color: a literal value or a theme reference.
+// Shared by styles.getCatalog previews and query.match effective styles.
+const themeValueSourcesSchema = objectSchema({
+  fontFamily: objectSchema(
+    {
+      origin: { enum: ['literal', 'theme'] },
+      themeFont: {
+        enum: [
+          'majorAscii',
+          'majorHAnsi',
+          'majorEastAsia',
+          'majorBidi',
+          'minorAscii',
+          'minorHAnsi',
+          'minorEastAsia',
+          'minorBidi',
+        ],
+      },
+      fallback: { const: true },
+    },
+    ['origin'],
+  ),
+  color: objectSchema(
+    {
+      origin: { enum: ['literal', 'theme', 'default'] },
+      themeColor: {
+        enum: [
+          'dk1',
+          'dk2',
+          'lt1',
+          'lt2',
+          'accent1',
+          'accent2',
+          'accent3',
+          'accent4',
+          'accent5',
+          'accent6',
+          'hyperlink',
+          'followedHyperlink',
+        ],
+      },
+      tint: { type: 'integer', minimum: 0, maximum: 255 },
+      shade: { type: 'integer', minimum: 0, maximum: 255 },
+      fallback: { const: true },
+    },
+    ['origin'],
+  ),
+});
+
 /**
  * Shared schema definitions referenced by `$ref` in operation schemas.
  *
@@ -866,6 +932,11 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
               italic: { type: 'boolean' },
               underline: { type: 'boolean' },
               strike: { type: 'boolean' },
+              color: { type: 'string' },
+              highlight: { type: 'string' },
+              fontFamily: { type: 'string' },
+              fontSizePt: { type: 'number' },
+              sources: themeValueSourcesSchema,
             },
             ['bold', 'italic', 'underline', 'strike'],
           ),
@@ -4529,6 +4600,10 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       {
         modelVersion: { const: 'sdm/1' },
         body: { type: 'array' },
+        styles: { type: 'object' },
+        theme: objectSchema(sdThemeProperties, ['colorScheme']),
+        docDefaults: { type: 'object' },
+        diagnostics: arraySchema(sdDiagnosticSchema),
       },
       ['modelVersion', 'body'],
     ),
@@ -5694,6 +5769,96 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       failure: stylesFailureSchema,
     };
   })(),
+  'styles.create': (() => {
+    // Derived from PROPERTY_REGISTRY under the `style` scope: the run channel
+    // carries four properties Word allows on a named style and forbids in
+    // docDefaults, so this schema is deliberately wider than styles.apply's.
+    const commonProperties = {
+      id: { type: 'string', minLength: 1 },
+      name: { type: 'string', minLength: 1 },
+      basedOn: { type: ['string', 'null'], minLength: 1 },
+      // `pattern` mirrors the validator: w:aliases is one comma-delimited
+      // value, so an alias with a comma reads back as two.
+      aliases: { ...arraySchema({ type: 'string', minLength: 1, pattern: '^[^,]+$' }), uniqueItems: true },
+      priority: { type: ['integer', 'null'] },
+      qFormat: { type: 'boolean' },
+      hidden: { type: 'boolean' },
+      semiHidden: { type: 'boolean' },
+      unhideWhenUsed: { type: 'boolean' },
+      locked: { type: 'boolean' },
+      custom: { type: 'boolean' },
+      conflictPolicy: { enum: ['fail', 'replace'] },
+    };
+    const paragraphInputSchema = objectSchema(
+      {
+        ...commonProperties,
+        type: { const: 'paragraph' },
+        next: { type: ['string', 'null'], minLength: 1 },
+        paragraph: buildPatchSchema('paragraph', 'style'),
+        run: buildPatchSchema('run', 'style'),
+      },
+      ['id', 'name', 'type'],
+    );
+    const characterInputSchema = objectSchema(
+      {
+        ...commonProperties,
+        type: { const: 'character' },
+        run: buildPatchSchema('run', 'style'),
+      },
+      ['id', 'name', 'type'],
+    );
+    const resolutionSchema = objectSchema(
+      {
+        scope: { const: 'style' },
+        id: { type: 'string', minLength: 1 },
+        type: { enum: ['paragraph', 'character'] },
+        xmlPart: { type: 'string' },
+        xmlPath: { const: 'w:styles/w:style' },
+      },
+      ['scope', 'id', 'type', 'xmlPart', 'xmlPath'],
+    );
+    // Per channel, unlike styles.apply: one w:style carries both, and
+    // `borders` means a different shape on each.
+    const channelStateSchema = objectSchema(
+      {
+        paragraph: { oneOf: [buildStateSchema('style', 'paragraph'), { type: 'null' }] },
+        run: { oneOf: [buildStateSchema('style', 'run'), { type: 'null' }] },
+      },
+      ['paragraph', 'run'],
+    );
+    const successSchema = objectSchema(
+      {
+        success: { const: true },
+        changed: { type: 'boolean' },
+        created: { type: 'boolean' },
+        resolution: resolutionSchema,
+        dryRun: { type: 'boolean' },
+        before: { oneOf: [channelStateSchema, { type: 'null' }] },
+        after: channelStateSchema,
+      },
+      ['success', 'changed', 'created', 'resolution', 'dryRun', 'before', 'after'],
+    );
+    const failureSchema = objectSchema(
+      {
+        success: { const: false },
+        failure: objectSchema(
+          {
+            code: { enum: [...COMMAND_CATALOG['styles.create'].possibleFailureCodes] },
+            message: { type: 'string' },
+            details: {},
+          },
+          ['code', 'message'],
+        ),
+      },
+      ['success', 'failure'],
+    );
+    return {
+      input: { oneOf: [paragraphInputSchema, characterInputSchema] },
+      output: { oneOf: [successSchema, failureSchema] },
+      success: successSchema,
+      failure: failureSchema,
+    };
+  })(),
   'styles.getCatalog': (() => {
     const catalogViews = ['quickGallery', 'recommended', 'currentDocument', 'all', 'inUse'];
     const catalogFilterTypes = ['paragraph', 'character', 'linked', 'table', 'numbering'];
@@ -5721,6 +5886,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       {
         available: { type: 'boolean' },
         css: { type: 'object' },
+        sources: themeValueSourcesSchema,
         unsupportedReason: { type: 'string' },
       },
       ['available'],
@@ -5769,19 +5935,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         'visibility',
       ],
     );
-    const diagnosticSchema = objectSchema(
-      {
-        severity: { enum: ['info', 'warning', 'error'] },
-        code: { type: 'string' },
-        part: { type: 'string' },
-        message: { type: 'string' },
-      },
-      ['severity', 'code', 'message'],
-    );
     const sourceStatusSchema = objectSchema(
       {
-        styles: { enum: ['present', 'missing', 'malformed'] },
-        settings: { enum: ['present', 'missing', 'malformed'] },
+        styles: stylePartStatusSchema,
+        settings: stylePartStatusSchema,
+        theme: stylePartStatusSchema,
         usage: { enum: ['unsupported', 'complete', 'partial', 'failed'] },
         preview: { enum: ['unsupported', 'available'] },
         view: { enum: ['supported', 'unsupported'] },
@@ -5815,12 +5973,26 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
           items: arraySchema(itemSchema),
           styles: arraySchema(itemSchema),
           sourceStatus: sourceStatusSchema,
-          diagnostics: arraySchema(diagnosticSchema),
+          diagnostics: arraySchema(styleDiagnosticSchema),
         },
         ['version', 'revision', 'view', 'defaults', 'items', 'styles', 'sourceStatus', 'diagnostics'],
       ),
     };
   })(),
+  'styles.getTheme': {
+    input: strictEmptyObjectSchema,
+    output: objectSchema(
+      {
+        theme: objectSchema(sdThemeProperties, ['source', 'colorScheme']),
+        sourceStatus: objectSchema({ theme: stylePartStatusSchema, settings: stylePartStatusSchema }, [
+          'theme',
+          'settings',
+        ]),
+        diagnostics: arraySchema(styleDiagnosticSchema),
+      },
+      ['theme', 'sourceStatus', 'diagnostics'],
+    ),
+  },
   'templates.apply': (() => {
     const templatesReceiptFailureCodes = [...COMMAND_CATALOG['templates.apply'].possibleFailureCodes];
     const pathSourceSchema = objectSchema({ kind: { const: 'path' }, path: { type: 'string' } }, ['kind', 'path']);
@@ -7617,8 +7789,29 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         },
         ['matchKind', 'address', 'blocks'],
       );
-      // query.match meta schema: effectiveResolved is required.
-      const queryMatchMetaSchema = objectSchema({ effectiveResolved: { type: 'boolean' } }, ['effectiveResolved']);
+      // query.match meta schema: effectiveResolved is required; diagnostics explain an unresolved result.
+      const queryMatchMetaSchema = objectSchema(
+        {
+          effectiveResolved: { type: 'boolean' },
+          diagnostics: arraySchema(
+            objectSchema(
+              {
+                code: {
+                  enum: [
+                    'tracked-view-unresolved',
+                    'theme-fallback',
+                    'style-parts-unavailable',
+                    'run-projection-unavailable',
+                  ],
+                },
+                message: { type: 'string' },
+              },
+              ['code', 'message'],
+            ),
+          ),
+        },
+        ['effectiveResolved'],
+      );
       return discoveryResultSchema({ oneOf: [textMatchItemSchema, nodeMatchItemSchema] }, queryMatchMetaSchema);
     })(),
   },
