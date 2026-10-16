@@ -68,6 +68,8 @@ export type MutationResolutionTarget = TextAddress | BlockNodeAddress | BodyStor
 
 export interface SDMutationReceipt {
   success: boolean;
+  /** Effective content mode on a committed success; absent for no-op and dry-run calls. */
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Rich HTML/Markdown fidelity outcome, when this receipt came from a rich write. */
   outcome?: SDHtmlMarkdownOutcome;
   failure?: SDError;

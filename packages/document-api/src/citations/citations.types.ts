@@ -219,6 +219,7 @@ export interface BibliographyInfo {
 
 export interface CitationMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   citation: CitationAddress;
 }
 
@@ -233,6 +234,7 @@ export type CitationSourceMutationResult = CitationSourceMutationSuccess | Adapt
 
 export interface BibliographyMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   bibliography: BibliographyAddress;
 }
 

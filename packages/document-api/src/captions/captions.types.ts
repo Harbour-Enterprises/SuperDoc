@@ -75,6 +75,7 @@ export interface CaptionDomain {
 
 export interface CaptionMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   caption: CaptionAddress;
 }
 

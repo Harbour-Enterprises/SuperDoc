@@ -102,6 +102,7 @@ export interface HyperlinkInfo {
 
 export interface HyperlinkMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   hyperlink: HyperlinkTarget;
 }
 

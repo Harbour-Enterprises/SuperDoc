@@ -264,6 +264,7 @@ describe('document-api contract catalog', () => {
     expect(successSchema!.additionalProperties).toBe(false);
     expect(Object.keys(successSchema!.properties!).sort()).toEqual([
       'affectedStories',
+      'appliedChangeMode',
       'changed',
       'item',
       'remappedRefs',
@@ -502,6 +503,7 @@ describe('document-api contract catalog', () => {
     const schemas = buildInternalContractSchemas();
     const expectedSuccessKeys = [
       'affectedStories',
+      'appliedChangeMode',
       'conversion',
       'effects',
       'evaluatedRevision',
@@ -540,6 +542,19 @@ describe('document-api contract catalog', () => {
     expect(blockEffect.properties).toHaveProperty('sourcePath');
   });
 
+  it.each(['format.paragraph.setAlignment', 'sections.setPageMargins'] as const)(
+    'publishes optional committed mode on %s success without changing failures',
+    (operationId) => {
+      const schemas = buildInternalContractSchemas();
+      const output = schemas.operations[operationId].output as ContractTestSchemaShape;
+      const success = output.oneOf!.find((schema) => schema.properties?.success?.const === true)!;
+      const failure = output.oneOf!.find((schema) => schema.properties?.success?.const === false)!;
+      expect(success.properties?.appliedChangeMode).toEqual({ enum: ['direct', 'tracked'] });
+      expect(success.required).not.toContain('appliedChangeMode');
+      expect(failure.properties).not.toHaveProperty('appliedChangeMode');
+    },
+  );
+
   it('publishes structural replacement and optional targeting restrictions in the schema', () => {
     const schemas = buildInternalContractSchemas();
     const input = schemas.operations['mutations.apply'].input as ContractTestSchemaShape;
@@ -558,6 +573,8 @@ describe('document-api contract catalog', () => {
   it('publishes tracked and invalidated refs from mutation plans', () => {
     const operation = buildInternalContractSchemas().operations['mutations.apply'];
     for (const schema of [operation.output, operation.success] as ContractTestSchemaShape[]) {
+      expect(schema.properties?.appliedChangeMode).toEqual({ enum: ['direct', 'tracked'] });
+      expect(schema.properties?.steps.items.properties?.appliedChangeMode).toEqual({ enum: ['direct', 'tracked'] });
       expect(schema.properties?.trackedChanges).toEqual({
         type: 'array',
         items: { $ref: '#/$defs/TrackedChangeAddress' },

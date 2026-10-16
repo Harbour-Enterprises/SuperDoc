@@ -119,6 +119,7 @@ export interface FootnoteDomain {
 
 export interface FootnoteMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   footnote: FootnoteAddress;
 }
 
@@ -130,6 +131,7 @@ export type FootnoteMutationResult = FootnoteMutationSuccess | AdapterMutationFa
 
 export interface FootnoteConfigSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
 }
 
 export type FootnoteConfigResult = FootnoteConfigSuccess | AdapterMutationFailure;

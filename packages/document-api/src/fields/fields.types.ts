@@ -110,6 +110,7 @@ export interface FieldDomain {
 
 export interface FieldMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   field: FieldAddress;
 }
 

@@ -162,6 +162,7 @@ export interface IndexEntryDomain {
 
 export interface IndexMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   index: IndexAddress;
 }
 
@@ -169,6 +170,7 @@ export type IndexMutationResult = IndexMutationSuccess | AdapterMutationFailure;
 
 export interface IndexEntryMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   entry: IndexEntryAddress;
 }
 

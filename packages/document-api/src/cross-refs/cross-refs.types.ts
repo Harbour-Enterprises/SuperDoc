@@ -94,6 +94,7 @@ export interface CrossRefDomain {
 
 export interface CrossRefMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   crossRef: CrossRefAddress;
 }
 

@@ -98,6 +98,7 @@ export interface BookmarkDomain {
 
 export interface BookmarkMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   bookmark: BookmarkAddress;
 }
 

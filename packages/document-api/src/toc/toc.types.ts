@@ -145,6 +145,7 @@ export interface TocRemoveInput {
 
 export interface TocMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   toc: TocAddress;
 }
 
@@ -179,6 +180,7 @@ export interface CreateTableOfContentsInput {
 
 export interface CreateTableOfContentsSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   toc: TocAddress;
 }
 
@@ -297,6 +299,7 @@ export type TocListEntriesResult = DiscoveryOutput<TocEntryDomain>;
 
 export interface TocEntryMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   entry: TocEntryAddress;
 }
 

@@ -276,6 +276,7 @@ export interface SetZOrderInput {
 
 export interface CreateImageSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   image: ImageAddress;
   trackedChangeRefs?: ReceiptInsert[];
   /** Commit id for the insertion, including its alt text when that was set in the same call. */
@@ -296,6 +297,7 @@ export interface ImagesListResult {
 
 export interface ImagesMutationSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   image: ImageAddress;
   trackedChangeRefs?: ReceiptInsert[];
 }

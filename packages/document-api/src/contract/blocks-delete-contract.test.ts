@@ -35,6 +35,7 @@ describe('blocks.delete contract metadata', () => {
     const deleteRangeSchemas = buildInternalContractSchemas().operations['blocks.deleteRange'];
     const receiptFields = [
       'affectedStories',
+      'appliedChangeMode',
       'deletedBlocks',
       'deletedCount',
       'dryRun',

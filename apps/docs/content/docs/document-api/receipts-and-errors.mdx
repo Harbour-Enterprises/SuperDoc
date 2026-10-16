@@ -6,6 +6,10 @@ description: Check capabilities, inspect mutation results, and recover safely fr
 
 Treat every Document API mutation result as part of the operation contract. A successful receipt confirms what the engine applied. A failure receipt or rejected call explains why the workflow must stop, re-query, or change its request.
 
+Successful review-aware mutations may include `appliedChangeMode: 'direct' | 'tracked'`. This reports the mode in which document content was committed. It can differ from the requested `changeMode` and from the Editor's `documentMode`. The field is absent on failures, dry runs, no-op successes, and operations that do not author reviewable content. For `mutations.apply`, each committed step can report its mode; the plan reports one only when all committed steps have the same mode.
+
+An edit folded into the same author's existing insertion reports `tracked` because the content remains under review. When a content edit also writes a style or numbering definition, the field describes the content edit.
+
 ## 1. Check capabilities before acting
 
 Capabilities describe the current document runtime. Check the operation and the requested mutation mode before presenting or running a workflow:

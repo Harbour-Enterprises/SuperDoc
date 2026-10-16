@@ -117,6 +117,7 @@ describe('receipt-bridge: created-content effects', () => {
         text: '',
       },
       id: 'tc-1',
+      appliedChangeMode: 'tracked',
       inserted: [trackedChange],
       updated: [trackedChange],
       removed: [trackedChange],
@@ -150,6 +151,7 @@ describe('receipt-bridge: created-content effects', () => {
     expect(receipt).toMatchObject({
       success: true,
       id: 'tc-1',
+      appliedChangeMode: 'tracked',
       inserted: [trackedChange],
       updated: [trackedChange],
       removed: [trackedChange],

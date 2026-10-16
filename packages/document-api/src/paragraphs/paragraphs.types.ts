@@ -8,6 +8,7 @@
 import type { BlockNodeAddress } from '../types/base.js';
 import type { ReceiptFailure, ReceiptInsert } from '../types/receipt.js';
 import type { SDRunProps } from '../types/sd-props.js';
+import type { ChangeMode } from '../write/write.js';
 
 // ---------------------------------------------------------------------------
 // Target
@@ -29,6 +30,8 @@ export interface ParagraphMutationSuccess {
   success: true;
   target: ParagraphTarget;
   resolution: MutationResolution;
+  /** Mode applied to committed paragraph content; omitted when no content was committed. */
+  appliedChangeMode?: ChangeMode;
   /** Logical tracked-change entities created or revised by this mutation. */
   trackedChangeRefs?: ReceiptInsert[];
 }

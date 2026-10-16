@@ -8,6 +8,7 @@ import type {
 import type { BlockNodeAddress } from './base.js';
 import type { BookmarkAddress } from '../bookmarks/bookmarks.types.js';
 import type { StoryLocator } from './story.types.js';
+import type { ChangeMode } from '../write/write.js';
 export type ReceiptInsert = TrackedChangeAddress;
 export type ReceiptEntity = EntityAddress;
 export type AffectedRef = TextAddress | BookmarkAddress | EntityAddress | BlockNavigationAddress;
@@ -215,6 +216,13 @@ export interface ReceiptEffects {
 
 export type ReceiptSuccess = {
   success: true;
+  /**
+   * Mode in which this call's document content was committed. An edit folded
+   * into the author's existing insertion is tracked; auxiliary style and
+   * numbering definition writes do not change the content mode. Omitted for
+   * dry runs, no-ops, and operations that do not author reviewable content.
+   */
+  appliedChangeMode?: ChangeMode;
   /**
    * Convenience id for operations that create exactly one primary durable entity.
    * Generic consumers should prefer `inserted`; this field exists for simple

@@ -145,6 +145,7 @@ export type TableCreateLocation =
  */
 export interface TableMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   table?: TableAddress;
   trackedChangeRefs?: ReceiptInsert[];
 }
@@ -174,6 +175,7 @@ export interface CreateTableInput {
 
 export interface CreateTableSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   table: TableAddress;
   trackedChangeRefs?: ReceiptInsert[];
 }

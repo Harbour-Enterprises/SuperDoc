@@ -161,12 +161,14 @@ export interface AuthorityEntryDomain {
 
 export interface AuthoritiesMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   authorities: AuthoritiesAddress;
 }
 export type AuthoritiesMutationResult = AuthoritiesMutationSuccess | AdapterMutationFailure;
 
 export interface AuthorityEntryMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   entry: AuthorityEntryAddress;
 }
 export type AuthorityEntryMutationResult = AuthorityEntryMutationSuccess | AdapterMutationFailure;

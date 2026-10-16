@@ -449,12 +449,14 @@ export type ListsCaptureTemplateResult = ListsCaptureTemplateSuccessResult | Lis
 // ---------------------------------------------------------------------------
 export interface ListsInsertSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   item: ListItemAddress;
   insertionPoint: TextAddress;
   trackedChangeRefs?: ReceiptInsert[];
 }
 export interface ListsMutateItemSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   item: ListItemAddress;
   /** Tracked changes authored by this mutation when `changeMode` is tracked. */
   trackedChangeRefs?: ReceiptInsert[];
@@ -466,32 +468,38 @@ export interface ListsMutateItemSuccessResult {
 }
 export interface ListsCreateSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   item: ListItemAddress;
 }
 export interface ListsJoinSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
 }
 export interface ListsSeparateSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   numId: number;
 }
 export interface ListsMergeSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   absorbedCount: number;
   removedEmptyBlocks: number;
 }
 export interface ListsSplitSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   listId: string;
   numId: number;
   restartedAt: number | null;
 }
 export interface ListsDetachSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   paragraph: {
     kind: 'block';
     nodeType: 'paragraph';
@@ -500,6 +508,7 @@ export interface ListsDetachSuccessResult {
 }
 export interface ListsConvertToTextSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   paragraph: {
     kind: 'block';
     nodeType: 'paragraph';
@@ -531,6 +540,7 @@ export type ListsDetachResult = ListsDetachSuccessResult | ListsFailureResult;
 export type ListsConvertToTextResult = ListsConvertToTextSuccessResult | ListsFailureResult;
 export interface ListsDeleteSuccessResult {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   /** Number of list items removed. */
   deletedCount: number;
 }

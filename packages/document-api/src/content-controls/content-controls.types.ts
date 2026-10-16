@@ -229,6 +229,7 @@ export interface ContentControlInfo {
 
 export interface ContentControlMutationSuccess {
   success: true;
+  appliedChangeMode?: 'direct' | 'tracked';
   contentControl: ContentControlTarget;
   updatedRef?: ContentControlTarget;
   affectedStories?: StoryLocator[];

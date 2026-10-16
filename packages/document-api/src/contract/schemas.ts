@@ -135,6 +135,7 @@ const conversionReportSchema = objectSchema(
   ['format', 'lossy', 'diagnostics'],
 );
 const receiptSuccessMetadataProperties: Record<string, JsonSchema> = {
+  appliedChangeMode: { enum: ['direct', 'tracked'] },
   id: { type: 'string' },
   inserted: arraySchema(ref('EntityAddress')),
   updated: arraySchema(ref('EntityAddress')),
@@ -223,8 +224,16 @@ function optionalTargetLocatorWithPayload(
 function imagesMutationSchemaSet(inputSchema: JsonSchema): OperationSchemaSet {
   return {
     input: inputSchema,
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -795,6 +804,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
   TextMutationSuccess: objectSchema(
     {
       success: { const: true },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
       resolution: ref('TextMutationResolution'),
       inserted: arraySchema(ref('EntityAddress')),
       updated: arraySchema(ref('EntityAddress')),
@@ -1423,6 +1433,7 @@ const trackChangeRefSchema = trackedChangeAddressSchema;
 const createParagraphSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     paragraph: paragraphAddressSchema,
     insertionPoint: textAddressSchema,
     trackedChangeRefs: arraySchema(trackChangeRefSchema),
@@ -1452,6 +1463,7 @@ function createParagraphResultSchemaFor(operationId: OperationId): JsonSchema {
 const createHeadingSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     heading: headingAddressSchema,
     insertionPoint: textAddressSchema,
     trackedChangeRefs: arraySchema(trackChangeRefSchema),
@@ -1483,6 +1495,7 @@ const semanticHeadingLevelSchema: JsonSchema = { type: 'integer', minimum: 1, ma
 const listsInsertSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     item: listItemAddressSchema,
     insertionPoint: textAddressSchema,
     trackedChangeRefs: arraySchema(trackChangeRefSchema),
@@ -1492,6 +1505,7 @@ const listsInsertSuccessSchema = objectSchema(
 const listsMutateItemSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     item: listItemAddressSchema,
     affectedStories: arraySchema(ref('StoryLocator')),
     remappedRefs: arraySchema(ref('AffectedRefRemapping')),
@@ -1508,6 +1522,7 @@ const listsMutateItemSuccessSchema = objectSchema(
 const listsExitSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     paragraph: paragraphAddressSchema,
   },
   ['success', 'paragraph'],
@@ -1997,6 +2012,7 @@ const sectionMutationSuccessSchema = objectSchema(
   {
     success: { const: true },
     section: sectionAddressSchema,
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
   },
   ['success', 'section'],
 );
@@ -2034,6 +2050,7 @@ const paragraphMutationSuccessSchema = objectSchema(
     success: { const: true },
     target: paragraphTargetSchema,
     resolution: paragraphMutationTargetSchema,
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     trackedChangeRefs: arraySchema(trackChangeRefSchema),
   },
   ['success', 'target', 'resolution'],
@@ -2056,6 +2073,7 @@ function paragraphMutationResultSchemaFor(operationId: OperationId): JsonSchema 
 const createSectionBreakSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     section: sectionAddressSchema,
     breakParagraph: blockNodeAddressSchema,
   },
@@ -3233,6 +3251,7 @@ const tableCreateLocationSchema: JsonSchema = {
 const tableMutationSuccessSchema: JsonSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     table: tableAddressSchema,
     trackedChangeRefs: arraySchema(entityAddressSchema),
   },
@@ -3242,6 +3261,7 @@ const tableMutationSuccessSchema: JsonSchema = objectSchema(
 const createTableSuccessSchema: JsonSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     table: tableAddressSchema,
     trackedChangeRefs: arraySchema(entityAddressSchema),
   },
@@ -3373,10 +3393,10 @@ const tocMutationFailureSchema: JsonSchema = objectSchema(
   },
   ['success', 'failure'],
 );
-const tocMutationSuccessSchema: JsonSchema = objectSchema({ success: { const: true }, toc: tocAddressSchema() }, [
-  'success',
-  'toc',
-]);
+const tocMutationSuccessSchema: JsonSchema = objectSchema(
+  { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, toc: tocAddressSchema() },
+  ['success', 'toc'],
+);
 function tocMutationResultSchema(): JsonSchema {
   return {
     oneOf: [tocMutationSuccessSchema, tocMutationFailureSchema],
@@ -3432,7 +3452,7 @@ const tocEntryMutationFailureSchema: JsonSchema = objectSchema(
   ['success', 'failure'],
 );
 const tocEntryMutationSuccessSchema: JsonSchema = objectSchema(
-  { success: { const: true }, entry: tocEntryAddressSchema() },
+  { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, entry: tocEntryAddressSchema() },
   ['success', 'entry'],
 );
 function tocEntryMutationResultSchema(): JsonSchema {
@@ -3501,7 +3521,7 @@ const hyperlinkDomainSchema: JsonSchema = objectSchema(
   ['address', 'properties'],
 );
 const hyperlinkMutationSuccessSchema: JsonSchema = objectSchema(
-  { success: { const: true }, hyperlink: hyperlinkTargetSchema },
+  { success: { const: true }, hyperlink: hyperlinkTargetSchema, appliedChangeMode: { enum: ['direct', 'tracked'] } },
   ['success', 'hyperlink'],
 );
 const hyperlinkMutationFailureCodes = [
@@ -3563,6 +3583,7 @@ const contentControlMoveDestinationSchema: JsonSchema = {
 const contentControlMutationSuccessSchema = objectSchema(
   {
     success: { const: true },
+    appliedChangeMode: { enum: ['direct', 'tracked'] },
     contentControl: contentControlTargetSchema,
     updatedRef: contentControlTargetSchema,
     affectedStories: arraySchema(ref('StoryLocator')),
@@ -4032,8 +4053,16 @@ const refFailureSchema: JsonSchema = objectSchema({ success: { const: false }, f
 function refMutationSchemas(
   successProperties: Record<string, JsonSchema>,
   requiredSuccess: string[],
+  reviewAware = false,
 ): { output: JsonSchema; success: JsonSchema; failure: JsonSchema } {
-  const success = objectSchema({ success: { const: true }, ...successProperties }, ['success', ...requiredSuccess]);
+  const success = objectSchema(
+    {
+      success: { const: true },
+      ...(reviewAware ? { appliedChangeMode: { enum: ['direct', 'tracked'] } } : {}),
+      ...successProperties,
+    },
+    ['success', ...requiredSuccess],
+  );
   return {
     output: { oneOf: [success, refFailureSchema] },
     success,
@@ -4041,8 +4070,11 @@ function refMutationSchemas(
   };
 }
 /** Creates output, success, and failure schemas for a config-style mutation (no address in success). */
-function refConfigSchemas(): { output: JsonSchema; success: JsonSchema; failure: JsonSchema } {
-  const success = objectSchema({ success: { const: true } }, ['success']);
+function refConfigSchemas(reviewAware = false): { output: JsonSchema; success: JsonSchema; failure: JsonSchema } {
+  const success = objectSchema(
+    { success: { const: true }, ...(reviewAware ? { appliedChangeMode: { enum: ['direct', 'tracked'] } } : {}) },
+    ['success'],
+  );
   return {
     output: { oneOf: [success, refFailureSchema] },
     success,
@@ -4059,7 +4091,7 @@ const bookmarkAddressSchema: JsonSchema = objectSchema(
   },
   ['kind', 'entityType', 'name'],
 );
-const bookmarkMutation = refMutationSchemas({ bookmark: bookmarkAddressSchema }, ['bookmark']);
+const bookmarkMutation = refMutationSchemas({ bookmark: bookmarkAddressSchema }, ['bookmark'], true);
 // --- Custom XML part schemas ---
 const customXmlPartTargetSchema: JsonSchema = {
   oneOf: [
@@ -4114,8 +4146,8 @@ const footnoteNumberingSchema: JsonSchema = objectSchema({
   restartPolicy: { enum: ['continuous', 'eachSection', 'eachPage'] },
   position: { enum: ['pageBottom', 'beneathText', 'sectionEnd', 'documentEnd'] },
 });
-const footnoteMutation = refMutationSchemas({ footnote: footnoteAddressSchema }, ['footnote']);
-const footnoteConfig = refConfigSchemas();
+const footnoteMutation = refMutationSchemas({ footnote: footnoteAddressSchema }, ['footnote'], true);
+const footnoteConfig = refConfigSchemas(true);
 // --- CrossRef schemas ---
 const crossRefAddressSchema: JsonSchema = objectSchema(
   { kind: { const: 'inline' }, nodeType: { const: 'crossRef' }, anchor: ref('InlineAnchor') },
@@ -4147,7 +4179,7 @@ const crossRefDisplaySchema: JsonSchema = {
     'styledPageNumber',
   ],
 };
-const crossRefMutation = refMutationSchemas({ crossRef: crossRefAddressSchema }, ['crossRef']);
+const crossRefMutation = refMutationSchemas({ crossRef: crossRefAddressSchema }, ['crossRef'], true);
 // --- Index schemas ---
 const indexAddressSchema: JsonSchema = objectSchema(
   { kind: { const: 'block' }, nodeType: { const: 'index' }, nodeId: { type: 'string' } },
@@ -4192,14 +4224,14 @@ const indexEntryPatchSchema: JsonSchema = objectSchema({
   entryType: { type: 'string' },
   yomi: { type: 'string' },
 });
-const indexMutation = refMutationSchemas({ index: indexAddressSchema }, ['index']);
-const indexEntryMutation = refMutationSchemas({ entry: indexEntryAddressSchema }, ['entry']);
+const indexMutation = refMutationSchemas({ index: indexAddressSchema }, ['index'], true);
+const indexEntryMutation = refMutationSchemas({ entry: indexEntryAddressSchema }, ['entry'], true);
 // --- Caption schemas ---
 const captionAddressSchema: JsonSchema = objectSchema(
   { kind: { const: 'block' }, nodeType: { const: 'paragraph' }, nodeId: { type: 'string' } },
   ['kind', 'nodeType', 'nodeId'],
 );
-const captionMutation = refMutationSchemas({ caption: captionAddressSchema }, ['caption']);
+const captionMutation = refMutationSchemas({ caption: captionAddressSchema }, ['caption'], true);
 const captionConfig = refConfigSchemas();
 // --- Field schemas ---
 // Issue 7: `storyId` and `fieldId` are optional session-stable identity
@@ -4216,7 +4248,7 @@ const fieldAddressSchema: JsonSchema = objectSchema(
   },
   ['kind', 'blockId', 'occurrenceIndex'],
 );
-const fieldMutation = refMutationSchemas({ field: fieldAddressSchema }, ['field']);
+const fieldMutation = refMutationSchemas({ field: fieldAddressSchema }, ['field'], true);
 // --- Citation schemas ---
 const citationAddressSchema: JsonSchema = objectSchema(
   {
@@ -4238,9 +4270,9 @@ const bibliographyAddressSchema: JsonSchema = objectSchema(
   { kind: { const: 'block' }, nodeType: { const: 'bibliography' }, nodeId: { type: 'string' } },
   ['kind', 'nodeType', 'nodeId'],
 );
-const citationMutation = refMutationSchemas({ citation: citationAddressSchema }, ['citation']);
+const citationMutation = refMutationSchemas({ citation: citationAddressSchema }, ['citation'], true);
 const citationSourceMutation = refMutationSchemas({ source: citationSourceAddressSchema }, ['source']);
-const bibliographyMutation = refMutationSchemas({ bibliography: bibliographyAddressSchema }, ['bibliography']);
+const bibliographyMutation = refMutationSchemas({ bibliography: bibliographyAddressSchema }, ['bibliography'], true);
 const citationPersonSchema: JsonSchema = objectSchema(
   {
     first: { type: 'string' },
@@ -4310,8 +4342,8 @@ const authorityEntryPatchSchema: JsonSchema = objectSchema({
   bold: { type: 'boolean' },
   italic: { type: 'boolean' },
 });
-const authoritiesMutation = refMutationSchemas({ authorities: authoritiesAddressSchema }, ['authorities']);
-const authorityEntryMutation = refMutationSchemas({ entry: authorityEntryAddressSchema }, ['entry']);
+const authoritiesMutation = refMutationSchemas({ authorities: authoritiesAddressSchema }, ['authorities'], true);
+const authorityEntryMutation = refMutationSchemas({ entry: authorityEntryAddressSchema }, ['entry'], true);
 // --- Diff schemas ---
 const diffCoverageSchema: JsonSchema = objectSchema(
   {
@@ -5072,6 +5104,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         deleted: deletableBlockNodeAddressSchema,
         deletedBlock: objectSchema({
           ordinal: { type: 'number' },
@@ -5089,6 +5122,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         deleted: deletableBlockNodeAddressSchema,
         deletedBlock: objectSchema({
           ordinal: { type: 'number' },
@@ -5116,6 +5150,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         deletedCount: { type: 'number' },
         deletedBlocks: {
           type: 'array',
@@ -5148,6 +5183,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         deletedCount: { type: 'number' },
         deletedBlocks: { type: 'array' },
         revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
@@ -5173,6 +5209,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         inserted: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5184,6 +5221,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         inserted: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5205,6 +5243,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         removed: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5216,6 +5255,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         removed: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5238,6 +5278,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     output: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         moved: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5248,6 +5289,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         moved: blockNodeAddressSchema,
         remappedRefs: arraySchema(ref('AffectedRefRemapping')),
         affectedStories: arraySchema(ref('StoryLocator')),
@@ -5621,6 +5663,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     const stylesSuccessSchema = objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         changed: { type: 'boolean' },
         resolution: stylesTargetResolutionSchema,
         dryRun: { type: 'boolean' },
@@ -5853,6 +5896,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     const templatesSuccessSchema = objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         changed: { type: 'boolean' },
         dryRun: { type: 'boolean' },
         bodyPolicy: { const: 'preserve' },
@@ -6401,19 +6445,27 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     },
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, listId: { type: 'string' }, item: listItemAddressSchema }, [
-          'success',
-          'listId',
-          'item',
-        ]),
+        objectSchema(
+          {
+            success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
+            listId: { type: 'string' },
+            item: listItemAddressSchema,
+          },
+          ['success', 'listId', 'item'],
+        ),
         listsFailureSchemaFor('lists.create'),
       ],
     },
-    success: objectSchema({ success: { const: true }, listId: { type: 'string' }, item: listItemAddressSchema }, [
-      'success',
-      'listId',
-      'item',
-    ]),
+    success: objectSchema(
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        listId: { type: 'string' },
+        item: listItemAddressSchema,
+      },
+      ['success', 'listId', 'item'],
+    ),
     failure: listsFailureSchemaFor('lists.create'),
   },
   'lists.attach': {
@@ -6438,11 +6490,25 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, ['success', 'paragraph']),
+        objectSchema(
+          {
+            success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
+            paragraph: ref('ParagraphAddress'),
+          },
+          ['success', 'paragraph'],
+        ),
         listsFailureSchemaFor('lists.detach'),
       ],
     },
-    success: objectSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, ['success', 'paragraph']),
+    success: objectSchema(
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        paragraph: ref('ParagraphAddress'),
+      },
+      ['success', 'paragraph'],
+    ),
     failure: listsFailureSchemaFor('lists.detach'),
   },
   'lists.delete': {
@@ -6454,17 +6520,25 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, deletedCount: { type: 'integer', minimum: 0 } }, [
-          'success',
-          'deletedCount',
-        ]),
+        objectSchema(
+          {
+            success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
+            deletedCount: { type: 'integer', minimum: 0 },
+          },
+          ['success', 'deletedCount'],
+        ),
         listsFailureSchemaFor('lists.delete'),
       ],
     },
-    success: objectSchema({ success: { const: true }, deletedCount: { type: 'integer', minimum: 0 } }, [
-      'success',
-      'deletedCount',
-    ]),
+    success: objectSchema(
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        deletedCount: { type: 'integer', minimum: 0 },
+      },
+      ['success', 'deletedCount'],
+    ),
     failure: listsFailureSchemaFor('lists.delete'),
   },
   'lists.indent': {
@@ -6499,11 +6573,17 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, listId: { type: 'string' } }, ['success', 'listId']),
+        objectSchema(
+          { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, listId: { type: 'string' } },
+          ['success', 'listId'],
+        ),
         listsFailureSchemaFor('lists.join'),
       ],
     },
-    success: objectSchema({ success: { const: true }, listId: { type: 'string' } }, ['success', 'listId']),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, listId: { type: 'string' } },
+      ['success', 'listId'],
+    ),
     failure: listsFailureSchemaFor('lists.join'),
   },
   'lists.canJoin': {
@@ -6533,19 +6613,27 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, listId: { type: 'string' }, numId: { type: 'integer' } }, [
-          'success',
-          'listId',
-          'numId',
-        ]),
+        objectSchema(
+          {
+            success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
+            listId: { type: 'string' },
+            numId: { type: 'integer' },
+          },
+          ['success', 'listId', 'numId'],
+        ),
         listsFailureSchemaFor('lists.separate'),
       ],
     },
-    success: objectSchema({ success: { const: true }, listId: { type: 'string' }, numId: { type: 'integer' } }, [
-      'success',
-      'listId',
-      'numId',
-    ]),
+    success: objectSchema(
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        listId: { type: 'string' },
+        numId: { type: 'integer' },
+      },
+      ['success', 'listId', 'numId'],
+    ),
     failure: listsFailureSchemaFor('lists.separate'),
   },
   'lists.merge': {
@@ -6561,6 +6649,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         objectSchema(
           {
             success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
             listId: { type: 'string' },
             absorbedCount: { type: 'integer' },
             removedEmptyBlocks: { type: 'integer' },
@@ -6573,6 +6662,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         listId: { type: 'string' },
         absorbedCount: { type: 'integer' },
         removedEmptyBlocks: { type: 'integer' },
@@ -6594,6 +6684,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         objectSchema(
           {
             success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
             listId: { type: 'string' },
             numId: { type: 'integer' },
             restartedAt: { type: ['integer', 'null'] },
@@ -6606,6 +6697,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     success: objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         listId: { type: 'string' },
         numId: { type: 'integer' },
         restartedAt: { type: ['integer', 'null'] },
@@ -6689,11 +6781,25 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: {
       oneOf: [
-        objectSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, ['success', 'paragraph']),
+        objectSchema(
+          {
+            success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
+            paragraph: ref('ParagraphAddress'),
+          },
+          ['success', 'paragraph'],
+        ),
         listsFailureSchemaFor('lists.convertToText'),
       ],
     },
-    success: objectSchema({ success: { const: true }, paragraph: ref('ParagraphAddress') }, ['success', 'paragraph']),
+    success: objectSchema(
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        paragraph: ref('ParagraphAddress'),
+      },
+      ['success', 'paragraph'],
+    ),
     failure: listsFailureSchemaFor('lists.convertToText'),
   },
   // SD-1973: List formatting and templates
@@ -6783,6 +6889,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     const successSchema = objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         template: objectSchema(
           {
             version: { const: 1 },
@@ -6968,6 +7075,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     const successSchema = objectSchema(
       {
         success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
         style: styleSchema,
       },
       ['success', 'style'],
@@ -7959,8 +8067,9 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         output: objectSchema(
           {
             success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
             revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
-            steps: arraySchema({ type: 'object' }),
+            steps: arraySchema({ type: 'object', properties: { appliedChangeMode: { enum: ['direct', 'tracked'] } } }),
             trackedChanges: arraySchema(trackedChangeAddressSchema),
             invalidatedRefs: arraySchema(ref('AffectedRef')),
             timing: objectSchema({ totalMs: { type: 'number' } }, ['totalMs']),
@@ -7970,8 +8079,9 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         success: objectSchema(
           {
             success: { const: true },
+            appliedChangeMode: { enum: ['direct', 'tracked'] },
             revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
-            steps: arraySchema({ type: 'object' }),
+            steps: arraySchema({ type: 'object', properties: { appliedChangeMode: { enum: ['direct', 'tracked'] } } }),
             trackedChanges: arraySchema(trackedChangeAddressSchema),
             invalidatedRefs: arraySchema(ref('AffectedRef')),
             timing: objectSchema({ totalMs: { type: 'number' } }, ['totalMs']),
@@ -9284,12 +9394,18 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     ),
     output: objectSchema({
       success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
       image: { type: 'object' },
       failure: { type: 'object' },
       trackedChangeRefs: arraySchema(trackChangeRefSchema),
     }),
     success: objectSchema(
-      { success: { const: true }, image: { type: 'object' }, trackedChangeRefs: arraySchema(trackChangeRefSchema) },
+      {
+        success: { const: true },
+        appliedChangeMode: { enum: ['direct', 'tracked'] },
+        image: { type: 'object' },
+        trackedChangeRefs: arraySchema(trackChangeRefSchema),
+      },
       ['success', 'image'],
     ),
     failure: objectSchema(
@@ -9313,8 +9429,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   },
   'images.delete': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9342,8 +9466,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'to'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9354,8 +9486,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   },
   'images.convertToInline': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9366,8 +9506,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
   },
   'images.convertToFloating': {
     input: objectSchema({ imageId: { type: 'string' } }, ['imageId']),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9391,8 +9539,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'size'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9409,8 +9565,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'type'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9424,8 +9588,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       { imageId: { type: 'string' }, side: { type: 'string', enum: ['bothSides', 'left', 'right', 'largest'] } },
       ['imageId', 'side'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9447,8 +9619,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'distances'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9474,8 +9654,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'position'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },
@@ -9498,8 +9686,16 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['imageId', 'options'],
     ),
-    output: objectSchema({ success: { type: 'boolean' }, image: { type: 'object' }, failure: { type: 'object' } }),
-    success: objectSchema({ success: { const: true }, image: { type: 'object' } }, ['success', 'image']),
+    output: objectSchema({
+      success: { type: 'boolean' },
+      appliedChangeMode: { enum: ['direct', 'tracked'] },
+      image: { type: 'object' },
+      failure: { type: 'object' },
+    }),
+    success: objectSchema(
+      { success: { const: true }, appliedChangeMode: { enum: ['direct', 'tracked'] }, image: { type: 'object' } },
+      ['success', 'image'],
+    ),
     failure: objectSchema(
       {
         success: { const: false },

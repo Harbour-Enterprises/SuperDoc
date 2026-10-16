@@ -25,6 +25,7 @@ export interface MutationReceiptBridgeContext {
 }
 
 interface CanonicalSuccessMetadata {
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   id?: ReceiptSuccess['id'];
   inserted?: ReceiptSuccess['inserted'];
   updated?: ReceiptSuccess['updated'];
@@ -40,6 +41,7 @@ interface CanonicalSuccessMetadata {
 
 function projectSuccessMetadata(metadata: CanonicalSuccessMetadata): Partial<SDMutationReceipt> {
   return {
+    ...(metadata.appliedChangeMode !== undefined ? { appliedChangeMode: metadata.appliedChangeMode } : {}),
     ...(metadata.id !== undefined ? { id: metadata.id } : {}),
     ...(metadata.inserted !== undefined ? { inserted: metadata.inserted } : {}),
     ...(metadata.updated !== undefined ? { updated: metadata.updated } : {}),

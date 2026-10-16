@@ -5,6 +5,7 @@ import type {
   Receipt,
   ReceiptFailure,
   ReceiptInsert,
+  ReceiptSuccess,
   TextRangeShift,
 } from './receipt.js';
 import type { StoryLocator } from './story.types.js';
@@ -125,6 +126,7 @@ export interface BlocksDeleteInput {
 }
 export interface BlocksDeleteResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   deleted: DeletableBlockNodeAddress;
   deletedBlock?: DeletedBlockSummary;
   trackedChangeRefs?: ReceiptInsert[];
@@ -165,6 +167,7 @@ export interface BlocksSplitInput {
 }
 export interface BlocksSplitSuccessResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Address of the new paragraph created by the split (the tail). */
   inserted: BlockNodeAddress;
   /**
@@ -193,6 +196,7 @@ export interface BlocksMergeInput {
 }
 export interface BlocksMergeSuccessResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Address of the paragraph that was removed (the second paragraph). */
   removed: BlockNodeAddress;
   /**
@@ -228,6 +232,7 @@ export interface BlocksMoveInput {
 }
 export interface BlocksMoveSuccessResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   /** Same `source` paragraph, now relocated. */
   moved: BlockNodeAddress;
   remappedRefs?: AffectedRefRemapping[];
@@ -251,6 +256,7 @@ export type BlocksMoveResult = BlocksMoveSuccessResult | BlocksMoveFailureResult
 export type { Receipt };
 export interface BlocksDeleteRangeResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   deletedCount: number;
   deletedBlocks: DeletedBlockSummary[];
   revision: {

@@ -72,8 +72,11 @@ const mutationInput: Parameters<DocumentApi['mutations']['apply']>[0] = {
 };
 const mutationResult: ReturnType<DocumentApi['mutations']['apply']> = doc.mutations.apply(mutationInput);
 const inspectMutationResult = async () => {
-  const invalidatedRefs = (await mutationResult).invalidatedRefs;
-  void invalidatedRefs;
+  const result = await mutationResult;
+  const invalidatedRefs = result.invalidatedRefs;
+  const planMode: 'direct' | 'tracked' | undefined = result.appliedChangeMode;
+  const stepMode: 'direct' | 'tracked' | undefined = result.steps[0]?.appliedChangeMode;
+  void [invalidatedRefs, planMode, stepMode];
 };
 void inspectMutationResult;
 
@@ -106,6 +109,35 @@ const richReplace = doc.replace(
 );
 const fragmentReplace = doc.replace({ content: fragment, target: paragraph });
 const refReplace = doc.replace({ type: 'html', value: '<p>Ref replacement</p>', ref: 'v2-text:opaque' });
+
+// Every phase-1 result shape exposes the effective mode without requiring it.
+const modeOf = (result: { appliedChangeMode?: 'direct' | 'tracked' }) => result.appliedChangeMode;
+const deleteReceipt = doc.delete({ target: selection });
+const formatReceipt = doc.format.apply({ target: selection, inline: { bold: true } });
+const clearReceipt = doc.clearContent({});
+const clipboardReceipt = doc.clipboard.insert({
+  payload: { source: 'api', items: [{ type: 'text/plain', kind: 'string', data: 'text' }] },
+});
+const paragraphReceipt = doc.create.paragraph({});
+const headingReceipt = doc.create.heading({ level: 1 });
+const splitReceipt = doc.blocks.split({ target: paragraph, offset: 1 });
+const mergeReceipt = doc.blocks.merge({ first: paragraph, second: paragraph });
+const moveReceipt = doc.blocks.move({ source: paragraph, destination: paragraph, placement: 'after' });
+void [
+  modeOf(richInsert),
+  modeOf(richReplace),
+  modeOf(doc.blocks.delete({ target: paragraph })),
+  modeOf(doc.blocks.deleteRange({ start: paragraph, end: paragraph })),
+  deleteReceipt.success && modeOf(deleteReceipt),
+  formatReceipt.success && modeOf(formatReceipt),
+  clearReceipt.success && modeOf(clearReceipt),
+  clipboardReceipt.success && modeOf(clipboardReceipt),
+  paragraphReceipt.success && modeOf(paragraphReceipt),
+  headingReceipt.success && modeOf(headingReceipt),
+  splitReceipt.success && modeOf(splitReceipt),
+  mergeReceipt.success && modeOf(mergeReceipt),
+  moveReceipt.success && modeOf(moveReceipt),
+];
 
 const invokedHtml: ReturnType<DocumentApi['invoke']> = doc.invoke({
   operationId: 'htmlToFragment',
@@ -221,3 +253,55 @@ void [
   oldMarkdown,
   parsedClipboard,
 ];
+
+const alignmentResult = doc.format.paragraph.setAlignment(
+  { target: paragraph, alignment: 'center' },
+  { changeMode: 'tracked' },
+);
+if (alignmentResult.success) {
+  const alignmentMode: 'direct' | 'tracked' | undefined = alignmentResult.appliedChangeMode;
+  // Existing callers can still construct a successful result without the additive field.
+  const oldAlignmentResult: typeof alignmentResult = {
+    success: true,
+    target: paragraph,
+    resolution: { target: paragraph },
+  };
+  void [alignmentMode, oldAlignmentResult];
+}
+
+const sectionTarget = { kind: 'section', sectionId: 'section-1' } as const;
+const sectionResult = doc.sections.setPageMargins({ target: sectionTarget, top: 1.5 }, { changeMode: 'tracked' });
+if (sectionResult.success) {
+  const sectionMode: 'direct' | 'tracked' | undefined = sectionResult.appliedChangeMode;
+  const oldSectionResult: typeof sectionResult = { success: true, section: sectionTarget };
+  void [sectionMode, oldSectionResult];
+}
+
+const hyperlinkReceipt = doc.hyperlinks.insert(
+  { text: 'Link', link: { destination: { href: 'https://example.com' } } },
+  { changeMode: 'tracked' },
+);
+if (hyperlinkReceipt.success) {
+  const hyperlinkMode: 'direct' | 'tracked' | undefined = hyperlinkReceipt.appliedChangeMode;
+  void hyperlinkMode;
+}
+
+// Every success-family interface supports additive mode reads through emitted public declarations.
+type SuccessMode<T> = 'appliedChangeMode' extends keyof Extract<Awaited<T>, { success: true }> ? true : false;
+const additionalModeTypes: [
+  SuccessMode<ReturnType<DocumentApi['bookmarks']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['fields']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['footnotes']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['lists']['create']>>,
+  SuccessMode<ReturnType<DocumentApi['create']['table']>>,
+  SuccessMode<ReturnType<DocumentApi['create']['image']>>,
+  SuccessMode<ReturnType<DocumentApi['create']['contentControl']>>,
+  SuccessMode<ReturnType<DocumentApi['create']['tableOfContents']>>,
+  SuccessMode<ReturnType<DocumentApi['index']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['authorities']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['crossRefs']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['captions']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['citations']['insert']>>,
+  SuccessMode<ReturnType<DocumentApi['citations']['bibliography']['insert']>>,
+] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true];
+void additionalModeTypes;

@@ -291,6 +291,8 @@ export type StepOutcomeData = TextStepData | AssertStepData | DomainStepData | T
 
 export type StepOutcome = {
   stepId: string;
+  /** Effective mode when all committed requests in this step used the same mode. */
+  appliedChangeMode?: ChangeMode;
   op: string;
   effect: StepEffect;
   matchCount: number;
@@ -300,6 +302,8 @@ export type StepOutcome = {
 
 export type PlanReceipt = {
   success: true;
+  /** Effective mode when every committed step used the same mode. */
+  appliedChangeMode?: ChangeMode;
   revision: {
     before: string;
     after: string;

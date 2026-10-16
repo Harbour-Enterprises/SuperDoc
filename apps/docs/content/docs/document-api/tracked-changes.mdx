@@ -6,6 +6,8 @@ description: Create reviewable edits, inspect open changes, and accept or reject
 
 Tracked changes connect programmatic editing to human review. Operations that report tracked-mode support can request it. The review API then lists, inspects, accepts, or rejects the resulting logical changes.
 
+For a successful content mutation, inspect `receipt.appliedChangeMode` to learn the effective mode. The requested `changeMode` and the Editor's suggesting `documentMode` describe intent and defaults; neither proves how that call committed. The field is absent for dry runs and no-op results. Edits absorbed into your own existing tracked insertion report `tracked` even when no new change ID is created.
+
 ## Create a reviewable edit
 
 Pass `changeMode: 'tracked'` as the mutation options argument. There is no separate operation for creating a tracked change:

@@ -1,7 +1,7 @@
 import type { TextAddress } from './address.js';
 import type { BlockNodeAddress } from './base.js';
 import type { ResolvedHandle } from './discovery.js';
-import type { ReceiptFailure, ReceiptInsert } from './receipt.js';
+import type { ReceiptFailure, ReceiptInsert, ReceiptSuccess } from './receipt.js';
 import type { StoryLocator } from './story.types.js';
 
 export type ParagraphCreateLocation =
@@ -26,6 +26,7 @@ export interface CreateParagraphInput {
 
 export interface CreateParagraphSuccessResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   paragraph: BlockNodeAddress;
   insertionPoint: TextAddress;
   trackedChangeRefs?: ReceiptInsert[];
@@ -98,6 +99,7 @@ export interface CreateHeadingInput {
 
 export interface CreateHeadingSuccessResult {
   success: true;
+  appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   heading: BlockNodeAddress;
   insertionPoint: TextAddress;
   trackedChangeRefs?: ReceiptInsert[];
