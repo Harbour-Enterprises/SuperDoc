@@ -1123,6 +1123,7 @@ function* layoutDocumentSteps(
     state: PageState,
     blocks: ReadonlyMap<string, import('@superdoc/contracts').LayoutBlockResumeCheckpoint>,
     tables: ReadonlyMap<string, readonly TableLayoutResumeCheckpoint[]>,
+    pageStartColumns: ReadonlyMap<number, ColumnLayout>,
   ) => void,
   continuationInput?: ContinuationInputPreflight,
 ): Generator<LayoutExecutionCheckpoint, Layout, void> {
@@ -1143,8 +1144,11 @@ function* layoutDocumentSteps(
   const blocksById = new Map<string, FlowBlock>();
   const measuresById = new Map<string, Measure>();
   const paragraphIndexById = new Map<string, number>();
+  // A bounded page stop withholds publication, but does not invalidate the
+  // independently owned source/measure scan. Other preparation dependencies
+  // still require the canonical complete preflight below.
   let preparedSourceScan =
-    paginationOptionsPublicationBlocker(options) == null ? readPaginationSourceScan(blocks, measures) : null;
+    paginationOptionsPublicationBlocker(options, false) == null ? readPaginationSourceScan(blocks, measures) : null;
   const ownedScan = preparedSourceScan;
   let preparationBlocks = preparedSourceScan ? createPreparedPaginationMetadataView(blocks, measures) : blocks;
   const sourceCandidateIds: string[] = [];
@@ -1763,7 +1767,9 @@ function* layoutDocumentSteps(
     return { decision: { forcePageBreak: false, forceMidPageRegion: false }, state: next };
   };
 
+  const pageStartColumns = new Map<number, ColumnLayout>();
   const createPage = (number: number, pageMargins: PageMargins, pageSizeOverride?: { w: number; h: number }): Page => {
+    pageStartColumns.set(number - 1 - pageNumberOffset, cloneColumnLayout(activeColumns));
     const page: Page = {
       number,
       fragments: [],
@@ -2077,7 +2083,7 @@ function* layoutDocumentSteps(
   const deferredTableCarrierPages: Array<{ page: Page; state: PageState }> = [];
   const publishSealedPage = (page: Page, state: PageState): void => {
     finalizeBodyPageGeometry(page, state);
-    onSealedPage?.(page, state, blockResumeCheckpoints, tableResumeCheckpoints);
+    onSealedPage?.(page, state, blockResumeCheckpoints, tableResumeCheckpoints, pageStartColumns);
   };
   const flushTableCarrierPages = (): void => {
     for (const { page, state } of deferredTableCarrierPages) publishSealedPage(page, state);
@@ -3038,9 +3044,10 @@ function* layoutDocumentSteps(
       ...(state.lastParagraphBorderHash ? { lastParagraphBorderHash: state.lastParagraphBorderHash } : {}),
       constraintBoundaries: state.constraintBoundaries.map((boundary) => ({
         y: boundary.y,
-        columns: { ...boundary.columns },
+        columns: cloneColumnLayout(boundary.columns),
       })),
       activeConstraintIndex: state.activeConstraintIndex,
+      activeColumns: cloneColumnLayout(getActiveColumnsForState(state)),
       footnoteDemandThisPage: state.footnoteDemandThisPage,
       footnoteRefsThisPage: state.footnoteRefsThisPage,
       footnoteAnchorsThisPage: state.footnoteAnchorsThisPage.map((anchor) => ({ ...anchor })),
@@ -3737,9 +3744,10 @@ function* layoutDocumentSteps(
               : {}),
             constraintBoundaries: checkpointState.constraintBoundaries.map((boundary) => ({
               y: boundary.y,
-              columns: { ...boundary.columns },
+              columns: cloneColumnLayout(boundary.columns),
             })),
             activeConstraintIndex: checkpointState.activeConstraintIndex,
+            activeColumns: cloneColumnLayout(getActiveColumnsForState(checkpointState)),
             footnoteDemandThisPage: checkpointState.footnoteDemandThisPage,
             footnoteRefsThisPage: checkpointState.footnoteRefsThisPage,
             footnoteAnchorsThisPage: checkpointState.footnoteAnchorsThisPage.map((anchor) => ({ ...anchor })),
@@ -4693,7 +4701,8 @@ function* layoutDocumentSteps(
   }
 
   const pageBordersBySection = new Map<number, SectionPageBorders>();
-  for (const block of blocks) {
+  for (const index of candidateIndices ?? blocks.keys()) {
+    const block = preparationBlocks[index]!;
     if (block.kind !== 'sectionBreak' || !block.pageBorders) continue;
     const sectionIndex = block.attrs?.sectionIndex;
     if (typeof sectionIndex === 'number') pageBordersBySection.set(sectionIndex, block.pageBorders);
@@ -4707,6 +4716,7 @@ function* layoutDocumentSteps(
     pageSize,
     pages,
     blockResumeCheckpoints,
+    pageStartColumns: new Map(Array.from(pageStartColumns).filter(([index]) => index < pages.length)),
     ...(options.documentBackground ? { documentBackground: options.documentBackground } : {}),
     // Note: columns here reflects the effective default for subsequent pages
     // after processing sections. Page/region-specific column changes are encoded
@@ -4771,7 +4781,7 @@ export type LayoutDocumentContinuation = {
   dispose(): void;
 };
 
-function paginationOptionsPublicationBlocker(options: LayoutOptions): string | null {
+function paginationOptionsPublicationBlocker(options: LayoutOptions, includePageBoundary = true): string | null {
   // AIDEV-NOTE: These finalizers can revise earlier pages after a page boundary.
   // Their existing cooperative complete path owns publication until their dependency closes.
   const notes = options.footnotes as { refs?: unknown; blocksById?: unknown } | undefined;
@@ -4781,7 +4791,7 @@ function paginationOptionsPublicationBlocker(options: LayoutOptions): string | n
       notes.refs.length === 0 &&
       notes.blocksById instanceof Map &&
       notes.blocksById.size === 0);
-  if (options.pageBoundary) return 'page-boundary';
+  if (includePageBoundary && options.pageBoundary) return 'page-boundary';
   if (!footnotesAbsent) return 'footnotes';
   if (options.footnotePageFlow) return 'footnote-page-flow';
   if (resolveColumnCount(options.columns) > 1 || resolveColumnCount(options.startContext?.activeColumns) > 1)
@@ -4825,6 +4835,7 @@ export function createLayoutDocumentContinuation(
   const pendingBlankPages: Page[] = [];
   let sealedBlockCheckpoints = new Map<string, import('@superdoc/contracts').LayoutBlockResumeCheckpoint>();
   let sealedTableCheckpoints = new Map<string, readonly TableLayoutResumeCheckpoint[]>();
+  const sealedPageStartColumns = new Map<number, ColumnLayout>();
   const blockIndexById = new Map<string, number>();
   const pageBorders = new Map<number, SectionPageBorders>();
   const pageOffset = options.startContext?.pageNumberOffset ?? 0;
@@ -4844,6 +4855,7 @@ export function createLayoutDocumentContinuation(
     state,
     blockCheckpoints,
     tableCheckpoints,
+    pageStartColumns,
   ) => {
     const snapshot = clonePlain(page);
     if (typeof snapshot.sectionIndex === 'number') snapshot.pageBorders = pageBorders.get(snapshot.sectionIndex);
@@ -4867,9 +4879,14 @@ export function createLayoutDocumentContinuation(
       pendingBlankPages.push(snapshot);
       return;
     }
+    const firstNewPageIndex = sealedPages.length;
     for (const page of pendingBlankPages) sealedPages.push(page);
     pendingBlankPages.length = 0;
     sealedPages.push(snapshot);
+    for (let pageIndex = firstNewPageIndex; pageIndex < sealedPages.length; pageIndex += 1) {
+      const columns = pageStartColumns.get(pageIndex);
+      if (columns) sealedPageStartColumns.set(pageIndex, columns);
+    }
     sealedBlockCheckpoints = new Map(
       Array.from(blockCheckpoints).filter(([, checkpoint]) => checkpoint.pageIndex < sealedPages.length),
     );
@@ -4941,6 +4958,7 @@ export function createLayoutDocumentContinuation(
           pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
           pages: sealedPages.slice(),
           blockResumeCheckpoints: sealedBlockCheckpoints,
+          pageStartColumns: new Map(sealedPageStartColumns),
           ...(options.documentBackground ? { documentBackground: options.documentBackground } : {}),
         };
         if (!complete) writeTableLayoutResumeCheckpoints(layout, sealedTableCheckpoints);
@@ -5105,6 +5123,8 @@ export function layoutDocumentRange(input: LayoutRangeInput): LayoutRangeResult 
     pageSize,
     pages: mappedPages.map((page) => page.page),
   };
+  // Range filtering changes array indices without whole-layout resume ownership.
+  delete layout.pageStartColumns;
   return {
     layout,
     pages: mappedPages,

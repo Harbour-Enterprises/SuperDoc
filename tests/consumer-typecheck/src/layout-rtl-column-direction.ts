@@ -32,3 +32,37 @@ void readDirection;
 void rtl;
 void ltr;
 void roundTripped;
+
+type Equal<A, B> = (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2 ? true : false;
+type AssertEqual<T extends true> = T;
+type PublicResumeCheckpoint = NonNullable<ReturnType<NonNullable<Layout['blockResumeCheckpoints']>['get']>>;
+
+const pageStartShape: AssertEqual<
+  Equal<Layout['pageStartColumns'], ReadonlyMap<number, PublicColumnLayout> | undefined>
+> = true;
+const checkpointShape: AssertEqual<Equal<PublicResumeCheckpoint['activeColumns'], PublicColumnLayout | undefined>> =
+  true;
+
+const omittedPageSeeds: Pick<Layout, 'pageStartColumns'> = {};
+const omittedBlockSeed: Pick<PublicResumeCheckpoint, 'activeColumns'> = {};
+const pageSeeds: Pick<Layout, 'pageStartColumns'> = {
+  pageStartColumns: new Map<number, PublicColumnLayout>([[0, rtlSection]]),
+};
+const blockSeed: Pick<PublicResumeCheckpoint, 'activeColumns'> = { activeColumns: ltrSection };
+const readPageSeed: PublicColumnLayout | undefined = layout.pageStartColumns?.get(0);
+const readBlockSeed: PublicColumnLayout | undefined = layout.blockResumeCheckpoints?.get('paragraph')?.activeColumns;
+const roundTrippedSeeds: Pick<Layout, 'pageStartColumns'> = {
+  pageStartColumns: readPageSeed ? new Map([[0, readPageSeed]]) : undefined,
+};
+const roundTrippedBlockSeed: Pick<PublicResumeCheckpoint, 'activeColumns'> = { activeColumns: readBlockSeed };
+
+void pageStartShape;
+void checkpointShape;
+void omittedPageSeeds;
+void omittedBlockSeed;
+void pageSeeds;
+void blockSeed;
+void readPageSeed;
+void readBlockSeed;
+void roundTrippedSeeds;
+void roundTrippedBlockSeed;

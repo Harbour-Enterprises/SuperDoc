@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
-import type { TableCell } from '@superdoc/contracts';
+import type { TableCell, ParagraphMeasure } from '@superdoc/contracts';
 import type { TableBlock } from '@superdoc/contracts';
 import { measureBlock } from './index.js';
 import { buildAutoFitWorkingGridInput } from './autofit-normalize.js';
@@ -16,6 +16,46 @@ describe('table-autofit-metrics', () => {
   beforeEach(() => {
     clearTableAutoFitMeasurementCaches();
   });
+
+  it.each(['auto', 'none'] as const)(
+    'uses Word kerning for a cold intrinsic canvas initialized to %s',
+    async (initialKerning) => {
+      vi.resetModules();
+      const context = {
+        font: '',
+        fontKerning: initialKerning,
+        measureText: vi.fn(function (this: { fontKerning: string }) {
+          return { width: this.fontKerning === 'none' ? 20 : 16 };
+        }),
+      } as unknown as CanvasRenderingContext2D;
+      const getContext = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context);
+      try {
+        const fresh = await import('./table-autofit-metrics.js');
+        const cell: TableCell = {
+          id: 'cold-kerning-cell',
+          attrs: {
+            padding: { left: 0, right: 0, top: 0, bottom: 0 },
+          },
+          blocks: [
+            {
+              id: 'cold-kerning-paragraph',
+              kind: 'paragraph',
+              runs: [{ text: 'AV', fontFamily: 'Arial', fontSize: 16 }],
+            },
+          ],
+        };
+        const metrics = await fresh.measureTableCellContentMetrics(cell, {
+          maxWidth: 400,
+          measureBlock: async () =>
+            ({ kind: 'paragraph', lines: [{ width: 40 }], totalHeight: 20 }) as ParagraphMeasure,
+        });
+        expect(metrics).toEqual({ minWidthPx: 20, maxWidthPx: 40 });
+        expect(context.fontKerning).toBe('none');
+      } finally {
+        getContext.mockRestore();
+      }
+    },
+  );
 
   it('uses the widest unbreakable token for cell min width', async () => {
     const cell: TableCell = {

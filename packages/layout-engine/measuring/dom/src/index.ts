@@ -134,6 +134,7 @@ import {
   bindSurfaceMeasurementPass,
   clearSurfaceMeasurementGeneration,
   createSurfaceMeasurementRuntimeState,
+  createMeasurementCanvasContext,
   disposeSurfaceMeasurementRuntime,
   ensureSurfaceMeasurementCanvas,
   getSurfaceMeasurementRuntime,
@@ -301,21 +302,17 @@ export interface DomMeasurementRuntime {
 }
 
 export interface DomMeasurementRuntimeOptions {
+  /** Explicit Canvas2D allocation seam for a surface; defaults to DOM or worker OffscreenCanvas. */
+  createCanvasContext?: () => CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+  /** Settle native font requests discovered during an uncommitted measurement attempt. */
+  flushTextMetrics?: () => Promise<void> | null;
+  /** Opaque browser fonts cannot supply synchronous reuse proofs until their metrics settle. */
+  canMeasureSynchronously?: (font: string) => boolean;
   maxTextEntries?: number;
   maxEstimatedTextBytes?: number;
 }
 
-function createCanvasContext(): CanvasRenderingContext2D {
-  const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-  if (!canvas) {
-    throw new DomMeasurementInfrastructureError(
-      'Canvas not available. Ensure this runs in a DOM environment (browser or jsdom).',
-    );
-  }
-  const context = canvas.getContext('2d');
-  if (!context) throw new DomMeasurementInfrastructureError('Failed to get 2D context from canvas');
-  return context;
-}
+const createCanvasContext = createMeasurementCanvasContext;
 
 function statsDelta(current: TextWidthCacheStats, baseline: TextWidthCacheStats): TextWidthCacheStats {
   return {
@@ -340,6 +337,7 @@ const WORD_BOUNDARIES_PER_MEASUREMENT_CHECKPOINT = 8;
 
 export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOptions = {}): DomMeasurementRuntime {
   const state = createSurfaceMeasurementRuntimeState({
+    createCanvasContext: options.createCanvasContext,
     maxTextEntries: options.maxTextEntries ?? 50_000,
     maxEstimatedTextBytes: options.maxEstimatedTextBytes ?? 16 * 1024 * 1024,
   });
@@ -353,7 +351,7 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
       if (state.fontSignature !== fontContext.fontSignature) {
         clearSurfaceMeasurementGeneration(state, fontContext.fontSignature);
       }
-      const passFontContext: FontMeasureContext = Object.freeze({
+      let passFontContext: FontMeasureContext = Object.freeze({
         fontSignature: fontContext.fontSignature,
         resolvePhysical: fontContext.resolvePhysical,
         ...(fontContext.resolveNaturalLineMultiplier
@@ -376,17 +374,43 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
             },
             passFontContext,
           );
+          if (options.canMeasureSynchronously?.(font) === false) return false;
           return digitProbe.hasTabularDigits(font);
         },
       });
       const snapshot = (): TextWidthCacheStats => statsDelta(state.textWidths.snapshotStats(), baseline);
-      return {
-        fontCapabilities,
-        measureBlock: async (block, constraints) => {
+      const measure = async (block: FlowBlock, constraints: number | MeasureConstraints): Promise<Measure> => {
+        for (let attempt = 0; attempt < 64; attempt += 1) {
           if (finished) throw new DomMeasurementInfrastructureError('DomMeasurementPass has finished');
           state.execution?.throwIfAborted?.();
           const result = await measureBlock(block, constraints, passFontContext);
+          const pending = options.flushTextMetrics?.();
+          if (!pending) {
+            state.execution?.throwIfAborted?.();
+            return result;
+          }
+          await pending;
           state.execution?.throwIfAborted?.();
+          // No speculative widths, font metrics or recursive table cache may escape this attempt.
+          state.textWidths.clear(false);
+          state.fontMetrics.clear();
+          digitProbe = undefined;
+          unbindSurfaceMeasurementPass(state, passFontContext);
+          passFontContext = Object.freeze({
+            ...fontContext,
+            fontSignature: `${fontContext.fontSignature}|native:${++nativeMetricAttempt}`,
+          });
+          bindSurfaceMeasurementPass(state, passFontContext, execution);
+        }
+        throw new DomMeasurementInfrastructureError('Native text metrics did not converge');
+      };
+      let tail: Promise<unknown> = Promise.resolve();
+      return {
+        fontCapabilities,
+        measureBlock: (block, constraints) => {
+          if (!options.flushTextMetrics) return measure(block, constraints);
+          const result = tail.then(() => measure(block, constraints));
+          tail = result.catch(() => {});
           return result;
         },
         snapshotStats: snapshot,
@@ -411,6 +435,8 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
     },
   };
 }
+
+let nativeMetricAttempt = 0;
 
 /** Compatibility canvas for callers using the exported singleton measureBlock. */
 let canvasContext: CanvasRenderingContext2D | null = null;

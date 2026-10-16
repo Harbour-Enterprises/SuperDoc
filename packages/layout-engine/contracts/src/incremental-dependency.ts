@@ -8,6 +8,7 @@
 export type PageCheckpointDependencyClass =
   | 'multiple-sections'
   | 'furniture-page-tokens'
+  | 'body-page-number-tokens'
   | 'non-balanceable-multi-column-sections'
   | 'body-anchored-objects'
   | 'non-flowing-page-relative-body-anchors'
@@ -21,6 +22,7 @@ export type PageCheckpointDependencyClass =
 export const PAGE_CHECKPOINT_DEPENDENCY_CLASSES = Object.freeze([
   'multiple-sections',
   'furniture-page-tokens',
+  'body-page-number-tokens',
   'non-balanceable-multi-column-sections',
   'body-anchored-objects',
   'non-flowing-page-relative-body-anchors',

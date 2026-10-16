@@ -13,8 +13,8 @@ const PAGE_ORIGIN = 'http://localhost:3333';
 const DOCX = path.resolve(__dirname, 'fixtures/sample-review.docx');
 const ENGINE_MANIFEST = path.resolve(__dirname, '../../node_modules/@superdoc/docx-engine/dist-cdn/manifest.json');
 
-// Engine-relative paths of the three worker files, keyed like `workerUrls`.
-async function engineWorkerPaths(): Promise<Record<'document' | 'collaboration' | 'reviewIndex', string>> {
+// Both mounted modes use the same composed dispatcher at a same-origin URL.
+async function engineWorkerPaths(): Promise<Record<'document' | 'collaboration', string>> {
   const manifest = JSON.parse(await readFile(ENGINE_MANIFEST, 'utf8')) as { files: { path: string }[] };
   const find = (prefix: string): string => {
     const file = manifest.files.find((entry) => entry.path.startsWith(`assets/${prefix}-`));
@@ -22,9 +22,8 @@ async function engineWorkerPaths(): Promise<Record<'document' | 'collaboration' 
     return `/node_modules/@superdoc/docx-engine/dist-cdn/${file.path}`;
   };
   return {
-    document: find('browser-worker-entry'),
-    collaboration: find('collaboration-worker-entry'),
-    reviewIndex: find('review-index-worker-entry'),
+    document: find('dom-worker-entry'),
+    collaboration: find('dom-worker-entry'),
   };
 }
 
@@ -43,6 +42,7 @@ interface StartupEvidence {
   pageErrors: string[];
   workerErrors: string[];
   workerEntryRequests: string[];
+  createdWorkers: string[];
   consoleLog: string[];
   failedRequests: string[];
 }
@@ -52,10 +52,12 @@ async function openCrossOriginPage(page: Page): Promise<StartupEvidence> {
     pageErrors: [],
     workerErrors: [],
     workerEntryRequests: [],
+    createdWorkers: [],
     consoleLog: [],
     failedRequests: [],
   };
   page.on('pageerror', (error) => evidence.pageErrors.push(error.message));
+  page.on('worker', (worker) => evidence.createdWorkers.push(worker.url()));
   page
     .context()
     .on('requestfailed', (request) =>
@@ -301,8 +303,9 @@ test('split-origin collaboration workers sync two clients and a rejoined client'
     await expect.poll(() => text(peer), { timeout: 30_000 }).toContain(edit);
 
     for (const evidence of [creatorEvidence, peerEvidence, rejoinEvidence]) {
-      expect(evidence.workerEntryRequests.some((url) => url.includes('collaboration-worker-entry-'))).toBe(true);
-      expect(evidence.workerEntryRequests.some((url) => url.includes('review-index-worker-entry-'))).toBe(true);
+      expect(evidence.workerEntryRequests.some((url) => url.includes('dom-worker-entry-'))).toBe(true);
+      expect(evidence.workerEntryRequests.some((url) => url.includes('review-index-worker-entry-'))).toBe(false);
+      expect(evidence.createdWorkers).toHaveLength(1);
       expect(evidence.workerEntryRequests.every((url) => url.startsWith(PAGE_ORIGIN))).toBe(true);
       expect(evidence.pageErrors).toEqual([]);
       expect(evidence.workerErrors).toEqual([]);

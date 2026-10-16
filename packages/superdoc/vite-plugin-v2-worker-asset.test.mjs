@@ -5,6 +5,7 @@
 // package-relative specifiers, so a fresh installed consumer resolves them
 // from dist/assets instead of a project-root /assets.
 import { describe, expect, it } from 'vite-plus/test';
+import { runInNewContext } from 'node:vm';
 import { preserveV2WorkerAssetPlugin } from './vite-plugin-v2-worker-asset.mjs';
 
 const KERNEL_WORKER_SOURCE = 'const realm="v2-worker-realm";postMessage({type:"hello"});';
@@ -19,6 +20,9 @@ function dataUrl(source) {
 function runGenerateBundle(bundle, outputOptions = { format: 'es' }) {
   const plugin = preserveV2WorkerAssetPlugin();
   const emitted = [];
+  plugin.renderStart(outputOptions);
+  const intro = plugin.intro();
+  for (const output of Object.values(bundle)) if (output.type === 'chunk' && intro) output.code = `${intro}\n${output.code}`;
   plugin.generateBundle.call(
     {
       emitFile(file) {
@@ -82,7 +86,7 @@ describe('preserveV2WorkerAssetPlugin — isolated worker assets', () => {
       code: 'const w = new Worker(new URL("/assets/review-index-worker-entry-abcd1234.js", import.meta.url), { type: "module" });',
     };
     runGenerateBundle({ chunk }, { format: 'iife' });
-    expect(chunk.code).toContain('new URL("./assets/review-index-worker-entry-abcd1234.js", document.baseURI)');
+    expect(chunk.code).toContain('new URL("./assets/review-index-worker-entry-abcd1234.js", __superdocV2AssetBase)');
     expect(chunk.code).not.toContain('__SUPERDOC_V2_BROWSER_WORKER_URL_PRELUDE__');
   });
 
@@ -110,7 +114,7 @@ describe('preserveV2WorkerAssetPlugin — isolated worker assets', () => {
     runGenerateBundle({ chunk }, { format: 'iife' });
 
     expect(chunk.code).toContain(
-      'new Worker(new URL("./assets/collaboration-worker-entry-abcd1234.js", document.baseURI), { type: "module" })',
+      'new Worker(new URL("./assets/collaboration-worker-entry-abcd1234.js", __superdocV2AssetBase), { type: "module" })',
     );
     expect(chunk.code).not.toContain('import.meta');
     expect(chunk.code).not.toContain('__SUPERDOC_V2_BROWSER_WORKER_URL_PRELUDE__');
@@ -195,4 +199,42 @@ describe('preserveV2WorkerAssetPlugin — isolated worker assets', () => {
     expect(emitted).toHaveLength(0);
     expect(chunk.code).toBe(originalCode);
   });
+});
+
+describe('composed DOM worker assets', () => {
+  it('identifies the composed worker before the collaboration marker', () => {
+    const source = COLLABORATION_WORKER_SOURCE + 'const mountError="Worker DOM is already mounted";';
+    const chunk = { type: 'chunk', fileName: 'superdoc.es.js', code: `const url="${dataUrl(source)}";` };
+    const emitted = runGenerateBundle({ chunk });
+    expect(emitted[0].fileName).toMatch(/^assets\/dom-worker-entry-/);
+    expect(chunk.code).toContain('./assets/dom-worker-entry-');
+  });
+
+  it('resolves delayed IIFE workers from the script location under a different document base', () => {
+    const chunk = { type: 'chunk', fileName: 'superdoc.iife.js', code:
+      'globalThis.openWorker=()=>new Worker(new URL("/assets/dom-worker-entry-abcd1234.js", {}.url), {type:"module",name:"superdoc-v2-edit"});' };
+    runGenerateBundle({ chunk }, { format: 'iife' });
+    const realm = {};
+    const document = { currentScript: { src: 'https://cdn.example/sdk/v2/superdoc.iife.js' }, baseURI: 'https://app.example/editor/' };
+    const workers = [];
+    Function('globalThis', 'document', 'Worker', 'URL', chunk.code)(realm, document,
+      function(url) { workers.push(url.href); }, URL);
+    document.currentScript = null;
+    document.baseURI = 'https://app.example/changed/';
+    realm.openWorker();
+    expect(workers).toEqual(['https://cdn.example/sdk/v2/assets/dom-worker-entry-abcd1234.js']);
+  });
+});
+
+it('preserves the named IIFE export and its captured script base', () => {
+  const chunk = { type:'chunk', fileName:'superdoc.iife.js', code:
+    'var SuperDoc = (()=>{class SuperDoc {static open(){return new Worker(new URL("/assets/dom-worker-entry-abcd1234.js", {}.url), {type:"module"});}}return SuperDoc;})();' };
+  runGenerateBundle({chunk},{format:'iife'});
+  const workers=[];
+  const realm={document:{currentScript:{src:'https://cdn.example/sdk/superdoc.iife.js'},baseURI:'https://app.example/'},URL,Worker:function(url){workers.push(url.href);}};
+  runInNewContext(chunk.code,realm);
+  expect(typeof realm.SuperDoc).toBe('function');
+  realm.document.currentScript=null;
+  realm.SuperDoc.open();
+  expect(workers).toEqual(['https://cdn.example/sdk/assets/dom-worker-entry-abcd1234.js']);
 });

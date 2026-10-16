@@ -12,6 +12,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import vue from '@vitejs/plugin-vue'
 import layeredCssPlugin from './vite-plugin-layered-css.mjs';
 import { preserveV2WorkerAssetPlugin } from './vite-plugin-v2-worker-asset.mjs';
+import { devNodeGlobalsPlugin } from './vite-plugin-node-polyfills-dev.mjs';
 
 import { version } from './package.json';
 import sourceResolve from '../../vite.sourceResolve';
@@ -20,7 +21,6 @@ import {
   resolveEnginePackageRoot,
   resolveSuperDocV2RuntimeMode,
 } from './vite.v2-runtime-mode.mjs';
-import { resolveDisableTrackedChangeLoading } from './vite.tracked-change-loading.mjs';
 
 // SD-2864: derive the dts include list from the canonical type-surface
 // config so vite, ensure-types, audit, and the tsconfig parity check
@@ -146,14 +146,6 @@ export default defineConfig(({ mode, command }) => {
     ? path.resolve(process.env.SUPERDOC_PUBLIC_NPM_OUT_DIR)
     : path.resolve(__dirname, 'dist');
   const engineDistRoot = v2Resolution.engineInput?.surfaceRoots?.dist ?? path.resolve(V2_ROOT, 'dist');
-  const disableTrackedChangeLoading = resolveDisableTrackedChangeLoading({
-    command,
-    runtimeMode: v2Resolution.mode,
-    env: process.env,
-  });
-  if (disableTrackedChangeLoading) {
-    console.warn('[superdoc] tracked-change loading: disabled for this dev server');
-  }
   const skipDts = internalEsOnly || process.env.SUPERDOC_SKIP_DTS === '1';
   const stringDecoderEntry = stdlibRequire.resolve('string_decoder/lib/string_decoder.js');
   const plugins = [
@@ -264,9 +256,14 @@ export default defineConfig(({ mode, command }) => {
     define: {
       __APP_VERSION__: JSON.stringify(version),
       __IS_DEBUG__: true,
-      __SUPERDOC_DISABLE_TRACKED_CHANGE_LOADING__: JSON.stringify(disableTrackedChangeLoading),
     },
     plugins,
+    // Source-mode worker builds are separate Vite builds and do not inherit
+    // the main bundle's browser globals. The DOM worker now reaches the same
+    // browser-compatible dependencies as the main render pipeline.
+    worker: {
+      plugins: () => v2Resolution.mode === 'source' ? [devNodeGlobalsPlugin({ apply: 'build' })] : [],
+    },
     test: {
       name: projectLabel,
       globals: true,

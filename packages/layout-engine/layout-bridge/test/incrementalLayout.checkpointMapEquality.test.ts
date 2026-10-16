@@ -159,6 +159,7 @@ describe('incrementalLayout spliced checkpoint sidecar equality (plan 15)', () =
       expect(missing, `editIdx=${editIdx} missing`).toEqual([]);
       expect(wrong, `editIdx=${editIdx} wrong`).toEqual([]);
       expect(spliced.size, `editIdx=${editIdx} size`).toBe(coldMap.size);
+      expect(inc.layout.pageStartColumns, `editIdx=${editIdx} page columns`).toEqual(cold.layout.pageStartColumns);
     }
   });
 
@@ -198,5 +199,6 @@ describe('incrementalLayout spliced checkpoint sidecar equality (plan 15)', () =
     expect(new Map(current.layout.blockResumeCheckpoints ?? [])).toEqual(
       new Map(cold.layout.blockResumeCheckpoints ?? []),
     );
+    expect(current.layout.pageStartColumns).toEqual(cold.layout.pageStartColumns);
   });
 });

@@ -9140,6 +9140,109 @@ describe('public ui — Plan B command catalog (row 747)', () => {
     expect(bold).toHaveBeenCalledWith({ target: SELECTION_TARGET, value: false }, { offsetSpace: 'selection' });
   });
 
+  it.each(['editing', 'suggesting'])(
+    'refreshes a cached caret before formatting a pending native range in %s mode',
+    async (mode) => {
+      const bold = vi.fn(() => ({ success: true }));
+      const setPendingInlineFormat = vi.fn();
+      let pending = 0;
+      let selection: Record<string, unknown> = {
+        ...SELECTION_INFO,
+        empty: true,
+        target: { kind: 'text', segments: [{ blockId: 'P1', range: { start: 0, end: 0 } }] },
+        selectionTarget: { ...SELECTION_TARGET, end: SELECTION_TARGET.start },
+        text: '',
+      };
+      const current = vi.fn(() => selection);
+      const superdoc = makeCatalogSuperdoc({
+        mode,
+        host: {
+          getForegroundMutationState: () => ({ active: pending, pending }),
+          getPendingInlineFormat: () => null,
+          getHandles: () => ({ editing: { selection: { subscribe: () => () => {} } } }),
+          setPendingInlineFormat,
+        },
+        doc: {
+          selection: { current },
+          format: { bold },
+          comments: { list: () => ({ items: [] }) },
+          trackChanges: { list: () => ({ items: [] }) },
+        },
+      });
+      const ui = createSuperDocUI({ superdoc });
+      try {
+        await vi.waitFor(() =>
+          expect(ui.commands.get('bold').getState()).toMatchObject({ enabled: true, active: false }),
+        );
+        const reads = current.mock.calls.length;
+        selection = SELECTION_INFO;
+        pending = 1;
+        await ui.commands.get('bold').executeAsync();
+        expect(current.mock.calls.length).toBeGreaterThan(reads);
+        expect(bold).toHaveBeenCalledWith(
+          { target: SELECTION_TARGET, value: true },
+          { offsetSpace: 'selection', ...(mode === 'suggesting' ? { changeMode: 'tracked' } : {}) },
+        );
+        expect(setPendingInlineFormat).not.toHaveBeenCalled();
+      } finally {
+        ui.destroy();
+      }
+    },
+  );
+
+  it('reads applied selection presentation for font and mark state without requesting projection graphs', () => {
+    const readProjection = vi.fn(() => {
+      throw new Error('projection graphs remain worker-owned');
+    });
+    const host = {
+      readAppliedSelectionPresentation: () => ({
+        selection: SELECTION_INFO,
+        inlineStyle: { bold: true, fontFamily: 'Calibri', fontSize: '12' },
+      }),
+      readMountedProjectionBlocks: readProjection,
+    };
+    const superdoc = makeCatalogSuperdoc({
+      doc: {
+        selection: { current: () => SELECTION_INFO },
+        comments: { list: () => ({ items: [] }) },
+        trackChanges: { list: () => ({ items: [] }) },
+        format: { bold: vi.fn(), fontFamily: vi.fn(), fontSize: vi.fn() },
+      },
+      host,
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.commands.get('bold').getState().active).toBe(true);
+    expect(ui.commands.get('font-family').getState().value).toBe('Calibri');
+    expect(ui.commands.get('font-size').getState().value).toBe('12');
+    expect(readProjection).not.toHaveBeenCalled();
+    ui.destroy();
+  });
+
+  it('does not seed current toolbar marks from a different applied selection', () => {
+    const host = {
+      readAppliedSelectionPresentation: () => ({
+        selection: {
+          ...SELECTION_INFO,
+          selectionTarget: { ...SELECTION_TARGET, start: { kind: 'text', blockId: 'P1', offset: 1 } },
+          target: { kind: 'text', segments: [{ blockId: 'P1', range: { start: 1, end: 5 } }] },
+        },
+        inlineStyle: { bold: true },
+      }),
+    };
+    const superdoc = makeCatalogSuperdoc({
+      doc: {
+        selection: { current: () => SELECTION_INFO },
+        comments: { list: () => ({ items: [] }) },
+        trackChanges: { list: () => ({ items: [] }) },
+        format: { bold: vi.fn() },
+      },
+      host,
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.commands.get('bold').getState().active).toBe(false);
+    ui.destroy();
+  });
+
   // --- Style-cascade-aware toggle-mark active state (SD-3860) --------------
 
   it('shows the bold button active for style-inherited bold with no direct rPr (SD-3860)', async () => {
@@ -10229,6 +10332,29 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
       expect(readMountedProjectionBlocksByIds).toHaveBeenCalledWith(['P1', 'P2']);
     },
   );
+
+  it('reads applied paragraph alignment without requesting mounted projection blocks', () => {
+    const readProjection = vi.fn(() => {
+      throw new Error('projection graphs remain worker-owned');
+    });
+    const superdoc = makeBlockSuperdoc({
+      getNodeById: vi.fn(() => ({ node: { kind: 'paragraph', paragraph: { props: {} } } })),
+      format: { paragraph: { setAlignment: vi.fn() } },
+    });
+    const selection = superdoc.activeEditor.doc.selection.current();
+    superdoc.activeEditor.host = {
+      readAppliedSelectionPresentation: () => ({
+        selection,
+        inlineStyle: {},
+        paragraphAlignments: { P1: 'center', P2: 'center' },
+      }),
+      readMountedProjectionBlocksByIds: readProjection,
+    };
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.commands.get('text-align').getState().value).toBe('center');
+    expect(readProjection).not.toHaveBeenCalled();
+    ui.destroy();
+  });
 
   it('text-align immediately reports a mounted alignment while paragraph node reads are pending', () => {
     const getNodeById = vi.fn(() => new Promise(() => {}));

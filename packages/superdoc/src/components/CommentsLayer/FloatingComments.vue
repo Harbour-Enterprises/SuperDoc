@@ -86,7 +86,24 @@ const { activeZoom } = storeToRefs(superdocStore);
 // Instances are scoped to the document this FloatingComments instance renders so
 // a multi-document session (e.g. a PDF plus a DOCX) does not paint another
 // document's comment cards into the wrong lane.
+const committedPresentation = computed(
+  () => commentsStore.committedReviewPresentations?.[String(props.currentDocument?.id)] ?? null,
+);
+const committedInstances = computed(() => {
+  const presentation = committedPresentation.value;
+  if (!presentation) return null;
+  const rows = new Map(
+    commentsStore.commentsList
+      .filter((row) => String(row.fileId) === String(props.currentDocument?.id))
+      .map((row) => [String(row.commentId), row]),
+  );
+  return presentation.instances.flatMap((instance) => {
+    const comment = instance.rowId === 'pending' ? pendingComment.value : rows.get(instance.rowId);
+    return comment ? [{ ...instance, comment, rowVersion: presentation.rowVersions[instance.rowId] ?? 0 }] : [];
+  });
+});
 const floatingCommentInstances = computed(() => {
+  if (committedInstances.value) return committedInstances.value.filter((instance) => instance.rowId !== 'pending');
   const currentFloatingCommentInstances = commentsStore.getFloatingCommentInstances;
   if (!Array.isArray(currentFloatingCommentInstances)) return [];
   const documentId = props.currentDocument?.id;
@@ -259,7 +276,9 @@ const getPendingAnchorTop = () => {
 const shouldRenderDialog = (position) => {
   return shouldMountFloatingCommentDialog({
     id: position?.id,
-    visibleIds: visibleIds.value,
+    visibleIds: committedPresentation.value
+      ? new Set(allPositions.value.filter((item) => item.instanceRef?.mount).map((item) => item.id))
+      : visibleIds.value,
     activeCommentInstanceId: activeCommentInstanceId.value,
     comment: position?.commentRef,
   });
@@ -320,6 +339,20 @@ const instantAlignmentInstanceKey = computed(() => {
 // Pre-compute all positions with collision avoidance
 const allPositions = computed(() => {
   viewportRevision.value;
+  if (committedInstances.value)
+    return committedInstances.value.map((instance) => ({
+      id: instance.id,
+      threadId: instance.threadId,
+      pageIndex: instance.pageIndex,
+      anchorTop: instance.anchorTop,
+      anchorBottom: instance.anchorBottom,
+      top: instance.top,
+      height: instance.height,
+      hasAnchorGeometry: instance.positionEntry != null || instance.rowId === 'pending',
+      isOffscreenReviewCard: instance.isOffscreenReviewCard,
+      commentRef: instance.comment,
+      instanceRef: instance,
+    }));
   const positionedInstances = geometryBearingInstances.value;
   const hasPending = pendingComment.value && pendingComment.value.fileId === props.currentDocument.id;
   if (!positionedInstances.length && !floatingCommentInstances.value.length && !hasPending) return [];
@@ -437,6 +470,56 @@ const allPositions = computed(() => {
   resolveCollisions(collisionPositions, activeIndex, 15);
   return positions;
 });
+
+watch(
+  () => {
+    const presentation = committedPresentation.value,
+      container = floatingCommentsContainer.value;
+    if (!presentation || !container) return null;
+    viewportRevision.value;
+    const viewport = getFloatingViewportRange();
+    if (!viewport) return null;
+    const rail = container.getBoundingClientRect(),
+      stage = props.parent?.getBoundingClientRect?.();
+    const instances = committedInstances.value ?? [];
+    return {
+      activeThreadId: activeComment.value == null ? null : String(activeComment.value),
+      activeInstanceId: activeCommentInstanceId.value == null ? null : String(activeCommentInstanceId.value),
+      editingRowId: editingCommentId.value == null ? null : String(editingCommentId.value),
+      retainedThreadIds: [],
+      visibility: {
+        comments:
+          commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
+          commentsStore.viewingVisibility?.commentsVisible === true,
+        trackedChanges:
+          commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
+          commentsStore.viewingVisibility?.trackChangesVisible === true,
+      },
+      viewport: {
+        ...viewport,
+        width: Math.max(1, rail.width),
+        scale: 1,
+        stageOffsetX: (stage?.left ?? rail.left) - rail.left,
+        stageOffsetY: (stage?.top ?? rail.top) - rail.top,
+      },
+      pending:
+        pendingComment.value?.fileId === props.currentDocument.id && getPendingAnchorTop() != null
+          ? { anchorTop: getPendingAnchorTop(), height: measuredHeights.value.pending || ESTIMATED_HEIGHT }
+          : null,
+      measurements: instances
+        .filter((instance) => measuredHeights.value[instance.id] > 0)
+        .map((instance) => ({
+          instanceId: instance.id,
+          rowVersion: instance.rowVersion,
+          height: measuredHeights.value[instance.id],
+        })),
+    };
+  },
+  (input) => {
+    if (input) committedPresentation.value?.updateContext(input);
+  },
+  { immediate: true },
+);
 
 // The page surface, not review-card stacking, owns document height. Cards are
 // absolutely positioned and clipped/materialized by the bounded render window.
@@ -1178,7 +1261,7 @@ onBeforeUnmount(() => {
     <div
       class="sidebar-container"
       :style="{
-        transform: `translateY(${sidebarOffsetY}px)`,
+        transform: `translateY(${committedPresentation ? 0 : sidebarOffsetY}px)`,
         transition: disableInstantLayoutTransitions ? 'none' : undefined,
       }"
     >

@@ -59,10 +59,10 @@ export function nodePolyfillsWithoutEsbuildBanner(options = {}) {
   };
 }
 
-export function devNodeGlobalsPlugin() {
+export function devNodeGlobalsPlugin({ apply = 'serve' } = {}) {
   return {
     name: 'superdoc-dev-node-globals',
-    apply: 'serve',
+    apply,
     enforce: 'post',
     resolveId(id) {
       if (id === VIRTUAL_ID) return RESOLVED_VIRTUAL_ID;

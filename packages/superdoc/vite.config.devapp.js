@@ -70,7 +70,6 @@ export default defineConfig(({ command }) => {
     define: {
       __APP_VERSION__: JSON.stringify(version),
       __IS_DEBUG__: true,
-      __SUPERDOC_DISABLE_TRACKED_CHANGE_LOADING__: JSON.stringify(false),
     },
     plugins: [
       {

@@ -33,6 +33,55 @@ const legalParagraph = (): FlowBlock => ({
 });
 
 describe('surface-owned DOM measurement runtime', () => {
+  it('settles browser font metrics before returning a measured block', async () => {
+    let exact = false,
+      pending = false;
+    const context = {
+      font: '',
+      measureText(text: string) {
+        if (!exact) pending = true;
+        return {
+          width: text.length * (exact ? 9 : 2),
+          actualBoundingBoxAscent: 12,
+          actualBoundingBoxDescent: 3,
+        } as TextMetrics;
+      },
+    } as unknown as CanvasRenderingContext2D;
+    const flushTextMetrics = vi.fn(() =>
+      pending
+        ? Promise.resolve().then(() => {
+            exact = true;
+            pending = false;
+          })
+        : null,
+    );
+    const runtime = createDomMeasurementRuntime({ createCanvasContext: () => context, flushTextMetrics });
+    const block: FlowBlock = {
+      kind: 'paragraph',
+      id: 'browser-font',
+      attrs: {},
+      runs: [{ text: 'alpha beta gamma delta', fontFamily: 'Browser Font', fontSize: 16 }],
+    };
+    const pass = runtime.beginPass(fontContext('browser-font'));
+    try {
+      const actual = await pass.measureBlock(block, 90);
+      pass.finish();
+      // The oracle must use exact metrics even when the candidate never settles.
+      exact = true;
+      const oracle = createDomMeasurementRuntime({ createCanvasContext: () => context });
+      const oraclePass = oracle.beginPass(fontContext('oracle'));
+      try {
+        expect(actual).toEqual(await oraclePass.measureBlock(block, 90));
+      } finally {
+        oraclePass.finish();
+        oracle.dispose();
+      }
+    } finally {
+      pass.finish();
+      runtime.dispose();
+    }
+  });
+
   it('freezes and memoizes the active surface digit capability', () => {
     const context = {
       font: '',

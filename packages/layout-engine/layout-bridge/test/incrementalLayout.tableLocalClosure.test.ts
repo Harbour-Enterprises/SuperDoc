@@ -26,6 +26,7 @@ import type {
 import { clearIncrementalModuleState, incrementalLayout, type IncrementalLayoutReuseOptions } from '../src/index.js';
 import { computeDirtyRegions } from '../src/diff.js';
 import { __test_only_lazyPageTransformStats } from '../src/incrementalLayout.js';
+import { readTableLayoutResumeCheckpoints } from '@superdoc/layout-engine';
 
 const OPTIONS = {
   pageSize: { w: 240, h: 140 },
@@ -240,9 +241,202 @@ function buildTableReuse(
   } as IncrementalLayoutReuseOptions;
 }
 
+it.each([
+  { kind: 'paragraph', prefixCount: 19, fault: null },
+  { kind: 'table', prefixCount: 18, fault: null },
+  { kind: 'table', prefixCount: 20, fault: null },
+  { kind: 'paragraph', prefixCount: 20, fault: null },
+  { kind: 'paragraph', prefixCount: 19, fault: 'missing' },
+  { kind: 'table', prefixCount: 18, fault: 'missing' },
+  { kind: 'table', prefixCount: 20, fault: 'wrong-page' },
+  { kind: 'paragraph', prefixCount: 20, fault: 'missing-page' },
+] as const)(
+  'retains exact single-column state or falls back for $kind checkpoint ($prefixCount prefix, $fault)',
+  async ({ kind, prefixCount, fault }) => {
+    clearIncrementalModuleState();
+    const section = (id: string): FlowBlock => ({
+      kind: 'sectionBreak',
+      id,
+      type: 'continuous',
+      columns: { count: 1, gap: 48, widths: [220], gaps: [48], equalWidth: false },
+    });
+    const prefix = Array.from({ length: prefixCount }, (_, index) =>
+      paragraph(`prefix-${index}`, `before-${index}`, 1 + index * 20),
+    );
+    const owner =
+      kind === 'table' ? table(['1234567', 'rowtwo', 'rowthree'], 1000) : paragraph('dirty-paragraph', '1234567', 1000);
+    const previousBlocks: FlowBlock[] = [
+      section('section-start'),
+      ...prefix,
+      owner,
+      section('section-continuous'),
+      paragraph('tail-one', 'tail-one', 1200),
+      paragraph('tail-two', 'tail-two', 1220),
+    ];
+    const measure = (block: FlowBlock): Promise<Measure> =>
+      block.kind === 'sectionBreak' ? Promise.resolve({ kind: 'sectionBreak' }) : measureFixedHeightTableBlock(block);
+    const previous = await incrementalLayout([], null, previousBlocks, OPTIONS, measure);
+    previous.layout.layoutEpoch = 1;
+    expect(previous.layout.pages.at(-1)!.columnRegions).toBeUndefined();
+    const nextBlocks = previousBlocks.map((block) => (block.kind === 'sectionBreak' ? block : structuredClone(block)));
+    const dirtyIndex = prefixCount + 1;
+    const dirty = nextBlocks[dirtyIndex]!;
+    if (dirty.kind === 'table') {
+      const edited = dirty.rows[0]!.cells[0]!.blocks![0] as ParagraphBlock;
+      edited.runs[0]!.text += 'x';
+      edited.runs[0]!.pmEnd! += 1;
+      for (const row of dirty.rows.slice(1))
+        for (const cell of row.cells)
+          for (const child of cell.blocks ?? [])
+            if (child.kind === 'paragraph')
+              for (const run of child.runs) {
+                run.pmStart! += 1;
+                run.pmEnd! += 1;
+              }
+    } else if (dirty.kind === 'paragraph') {
+      dirty.runs[0]!.text += 'x';
+      dirty.runs[0]!.pmEnd! += 1;
+    }
+    for (const block of nextBlocks.slice(dirtyIndex + 1))
+      if (block.kind === 'paragraph')
+        for (const run of block.runs) {
+          run.pmStart! += 1;
+          run.pmEnd! += 1;
+        }
+    const reuse = buildTableReuse(previousBlocks, nextBlocks, previous.layout, 1008, true);
+    reuse.dirtyBlockIds = [owner.id];
+    reuse.provedDirtyRegion = {
+      firstDirtyIndex: dirtyIndex,
+      lastStableIndex: dirtyIndex - 1,
+      insertedBlockIds: [],
+      deletedBlockIds: [],
+      changedBlockIds: [owner.id],
+      stableBlockIds: new Set(previousBlocks.filter((block) => block.id !== owner.id).map((block) => block.id)),
+    };
+    expect(reuse.dirtyBlockIds).toEqual([owner.id]);
+    const checkpoints =
+      kind === 'paragraph'
+        ? [previous.layout.blockResumeCheckpoints!.get(owner.id)!]
+        : [...readTableLayoutResumeCheckpoints(previous.layout)!.get(owner.id)!];
+    expect(checkpoints.every((checkpoint) => checkpoint.activeColumns?.gap === 48)).toBe(true);
+    const sourceColumns = previousBlocks[0]!.kind === 'sectionBreak' ? previousBlocks[0]!.columns! : null;
+    for (const checkpoint of checkpoints) {
+      expect(checkpoint.activeColumns).toEqual(sourceColumns);
+      expect(checkpoint.activeColumns).not.toBe(sourceColumns);
+      expect(checkpoint.activeColumns!.widths).not.toBe(sourceColumns!.widths);
+      expect(checkpoint.activeColumns!.gaps).not.toBe(sourceColumns!.gaps);
+    }
+    const ownerPage = blockPageIndex(previous.layout).get(owner.id)!.firstPage;
+    expect(previous.layout.pageStartColumns!.get(ownerPage)).toEqual(sourceColumns);
+    if (fault === 'missing') {
+      for (const checkpoint of checkpoints) delete checkpoint.activeColumns;
+    } else if (fault === 'wrong-page') {
+      for (const checkpoint of checkpoints) checkpoint.pageIndex -= 1;
+      const pageColumns = new Map(previous.layout.pageStartColumns);
+      pageColumns.set(ownerPage - 1, pageColumns.get(ownerPage)!);
+      pageColumns.delete(ownerPage);
+      previous.layout.pageStartColumns = pageColumns;
+    } else if (fault === 'missing-page') {
+      previous.layout.pageStartColumns = undefined;
+    }
+    const warm = await incrementalLayout(
+      previousBlocks,
+      previous.layout,
+      nextBlocks,
+      OPTIONS,
+      measure,
+      undefined,
+      previous.measures,
+      undefined,
+      undefined,
+      reuse,
+    );
+    const cold = await incrementalLayout([], null, nextBlocks, OPTIONS, measure);
+    if (fault) {
+      expect(warm.layoutReuse).toMatchObject({
+        mode: 'full',
+        reason: 'm4-layout-reuse-disabled-checkpoint-column-state-unproved',
+      });
+    } else {
+      expect(warm.layoutReuse, JSON.stringify(warm.layoutReuse)).toMatchObject({
+        checkpointPageIndex: expect.any(Number),
+      });
+      expect(warm.layout.blockResumeCheckpoints!.get('prefix-0')!.activeColumns).toEqual(sourceColumns);
+      const currentCheckpoints =
+        kind === 'paragraph'
+          ? [warm.layout.blockResumeCheckpoints!.get(owner.id)!]
+          : [...readTableLayoutResumeCheckpoints(warm.layout)!.get(owner.id)!];
+      expect(currentCheckpoints.every((checkpoint) => checkpoint.activeColumns?.gap === 48)).toBe(true);
+      expect([...warm.layout.pageStartColumns!]).toEqual([...cold.layout.pageStartColumns!]);
+    }
+    expect(warm.layout.pages.at(-1)!.columnRegions).toEqual(cold.layout.pages.at(-1)!.columnRegions);
+    expect(json(warm.layout.pages)).toEqual(json(cold.layout.pages));
+  },
+);
+
 function json(value: unknown): unknown {
   return JSON.parse(JSON.stringify(value));
 }
+
+it('falls back when a clean page start skips an already applied continuous column region', async () => {
+  clearIncrementalModuleState();
+  const prefix = Array.from({ length: 20 }, (_, index) =>
+    paragraph(`prefix-${index}`, `before-${index}`, 1 + index * 20),
+  );
+  const owner = paragraph('dirty-paragraph', '1234567', 1000);
+  const previousBlocks: FlowBlock[] = [
+    ...prefix,
+    { kind: 'pageBreak', id: 'open-page' },
+    { kind: 'sectionBreak', id: 'changed-columns', type: 'continuous', columns: { count: 1, gap: 48 } },
+    owner,
+    paragraph('tail', 'tail', 1200),
+  ];
+  const measure = (block: FlowBlock): Promise<Measure> =>
+    block.kind === 'pageBreak' || block.kind === 'sectionBreak'
+      ? Promise.resolve({ kind: block.kind })
+      : measureFixedHeightTableBlock(block);
+  const previous = await incrementalLayout([], null, previousBlocks, OPTIONS, measure);
+  previous.layout.layoutEpoch = 1;
+  const ownerPageIndex = blockPageIndex(previous.layout).get(owner.id)!.firstPage;
+  expect(previous.layout.pages[ownerPageIndex]!.columnRegions).toHaveLength(2);
+  expect(previous.layout.pageStartColumns!.get(ownerPageIndex)).toEqual({ count: 1, gap: 0 });
+  expect(previous.layout.blockResumeCheckpoints!.get(owner.id)!.activeColumns).toEqual({ count: 1, gap: 48 });
+  const nextBlocks = previousBlocks.map((block) =>
+    block === owner
+      ? paragraph(owner.id, '1234567x', 1000)
+      : block.id === 'tail'
+        ? paragraph('tail', 'tail', 1201)
+        : block,
+  );
+  const reuse = buildTableReuse(previousBlocks, nextBlocks, previous.layout, 1008, true);
+  reuse.dirtyBlockIds = [owner.id];
+  reuse.provedDirtyRegion = {
+    firstDirtyIndex: 22,
+    lastStableIndex: 21,
+    insertedBlockIds: [],
+    deletedBlockIds: [],
+    changedBlockIds: [owner.id],
+    stableBlockIds: new Set(previousBlocks.filter((block) => block !== owner).map((block) => block.id)),
+  };
+  const warm = await incrementalLayout(
+    previousBlocks,
+    previous.layout,
+    nextBlocks,
+    OPTIONS,
+    measure,
+    undefined,
+    previous.measures,
+    undefined,
+    undefined,
+    reuse,
+  );
+  const cold = await incrementalLayout([], null, nextBlocks, OPTIONS, measure);
+  expect(json(warm.layout.pages)).toEqual(json(cold.layout.pages));
+  expect(warm.layoutReuse).toMatchObject({
+    mode: 'full',
+    reason: 'm4-layout-reuse-disabled-clean-checkpoint-column-regions-unproved',
+  });
+});
 
 /** Append one character to a cell paragraph, shifting later pm positions. */
 function applyCellEdit(blocks: FlowBlock[], rowIndex: number): { next: FlowBlock[]; editPmEnd: number } {

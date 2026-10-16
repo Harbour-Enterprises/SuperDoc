@@ -125,6 +125,84 @@ describe('FloatingComments sidebar continuity', () => {
     return wrapper;
   };
 
+  it('uses the current document row when another document has the same Word comment ID', async () => {
+    commentsStore.committedReviewPresentations = {
+      'doc-1': {
+        rowVersions: { 0: 1 },
+        threads: {},
+        groupOrder: { open: ['0'], resolved: [] },
+        updateContext: vi.fn(),
+        instances: [
+          {
+            id: 'own-instance',
+            rowId: '0',
+            threadId: '0',
+            version: 1,
+            pageIndex: 0,
+            positionKey: '0',
+            positionEntry: makePosition('0', 10),
+            anchorTop: 10,
+            anchorBottom: 30,
+            top: 100,
+            height: 100,
+            isPrimary: true,
+            mount: true,
+          },
+        ],
+      },
+    };
+    const wrapper = await mountSidebar([{ id: '0', top: 10 }], { tracked: false });
+    try {
+      commentsStore.commentsList.push(useComment({ commentId: '0', fileId: 'doc-2', commentText: 'other document' }));
+      await settleLayout();
+      expect(wrapper.findComponent({ name: 'CommentDialog' }).props('comment').fileId).toBe('doc-1');
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  it('renders source-owned instance placement and returns only measured browser context', async () => {
+    const updateContext = vi.fn();
+    commentsStore.committedReviewPresentations = {
+      'doc-1': {
+        rowVersions: { 'tc-a': 3 },
+        threads: {},
+        groupOrder: { open: ['tc-a'], resolved: [] },
+        updateContext,
+        instances: [
+          {
+            id: 'worker-instance',
+            rowId: 'tc-a',
+            threadId: 'tc-a',
+            version: 1,
+            pageIndex: 0,
+            positionKey: 'tc-a',
+            positionEntry: makePosition('tc-a', 10),
+            anchorTop: 10,
+            anchorBottom: 30,
+            top: 333,
+            height: 222,
+            isPrimary: true,
+            isOffscreenReviewCard: false,
+            mount: true,
+          },
+        ],
+      },
+    };
+    const wrapper = await mountSidebar([{ id: 'tc-a', top: 10 }]);
+    try {
+      expect(wrapper.find('[data-comment-id="worker-instance"]').attributes('style')).toContain('top: 333px');
+      expect(updateContext).toHaveBeenCalledWith(
+        expect.objectContaining({ viewport: expect.objectContaining({ width: 300 }), activeThreadId: null }),
+      );
+      commentsStore.editorCommentPositions = { 'tc-a': makePosition('tc-a', 900) };
+      await settleLayout();
+      expect(wrapper.find('[data-comment-id="worker-instance"]').attributes('style')).toContain('top: 333px');
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   const activateAt = async (id, targetClientY) => {
     commentsStore.requestInstantSidebarAlignment(targetClientY, id, id);
     commentsStore.activeFloatingCommentInstanceId = id;

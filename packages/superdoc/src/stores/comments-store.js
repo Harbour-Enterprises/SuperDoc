@@ -311,6 +311,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
   // Floating comments
   const floatingCommentsOffset = ref(0);
+  const committedReviewPresentations = shallowRef({});
   const sortedConversations = ref([]);
   const visibleConversations = ref([]);
   const skipSelectionUpdate = ref(false);
@@ -1764,7 +1765,30 @@ export const useCommentsStore = defineStore('comments', () => {
     };
   };
 
-  const buildGroupedComments = (sorter) => buildGroupedCommentsFrom(commentsList.value, sorter);
+  const buildGroupedComments = (sorter) => {
+    const presentations = committedReviewPresentations.value;
+    if (!Object.keys(presentations).length) return buildGroupedCommentsFrom(commentsList.value, sorter);
+    const rows = new Map(
+      commentsList.value.map((row) => [JSON.stringify([String(row.fileId), String(row.commentId)]), row]),
+    );
+    const legacy = buildGroupedCommentsFrom(
+      commentsList.value.filter((row) => !presentations[String(row.fileId)]),
+      sorter,
+    );
+    for (const [documentId, presentation] of Object.entries(presentations)) {
+      legacy.parentComments.push(
+        ...presentation.groupOrder.open
+          .map((id) => rows.get(JSON.stringify([documentId, String(id)])))
+          .filter((row) => row && isThreadVisible(row)),
+      );
+      legacy.resolvedComments.push(
+        ...presentation.groupOrder.resolved
+          .map((id) => rows.get(JSON.stringify([documentId, String(id)])))
+          .filter((row) => row && isThreadVisible(row)),
+      );
+    }
+    return legacy;
+  };
 
   /** @type {import('vue').ComputedRef<{parentComments: Array, resolvedComments: Array}>} Comments grouped and sorted by creation time */
   const getGroupedComments = computed(() => buildGroupedComments(compareByCreatedTime));
@@ -2946,6 +2970,7 @@ export const useCommentsStore = defineStore('comments', () => {
     documentId,
     commentItems,
     trackedChangeItems,
+    preparedReview,
     requestedCommentIds,
     requestedTrackedChangeIds,
     unresolvedCommentIds,
@@ -2977,6 +3002,14 @@ export const useCommentsStore = defineStore('comments', () => {
             return { ok: false, reason: 'document-mismatch' };
           }
         }
+        if (
+          preparedReview &&
+          (!Array.isArray(preparedReview.comments) ||
+            !Array.isArray(preparedReview.trackedChanges) ||
+            preparedReview.comments.length > 4096 ||
+            preparedReview.trackedChanges.length > 4096)
+        )
+          return { ok: false, reason: 'items-invalid' };
         if (!Array.isArray(commentItems) || !Array.isArray(trackedChangeItems)) {
           return { ok: false, reason: 'items-invalid' };
         }
@@ -2991,7 +3024,7 @@ export const useCommentsStore = defineStore('comments', () => {
         }
 
         let effectiveCommentItems = commentItems;
-        if (typeof commentsAdapter.seedReviewCatalog === 'function') {
+        if (!preparedReview && typeof commentsAdapter.seedReviewCatalog === 'function') {
           const seeded = commentsAdapter.seedReviewCatalog(commentItems, {
             sourceCoverageRevision,
             evaluatedRevision,
@@ -3012,18 +3045,27 @@ export const useCommentsStore = defineStore('comments', () => {
         let preparedInputs;
         let preparedParams;
         try {
-          preparedInputs = effectiveCommentItems
-            .filter((item) => !isSyntheticTrackedChangeCommentLaneItem(item))
-            .map((item) =>
-              commentsAdapter.mapV2CommentToUseCommentInput(item, {
+          preparedInputs = preparedReview
+            ? preparedReview.comments.map((input) => ({
+                ...input,
                 fileId: normalizedDocumentId,
                 fileType,
-              }),
-            )
-            .filter(Boolean);
-          preparedParams = trackedChangeItems
-            .map((item) => trackedChangesAdapter.mapV2TrackedChangeToCommentParams(item))
-            .filter(Boolean);
+                selection: { ...input.selection, documentId: normalizedDocumentId },
+              }))
+            : effectiveCommentItems
+                .filter((item) => !isSyntheticTrackedChangeCommentLaneItem(item))
+                .map((item) =>
+                  commentsAdapter.mapV2CommentToUseCommentInput(item, {
+                    fileId: normalizedDocumentId,
+                    fileType,
+                  }),
+                )
+                .filter(Boolean);
+          preparedParams = preparedReview
+            ? preparedReview.trackedChanges.map((params) => ({ ...params, documentId: normalizedDocumentId }))
+            : trackedChangeItems
+                .map((item) => trackedChangesAdapter.mapV2TrackedChangeToCommentParams(item))
+                .filter(Boolean);
         } catch (error) {
           return { ok: false, reason: 'mapper-failed', detail: error?.message ?? String(error) };
         }
@@ -3051,6 +3093,11 @@ export const useCommentsStore = defineStore('comments', () => {
             .filter(Boolean),
         );
         patch(() => {
+          if (preparedReview?.presentation)
+            committedReviewPresentations.value = {
+              ...committedReviewPresentations.value,
+              [normalizedDocumentId]: preparedReview.presentation,
+            };
           reconcileTrackedChangesFromV2({
             superdoc,
             adapter: trackedChangesAdapter,
@@ -3602,6 +3649,11 @@ export const useCommentsStore = defineStore('comments', () => {
   function removeCommentsForDocument(documentId) {
     const activeDocumentId = documentId != null ? String(documentId) : null;
     if (!activeDocumentId) return;
+    if (committedReviewPresentations.value[activeDocumentId]) {
+      const next = { ...committedReviewPresentations.value };
+      delete next[activeDocumentId];
+      committedReviewPresentations.value = next;
+    }
     cancelImportedTrackedChangeBootstrap(activeDocumentId);
 
     const removedComments = commentsList.value.filter((comment) =>
@@ -5782,6 +5834,7 @@ export const useCommentsStore = defineStore('comments', () => {
 
     // Floating comments
     floatingCommentsOffset,
+    committedReviewPresentations,
     sortedConversations,
     visibleConversations,
     skipSelectionUpdate,

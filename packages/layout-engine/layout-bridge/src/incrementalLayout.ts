@@ -1330,13 +1330,14 @@ export type IncrementalPaginationProof = IncrementalPaginationProofBase &
          * mid-section checkpoint cannot seed. False is admissible only
          * together with `balanceableSectionsBoundaryBlockId`, the last
          * page-bearing block at or before the final balanceable section end.
-         * The bridge requires a document-start replay, includes that section
-         * finalizer, and refuses convergence until a stable page strictly
-         * after the retained boundary. Anything else takes the canonical full
-         * layout.
+         * The bridge replays from document start unless the separately proved
+         * unchanged balanced prefix precedes a complete single-column seed
+         * strictly after the boundary. Convergence remains fenced after it.
          */
         multiColumnSectionsProvedNonBalanceable: boolean;
         balanceableSectionsBoundaryBlockId?: string;
+        /** The unchanged balanced sections precede every dirty owner; the bridge re-verifies the seeded checkpoint. */
+        balanceableSectionsRetainedPrefix?: true;
         /** Last vertically aligned section page; validated before reuse. */
         vAlignSectionsBoundaryBlockId?: string;
         /** Replay page zero through the aligned boundary before convergence. */
@@ -2808,8 +2809,9 @@ async function incrementalLayoutComplete(
     !retainedProofExcludesLiveCrossReferences(suppliedMeasureReuseProof?.dependencyProof) &&
     flowBlocksContainCrossReferenceMetadata(nextBlocks);
   if (hasLiveBodyCrossReferences) {
-    nextBlocks = cloneLiveCrossReferenceFieldBlocks(nextBlocks);
-    resolveLiveCrossReferences(nextBlocks);
+    const resolved = cloneLiveCrossReferenceFieldBlocks(nextBlocks);
+    // Compare against the current source, whose imported field caches may be stale.
+    if (resolveLiveCrossReferences(resolved)) nextBlocks = resolved;
   }
 
   // Live field results are derived layout inputs. The host's exact packet can
@@ -3174,6 +3176,9 @@ async function incrementalLayoutComplete(
       if (measures.length !== nextBlocks.length) {
         throw new Error('incrementalLayout: structural measure splice cardinality mismatch');
       }
+      // Pagination must retain the same tracked vector that is published to
+      // the next pass. Wrapping only at return loses its scan/owner identity.
+      measures = trackMeasureArray(measures);
     } else {
       measures = createMeasureOverlay(previousMeasures!, overrides);
     }
@@ -7777,6 +7782,31 @@ function tableAffectedPageRange(
   return Number.isFinite(firstPage) && lastPage >= firstPage ? { firstPage, lastPage } : null;
 }
 
+function createSplicedPageStartColumns(input: {
+  previous: ReadonlyMap<number, ColumnLayout> | undefined;
+  local: ReadonlyMap<number, ColumnLayout> | undefined;
+  checkpointPageIndex: number;
+  relaidPageCount: number;
+  sourceTailStartPageIndex: number;
+  pageIndexDelta: number;
+  partialCheckpoint: boolean;
+}): ReadonlyMap<number, ColumnLayout> | undefined {
+  if (!input.previous && !input.local) return undefined;
+  const columns = new Map<number, ColumnLayout>();
+  for (const [pageIndex, value] of input.previous ?? []) {
+    if (pageIndex < input.checkpointPageIndex || (input.partialCheckpoint && pageIndex === input.checkpointPageIndex)) {
+      columns.set(pageIndex, value);
+    } else if (pageIndex >= input.sourceTailStartPageIndex) {
+      columns.set(pageIndex + input.pageIndexDelta, value);
+    }
+  }
+  for (const [pageIndex, value] of input.local ?? []) {
+    if (pageIndex < 0 || pageIndex >= input.relaidPageCount || (input.partialCheckpoint && pageIndex === 0)) continue;
+    columns.set(pageIndex + input.checkpointPageIndex, value);
+  }
+  return columns;
+}
+
 function createSplicedTableResumeCheckpointMap(input: {
   previous: ReadonlyMap<string, readonly TableLayoutResumeCheckpoint[]> | null;
   local: ReadonlyMap<string, readonly TableLayoutResumeCheckpoint[]> | null;
@@ -8162,6 +8192,17 @@ async function layoutWithOptionalReuse(input: {
               });
               if (tables) writeTableLayoutResumeCheckpoints(layout, tables);
             }
+            if (input.reuse?.previousLayout && (prefixCount > 0 || options.startContext?.initialPageState)) {
+              layout.pageStartColumns = createSplicedPageStartColumns({
+                previous: input.reuse.previousLayout.pageStartColumns,
+                local: batch.layout.pageStartColumns,
+                checkpointPageIndex: prefixCount,
+                relaidPageCount: batch.layout.pages.length,
+                sourceTailStartPageIndex: input.reuse.previousLayout.pages.length,
+                pageIndexDelta: 0,
+                partialCheckpoint: options.startContext?.initialPageState != null,
+              });
+            }
             await input.progressive.publishBody({
               layout,
               pageRange: batch.pageRange,
@@ -8369,10 +8410,9 @@ async function layoutWithOptionalReuse(input: {
                 : 'preparation-declined';
   }
   if (preparedSource) input.timing.preparationReuses = (input.timing.preparationReuses ?? 0) + 1;
-  // A balanceable section can be reused only from document start. The named
-  // block owns the last retained page touched by any such section; candidate
-  // selection below is fenced strictly after it, so pagination must encounter
-  // and finalize every balanced section before it can adopt retained pages.
+  // The named block owns the last retained balanced page. A changed balanced
+  // section is replayed and finalized from document start; an unchanged
+  // balanced prefix may precede a separately validated post-boundary seed.
   const scopedBalanceableBoundaryBlockId =
     dependencyProof != null &&
     dependencyProof.profile !== 'single-section-local-text' &&
@@ -8381,10 +8421,14 @@ async function layoutWithOptionalReuse(input: {
       : null;
   let scopedBalanceableBoundaryPages: { firstPage: number; lastPage: number } | null = null;
   let scopedBalanceableBoundaryCurrentBlockIndex: number | null = null;
+  const balanceableSectionsRetainedPrefix =
+    dependencyProof?.profile === 'page-checkpoint-local-text' &&
+    dependencyProof.balanceableSectionsRetainedPrefix === true &&
+    reuse.requireDocumentStartCheckpoint !== true;
   if (scopedBalanceableBoundaryBlockId != null) {
     const boundaryPages = reuse.previousBlockPageIndex?.get(scopedBalanceableBoundaryBlockId) ?? null;
     if (
-      reuse.requireDocumentStartCheckpoint !== true ||
+      (reuse.requireDocumentStartCheckpoint !== true && !balanceableSectionsRetainedPrefix) ||
       !boundaryPages ||
       !Number.isInteger(boundaryPages.firstPage) ||
       !Number.isInteger(boundaryPages.lastPage) ||
@@ -8403,6 +8447,14 @@ async function layoutWithOptionalReuse(input: {
       input.blocks[currentBoundaryBlockIndex!]?.id !== currentBoundaryBlockId
     ) {
       return full('m5-layout-reuse-disabled-balanceable-boundary-current-block-unresolved');
+    }
+    if (
+      balanceableSectionsRetainedPrefix &&
+      (!input.stableBlockIds.has(currentBoundaryBlockId) ||
+        (reuse.blockIdRewrites?.currentToPrevious.get(currentBoundaryBlockId) ?? currentBoundaryBlockId) !==
+          scopedBalanceableBoundaryBlockId)
+    ) {
+      return full('m5-layout-reuse-disabled-balanceable-prefix-boundary-not-stable');
     }
     scopedBalanceableBoundaryPages = boundaryPages;
     scopedBalanceableBoundaryCurrentBlockIndex = currentBoundaryBlockIndex!;
@@ -8973,8 +9025,52 @@ async function layoutWithOptionalReuse(input: {
   if (!checkpointPage || (!partialPageCheckpoint && !pageStartsAtCleanBlockBoundary(checkpointPage))) {
     return full('m5-layout-reuse-unavailable-clean-checkpoint-not-found');
   }
+  if (!partialPageCheckpoint && (checkpointPage.columnRegions?.length ?? 0) > 0) {
+    // A fragmentless section carrier can have changed columns before the
+    // first painted owner. A clean source suffix would skip that transition.
+    return full('m4-layout-reuse-disabled-clean-checkpoint-column-regions-unproved');
+  }
   if (dirtyPageRanges.some((pageRange) => pageRange.firstPage < checkpointPageIndex)) {
     return full('m4-layout-reuse-disabled-dirty-block-in-retained-prefix');
+  }
+  if (balanceableSectionsRetainedPrefix) {
+    if (
+      !scopedBalanceableBoundaryPages ||
+      scopedBalanceableBoundaryCurrentBlockIndex == null ||
+      checkpointPageIndex <= scopedBalanceableBoundaryPages.lastPage ||
+      dirtyPageRanges.some((range) => range.firstPage <= scopedBalanceableBoundaryPages!.lastPage)
+    ) {
+      return full('m5-layout-reuse-disabled-balanceable-prefix-checkpoint-crosses-boundary');
+    }
+    const boundaryPage = previousPages[scopedBalanceableBoundaryPages.lastPage];
+    const columns = checkpointPage.columns;
+    // Ordinary pages omit a size override. In that case the canonical
+    // retained default must agree with the current invocation's default.
+    const pageSize = checkpointPage.size ?? previousLayout.pageSize;
+    const defaultSizeUnchanged =
+      checkpointPage.size != null ||
+      (previousLayout.pageSize.w === input.options.pageSize?.w &&
+        previousLayout.pageSize.h === input.options.pageSize?.h);
+    if (
+      !Number.isInteger(checkpointPage.sectionIndex) ||
+      !Number.isInteger(boundaryPage?.sectionIndex) ||
+      checkpointPage.sectionIndex! <= boundaryPage.sectionIndex! ||
+      (columns != null && (columns.count !== 1 || (columns.widths?.length ?? 1) !== 1)) ||
+      !defaultSizeUnchanged ||
+      !Number.isFinite(pageSize?.w) ||
+      pageSize!.w <= 0 ||
+      !Number.isFinite(pageSize?.h) ||
+      pageSize!.h <= 0
+    ) {
+      return full('m5-layout-reuse-disabled-balanceable-prefix-active-section-unproved');
+    }
+    if (
+      dirtyBlockIds.some(
+        (id) => (reuse.currentBlockIndexById?.get(id) ?? -1) <= scopedBalanceableBoundaryCurrentBlockIndex!,
+      )
+    ) {
+      return full('m5-layout-reuse-disabled-balanceable-prefix-current-dirty-crosses-boundary');
+    }
   }
   const suffixStartBlockId =
     partialPageCheckpoint?.previousBlockId ??
@@ -9007,6 +9103,9 @@ async function layoutWithOptionalReuse(input: {
     return full(
       `m4-layout-reuse-disabled-current-block-index-stale:suffix=${currentSuffixStartBlockId}@${suffixStartBlockIndex} saw=${String(input.blocks[suffixStartBlockIndex]?.id)} blocks=${input.blocks.length}`,
     );
+  }
+  if (balanceableSectionsRetainedPrefix && suffixStartBlockIndex <= scopedBalanceableBoundaryCurrentBlockIndex!) {
+    return full('m5-layout-reuse-disabled-balanceable-prefix-current-checkpoint-crosses-boundary');
   }
   if (
     partialPageCheckpoint &&
@@ -9086,15 +9185,11 @@ async function layoutWithOptionalReuse(input: {
     // Ordinary non-terminal probes keep both input and pagination bounded.
     // The scoped-anchor exception may extend only the preflight input; the
     // page boundary below still bounds the pages it can emit.
-    const preparedSuffix =
-      preparedSource && input.progressive
-        ? createPreparedPaginationSuffix(
-            input.blocks,
-            input.measures,
-            suffixStartBlockIndex,
-            localEndBlockIndexExclusive,
-          )
-        : null;
+    // Source ownership also applies to steady renders: their bounded preflight
+    // must not eagerly materialize the same clean coordinate payloads again.
+    const preparedSuffix = preparedSource
+      ? createPreparedPaginationSuffix(input.blocks, input.measures, suffixStartBlockIndex, localEndBlockIndexExclusive)
+      : null;
     const suffixBlocks =
       preparedSuffix?.blocks ?? input.blocks.slice(suffixStartBlockIndex, localEndBlockIndexExclusive);
     const suffixMeasures =
@@ -9152,15 +9247,21 @@ async function layoutWithOptionalReuse(input: {
       ) {
         return full('m4-layout-reuse-disabled-checkpoint-margin-state-incomplete');
       }
+      const checkpointColumns = readResumeCheckpointColumns({
+        layout: previousLayout,
+        blockId: suffixStartBlockId,
+        pageIndex: checkpointPageIndex,
+        partialCheckpoint: partialPageCheckpoint?.checkpoint ?? null,
+      });
+      if (!checkpointColumns) {
+        return full('m4-layout-reuse-disabled-checkpoint-column-state-unproved');
+      }
       activeGeometrySeed = {
         activeSectionBaseMargins: { top: checkpointBaseTop, bottom: checkpointBaseBottom },
         activeSectionSideMargins: { left: checkpointLeft, right: checkpointRight },
         activeHeaderFooterDistances: { header: checkpointHeaderDistance, footer: checkpointFooterDistance },
         ...(checkpointPage.size ? { activePageSize: checkpointPage.size } : {}),
-        // Absent page columns mean the boundary was single-column; seed that
-        // explicitly rather than falling back to a caller-level multi-column
-        // default the checkpoint page never used.
-        activeColumns: checkpointPage.columns ?? { count: 1, gap: 0 },
+        activeColumns: checkpointColumns,
       };
     }
     let convergencePageIndex: number | null = null;
@@ -9539,6 +9640,15 @@ async function layoutWithOptionalReuse(input: {
         pages,
         columns: previousLayout.columns ?? suffixLayout.columns,
         ...(blockResumeCheckpoints ? { blockResumeCheckpoints } : {}),
+        pageStartColumns: createSplicedPageStartColumns({
+          previous: previousLayout.pageStartColumns,
+          local: suffixLayout.pageStartColumns,
+          checkpointPageIndex,
+          relaidPageCount,
+          sourceTailStartPageIndex: sourceConvergencePageIndex,
+          pageIndexDelta,
+          partialCheckpoint: partialPageCheckpoint != null,
+        }),
       };
       const tableResumeCheckpoints = createSplicedTableResumeCheckpointMap({
         previous: readTableLayoutResumeCheckpoints(previousLayout),
@@ -9642,6 +9752,15 @@ async function layoutWithOptionalReuse(input: {
         pages,
         columns: previousLayout.columns ?? suffixLayout.columns,
         ...(blockResumeCheckpoints ? { blockResumeCheckpoints } : {}),
+        pageStartColumns: createSplicedPageStartColumns({
+          previous: previousLayout.pageStartColumns,
+          local: suffixLayout.pageStartColumns,
+          checkpointPageIndex,
+          relaidPageCount: suffixLayout.pages.length,
+          sourceTailStartPageIndex: previousPages.length,
+          pageIndexDelta: 0,
+          partialCheckpoint: partialPageCheckpoint != null,
+        }),
       };
       const tableResumeCheckpoints = createSplicedTableResumeCheckpointMap({
         previous: readTableLayoutResumeCheckpoints(previousLayout),
@@ -10257,6 +10376,196 @@ interface LazyPageSequence {
 }
 
 const lazyPageSequences = new WeakMap<Page[], LazyPageSequence>();
+const guardedPageSources = new WeakMap<
+  Page[],
+  {
+    sourcePages: Page[];
+    cache: ReadonlyMap<number, Page>;
+    adoption: IncrementalLayoutTailAdoption;
+  }
+>();
+
+export type LayoutPageGeometry = Pick<Page, 'size' | 'margins' | 'sectionIndex'>;
+
+function pageSegmentRequiresClone(segment: LazyPageSegment): boolean {
+  return (
+    segment.positionDelta !== 0 ||
+    segment.positionTransforms != null ||
+    segment.pageIndexDelta !== 0 ||
+    (segment.sectionPageNumberDeltas?.size ?? 0) > 0 ||
+    segment.displayPageNumberTransforms != null ||
+    hasBlockIdRewrites(segment.blockIdRewrites) ||
+    segment.coupledFootnoteCertificateOwner != null ||
+    segment.ensureEmptyFootnoteMetadata
+  );
+}
+
+/** Internal live identity readback; every fragment remains visible to ownership validation. */
+export function* readLayoutPageFragmentBlockIds(pages: Page[], pageIndex: number): IterableIterator<string> {
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || pageIndex >= pages.length)
+    throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+  const transforms: { rewrites: ReadonlyMap<string, string> | null; pageIndexDelta: number }[] = [];
+  let sourcePages = pages;
+  let sourceIndex = pageIndex;
+  let page: Page | undefined;
+  while (!page) {
+    const guard = guardedPageSources.get(sourcePages);
+    if (guard) {
+      page = guard.cache.get(sourceIndex);
+      if (!page) {
+        if (sourceIndex >= guard.adoption.startPageIndex && sourceIndex < guard.adoption.endPageIndexExclusive)
+          transforms.push({
+            rewrites: guard.adoption.blockIdRewrites ?? null,
+            pageIndexDelta: guard.adoption.pageIndexDelta,
+          });
+        sourcePages = guard.sourcePages;
+      }
+      continue;
+    }
+    const sequence = lazyPageSequences.get(sourcePages);
+    if (!sequence) {
+      page = sourcePages[sourceIndex];
+      break;
+    }
+    page = sequence.cache.get(sourceIndex);
+    if (page) break;
+    let low = 0,
+      high = sequence.segments.length - 1;
+    let segment: LazyPageSegment | undefined;
+    while (low <= high) {
+      const middle = (low + high) >>> 1;
+      const candidate = sequence.segments[middle]!;
+      if (sourceIndex < candidate.targetStart) high = middle - 1;
+      else if (sourceIndex >= candidate.targetStart + candidate.length) low = middle + 1;
+      else {
+        segment = candidate;
+        break;
+      }
+    }
+    if (!segment) throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+    if (pageSegmentRequiresClone(segment))
+      transforms.push({ rewrites: segment.blockIdRewrites, pageIndexDelta: segment.pageIndexDelta });
+    sourceIndex = segment.sourceStart + sourceIndex - segment.targetStart;
+    sourcePages = segment.sourcePages;
+  }
+  if (!page) throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+  const descriptor = Object.getOwnPropertyDescriptor(page, 'fragments');
+  const fragments = descriptor && 'value' in descriptor ? (descriptor.value as Fragment[]) : undefined;
+  const prototype = Object.getPrototypeOf(page);
+  let simple =
+    (prototype === Object.prototype || prototype === null) &&
+    descriptor?.enumerable === true &&
+    Array.isArray(fragments) &&
+    Object.getPrototypeOf(fragments) === Array.prototype &&
+    !Object.getOwnPropertyDescriptor(fragments, Symbol.iterator) &&
+    fragments[Symbol.iterator] === Array.prototype[Symbol.iterator];
+  if (simple)
+    for (let index = 0; index < fragments!.length; index++) {
+      const fragment = Object.getOwnPropertyDescriptor(fragments, String(index));
+      const value = fragment && 'value' in fragment ? fragment.value : null;
+      const id = value && Object.getOwnPropertyDescriptor(value, 'blockId');
+      if (
+        !fragment ||
+        !('value' in fragment) ||
+        !value ||
+        (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) ||
+        !id ||
+        !('value' in id) ||
+        !id.enumerable ||
+        typeof id.value !== 'string'
+      ) {
+        simple = false;
+        break;
+      }
+    }
+  if (!simple) {
+    // Accessor/native/iterator semantics belong to ordinary canonical page
+    // materialization. Copied or mutable pages gain no cached identity proof.
+    const current = pages[pageIndex]!.fragments;
+    const length = current.length;
+    for (let index = 0; index < length; index++) if (index in current) yield current[index]!.blockId;
+    return;
+  }
+  for (const fragment of fragments!) {
+    let id = fragment.blockId;
+    for (let index = transforms.length - 1; index >= 0; index--) {
+      const transform = transforms[index]!;
+      id = rebasePageScopedFootnoteSeparatorId(transform.rewrites?.get(id) ?? id, transform.pageIndexDelta);
+    }
+    yield id;
+  }
+}
+
+/** Read canonical page boxes without materializing retained PM or fragment transforms. */
+export function readLayoutPageGeometry(pages: Page[], pageIndex: number): LayoutPageGeometry {
+  if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || pageIndex >= pages.length) {
+    throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+  }
+  let sourcePages = pages;
+  let sourceIndex = pageIndex;
+  let page: Page | undefined;
+  while (!page) {
+    const guard = guardedPageSources.get(sourcePages);
+    if (guard) {
+      page = guard.cache.get(sourceIndex);
+      if (!page) sourcePages = guard.sourcePages;
+      continue;
+    }
+    const sequence = lazyPageSequences.get(sourcePages);
+    if (!sequence) {
+      page = sourcePages[sourceIndex];
+      if (!page) throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+      break;
+    }
+    page = sequence.cache.get(sourceIndex);
+    if (page) break;
+    let low = 0;
+    let high = sequence.segments.length - 1;
+    let segment: LazyPageSegment | undefined;
+    while (low <= high) {
+      const middle = (low + high) >>> 1;
+      const candidate = sequence.segments[middle]!;
+      if (sourceIndex < candidate.targetStart) high = middle - 1;
+      else if (sourceIndex >= candidate.targetStart + candidate.length) low = middle + 1;
+      else {
+        segment = candidate;
+        break;
+      }
+    }
+    if (!segment) throw new RangeError(`Layout page index ${pageIndex} is out of range.`);
+    // Adoption transforms PM coordinates, numbering and note provenance, never these page boxes.
+    sourceIndex = segment.sourceStart + sourceIndex - segment.targetStart;
+    sourcePages = segment.sourcePages;
+  }
+  // Retained source objects stay private even when a caller mutates this readback.
+  return {
+    size: page.size ? { ...page.size } : undefined,
+    margins: page.margins ? { ...page.margins } : undefined,
+    sectionIndex: page.sectionIndex,
+  };
+}
+
+export function __test_only_pageSequenceMaterializationCount(pages: Page[]): number {
+  const seen = new Set<Page[]>();
+  const pending = [pages];
+  let count = 0;
+  while (pending.length) {
+    const current = pending.pop()!;
+    if (seen.has(current)) continue;
+    seen.add(current);
+    const guard = guardedPageSources.get(current);
+    if (guard) {
+      count += guard.cache.size;
+      pending.push(guard.sourcePages);
+    }
+    const sequence = lazyPageSequences.get(current);
+    if (sequence) {
+      count += sequence.cache.size;
+      for (const segment of sequence.segments) pending.push(segment.sourcePages);
+    }
+  }
+  return count;
+}
 
 /**
  * Compose retained prefix/local relayout/retained tail without spreading the
@@ -10345,26 +10654,18 @@ function createLazyPageSequence(segments: readonly LazyPageSegment[]): Page[] {
       else {
         const sourcePage = segment.sourcePages[segment.sourceStart + index - segment.targetStart];
         if (!sourcePage) throw new RangeError(`Layout page index ${index} is out of range.`);
-        const page =
-          segment.positionDelta !== 0 ||
-          segment.positionTransforms != null ||
-          segment.pageIndexDelta !== 0 ||
-          (segment.sectionPageNumberDeltas?.size ?? 0) > 0 ||
-          segment.displayPageNumberTransforms != null ||
-          hasBlockIdRewrites(segment.blockIdRewrites) ||
-          segment.coupledFootnoteCertificateOwner != null ||
-          segment.ensureEmptyFootnoteMetadata
-            ? materializeAdoptedLayoutPage(
-                sourcePage,
-                segment.positionTransforms,
-                segment.pageIndexDelta,
-                segment.blockIdRewrites,
-                segment.sectionPageNumberDeltas,
-                segment.displayPageNumberTransforms,
-                segment.positionDelta,
-                segment.coupledFootnoteCertificateOwner,
-              )
-            : sourcePage;
+        const page = pageSegmentRequiresClone(segment)
+          ? materializeAdoptedLayoutPage(
+              sourcePage,
+              segment.positionTransforms,
+              segment.pageIndexDelta,
+              segment.blockIdRewrites,
+              segment.sectionPageNumberDeltas,
+              segment.displayPageNumberTransforms,
+              segment.positionDelta,
+              segment.coupledFootnoteCertificateOwner,
+            )
+          : sourcePage;
         if (segment.ensureEmptyFootnoteMetadata) {
           page.footnoteReserved = 0;
           page.footnoteLedger = {
@@ -10730,6 +11031,7 @@ function guardAdoptedLayoutPages(
       return false;
     },
   }) as Page[];
+  guardedPageSources.set(pages, { sourcePages, cache: materializedPages, adoption });
   return { ...layout, pages };
 }
 
@@ -10894,8 +11196,8 @@ function validateIncrementalPaginationProof(proof: IncrementalPaginationProof): 
   };
   // Balanceable multi-column sections fail closed unless the host either
   // proved balancing inert or named the final page-bearing section end. The
-  // caller then enforces document-start replay and a post-boundary convergence
-  // fence against retained layout metadata.
+  // caller then verifies replay through that boundary or an unchanged prefix
+  // before a post-boundary seed against retained layout metadata.
   const balanceableSectionsAdmissible =
     (proof as { multiColumnSectionsProvedNonBalanceable?: boolean }).multiColumnSectionsProvedNonBalanceable === true ||
     (typeof (proof as { balanceableSectionsBoundaryBlockId?: unknown }).balanceableSectionsBoundaryBlockId ===
@@ -11509,6 +11811,36 @@ function pageStartsAtCleanBlockBoundary(page: { fragments?: Fragment[] } | undef
   const fromRow = 'fromRow' in first ? first.fromRow : 0;
   const partialRow = 'partialRow' in first ? first.partialRow : undefined;
   return (fromLine ?? 0) === 0 && (fromRow ?? 0) === 0 && partialRow == null;
+}
+
+function readResumeCheckpointColumns(input: {
+  layout: Layout;
+  blockId: string | null;
+  pageIndex: number;
+  partialCheckpoint: LayoutBlockResumeCheckpoint | null;
+}): ColumnLayout | null {
+  if (input.blockId == null) return null;
+  const checkpoint = input.partialCheckpoint;
+  if (checkpoint && (checkpoint.blockId !== input.blockId || checkpoint.pageIndex !== input.pageIndex)) return null;
+  // A paragraph can be captured before its fit decision moves its first
+  // fragment to the next page. A clean resume uses that physical page's own
+  // creation state; preflightPageIndex cannot certify an earlier snapshot.
+  const columns = checkpoint ? checkpoint.activeColumns : input.layout.pageStartColumns?.get(input.pageIndex);
+  if (
+    !columns ||
+    !Number.isInteger(columns.count) ||
+    columns.count < 1 ||
+    !Number.isFinite(columns.gap) ||
+    (columns.widths != null &&
+      (!Array.isArray(columns.widths) || !columns.widths.every((width) => Number.isFinite(width) && width > 0))) ||
+    (columns.gaps != null && (!Array.isArray(columns.gaps) || !columns.gaps.every((gap) => Number.isFinite(gap)))) ||
+    (columns.equalWidth != null && typeof columns.equalWidth !== 'boolean') ||
+    (columns.withSeparator != null && typeof columns.withSeparator !== 'boolean') ||
+    (columns.direction != null && columns.direction !== 'ltr' && columns.direction !== 'rtl')
+  ) {
+    return null;
+  }
+  return cloneColumnLayout(columns);
 }
 
 function findSafeTablePartialPageCheckpoint(input: {

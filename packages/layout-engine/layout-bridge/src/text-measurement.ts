@@ -1,3 +1,8 @@
+import {
+  createLayoutMeasurementContext,
+  getLayoutMeasurementFontGeneration,
+  type LayoutMeasurementContext,
+} from './measurement-environment.js';
 import type { FlowBlock, Line, Run, TabRun } from '@superdoc/contracts';
 import {
   interCharacterJustifyAdvanceBeforeOffset,
@@ -21,8 +26,8 @@ import { countSpaces, getJustifyAdjustment } from './line-justify-adjustment.js'
  */
 
 // Stateful canvas for text measurement
-let measurementCanvas: HTMLCanvasElement | null = null;
-let measurementCtx: CanvasRenderingContext2D | null = null;
+let measurementCtx: LayoutMeasurementContext | null = null;
+let measurementFontGeneration = -1;
 
 const TAB_CHAR_LENGTH = 1;
 const FOOTNOTE_MARKER_DATA_ATTR = 'data-sd-footnote-number';
@@ -96,29 +101,13 @@ const applyTextTransform = (
  * Get or create the measurement canvas context.
  * Lazy initialization to avoid creating canvas in non-browser environments.
  */
-function getMeasurementContext(): CanvasRenderingContext2D | null {
-  if (measurementCtx) return measurementCtx;
-
-  if (typeof document === 'undefined') {
-    // Only warn in non-test environments - Canvas fallback is expected in tests
-    if (process.env.NODE_ENV !== 'test') {
-      console.warn('[text-measurement] Canvas not available (non-browser environment)');
-    }
-    return null;
-  }
-
-  measurementCanvas = document.createElement('canvas');
-  try {
-    measurementCtx = measurementCanvas.getContext('2d');
-  } catch {
+function getMeasurementContext(): LayoutMeasurementContext | null {
+  const generation = getLayoutMeasurementFontGeneration();
+  if (generation !== measurementFontGeneration) {
     measurementCtx = null;
+    measurementFontGeneration = generation;
   }
-
-  if (!measurementCtx && process.env.NODE_ENV !== 'test') {
-    console.warn('[text-measurement] Failed to create 2D context');
-  }
-
-  return measurementCtx;
+  return (measurementCtx ??= createLayoutMeasurementContext());
 }
 
 /**
@@ -417,7 +406,7 @@ function measureCharacterXSegmentBased(
   block: FlowBlock,
   line: Line,
   charOffset: number,
-  ctx: CanvasRenderingContext2D,
+  ctx: LayoutMeasurementContext,
   fontContext: FontMeasureContext,
 ): number {
   if (block.kind !== 'paragraph' || !line.segments) return 0;
@@ -691,10 +680,10 @@ const resolveVisualOnlyRunBoundary = (
 // Scoped PER CANVAS CONTEXT: two contexts can share a font string but carry
 // different transforms/scales, so a shared map would cross-contaminate
 // widths (mis-mapping caret x -> offset, i.e. corrupting typed positions).
-const caretWidthMemoByCtx = new WeakMap<CanvasRenderingContext2D, Map<string, Map<number, number>>>();
+const caretWidthMemoByCtx = new WeakMap<LayoutMeasurementContext, Map<string, Map<number, number>>>();
 const CARET_WIDTH_MEMO_MAX_TEXTS = 512;
 
-function memoizedCaretWidth(ctx: CanvasRenderingContext2D, fontKey: string, displayText: string, upTo: number): number {
+function memoizedCaretWidth(ctx: LayoutMeasurementContext, fontKey: string, displayText: string, upTo: number): number {
   let caretWidthMemo = caretWidthMemoByCtx.get(ctx);
   if (!caretWidthMemo) {
     caretWidthMemo = new Map();

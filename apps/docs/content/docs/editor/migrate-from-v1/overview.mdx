@@ -501,14 +501,13 @@ The [preview API](/editor/collaboration/connect-two-editors#configure-your-appli
 
 #### Split-origin worker assets
 
-If your JavaScript bundle is served from a different origin than the application, copy the three v2 worker files to
-the application's origin and pass their URLs explicitly. The files ship in `@superdoc/docx-engine/dist/assets/`:
+If your JavaScript bundle is served from a different origin than the application, copy the composed document
+worker to the application's origin and pass its URL explicitly. The file ships in `@superdoc/docx-engine/dist/assets/`:
 
-| `workerUrls` key | File                                   |
-| ---------------- | -------------------------------------- |
-| `document`       | `browser-worker-entry-<hash>.js`       |
-| `collaboration`  | `collaboration-worker-entry-<hash>.js` |
-| `reviewIndex`    | `review-index-worker-entry-<hash>.js`  |
+| `workerUrls` key | File                                  |
+| ---------------- | ------------------------------------- |
+| `document`       | `dom-worker-entry-<hash>.js`          |
+| `collaboration`  | The same `dom-worker-entry-<hash>.js` |
 
 The hash changes with each engine version, so copy the files as part of your build rather than by hand.
 
@@ -518,14 +517,15 @@ new SuperDoc({
   document,
   workerUrls: {
     document: '/superdoc-workers/document.js',
-    collaboration: '/superdoc-workers/collaboration.js',
-    reviewIndex: '/superdoc-workers/review-index.js',
+    collaboration: '/superdoc-workers/document.js',
   },
 });
 ```
 
 Each URL must be same-origin with the page and serve a module worker. Omit this option when SuperDoc and the
 application share an origin; the bundled worker URLs remain the default.
+The optional `reviewIndex` key is accepted for configuration compatibility. Mounted editors process review
+in the document worker and do not load a separate review worker.
 
 ## 7. Verify one DOCX round trip
 

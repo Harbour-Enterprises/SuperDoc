@@ -720,6 +720,7 @@ const v2ReviewWindowController = resolvedEditorIntegration.createReviewWindowCon
       documentId: ctx?.documentId,
       commentItems: result?.comments?.items,
       trackedChangeItems: result?.trackedChanges?.items,
+      preparedReview: result?.preparedReview,
       requestedCommentIds: result?.comments?.requestedIds,
       requestedTrackedChangeIds: result?.trackedChanges?.requestedIds,
       unresolvedCommentIds: result?.comments?.unresolvedCommentIds,
@@ -2314,13 +2315,6 @@ const editorOptions = (doc) => {
   const useLayoutEngine = proxy.$superdoc.config.useLayoutEngine !== false;
 
   const isNewFile = doc.isNewFile;
-  // INTERNAL / TEST-ONLY (WS6): `benchmarkExecutionMode` is NOT part of the
-  // typed public `Config` — it only reaches here because `SuperDoc#init`
-  // spreads the raw config object. It exists solely for bench/dev/behavior
-  // harnesses to pin the v2 execution realm. Customer browser execution is
-  // worker-only (the named collab-inline exception is decided inside the v2
-  // shell); do not type, document, or advertise this key publicly.
-  const benchmarkExecutionMode = proxy.$superdoc.config?.benchmarkExecutionMode;
   const benchmarkTraceEnabled = proxy.$superdoc.config?.benchmarkTraceEnabled === true;
   const collaborationResolution = resolveDocumentV2Collaboration(doc);
   const v2Collaboration = collaborationResolution.state === 'valid' ? collaborationResolution.config : null;
@@ -2341,7 +2335,6 @@ const editorOptions = (doc) => {
     html: doc.html,
     markdown: doc.markdown,
     documentMode: proxy.$superdoc.config.documentMode,
-    ...(benchmarkExecutionMode ? { benchmarkExecutionMode } : {}),
     ...(benchmarkTraceEnabled ? { benchmarkTraceEnabled: true } : {}),
     allowSelectionInViewMode: proxy.$superdoc.config.allowSelectionInViewMode,
     rulers: doc.rulers,

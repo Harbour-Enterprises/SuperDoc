@@ -47,6 +47,7 @@ describe('incrementalLayout progressive execution', () => {
     expect(result.layout.pages).toHaveLength(1);
     expect(result.progressive?.status).toBe('pending');
     expect(result.layout.pages[0]).toEqual(full.layout.pages[0]);
+    expect(result.layout.pageStartColumns).toEqual(new Map([[0, full.layout.pageStartColumns!.get(0)]]));
     expect(result.progressive?.resume.nextBlockIndex).toBe(0);
     const continuation = result.progressive!.continuation;
     while (result.progressive) result = await continuation.advance();

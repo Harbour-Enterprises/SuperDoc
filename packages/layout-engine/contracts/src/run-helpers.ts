@@ -67,6 +67,7 @@ export function expandRunsForInlineNewlines(runs: Run[]): Run[] {
             pmEnd: cursor + 1,
             sdt: textRun.sdt,
             trackedChange: textRun.trackedChange,
+            trackedChanges: textRun.trackedChanges,
           });
           cursor += 1;
         }

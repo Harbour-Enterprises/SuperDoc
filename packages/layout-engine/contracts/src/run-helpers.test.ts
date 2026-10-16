@@ -63,6 +63,17 @@ describe('expandRunsForInlineNewlines', () => {
     const result = expandRunsForInlineNewlines([run]);
     expect(result[1]).toMatchObject({ kind: 'break', trackedChange });
   });
+
+  it('preserves every tracked layer on a newline inside overlapping revisions', () => {
+    const parent: TrackedChangeMeta = { id: 'parent', kind: 'insert' };
+    const child: TrackedChangeMeta = { id: 'child', kind: 'delete', overlapParentId: 'parent' };
+    const run: TextRun = { ...makeRun('one\nmore'), trackedChange: parent, trackedChanges: [parent, child] };
+    expect(expandRunsForInlineNewlines([run])[1]).toMatchObject({
+      kind: 'break',
+      trackedChange: parent,
+      trackedChanges: [parent, child],
+    });
+  });
 });
 
 describe('sliceRunsForLine', () => {

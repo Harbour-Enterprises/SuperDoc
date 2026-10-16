@@ -18,7 +18,7 @@
 //   - Plain dev/build/pack/release never auto-select source mode.
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -311,6 +311,13 @@ if (v2SourcePresent) {
     if (!aliasesTouchV2Src(r)) throw new Error('source mode did not alias into v2 src');
     if (!r.conditions.includes('source')) throw new Error('source mode must enable the source condition');
     const layoutEngineSource = path.join(LAYOUT_ENGINE_ROOT, 'layout-engine', 'src', 'index.ts');
+    const engineRoot = path.join(LAYOUT_ENGINE_ROOT, 'layout-engine');
+    const declared = JSON.parse(readFileSync(path.join(engineRoot, 'package.json'), 'utf8'));
+    const preparationSource = path.resolve(engineRoot, declared.exports['./internal-source-preparation']);
+    if (resolveThroughAliases(r, '@superdoc/layout-engine/internal-source-preparation') !== preparationSource
+      || preparationSource !== path.resolve(path.dirname(layoutEngineSource), 'source-preparation.ts')) {
+      throw new Error('host and paginator must share the declared source-preparation module and its proof registry');
+    }
     if (!aliasReplacements(r).includes(layoutEngineSource)) {
       throw new Error('source mode must alias @superdoc/layout-engine to source');
     }

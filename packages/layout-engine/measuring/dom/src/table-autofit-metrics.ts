@@ -31,6 +31,7 @@ import type { FixedLayoutResult } from './fixed-table-columns.js';
 import { getMeasuredTextWidth } from './measurementCache.js';
 import {
   ensureSurfaceMeasurementCanvas,
+  createMeasurementCanvasContext,
   getSurfaceMeasurementRuntime,
   getSurfaceMeasurementRuntimeForCanvas,
   surfaceMeasurementCheckpointIfDue,
@@ -988,13 +989,7 @@ function getCellBorderWidthPx(border: BorderSpec | undefined): number {
 function getCanvasContext(fontContext?: FontMeasureContext): CanvasRenderingContext2D {
   const runtime = getSurfaceMeasurementRuntime(fontContext);
   if (runtime) return ensureSurfaceMeasurementCanvas(runtime);
-  if (!canvasContext) {
-    const canvas = document.createElement('canvas');
-    canvasContext = canvas.getContext('2d');
-    if (!canvasContext) {
-      throw new DomMeasurementInfrastructureError('Failed to create canvas context for AutoFit cell measurement.');
-    }
-  }
+  canvasContext ??= createMeasurementCanvasContext();
 
   return canvasContext;
 }
@@ -1005,6 +1000,9 @@ function measureCachedTextWidth(
   letterSpacing: number,
   context: CanvasRenderingContext2D,
 ): number {
+  // Intrinsic table widths use the same Word kerning default as paragraph paint.
+  // A cold table canvas must not inherit Canvas2D's automatic kerning.
+  context.fontKerning = 'none';
   const runtime = getSurfaceMeasurementRuntimeForCanvas(context);
   return runtime
     ? runtime.textWidths.measure(text, font, letterSpacing, context)

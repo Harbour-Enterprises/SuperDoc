@@ -3783,6 +3783,8 @@ export type LayoutBlockResumeCheckpoint = {
   lastParagraphBorderHash?: string;
   constraintBoundaries: readonly { y: number; columns: ColumnLayout }[];
   activeConstraintIndex: number;
+  /** Exact active configuration, including single-column state omitted from Page.columns. */
+  activeColumns?: ColumnLayout;
   footnoteDemandThisPage: number;
   footnoteRefsThisPage: number;
   footnoteAnchorsThisPage: readonly {
@@ -3817,6 +3819,8 @@ export type Layout = {
   layoutEpoch?: number;
   /** Exact paragraph-boundary resume sidecar; never inferred from painted geometry. */
   blockResumeCheckpoints?: ReadonlyMap<BlockId, LayoutBlockResumeCheckpoint>;
+  /** Engine-authored column state at physical page creation, including count=1 configurations. */
+  pageStartColumns?: ReadonlyMap<number, ColumnLayout>;
 };
 
 export type WrapTextMode = 'bothSides' | 'left' | 'right' | 'largest';

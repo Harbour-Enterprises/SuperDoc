@@ -401,6 +401,17 @@ export class FontResolver {
     this.#cachedSignature = null;
   }
 
+  /** Immutable resolution owner for geometry retained with an already displayed scene. */
+  snapshot(): Pick<FontResolver, 'resolvePhysicalFamilyForFace' | 'signature'> {
+    const copy = new FontResolver(this.#activation);
+    for (const [key, value] of this.#overrides) copy.#overrides.set(key, value);
+    for (const [key, value] of this.#embedded) copy.#embedded.set(key, value);
+    return Object.freeze({
+      signature: this.signature,
+      resolvePhysicalFamilyForFace: copy.resolvePhysicalFamilyForFace.bind(copy),
+    });
+  }
+
   /** Monotonic version; bumps on every mapping change. A lightweight "did it change" signal. */
   get version(): number {
     return this.#version;

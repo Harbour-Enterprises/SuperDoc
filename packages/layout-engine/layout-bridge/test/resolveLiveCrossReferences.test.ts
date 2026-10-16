@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FlowBlock, Layout, ParagraphBlock, TextRun } from '@superdoc/contracts';
 import { buildPageStyleReferenceResolver, resolveLiveCrossReferences } from '../src/resolveLiveCrossReferences';
+import { incrementalLayout, measureCache } from '../src/incrementalLayout';
 
 const textRun = (text: string, extra: Partial<TextRun> = {}): TextRun => ({
   kind: 'text',
@@ -18,6 +19,72 @@ const paragraph = (id: string, runs: TextRun[], styleId?: string): ParagraphBloc
 });
 
 describe('resolveLiveCrossReferences', () => {
+  const referenceFixture = (cachedText: string) => [
+    paragraph('field', [
+      textRun(cachedText, {
+        crossReferenceMetadata: {
+          kind: 'ref',
+          instruction: 'REF Target',
+          target: 'Target',
+        },
+      }),
+    ]),
+    paragraph('target', [
+      textRun('', {
+        dataAttrs: { 'data-bookmark-marker': 'start', 'data-bookmark-id': '7', 'data-bookmark-name': 'Target' },
+      }),
+      textRun('Current target'),
+      textRun('', { dataAttrs: { 'data-bookmark-marker': 'end', 'data-bookmark-id': '7' } }),
+    ]),
+  ];
+  const referenceOptions = { pageSize: { w: 300, h: 400 }, margins: { top: 10, right: 10, bottom: 10, left: 10 } };
+  const referenceMeasure = async (block: FlowBlock) => {
+    if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+    return {
+      kind: 'paragraph' as const,
+      totalHeight: 12,
+      lines: [
+        {
+          fromRun: 0,
+          fromChar: 0,
+          toRun: block.runs.length - 1,
+          toChar: (block.runs.at(-1) as TextRun).text.length,
+          width: 100,
+          ascent: 10,
+          descent: 2,
+          lineHeight: 12,
+        },
+      ],
+    };
+  };
+
+  it('retains the canonical source vector when resolving live REF changes no current result text', async () => {
+    measureCache.clear();
+    const source = referenceFixture('Current target');
+    const result = await incrementalLayout([], null, source, referenceOptions, referenceMeasure);
+    expect(result.blocks, 'Unchanged live fields must preserve the source preparation owner').toBe(source);
+    expect(result.blocks).toEqual(source);
+  });
+
+  it('resolves stale current REF caches even when they agree with the previous computed plane', async () => {
+    measureCache.clear();
+    const previous = await incrementalLayout([], null, referenceFixture('stale'), referenceOptions, referenceMeasure);
+    const source = referenceFixture('stale');
+    Object.freeze(source[0]!.runs[0]);
+    const result = await incrementalLayout(
+      previous.blocks,
+      previous.layout,
+      source,
+      referenceOptions,
+      referenceMeasure,
+      undefined,
+      previous.measures,
+    );
+    expect((result.blocks[0] as ParagraphBlock).runs[0]!.text).toBe('Current target');
+    expect(result.blocks).not.toBe(source);
+    expect(source[0]!.runs[0]!.text).toBe('stale');
+  });
+
   it('re-evaluates REF content from current bookmark text and reports a deleted target truthfully', () => {
     const metadata = {
       kind: 'ref' as const,

@@ -34,7 +34,7 @@ for (const file of ['superdoc.min.js', 'superdoc.min.css']) {
 if (fs.existsSync(distRoot)) {
   for (const file of walkFiles(distRoot)) {
     const relative = path.relative(distRoot, file).split(path.sep).join('/');
-    if (/^(?:browser|collaboration)-worker-entry-/.test(path.basename(file))) {
+    if (/^(?:browser|collaboration|dom)-worker-entry-/.test(path.basename(file))) {
       failures.push(`dist-cdn/${relative} is an engine worker asset`);
     }
     if (['DOCX-ENGINE-LICENSE.md', 'NOTICE.md', 'THIRD_PARTY_NOTICES'].includes(path.basename(file))) {

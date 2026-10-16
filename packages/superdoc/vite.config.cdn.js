@@ -46,7 +46,6 @@ export default defineConfig(({ command }) => {
       __DOCX_ENGINE_VERSION__: JSON.stringify(engineVersion),
       __DOCX_ENGINE_CDN_BASE_URL__: JSON.stringify(engineCdnBaseUrl),
       __SUPERDOC_BUILD__: JSON.stringify('cdn-iife'),
-      __SUPERDOC_DISABLE_TRACKED_CHANGE_LOADING__: JSON.stringify(false),
       'process.env.NODE_ENV': JSON.stringify('production'),
     },
     plugins,

@@ -3735,6 +3735,77 @@ describe('comments-store committed review-window apply', () => {
     });
   }
 
+  it('applies source-prepared review rows with browser document identity and source grouping without remapping', () => {
+    const presentation = {
+      instances: [],
+      rowVersions: {},
+      threads: {},
+      groupOrder: { open: ['comment-1'], resolved: [] },
+      updateContext: vi.fn(),
+    };
+    const result = apply({
+      trackedChangeItems: [],
+      preparedReview: {
+        comments: [
+          {
+            commentId: 'comment-1',
+            commentText: 'Source mapped',
+            fileId: null,
+            selection: { source: 'document-editor', documentId: null },
+            resolvedTime: null,
+          },
+        ],
+        trackedChanges: [],
+        presentation,
+      },
+    });
+    expect(result).toEqual({ ok: true, commentItems: 1, trackedItems: 0 });
+    expect(commentsAdapter.mapV2CommentToUseCommentInput).not.toHaveBeenCalled();
+    expect(trackedChangesAdapter.mapV2TrackedChangeToCommentParams).not.toHaveBeenCalled();
+    expect(store.commentsList[0]).toMatchObject({
+      commentId: 'comment-1',
+      fileId: 'doc-1',
+      commentText: 'Source mapped',
+      selection: { documentId: 'doc-1' },
+    });
+    expect(store.getGroupedComments.parentComments.map((row) => row.commentId)).toEqual(['comment-1']);
+    expect(store.committedReviewPresentations['doc-1']).toBe(presentation);
+  });
+
+  it('keeps prepared rows with identical Word comment IDs scoped to each document', () => {
+    for (const documentId of ['doc-1', 'doc-2']) {
+      const scopedComments = { ...commentsAdapter, documentId },
+        scopedTracked = { ...trackedChangesAdapter, documentId };
+      store.setV2CommentsAdapter(scopedComments);
+      store.setV2TrackedChangesAdapter(scopedTracked);
+      expect(
+        apply({
+          documentId,
+          superdoc: { ...superdoc, activeEditor: { editorVersion: 2, documentId } },
+          commentsAdapter: scopedComments,
+          trackedChangesAdapter: scopedTracked,
+          trackedChangeItems: [],
+          preparedReview: {
+            comments: [{ commentId: '0', commentText: documentId, resolvedTime: null }],
+            trackedChanges: [],
+            presentation: {
+              instances: [],
+              rowVersions: {},
+              threads: {},
+              groupOrder: { open: ['0'], resolved: [] },
+              updateContext: vi.fn(),
+            },
+          },
+        }),
+      ).toMatchObject({ ok: true });
+    }
+    expect(store.getGroupedComments.parentComments.map((row) => [row.fileId, row.commentText])).toEqual([
+      ['doc-1', 'doc-1'],
+      ['doc-2', 'doc-2'],
+    ]);
+    expect(store.getCommentsByPosition.parentComments.map((row) => row.fileId)).toEqual(['doc-1', 'doc-2']);
+  });
+
   it('publishes tracked and comment rows in one Pinia patch with no intermediate family state', () => {
     const notifications = [];
     store.$subscribe(

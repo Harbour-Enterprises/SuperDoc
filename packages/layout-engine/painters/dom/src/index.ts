@@ -284,3 +284,13 @@ function buildDomPainterHandle(painter: DomPainter): DomPainterHandle {
   });
   return handle;
 }
+
+// Pure paint decisions: safe to consume in an OffscreenCanvas/document worker.
+export { resolveRunTypographyStyles, resolveRunDecorationStyles } from './runs/text-style-facts.js';
+export {
+  resolveTrackedChangeDecorationFacts,
+  getTrackedChangeLayers,
+  resolveTrackedChangesConfig,
+} from './runs/tracked-changes.js';
+export { buildLinkRenderData } from './runs/links.js';
+export { INLINE_TRACKED_CHANGE_DEFAULTS } from './styles.js';

@@ -384,6 +384,13 @@ const LINK_AND_TOC_STYLES = `
 }
 `;
 
+/** Default inline tracking paint values shared with non-DOM drawing consumers. */
+export const INLINE_TRACKED_CHANGE_DEFAULTS = {
+  insert: { border: '#1f6feb', background: '#1f6feb22', borderWidth: 1, strikeWidth: 0 },
+  delete: { border: '#cb0e47', background: '#cb0e4722', borderWidth: 1, strikeWidth: 2 },
+  format: { border: 'gold', background: 'transparent', borderWidth: 2, strikeWidth: 0 },
+} as const;
+
 const TRACK_CHANGE_STYLES = `
 .superdoc-layout .track-insert-dec.hidden,
 .superdoc-layout .track-delete-dec.hidden {
@@ -391,9 +398,9 @@ const TRACK_CHANGE_STYLES = `
 }
 
 .superdoc-layout .track-insert-dec.highlighted {
-  border-top: var(--sd-tracked-changes-insert-border-width, 1px) dashed var(--sd-tracked-changes-insert-border, #1f6feb);
-  border-bottom: var(--sd-tracked-changes-insert-border-width, 1px) dashed var(--sd-tracked-changes-insert-border, #1f6feb);
-  background-color: var(--sd-tracked-changes-insert-background, #1f6feb22);
+  border-top: var(--sd-tracked-changes-insert-border-width, 1px) dashed var(--sd-tracked-changes-insert-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.insert.border});
+  border-bottom: var(--sd-tracked-changes-insert-border-width, 1px) dashed var(--sd-tracked-changes-insert-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.insert.border});
+  background-color: var(--sd-tracked-changes-insert-background, ${INLINE_TRACKED_CHANGE_DEFAULTS.insert.background});
   color: var(--sd-tracked-changes-insert-text, currentColor);
   text-decoration-line: var(--sd-tracked-changes-insert-decoration-line, none);
   text-decoration-color: var(--sd-tracked-changes-insert-text, currentColor);
@@ -402,9 +409,9 @@ const TRACK_CHANGE_STYLES = `
 }
 
 .superdoc-layout .track-delete-dec.highlighted {
-  border-top: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, #cb0e47);
-  border-bottom: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, #cb0e47);
-  background-color: var(--sd-tracked-changes-delete-background, #cb0e4722);
+  border-top: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.border});
+  border-bottom: var(--sd-tracked-changes-delete-border-width, 1px) dashed var(--sd-tracked-changes-delete-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.border});
+  background-color: var(--sd-tracked-changes-delete-background, ${INLINE_TRACKED_CHANGE_DEFAULTS.delete.background});
   color: var(--sd-tracked-changes-delete-text, currentColor);
   text-decoration:
     line-through
@@ -414,7 +421,7 @@ const TRACK_CHANGE_STYLES = `
 }
 
 .superdoc-layout .track-format-dec.highlighted {
-  border-bottom: 2px solid var(--sd-tracked-changes-format-border, gold);
+  border-bottom: 2px solid var(--sd-tracked-changes-format-border, ${INLINE_TRACKED_CHANGE_DEFAULTS.format.border});
 }
 
 .superdoc-layout .superdoc-paragraph-property-review-marker {

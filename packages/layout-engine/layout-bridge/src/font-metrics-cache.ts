@@ -1,3 +1,9 @@
+import {
+  createLayoutMeasurementContext,
+  getLayoutMeasurementFontGeneration,
+  type LayoutMeasurementContext,
+} from './measurement-environment.js';
+
 /**
  * Font Metrics Cache
  *
@@ -106,8 +112,8 @@ const COMMON_UNICODE = [
  */
 export class FontMetricsCache {
   private cache: Map<string, FontMetrics> = new Map();
-  private canvas: HTMLCanvasElement | null = null;
-  private ctx: CanvasRenderingContext2D | null = null;
+  private ctx: LayoutMeasurementContext | null = null;
+  private fontGeneration = -1;
 
   /**
    * Creates a new FontMetricsCache instance.
@@ -117,41 +123,15 @@ export class FontMetricsCache {
     this.initializeCanvas();
   }
 
-  /**
-   * Initializes the canvas and context for font measurements.
-   *
-   * Creates an offscreen 1x1 canvas with 2D rendering context optimized for
-   * text measurement. The canvas is never attached to the DOM and is purely
-   * used for the canvas.measureText() API.
-   *
-   * Performance considerations:
-   * - Canvas is created once and reused for all measurements
-   * - Size is minimal (1x1) as we only need measureText(), not rendering
-   * - willReadFrequently hint optimizes for frequent measureText() calls
-   *
-   * Failure modes:
-   * - Not in browser environment (SSR): Sets ctx to null, cache will be disabled
-   * - Canvas creation fails: Catches error, sets ctx to null, measurements fall back to defaults
-   *
-   * Side effects:
-   * - Creates this.canvas and this.ctx properties
-   * - On failure, cache becomes read-only (getMetrics returns undefined for unmeasured fonts)
-   *
-   * @private
-   */
   private initializeCanvas(): void {
-    if (typeof document === 'undefined') {
-      // Not in browser environment
-      return;
-    }
+    this.ctx = createLayoutMeasurementContext();
+    this.fontGeneration = getLayoutMeasurementFontGeneration();
+  }
 
-    try {
-      this.canvas = document.createElement('canvas');
-      this.canvas.width = 1;
-      this.canvas.height = 1;
-      this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
-    } catch {
-      // Canvas creation failed, cache will be disabled
+  private ensureFontGeneration(): void {
+    if (this.fontGeneration !== getLayoutMeasurementFontGeneration()) {
+      this.cache.clear();
+      this.initializeCanvas();
     }
   }
 
@@ -161,6 +141,7 @@ export class FontMetricsCache {
    * @param fonts - Array of font configurations to pre-measure
    */
   warmCache(fonts: FontMetricsCacheConfig[]): void {
+    this.ensureFontGeneration();
     for (const config of fonts) {
       // Validate fontKey format (should be "family|size|weight|style")
       if (!this.isValidFontKey(config.fontKey)) {
@@ -183,6 +164,7 @@ export class FontMetricsCache {
    * @returns Font metrics if cached, undefined otherwise
    */
   getMetrics(fontKey: string): FontMetrics | undefined {
+    this.ensureFontGeneration();
     return this.cache.get(fontKey);
   }
 
@@ -195,6 +177,7 @@ export class FontMetricsCache {
    * @returns Width of the character in pixels
    */
   measureChar(fontKey: string, char: string): number {
+    this.ensureFontGeneration();
     let metrics = this.cache.get(fontKey);
 
     if (!metrics) {
@@ -355,12 +338,14 @@ export class FontMetricsCache {
    */
   clear(): void {
     this.cache.clear();
+    this.initializeCanvas();
   }
 
   /**
    * Gets the number of cached font configurations.
    */
   get size(): number {
+    this.ensureFontGeneration();
     return this.cache.size;
   }
 
@@ -371,6 +356,7 @@ export class FontMetricsCache {
    * @returns True if metrics are cached
    */
   has(fontKey: string): boolean {
+    this.ensureFontGeneration();
     return this.cache.has(fontKey);
   }
 

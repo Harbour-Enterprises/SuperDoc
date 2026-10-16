@@ -31,6 +31,8 @@ interface PresetShapeOptions {
   width?: number;
   /** Target height for dimension-sensitive shapes. */
   height?: number;
+  /** XML construction capability for runtimes without a global DOMParser. */
+  parseXml?: (xml: string) => { documentElement: Element };
 }
 /** Lists the preset names that have been pre-generated. */
 declare function listPresetNames(): string[];

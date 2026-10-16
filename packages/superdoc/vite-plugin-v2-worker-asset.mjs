@@ -2,12 +2,9 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 const WORKER_DATA_URL_RE = /(["'])data:text\/javascript(?:;charset=utf-8)?;base64,([A-Za-z0-9+/=]+)\1/g;
-// The protected engine carries three worker assets —
-// the default kernel worker (`browser-worker-entry-*`) and the shell-owned
-// collaboration worker (`collaboration-worker-entry-*`), plus the dormant
-// isolated review worker (`review-index-worker-entry-*`). All must survive
-// library re-bundling as real package-relative assets.
-const WORKER_ASSET_FILE_RE = /^assets\/(?:browser|collaboration|review-index)-worker-entry-[A-Za-z0-9_-]+\.js$/;
+// Keep every compiled worker role as a real package-relative asset when a
+// consumer re-bundles the engine, including its composed DOM renderer.
+const WORKER_ASSET_FILE_RE = /^assets\/(?:browser|collaboration|review-index|dom)-worker-entry-[A-Za-z0-9_-]+\.js$/;
 const WORKER_URL_GLOBAL = '__SUPERDOC_V2_BROWSER_WORKER_URL__';
 const WORKER_URL_PRELUDE_MARKER = '__SUPERDOC_V2_BROWSER_WORKER_URL_PRELUDE__';
 // The IIFE prelude configures the DEFAULT kernel worker URL global only; the
@@ -30,17 +27,17 @@ const OPTIONAL_STRING_COERCION = '(?:""\\s*\\+\\s*)?';
 const VITE_NESTED_WORKER_ASSET_RE = new RegExp(
   'new Worker\\(\\s*new URL\\(\\s*(?:\\/\\* @vite-ignore \\*\\/\\s*)?' +
     OPTIONAL_STRING_COERCION +
-    'new URL\\(\\s*(["\'])([^"\']*(?:browser|collaboration|review-index)-worker-entry-[^"\']+\\.js)\\1\\s*,' +
+    'new URL\\(\\s*(["\'])([^"\']*(?:browser|collaboration|review-index|dom)-worker-entry-[^"\']+\\.js)\\1\\s*,' +
     `\\s*${OPTIONAL_STRING_COERCION}(?:${IMPORT_META_URL_OR_SUBSTITUTED_RE.source})\\s*\\)\\.href\\s*,` +
     `\\s*${OPTIONAL_STRING_COERCION}(?:${IMPORT_META_URL_OR_SUBSTITUTED_RE.source})\\s*\\)\\s*,\\s*` +
     `(\\{\\s*type\\s*:\\s*(["'])module\\4(?:\\s*,\\s*name\\s*:\\s*(["'])[^"']+\\5)?\\s*\\})\\s*\\)`,
   'g',
 );
 const VITE_STATIC_WORKER_ASSET_RE =
-  /new Worker\(\s*new URL\(\s*(?:\/\* @vite-ignore \*\/\s*)?(["'])([^"']*(?:browser|collaboration|review-index)-worker-entry-[^"']+\.js)\1\s*,/g;
+  /new Worker\(\s*new URL\(\s*(?:\/\* @vite-ignore \*\/\s*)?(["'])([^"']*(?:browser|collaboration|review-index|dom)-worker-entry-[^"']+\.js)\1\s*,/g;
 const VITE_STATIC_WORKER_IMPORT_META_BASE_RE = new RegExp(
   '(new Worker\\(\\s*new URL\\(\\s*(?:\\/\\* @vite-ignore \\*\\/\\s*)?' +
-    '["\'][^"\']*(?:browser|collaboration|review-index)-worker-entry-[^"\']+\\.js["\']\\s*,\\s*)' +
+    '["\'][^"\']*(?:browser|collaboration|review-index|dom)-worker-entry-[^"\']+\\.js["\']\\s*,\\s*)' +
     `(?:${IMPORT_META_URL_OR_SUBSTITUTED_RE.source})`,
   'g',
 );
@@ -49,6 +46,7 @@ const V2_WORKER_HELLO_MARKER = 'type:"hello"';
 // Survives minification (string literal in the one-shot registration error):
 // present only in the collaboration-capable worker entry.
 const V2_COLLABORATION_WORKER_MARKER = 'one-shot per worker realm';
+const DOM_WORKER_MARKER = 'Worker DOM is already mounted';
 const REVIEW_INDEX_WORKER_MARKER = 'superdoc-review-index-worker';
 
 function decodeBase64Worker(match) {
@@ -63,6 +61,8 @@ function buildWorkerFileName(source) {
   const hash = createHash('sha256').update(source).digest('hex').slice(0, 8);
   const kind = source.includes(REVIEW_INDEX_WORKER_MARKER)
     ? 'review-index'
+    : source.includes(DOM_WORKER_MARKER)
+      ? 'dom'
     : source.includes(V2_COLLABORATION_WORKER_MARKER)
       ? 'collaboration'
       : 'browser';
@@ -115,7 +115,7 @@ function workerAssetUrlBase(format) {
   // Worker construction is browser-only. `import.meta.url` is valid only in
   // ESM; script and CommonJS outputs use the same browser-safe URL base as the
   // CDN build so every emitted file remains parseable in its declared format.
-  return format === 'es' ? 'import.meta.url' : 'document.baseURI';
+  return format === 'es' ? 'import.meta.url' : format === 'iife' ? '__superdocV2AssetBase' : 'document.baseURI';
 }
 
 function collapseNestedWorkerAssetUrls(source, chunkFileName, format) {
@@ -149,10 +149,19 @@ function normalizeStaticWorkerAssetUrls(source, chunkFileName, format) {
  */
 export function preserveV2WorkerAssetPlugin() {
   const emitted = new Map();
+  let iife = false;
 
   return {
     name: 'superdoc-preserve-v2-worker-asset',
     enforce: 'post',
+    renderStart(options) {
+      iife = options.format === 'iife';
+    },
+    intro() {
+      // Rollup places intro inside its IIFE wrapper, preserving the exported
+      // global while retaining the executing script's base for delayed opens.
+      return iife ? 'const __superdocV2AssetBase = document.currentScript?.src || document.baseURI;' : '';
+    },
     generateBundle(outputOptions, bundle) {
       for (const output of Object.values(bundle)) {
         if (output.type !== 'chunk') continue;

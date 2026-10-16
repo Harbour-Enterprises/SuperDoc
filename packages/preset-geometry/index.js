@@ -2611,9 +2611,9 @@ function h0(t, n, o) {
 function L0(t, n = {}) {
   let o = n.width ?? o0.width,
     L = n.height ?? o0.height,
-    e = U(),
+    e = n.parseXml ? null : U(),
     l = Y(t),
-    i = e.parseFromString(l, 'application/xml').documentElement,
+    i = (n.parseXml ? n.parseXml(l) : e.parseFromString(l, 'application/xml')).documentElement,
     s = [];
   for (let a of p0(i)) {
     if (a.nodeType !== 1) continue;
@@ -2654,18 +2654,18 @@ function l0(t, n) {
 function m0() {
   return Object.keys(r0);
 }
-function x0(t, n, o) {
+function x0(t, n, o, parseXml) {
   let L = X[t];
   if (!L) return null;
   let e = `<presetRoot xmlns:a="${p}">${L}</presetRoot>`,
-    [l] = L0(e, { width: n, height: o });
+    [l] = L0(e, { width: n, height: o, parseXml });
   return l ? { viewBox: l.viewBox, paths: l.paths } : null;
 }
 function i0(t) {
-  let { preset: n, styleOverrides: o, width: L, height: e } = t;
+  let { preset: n, styleOverrides: o, width: L, height: e, parseXml } = t;
   if (!n) throw new Error('createPresetShape requires a preset name.');
   if (F.has(n) && L != null && e != null && L !== e) {
-    let i = x0(n, L, e);
+    let i = x0(n, L, e, parseXml);
     if (i) return { preset: n, viewBox: i.viewBox, paths: l0(i.paths, o) };
   }
   let r = r0[n];

@@ -3859,6 +3859,20 @@ export class DomPainter {
         const paragraphHost = this.doc!.createElement('div');
         paragraphHost.style.position = 'relative';
         paragraphHost.style.flex = '0 0 auto';
+        if (paragraphTextboxId) {
+          applyLayoutIdentityDataset(
+            paragraphHost,
+            buildLayoutSourceIdentity({
+              blockId: contentBlock.id,
+              story: { kind: 'textbox', id: paragraphTextboxId },
+              kind: 'para',
+              fromLine: 0,
+              toLine: measure.lines.length,
+              sourceAnchor: contentBlock.sourceAnchor,
+            }),
+          );
+        }
+        applySourceAnchorDataset(paragraphHost, contentBlock.sourceAnchor);
         const rendered = renderParagraphContent({
           doc: this.doc!,
           frameEl: paragraphHost,
@@ -5256,6 +5270,11 @@ export class DomPainter {
 
       return getPresetShapeSvg({
         preset: block.shapeKind ?? '',
+        parseXml: (xml) => {
+          const Parser = this.doc?.defaultView?.DOMParser ?? (typeof DOMParser !== 'undefined' ? DOMParser : null);
+          if (!Parser) throw new Error('Preset geometry requires an XML construction parser');
+          return new Parser().parseFromString(xml, 'application/xml');
+        },
         styleOverrides: () => ({
           fill: fillColor,
           stroke: strokeColor,

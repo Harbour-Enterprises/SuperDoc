@@ -98,6 +98,17 @@ export function retainPaginationSourceScan(
   candidateIds: readonly string[],
 ): void {
   scans.set(blocks, { blocks, measures, indexById, candidateIds: Object.freeze([...candidateIds]), offset: 0 });
+  // The completed canonical validation knows every preparation candidate.
+  // Capture table membership once, including an empty map, so a later owned
+  // coordinate view need not open clean non-table payloads to rediscover it.
+  const tables = new Map<number, { readonly table: TableBlock; readonly reusable: boolean }>();
+  for (const id of candidateIds) {
+    const index = indexById.get(id);
+    const block = index == null ? null : blocks[index];
+    if (index != null && block?.kind === 'table')
+      tables.set(index, { table: tablePreparationSnapshot(block), reusable: true });
+  }
+  tablePreparationBySource.set(blocks, tables);
 }
 
 export function readPaginationSourceScan(
@@ -133,6 +144,8 @@ export function prepareCanonicalPaginationSource(input: {
   const previous = scans.get(input.previousBlocks);
   if (!owner) return reject('unknown-owner');
   if (!previous) return reject('previous-engine-scan-missing');
+  const previousTables = tablePreparationBySource.get(input.previousBlocks);
+  if (!previousTables) return reject('previous-preparation-membership-missing');
   if (previous.offset !== 0 || previous.measures !== input.previousMeasures)
     return reject('previous-engine-plane-mismatch');
   if (previous.isCurrent && !previous.isCurrent()) return reject('previous-source-revoked');
@@ -168,7 +181,10 @@ export function prepareCanonicalPaginationSource(input: {
   const candidateIds = new Set<string>();
   for (const oldId of previous.dependencyIds ?? previous.candidateIds) {
     const id = input.previousToCurrentBlockId?.get(oldId) ?? oldId;
-    if (input.currentIndexById.has(id)) candidateIds.add(id);
+    // A changed block can cease to be a preparation dependency, or change
+    // kind. Classify its exact replacement below instead of retaining its old
+    // membership indefinitely.
+    if (!dirty.has(id) && input.currentIndexById.has(id)) candidateIds.add(id);
   }
   for (const id of dirty) {
     const index = input.currentIndexById.get(id);
@@ -183,26 +199,22 @@ export function prepareCanonicalPaginationSource(input: {
     (left, right) => input.currentIndexById.get(left)! - input.currentIndexById.get(right)!,
   );
   const currentSource = input.blocks;
-  const previousTables = new Map(tablePreparationBySource.get(input.previousBlocks));
-  for (const id of previous.dependencyIds ?? previous.candidateIds) {
-    const oldIndex = previous.indexById.get(id);
-    if (oldIndex == null || previousTables.has(oldIndex)) continue;
-    const block = input.previousBlocks[oldIndex];
-    if (block?.kind === 'table')
-      previousTables.set(oldIndex, {
-        table: tablePreparationSnapshot(block),
-        reusable: true,
-      });
-  }
   const tablePreparation = new Map<number, { readonly table: TableBlock; readonly reusable: boolean }>();
   for (const [, { table }] of previousTables) {
     const id = input.previousToCurrentBlockId?.get(table.id) ?? table.id;
     const index = input.currentIndexById.get(id);
-    if (index != null && !dirty.has(id))
+    if (index != null && !dirty.has(id)) {
+      const anchorId = (table.attrs as { anchorParagraphId?: unknown } | undefined)?.anchorParagraphId;
+      const anchorRekeyed =
+        typeof anchorId === 'string' && (input.previousToCurrentBlockId?.get(anchorId) ?? anchorId) !== anchorId;
       tablePreparation.set(index, {
-        table: tablePreparationSnapshot(table, id, input.previousToCurrentBlockId),
+        table:
+          id === table.id && !anchorRekeyed
+            ? table
+            : tablePreparationSnapshot(table, id, input.previousToCurrentBlockId),
         reusable: true,
       });
+    }
   }
   for (const id of dirty) {
     const index = input.currentIndexById.get(id);

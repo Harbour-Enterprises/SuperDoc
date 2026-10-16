@@ -13,6 +13,7 @@ export interface SurfaceMeasurementRuntimeState {
   readonly textWidths: TextWidthMeasurementCache;
   readonly fontMetrics: FontMetricsMeasurementCache;
   canvasContext: CanvasRenderingContext2D | null;
+  readonly createCanvasContext: () => CanvasRenderingContext2D;
   fontSignature: string | null;
   execution: SurfaceMeasurementExecutionControl | null;
   activeFontContext: FontMeasureContext | null;
@@ -26,6 +27,7 @@ const runtimeByCanvasContext = new WeakMap<CanvasRenderingContext2D, SurfaceMeas
 export function createSurfaceMeasurementRuntimeState(options: {
   maxTextEntries: number;
   maxEstimatedTextBytes: number;
+  createCanvasContext?: () => CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 }): SurfaceMeasurementRuntimeState {
   return {
     textWidths: new TextWidthMeasurementCache({
@@ -34,6 +36,9 @@ export function createSurfaceMeasurementRuntimeState(options: {
     }),
     fontMetrics: new FontMetricsMeasurementCache(),
     canvasContext: null,
+    createCanvasContext: options.createCanvasContext
+      ? () => options.createCanvasContext!() as CanvasRenderingContext2D
+      : createMeasurementCanvasContext,
     fontSignature: null,
     execution: null,
     activeFontContext: null,
@@ -54,17 +59,25 @@ export function getSurfaceMeasurementRuntimeForCanvas(
   return runtimeByCanvasContext.get(context);
 }
 
+/** Canvas2D is the measurement contract; workers use their own OffscreenCanvas. */
+export function createMeasurementCanvasContext(): CanvasRenderingContext2D {
+  const canvas =
+    typeof document !== 'undefined'
+      ? document.createElement('canvas')
+      : typeof OffscreenCanvas !== 'undefined'
+        ? new OffscreenCanvas(1, 1)
+        : null;
+  const context = canvas?.getContext('2d');
+  if (!context) {
+    throw new DomMeasurementInfrastructureError('Canvas2D is unavailable in this execution environment.');
+  }
+  return context as CanvasRenderingContext2D;
+}
+
 export function ensureSurfaceMeasurementCanvas(state: SurfaceMeasurementRuntimeState): CanvasRenderingContext2D {
   assertSurfaceMeasurementRuntimeLive(state);
   if (!state.canvasContext) {
-    const canvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
-    if (!canvas) {
-      throw new DomMeasurementInfrastructureError(
-        'Canvas not available. Ensure this runs in a DOM environment (browser or jsdom).',
-      );
-    }
-    const context = canvas.getContext('2d');
-    if (!context) throw new DomMeasurementInfrastructureError('Failed to get 2D context from canvas');
+    const context = state.createCanvasContext();
     state.canvasContext = context;
     runtimeByCanvasContext.set(context, state);
   }

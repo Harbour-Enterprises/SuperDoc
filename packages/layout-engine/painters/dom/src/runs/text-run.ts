@@ -3,17 +3,13 @@ import {
   formatChapterPageNumberText,
   formatPageNumberFieldValue,
   formatSectionPageNumberText,
-  normalizeBaselineShift,
-  resolveBaseFontSizeForVerticalText,
 } from '@superdoc/contracts';
-import { resolvePhysicalFamily } from '@superdoc/font-system';
 import type { FragmentRenderContext } from '../renderer.js';
 import { BROWSER_DEFAULT_FONT_SIZE, CLASS_NAMES } from '../styles.js';
 import type { RunRenderContext, TrackedChangesRenderConfig } from './types.js';
 import { applyRunDataAttributes } from './hash.js';
 import { applyLinkAttributes, applyLinkDataset, buildLinkRenderData, enhanceAccessibility } from './links.js';
 import { setTextContentWithFormattingSpaceMarks } from './formatting-marks.js';
-import { allowFontSynthesis } from './font-synthesis.js';
 import { applyTextEffects } from './text-effects.js';
 import {
   normalizeRtlDateTokenForWordParity,
@@ -21,8 +17,12 @@ import {
 } from '../features/inline-direction/index.js';
 import { resolveDerivedRunText } from '../derived-run-text-plane.js';
 
-const DEFAULT_SUPERSCRIPT_RAISE_RATIO = 0.33;
-const DEFAULT_SUBSCRIPT_LOWER_RATIO = 0.14;
+import {
+  resolveRunTypographyStyles,
+  resolveRunDecorationStyles,
+  type ResolvePhysicalFont,
+} from './text-style-facts.js';
+export { underlineThicknessPx } from './text-style-facts.js';
 
 export type CheckboxGlyphs = { checked: string; unchecked: string; current: string };
 
@@ -55,94 +55,14 @@ export const applyCheckboxGlyphMetadata = (element: HTMLElement, run: TextRun): 
   return glyphs;
 };
 
-/**
- * Underline thickness in px, scaled to font size. Shared by text runs
- * (`text-decoration-thickness`) and tab underlines (border width) so a run's
- * underline renders as a single uniform weight across text and tab characters,
- * matching Word, on any display density (SD-3330). The divisor approximates the
- * font's natural underline weight (≈ what `text-decoration-thickness: auto`
- * produces) while staying deterministic across platforms.
- *
- * Rounded to an integer px because CSS borders snap to integer device pixels
- * while `text-decoration-thickness` keeps fractional values; using an integer
- * makes the tab border and the text underline rasterize to the same line weight.
- */
-export const underlineThicknessPx = (fontSize: number): number => Math.max(1, Math.round(fontSize / 14));
-
-const hasVerticalPositioning = (run: TextRun): boolean =>
-  normalizeBaselineShift(run.baselineShift) != null || run.vertAlign === 'superscript' || run.vertAlign === 'subscript';
-
-const applyRunVerticalPositioning = (element: HTMLElement, run: TextRun): void => {
-  // Vertically shifted runs should use a tight inline box. If they inherit the
-  // parent line's full line-height, the glyph remains visually low inside an
-  // oversized inline box even when the superscript/subscript offset is correct.
-  if (hasVerticalPositioning(run)) {
-    element.style.lineHeight = '1';
-  }
-
-  const explicitBaselineShift = normalizeBaselineShift(run.baselineShift);
-  if (explicitBaselineShift != null) {
-    element.style.verticalAlign = `${explicitBaselineShift}pt`;
-    return;
-  }
-
-  if (run.vertAlign === 'superscript') {
-    const baseFontSize = resolveBaseFontSizeForVerticalText(run.fontSize, run);
-    element.style.verticalAlign = `${baseFontSize * DEFAULT_SUPERSCRIPT_RAISE_RATIO}px`;
-    return;
-  }
-
-  if (run.vertAlign === 'subscript') {
-    const baseFontSize = resolveBaseFontSizeForVerticalText(run.fontSize, run);
-    element.style.verticalAlign = `${-(baseFontSize * DEFAULT_SUBSCRIPT_LOWER_RATIO)}px`;
-    return;
-  }
-
-  if (run.vertAlign === 'baseline') {
-    element.style.verticalAlign = 'baseline';
-  }
-};
-
-type ResolvePhysicalFont = (
-  cssFontFamily: string,
-  face: { weight: '400' | '700'; style: 'normal' | 'italic' },
-) => string;
-
 export const applyRunTypographyStyles = (
   element: HTMLElement,
   run: TextRun,
-  resolvePhysical: ResolvePhysicalFont = resolvePhysicalFamily,
+  resolvePhysical?: ResolvePhysicalFont,
 ): void => {
-  // Use the same per-document physical family used during measurement so late
-  // font substitution cannot make painted glyph metrics diverge from layout.
-  element.style.fontFamily = resolvePhysical(run.fontFamily, {
-    weight: run.bold ? '700' : '400',
-    style: run.italic ? 'italic' : 'normal',
-  });
-  element.style.fontSize = `${run.fontSize}px`;
-  // OOXML leaves kerning disabled unless w:kern opts the run in.
-  element.style.fontKerning = 'none';
-  allowFontSynthesis(element);
-  if (run.bold) element.style.fontWeight = 'bold';
-  if (run.italic) element.style.fontStyle = 'italic';
-
-  if (run.letterSpacing != null) {
-    element.style.letterSpacing = `${run.letterSpacing}px`;
+  for (const [property, value] of Object.entries(resolveRunTypographyStyles(run, resolvePhysical))) {
+    element.style.setProperty(property, value);
   }
-  if (
-    run.horizontalScale != null &&
-    Number.isFinite(run.horizontalScale) &&
-    run.horizontalScale >= 0 &&
-    run.horizontalScale !== 1
-  ) {
-    // CSS font-stretch does not reliably condense ordinary fonts; layout has
-    // already measured this scale, so paint the glyph box with the same transform.
-    element.style.display = 'inline-block';
-    element.style.transform = `scaleX(${run.horizontalScale})`;
-    element.style.transformOrigin = run.bidi?.rtl ? 'right center' : 'left center';
-  }
-
-  applyRunVerticalPositioning(element, run);
 };
 
 /**
@@ -159,7 +79,7 @@ export const applyRunStyles = (
   element: HTMLElement,
   run: Run,
   _isLink = false,
-  resolvePhysical: ResolvePhysicalFont = resolvePhysicalFamily,
+  resolvePhysical?: ResolvePhysicalFont,
 ): void => {
   if (
     run.kind === 'tab' ||
@@ -185,27 +105,8 @@ export const applyRunStyles = (
   }
   applyTextEffects(element, run.textEffects);
 
-  // Apply text decorations from the run. Even for links, inline decorations should reflect
-  // the document styling (tests assert underline presence on anchors).
-  const decorations: string[] = [];
-  if (run.underline) {
-    decorations.push('underline');
-    const u = run.underline;
-    element.style.textDecorationStyle = u.style && u.style !== 'single' ? u.style : 'solid';
-    // Pin the thickness to an explicit, font-scaled value (instead of `auto`, which
-    // browsers render at the font's underline weight). Tab underlines reuse the same
-    // value for their border width, so a run's underline is one uniform weight across
-    // text and tab characters (SD-3330). See underlineThicknessPx.
-    element.style.textDecorationThickness = `${underlineThicknessPx(run.fontSize)}px`;
-    if (u.color) {
-      element.style.textDecorationColor = u.color;
-    }
-  }
-  if (run.strike) {
-    decorations.push('line-through');
-  }
-  if (decorations.length > 0) {
-    element.style.textDecorationLine = decorations.join(' ');
+  for (const [property, value] of Object.entries(resolveRunDecorationStyles(run))) {
+    element.style.setProperty(property, value);
   }
 };
 

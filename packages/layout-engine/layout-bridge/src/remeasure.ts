@@ -1,3 +1,8 @@
+import {
+  createLayoutMeasurementContext,
+  invalidateLayoutMeasurementFonts,
+  type LayoutMeasurementContext,
+} from './measurement-environment.js';
 import type {
   ParagraphBlock,
   ParagraphMeasure,
@@ -54,25 +59,10 @@ type ParagraphBlockAttrs = {
   suppressFirstLineIndent?: boolean;
 };
 
-let canvas: HTMLCanvasElement | null = null;
-let ctx: CanvasRenderingContext2D | null = null;
+let ctx: LayoutMeasurementContext | null = null;
 
-/**
- * Retrieves or creates a canvas rendering context for text measurement.
- *
- * This function manages a singleton canvas context used across all text measurements.
- * The canvas context provides the measureText API which is essential for accurate
- * text width calculations that match browser rendering.
- *
- * @returns Canvas 2D rendering context if available in browser environment, null otherwise.
- *   Returns null in server-side rendering contexts where document is undefined.
- */
-function getCtx(): CanvasRenderingContext2D | null {
-  if (ctx) return ctx;
-  if (typeof document === 'undefined') return null;
-  canvas = document.createElement('canvas');
-  ctx = canvas.getContext('2d');
-  return ctx;
+function getCtx(): LayoutMeasurementContext | null {
+  return (ctx ??= createLayoutMeasurementContext());
 }
 
 // ---------------------------------------------------------------------------
@@ -114,11 +104,11 @@ export function clearRemeasureTextCaches(): void {
   glyphAdvancesByFont.clear();
   sliceWidthCache.clear();
   ctx = null;
-  canvas = null;
+  invalidateLayoutMeasurementFonts();
 }
 
 /** Measure a single character's advance for a font, through the glyph cache. */
-function measureGlyphAdvance(context: CanvasRenderingContext2D, font: string, char: string): number {
+function measureGlyphAdvance(context: LayoutMeasurementContext, font: string, char: string): number {
   let advances = glyphAdvancesByFont.get(font);
   if (!advances) {
     if (glyphAdvancesByFont.size >= MAX_GLYPH_FONT_ENTRIES) glyphAdvancesByFont.clear();
@@ -135,7 +125,7 @@ function measureGlyphAdvance(context: CanvasRenderingContext2D, font: string, ch
 }
 
 /** Measure a multi-character slice's base width (no letter-spacing), memoized. */
-function measureSliceBaseWidth(context: CanvasRenderingContext2D, font: string, text: string): number {
+function measureSliceBaseWidth(context: LayoutMeasurementContext, font: string, text: string): number {
   // "\0" cannot appear in a canvas font string, so the first NUL delimits unambiguously.
   const key = font + '\u0000' + text;
   const cached = sliceWidthCache.get(key);

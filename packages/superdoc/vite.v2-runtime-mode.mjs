@@ -119,6 +119,7 @@ export function buildSourceModeAliases({ v2Root, layoutEngineRoot }) {
     // superdoc/v2/node_modules can lag behind the checkout and stale Vite deps.
     { find: /^@superdoc\/contracts$/, replacement: path.resolve(layoutEngineRoot, 'contracts/src/index.ts') },
     { find: /^@superdoc\/dom-contract$/, replacement: path.resolve(layoutEngineRoot, 'dom-contract/src/index.ts') },
+    { find: /^@superdoc\/layout-engine\/internal-source-preparation$/, replacement: path.resolve(layoutEngineRoot, 'layout-engine/src/source-preparation.ts') },
     { find: /^@superdoc\/layout-engine$/, replacement: path.resolve(layoutEngineRoot, 'layout-engine/src/index.ts') },
     {
       find: /^@superdoc\/measuring-dom\/canvas-resolver$/,

@@ -4354,7 +4354,7 @@ interface V2WorkerUrlsConfig {
   document?: string | URL;
   /** Collaboration-capable document worker used by v2 collaboration rooms. */
   collaboration?: string | URL;
-  /** Isolated review-index worker used for comments and tracked changes. */
+  /** @deprecated Review processing runs in the document worker. Accepted for configuration compatibility. */
   reviewIndex?: string | URL;
 }
 

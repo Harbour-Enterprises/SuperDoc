@@ -181,14 +181,14 @@ export class TextWidthMeasurementCache {
     return { ...this.stats };
   }
 
-  clear(): void {
+  clear(resetStats = true): void {
     this.assertLive();
     this.cacheByContext = new WeakMap();
     this.spacesByContext = new WeakMap();
     this.clock = [];
     this.freeSlots = [];
     this.clockCursor = 0;
-    this.stats = emptyStats();
+    this.stats = resetStats ? emptyStats() : { ...this.stats, residentEntries: 0, estimatedResidentBytes: 0 };
   }
 
   dispose(): void {

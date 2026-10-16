@@ -4735,7 +4735,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * query surfaces only DIRECT run properties, so inherited fonts have no
    * projected value; the layout has already resolved them for painting.
    */
+  const appliedSelectionPresentation = (selection: SelectionSlice): LooseRecord | null => {
+    const host = getHost(),
+      read = host?.readAppliedSelectionPresentation;
+    if (typeof read !== 'function') return null;
+    const value = safeCall<LooseRecord | null>(() => read.call(host), null);
+    const info = normalizeSelectionInfo(value?.selection);
+    return value && info && selectionSignature(selectionSliceFromInfo(info, 'ready')) === selectionSignature(selection)
+      ? value
+      : null;
+  };
+
   const resolveEffectiveInlineValuesFromLayout = (selection: SelectionSlice): ProjectedInlineSelectionValues => {
+    const applied = appliedSelectionPresentation(selection);
+    if (applied) return applied.inlineStyle ?? {};
     const host = getHost();
     const blockIds = new Set(selectionBlockIds(selection));
     if (blockIds.size === 0) return {};
@@ -4892,6 +4905,8 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * `{ style: 'single' }`) when active, never a bare `true` — check presence.
    */
   const resolveEffectiveMarkValuesFromLayout = (selection: SelectionSlice): EffectiveMarkValues => {
+    const applied = appliedSelectionPresentation(selection);
+    if (applied) return applied.inlineStyle ?? {};
     const host = getHost();
     const blockIds = new Set(selectionBlockIds(selection));
     if (blockIds.size === 0) return {};
@@ -6052,6 +6067,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     selection: SelectionSlice,
     blockIds: readonly string[],
   ): Map<string, ParagraphAlignment> | null => {
+    const applied = appliedSelectionPresentation(selection);
+    if (applied)
+      return new Map(
+        blockIds.flatMap((id) => {
+          const alignment = normalizeParagraphAlignment(applied.paragraphAlignments?.[id]);
+          return alignment ? [[id, alignment] as const] : [];
+        }),
+      );
     const host = getHost();
     const readByIds = host?.readMountedProjectionBlocksByIds;
     if (typeof readByIds !== 'function') return null;
@@ -9181,6 +9204,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   const commandSelectionIsReady = (id: string, descriptor: CommandDescriptor | null, payload: unknown): boolean => {
+    const foreground = foregroundMutationState();
+    // A cached painted caret can precede an already captured native range.
+    // Resolve through the ordered worker reader before choosing range vs marks.
+    if (foreground && (foreground.active > 0 || foreground.pending > 0)) return false;
     if (state.selection.status !== 'ready') return false;
     const trackCommand = trackDecisionCommand(id);
     if (trackCommand?.scope === 'id') return true;

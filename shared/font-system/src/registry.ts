@@ -229,7 +229,7 @@ export class FontRegistry {
    * constructor: the family is recorded as `unloaded` and will resolve to
    * `fallback_used` when awaited.
    */
-  register(descriptor: FontFaceDescriptor): RegisterFaceResult {
+  register(descriptor: FontFaceDescriptor, options: { preserveDescriptors?: boolean } = {}): RegisterFaceResult {
     const { family, source, descriptors } = descriptor;
     // Identity source for the duplicate-face guard: canonicalize url(...) quoting so the SAME file
     // registered by the bundled pack (`url(/x)`) and by `fonts.add` (`url("/x")`) compares equal
@@ -256,11 +256,14 @@ export class FontRegistry {
       }
     }
     if (this.#FontFaceCtor && this.#fontSet) {
-      // Build the FontFace with the BUCKETED weight/style the key uses, not the raw descriptor. The
-      // face key is family|<400|700>|<normal|italic>, so an off-bucket descriptor (e.g. weight 500)
-      // would answer hasFace for the 400 key yet render at 500 - the run model is binary, so clamp the
-      // rendered face to the same bucket. Other descriptors (stretch, unicodeRange, display) pass through.
-      const face = new this.#FontFaceCtor(family, source, { ...descriptors, weight, style });
+      // Bundled/V1 callers clamp physical faces to the run model's weight/style buckets.
+      // Explicit V2 custom faces preserve CSS matching semantics across realms; their
+      // logical availability still uses the run model's buckets.
+      const face = new this.#FontFaceCtor(
+        family,
+        source,
+        options.preserveDescriptors ? { ...descriptors } : { ...descriptors, weight, style },
+      );
       this.#fontSet.add(face);
       this.#addManagedFace(family, key, face);
     }
@@ -422,6 +425,20 @@ export class FontRegistry {
   hasFace(family: string, weight: '400' | '700', style: 'normal' | 'italic'): boolean {
     const key = faceKeyOf(family, weight, style);
     return this.#providerFaceKeys.has(key) && this.#faceStatus.get(key) !== 'failed';
+  }
+
+  /** Face facts captured without retaining this registry or consulting later load state. */
+  snapshotFaces(): Pick<FontRegistry, 'hasFace' | 'getFaceStatus'> {
+    const providers = new Set(this.#providerFaceKeys);
+    const statuses = new Map(this.#faceStatus);
+    return Object.freeze({
+      hasFace: (family: string, weight: '400' | '700', style: 'normal' | 'italic') => {
+        const key = faceKeyOf(family, weight, style);
+        return providers.has(key) && statuses.get(key) !== 'failed';
+      },
+      getFaceStatus: (request: FontFaceRequest): FontLoadStatus =>
+        statuses.get(faceKeyOf(request.family, request.weight, request.style)) ?? 'unloaded',
+    });
   }
 
   /**

@@ -92,7 +92,14 @@ export type {
   HeaderFooterRefs,
   SectionAwareHeaderFooterMeasurementGroup,
 } from './sectionAwareHeaderFooter';
-export { clearIncrementalModuleState, incrementalLayout, measureCache, normalizeMargin } from './incrementalLayout';
+export {
+  clearIncrementalModuleState,
+  incrementalLayout,
+  measureCache,
+  normalizeMargin,
+  readLayoutPageGeometry,
+  readLayoutPageFragmentBlockIds,
+} from './incrementalLayout';
 export { hashMeasureContent } from './cache';
 export type {
   HeaderFooterLayoutResult,
@@ -109,6 +116,7 @@ export type {
   IncrementalLayoutTailDisposition,
   IncrementalPaginationProof,
   LayoutPositionTransform,
+  LayoutPageGeometry,
   FootnoteReserveSeed,
 } from './incrementalLayout';
 export {

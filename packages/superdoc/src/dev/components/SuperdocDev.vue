@@ -99,22 +99,6 @@ const normalizeBooleanParam = (raw, fallback = true) => {
 // Painter plan P7: the windowed paint owner IS vertical-paginated flow (no
 // flag). `?v2Hud=1`: per-paint counter HUD + dark reuse tripwire.
 const paintHud = normalizeBooleanParam(urlParams.get('v2Hud'), false);
-// WS6.2 — DEV-ONLY HARNESS CONTROLS. The URL params `v2exec`,
-// `executionMode`, and `workerMode` (and the streaming/HUD params above) are
-// parsed only by this dev app. `src/dev/**` is unreachable from every library
-// build: the lib entries (`src/index.js`, `src/public/ui*.ts` in
-// vite.config.js) never import it, the dts/coverage configs exclude
-// `src/dev/**`, and vite.config.devapp.js — the only build that bundles this
-// file — is explicitly NOT a library build. No customer bundle can reach
-// these overrides. They feed the internal/test-only `benchmarkExecutionMode`
-// config key; product/customer browser execution stays worker-only.
-const normalizeV2ExecutionModeParam = (raw) => {
-  if (raw === 'worker' || raw === 'inline' || raw === 'auto') return raw;
-  return null;
-};
-const requestedV2ExecutionMode = normalizeV2ExecutionModeParam(
-  urlParams.get('v2exec') ?? urlParams.get('executionMode') ?? urlParams.get('workerMode'),
-);
 const trackChangesReplacementMode = ref(
   urlParams.get('replacementMode') === 'separate' || urlParams.get('replacements') === 'independent'
     ? 'separate'
@@ -147,13 +131,6 @@ const exportFileStem = computed(() => {
   const rawName = uploadedFileName.value?.trim();
   if (!rawName) return 'document';
   return rawName.replace(/\.[^.]+$/, '') || 'document';
-});
-const resolvedV2ExecutionMode = computed(() => {
-  if (useCollaboration) return null;
-  if (requestedV2ExecutionMode === 'worker' || requestedV2ExecutionMode === 'inline') {
-    return requestedV2ExecutionMode;
-  }
-  return null;
 });
 const headerCollapsed = ref(false);
 const documentApiUnavailableMessage = computed(
@@ -325,7 +302,6 @@ const captureDiffSnapshotFromFile = async (file) => {
         superdocId: `superdoc-dev-compare-${crypto.randomUUID()}`,
         selector: `#${mount.id}`,
         documentMode: 'editing',
-        benchmarkExecutionMode: 'inline',
         licenseKey: 'public_license_key_superdocinternal_ad7035140c4b',
         telemetry: {
           enabled: true,
@@ -606,9 +582,6 @@ const init = async () => {
     // code/reason so large-document failures are visible without DOM probes.
     isDebug: true,
     documentMode: 'editing',
-    // Explicit dev-only override. The default execution path is product-owned
-    // by the v2 shell and should run here without harness configuration.
-    ...(resolvedV2ExecutionMode.value ? { benchmarkExecutionMode: resolvedV2ExecutionMode.value } : {}),
     licenseKey: 'public_license_key_superdocinternal_ad7035140c4b',
     // Word-parity QA must load reviewed metric-compatible substitutes before
     // the first measurement pass. Production consumers opt into the same pack

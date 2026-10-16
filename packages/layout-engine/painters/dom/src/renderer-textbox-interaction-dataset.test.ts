@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vite-plus/test';
 import { createTestPainter as createDomPainter } from './_test-utils.js';
-import type { FlowBlock, Measure, Layout, DrawingGeometry } from '@superdoc/contracts';
+import type { FlowBlock, Measure, Layout, DrawingGeometry, TextboxDrawing } from '@superdoc/contracts';
 
 const geometry: DrawingGeometry = { width: 200, height: 100, rotation: 45, flipH: true, flipV: false };
 
@@ -70,6 +70,28 @@ describe('painter textbox interaction dataset', () => {
     document.body.appendChild(mount);
   });
   afterEach(() => mount.remove());
+
+  it('retains textbox story identity on an empty tracked paragraph without line carriers', () => {
+    const block = textboxBlock('tb-owner-empty', { textboxId: 'tb0' }) as TextboxDrawing;
+    block.contentBlocks = [
+      {
+        kind: 'paragraph',
+        id: 'empty',
+        runs: [],
+        attrs: {
+          paragraphMarkTrackedChange: { id: 'mark', kind: 'delete' },
+        },
+      },
+    ];
+    const contentMeasures = [{ kind: 'paragraph' as const, lines: [], totalHeight: 13 }];
+    block.contentMeasures = contentMeasures;
+    const measure = { ...textboxMeasure(), contentMeasures } as unknown as Measure;
+    const painter = createDomPainter({ blocks: [block], measures: [measure] });
+    painter.paint(singlePageLayout(block), mount);
+    const carrier = mount.querySelector('[data-track-change-id="mark"]') as HTMLElement;
+    expect(carrier).toBeTruthy();
+    expect(carrier.dataset.layoutStory).toBe('textbox:tb0');
+  });
 
   it('stamps canonical identity, capability, revision, and intrinsic geometry', () => {
     const block = textboxBlock('tb-owner-1', {

@@ -124,12 +124,13 @@ function cloneLiveCrossReferenceFieldBlock(block: FlowBlock): FlowBlock {
  * graph. This happens before measurement, so changed result text participates
  * in line wrapping and pagination without creating a second document mutation.
  */
-export function resolveLiveCrossReferences(bodyBlocks: FlowBlock[]): void {
+export function resolveLiveCrossReferences(bodyBlocks: FlowBlock[]): boolean {
   const paragraphs = collectParagraphs(bodyBlocks);
   const bookmarks = collectBookmarks(paragraphs);
   const paragraphNumbers = collectFullContextParagraphNumbers(paragraphs);
   const styleCandidates = collectStyleCandidates(paragraphs);
   const noteReferences = collectBookmarkedNoteReferenceMarkers(paragraphs);
+  let changed = false;
 
   for (const group of collectFieldRunGroups(paragraphs)) {
     // A field result spanning paragraphs carries paragraph structure that a
@@ -144,8 +145,9 @@ export function resolveLiveCrossReferences(bodyBlocks: FlowBlock[]): void {
       styleCandidates,
       noteReferences,
     });
-    writeFieldResult(group.runs, result);
+    changed = writeFieldResult(group.runs, result) || changed;
   }
+  return changed;
 }
 
 /** Build the page-aware STYLEREF resolver used by repeated headers/footers. */
@@ -407,8 +409,14 @@ function collectFieldRunGroups(paragraphs: readonly ParagraphEntry[]): FieldRunG
   return [...groups.values()];
 }
 
-function writeFieldResult(runs: readonly TextRun[], result: string): void {
-  for (let index = 0; index < runs.length; index += 1) runs[index]!.text = index === 0 ? result : '';
+function writeFieldResult(runs: readonly TextRun[], result: string): boolean {
+  let changed = false;
+  for (let index = 0; index < runs.length; index += 1) {
+    const text = index === 0 ? result : '';
+    if (runs[index]!.text !== text) changed = true;
+    runs[index]!.text = text;
+  }
+  return changed;
 }
 
 function paragraphText(paragraph: ParagraphBlock): string {
