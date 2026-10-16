@@ -149,6 +149,9 @@ export function onScopeDispose(...args) {
 export function openBlock(...args) {
   return runtime().openBlock(...args);
 }
+export function provide(...args) {
+  return runtime().provide(...args);
+}
 export function reactive(...args) {
   return runtime().reactive(...args);
 }

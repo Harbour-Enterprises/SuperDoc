@@ -5399,6 +5399,38 @@ describe('DomPainter', () => {
     expect(headerEl?.getAttribute('data-sd-headerfooter-kind')).toBe('header');
   });
 
+  it.each([true, false])('stamps behind-body paint ordering for anchored media (%s)', (behindDoc) => {
+    const image: FlowBlock = {
+      kind: 'image',
+      id: 'floating-body-image',
+      src: 'data:image/png;base64,AAAA',
+      width: 100,
+      height: 60,
+      anchor: { isAnchored: true, behindDoc, hRelativeFrom: 'page', vRelativeFrom: 'page' },
+    };
+    const fragment = {
+      kind: 'image' as const,
+      blockId: image.id,
+      x: 20,
+      y: 20,
+      width: 100,
+      height: 60,
+      isAnchored: true,
+      behindDoc,
+    };
+    const painter = createTestPainter({
+      blocks: [block, image],
+      measures: [measure, { kind: 'image', width: 100, height: 60 }],
+    });
+    painter.paint(
+      { ...layout, pages: [{ ...layout.pages[0], fragments: [...layout.pages[0].fragments, fragment] }] },
+      mount,
+    );
+    const element = mount.querySelector('[data-block-id="floating-body-image"]') as HTMLElement;
+    expect(element.classList.contains('superdoc-floating-fragment')).toBe(true);
+    expect(element.dataset.behindDoc).toBe(behindDoc ? 'true' : undefined);
+  });
+
   it('renders behindDoc header images directly on page, not in header container', () => {
     // Per OOXML spec, behindDoc images should render behind body content.
     // This requires placing them directly on the page element (not in header container)

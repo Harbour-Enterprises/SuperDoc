@@ -219,6 +219,7 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
 
   const container = doc.createElement('div');
   container.classList.add(CLASS_NAMES.fragment);
+  if (block.anchor?.isAnchored) container.dataset.sdTableFloating = 'true';
   applyStyles(container, fragmentStyles);
   applyFragmentFrame(container, fragment);
   if (fragment.pmStart != null) {
@@ -227,6 +228,8 @@ export function* renderTableFragmentWork(deps: TableRenderDependencies): RenderW
   if (fragment.pmEnd != null) {
     container.dataset.pmEnd = String(fragment.pmEnd);
   }
+  if (fragment.continuesFromPrev) container.dataset.continuesFromPrev = 'true';
+  if (fragment.continuesOnNext) container.dataset.continuesOnNext = 'true';
   container.style.height = `${fragment.height}px`;
   applySdtDataset(container, block.attrs?.sdt);
   applyContainerSdtDataset?.(container, block.attrs?.containerSdt);

@@ -33,6 +33,33 @@ describe('packaged internal Vue selection', () => {
     expect(globalThis[key].peer).toBe(peer);
   });
 
+  it('provides toolbar ownership to children using the installed Vue runtime', async () => {
+    globalThis[key] = { vue: Vue };
+    const runtime = await import('./internal-vue-runtime.js');
+    const child = {
+      setup() {
+        const owner = Vue.inject('sdToolbarOwnerId');
+        return () => Vue.h('span', owner);
+      },
+    };
+    const container = document.createElement('div');
+    const errors = [];
+    const app = Vue.createApp({
+      setup() {
+        runtime.provide('sdToolbarOwnerId', 'toolbar-owner');
+        return () => Vue.h(child);
+      },
+    });
+    app.config.errorHandler = (error) => errors.push(error);
+    try {
+      app.mount(container);
+      expect(errors).toEqual([]);
+      expect(container.textContent).toBe('toolbar-owner');
+    } finally {
+      app.unmount();
+    }
+  });
+
   it('binds checkbox and select v-model and renders static markup through the installed runtime', async () => {
     globalThis[key] = { vue: Vue };
     const runtime = await import('./internal-vue-runtime.js');

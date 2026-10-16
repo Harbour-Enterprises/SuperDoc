@@ -8,11 +8,13 @@ import {
   onBeforeUnmount,
   computed,
   nextTick,
+  provide,
 } from 'vue';
 import { throttle } from './helpers.js';
 import ButtonGroup from './ButtonGroup.vue';
 import { preventEditorFocusTransfer } from './toolbar-focus-helpers.js';
 import { RESPONSIVE_BREAKPOINTS } from './constants.js';
+import { getSuperDocUiOwnerId } from '../../../core/superdoc-ui-owner.js';
 
 /**
  * The default font-family to use for toolbar UI surfaces when no custom font is configured.
@@ -22,6 +24,7 @@ import { RESPONSIVE_BREAKPOINTS } from './constants.js';
 const DEFAULT_UI_FONT_FAMILY = 'Arial, Helvetica, sans-serif';
 
 const { proxy } = getCurrentInstance();
+provide('sdToolbarOwnerId', getSuperDocUiOwnerId(proxy.$toolbar.superdoc));
 const emit = defineEmits(['command', 'toggle', 'select']);
 
 let toolbarKey = ref(1);
@@ -200,6 +203,7 @@ const handleToolbarMousedown = (e) => {
     aria-label="Toolbar"
     data-sd-part="toolbar"
     data-editor-ui-surface
+    :data-superdoc-ui-owner="getSuperDocUiOwnerId(proxy.$toolbar.superdoc)"
     @mousedown="handleToolbarMousedown"
   >
     <ButtonGroup

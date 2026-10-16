@@ -269,6 +269,25 @@ describe('renderTableFragment', () => {
     expect(render(first).querySelector<HTMLElement>('[data-superdoc-table-row-role]')!.style.height).toBe('60px');
   });
 
+  it('stamps both continuation edges', () => {
+    const measure = createTestTableMeasure();
+    const element = renderTableFragment({
+      doc,
+      context,
+      block: createTestTableBlock(),
+      fragment: { ...createTestTableFragment(), continuesFromPrev: true, continuesOnNext: true },
+      measure,
+      cellSpacingPx: 0,
+      effectiveColumnWidths: measure.columnWidths,
+      renderLine: () => doc.createElement('div'),
+      applyFragmentFrame: () => {},
+      applySdtDataset: () => {},
+      applyStyles: () => {},
+    });
+    expect(element.dataset.continuesFromPrev).toBe('true');
+    expect(element.dataset.continuesOnNext).toBe('true');
+  });
+
   it('writes PM range attributes on the table fragment wrapper', () => {
     const fragment = {
       ...createTestTableFragment(),

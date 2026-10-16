@@ -41,6 +41,7 @@ const makeItem = (overrides = {}) => ({
 const mountCombobox = (item = makeItem()) => {
   wrapper = mount(FontFamilyCombobox, {
     props: { item, uiFontFamily: 'Inter, sans-serif' },
+    global: { provide: { sdToolbarOwnerId: 'font-editor-owner' } },
     attachTo: document.body,
   });
   return { item, input: wrapper.get('input') };
@@ -78,6 +79,12 @@ afterEach(() => {
 });
 
 describe('FontFamilyCombobox', () => {
+  it('carries editor ownership into the teleported font listbox', async () => {
+    mountCombobox();
+    await openViaChevron();
+    expect(document.querySelector('.sd-font-combobox__listbox')?.dataset.superdocUiOwner).toBe('font-editor-owner');
+  });
+
   it('shows the applied font and labels the control', () => {
     const { input } = mountCombobox();
 

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, inject, nextTick, onBeforeUnmount, ref, watch } from 'vue';
 import { toolbarIcons } from './toolbarIcons.js';
 import { useHighContrastMode } from '../../../composables/use-high-contrast-mode';
 import { computeTypeahead, findPrefixMatchIndex } from './font-typeahead.js';
@@ -30,6 +30,7 @@ const props = defineProps({
 const emit = defineEmits(['command', 'item-clicked', 'tab-out', 'editor-handoff']);
 
 const { isHighContrastMode } = useHighContrastMode();
+const toolbarOwnerId = inject('sdToolbarOwnerId', null);
 
 const inputRef = ref(null);
 const rootRef = ref(null);
@@ -540,6 +541,7 @@ watch(
         ref="popupRef"
         role="listbox"
         data-sd-part="dropdown-menu"
+        :data-superdoc-ui-owner="toolbarOwnerId"
         :id="listboxId"
         :aria-label="ariaLabel"
         class="sd-font-combobox__listbox"

@@ -140,8 +140,9 @@ export interface SelectionInfo {
   selectionTarget?: SelectionTarget | null;
   /**
    * V2 browser cell context with inclusive, zero-based logical bounds.
-   * Whole-cell selections clear text targets. Character selections preserve
-   * their targets and include the containing cells, including endpoint cells.
+   * Whole-cell selections clear text targets; explicit whole-table handle selections
+   * retain resolved formatting targets. Character selections preserve their targets
+   * and include the containing cells, including endpoint cells.
    * Exact cell IDs and spans describe merged or nonrectangular selections;
    * only rectangular whole-cell metadata can become a table-cells target.
    */

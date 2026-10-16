@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import Toolbar from './Toolbar.vue';
+import { getSuperDocUiOwnerId } from '../../../core/superdoc-ui-owner.js';
 import { useToolbarItem } from './use-toolbar-item.js';
 
 let wrapper;
@@ -28,6 +29,7 @@ function mountToolbar({ overflowBelow = 0 } = {}) {
     attributes: { ariaLabel: 'Overflow items' },
   });
   const toolbar = {
+    superdoc: {},
     config: { toolbarGroups: ['left', 'center'] },
     get overflowItems() {
       return width < overflowBelow ? [item] : [];
@@ -44,6 +46,7 @@ function mountToolbar({ overflowBelow = 0 } = {}) {
   });
   return {
     toolbar,
+    overflow,
     setWidth: (value) => {
       width = value;
     },
@@ -52,6 +55,16 @@ function mountToolbar({ overflowBelow = 0 } = {}) {
 }
 
 describe('Toolbar responsive layout', () => {
+  it('provides its editor identity to the teleported overflow menu', async () => {
+    const { toolbar, overflow } = mountToolbar({ overflowBelow: 1300 });
+    overflow.expand.value = true;
+    await nextTick();
+    await nextTick();
+    const owner = getSuperDocUiOwnerId(toolbar.superdoc);
+    expect(wrapper.get('[role="toolbar"]').attributes('data-superdoc-ui-owner')).toBe(owner);
+    expect(document.querySelector('.sd-toolbar-overflow-menu')?.getAttribute('data-superdoc-ui-owner')).toBe(owner);
+  });
+
   it('preserves mounted focus targets when duplicate resize notifications report the same width', async () => {
     vi.useFakeTimers();
     const { toolbar, setWidth, emit } = mountToolbar();

@@ -4013,7 +4013,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * host's local snapshot so the toolbar reflects the NEW caret's block (and the
    * effective font resolved from it) on the next recompute, instead of serving
    * the previous selection until the worker `selection.current` round-trip lands
-   * (SD-3652). Only a resolvable COLLAPSED CARET is seeded - a range's snapshot
+   * (SD-3652). A resolvable collapsed caret is seeded; a range's snapshot
    * cannot be resolved synchronously in worker mode, so a new range starts an
    * authoritative async read without waiting for the input-idle gate (SD-5394).
    * Seeding an empty value would wrongly disable range-only commands. The
@@ -4023,8 +4023,14 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * tracked-change id is carried only when the host's painted caret proves the
    * same carrier, or while an active typing dispatch advances the same caret by
    * one code point. Pending work alone never carries review command context.
+   * Explicit whole-table changes have a complete local source range and also
+   * seed clears, so a delayed worker read cannot retain a cleared table target.
    */
-  const refreshSelectionFromHost = (hostSelectionSnapshot?: unknown, afterTypingPaint = false): void => {
+  const refreshSelectionFromHost = (
+    hostSelectionSnapshot?: unknown,
+    afterTypingPaint = false,
+    wholeTableSelectionChanged = false,
+  ): void => {
     const foreground = foregroundMutationState();
     if (isNonCollapsedHostSelection(hostSelectionSnapshot) && !(foreground && foreground.active > 0)) {
       typedCaretValidationHeld = false;
@@ -4036,7 +4042,16 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const read = host?.readLiveSelectionSyncSnapshot;
     if (typeof read !== 'function') return;
     const seed = normalizeSelectionInfo(safeCall(() => (read as AnyFn).call(host), null));
-    if (!seed || !isCollapsedCaretSnapshot(seed)) return;
+    if (!seed) return;
+    if (wholeTableSelectionChanged) {
+      typedCaretValidationHeld = false;
+      pendingSelectionSeedValidationToken = null;
+      const token = selectionReadToken();
+      asyncReads.set('selection', { token, value: seed, hasSettled: true, inflightToken: null });
+      issueAsyncRead('selection', token, selectionCurrentRun, normalizeSelectionInfo);
+      return;
+    }
+    if (!isCollapsedCaretSnapshot(seed)) return;
     const previousCaret = collapsedTextAddressFromSelection(state.selection);
     const nextCaret =
       collapsedTextAddressFromTarget(seed.selectionTarget) ?? collapsedTextAddressFromTarget(seed.target);
@@ -6975,6 +6990,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     currentHostSelectionSource = next;
     if (!next) return;
     try {
+      const unsubscribeCallbacks: Array<() => void> = [];
+      detachHostSelection = () => {
+        for (const detach of unsubscribeCallbacks) detach();
+      };
       const unsubscribe = next.subscribe((snapshot: unknown) => {
         // A foreground text mutation can move the caret before its new block is
         // in the mounted projection. Publish that selection after the exact
@@ -6992,7 +7011,21 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         refreshSelectionFromHost(snapshot);
         recompute('host-selection');
       });
-      if (typeof unsubscribe === 'function') detachHostSelection = unsubscribe;
+      if (typeof unsubscribe === 'function') unsubscribeCallbacks.push(unsubscribe);
+      const host = getHost();
+      const handles = safeCall<LooseRecord | null>(host?.getHandles ? () => host.getHandles() : undefined, null);
+      const tableSelection = handles?.selection;
+      if (typeof tableSelection?.subscribeWholeTable === 'function') {
+        const refreshWholeTable = (): void => {
+          selectionEpoch += 1;
+          refreshSelectionFromHost(undefined, false, true);
+          recompute('host-selection');
+        };
+        const detach = tableSelection.subscribeWholeTable(refreshWholeTable);
+        if (typeof detach === 'function') unsubscribeCallbacks.push(detach);
+        const nodeId = tableSelection.getWholeTableNodeId?.();
+        if (nodeId) refreshWholeTable();
+      }
     } catch {
       currentHostSelectionSource = null;
     }

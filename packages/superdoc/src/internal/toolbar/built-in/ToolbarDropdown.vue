@@ -1,5 +1,5 @@
 <script setup>
-import { computed, defineComponent, h, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue';
+import { computed, defineComponent, h, inject, nextTick, onBeforeUnmount, onMounted, ref, useSlots, watch } from 'vue';
 
 const props = defineProps({
   options: {
@@ -42,6 +42,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:show', 'select']);
 const slots = useSlots();
+const toolbarOwnerId = inject('sdToolbarOwnerId', null);
 
 const triggerRef = ref(null);
 const menuRef = ref(null);
@@ -440,6 +441,7 @@ onBeforeUnmount(() => {
           :class="mergedMenuClass"
           :style="menuStyle"
           v-bind="computedMenuAttrs"
+          :data-superdoc-ui-owner="toolbarOwnerId"
         >
           <slot v-if="hasCustomMenu" name="menu" />
           <div

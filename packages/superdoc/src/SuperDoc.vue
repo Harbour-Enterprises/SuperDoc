@@ -6,6 +6,7 @@ import {
 } from './internal/diagnostics/interaction-history.js';
 import { createTrackedChangePermissionResolver } from './core/collaboration/permissions.js';
 import { executeFirstPartyCommandAsync, registerFirstPartyCommandMutation } from './public/ui/create-super-doc-ui.js';
+import { getSuperDocUiOwnerId } from './core/superdoc-ui-owner.js';
 import '@superdoc/common/styles/common-styles.css';
 import { superdocIcons } from './icons.js';
 //prettier-ignore
@@ -3684,6 +3685,7 @@ const whiteboardInteractive = computed(() => whiteboardEnabled.value);
   <div
     ref="superdocRoot"
     class="superdoc"
+    :data-superdoc-ui-owner="getSuperDocUiOwnerId(proxy.$superdoc)"
     :class="{
       'superdoc--with-sidebar': showCommentsSidebar,
       'superdoc--web-layout': proxy.$superdoc.config.viewOptions?.layout === 'web',

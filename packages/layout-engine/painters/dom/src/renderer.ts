@@ -2658,6 +2658,7 @@ export class DomPainter {
       fragEl.style.top = `${pageY}px`;
       fragEl.style.left = `${isPageRelativeX ? fragment.x : marginLeft + fragment.x}px`;
       fragEl.style.zIndex = '0'; // Same level as page, but inserted first so renders behind
+      fragEl.dataset.behindDoc = 'true';
       fragEl.dataset.behindDocSection = kind; // Track for cleanup on re-render
       // Insert at beginning of page so it renders behind body content due to DOM order
       pageEl.insertBefore(fragEl, pageEl.firstChild);
@@ -6318,6 +6319,14 @@ export class DomPainter {
 
   private applyFragmentWrapperZIndex(el: HTMLElement, fragment: Fragment, resolvedZIndex?: number): void {
     el.style.zIndex = this.resolveFragmentWrapperZIndex(fragment, resolvedZIndex);
+    if (
+      this.isAnchoredMediaFragment(fragment) &&
+      (fragment.behindDoc === true || (fragment.behindDoc == null && 'zIndex' in fragment && fragment.zIndex === 0))
+    ) {
+      el.dataset.behindDoc = 'true';
+    } else {
+      delete el.dataset.behindDoc;
+    }
   }
 
   private applyResolvedFragmentFrame(
