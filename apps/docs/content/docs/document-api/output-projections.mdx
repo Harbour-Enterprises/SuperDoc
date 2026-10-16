@@ -102,6 +102,7 @@ round trip:
 | Rectangular, simple tables                       | Semantic table                                      | GFM table                                             |
 | Row/column spans or structurally rich tables     | Semantic table with spans                           | Raw semantic HTML table                               |
 | Safe links and visible field results             | Link or visible result                              | Link or visible result                                |
+| Internal links to a bookmark in the output       | `href="#sd-bookmark-…"` and a matching `id`         | `(#sd-bookmark-…)` and a raw `<a id>` target          |
 | Images with a public resolvable URL              | Image element                                       | Markdown image                                        |
 | Package-only media, drawings, OLE, embedded data | Readable deterministic placeholder and warning      | Readable deterministic placeholder and warning        |
 | Math, content controls, unsupported field shape  | Preserved readable content or diagnosed placeholder | Preserved readable content or diagnosed placeholder   |
@@ -111,6 +112,27 @@ Exact Word numbering is resolved per effective list level, including legal numbe
 visible label explicitly instead of relying on a browser's list counter. Markdown uses native list syntax only when it
 can reproduce that label and separator; custom, Roman, alphabetic, legal, tab-suffixed, or no-suffix labels can use the
 documented raw-HTML list carrier. This is a deterministic semantic representation, not a claim of Word visual parity.
+
+Internal links come from `w:hyperlink w:anchor`, `HYPERLINK \l` fields, and `REF` or `PAGEREF` fields with `\h`,
+including Word table-of-contents entries. A link is kept only when its bookmark starts in the same output, after the
+review view and scope are applied. The target is an empty `<a id="sd-bookmark-…">` at the start of the bookmark's
+paragraph; only bookmarks that a kept link targets get an id. Bookmark names match case-insensitively, as in Word. When
+the bookmark is missing, deleted in the selected view, or outside the requested scope, the link text stays readable and
+a lossy `projection-downgraded-construct` diagnostic reports it. Hyperlinks also get the `[link unavailable]`
+placeholder; `REF` and `PAGEREF` results stay plain text, because that text is the reference itself. Bookmarks placed between
+paragraphs are not link targets.
+
+A scoped projection is a standalone excerpt: it does not include surrounding blocks, fetch destinations outside the
+scope, or create a link back into the original document. For example, if paragraph A links to a bookmark in paragraph B,
+projecting only A preserves its reference text and reports the unavailable link; projecting both A and B keeps the link
+and destination. This also applies when the target exists in the DOCX but the selected review view hides it. A subsequent
+full-document read still resolves the original link, and projection never removes or rewrites that reference in the DOCX.
+Use a full-document projection when an agent needs to follow references across the document. The emitted bookmark IDs
+identify destinations within that output; they are not persistent Document API addresses or cross-session citations.
+
+This differs from copying an incomplete reference into a new Word document: Word can retain a hyperlink whose bookmark
+was not copied, and updating a copied `REF` field can display a missing-reference error. Projection preserves the cached
+visible field result and reports its limitation without evaluating or updating the source field.
 
 Use [`extract()`](/document-api/reference/extract) when the application needs the structured SDM snapshot rather than a
 serialized review view. Keep the DOCX itself when the workflow requires package parts, layout, macros, embedded objects,
