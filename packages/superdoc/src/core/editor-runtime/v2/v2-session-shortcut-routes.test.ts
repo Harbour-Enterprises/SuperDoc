@@ -213,3 +213,43 @@ describe('createV2SessionShortcutRoutes — PAGE through the built-in page-numbe
     expect(execute).not.toHaveBeenCalled();
   });
 });
+
+describe('F9 first-party mutation handoff', () => {
+  it('dispatches each mutation through the trusted route only after its asynchronous list resolves', async () => {
+    let resolveFields!: (items: unknown) => void;
+    const fields = {
+      list: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            resolveFields = resolve;
+          }),
+      ),
+      rebuild: vi.fn(),
+    };
+    const toc = { list: vi.fn(async () => ({ items: [{ address: 'toc:1' }] })), update: vi.fn() };
+    const index = { list: vi.fn(async () => ({ items: [{ address: 'index:1' }] })), rebuild: vi.fn() };
+    const runReferenceMutation = vi.fn(async () => ({ success: true }));
+    const routes = createV2SessionShortcutRoutes({
+      resolveToolbarElement: () => null,
+      getDocumentApi: () => ({ fields, toc, index }),
+      runReferenceMutation,
+    });
+    expect(routes.updateFields?.()).toBe(true);
+    await flush();
+    expect(runReferenceMutation).not.toHaveBeenCalledWith('fields.rebuild', expect.anything());
+    resolveFields({ items: [{ address: 'field:1' }, { address: 'field:2' }] });
+    await flush();
+    expect(runReferenceMutation.mock.calls).toEqual(
+      expect.arrayContaining([
+        ['toc.update', { target: 'toc:1' }],
+        ['index.rebuild', { target: 'index:1' }],
+        ['fields.rebuild', { target: 'field:1' }],
+        ['fields.rebuild', { target: 'field:2' }],
+      ]),
+    );
+    expect(runReferenceMutation).toHaveBeenCalledTimes(4);
+    expect(fields.rebuild).not.toHaveBeenCalled();
+    expect(toc.update).not.toHaveBeenCalled();
+    expect(index.rebuild).not.toHaveBeenCalled();
+  });
+});

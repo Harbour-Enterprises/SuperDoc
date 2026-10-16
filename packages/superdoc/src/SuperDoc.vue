@@ -593,18 +593,28 @@ const clearV2SessionShortcutBinding = (documentId) => {
 
 // v2-keyboard-005: install the shell/session/reference shortcut binding. Toolbar
 // focus routes to the built-in toolbar chrome; PAGE insertion runs the built-in
-// page-number command; field update and NUMPAGES insertion route through the
-// public Document API facade. Header/footer focus and Escape session exit stay
+// page-number command; field updates retain first-party intent per mutation,
+// while NUMPAGES insertion uses the public Document API facade. Header/footer focus and Escape session exit stay
 // unprovided (no public host seam), so the binder fails closed for those rather
 // than reaching V1 internals. Mutating reference shortcuts honor viewing/read-only
 // suppression.
-const installV2SessionShortcutBinding = ({ documentId, bindSessionShortcuts, documentApi }) => {
+const installV2SessionShortcutBinding = ({
+  documentId,
+  bindSessionShortcuts,
+  documentApi,
+  firstPartyCommandMutation,
+}) => {
   if (!documentId) return;
   clearV2SessionShortcutBinding(documentId);
   if (typeof bindSessionShortcuts !== 'function') return;
   const routes = createV2SessionShortcutRoutes({
     resolveToolbarElement: () => proxy.$superdoc?.toolbar?.toolbarContainer ?? null,
     getDocumentApi: () => documentApi ?? null,
+    ...(firstPartyCommandMutation
+      ? {
+          runReferenceMutation: (memberPath, input) => firstPartyCommandMutation.run(memberPath, [input]),
+        }
+      : {}),
     pageNumberCommand: {
       isEnabled: () => getSuperDocUI()?.commands.get('page-number-insert').getState().enabled === true,
       execute: () => {
@@ -1313,7 +1323,7 @@ const onV2EditorReady = (payload) => {
     registerFirstPartyCommandMutation(proxy.$superdoc, host, firstPartyCommandMutation);
   }
   installV2CommandShortcutBinding({ documentId, bindEditShortcuts });
-  installV2SessionShortcutBinding({ documentId, bindSessionShortcuts, documentApi });
+  installV2SessionShortcutBinding({ documentId, bindSessionShortcuts, documentApi, firstPartyCommandMutation });
   if (collaborationProvider && resolveDocumentV2Collaboration(getDocument(documentId)).state === 'valid') {
     onEditorCollaborationReady({ editor: facade });
   }

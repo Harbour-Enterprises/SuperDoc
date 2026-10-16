@@ -8,6 +8,7 @@
     "initialize-a-document",
     "coordinate-room-creation",
     "save-and-restore-a-room",
+    "observe-edits",
     "control-room-access",
     "run-a-server",
     "use-your-own-provider",

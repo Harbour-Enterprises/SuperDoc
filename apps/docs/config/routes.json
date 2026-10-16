@@ -534,6 +534,7 @@
     "/editor/collaboration/control-room-access/",
     "/editor/collaboration/coordinate-room-creation/",
     "/editor/collaboration/initialize-a-document/",
+    "/editor/collaboration/observe-edits/",
     "/editor/collaboration/presence-and-awareness/",
     "/editor/collaboration/run-a-server/",
     "/editor/collaboration/save-and-restore-a-room/",

@@ -67,6 +67,8 @@ export interface CreateV2SessionShortcutRoutesDeps {
   resolveToolbarElement: () => HTMLElement | null | undefined;
   /** Resolve the live public Document API facade, or null when unavailable. */
   getDocumentApi: () => ReferenceDocumentApi | null | undefined;
+  /** Scope each first-party mutation after its asynchronous list has resolved. */
+  runReferenceMutation?: (memberPath: 'toc.update' | 'fields.rebuild' | 'index.rebuild', input: unknown) => unknown;
   /**
    * The built-in page-number command. When present, the PAGE shortcut runs it,
    * so the shortcut and the toolbar control insert and place the caret the same way.
@@ -190,9 +192,17 @@ export function createV2SessionShortcutRoutes(deps: CreateV2SessionShortcutRoute
     const doc = deps.getDocumentApi();
     if (!doc) return { handled: false, reason: 'document-api-unavailable' };
     // V1 `F9`: update TOCs first, then stat/reference fields, then indexes.
-    let ran = runListThenApply(doc.toc?.list, doc.toc?.update);
-    ran = runListThenApply(doc.fields?.list, doc.fields?.rebuild) || ran;
-    ran = runListThenApply(doc.index?.list, doc.index?.rebuild) || ran;
+    const apply = (
+      memberPath: 'toc.update' | 'fields.rebuild' | 'index.rebuild',
+      mutation: ((input: unknown) => unknown) | undefined,
+    ) =>
+      isFn(mutation)
+        ? (input: unknown) =>
+            deps.runReferenceMutation ? deps.runReferenceMutation(memberPath, input) : mutation(input)
+        : undefined;
+    let ran = runListThenApply(doc.toc?.list, apply('toc.update', doc.toc?.update));
+    ran = runListThenApply(doc.fields?.list, apply('fields.rebuild', doc.fields?.rebuild)) || ran;
+    ran = runListThenApply(doc.index?.list, apply('index.rebuild', doc.index?.rebuild)) || ran;
     return ran ? true : { handled: false, reason: 'field-update-workflow-unavailable' };
   };
 
