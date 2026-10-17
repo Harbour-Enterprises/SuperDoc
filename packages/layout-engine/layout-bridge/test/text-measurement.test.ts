@@ -1,7 +1,13 @@
 import { beforeAll, describe, expect, it } from 'vite-plus/test';
 import type { FlowBlock, Line, Run } from '@superdoc/contracts';
 import { resolvePhysicalFamily } from '@superdoc/font-system';
-import { findCharacterAtX, measureCharacterX, charOffsetToPm, getRunFontString } from '../src/text-measurement.ts';
+import {
+  findCharacterAtX,
+  measureCharacterX,
+  charOffsetToPm,
+  getRunFontString,
+  measureInlineImageCaretTextBox,
+} from '../src/text-measurement.ts';
 
 // Helper to count spaces (tests functionality indirectly through justify calculations)
 const countSpaces = (text: string): number => {
@@ -46,7 +52,21 @@ const ensureDocumentStub = (): void => {
     measureText(text: string) {
       const charWidth = this.font.includes('DocumentWide') ? CHAR_WIDTH * 2 : CHAR_WIDTH;
       const kerningAdjustment = this.font.includes('KerningProbe') ? (text.match(/AV/g)?.length ?? 0) * 2 : 0;
-      return { width: text.length * charWidth - kerningAdjustment } as TextMetrics;
+      if (this.font.includes('NativeStrut'))
+        return {
+          width: text.length * charWidth,
+          fontBoundingBoxAscent: 12,
+          fontBoundingBoxDescent: 3,
+          normalLineHeight: 16,
+          normalLineBaseline: 12,
+          nativeTextBoxAscent: 12,
+          nativeTextBoxDescent: 3,
+        } as TextMetrics;
+      return {
+        width: text.length * charWidth - kerningAdjustment,
+        fontBoundingBoxAscent: 14,
+        fontBoundingBoxDescent: 4,
+      } as TextMetrics;
     },
   };
   (globalThis as any).document = {
@@ -83,6 +103,131 @@ const baseLine = (overrides?: Partial<Line>): Line => ({
 });
 
 describe('text measurement utility', () => {
+  const imageBlock = (): FlowBlock =>
+    createBlock([
+      { kind: 'text', text: 'AB', pmStart: 1, pmEnd: 3 },
+      { kind: 'image', src: 'test.png', width: 96, height: 48, pmStart: 3, pmEnd: 4 },
+      { kind: 'text', text: 'C', pmStart: 4, pmEnd: 5 },
+    ]);
+  const imageLine = (): Line =>
+    baseLine({
+      toRun: 2,
+      toChar: 1,
+      width: 126,
+      lineHeight: 48,
+      segments: [
+        { runIndex: 0, fromChar: 0, toChar: 2, width: 20 },
+        { runIndex: 1, fromChar: 0, toChar: 1, width: 96 },
+        { runIndex: 2, fromChar: 0, toChar: 1, width: 10 },
+      ],
+    });
+
+  it('addresses both sides of an inline image and the trailing text end without explicit segment positions', () => {
+    const block = imageBlock();
+    const line = imageLine();
+    const boundaries = [0, 10, 20, 116, 126];
+    expect(boundaries.map((_, offset) => measureCharacterX(block, line, offset))).toEqual(boundaries);
+    expect(boundaries.map((x) => findCharacterAtX(block, line, x, 1).charOffset)).toEqual([0, 1, 2, 3, 4]);
+    expect([0, 1, 2, 3, 4].map((offset) => charOffsetToPm(block, line, offset, 1))).toEqual([1, 2, 3, 4, 5]);
+  });
+
+  it('uses canonical text boundaries beside an image when secondary text shaping differs', () => {
+    const block = imageBlock();
+    const line = imageLine();
+    line.segments![0]!.width = 21;
+    line.segments![2]!.width = 11;
+    line.width = 128;
+    expect(measureCharacterX(block, line, 2)).toBe(21);
+    expect(measureCharacterX(block, line, 3)).toBe(117);
+    expect(measureCharacterX(block, line, 4)).toBe(128);
+  });
+
+  it('excludes an image retained at an empty wrapped line boundary', () => {
+    const block = imageBlock();
+    const line = { ...imageLine(), toRun: 1, toChar: 0, width: 20, segments: imageLine().segments!.slice(0, 1) };
+    expect(measureCharacterX(block, line, 3)).toBe(20);
+    expect(findCharacterAtX(block, line, 200, 1).charOffset).toBe(2);
+    expect(charOffsetToPm(block, line, 3, 1)).toBe(3);
+    expect(measureInlineImageCaretTextBox(block, line, 2)).toEqual({
+      ascent: 14,
+      height: 18,
+      bottomAligned: false,
+      bottomInset: 0,
+    });
+  });
+
+  it.each([
+    ['center', 37],
+    ['right', 74],
+  ] as const)('retains %s alignment around an inline image', (alignment, shift) => {
+    const block = imageBlock();
+    expect(measureCharacterX(block, imageLine(), 3, 200, alignment)).toBe(116 + shift);
+    expect(findCharacterAtX(block, imageLine(), 126 + shift, 1, 200, alignment).charOffset).toBe(4);
+  });
+
+  it('retains justified word spacing across an image', () => {
+    const block = imageBlock();
+    if (block.kind !== 'paragraph') throw new Error('paragraph fixture');
+    block.attrs = { alignment: 'justify' };
+    block.runs[0] = { kind: 'text', text: 'A ' };
+    const line = { ...imageLine(), toRun: 1, toChar: 1, segments: imageLine().segments!.slice(0, 2), width: 116 };
+    expect(measureCharacterX(block, line, 2, 216)).toBe(120);
+    expect(measureCharacterX(block, line, 3, 216)).toBe(216);
+  });
+
+  it('accounts for measured native strut leading only on the uniform inline text-group path', () => {
+    const block = imageBlock(),
+      line = imageLine();
+    const context = { fontSignature: 'native-strut', resolvePhysical: () => 'NativeStrut' };
+    expect(measureInlineImageCaretTextBox(block, line, 3, context)).toEqual({
+      ascent: 12,
+      height: 15,
+      bottomAligned: true,
+      bottomInset: 1,
+    });
+    expect(
+      measureInlineImageCaretTextBox(
+        block,
+        { ...line, segments: line.segments!.map((segment) => ({ ...segment, x: 0 })) },
+        3,
+        context,
+      )?.bottomInset,
+    ).toBe(0);
+    if (block.kind !== 'paragraph') throw new Error('paragraph fixture');
+    block.runs[0] = { kind: 'text', text: 'AB', bold: true };
+    expect(measureInlineImageCaretTextBox(block, line, 3, context)?.bottomInset).toBe(0);
+  });
+
+  it('uses the selected native text box beside images and on wrapped text lines', () => {
+    const block = imageBlock();
+    const line = imageLine();
+    expect(measureInlineImageCaretTextBox(block, line, 3)).toEqual({
+      ascent: 14,
+      height: 18,
+      bottomAligned: true,
+      bottomInset: 0,
+    });
+    expect(measureInlineImageCaretTextBox(block, line, 4)).toEqual({
+      ascent: 14,
+      height: 18,
+      bottomAligned: true,
+      bottomInset: 0,
+    });
+    expect(
+      measureInlineImageCaretTextBox(block, { ...line, toRun: 0, toChar: 2, segments: line.segments!.slice(0, 1) }, 1),
+    ).toEqual({ ascent: 14, height: 18, bottomAligned: false, bottomInset: 0 });
+    expect(
+      measureInlineImageCaretTextBox(
+        block,
+        { ...line, inlineImageAlignments: [{ runIndex: 1, verticalAlign: 'baseline' }] },
+        3,
+      ),
+    ).toEqual({ ascent: 14, height: 18, bottomAligned: false, bottomInset: 0 });
+    if (block.kind !== 'paragraph') throw new Error('paragraph fixture');
+    block.runs[2] = { kind: 'text', text: 'C', baselineShift: 2 };
+    expect(measureInlineImageCaretTextBox(block, line, 3)).toBeNull();
+  });
+
   it('measures text with the shared physical font family', () => {
     expect(getRunFontString({ text: 'Editable', fontFamily: 'Calibri', fontSize: 16 })).toBe(
       `normal normal 16px ${resolvePhysicalFamily('Calibri')}`,

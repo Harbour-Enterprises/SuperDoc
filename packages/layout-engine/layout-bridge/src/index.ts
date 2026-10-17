@@ -138,7 +138,12 @@ export type {
 export { computeDisplayPageNumber } from '@superdoc/layout-engine';
 export type { DisplayPageInfo, HeaderFooterConstraints } from '@superdoc/layout-engine';
 export { clearRemeasureTextCaches, remeasureParagraph } from './remeasure';
-export { findCharacterAtX, measureCharacterX } from './text-measurement';
+export {
+  findCharacterAtX,
+  measureCharacterX,
+  measureInlineImageCaretTextBox,
+  getRunFontString,
+} from './text-measurement';
 export { sliceRunsForLine } from '@superdoc/contracts';
 export { clickToPositionDom, findPageElement } from './dom-mapping';
 export { isListItem, getWordLayoutConfig, calculateTextStartIndent, extractParagraphIndent } from './list-indent-utils';

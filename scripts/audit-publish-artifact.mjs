@@ -474,7 +474,7 @@ const ENGINE_BANNER_MARKERS = [
   ['license title', /DOCX Engine \S+ License Agreement/u],
   ['license filename', /DOCX-ENGINE-LICENSE\.md/u],
 ];
-const ENGINE_WORKER_RE = /^(?:browser|collaboration)-worker-entry-[A-Za-z0-9_-]+\.js$/;
+const ENGINE_WORKER_RE = /^(?:browser|dom|collaboration)-worker-entry-[A-Za-z0-9_-]+\.js$/;
 
 function superdocArtifact(target) {
   if (target.endsWith('.tgz') || target.endsWith('.tar.gz')) {

@@ -7,6 +7,8 @@ import type { FlowBlock, Line, Run, TabRun } from '@superdoc/contracts';
 import {
   interCharacterJustifyAdvanceBeforeOffset,
   isBodyNoteReferenceRun,
+  getParagraphInlineDirection,
+  normalizeBaselineShift,
   sliceRunsForLine,
 } from '@superdoc/contracts';
 import { DEFAULT_FONT_MEASURE_CONTEXT, type FaceKey, type FontMeasureContext } from '@superdoc/font-system';
@@ -42,6 +44,7 @@ const getRunDataAttrs = (run: Run | undefined): Record<string, string> | undefin
 const getRunCharacterLength = (run: Run | undefined): number => {
   if (!run) return 0;
   if (isTabRun(run)) return TAB_CHAR_LENGTH;
+  if (run.kind === 'image') return 1;
   if (
     'src' in run ||
     run.kind === 'lineBreak' ||
@@ -53,6 +56,17 @@ const getRunCharacterLength = (run: Run | undefined): number => {
   }
   return run.text?.length ?? 0;
 };
+
+// Atomic runs can be retained at a wrapped boundary with an empty interval.
+// Caret coordinates count only images that actually belong to this line.
+const sliceCaretRunsForLine = (block: FlowBlock, line: Line): Run[] =>
+  sliceRunsForLine(block, line).filter(
+    (run) =>
+      run.kind !== 'image' ||
+      !line.segments ||
+      (block.kind === 'paragraph' &&
+        line.segments.some((segment) => block.runs[segment.runIndex] === run && segment.toChar > segment.fromChar)),
+  );
 
 const isVisualOnlyRun = (run: Run | undefined): boolean => {
   return getRunDataAttrs(run)?.[FOOTNOTE_MARKER_DATA_ATTR] === 'true';
@@ -137,6 +151,104 @@ export function getRunFontString(run: Run, fontContext: FontMeasureContext = DEF
   return `${style} ${weight} ${fontSize}px ${fontFamily}`;
 }
 
+/** Native caret text box for inline-image paragraphs, including wrapped text lines. */
+export function measureInlineImageCaretTextBox(
+  block: FlowBlock,
+  line: Line,
+  charOffset: number,
+  fontContext: FontMeasureContext = DEFAULT_FONT_MEASURE_CONTEXT,
+  measurementContext?: LayoutMeasurementContext,
+): { ascent: number; height: number; bottomAligned: boolean; bottomInset: number } | null {
+  if (block.kind !== 'paragraph' || !block.runs.some((run) => run.kind === 'image')) return null;
+  const expandsLine = line.segments?.some((segment) => {
+    if (segment.toChar <= segment.fromChar) return false;
+    const run = block.runs[segment.runIndex];
+    if (run?.kind !== 'image') return false;
+    const alignment =
+      run.verticalAlign ??
+      line.inlineImageAlignments?.find((entry) => entry.runIndex === segment.runIndex)?.verticalAlign;
+    return (
+      (alignment == null || alignment === 'top') &&
+      run.height + (run.distTop ?? 0) + (run.distBottom ?? 0) >= line.lineHeight - 0.5
+    );
+  });
+  const runs = sliceCaretRunsForLine(block, line);
+  let cursor = 0;
+  let selectedRun: Run | undefined;
+  for (const run of runs) {
+    const length = getRunCharacterLength(run);
+    if (
+      'text' in run &&
+      (run.kind === 'text' || run.kind === undefined) &&
+      charOffset >= cursor &&
+      charOffset <= cursor + length
+    )
+      selectedRun = run;
+    cursor += length;
+  }
+  // Shifted/script text keeps its own painter baseline policy.
+  if (
+    !selectedRun ||
+    !('text' in selectedRun) ||
+    normalizeBaselineShift(selectedRun.baselineShift) != null ||
+    selectedRun.vertAlign != null ||
+    selectedRun.vanish
+  )
+    return null;
+  const ctx = measurementContext ?? getMeasurementContext();
+  if (!ctx) return null;
+  ctx.font = getRunFontString(selectedRun, fontContext);
+  const metrics = ctx.measureText('M');
+  // Additive font-resource fields are present on the worker's native context.
+  const native = metrics as TextMetrics &
+    Partial<{
+      normalLineHeight: number;
+      normalLineBaseline: number;
+      nativeTextBoxAscent: number;
+      nativeTextBoxDescent: number;
+    }>;
+  const hasNativeBox = [
+    native.normalLineHeight,
+    native.normalLineBaseline,
+    native.nativeTextBoxAscent,
+    native.nativeTextBoxDescent,
+  ].every((value) => Number.isFinite(value));
+  const ascent = hasNativeBox ? native.nativeTextBoxAscent! : metrics.fontBoundingBoxAscent;
+  const height = hasNativeBox
+    ? native.nativeTextBoxAscent! + native.nativeTextBoxDescent!
+    : metrics.fontBoundingBoxAscent + metrics.fontBoundingBoxDescent;
+  // The painter uses a native base-font group for uniform ordinary LTR text.
+  // Keep positioned, mixed-face, script and effect branches on their prior box policy.
+  const nativeGroup =
+    expandsLine &&
+    !line.inlineBoxes?.length &&
+    getParagraphInlineDirection(block.attrs) !== 'rtl' &&
+    !line.segments?.some((segment) => segment.x !== undefined) &&
+    runs.every(
+      (run) =>
+        !('text' in run) ||
+        !run.text ||
+        run.vanish ||
+        ((run.kind === 'text' || run.kind === undefined) &&
+          !run.textEffects?.reflection &&
+          !run.bidi?.rtl &&
+          !/[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF\u{10800}-\u{10FFF}\u{1E800}-\u{1EFFF}\p{Bidi_Control}]/u.test(
+            run.text,
+          ) &&
+          normalizeBaselineShift(run.baselineShift) == null &&
+          run.vertAlign == null &&
+          (run.horizontalScale == null || run.horizontalScale === 1) &&
+          getRunFontString(run, fontContext) === getRunFontString(selectedRun, fontContext)),
+    );
+  const bottomInset =
+    hasNativeBox && nativeGroup
+      ? native.normalLineHeight! - native.normalLineBaseline! - native.nativeTextBoxDescent!
+      : 0;
+  return Number.isFinite(height) && height > 0 && Number.isFinite(ascent)
+    ? { ascent, height, bottomAligned: expandsLine === true, bottomInset }
+    : null;
+}
+
 /**
  * Measure the X position for a specific character offset within a line.
  * Uses Canvas measureText for pixel-perfect accuracy.
@@ -188,13 +300,51 @@ function measureCharacterXWithoutInlineBoxes(
   // Check if line has segment-based positioning (used for tab-aligned text)
   // When segments have explicit X positions, we must use segment-based calculation
   // to match the actual DOM positioning
-  if (hasExplicitPositioning && line.segments && ctx) {
-    return measureCharacterXSegmentBased(block, line, charOffset, ctx, fontContext);
+  const hasMeasuredImage =
+    block.kind === 'paragraph' &&
+    line.segments?.some(
+      (segment) => segment.toChar > segment.fromChar && block.runs[segment.runIndex]?.kind === 'image',
+    );
+  if ((hasExplicitPositioning || hasMeasuredImage) && line.segments && ctx) {
+    const naturalX = measureCharacterXSegmentBased(
+      block,
+      line,
+      charOffset,
+      ctx,
+      fontContext,
+      hasMeasuredImage === true,
+    );
+    if (hasExplicitPositioning) return naturalX;
+    // Image lines use their canonical segment advances; preserve the ordinary
+    // alignment and justification terms applied by the inline-flow painter.
+    let cursor = 0;
+    let spaces = 0;
+    for (const segment of line.segments) {
+      const length = segment.toChar - segment.fromChar;
+      const run = block.kind === 'paragraph' ? block.runs[segment.runIndex] : undefined;
+      if (run && 'text' in run && run.text) {
+        spaces += countSpaces(
+          run.text.slice(segment.fromChar, segment.fromChar + Math.max(0, Math.min(length, charOffset - cursor))),
+        );
+      }
+      cursor += length;
+      if (cursor >= charOffset) break;
+    }
+    return (
+      alignmentOffset +
+      naturalX +
+      justify.extraPerSpace * spaces +
+      interCharacterJustifyAdvanceBeforeOffset(
+        justify.interCharacterBoundaries,
+        charOffset,
+        justify.interCharacterSpacing,
+      )
+    );
   }
 
   if (!ctx) {
     // Fallback to ratio-based calculation if Canvas unavailable
-    const runs = sliceRunsForLine(block, line);
+    const runs = sliceCaretRunsForLine(block, line);
     const charsInLine = Math.max(
       1,
       runs.reduce((sum, run) => {
@@ -213,12 +363,35 @@ function measureCharacterXWithoutInlineBoxes(
     return (charOffset / charsInLine) * renderedLineWidth;
   }
 
-  const runs = sliceRunsForLine(block, line);
+  const runs = sliceCaretRunsForLine(block, line);
   let currentX = 0;
   let currentCharOffset = 0;
   let nextTabRunIndex = line.fromRun;
+  let nextImageRunIndex = line.fromRun;
 
   for (const run of runs) {
+    if (run.kind === 'image') {
+      const runIndex = block.kind === 'paragraph' ? block.runs.indexOf(run, nextImageRunIndex) : -1;
+      nextImageRunIndex = runIndex + 1;
+      const imageWidth =
+        line.segments?.find((segment) => segment.runIndex === runIndex)?.width ??
+        run.width + (run.distLeft ?? 0) + (run.distRight ?? 0);
+      if (currentCharOffset + 1 >= charOffset) {
+        return (
+          alignmentOffset +
+          currentX +
+          (charOffset > currentCharOffset ? imageWidth : 0) +
+          interCharacterJustifyAdvanceBeforeOffset(
+            justify.interCharacterBoundaries,
+            charOffset,
+            justify.interCharacterSpacing,
+          )
+        );
+      }
+      currentX += imageWidth;
+      currentCharOffset += 1;
+      continue;
+    }
     if (isTabRun(run)) {
       // AIDEV-NOTE: Tab slices retain source identity; empty boundary text
       // slices can disappear, so sliced-array offsets are not line width keys.
@@ -408,6 +581,7 @@ function measureCharacterXSegmentBased(
   charOffset: number,
   ctx: LayoutMeasurementContext,
   fontContext: FontMeasureContext,
+  measuredImageBoundaries = false,
 ): number {
   if (block.kind !== 'paragraph' || !line.segments) return 0;
 
@@ -470,6 +644,9 @@ function measureCharacterXSegmentBased(
         return segmentBaseX;
       }
 
+      if (measuredImageBoundaries && offsetInSegment === segmentChars) {
+        return segmentBaseX + segment.width;
+      }
       const text = run.text ?? '';
       // Only TextRun and TabRun have textTransform (via RunMarks)
       // At this point, we've already filtered out TabRun, ImageRun, etc., so run must be TextRun
@@ -548,7 +725,7 @@ export function charOffsetToPm(block: FlowBlock, line: Line, charOffset: number,
     return fallbackPmStart + safeCharOffset;
   }
 
-  const runs = sliceRunsForLine(block, line);
+  const runs = sliceCaretRunsForLine(block, line);
   let cursor = 0;
   let lastPm = fallbackPmStart;
 
@@ -749,27 +926,10 @@ export function findCharacterAtX(
 /**
  * Number of addressable caret offsets on a line (its last caret offset). Mirrors
  * how measureCharacterX advances charOffset: tab runs count as one character,
- * atomic/break/field/math runs as zero, and text runs by their length.
+ * images as one, break/field/math runs as zero, and text runs by their length.
  */
 function lineCharLength(block: FlowBlock, line: Line): number {
-  let length = 0;
-  for (const run of sliceRunsForLine(block, line)) {
-    if (isTabRun(run)) {
-      length += TAB_CHAR_LENGTH;
-      continue;
-    }
-    if (
-      'src' in run ||
-      run.kind === 'lineBreak' ||
-      run.kind === 'break' ||
-      run.kind === 'fieldAnnotation' ||
-      run.kind === 'math'
-    ) {
-      continue;
-    }
-    length += (run.text ?? '').length;
-  }
-  return length;
+  return sliceCaretRunsForLine(block, line).reduce((length, run) => length + getRunCharacterLength(run), 0);
 }
 
 /**

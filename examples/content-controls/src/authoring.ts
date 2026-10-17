@@ -66,11 +66,11 @@ async function refreshControls(): Promise<void> {
   renderControls(result.items);
 }
 
-async function readReadySelection(): Promise<SelectionSlice | null> {
-  if (latestSelection?.status === 'ready') return latestSelection;
+async function readReadySelection(accept: (selection: SelectionSlice) => boolean): Promise<SelectionSlice | null> {
+  if (latestSelection && accept(latestSelection) && latestSelection.status === 'ready') return latestSelection;
 
   const current = superdoc.ui.selection.getSnapshot();
-  if (current.status === 'ready') return current;
+  if (current.status === 'ready' && accept(current)) return current;
   const requiresTarget = Boolean(latestSelection?.selectionTarget ?? current.selectionTarget);
 
   return new Promise((resolve) => {
@@ -87,7 +87,7 @@ async function readReadySelection(): Promise<SelectionSlice | null> {
 
     unsubscribe = superdoc.ui.selection.observe((snapshot) => {
       if (snapshot.selectionTarget) latestSelection = snapshot;
-      if (snapshot.status === 'ready' && (!requiresTarget || snapshot.selectionTarget)) finish(snapshot);
+      if (snapshot.status === 'ready' && accept(snapshot) && (!requiresTarget || snapshot.selectionTarget)) finish(snapshot);
     });
     if (settled) unsubscribe();
   });
@@ -97,7 +97,7 @@ addInlineButton.addEventListener('click', async () => {
   if (busy) return;
   busy = true;
   renderControls(detectedControls);
-  const selection = await readReadySelection();
+  const selection = await readReadySelection(selection => selection.empty === false && selection.quotedText === clientName);
   const target =
     selection?.status === 'ready' && selection.empty === false && selection.quotedText === clientName
       ? selection.selectionTarget
@@ -136,7 +136,10 @@ addBlockButton.addEventListener('click', async () => {
   if (busy) return;
   busy = true;
   renderControls(detectedControls);
-  const selection = await readReadySelection();
+  const selection = await readReadySelection(selection => selection.empty === true
+    && selection.selectionTarget?.start.kind === 'text' && selection.selectionTarget.end.kind === 'text'
+    && selection.selectionTarget.start.blockId === confidentialitySlotBlockId
+    && selection.selectionTarget.end.blockId === confidentialitySlotBlockId);
   const target = selection?.status === 'ready' && selection.empty === true ? selection.selectionTarget : null;
   const isConfidentialitySlot =
     target?.start.kind === 'text' &&

@@ -3090,6 +3090,11 @@ function* layoutDocumentSteps(
     const layout: Layout = {
       pageSize,
       pages: snapshotPages,
+      pageStartColumns: new Map(
+        Array.from(pageStartColumns)
+          .filter(([index]) => index < snapshotPages.length)
+          .map(([index, columns]) => [index, cloneColumnLayout(columns)]),
+      ),
       blockResumeCheckpoints: new Map(blockResumeCheckpoints),
       layoutEpoch: 0,
       ...(options.documentBackground ? { documentBackground: options.documentBackground } : {}),

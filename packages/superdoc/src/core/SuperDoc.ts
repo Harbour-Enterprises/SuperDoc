@@ -987,6 +987,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
 
   /** Count of editors that have signaled `editorCreate`. */
   readyEditors = 0;
+  #sourceLifecycleReady = false;
+  #pendingSourceLifecycle: Array<'source:complete' | 'source:signals-complete'> = [];
 
   // ─── Runtime fields populated by `#init` ──────────────────────────────
   // Declared with `declare` so TS knows the field shape without emitting a
@@ -1391,6 +1393,8 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * Mount the Vue app, stores, and editor runtime.
    */
   #startRuntime() {
+    this.#sourceLifecycleReady = false;
+    this.#pendingSourceLifecycle = [];
     this.#initVueApp();
     this.readyEditors = 0;
     // `#initVueApp()` assigns `this.app`, but TS can't follow the side
@@ -2813,8 +2817,12 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * Triggered when the superdoc is ready
    */
   broadcastReady() {
+    if (this.#destroyed) return;
     if (this.readyEditors === this.requiredNumberOfEditors) {
       this.emit('ready', { superdoc: this });
+      if (this.#destroyed) return;
+      this.#sourceLifecycleReady = true;
+      for (const type of this.#pendingSourceLifecycle.splice(0)) this.emit(type);
     }
   }
 
@@ -2837,12 +2845,21 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     this.emit('editorCreate', { editor: createDeprecatedEditorProxy(editor) });
   }
 
+  #broadcastSourceLifecycle(type: 'source:complete' | 'source:signals-complete') {
+    if (this.#destroyed) return;
+    if (!this.#sourceLifecycleReady) {
+      this.#pendingSourceLifecycle.push(type);
+      return;
+    }
+    this.emit(type);
+  }
+
   broadcastSourceComplete() {
-    this.emit('source:complete');
+    this.#broadcastSourceLifecycle('source:complete');
   }
 
   broadcastSourceSignalsComplete() {
-    this.emit('source:signals-complete');
+    this.#broadcastSourceLifecycle('source:signals-complete');
   }
 
   /** Editors whose `fonts-changed` we already relay, so a repeated create wires once. */
@@ -4550,6 +4567,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     // Mark as destroyed early to prevent in-flight init from mounting
     closeInteractionHistory(this);
     this.#destroyed = true;
+    this.#pendingSourceLifecycle = [];
 
     this.#contentControlClickRoot?.removeEventListener('click', this.#handleContentControlClick, true);
     this.#contentControlClickRoot?.removeEventListener('pointerdown', this.#handleContentControlPointerDown, true);

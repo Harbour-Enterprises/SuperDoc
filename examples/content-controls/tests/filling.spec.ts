@@ -272,7 +272,7 @@ test('shows partial success when one matching control has an incompatible type',
   await nameInput.fill(clientName);
   await expect(page.locator('#filling-status')).toHaveText('Updated 2 of 3 locations.', { timeout: 120_000 });
   await expect
-    .poll(async () => (await page.locator('#editor [data-v2-paint-wrapper]').textContent())?.split(clientName).length ?? 0)
+    .poll(async () => (await page.locator('#editor [data-v2-paint-wrapper] .superdoc-layout').textContent())?.split(clientName).length ?? 0)
     .toBe(3);
 
   let downloaded = false;

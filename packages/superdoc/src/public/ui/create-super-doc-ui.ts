@@ -11424,6 +11424,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (!applyResult.ok && applyResult.reason !== SUPERDOC_UI_REASONS.hostCapabilityUnavailable) {
         return { success: false, reason: 'not-reachable' };
       }
+      const editor = getEditor(),
+        host = getHost();
+      const readiness = editor?.documentMutationReadiness as LooseRecord | undefined;
+      if (typeof readiness?.whenPainted === 'function') {
+        try {
+          await readiness.whenPainted.call(readiness);
+        } catch {
+          return { success: false, reason: 'not-reachable' };
+        }
+        if (getEditor() !== editor || getHost() !== host) return { success: false, reason: 'not-ready' };
+      }
+      host?.getMountedHandle?.()?.focus?.focus({ preventScroll: true });
       activateContentControlChrome(id);
       return { success: true };
     },
