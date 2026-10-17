@@ -76,6 +76,8 @@ const ENGINE_INPUT_PATHS = Object.freeze([
   'superdoc/public/scripts/audit-publish-artifact.mjs',
   'superdoc/public/scripts/engine-prepared-input.mjs',
   'superdoc/public/scripts/engine-native-runtime.mjs',
+  'superdoc/public/scripts/build-resources.mjs',
+  'superdoc/public/scripts/prepare-document-api.mjs',
   'superdoc/public/scripts/superdoc-artifact-store.mjs',
   'superdoc/public/scripts/superdoc-build-timing.mjs',
   'superdoc/public/packages/document-api',
@@ -271,6 +273,17 @@ function resolveGitRoot(startDirectory) {
  * bytes. HEAD alone is insufficient because local builds commonly run from a
  * dirty tree; the tracked diff and every relevant untracked file are hashed.
  */
+// Reusable compilation identity is independent of commit provenance. Git's
+// inventory excludes ignored build outputs while file bytes include local edits.
+export function observeEngineContentIdentity({ v2Root, repoRoot = path.resolve(v2Root, '../..') }) {
+  const gitRoot = resolveGitRoot(repoRoot);
+  const inputPaths = gitRoot
+    ? runGit(gitRoot, ['ls-files', '--cached', '--others', '--exclude-standard', '-z', '--', ...ENGINE_INPUT_PATHS, 'superdoc/public'])
+        .split('\0').filter(Boolean)
+    : [...ENGINE_INPUT_PATHS, 'superdoc/public'];
+  return hashSourceInputClosure({ root: gitRoot ?? repoRoot, inputPaths, label: 'engine compilation' });
+}
+
 export function observeEngineInputIdentity({ v2Root, repoRoot = path.resolve(v2Root, '../..') }) {
   const gitRoot = resolveGitRoot(repoRoot);
   if (!gitRoot) {

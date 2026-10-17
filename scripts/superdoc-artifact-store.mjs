@@ -1319,6 +1319,7 @@ export function createSuperDocArtifactStore(options) {
   return Object.freeze({
     root,
     paths,
+    acquireExclusiveLock: acquirePromotionLock,
     createRun,
     discardRun,
     sealTree: sealArtifactTree,

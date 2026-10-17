@@ -248,6 +248,33 @@ describe('sealed public packing', () => {
     }
   });
 
+  it('packs a private npm-only behavior build without requiring or shipping CDN output', () => {
+    const fixture = createFixture();
+    const observed = {};
+    try {
+      rmSync(path.join(fixture.packageRoot, 'dist-cdn'), { recursive: true });
+      delete fixture.receipt.surfaces.cdn;
+      packSealedPublicPackage({
+        packageRoot: fixture.packageRoot,
+        outputPath: fixture.outputPath,
+        packReceiptPath: fixture.packReceiptPath,
+        localOnly: true,
+        npmOnly: true,
+        ...dependencies(fixture, observed),
+      });
+      expect(observed.stageEntries).not.toContain('dist-cdn');
+      expect(observed.stageManifest.files).not.toContain('dist-cdn');
+      expect(observed.stageManifest.private).toBe(true);
+      expect(() => packSealedPublicPackage({ packageRoot: fixture.packageRoot, npmOnly: true })).toThrow(/local-only/u);
+      expect(() => packSealedPublicPackage({
+        packageRoot: fixture.packageRoot,
+        ...dependencies(fixture),
+      })).toThrow();
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true });
+    }
+  });
+
   it('applies a validated version override only inside the ephemeral pack stage', () => {
     const fixture = createFixture();
     const observed = {};

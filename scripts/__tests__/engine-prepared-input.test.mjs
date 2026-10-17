@@ -13,6 +13,7 @@ import {
   hashEngineTree,
   normalizeExactEngineVersion,
   observeEngineInputIdentity,
+  observeEngineContentIdentity,
   quarantineInvalidEngineProducerSelection,
   readEngineProducerReceipt,
   readEngineProducerSelection,
@@ -437,4 +438,27 @@ test('exact version normalization accepts workspace pins and rejects ranges', ()
   assert.equal(normalizeExactEngineVersion('1.0.0'), '1.0.0');
   assert.throws(() => normalizeExactEngineVersion('^1.0.0'), /exact version/);
   assert.throws(() => normalizeExactEngineVersion('workspace:*'), /exact version/);
+});
+
+
+test('compilation identity reuses unchanged bytes across commits and invalidates source edits', (t) => {
+  const root = mkdtempSync(path.join(tmpdir(), 'engine-content-key-'));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const v2Root = path.join(root, 'superdoc/v2');
+  mkdirSync(v2Root, { recursive: true });
+  writeFileSync(path.join(v2Root, 'source.ts'), 'export const value = 1;');
+  const git = (...args) => {
+    const result = spawnSync('git', args, { cwd: root, encoding: 'utf8' });
+    assert.equal(result.status, 0, result.stderr);
+  };
+  git('init'); git('config', 'user.name', 'Test'); git('config', 'user.email', 'test@example.invalid');
+  git('add', '.'); git('commit', '-m', 'engine');
+  const initial = observeEngineContentIdentity({ repoRoot: root, v2Root }).digest;
+  const provenance = observeEngineInputIdentity({ repoRoot: root, v2Root }).digest;
+  writeFileSync(path.join(root, 'unrelated.md'), 'other product');
+  git('add', '.'); git('commit', '-m', 'unrelated');
+  assert.equal(observeEngineContentIdentity({ repoRoot: root, v2Root }).digest, initial);
+  assert.notEqual(observeEngineInputIdentity({ repoRoot: root, v2Root }).digest, provenance);
+  writeFileSync(path.join(v2Root, 'source.ts'), 'export const value = 2;');
+  assert.notEqual(observeEngineContentIdentity({ repoRoot: root, v2Root }).digest, initial);
 });

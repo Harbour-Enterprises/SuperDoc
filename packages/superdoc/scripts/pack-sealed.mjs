@@ -126,11 +126,12 @@ function checkpoint(name, failAt) {
   if (failAt === name) throw new Error(`injected sealed-pack failure at ${name}`);
 }
 
-function assertStagedSurfaces(stageRoot, publicReceipt) {
+function assertStagedSurfaces(stageRoot, publicReceipt, npmOnly) {
   for (const [surface, directory] of [
     ['npm', 'dist'],
     ['cdn', 'dist-cdn'],
   ]) {
+    if (npmOnly && surface === 'cdn') continue;
     const sealed = publicReceipt.surfaces?.[surface];
     const staged = hashPublicTree(path.join(stageRoot, directory));
     if (
@@ -153,9 +154,10 @@ export function normalizePackVersionOverride(versionOverride) {
   return versionOverride;
 }
 
-function createPackStage({ packageRoot, stageRoot, publicReceipt, surfaceRoots, readCatalog, versionOverride, localOnly }) {
+function createPackStage({ packageRoot, stageRoot, publicReceipt, surfaceRoots, readCatalog, versionOverride, localOnly, npmOnly }) {
   mkdirSync(stageRoot, { recursive: false });
   for (const directory of PACKED_DIRECTORIES) {
+    if (npmOnly && directory === 'dist-cdn') continue;
     const surface = directory === 'dist' ? 'npm' : 'cdn';
     copyRegularTree(surfaceRoots[surface], path.join(stageRoot, directory));
   }
@@ -169,7 +171,7 @@ function createPackStage({ packageRoot, stageRoot, publicReceipt, surfaceRoots, 
   const catalog = readCatalog({ packageRoot });
   const packedManifest = buildSanitizedPackManifest(sourceManifest, {
     hasInternalWorkspace,
-    files: PACKED_MANIFEST_FILES,
+    files: npmOnly ? PACKED_MANIFEST_FILES.filter(file => file !== 'dist-cdn') : PACKED_MANIFEST_FILES,
     catalog,
   });
   if (versionOverride) packedManifest.version = versionOverride;
@@ -178,7 +180,7 @@ function createPackStage({ packageRoot, stageRoot, publicReceipt, surfaceRoots, 
     delete packedManifest.publishConfig;
   }
   writeFileSync(path.join(stageRoot, 'package.json'), `${JSON.stringify(packedManifest, null, 2)}\n`, { flag: 'wx' });
-  assertStagedSurfaces(stageRoot, publicReceipt);
+  assertStagedSurfaces(stageRoot, publicReceipt, npmOnly);
   return packedManifest;
 }
 
@@ -376,7 +378,9 @@ export function packSealedPublicPackage({
   readCatalog = readPnpmDefaultCatalog,
   versionOverride = env.SUPERDOC_PACK_VERSION_OVERRIDE ?? null,
   localOnly = false,
+  npmOnly = false,
 } = {}) {
+  if (npmOnly && !localOnly) throw new Error('npm-only packing requires --local-only; publication requires both surfaces');
   versionOverride = normalizePackVersionOverride(versionOverride);
   const sourceManifestPath = path.join(packageRoot, 'package.json');
   const sourceManifestBefore = readFileSync(sourceManifestPath);
@@ -384,7 +388,7 @@ export function packSealedPublicPackage({
   const publicReceipt = verifyReceipt({
     packageRoot,
     v2Root,
-    requiredSurfaces: ['npm', 'cdn'],
+    requiredSurfaces: npmOnly ? ['npm'] : ['npm', 'cdn'],
     env,
     surfaceRoots: selection.surfaceRoots,
     receiptPath: selection.receiptPath,
@@ -397,7 +401,7 @@ export function packSealedPublicPackage({
     const verified = verifyPreparedEngine({
       v2Root,
       expectedVersion: readDeclaredEngineVersion(packageRoot),
-      surfaces: ['dist', 'dist-cdn'],
+      surfaces: npmOnly ? ['dist'] : ['dist', 'dist-cdn'],
       expectedReceiptDigest: publicReceipt.engineInput.producerReceiptDigest,
       currentInputIdentity: observeEngineInputIdentity({ v2Root }),
       expectedBuildProfile: localOnly ? 'eval-fast' : 'canonical',
@@ -424,6 +428,7 @@ export function packSealedPublicPackage({
       readCatalog,
       versionOverride,
       localOnly,
+      npmOnly,
     });
     const stageMetadata = prepareStage
       ? prepareStage({ stageRoot, publicReceipt, selection, temporaryRoot })
@@ -499,9 +504,12 @@ function isCliEntry() {
 if (isCliEntry()) {
   try {
     const localOnly = process.argv.slice(2).includes('--local-only');
-    if (process.argv.slice(2).some((arg) => arg !== '--local-only')) throw new Error('unknown pack-sealed option');
+    const npmOnly = process.argv.slice(2).includes('--npm-only');
+    if (npmOnly && !localOnly) throw new Error('--npm-only requires --local-only');
+    if (process.argv.slice(2).some((arg) => !['--local-only', '--npm-only'].includes(arg))) throw new Error('unknown pack-sealed option');
     const result = packSealedPublicPackage(localOnly ? {
       localOnly,
+      npmOnly,
       outputPath: path.join(PACKAGE_ROOT, 'superdoc-internal.tgz'),
       packReceiptPath: path.join(PACKAGE_ROOT, 'build-receipts', 'public-pack-internal-receipt.json'),
     } : {});

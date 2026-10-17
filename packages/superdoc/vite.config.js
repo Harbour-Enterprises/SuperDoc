@@ -305,6 +305,8 @@ export default defineConfig(({ mode, command }) => {
         cssFileName: 'style',
       },
       minify: false,
+      cssMinify: process.env.SUPERDOC_EVAL_FAST_BUILD !== '1',
+      reportCompressedSize: process.env.SUPERDOC_EVAL_FAST_BUILD !== '1',
       sourcemap: false,
       rollupOptions: {
         input: internalEsOnly ? { 'superdoc': 'src/index.js' } : {

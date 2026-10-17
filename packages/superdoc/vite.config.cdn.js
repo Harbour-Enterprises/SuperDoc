@@ -67,7 +67,9 @@ export default defineConfig(({ command }) => {
         cssFileName: 'superdoc.min',
         fileName: () => 'superdoc.min.js',
       },
-      minify: 'esbuild',
+      minify: process.env.SUPERDOC_EVAL_FAST_BUILD === '1' ? false : 'esbuild',
+      cssMinify: process.env.SUPERDOC_EVAL_FAST_BUILD !== '1',
+      reportCompressedSize: process.env.SUPERDOC_EVAL_FAST_BUILD !== '1',
       // Published CDN artifact must never carry a source map (it would expose
       // the bundled private v2 runtime source). The publish-artifact auditor is
       // the enforcing backstop.
