@@ -6245,6 +6245,148 @@ describe('public ui — track changes workflow parity (row 748)', () => {
     expect(ui.trackChanges.getSnapshot().activeId).toBe('tc-1');
   });
 
+  it('keeps rapid navigation queued when the host enriches panel focus with its painted alias', async () => {
+    let activeReviewTarget: Record<string, unknown> | null = null;
+    let publishReviewSnapshot: ((snapshot: { activeReviewTarget: unknown }) => void) | null = null;
+    const review = {
+      getActiveReviewTarget: () => activeReviewTarget,
+      subscribe: (listener: typeof publishReviewSnapshot) => {
+        publishReviewSnapshot = listener;
+        return () => {};
+      },
+      setActiveReviewTarget: (target: Record<string, unknown>) => {
+        activeReviewTarget = { ...target, paintedEntityId: `imported:${String(target.entityId).slice(-1)}` };
+        publishReviewSnapshot?.({ activeReviewTarget });
+      },
+    };
+    const rows = items.map((item, index) => ({
+      ...item,
+      target: { kind: 'text', segments: [{ blockId: `P${index + 1}`, range: { start: 0, end: 3 } }] },
+      sourceIds: { wordIdInsert: String(index + 1) },
+    }));
+    const scrollTargetIntoView = vi.fn(async () => ({ success: true }));
+    const { superdoc } = makeWorkflowSuperdoc({
+      trackChanges: { list: () => ({ items: rows }) },
+      host: { getHandles: () => ({ review }), scrollTargetIntoView },
+    });
+    const ui = createSuperDocUI({ superdoc });
+
+    expect(await Promise.all(Array.from({ length: 5 }, () => ui.trackChanges.navigateNext()))).toEqual(
+      Array.from({ length: 5 }, () => ({ success: true })),
+    );
+    expect(ui.trackChanges.getSnapshot().activeId).toBe('tc-2');
+    expect(await Promise.all(Array.from({ length: 3 }, () => ui.trackChanges.navigatePrevious()))).toEqual(
+      Array.from({ length: 3 }, () => ({ success: true })),
+    );
+    expect(ui.trackChanges.getSnapshot().activeId).toBe('tc-2');
+    expect(scrollTargetIntoView).toHaveBeenCalledTimes(8);
+    expect(activeReviewTarget).toMatchObject({ entityId: 'tc-2', paintedEntityId: 'imported:2' });
+    ui.destroy();
+  });
+
+  it('keeps queued navigation current when an unrelated host snapshot republishes the previous panel target', async () => {
+    let activeReviewTarget: Record<string, unknown> | null = null;
+    let publishReviewSnapshot: ((snapshot: { activeReviewTarget: unknown }) => void) | null = null;
+    const review = {
+      getActiveReviewTarget: () => activeReviewTarget,
+      subscribe: (listener: typeof publishReviewSnapshot) => {
+        publishReviewSnapshot = listener;
+        return () => {};
+      },
+      setActiveReviewTarget: (target: Record<string, unknown>) => {
+        activeReviewTarget = target;
+        publishReviewSnapshot?.({ activeReviewTarget });
+      },
+    };
+    const rows = items.map((item, index) => ({
+      ...item,
+      target: { kind: 'text', segments: [{ blockId: `P${index + 1}`, range: { start: 0, end: 3 } }] },
+    }));
+    const scrollTargetIntoView = vi.fn(async () => {
+      // Host wrappers can copy a snapshot while retaining the same logical
+      // panel target until this asynchronous navigation mirrors its new one.
+      publishReviewSnapshot?.({ activeReviewTarget: activeReviewTarget && { ...activeReviewTarget } });
+      return { success: true };
+    });
+    const { superdoc } = makeWorkflowSuperdoc({
+      trackChanges: { list: () => ({ items: rows }) },
+      host: { getHandles: () => ({ review }), scrollTargetIntoView },
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.trackChanges.setActive('tc-2')).toBe(true);
+
+    expect(await Promise.all(Array.from({ length: 3 }, () => ui.trackChanges.navigatePrevious()))).toEqual(
+      Array.from({ length: 3 }, () => ({ success: true })),
+    );
+    expect(ui.trackChanges.getSnapshot().activeId).toBe('tc-2');
+    expect(scrollTargetIntoView).toHaveBeenCalledTimes(3);
+    ui.destroy();
+  });
+
+  it.each([
+    { interaction: 'document click', origin: 'document', entityId: 'tc-1', paintedIds: ['imported:1'] },
+    { interaction: 'different panel target', origin: 'panel', entityId: 'tc-3', paintedIds: ['imported:3'] },
+    {
+      interaction: 'different painted occurrence',
+      origin: 'panel',
+      entityId: 'tc-1',
+      paintedIds: ['imported:1', 'imported:11'],
+    },
+  ])('cancels queued navigation after a $interaction', async ({ origin, entityId, paintedIds }) => {
+    let activeReviewTarget: Record<string, unknown> | null = null;
+    let publishReviewSnapshot: ((snapshot: { activeReviewTarget: unknown }) => void) | null = null;
+    let resolveScroll: ((value: { success: boolean }) => void) | undefined;
+    const review = {
+      getActiveReviewTarget: () => activeReviewTarget,
+      subscribe: (listener: typeof publishReviewSnapshot) => {
+        publishReviewSnapshot = listener;
+        return () => {};
+      },
+      setActiveReviewTarget: (target: Record<string, unknown>) => {
+        activeReviewTarget = target;
+        publishReviewSnapshot?.({ activeReviewTarget });
+      },
+    };
+    const rows = items.map((item, index) => ({
+      ...item,
+      sourceIds: { wordIdInsert: String(index + 1), wordIdDelete: String(index + 11) },
+    }));
+    const scrollTargetIntoView = vi.fn(
+      () =>
+        new Promise<{ success: boolean }>((resolve) => {
+          resolveScroll = resolve;
+        }),
+    );
+    const { superdoc } = makeWorkflowSuperdoc({
+      trackChanges: { list: () => ({ items: rows }) },
+      host: { getHandles: () => ({ review }), scrollTargetIntoView },
+    });
+    const ui = createSuperDocUI({ superdoc });
+    const first = ui.trackChanges.navigateNext();
+    const queued = ui.trackChanges.navigateNext();
+    for (let index = 0; index < 10 && !resolveScroll; index += 1) await Promise.resolve();
+    expect(scrollTargetIntoView).toHaveBeenCalledOnce();
+
+    for (const paintedEntityId of paintedIds) {
+      activeReviewTarget = {
+        entityType: 'trackedChange',
+        entityId,
+        paintedEntityId,
+        origin,
+        story: { kind: 'story', storyType: 'body' },
+      };
+      publishReviewSnapshot?.({ activeReviewTarget });
+    }
+    resolveScroll?.({ success: true });
+
+    await expect(first).resolves.toEqual({ success: false });
+    await expect(queued).resolves.toEqual({ success: false });
+    expect(scrollTargetIntoView).toHaveBeenCalledOnce();
+    expect(ui.trackChanges.getSnapshot().activeId).toBe(entityId);
+    expect(activeReviewTarget).toMatchObject({ entityId, paintedEntityId: paintedIds.at(-1) });
+    ui.destroy();
+  });
+
   it('navigateNext threads a non-body row story into the scroll target (IT-1250)', async () => {
     const scrollTargetIntoView = vi.fn(async () => ({ success: true }));
     const footnoteStory = { kind: 'story', storyType: 'footnote', noteId: '1' } as const;

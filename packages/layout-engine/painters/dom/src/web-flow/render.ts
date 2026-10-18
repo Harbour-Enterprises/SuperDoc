@@ -302,9 +302,13 @@ function renderCell(cell: TableCell, row: TableRow, table: TableBlock, context: 
   const cellTrackedConfig = cellParagraph ? resolveTrackedChangesConfig(cellParagraph) : rowTrackedConfig;
   if (row.attrs?.trackedChange) {
     applyRowTrackedChangeToCell(element, row.attrs.trackedChange, rowTrackedConfig);
+    if (element.dataset.trackChangeId === row.attrs.trackedChange.id) element.dataset.trackChangeSourceBlock = row.id;
   }
   if (cell.attrs?.trackedChange) {
     applyCellTrackedChangeToCell(element, cell.attrs.trackedChange, cellTrackedConfig);
+    if (!element.dataset.trackChangeSourceBlock && element.dataset.trackChangeId === cell.attrs.trackedChange.id) {
+      element.dataset.trackChangeSourceBlock = cell.id;
+    }
   }
   const blocks = (cell.blocks ?? (cell.paragraph ? [cell.paragraph] : [])).filter(doesWebFlowBlockProduceDom);
   blocks.forEach((block) => element.appendChild(renderFlowBlock(block, context)));

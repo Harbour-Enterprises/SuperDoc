@@ -754,4 +754,48 @@ describe('WebFlowPainter', () => {
     expect(root.querySelector('[data-flow-block-id="deleted-cell"]')?.classList).toContain('hidden');
     expect(root.querySelector('[data-flow-block-id="off-cell"]')?.getAttribute('data-track-change-id')).toBeNull();
   });
+  it('binds web-flow structural review to its primary physical row or cell and omits disabled owners', () => {
+    const root = mount(),
+      painter = createWebFlowPainter(root);
+    const meta = { kind: 'insert' as const, id: 'imported:3' };
+    const block: FlowBlock = {
+      kind: 'table',
+      id: 'table',
+      rows: [
+        {
+          id: 'actual-row',
+          attrs: { trackedChange: meta },
+          cells: [{ id: 'overlapped-cell', attrs: { trackedChange: meta }, paragraph: paragraph('p1', 'both') }],
+        },
+        {
+          id: 'other-row',
+          cells: [{ id: 'actual-cell', attrs: { trackedChange: meta }, paragraph: paragraph('p2', 'cell') }],
+        },
+        {
+          id: 'disabled-row',
+          attrs: { trackedChange: meta },
+          cells: [
+            {
+              id: 'disabled-cell',
+              paragraph: paragraph('p3', 'off', { attrs: { trackedChangesMode: 'off', trackedChangesEnabled: true } }),
+            },
+          ],
+        },
+      ],
+    };
+    commit(painter, {
+      kind: 'replace-all',
+      epoch: 1,
+      items: [{ stableDomKey: 'table', renderFingerprint: 'v1', block }],
+    });
+    expect(
+      root.querySelector('[data-flow-block-id="overlapped-cell"]')?.getAttribute('data-track-change-source-block'),
+    ).toBe('actual-row');
+    expect(
+      root.querySelector('[data-flow-block-id="actual-cell"]')?.getAttribute('data-track-change-source-block'),
+    ).toBe('actual-cell');
+    expect(
+      root.querySelector('[data-flow-block-id="disabled-cell"]')?.getAttribute('data-track-change-source-block'),
+    ).toBeNull();
+  });
 });

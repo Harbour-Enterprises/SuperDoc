@@ -352,7 +352,9 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
         clearSurfaceMeasurementGeneration(state, fontContext.fontSignature);
       }
       let passFontContext: FontMeasureContext = Object.freeze({
-        fontSignature: fontContext.fontSignature,
+        fontSignature: options.flushTextMetrics
+          ? `${fontContext.fontSignature}|native:${++nativeMetricAttempt}`
+          : fontContext.fontSignature,
         resolvePhysical: fontContext.resolvePhysical,
         ...(fontContext.resolveNaturalLineMultiplier
           ? { resolveNaturalLineMultiplier: fontContext.resolveNaturalLineMultiplier }
@@ -383,14 +385,21 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
         for (let attempt = 0; attempt < 64; attempt += 1) {
           if (finished) throw new DomMeasurementInfrastructureError('DomMeasurementPass has finished');
           state.execution?.throwIfAborted?.();
-          const result = await measureBlock(block, constraints, passFontContext);
-          const pending = options.flushTextMetrics?.();
-          if (!pending) {
+          const authority = { settled: false };
+          state.measurementAttempt = authority;
+          try {
+            const result = await measureBlock(block, constraints, passFontContext);
+            const pending = options.flushTextMetrics?.();
+            if (!pending) {
+              state.execution?.throwIfAborted?.();
+              authority.settled = true;
+              return result;
+            }
+            await pending;
             state.execution?.throwIfAborted?.();
-            return result;
+          } finally {
+            if (state.measurementAttempt === authority) state.measurementAttempt = null;
           }
-          await pending;
-          state.execution?.throwIfAborted?.();
           // No speculative widths, font metrics or recursive table cache may escape this attempt.
           state.textWidths.clear(false);
           state.fontMetrics.clear();
@@ -4843,13 +4852,16 @@ async function measureTableBlock(
   const measurementStartedAt = tableMeasurementNow();
   const tableObservation = createMutableTableMeasurementObservation();
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
-  const measurementRuntimeSignature = JSON.stringify({
+  const measurementConfiguration = {
     mode: measurementConfig.mode,
     deterministicFamily: measurementConfig.fonts.deterministicFamily,
     fallbackStack: measurementConfig.fonts.fallbackStack,
+  };
+  const measurementRuntimeSignature = JSON.stringify({
+    ...measurementConfiguration,
     fontSignature: fontContext.fontSignature,
   });
-  const measurementOwner = createTableMeasurementOwner(block, fontContext, measurementRuntimeSignature);
+  const measurementOwner = createTableMeasurementOwner(block, fontContext, JSON.stringify(measurementConfiguration));
   const retainedTable = readRetainedTableMeasurement(constraints.retainedTable, measurementOwner);
   const retainedWorkingInput = retainedTable && tableWorkingInputs.get(retainedTable.measure);
   const boundedRows = retainedWorkingInput

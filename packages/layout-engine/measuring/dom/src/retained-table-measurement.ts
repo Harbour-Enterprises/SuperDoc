@@ -22,6 +22,7 @@ type TableMeasurementOwner = {
   runtime: SurfaceMeasurementRuntimeState;
   fontSignature: string;
   measurementRuntimeSignature: string;
+  attempt: { settled: boolean } | null;
   immutable: boolean;
   rowsCertified: number;
   rowsReusable: boolean;
@@ -41,6 +42,7 @@ type CompletedTableMeasurementOwner = {
   runtimeIdentity: object;
   fontSignature: string;
   measurementRuntimeSignature: string;
+  attempt: { settled: boolean } | null;
   maxWidth: number;
   columnWidths: readonly number[];
   rowsReusable: boolean;
@@ -168,8 +170,11 @@ export function createTableMeasurementOwner(
   return {
     block,
     runtime,
-    fontSignature: fontContext.fontSignature,
+    // Native discovery changes the speculative cache namespace, not the
+    // settled browser font generation of already acknowledged row geometry.
+    fontSignature: runtime.fontSignature ?? fontContext.fontSignature,
     measurementRuntimeSignature,
+    attempt: runtime.measurementAttempt,
     immutable: isImmutableContainerExcept(block, 'rows') && isFrozenArray(block.rows),
     rowsCertified: 0,
     rowsReusable: hasStandardObjectPrototype(),
@@ -422,6 +427,7 @@ export function readRetainedTableMeasurement(
   if (!retained || !owner) return undefined;
   const previous = measurementOwners.get(retained.measure);
   return previous &&
+    previous.attempt?.settled === true &&
     previous.blockIdentity === measurementIdentities.get(retained.block) &&
     previous.runtimeIdentity === measurementIdentities.get(owner.runtime) &&
     previous.fontSignature === owner.fontSignature &&
@@ -445,6 +451,7 @@ export function recordTableMeasurementOwner(
       runtimeIdentity: measurementIdentity(owner.runtime),
       fontSignature: owner.fontSignature,
       measurementRuntimeSignature: owner.measurementRuntimeSignature,
+      attempt: owner.attempt,
       maxWidth,
       columnWidths: measure.columnWidths.slice(),
       rowsReusable: owner.rowsReusable && hasStandardObjectPrototype(),

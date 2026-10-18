@@ -19,6 +19,7 @@ import { scrollToElement } from '../internal/toolbar/built-in/scroll-helpers.js'
 /** @typedef {import('../core/types/index.js').Editor} Editor */
 /** @typedef {import('../public/ui/types.js').SuperDocUI} SuperDocUI */
 /** @typedef {import('@superdoc/document-api').HyperlinkTarget} HyperlinkTarget */
+/** @typedef {{ getHandles?: () => { editing?: { input?: { runAfterPendingInput?: (action: (signal?: AbortSignal) => Promise<boolean>) => Promise<boolean> } } } }} LinkNavigationHost */
 
 /**
  * A single-block text-selection target in the Document API `query.match`
@@ -634,6 +635,38 @@ export function useLinkPopover({
     const anchorName = decodeAnchorFragment(anchorUrl.slice(1));
     const editor = getActiveEditor();
     const generation = openGeneration;
+    /** @param {AbortSignal} [signal] */
+    const navigate = (signal) =>
+      navigateAnchorInEditor(anchorName, editor, generation, placeCaret, revalidateCaretAfterReveal, signal);
+    if (revalidateCaretAfterReveal) {
+      try {
+        const host = /** @type {LinkNavigationHost | null | undefined} */ (editor?.host);
+        const input = host?.getHandles?.()?.editing?.input;
+        if (typeof input?.runAfterPendingInput === 'function') return await input.runAfterPendingInput(navigate);
+      } catch {
+        return false;
+      }
+    }
+    return navigate();
+  }
+
+  /**
+   * @param {string} anchorName
+   * @param {Editor | null | undefined} editor
+   * @param {number} generation
+   * @param {boolean} placeCaret
+   * @param {boolean} revalidateCaretAfterReveal
+   * @param {AbortSignal} [signal]
+   */
+  async function navigateAnchorInEditor(
+    anchorName,
+    editor,
+    generation,
+    placeCaret,
+    revalidateCaretAfterReveal,
+    signal,
+  ) {
+    if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
     /** @type {LinkPopoverDocumentApi | null | undefined} */
     const doc = editor?.doc;
     const bookmarkGet = doc?.bookmarks?.get;
@@ -648,6 +681,7 @@ export function useLinkPopover({
         const list = doc?.bookmarks?.list;
         if (typeof list === 'function') {
           const catalog = await Promise.resolve(list.call(doc.bookmarks));
+          if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return null;
           if (catalog?.items?.filter((item) => item.name === anchorName).length !== 1) return null;
         }
         const bookmark = await Promise.resolve(
@@ -655,7 +689,7 @@ export function useLinkPopover({
             target: { kind: 'entity', entityType: 'bookmark', name: anchorName },
           }),
         );
-        if (editor !== getActiveEditor() || generation !== openGeneration) return null;
+        if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return null;
         const story = bookmark?.address?.story;
         if ((story && story.storyType !== 'body') || bookmark?.tableColumn) return null;
         const blockId = bookmark?.range?.from?.blockId;
@@ -667,12 +701,13 @@ export function useLinkPopover({
       }
     }
     let position = await readBodyBookmark();
-    if (!position) return false;
+    if (!position || signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
     if (placeCaret && !revalidateCaretAfterReveal) await placeCaretAtBookmark(position.blockId, position.offset);
     const viewport = getUi()?.viewport;
     const scrollIntoView = viewport?.scrollIntoView;
     if (typeof scrollIntoView !== 'function') return false;
     for (let step = 0; step < MAX_ANCHOR_NAVIGATION_STEPS; step += 1) {
+      if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
       try {
         const target = {
           kind: 'text',
@@ -682,17 +717,18 @@ export function useLinkPopover({
         const result = await Promise.resolve(
           scrollIntoView.call(viewport, { target, block: 'start', behavior: 'instant' }),
         );
-        if (editor !== getActiveEditor() || generation !== openGeneration) return false;
+        if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
         if (result?.success !== false) {
           if (revalidateCaretAfterReveal) {
             const current = await readBodyBookmark();
-            if (!current) return false;
+            if (!current || signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration)
+              return false;
             if (current.blockId !== position.blockId || current.offset !== position.offset) {
               position = current;
               continue;
             }
             if (placeCaret) await placeCaretAtBookmark(current.blockId, current.offset);
-            if (editor !== getActiveEditor() || generation !== openGeneration) return false;
+            if (signal?.aborted || editor !== getActiveEditor() || generation !== openGeneration) return false;
           }
           return true;
         }

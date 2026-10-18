@@ -1730,6 +1730,144 @@ describe('useLinkPopover', () => {
     });
   });
 
+  it('owns note REF navigation across async model reads, reveal and caret publication', async () => {
+    const note = document.createElement('div');
+    note.dataset.sdNoteRole = 'body';
+    const anchor = document.createElement('a');
+    anchor.dataset.sdNoteCrossReference = 'ref';
+    note.appendChild(anchor);
+    let finishRead,
+      finishReveal,
+      finishCaret,
+      pending = false,
+      task;
+    const bookmarkGet = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishRead = () => resolve({ range: { from: { blockId: 'body-marker', offset: 8 } } });
+        }),
+    );
+    const scrollIntoView = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishReveal = () => resolve({ success: true });
+        }),
+    );
+    const setSelectionTarget = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishCaret = () => resolve({ ok: true });
+        }),
+    );
+    const input = {
+      runAfterPendingInput: vi.fn((action) => {
+        pending = true;
+        task = Promise.resolve()
+          .then(action)
+          .finally(() => {
+            pending = false;
+          });
+        return task;
+      }),
+    };
+    const editor = {
+      host: { getHandles: () => ({ editing: { input } }) },
+      authoring: { setSelectionTarget },
+      doc: { bookmarks: { get: bookmarkGet } },
+    };
+    const { popover } = createSubject({ editor, ui: { viewport: { scrollIntoView } } });
+    popover.handleLinkClick(createPayload({ href: '#BodyTarget', element: anchor, editableText: false }));
+    expect(input.runAfterPendingInput).toHaveBeenCalledTimes(1);
+    await tick();
+    expect(pending).toBe(true);
+    finishRead();
+    await tick();
+    expect(pending).toBe(true);
+    finishReveal();
+    await tick();
+    expect(pending).toBe(true);
+    finishRead();
+    await tick();
+    expect(pending).toBe(true);
+    expect(setSelectionTarget).toHaveBeenCalledTimes(1);
+    finishCaret();
+    await task;
+    expect(pending).toBe(false);
+    expect(setSelectionTarget.mock.lastCall[0].target.start).toMatchObject({ blockId: 'body-marker', offset: 8 });
+  });
+
+  it('cancels note navigation closed while waiting for pending input without reacquiring a newer generation', async () => {
+    const note = document.createElement('div');
+    note.dataset.sdNoteRole = 'body';
+    const anchor = document.createElement('a');
+    anchor.dataset.sdNoteCrossReference = 'ref';
+    note.appendChild(anchor);
+    let run, task;
+    const input = {
+      runAfterPendingInput: vi.fn((action) => {
+        task = new Promise((resolve) => {
+          run = () => resolve(action());
+        });
+        return task;
+      }),
+    };
+    const bookmarkGet = vi.fn(),
+      setSelectionTarget = vi.fn(),
+      scrollIntoView = vi.fn();
+    const editor = {
+      host: { getHandles: () => ({ editing: { input } }) },
+      authoring: { setSelectionTarget },
+      doc: { bookmarks: { get: bookmarkGet } },
+    };
+    const { popover } = createSubject({ editor, ui: { viewport: { scrollIntoView } } });
+    popover.handleLinkClick(createPayload({ href: '#BodyTarget', element: anchor, editableText: false }));
+    expect(input.runAfterPendingInput).toHaveBeenCalledTimes(1);
+    popover.destroy();
+    run();
+    await task;
+    expect(bookmarkGet).not.toHaveBeenCalled();
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(setSelectionTarget).not.toHaveBeenCalled();
+  });
+
+  it('cannot resume an aborted note reveal when the same editor becomes usable again', async () => {
+    const note = document.createElement('div');
+    note.dataset.sdNoteRole = 'body';
+    const anchor = document.createElement('a');
+    anchor.dataset.sdNoteCrossReference = 'ref';
+    note.appendChild(anchor);
+    const retirement = new AbortController();
+    let finishReveal, task;
+    const input = {
+      runAfterPendingInput: vi.fn((action) => {
+        task = action(retirement.signal);
+        return task;
+      }),
+    };
+    const bookmarkGet = vi.fn(async () => ({ range: { from: { blockId: 'body-marker', offset: 8 } } }));
+    const scrollIntoView = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          finishReveal = () => resolve({ success: true });
+        }),
+    );
+    const setSelectionTarget = vi.fn();
+    const editor = {
+      host: { getHandles: () => ({ editing: { input } }) },
+      authoring: { setSelectionTarget },
+      doc: { bookmarks: { get: bookmarkGet } },
+    };
+    const { popover } = createSubject({ editor, ui: { viewport: { scrollIntoView } } });
+    popover.handleLinkClick(createPayload({ href: '#BodyTarget', element: anchor, editableText: false }));
+    await tick();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    retirement.abort();
+    finishReveal();
+    await task;
+    expect(bookmarkGet).toHaveBeenCalledTimes(1);
+    expect(setSelectionTarget).not.toHaveBeenCalled();
+  });
+
   it('revalidates a note REF bookmark moved by a peer during a successful viewport reveal', async () => {
     const note = document.createElement('div');
     note.dataset.sdNoteRole = 'body';

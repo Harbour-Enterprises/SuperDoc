@@ -4314,3 +4314,44 @@ describe('comments-store PDF comment selection bounds (SD-3497)', () => {
     expect(floating[0].selection.selectionBounds).toMatchObject({ top: 64, left: 12, right: 96, bottom: 90 });
   });
 });
+
+describe('pending receipt creation invalidation', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    useSuperdocStore().documents = [
+      { id: 'doc-1', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ];
+  });
+
+  it('removes pending-created rows immediately while preserving unrelated deletion events', () => {
+    const store = useCommentsStore();
+    const adapter = { documentId: 'doc-1', isPendingCommentCreation: (id) => id === 'pending-created' };
+    const superdoc = makeSuperdoc(adapter);
+    store.setV2CommentsAdapter(adapter);
+    store.commentsList = ['pending-created', 'existing'].map((commentId) =>
+      useComment({ commentId, fileId: 'doc-1', commentText: commentId }),
+    );
+    store.activeComment = 'pending-created';
+    store.dropCommentsFromMutationImpact({
+      superdoc,
+      documentId: 'doc-1',
+      removedIds: new Set(['pending-created', 'existing']),
+    });
+    expect(store.commentsList).toEqual([]);
+    expect(store.activeComment).toBeNull();
+    expect(superdoc.emit.mock.calls.map(([, event]) => event.comment.commentId)).toEqual(['existing']);
+  });
+
+  it('never uses retired creation ownership to suppress a new adapter deletion', () => {
+    const store = useCommentsStore();
+    const retired = { documentId: 'doc-1', isPendingCommentCreation: () => true };
+    store.setV2CommentsAdapter(retired);
+    const current = { documentId: 'doc-1', isPendingCommentCreation: () => false };
+    store.setV2CommentsAdapter(current);
+    const superdoc = makeSuperdoc(current);
+    store.commentsList = [useComment({ commentId: 'pending-created', fileId: 'doc-1', commentText: 'current' })];
+    store.dropCommentsFromMutationImpact({ superdoc, documentId: 'doc-1', removedIds: new Set(['pending-created']) });
+    expect(store.commentsList).toEqual([]);
+    expect(superdoc.emit).toHaveBeenCalledWith('comments-update', expect.objectContaining({ type: 'deleted' }));
+  });
+});

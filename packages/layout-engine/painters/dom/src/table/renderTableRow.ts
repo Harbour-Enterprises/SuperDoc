@@ -845,6 +845,9 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
     // shared single-value datasets / color variables (SD-3481).
     if (rowTrackedChange && rowTrackedChangeConfig) {
       applyRowTrackedChangeToCell(cellElement, rowTrackedChange, rowTrackedChangeConfig);
+      if (row?.id && cellElement.dataset.trackChangeId === rowTrackedChange.id) {
+        cellElement.dataset.trackChangeSourceBlock = row.id;
+      }
     }
 
     // Paint the structural cell-level tracked change (SD-3481 cell insertion /
@@ -859,6 +862,13 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
         ? resolveTrackedChangesConfig(representativeCellParagraph)
         : { mode: 'review', enabled: true };
       applyCellTrackedChangeToCell(cellElement, cellTrackedChange, cellTrackedChangeConfig);
+      if (
+        cell?.id &&
+        !cellElement.dataset.trackChangeSourceBlock &&
+        cellElement.dataset.trackChangeId === cellTrackedChange.id
+      ) {
+        cellElement.dataset.trackChangeSourceBlock = cell.id;
+      }
     }
 
     container.appendChild(cellElement);

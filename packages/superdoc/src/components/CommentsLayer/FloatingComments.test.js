@@ -203,12 +203,113 @@ describe('FloatingComments sidebar continuity', () => {
     }
   });
 
+  it('reports the attached paint origin when the contained document scrolls independently of its layers', async () => {
+    let paintTop = -500;
+    const updateContext = vi.fn();
+    commentsStore.committedReviewPresentations = {
+      'doc-1': {
+        rowVersions: { 'tc-a': 1 },
+        threads: {},
+        groupOrder: { open: ['tc-a'], resolved: [] },
+        instances: [],
+        readPaintOrigin: () => ({ left: 44, top: paintTop }),
+        updateContext,
+      },
+    };
+    const wrapper = await mountSidebar([{ id: 'tc-a', top: 10 }]);
+    try {
+      expect(updateContext).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          viewport: expect.objectContaining({ stageOffsetX: 44, stageOffsetY: -500 }),
+        }),
+      );
+      paintTop = -650;
+      parent.dispatchEvent(new Event('scroll'));
+      await settleLayout();
+      expect(updateContext).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          viewport: expect.objectContaining({ stageOffsetX: 44, stageOffsetY: -650 }),
+        }),
+      );
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
+  it.each([null, { left: 0, top: Number.NaN }])(
+    'does not submit feedback from an unavailable paint origin: %j',
+    async (origin) => {
+      const updateContext = vi.fn();
+      commentsStore.committedReviewPresentations = {
+        'doc-1': {
+          rowVersions: { 'tc-a': 1 },
+          threads: {},
+          groupOrder: { open: ['tc-a'], resolved: [] },
+          instances: [],
+          readPaintOrigin: () => origin,
+          updateContext,
+        },
+      };
+      const wrapper = await mountSidebar([{ id: 'tc-a', top: 10 }]);
+      try {
+        expect(updateContext).not.toHaveBeenCalled();
+      } finally {
+        wrapper.unmount();
+      }
+    },
+  );
+
   const activateAt = async (id, targetClientY) => {
     commentsStore.requestInstantSidebarAlignment(targetClientY, id, id);
     commentsStore.activeFloatingCommentInstanceId = id;
     commentsStore.activeComment = id;
     await settleLayout();
   };
+
+  it.each([-6, 6])(
+    'keeps committed offscreen cards at their worker positions after a %ipx alignment request',
+    async (offset) => {
+      const instance = (id, top, anchorTop, isOffscreenReviewCard) => ({
+        id,
+        rowId: id,
+        threadId: id,
+        version: 1,
+        pageIndex: 0,
+        positionKey: id,
+        positionEntry: makePosition(id, anchorTop),
+        anchorTop,
+        anchorBottom: anchorTop + 20,
+        top,
+        height: 110,
+        isPrimary: true,
+        isOffscreenReviewCard,
+        mount: true,
+      });
+      commentsStore.committedReviewPresentations = {
+        'doc-1': {
+          rowVersions: { 'tc-a': 1, 'tc-b': 1 },
+          threads: {},
+          groupOrder: { open: ['tc-a', 'tc-b'], resolved: [] },
+          updateContext: vi.fn(),
+          instances: [instance('tc-a', 333, 333, false), instance('tc-b', -111, -30, true)],
+        },
+      };
+      const wrapper = await mountSidebar([
+        { id: 'tc-a', top: 333 },
+        { id: 'tc-b', top: -30 },
+      ]);
+      try {
+        await activateAt('tc-a', 333 + offset);
+        expect(readTranslateY(wrapper.get('.sidebar-container').element)).toBe(0);
+        expect(wrapper.get('[data-comment-id="tc-a"]').element.getBoundingClientRect().top).toBe(333);
+        const offscreen = wrapper.get('[data-comment-id="tc-b"]').element;
+        expect(Number.parseFloat(offscreen.style.top)).toBe(-111);
+        expect(offscreen.getBoundingClientRect().bottom).toBe(-1);
+      } finally {
+        wrapper.unmount();
+      }
+    },
+  );
 
   const decideActiveChange = async (decision) => {
     const activeRow = commentsStore.getComment('tc-b');

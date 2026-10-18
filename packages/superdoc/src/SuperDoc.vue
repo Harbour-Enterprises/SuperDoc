@@ -992,7 +992,8 @@ const onV2EditorReady = (payload) => {
     }
     let result;
     try {
-      result = selectionTargets.apply(selectionTarget);
+      const apply = selectionTargets.applyAndWait ?? selectionTargets.apply;
+      result = await apply.call(selectionTargets, selectionTarget);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return createV2AuthoringFailure('selection-target-threw', message);

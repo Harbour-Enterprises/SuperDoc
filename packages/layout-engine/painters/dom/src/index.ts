@@ -294,3 +294,5 @@ export {
 } from './runs/tracked-changes.js';
 export { buildLinkRenderData } from './runs/links.js';
 export { INLINE_TRACKED_CHANGE_DEFAULTS } from './styles.js';
+
+export { resolveDecorationFragmentPosition } from './decoration-geometry.js';

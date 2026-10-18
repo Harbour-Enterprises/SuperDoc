@@ -2230,8 +2230,12 @@ export const useCommentsStore = defineStore('comments', () => {
     const activeId = normalizeCommentId(activeComment.value);
     if (activeId && droppedIds.has(activeId)) clearActiveCommentSelection();
 
+    const adapter = getV2CommentsAdapter(superdoc);
     removedComments.forEach((comment) => {
       const payload = typeof comment.getValues === 'function' ? comment.getValues() : comment;
+      // The pending creation owns its public outcome; canonical removal still
+      // retires the hydrated row immediately when undo invalidates its receipt.
+      if (isCurrentV2CommentsAdapter(adapter) && adapter.isPendingCommentCreation?.(payload?.commentId)) return;
       const event = {
         type: COMMENT_EVENTS.DELETED,
         comment: payload,

@@ -42,6 +42,7 @@ export async function runGenerationPhases(runPhase = run) {
     runPhase('SDK contract then codegen', 'node', [
       path.join(REPO_ROOT, 'packages/sdk/scripts/sdk-generate.mjs'),
       ...(process.argv.includes('--prepare-ci') ? ['--prepare-ci'] : []),
+      ...(process.argv.includes('--skip-rust-sdk') || process.env.SUPERDOC_SDK_SKIP_RUST === '1' ? ['--skip-rust-sdk'] : []),
     ]),
     runPhase('Font sources', 'pnpm', ['--filter', '@superdoc/fonts', 'generate']),
   ]);

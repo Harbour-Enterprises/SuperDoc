@@ -800,6 +800,138 @@ describe('text measurement utility', () => {
   });
 
   describe('justify alignment integration', () => {
+    const hangingTabLine = (includeTabSegment = true) => {
+      const block = createBlock([
+        { text: '1.1', fontFamily: 'Arial', fontSize: 16 },
+        { kind: 'tab', text: '\t' },
+        { text: 'A B C', fontFamily: 'Arial', fontSize: 16 },
+        { text: 'next line', fontFamily: 'Arial', fontSize: 16 },
+      ]);
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      block.attrs = { alignment: 'justify', indent: { left: 48, hanging: 48 } };
+      const line = baseLine({
+        toRun: 2,
+        toChar: 5,
+        width: 98,
+        maxWidth: 128,
+        spaceCount: 2,
+        hasExplicitTabStops: true,
+        justifyAfterHangingTab: true,
+        segments: [
+          { runIndex: 0, fromChar: 0, toChar: 3, width: 30 },
+          { runIndex: 1, fromChar: 0, toChar: 1, width: 18 },
+          { runIndex: 2, fromChar: 0, toChar: 5, width: 50, x: 48 },
+        ],
+        tabWidths: { 1: 18 },
+      });
+      if (!includeTabSegment) line.segments = line.segments!.filter((segment) => segment.runIndex !== 1);
+      return { block, line };
+    };
+
+    it.each([true, false])(
+      'maps hanging-tab source boundaries through justification (tab segment: %s)',
+      (tabSegment) => {
+        const { block, line } = hangingTabLine(tabSegment);
+        // The measured tab fixes the body start at 48. The two body spaces
+        // receive 15px each from the remaining 30px of line width.
+        const expected = [0, 10, 20, 30, 48, 58, 83, 93, 118, 128];
+        expect(expected.map((_, offset) => measureCharacterX(block, line, offset))).toEqual(expected);
+        for (const [offset, x] of expected.entries()) {
+          expect(findCharacterAtX(block, line, x, 0, line.maxWidth).charOffset).toBe(offset);
+        }
+      },
+    );
+
+    it('keeps ordinary column tabs at their measured positions', () => {
+      const { block, line } = hangingTabLine();
+      line.justifyAfterHangingTab = false;
+      expect([4, 6, 9].map((offset) => measureCharacterX(block, line, offset))).toEqual([48, 68, 98]);
+    });
+
+    it('keeps source offsets when the measured tab advance is represented by the next text segment', () => {
+      const { block, line } = hangingTabLine(false);
+      line.justifyAfterHangingTab = false;
+      expect([3, 4, 5, 6, 7, 8, 9].map((offset) => measureCharacterX(block, line, offset))).toEqual([
+        30, 48, 58, 68, 78, 88, 98,
+      ]);
+    });
+
+    it('does not count an empty image interval retained at a positioned wrap boundary', () => {
+      const { block, line } = hangingTabLine(false);
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      block.runs.splice(1, 0, { kind: 'image', src: 'previous-line.png', width: 20, height: 20 });
+      line.toRun = 3;
+      line.tabWidths = { 2: 18 };
+      line.segments = [
+        line.segments![0],
+        { runIndex: 1, fromChar: 0, toChar: 0, width: 0 },
+        { ...line.segments![1], runIndex: 3 },
+      ];
+      expect([4, 5, 6, 7, 8, 9].map((offset) => measureCharacterX(block, line, offset))).toEqual([
+        48, 58, 83, 93, 118, 128,
+      ]);
+    });
+
+    it('keeps multiple independently positioned columns unexpanded', () => {
+      const { block, line } = hangingTabLine();
+      line.segments![0].x = 0;
+      expect([4, 6, 9].map((offset) => measureCharacterX(block, line, offset))).toEqual([48, 68, 98]);
+    });
+
+    it('does not stretch the true last hanging-tab line', () => {
+      const { block, line } = hangingTabLine();
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      block.runs.pop();
+      expect([4, 6, 9].map((offset) => measureCharacterX(block, line, offset))).toEqual([48, 68, 98]);
+    });
+
+    it('does not distribute justification into a trimmed wrap-point space', () => {
+      const { block, line } = hangingTabLine(false);
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      block.runs[2] = { text: 'A B C ', fontFamily: 'Arial', fontSize: 16 };
+      line.toChar = 6;
+      expect([8, 9, 10].map((offset) => measureCharacterX(block, line, offset))).toEqual([118, 128, 128]);
+    });
+
+    it('keeps partial source-run intervals in positioned justified lines', () => {
+      const { block, line } = hangingTabLine(false);
+      Object.assign(line, {
+        fromRun: 2,
+        fromChar: 2,
+        width: 78,
+        maxWidth: 108,
+        spaceCount: 1,
+        segments: [{ runIndex: 2, fromChar: 2, toChar: 5, width: 30, x: 48 }],
+      });
+      expect([0, 1, 2, 3].map((offset) => measureCharacterX(block, line, offset))).toEqual([48, 58, 98, 108]);
+    });
+
+    it('preserves source-relative CJK justification after an omitted tab segment', () => {
+      const { block, line } = hangingTabLine(false);
+      if (block.kind !== 'paragraph') throw new Error('Expected paragraph');
+      block.runs[2] = { text: '春天来到', fontFamily: 'Arial', fontSize: 16 };
+      Object.assign(line, {
+        toChar: 4,
+        width: 88,
+        maxWidth: 118,
+        spaceCount: 0,
+        justificationPlan: { type: 'inter-character', boundaries: [5, 6, 7] },
+      });
+      line.segments![1] = { runIndex: 2, fromChar: 0, toChar: 4, width: 40, x: 48 };
+      const expected = [48, 68, 88, 108, 118];
+      expect(expected.map((_, index) => measureCharacterX(block, line, index + 4))).toEqual(expected);
+      for (const [index, x] of expected.entries()) {
+        expect(findCharacterAtX(block, line, x, 0, line.maxWidth).charOffset).toBe(index + 4);
+      }
+    });
+
+    it.each(['left', 'center', 'right'])('preserves positioned hanging-tab geometry for %s alignment', (alignment) => {
+      const { block, line } = hangingTabLine();
+      expect([4, 6, 9].map((offset) => measureCharacterX(block, line, offset, line.maxWidth, alignment))).toEqual([
+        48, 68, 98,
+      ]);
+    });
+
     // These tests verify that justify alignment works correctly through the public API
     it('applies justify spacing for justified text', () => {
       // Use two runs so the first line is NOT the last line (last lines skip justify)

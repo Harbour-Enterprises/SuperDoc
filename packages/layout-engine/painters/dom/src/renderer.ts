@@ -1,3 +1,4 @@
+import { resolveDecorationBandGeometry, resolveDecorationFragmentPosition } from './decoration-geometry.js';
 import type {
   ChartDrawing,
   CellBorders,
@@ -62,11 +63,8 @@ import {
   isPositionedParagraphFrame,
   normalizeColumnLayout,
   resolveColumnMode,
-  resolveFooterPageFrameOriginY,
   rescaleColumnWidths,
   getCellSpacingPx,
-  isPagePositionedFloatingTable,
-  isPagePositionedParagraphFrame,
 } from '@superdoc/contracts';
 import { DATASET_KEYS, decodeLayoutStoryDataset } from '@superdoc/dom-contract';
 import { isMinimalWordLayout } from '@superdoc/common/list-marker-utils';
@@ -2352,123 +2350,6 @@ export class DomPainter {
     yield* this.renderDecorationSectionWork(pageEl, page, pageIndex, 'footer');
   }
 
-  /**
-   * Check if a fragment is vertically anchored to the page.
-   * Used to determine special Y positioning for page-relative anchored content
-   * in header/footer decoration sections.
-   */
-  private isPageRelativeAnchoredFragment(
-    fragment: Fragment,
-    resolvedItem: ResolvedPaintItem | undefined,
-    kind: 'header' | 'footer',
-  ): boolean {
-    if (this.isPageRelativeParagraphFrame(fragment, resolvedItem)) return true;
-    const block = resolvedItem && 'block' in resolvedItem ? resolvedItem.block : undefined;
-    if (
-      kind === 'footer' &&
-      fragment.kind === 'table' &&
-      fragment.isAnchored === true &&
-      isPagePositionedFloatingTable(block)
-    ) {
-      return true;
-    }
-    return (
-      (fragment.kind === 'image' || fragment.kind === 'drawing') &&
-      (block?.kind === 'image' || block?.kind === 'drawing') &&
-      block.anchor?.vRelativeFrom === 'page'
-    );
-  }
-
-  private isPageRelativeParagraphFrame(fragment: Fragment, resolvedItem: ResolvedPaintItem | undefined): boolean {
-    if (fragment.kind !== 'para') return false;
-    const block = resolvedItem && 'block' in resolvedItem ? resolvedItem.block : undefined;
-    const frame = block?.kind === 'paragraph' ? block.attrs?.frame : undefined;
-    return isPagePositionedParagraphFrame(frame);
-  }
-
-  private isPageRelativeHorizontalAnchoredFragment(
-    fragment: Fragment,
-    resolvedItem: ResolvedPaintItem | undefined,
-    kind: 'header' | 'footer',
-  ): boolean {
-    const block = resolvedItem && 'block' in resolvedItem ? resolvedItem.block : undefined;
-    if (fragment.kind === 'para' && block?.kind === 'paragraph') {
-      const frame = block.attrs?.frame;
-      return isPositionedParagraphFrame(frame) && frame.hAnchor === 'page';
-    }
-    if (fragment.kind === 'table' && block?.kind === 'table') {
-      return (
-        kind === 'footer' &&
-        fragment.isAnchored === true &&
-        block.anchor?.isAnchored === true &&
-        block.anchor.hRelativeFrom === 'page'
-      );
-    }
-    if (fragment.kind !== 'image' && fragment.kind !== 'drawing') {
-      return false;
-    }
-    if (!block || (block.kind !== 'image' && block.kind !== 'drawing')) {
-      return false;
-    }
-    return block.anchor?.hRelativeFrom === 'page';
-  }
-
-  /**
-   * Header/footer layout emits normalized anchor Y coordinates:
-   * - headers: local to the header container origin
-   * - footers: local to the top of the footer band (pageHeight - bottomMargin)
-   *
-   * Footer containers can grow upward when content overflows the reserved footer
-   * band, so their top edge is not always the same as the footer band origin.
-   * This helper returns the page-space origin that normalized anchor Y values
-   * are measured from.
-   */
-  private getDecorationAnchorPageOriginY(
-    page: ResolvedPage,
-    kind: 'header' | 'footer',
-    effectiveOffset: number,
-  ): number {
-    if (kind === 'header') {
-      return effectiveOffset;
-    }
-
-    if (!Number.isFinite(page.height) || page.height <= 0) {
-      throw new Error(
-        `DomPainter: invalid ResolvedPage.height (${page.height}) for page ${page.index}; resolve stage must produce a positive numeric height.`,
-      );
-    }
-
-    const pageMargins = page.margins;
-    const pageHeight = page.height;
-
-    const footerDistance = pageMargins?.footer;
-    if (typeof footerDistance === 'number' && Number.isFinite(footerDistance)) {
-      return Math.max(0, pageHeight - Math.max(0, footerDistance));
-    }
-
-    const bottomMargin = pageMargins?.bottom;
-    if (bottomMargin == null) {
-      return effectiveOffset;
-    }
-
-    const footnoteReserve = page.footnoteReserved ?? 0;
-    const adjustedBottomMargin = Math.max(0, bottomMargin - footnoteReserve);
-
-    return Math.max(0, pageHeight - adjustedBottomMargin);
-  }
-
-  private getFooterFragmentAnchorPageOriginY(
-    page: ResolvedPage,
-    effectiveOffset: number,
-    fragment: Fragment,
-    resolvedItem: ResolvedPaintItem | undefined,
-  ): number {
-    const mediaOrigin = this.getDecorationAnchorPageOriginY(page, 'footer', effectiveOffset);
-    if (!this.isPageRelativeParagraphFrame(fragment, resolvedItem)) return mediaOrigin;
-
-    return resolveFooterPageFrameOriginY(page.height, page.baseMargins?.bottom ?? page.margins?.bottom);
-  }
-
   private *renderDecorationSectionWork(
     pageEl: HTMLElement,
     page: ResolvedPage,
@@ -2511,26 +2392,12 @@ export class DomPainter {
       container.removeAttribute('data-sd-headerfooter-variant');
     }
     container.setAttribute('data-sd-headerfooter-kind', kind);
-    const baseOffset = data.offset;
     const marginLeft = data.marginLeft ?? 0;
     const pageMargins = page.margins;
     const marginRight = pageMargins?.right ?? 0;
 
-    // For footers, if content is taller than reserved space, expand container upward
-    // The container bottom stays anchored at footerMargin from page bottom
-    let effectiveHeight = data.height;
-    let effectiveOffset = baseOffset;
-    if (
-      kind === 'footer' &&
-      typeof data.contentHeight === 'number' &&
-      Number.isFinite(data.contentHeight) &&
-      data.contentHeight > 0 &&
-      data.contentHeight > data.height
-    ) {
-      effectiveHeight = data.contentHeight;
-      // Move container up to accommodate taller content while keeping bottom edge in place
-      effectiveOffset = baseOffset - (data.contentHeight - data.height);
-    }
+    const band = resolveDecorationBandGeometry(data, kind);
+    const { effectiveHeight, effectiveOffset } = band;
 
     container.style.position = 'absolute';
     container.style.left = `${marginLeft}px`;
@@ -2551,25 +2418,6 @@ export class DomPainter {
     // In OOXML, headers and footers can extend past their allocated margin space
     // into the body region, similar to how body content can have negative indents.
     container.style.overflow = 'visible';
-
-    // For footers, calculate offset to push content to bottom of container
-    // Fragments are absolutely positioned, so we need to adjust their y values
-    // Use effectiveHeight (which accounts for overflow) rather than reserved height
-    let footerYOffset = 0;
-    if (kind === 'footer' && data.fragments.length > 0) {
-      const contentHeight =
-        typeof data.contentHeight === 'number'
-          ? data.contentHeight
-          : data.fragments.reduce((max, f, fi) => {
-              const resolvedItem = data.items?.[fi];
-              const fragHeight =
-                'height' in f && typeof f.height === 'number' ? f.height : this.estimateFragmentHeight(f, resolvedItem);
-              return Math.max(max, f.y + Math.max(0, fragHeight));
-            }, 0);
-      // Offset to push content to bottom of container
-      // When container has expanded (effectiveHeight >= contentHeight), offset is 0
-      footerYOffset = Math.max(0, effectiveHeight - contentHeight);
-    }
 
     const context: FragmentRenderContext = {
       pageNumber: page.number,
@@ -2641,22 +2489,9 @@ export class DomPainter {
         resolvedItem,
       );
       this.applyHeaderFooterTextWatermarkPreviewOpacity(fragEl, data.isActiveHeaderFooter === true);
-      const isPageRelative = this.isPageRelativeAnchoredFragment(fragment, resolvedItem, kind);
-      const isPageRelativeX = this.isPageRelativeHorizontalAnchoredFragment(fragment, resolvedItem, kind);
-
-      let pageY: number;
-      if (isPageRelative && kind === 'footer') {
-        // Footer page-relative: fragment.y is normalized to band-local coords
-        pageY = this.getFooterFragmentAnchorPageOriginY(page, effectiveOffset, fragment, resolvedItem) + fragment.y;
-      } else if (isPageRelative) {
-        // Header page-relative: fragment.y is raw inner-layout absolute Y
-        pageY = fragment.y;
-      } else {
-        pageY = effectiveOffset + fragment.y + (kind === 'footer' ? footerYOffset : 0);
-      }
-
-      fragEl.style.top = `${pageY}px`;
-      fragEl.style.left = `${isPageRelativeX ? fragment.x : marginLeft + fragment.x}px`;
+      const position = resolveDecorationFragmentPosition(page, kind, data, fragment, resolvedItem, band, true);
+      fragEl.style.top = `${position.y}px`;
+      fragEl.style.left = `${position.x}px`;
       fragEl.style.zIndex = '0'; // Same level as page, but inserted first so renders behind
       fragEl.dataset.behindDoc = 'true';
       fragEl.dataset.behindDocSection = kind; // Track for cleanup on re-render
@@ -2677,29 +2512,9 @@ export class DomPainter {
         resolvedItem,
       );
       this.applyHeaderFooterTextWatermarkPreviewOpacity(fragEl, data.isActiveHeaderFooter === true);
-      const isPageRelative = this.isPageRelativeAnchoredFragment(fragment, resolvedItem, kind);
-      const isPageRelativeX = this.isPageRelativeHorizontalAnchoredFragment(fragment, resolvedItem, kind);
-
-      if (isPageRelative && kind === 'footer') {
-        // Footer page-relative: fragment.y is normalized to band-local coords
-        const anchorPageOriginY = this.getFooterFragmentAnchorPageOriginY(
-          page,
-          effectiveOffset,
-          fragment,
-          resolvedItem,
-        );
-        fragEl.style.top = `${fragment.y + anchorPageOriginY - effectiveOffset}px`;
-      } else if (isPageRelative) {
-        // Header page-relative: convert raw inner-layout Y to container-local
-        fragEl.style.top = `${fragment.y - effectiveOffset}px`;
-      } else if (footerYOffset > 0) {
-        // Non-anchored footer content: push to bottom of container
-        const currentTop = parseFloat(fragEl.style.top) || fragment.y;
-        fragEl.style.top = `${currentTop + footerYOffset}px`;
-      }
-      if (isPageRelativeX) {
-        fragEl.style.left = `${fragment.x - marginLeft}px`;
-      }
+      const position = resolveDecorationFragmentPosition(page, kind, data, fragment, resolvedItem, band);
+      fragEl.style.top = `${position.y - Math.max(0, effectiveOffset)}px`;
+      fragEl.style.left = `${position.x - marginLeft}px`;
 
       // Project the local shading state while building this story. Relational
       // :has selectors in V2HeaderFooterOverlay invalidate the whole document
@@ -6389,26 +6204,5 @@ export class DomPainter {
     } else {
       delete el.dataset[DATASET_KEYS.LAYOUT_COLUMN_INDEX];
     }
-  }
-
-  /**
-   * Estimates the height of a fragment when explicit height is not available.
-   *
-   * This method provides fallback height calculations for footer bottom-alignment
-   * from resolved layout data, or using the fragment's height property for
-   * tables, images, and drawings.
-   *
-   * @param fragment - The fragment to estimate height for
-   * @returns Estimated height in pixels, or 0 if height cannot be determined
-   */
-  private estimateFragmentHeight(fragment: Fragment, resolvedItem?: ResolvedPaintItem): number {
-    if (resolvedItem && 'height' in resolvedItem && typeof resolvedItem.height === 'number') {
-      return resolvedItem.height;
-    }
-    // Atomic fragment kinds carry their own height on the fragment.
-    if (fragment.kind === 'table' || fragment.kind === 'image' || fragment.kind === 'drawing') {
-      return fragment.height;
-    }
-    return 0;
   }
 }

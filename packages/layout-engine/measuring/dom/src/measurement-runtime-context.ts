@@ -17,6 +17,7 @@ export interface SurfaceMeasurementRuntimeState {
   fontSignature: string | null;
   execution: SurfaceMeasurementExecutionControl | null;
   activeFontContext: FontMeasureContext | null;
+  measurementAttempt: { settled: boolean } | null;
   activePass: boolean;
   disposed: boolean;
 }
@@ -42,6 +43,7 @@ export function createSurfaceMeasurementRuntimeState(options: {
     fontSignature: null,
     execution: null,
     activeFontContext: null,
+    measurementAttempt: null,
     activePass: false,
     disposed: false,
   };
@@ -133,6 +135,7 @@ export function disposeSurfaceMeasurementRuntime(state: SurfaceMeasurementRuntim
   }
   if (state.canvasContext) runtimeByCanvasContext.delete(state.canvasContext);
   state.activeFontContext = null;
+  state.measurementAttempt = null;
   state.canvasContext = null;
   state.execution = null;
   state.activePass = false;

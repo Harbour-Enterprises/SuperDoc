@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, mkdirSync, writeFileSync, renameSync, rmSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { hashSourceInputClosure, hashEngineTree } from './engine-prepared-input.mjs';
@@ -8,7 +9,7 @@ import { createSuperDocArtifactStore } from './superdoc-artifact-store.mjs';
 
 const PUBLIC_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export async function prepareDocumentApi({ publicRoot = PUBLIC_ROOT } = {}) {
+export async function prepareDocumentApi({ publicRoot = PUBLIC_ROOT, compilerRoot = publicRoot } = {}) {
   const root = path.join(publicRoot, 'packages/document-api');
   const lease = createSuperDocArtifactStore({ root: path.join(root, '.cache/compiler-lock'), lockTimeoutMs: 120000 });
   const release = await lease.acquireExclusiveLock();
@@ -19,7 +20,10 @@ export async function prepareDocumentApi({ publicRoot = PUBLIC_ROOT } = {}) {
       'scripts/prepare-document-api.mjs', 'scripts/engine-prepared-input.mjs',
     ];
     const input = hashSourceInputClosure({ root: publicRoot, inputPaths: inputs }).digest;
-    const typescript = JSON.parse(readFileSync(path.join(publicRoot, 'node_modules/typescript/package.json'))).version;
+    const require = createRequire(path.join(compilerRoot, 'package.json'));
+    const compilerPackage = require.resolve('typescript/package.json');
+    const { version: typescript, bin } = JSON.parse(readFileSync(compilerPackage, 'utf8'));
+    const compiler = path.resolve(path.dirname(compilerPackage), bin.tsc);
     const key = createHash('sha256').update(JSON.stringify({ input, typescript, node: process.version })).digest('hex');
     const receipt = path.join(root, '.cache/compiled-receipt.json');
     try {
@@ -30,8 +34,8 @@ export async function prepareDocumentApi({ publicRoot = PUBLIC_ROOT } = {}) {
       }
     } catch { /* Missing or changed output is rebuilt. */ }
     console.log('[document-api] compiling shared runtime and types');
-    await runBuildCommand('pnpm', ['exec', 'tsc', '-b', '--clean', 'packages/document-api'], { cwd: publicRoot });
-    await runBuildCommand('pnpm', ['exec', 'tsc', '-b', 'packages/document-api'], { cwd: publicRoot });
+    await runBuildCommand(process.execPath, [compiler, '-b', '--clean', 'packages/document-api'], { cwd: publicRoot });
+    await runBuildCommand(process.execPath, [compiler, '-b', 'packages/document-api'], { cwd: publicRoot });
     const finalInput = hashSourceInputClosure({ root: publicRoot, inputPaths: inputs }).digest;
     if (input !== finalInput) throw new Error('Document API inputs changed during compilation');
     mkdirSync(path.dirname(receipt), { recursive: true });

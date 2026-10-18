@@ -479,8 +479,14 @@ watch(
     viewportRevision.value;
     const viewport = getFloatingViewportRange();
     if (!viewport) return null;
-    const rail = container.getBoundingClientRect(),
-      stage = props.parent?.getBoundingClientRect?.();
+    const rail = container.getBoundingClientRect();
+    // A contained document can scroll without moving the outer layers or rail.
+    // Worker anchors start at the attached paint root, not those outer layers.
+    const stage =
+      typeof presentation.readPaintOrigin === 'function'
+        ? presentation.readPaintOrigin()
+        : props.parent?.getBoundingClientRect?.();
+    if (!stage || !Number.isFinite(stage.left) || !Number.isFinite(stage.top)) return null;
     const instances = committedInstances.value ?? [];
     return {
       activeThreadId: activeComment.value == null ? null : String(activeComment.value),
@@ -1279,8 +1285,8 @@ onBeforeUnmount(() => {
           'is-direct-decision-continuity-target': pos.id === directDecisionContinuityTargetId,
         }"
         :style="{
-          // Excluded rows must stay outside the viewport when the active rail moves.
-          top: (pos.isOffscreenReviewCard ? pos.top - sidebarOffsetY : pos.top) + 'px',
+          // Only the legacy translated rail needs compensation for excluded rows.
+          top: (pos.isOffscreenReviewCard && !committedPresentation ? pos.top - sidebarOffsetY : pos.top) + 'px',
           height: pos.height + 'px',
           transition: disableInstantLayoutTransitions ? 'none' : undefined,
         }"

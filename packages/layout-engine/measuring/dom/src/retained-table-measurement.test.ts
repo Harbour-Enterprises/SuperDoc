@@ -1,6 +1,6 @@
 import { Session } from 'node:inspector';
 import { setImmediate } from 'node:timers/promises';
-import { beforeEach, describe, expect, it } from 'vite-plus/test';
+import { beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import type { ParagraphBlock, TableBlock, TableMeasure } from '@superdoc/contracts';
 import type { FontMeasureContext } from '@superdoc/font-system';
 import {
@@ -11,6 +11,7 @@ import {
   type TableMeasurementObservation,
 } from './index.js';
 import { clearTableCellBlockMeasureCache } from './table-cell-block-measure-cache.js';
+import * as retainedTableModule from './retained-table-measurement.js';
 
 function freezeData<T>(value: T): T {
   if (value && typeof value === 'object') {
@@ -103,8 +104,154 @@ async function measure(
   }
 }
 
+function nativeMetricsRuntime(onFlush?: () => void) {
+  const canvas = document.createElement('canvas').getContext('2d')!;
+  const known = new Set<string>();
+  const pending = new Set<string>();
+  let flushCount = 0;
+  const context = new Proxy(canvas, {
+    get(target, key) {
+      if (key === 'measureText')
+        return (text: string) => {
+          const query = JSON.stringify([target.font, text]);
+          const actual = target.measureText(text);
+          if (known.has(query)) return actual;
+          pending.add(query);
+          return new Proxy(actual, {
+            get: (metric, field) => (field === 'width' ? metric.width / 2 : Reflect.get(metric, field)),
+          });
+        };
+      const value = Reflect.get(target, key, target);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    set: (target, key, value) => Reflect.set(target, key, value, target),
+  });
+  const runtime = createDomMeasurementRuntime({
+    createCanvasContext: () => context,
+    flushTextMetrics: () =>
+      pending.size
+        ? Promise.resolve().then(() => {
+            flushCount++;
+            onFlush?.();
+            for (const query of pending) known.add(query);
+            pending.clear();
+          })
+        : null,
+  });
+  return {
+    runtime,
+    canvas,
+    get flushCount() {
+      return flushCount;
+    },
+  };
+}
+
 describe('retained table paragraph measurement', () => {
   beforeEach(() => clearTableCellBlockMeasureCache());
+
+  it('does not revive speculative cell widths on a later pass without retained input', async () => {
+    clearTableCellBlockMeasureCache();
+    const native = nativeMetricsRuntime();
+    const { runtime, canvas } = native;
+    const oracle = createDomMeasurementRuntime({ createCanvasContext: () => canvas });
+    try {
+      const source = editCell(
+        freezeData(tableGrid(2, 2)),
+        0,
+        'Native widths must remain authoritative across repeated measurement passes',
+      );
+      const initial = await measure(runtime, source, undefined, 192);
+      const repeated = await measure(runtime, source, undefined, 192);
+      clearTableCellBlockMeasureCache();
+      const cold = await measure(oracle, source, undefined, 192);
+      expect(initial.measure).toEqual(cold.measure);
+      expect(repeated.measure).toEqual(cold.measure);
+    } finally {
+      runtime.dispose();
+      oracle.dispose();
+      clearTableCellBlockMeasureCache();
+    }
+  });
+
+  it('retains settled row geometry when a later edit discovers new native text metrics', async () => {
+    const native = nativeMetricsRuntime();
+    const { runtime, canvas } = native;
+    const oracle = createDomMeasurementRuntime({ createCanvasContext: () => canvas });
+    try {
+      const original = freezeData(tableGrid(4, 2));
+      const initial = await measure(runtime, original, undefined, 192);
+      const initialFlushes = native.flushCount;
+      const edited = editCell(original, 2, 'A new native width that wraps over several lines');
+      clearTableCellBlockMeasureCache();
+      const next = await measure(runtime, edited, { block: original, measure: initial.measure }, 192);
+      expect(native.flushCount).toBeGreaterThan(initialFlushes);
+      expect(next.observation.cellBlockCache.miss).toBe(1);
+      expect(next.measure.rows[0]).toBe(initial.measure.rows[0]);
+      clearTableCellBlockMeasureCache();
+      expect(next.measure).toEqual((await measure(oracle, edited, undefined, 192)).measure);
+    } finally {
+      runtime.dispose();
+      oracle.dispose();
+    }
+  });
+
+  it.each(['failed', 'canceled'] as const)(
+    'refuses geometry produced by a %s native discovery attempt',
+    async (kind) => {
+      let fail = true,
+        aborted = false;
+      const native = nativeMetricsRuntime(() => {
+        if (!fail) return;
+        if (kind === 'failed') throw new Error('Injected native metric failure');
+        aborted = true;
+      });
+      const { runtime, canvas } = native;
+      const completed: TableMeasure[] = [];
+      const record = retainedTableModule.recordTableMeasurementOwner;
+      const observation = vi.spyOn(retainedTableModule, 'recordTableMeasurementOwner').mockImplementation((...args) => {
+        record(...args);
+        completed.push(args[0]);
+      });
+      const oracle = createDomMeasurementRuntime({ createCanvasContext: () => canvas });
+      try {
+        const source = freezeData(tableGrid(4, 2));
+        const pass = runtime.beginPass(fontContext(), {
+          throwIfAborted: () => {
+            if (aborted) throw new Error('Native measurement canceled');
+          },
+        });
+        try {
+          await expect(pass.measureBlock(source, { maxWidth: 192 })).rejects.toThrow(
+            kind === 'failed' ? 'Injected native metric failure' : 'Native measurement canceled',
+          );
+        } finally {
+          pass.finish();
+        }
+        const discarded = completed.find((value) => value.rows.length === 4);
+        expect(discarded).toBeDefined();
+        fail = false;
+        aborted = false;
+        const reads = vi.spyOn(retainedTableModule, 'readRetainedTableMeasurement');
+        clearTableCellBlockMeasureCache();
+        const edited = editCell(source, 2, 'Current authoritative native geometry');
+        const next = await measure(runtime, edited, { block: source, measure: discarded! }, 192);
+        expect(reads.mock.calls.some((args) => args[0]?.measure === discarded)).toBe(true);
+        reads.mock.calls.forEach((args, index) => {
+          if (args[0]?.measure === discarded) expect(reads.mock.results[index]!.value).toBeUndefined();
+        });
+        reads.mockRestore();
+        expect(next.observation.cellBlockCache['retained-hit']).toBe(0);
+        expect(next.measure.rows[0]).not.toBe(discarded!.rows[0]);
+        clearTableCellBlockMeasureCache();
+        expect(next.measure).toEqual((await measure(oracle, edited, undefined, 192)).measure);
+      } finally {
+        observation.mockRestore();
+        runtime.dispose();
+        oracle.dispose();
+      }
+    },
+  );
 
   it('does not retain a disposed source table through its completed measurement certificate', async () => {
     const retained = await (async () => {

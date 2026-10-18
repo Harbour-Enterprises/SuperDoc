@@ -1428,6 +1428,9 @@ type OptimisticInlineToggle = {
   active: boolean;
   generation: number;
   settled: boolean;
+  editorSource: unknown;
+  documentSource: unknown;
+  documentMode: SuperDocUIState['documentMode'];
 };
 type OptimisticParagraphAlignment = {
   selectionSignature: string;
@@ -5195,6 +5198,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return fromWorker !== undefined ? fromWorker : null;
   };
 
+  const inlineToggleStateIsCurrent = (commandId: string, selection: SelectionSlice): boolean => {
+    const descriptor = getCommandDescriptor(commandId);
+    const mark = descriptor?.activeMark;
+    if (!mark || !(EFFECTIVE_MARK_KEYS as readonly string[]).includes(mark)) return true;
+    if (resolveEffectiveMarkValuesFromLayout(selection)[mark as EffectiveMarkKey] !== undefined) return true;
+    if (!resolveDocOperation(getDoc(), 'format.readEffectiveInlineUniformity')) return true;
+    // Selection readiness does not certify formatting. A prior content token's
+    // uniformity result can remain cached while the committed selection is ready.
+    // Hand off only to this revision's verdict, including mixed/failed reads.
+    const { status } = readEffectiveInlineUniformityCached(selection);
+    const key = effectiveInlineUniformityCacheKey(selection);
+    return status === 'ready' || (key != null && asyncReads.get(key)?.failedToken === contentToken());
+  };
+
   const readEffectiveInlineUniformityNow = async (input: LooseRecord | null): Promise<LooseRecord | null> => {
     if (!input) return null;
     const op = resolveDocOperation(getDoc(), 'format.readEffectiveInlineUniformity');
@@ -6836,9 +6853,19 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     reconcilePendingInlineFormat(selection);
     const selectionSignature = selectionInlineValueSignature(selection);
     for (const [commandId, optimistic] of optimisticInlineToggles) {
-      if (!selectionSignature || optimistic.selectionSignature !== selectionSignature) {
+      if (
+        !selectionSignature ||
+        optimistic.selectionSignature !== selectionSignature ||
+        optimistic.editorSource !== getEditor() ||
+        optimistic.documentSource !== getEditor()?.doc ||
+        optimistic.documentMode !== documentMode
+      ) {
         optimisticInlineToggles.delete(commandId);
-      } else if (optimistic.settled && selection.status === 'ready') {
+      } else if (
+        optimistic.settled &&
+        selection.status === 'ready' &&
+        inlineToggleStateIsCurrent(commandId, selection)
+      ) {
         optimisticInlineToggles.delete(commandId);
       }
     }
@@ -7075,6 +7102,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   let trackedChangeNavigationInFlight = 0;
+  let lastPublishedHostReviewTarget:
+    | {
+        raw: unknown;
+        focus: ExplicitActiveChange | null;
+        origin: unknown;
+      }
+    | undefined;
 
   const syncTrackedChangeFocusFromHostReviewTarget = (rawTarget: unknown, rawSnapshot?: unknown): boolean => {
     const snapshot = rawSnapshot && typeof rawSnapshot === 'object' ? (rawSnapshot as LooseRecord) : null;
@@ -7124,7 +7158,36 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     ) {
       return false;
     }
+    // Capability and paint notifications can republish the unchanged held
+    // target while panel navigation is awaiting its new target. That same
+    // host publication is not a newer focus request.
+    const previousPublication = lastPublishedHostReviewTarget;
+    if (
+      previousPublication &&
+      (rawTarget === previousPublication.raw ||
+        (target?.origin === 'panel' &&
+          previousPublication.origin === 'panel' &&
+          next &&
+          previousPublication.focus &&
+          explicitActiveChangesEqual(previousPublication.focus, next)))
+    )
+      return false;
+    lastPublishedHostReviewTarget = { raw: rawTarget, focus: next, origin: target?.origin };
     if (explicitActiveChangesEqual(explicitActiveChange, next)) return false;
+    if (
+      target?.origin === 'panel' &&
+      explicitActiveChange &&
+      next &&
+      explicitActiveChange.id === next.id &&
+      storyLocatorSignature(explicitActiveChange.story) === storyLocatorSignature(next.story) &&
+      !explicitActiveChange.paintedEntityId &&
+      next.paintedEntityId
+    ) {
+      // Resolving the same panel target to its painted carrier enriches the
+      // held request; it does not supersede that request or its queued steps.
+      explicitActiveChange.paintedEntityId = next.paintedEntityId;
+      return false;
+    }
     setExplicitActiveChange(next);
     return true;
   };
@@ -7137,6 +7200,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       detachHostReview = null;
     }
     currentHostReviewSource = next;
+    lastPublishedHostReviewTarget = undefined;
     if (!next) {
       syncTrackedChangeFocusFromHostReviewTarget(null);
       return;
@@ -7233,6 +7297,20 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       const off = next.subscribe((event: LooseRecord) => {
         const type = event?.type;
         const isStandaloneDocumentMutation = type === 'document:mutated' && event.hasCommitEvent !== true;
+        if (
+          type === 'collaboration:document-replaced' ||
+          isStandaloneDocumentMutation ||
+          (type === 'mutation:committed' && mutationCommittedEventChangedDocument(event)) ||
+          type === 'collaboration:remote-changed'
+        ) {
+          // A confirmed toggle belongs to its source revision. A later actual
+          // mutation must not inherit it while that revision's read is pending.
+          for (const [commandId, optimistic] of optimisticInlineToggles) {
+            if (optimistic.settled || type === 'collaboration:document-replaced') {
+              optimisticInlineToggles.delete(commandId);
+            }
+          }
+        }
         if (
           isStandaloneDocumentMutation ||
           (type === 'mutation:committed' && mutationCommittedEventChangedDocument(event)) ||
@@ -7532,6 +7610,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
                 // again after a replace, and `readAsync()` serves a settled entry
                 // from any token as `stale` while its replacement is in flight.
                 runDocumentResetHooks();
+                optimisticInlineToggles.clear();
                 asyncReads.clear();
                 invalidateDocumentContent();
                 recompute();
@@ -8127,6 +8206,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       active: input.value === true,
       generation,
       settled: false,
+      editorSource: getEditor(),
+      documentSource: getEditor()?.doc,
+      documentMode: readDocumentMode(),
     });
     recompute();
     return generation;

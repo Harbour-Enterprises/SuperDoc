@@ -68,6 +68,17 @@ const sliceCaretRunsForLine = (block: FlowBlock, line: Line): Run[] =>
         line.segments.some((segment) => block.runs[segment.runIndex] === run && segment.toChar > segment.fromChar)),
   );
 
+const caretRunCharacterLength = (block: FlowBlock, line: Line, runIndex: number): number => {
+  const run = block.kind === 'paragraph' ? block.runs[runIndex] : undefined;
+  if (
+    run?.kind === 'image' &&
+    line.segments &&
+    !line.segments.some((segment) => segment.runIndex === runIndex && segment.toChar > segment.fromChar)
+  )
+    return 0;
+  return getRunCharacterLength(run);
+};
+
 const isVisualOnlyRun = (run: Run | undefined): boolean => {
   return getRunDataAttrs(run)?.[FOOTNOTE_MARKER_DATA_ATTR] === 'true';
 };
@@ -275,12 +286,16 @@ function measureCharacterXWithoutInlineBoxes(
     line.maxWidth ??
     // Fallback: if no maxWidth, approximate available width as line width (no slack)
     line.width;
+  const explicitSegmentCount =
+    line.segments?.reduce((count, segment) => count + (segment.x !== undefined ? 1 : 0), 0) ?? 0;
   // Pass availableWidth to justify calculation to match painter's word-spacing
   const justify = getJustifyAdjustment({
     block,
     line,
     availableWidthOverride: availableWidth,
     alignmentOverride,
+    // Independently positioned columns remain fixed, as in the DOM painter.
+    skipJustifyOverride: explicitSegmentCount > 1,
   });
   const alignment = alignmentOverride ?? (block.kind === 'paragraph' ? block.attrs?.alignment : undefined);
   // For justify alignment, the line is stretched to fill available width (slack distributed across spaces)
@@ -289,7 +304,7 @@ function measureCharacterXWithoutInlineBoxes(
     alignment === 'justify' && (justify.extraPerSpace !== 0 || justify.interCharacterSpacing !== 0)
       ? availableWidth
       : line.width;
-  const hasExplicitPositioning = line.segments?.some((seg) => seg.x !== undefined);
+  const hasExplicitPositioning = explicitSegmentCount > 0;
   const alignmentOffset =
     !hasExplicitPositioning && alignment === 'center'
       ? Math.max(0, (availableWidth - renderedLineWidth) / 2)
@@ -314,21 +329,25 @@ function measureCharacterXWithoutInlineBoxes(
       fontContext,
       hasMeasuredImage === true,
     );
-    if (hasExplicitPositioning) return naturalX;
-    // Image lines use their canonical segment advances; preserve the ordinary
-    // alignment and justification terms applied by the inline-flow painter.
-    let cursor = 0;
+    // A hanging tab fixes the body start without suppressing its justification.
+    // Count only retained text segments: wrap-point spaces may be trimmed from
+    // segments, while omitted tab segments still occupy one source offset.
+    let sourceRun = line.fromRun;
+    let sourceRunStart = -line.fromChar;
     let spaces = 0;
     for (const segment of line.segments) {
+      while (block.kind === 'paragraph' && sourceRun < segment.runIndex) {
+        sourceRunStart += caretRunCharacterLength(block, line, sourceRun++);
+      }
+      const segmentStart = sourceRunStart + segment.fromChar;
       const length = segment.toChar - segment.fromChar;
       const run = block.kind === 'paragraph' ? block.runs[segment.runIndex] : undefined;
-      if (run && 'text' in run && run.text) {
+      if (run && !isTabRun(run) && !isVanishedRun(run) && 'text' in run && run.text) {
         spaces += countSpaces(
-          run.text.slice(segment.fromChar, segment.fromChar + Math.max(0, Math.min(length, charOffset - cursor))),
+          run.text.slice(segment.fromChar, segment.fromChar + Math.max(0, Math.min(length, charOffset - segmentStart))),
         );
       }
-      cursor += length;
-      if (cursor >= charOffset) break;
+      if (segmentStart + length >= charOffset) break;
     }
     return (
       alignmentOffset +
@@ -585,19 +604,25 @@ function measureCharacterXSegmentBased(
 ): number {
   if (block.kind !== 'paragraph' || !line.segments) return 0;
 
-  // Build a map of cumulative character offsets per run
-  // to translate line-relative charOffset to run-relative offsets
-  let lineCharCount = 0;
+  // Segments can omit tabs whose advance is carried by the next explicit x.
+  // Locate each segment in source-run coordinates rather than concatenating
+  // only the retained segment characters.
+  let sourceRun = line.fromRun;
+  let sourceRunStart = -line.fromChar;
 
   for (const segment of line.segments) {
     const run = block.runs[segment.runIndex];
     if (!run) continue;
+    while (sourceRun < segment.runIndex) {
+      sourceRunStart += caretRunCharacterLength(block, line, sourceRun++);
+    }
 
     const segmentChars = segment.toChar - segment.fromChar;
+    const segmentStart = sourceRunStart + segment.fromChar;
 
     // Check if target character is within this segment
-    if (lineCharCount + segmentChars >= charOffset) {
-      const offsetInSegment = charOffset - lineCharCount;
+    if (segmentStart + segmentChars >= charOffset) {
+      const offsetInSegment = Math.max(0, charOffset - segmentStart);
 
       // Get the base X position for this segment
       // If segment has explicit X (tab-aligned), use it
@@ -661,8 +686,6 @@ function measureCharacterXSegmentBased(
 
       return segmentBaseX + (segmentPrefixWidth + spacingWidth) * getHorizontalScale(run);
     }
-
-    lineCharCount += segmentChars;
   }
 
   // Past end of line, return total width

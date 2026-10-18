@@ -1284,6 +1284,32 @@ describe('renderTableRow', () => {
     });
   });
 
+  it.each(['row', 'cell', 'overlap', 'off'] as const)(
+    'binds the primary %s review carrier to its actual physical block',
+    (mode) => {
+      const meta = { kind: 'insert', id: 'imported:3', author: 'Shared Reviewer' };
+      renderTableRow(
+        createDeps({
+          row: {
+            id: 'actual-row',
+            ...(mode === 'row' || mode === 'overlap' ? { attrs: { trackedChange: meta } } : {}),
+            cells: [
+              {
+                id: 'actual-cell',
+                attrs: { trackedChange: meta },
+                blocks: [makeParagraph(mode === 'off' ? 'off' : 'review', true)],
+              },
+            ],
+          },
+        }) as never,
+      );
+      const cell = container.firstElementChild as HTMLElement;
+      expect(cell.dataset.trackChangeSourceBlock).toBe(
+        mode === 'off' ? undefined : mode === 'cell' ? 'actual-cell' : 'actual-row',
+      );
+    },
+  );
+
   describe('structural cell tracked changes (SD-3481)', () => {
     const trackedCellDeps = (
       cellMeta: Record<string, unknown>,
