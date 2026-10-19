@@ -1265,6 +1265,13 @@ export const useCommentsStore = defineStore('comments', () => {
             getTrackedChangeStoryKey(trackedComment),
             incomingStoryKey,
           );
+          if (
+            normalizedTrackedChangeCanonicalId &&
+            commentCanonicalId &&
+            normalizedTrackedChangeCanonicalId !== commentCanonicalId
+          ) {
+            return false;
+          }
           if (hasCompatibleStory && commentAliasIds.includes(normalizedChangeId)) return true;
           const incomingAliasIds = new Set(normalizedTrackedChangePositionAliases ?? []);
           if (
@@ -4027,20 +4034,17 @@ export const useCommentsStore = defineStore('comments', () => {
   };
 
   // SD-4689: One logical body tracked change must produce one sidebar card.
-  // Duplicate rows that share a body identity (commentId / importedId /
-  // canonical / anchor / position aliases) are collapsed to the earliest
-  // survivor. Move-from/move-to sides keep distinct commentIds under one
-  // canonical id; those only join on commentId so the pair is not merged.
+  // Canonical rows only join on commentId: imported IDs and position aliases
+  // can belong to distinct changes, and move sides share one canonical ID.
+  // Legacy rows without canonical identity still compact through their aliases.
   const getBodyTrackedChangeIdentityIds = (comment) => {
     const commentId = normalizeCommentId(comment.commentId);
     const canonicalId = normalizeCommentId(comment.trackedChangeCanonicalId);
-    const hasSyntheticSideIdentity = canonicalId && canonicalId !== commentId;
     return [
       commentId,
-      ...(!hasSyntheticSideIdentity
+      ...(!canonicalId
         ? [
             comment.importedId,
-            canonicalId,
             comment.trackedChangeAnchorKey,
             ...normalizeTrackedChangePositionAliases(comment.trackedChangePositionAliases),
           ]

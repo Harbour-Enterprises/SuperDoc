@@ -1445,6 +1445,58 @@ describe('comments-store v2 tracked-change hydration', () => {
     store = useCommentsStore();
   });
 
+  it.each(['imported id', 'position alias'])('keeps distinct canonical changes with a shared %s', (identity) => {
+    const items = [
+      { id: 'tc-replacement', text: 'scor', deletedText: 'old' },
+      { id: 'tc-tail', text: 'ed', deletedText: null },
+    ];
+    const adapter = {
+      documentId: 'doc-1',
+      mapV2TrackedChangeToCommentParams: (item) => ({
+        event: 'add',
+        changeId: item.id,
+        trackedChangeCanonicalId: item.id,
+        documentId: 'doc-1',
+        trackedChangeText: item.text,
+        deletedText: item.deletedText,
+        trackedChangeType: item.deletedText ? 'both' : 'insert',
+        trackedChangeDisplayType: item.deletedText ? 'both' : 'insert',
+        trackedChangeAnchorKey: `tc::body::${item.id}`,
+        ...(identity === 'imported id' ? { importedId: '20' } : {}),
+        trackedChangePositionAliases: identity === 'position alias' ? ['20'] : [],
+      }),
+    };
+    store.setV2TrackedChangesAdapter(adapter);
+    const reconcile = () =>
+      store.reconcileTrackedChangesFromV2({
+        superdoc: { config: { isInternal: true }, emit: vi.fn() },
+        adapter,
+        documentId: 'doc-1',
+        items,
+        pruneStale: false,
+      });
+
+    reconcile();
+    expect(store.commentsList.map((row) => row.commentId)).toEqual(items.map((item) => item.id));
+    items[0].text = 'updated replacement';
+    reconcile();
+    expect(
+      store.commentsList.map((row) => ({
+        id: row.commentId,
+        canonicalId: row.trackedChangeCanonicalId,
+        text: row.trackedChangeText,
+        deletedText: row.deletedText,
+      })),
+    ).toEqual(
+      items.map((item) => ({
+        id: item.id,
+        canonicalId: item.id,
+        text: item.text,
+        deletedText: item.deletedText,
+      })),
+    );
+  });
+
   it('normalizes and refreshes tracked-change position aliases on a canonical row', async () => {
     let aliases = ['00000029', '00000029', null];
     const adapter = {
