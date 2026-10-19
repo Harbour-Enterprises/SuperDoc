@@ -4,6 +4,7 @@ import {
   type AgentApplyArgs,
   type AgentVerifyArgs,
   type AgentReceipt,
+  type ReplaceTextArgs,
 } from '../../../packages/sdk/langs/node/dist/index.js';
 const document = await createSuperDocClient().open({ doc: 'document.docx' });
 const apply: AgentApplyArgs = {
@@ -59,3 +60,24 @@ const trackedAction: Promise<unknown> = dispatchSuperDocTool(
   { preset: 'core', changeMode: 'tracked' },
 );
 void trackedAction;
+
+const targetedReplacement: ReplaceTextArgs = {
+  action: 'replace_text',
+  selector: { kind: 'nodeId', nodeId: 'body' },
+  edits: [{ find: 'shall', replace: 'may', occurrence: 2 }],
+  expectedRevision: blocks.revision,
+  changeMode: 'tracked',
+};
+const targetedResult: Promise<unknown> = dispatchSuperDocTool(
+  document,
+  'superdoc_perform_action',
+  targetedReplacement,
+  { preset: 'core' },
+);
+void targetedResult;
+// @ts-expect-error Ordinals are numbers, not strings.
+const invalidOccurrence: ReplaceTextArgs['edits'][number] = { find: 'shall', replace: 'may', occurrence: '2' };
+// @ts-expect-error Revision tokens are opaque strings, not numbers.
+const invalidRevision: ReplaceTextArgs = { ...targetedReplacement, expectedRevision: 2 };
+void invalidOccurrence;
+void invalidRevision;
