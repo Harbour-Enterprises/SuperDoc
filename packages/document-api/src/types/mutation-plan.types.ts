@@ -6,7 +6,7 @@
  */
 
 import type { BlockNodeAddress, BlockNodeType } from './base.js';
-import type { TextAddress, TrackedChangeAddress, SelectionTarget, DeleteBehavior } from './address.js';
+import type { TextAddress, TextTarget, TrackedChangeAddress, SelectionTarget, DeleteBehavior } from './address.js';
 import type { TextSelector, NodeSelector } from './query.js';
 import type { InsertStylePolicy, StylePolicy } from './style-policy.types.js';
 import type { InlineRunPatch } from '../format/inline-run-patch.js';
@@ -165,6 +165,19 @@ export type StructuralReplaceStep = {
   };
 };
 
+/** Explicit review edits. Targets use the starting revision; relocations precede decisions. */
+export type CommentRelocateStep = {
+  id: string;
+  op: 'comments.patch';
+  args: { commentId: string; target: TextAddress | SelectionTarget };
+};
+export type TrackChangesDecideStep = {
+  id: string;
+  op: 'trackChanges.decide';
+  args: { decision: 'accept' | 'reject'; target: { kind: 'id'; id: string } | { kind: 'ids'; ids: string[] } };
+};
+export type ReviewMutationStep = CommentRelocateStep | TrackChangesDecideStep;
+
 export type DomainStep = {
   id: string;
   op: string;
@@ -180,7 +193,8 @@ export type MutationStep =
   | StructuralInsertStep
   | StructuralReplaceStep
   | AssertStep
-  | DomainStep;
+  | DomainStep
+  | ReviewMutationStep;
 
 // ---------------------------------------------------------------------------
 // Plan input
@@ -287,7 +301,20 @@ export type StructuralStepData = {
   insertedBlockIds?: string[];
 };
 
-export type StepOutcomeData = TextStepData | AssertStepData | DomainStepData | TableStepData | StructuralStepData;
+export type ReviewStepData = {
+  domain: 'review';
+  commentIds?: string[];
+  commentTargets?: { commentId: string; target: TextTarget }[];
+  decidedTrackedChangeIds?: string[];
+};
+
+export type StepOutcomeData =
+  | ReviewStepData
+  | TextStepData
+  | AssertStepData
+  | DomainStepData
+  | TableStepData
+  | StructuralStepData;
 
 export type StepOutcome = {
   stepId: string;
@@ -341,6 +368,13 @@ export type StepPreview = {
   spanResolutions?: SpanStepResolution[];
   selectionResolutions?: SelectionStepResolution[];
   style?: unknown;
+  review?: {
+    commentId?: string;
+    target?: TextAddress | SelectionTarget;
+    mappedTarget?: TextTarget;
+    trackedChangeIds?: string[];
+    decision?: 'accept' | 'reject';
+  };
 };
 
 export type MutationsPreviewOutput = {

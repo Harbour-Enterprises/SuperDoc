@@ -28,11 +28,49 @@ Every plan requires:
 - `changeMode: 'direct'` or `'tracked'`
 - A stable, unique `id` for every step
 - A supported step `op`
-- A `where` target and operation-specific `args`
+- A `where` target for core text/format steps, or explicit native `args` for review steps
 
 Check `doc.capabilities().planEngine.supportedStepOps` before constructing plans dynamically. The generated reference remains authoritative for each step shape.
 
 Mutation plans do not accept a per-call `author`, including on individual steps. Use separate tracked plain-text `doc.insert`, `doc.delete`, or `doc.replace` calls when edits need different display authors; unlike a plan, those calls are not atomic as a group.
+
+## Relocate a discussion and decide revisions together
+
+Applications can explicitly relocate a root comment thread before accepting or rejecting exact revision IDs in one mutation. The application chooses which thread to move and its destination. Ordinary revision decisions retain their default behavior.
+
+```ts
+const plan = {
+  atomic: true,
+  changeMode: 'direct',
+  expectedRevision: revision,
+  steps: [
+    {
+      id: 'move-discussion',
+      op: 'comments.patch',
+      args: {
+        commentId: rootCommentId,
+        target: { kind: 'text', blockId: survivingParagraphId, range: { start: 0, end: 0 } },
+      },
+    },
+    {
+      id: 'decide',
+      op: 'trackChanges.decide',
+      args: {
+        decision: 'reject',
+        target: { kind: 'ids', ids: revisionIds },
+      },
+    },
+  ],
+} satisfies Parameters<typeof doc.mutations.apply>[0];
+const preview = await doc.mutations.preview(plan);
+if (preview.valid) await doc.mutations.apply(plan);
+```
+
+Review plans support direct edits in the body story. Concrete point/range targets refer to the starting revision; every relocation must precede every decision. Decisions identify whole text revisions through `id` or `ids`. Preview validates the complete sequence without changing document bytes, revision, or history. Apply publishes the complete result once and creates one Undo entry; a failed step leaves the original document intact.
+
+Review plans cannot mix core text/format/structural steps. Comment creation, comment metadata changes, Custom XML writes, structural revisions and secondary stories are unsupported. The selected destination must survive every decision. Preview reports unsupported combinations explicitly; do not invent a fallback destination after failure. `plan.execute` remains stepwise and retains earlier successful edits when a later entry fails.
+
+A grouped revision can include paragraph marks or other structural carriers even when its public type is `deletion`. Such groups are unsupported by review plans and are rejected before publication. Repeated exact revision IDs are counted and decided once.
 
 ## Replace a selected range with a locked block content control
 

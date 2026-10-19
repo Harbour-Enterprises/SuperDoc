@@ -70,7 +70,8 @@ export interface ReplyToCommentInput extends CommentCreateAttributionInput {
 export interface MoveCommentInput {
   commentId: string;
   /**
-   * New anchor target. Accepts a plain {@link TextAddress}, a
+   * New root-thread anchor target. Existing descendant anchors move with the root.
+   * Accepts a plain {@link TextAddress}, a
    * {@link SelectionTarget}, or a {@link TrackedChangeCommentTarget} that
    * names a logical tracked-change id as a convenience re-anchor target.
    */

@@ -8182,6 +8182,48 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       },
       ['id', 'op', 'where', 'args'],
     );
+    const commentRelocateStepSchema = objectSchema(
+      {
+        id: { type: 'string', minLength: 1 },
+        op: { const: 'comments.patch', type: 'string' },
+        args: objectSchema(
+          {
+            commentId: { type: 'string', minLength: 1 },
+            target: { oneOf: [textAddressSchema, selectionTargetSchema] },
+          },
+          ['commentId', 'target'],
+        ),
+      },
+      ['id', 'op', 'args'],
+    );
+    const revisionDecisionStepSchema = objectSchema(
+      {
+        id: { type: 'string', minLength: 1 },
+        op: { const: 'trackChanges.decide', type: 'string' },
+        args: objectSchema(
+          {
+            decision: { enum: ['accept', 'reject'], type: 'string' },
+            target: {
+              oneOf: [
+                objectSchema({ kind: { const: 'id', type: 'string' }, id: { type: 'string', minLength: 1 } }, [
+                  'kind',
+                  'id',
+                ]),
+                objectSchema(
+                  {
+                    kind: { const: 'ids', type: 'string' },
+                    ids: { ...arraySchema({ type: 'string', minLength: 1 }), minItems: 1 },
+                  },
+                  ['kind', 'ids'],
+                ),
+              ],
+            },
+          },
+          ['decision', 'target'],
+        ),
+      },
+      ['id', 'op', 'args'],
+    );
     const mutationStepSchema: JsonSchema = {
       oneOf: [
         textRewriteStepSchema,
@@ -8190,6 +8232,8 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         formatApplyStepSchema,
         structuralReplaceStepSchema,
         assertStepSchema,
+        commentRelocateStepSchema,
+        revisionDecisionStepSchema,
       ],
     };
     const mutationsInputProperties = {
@@ -8212,7 +8256,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       steps: {
         ...arraySchema(mutationStepSchema),
         description:
-          "Ordered array of mutation steps. Each step needs 'op' (text.rewrite, text.insert, text.delete, format.apply, structural.replace, or assert) and a 'where' targeting clause. Check runtime capabilities for operation-specific content and targeting restrictions.",
+          "Ordered array of mutation steps. Each step needs 'op' (text.rewrite, text.insert, text.delete, format.apply, structural.replace, assert, comments.patch, or trackChanges.decide). Core steps use 'where'; review steps use explicit native args and require direct body-only plans with relocations before decisions. Check runtime capabilities for operation-specific content and targeting restrictions.",
       },
     };
     const mutationsInputSchema = objectSchema(mutationsInputProperties, ['atomic', 'changeMode', 'steps']);
@@ -8422,6 +8466,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
             steps: arraySchema({ type: 'object', properties: { appliedChangeMode: { enum: ['direct', 'tracked'] } } }),
             trackedChanges: arraySchema(trackedChangeAddressSchema),
             invalidatedRefs: arraySchema(ref('AffectedRef')),
+            updated: arraySchema(ref('EntityAddress')),
+            affectedStories: arraySchema(ref('StoryLocator')),
+            remappedRefs: arraySchema(ref('AffectedRefRemapping')),
+            textRangeShifts: arraySchema(ref('TextRangeShift')),
+            txId: { type: 'string' },
             timing: objectSchema({ totalMs: { type: 'number' } }, ['totalMs']),
           },
           ['success', 'revision', 'steps', 'timing'],
@@ -8435,6 +8484,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
             steps: arraySchema({ type: 'object', properties: { appliedChangeMode: { enum: ['direct', 'tracked'] } } }),
             trackedChanges: arraySchema(trackedChangeAddressSchema),
             invalidatedRefs: arraySchema(ref('AffectedRef')),
+            updated: arraySchema(ref('EntityAddress')),
+            affectedStories: arraySchema(ref('StoryLocator')),
+            remappedRefs: arraySchema(ref('AffectedRefRemapping')),
+            textRangeShifts: arraySchema(ref('TextRangeShift')),
+            txId: { type: 'string' },
             timing: objectSchema({ totalMs: { type: 'number' } }, ['totalMs']),
           },
           ['success', 'revision', 'steps', 'timing'],

@@ -30,6 +30,15 @@ A reply belongs to an existing thread. Pass `parentCommentId` and text. Do not p
 
 The reply is another document mutation. Inspect its receipt before resolving the thread or saving the file.
 
+## Move a thread
+
+Pass the root comment ID and a new supported document target to `comments.patch({ commentId, target })`.
+The root and its descendants move together, retaining their identities, contents, metadata and resolved state.
+Use a zero-length text range when the destination is a point. Independent reply relocation is rejected.
+
+Relocation is an explicit document edit. Accepting or rejecting a revision still follows its normal comment-cleanup rules;
+it does not automatically relocate or resolve a discussion. Inspect each mutation receipt and use current revision guards.
+
 ## Resolve or reopen the thread
 
 `comments.patch()` changes exactly one comment field per call. Set `status: 'resolved'` to resolve the root thread. Set `status: 'active'` in a later call to reopen it.
