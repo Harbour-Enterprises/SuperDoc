@@ -4716,16 +4716,20 @@ export const OPERATION_DEFINITIONS = {
   },
   'hyperlinks.wrap': {
     memberPath: 'hyperlinks.wrap',
-    description: 'Wrap an existing text range with a hyperlink.',
+    description:
+      'Wrap an existing text range with a hyperlink. A range inside one pending tracked insertion is linked ' +
+      'without authoring a revision: the insertion keeps its author and date and is split at the range boundaries. ' +
+      'Ranges that cross a revision boundary or touch deleted, moved or several revisions are refused.',
     expectedResult:
-      'Returns a HyperlinkMutationResult with the created hyperlink address on success, or a failure code on no-op.',
+      'Returns a HyperlinkMutationResult with the created hyperlink address on success, or a failure code on no-op ' +
+      'or an unsupported revision context.',
     requiresDocumentContext: true,
     metadata: mutationOperation({
       idempotency: 'conditional',
       supportsDryRun: true,
       trackedSupport: 'never',
       deterministicTargetResolution: true,
-      possibleFailureCodes: ['NO_OP'],
+      possibleFailureCodes: ['NO_OP', 'INVALID_CONTEXT'],
       throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT'],
     }),
     referenceDocPath: 'hyperlinks/wrap.mdx',
