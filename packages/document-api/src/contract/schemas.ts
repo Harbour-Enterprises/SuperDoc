@@ -7887,37 +7887,41 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     failure: receiptFailureResultSchemaFor('trackChanges.decide'),
   },
   'query.match': {
-    input: objectSchema(
-      {
-        in: storyLocatorSchema,
-        select: {
-          description:
-            "Search selector. Use {type:'text', pattern:'...'} for text search or {type:'node', nodeType:'paragraph'|'heading'|...} for node search.",
-          oneOf: [planTextSelectorSchema, nodeSelectorSchema],
+    input: {
+      ...objectSchema(
+        {
+          in: storyLocatorSchema,
+          select: {
+            description:
+              "Search selector. Use {type:'text', pattern:'...'} for text search or {type:'node', nodeType:'paragraph'|'heading'|...} for node search.",
+            oneOf: [planTextSelectorSchema, nodeSelectorSchema],
+          },
+          within: {
+            ...blockNodeAddressSchema,
+            description: "Limit search scope to within a specific block: {kind:'block', nodeType:'...', nodeId:'...'}.",
+          },
+          require: {
+            enum: ['any', 'first', 'last', 'exactlyOne', 'all'],
+            description:
+              "Match cardinality: 'any' (all matches), 'first' (only first), 'last' (final scoped match, without limit/offset), 'exactlyOne' (fail if != 1), 'all' (fail if 0). For 'last', page.offset reports the selected match's ordinal in the full set.",
+          },
+          mode: {
+            enum: ['strict', 'candidates'],
+            description:
+              "Search mode: 'strict' (default, exact matching) or 'candidates' (returns scored potential matches).",
+          },
+          includeNodes: {
+            type: 'boolean',
+            description: 'When true, includes full node data in results. Default: false.',
+          },
+          limit: { type: 'integer', minimum: 1, description: 'Maximum number of matches to return.' },
+          offset: { type: 'integer', minimum: 0, description: 'Number of matches to skip for pagination.' },
         },
-        within: {
-          ...blockNodeAddressSchema,
-          description: "Limit search scope to within a specific block: {kind:'block', nodeType:'...', nodeId:'...'}.",
-        },
-        require: {
-          enum: ['any', 'first', 'exactlyOne', 'all'],
-          description:
-            "Match cardinality: 'any' (all matches), 'first' (only first), 'exactlyOne' (fail if != 1), 'all' (fail if 0).",
-        },
-        mode: {
-          enum: ['strict', 'candidates'],
-          description:
-            "Search mode: 'strict' (default, exact matching) or 'candidates' (returns scored potential matches).",
-        },
-        includeNodes: {
-          type: 'boolean',
-          description: 'When true, includes full node data in results. Default: false.',
-        },
-        limit: { type: 'integer', minimum: 1, description: 'Maximum number of matches to return.' },
-        offset: { type: 'integer', minimum: 0, description: 'Number of matches to skip for pagination.' },
-      },
-      ['select'],
-    ),
+        ['select'],
+      ),
+      if: { properties: { require: { const: 'last' } }, required: ['require'] },
+      then: { not: { anyOf: [{ required: ['limit'] }, { required: ['offset'] }] } },
+    },
     output: (() => {
       // D18: discriminated union schema for TextMatchDomain vs NodeMatchDomain.
       // Text matches require snippet + highlightRange + non-empty blocks.

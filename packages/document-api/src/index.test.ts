@@ -394,6 +394,29 @@ const FIND_RESULT: SDFindResult = {
 };
 
 describe('createDocumentApi', () => {
+  it('validates query.match cardinality and last-match pagination before invoking the adapter', () => {
+    const match = mock(() => ({
+      evaluatedRevision: 'r1',
+      total: 0,
+      items: [],
+      page: { limit: 0, offset: 0, returned: 0 },
+      meta: { effectiveResolved: true },
+    }));
+    const api = createDocumentApi({ query: { match } } as unknown as DocumentApiAdapters);
+    const select = { type: 'text' as const, pattern: 'target' };
+
+    expect(() => api.query.match({ select, require: 'typo' } as any)).toThrow(
+      expect.objectContaining({ code: 'INVALID_INPUT' }),
+    );
+    for (const pagination of [{ limit: 1 }, { offset: 1 }, { offset: 0 }]) {
+      expect(() => api.query.match({ select, require: 'last', ...pagination })).toThrow(
+        expect.objectContaining({ code: 'INVALID_INPUT' }),
+      );
+    }
+    expect(match).not.toHaveBeenCalled();
+    api.query.match({ select, require: 'last' });
+    expect(match).toHaveBeenCalledWith({ select, require: 'last' });
+  });
   it('delegates detailed projection methods through optional root adapter slots', async () => {
     const htmlResult = {
       format: 'html' as const,

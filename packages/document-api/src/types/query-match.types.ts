@@ -16,7 +16,7 @@ import type { InlineToggleDirective } from './style-policy.types.js';
 import type { StoryLocator } from './story.types.js';
 import type { StyleCatalogPreviewSources } from '../styles/catalog.js';
 
-export type CardinalityRequirement = 'any' | 'first' | 'exactlyOne' | 'all';
+export type CardinalityRequirement = 'any' | 'first' | 'last' | 'exactlyOne' | 'all';
 
 // ---------------------------------------------------------------------------
 // Snippet context
@@ -282,6 +282,7 @@ export interface QueryMatchInput {
   within?: BlockNodeAddress;
   /** Restrict matching to one story. Omit to match body and textbox stories. */
   in?: StoryLocator;
+  /** `last` selects the final scoped match, rejects explicit `limit` or `offset`, and reports `page: { limit: 1, offset: total - 1, returned: 1 }`. */
   require?: CardinalityRequirement;
   /** Match evaluation mode. `'candidates'` (default) returns best-effort matches; `'strict'` enforces exact semantics (future). */
   mode?: 'strict' | 'candidates';

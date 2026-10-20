@@ -38,14 +38,23 @@ Use `item.matchKind` before reading text-only fields. Node queries return a diff
 
 Set `require` according to what makes the operation safe:
 
-| Value          | Behavior                                          |
-| -------------- | ------------------------------------------------- |
-| `'first'`      | Return only the first match                       |
-| `'exactlyOne'` | Require one match and fail when the count differs |
-| `'all'`        | Return all matches and fail when none exist       |
-| `'any'`        | Return all matches, including an empty result     |
+| Value          | Behavior                                            |
+| -------------- | --------------------------------------------------- |
+| `'first'`      | Return only the first match                         |
+| `'last'`       | Return the final scoped match; fail when none exist |
+| `'exactlyOne'` | Require one match and fail when the count differs   |
+| `'all'`        | Return all matches and fail when none exist         |
+| `'any'`        | Return all matches, including an empty result       |
 
 Prefer `'exactlyOne'` when a later mutation must affect one unique clause. Prefer `'all'` when the task intentionally handles every occurrence.
+
+### Select the last match
+
+`require: 'last'` selects the final match after the selector, story, `within`, and deleted-text options have filtered the candidates. It uses the same order as `require: 'all'`: story enumeration order first, then document order within each story. An unscoped text query searches the body followed by supported textboxes in the main document, so the last match may be inside a textbox. Pass `in: { kind: 'story', storyType: 'body' }` to search only body text.
+
+Do not pass `limit` or `offset` with `last`; either field causes `INVALID_INPUT`. The result contains one item with an `id` of `m:<total - 1>`, and `page` reports `{ limit: 1, offset: total - 1, returned: 1 }`. Here `page.offset` is the match's position in the full filtered set, even though the caller supplied no offset. Zero matches cause `MATCH_NOT_FOUND`.
+
+`doc.find` uses a separate result format and searches body text by default. Its callers can use `query.match({ select, in: { kind: 'story', storyType: 'body' }, require: 'last' })` to get the final body match and a revision-bound target.
 
 ## 4. Keep targets revision-safe
 

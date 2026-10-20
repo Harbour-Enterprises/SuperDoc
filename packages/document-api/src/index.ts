@@ -2396,6 +2396,18 @@ function executeQueryMatch(
               ...(rawInput.offset !== undefined ? { offset: rawInput.offset as number } : {}),
             }
           : { select: input };
+  if (normalized.require !== undefined && !['any', 'first', 'last', 'exactlyOne', 'all'].includes(normalized.require)) {
+    throw new DocumentApiValidationError(
+      'INVALID_INPUT',
+      'require must be one of: any, first, last, exactlyOne, all.',
+      { field: 'require', value: normalized.require },
+    );
+  }
+  if (normalized.require === 'last' && (normalized.limit !== undefined || normalized.offset !== undefined)) {
+    throw new DocumentApiValidationError('INVALID_INPUT', 'require: last cannot be combined with limit or offset.', {
+      field: normalized.limit !== undefined ? 'limit' : 'offset',
+    });
+  }
   validateStoryLocator(normalized.in, 'in');
   return adapter.match(normalized);
 }

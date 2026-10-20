@@ -137,7 +137,7 @@ export const INTENT_GROUP_META: Record<string, IntentGroupMeta> = {
       'Refs expire after any mutation that changes the document. Re-search before the next edit when using individual tools (superdoc_edit, superdoc_format). ' +
       'Within a superdoc_mutations batch, selectors in "where" clauses resolve automatically at compile time; no manual re-searching needed between steps. ' +
       'Text search returns handle.ref covering only the matched substring. Node search finds blocks by type (paragraph, heading, table, listItem, etc.). ' +
-      'The "require" parameter controls match cardinality: "first" returns one match, "all" returns every match, "exactlyOne" fails if not exactly one match. ' +
+      'The "require" parameter controls match cardinality: "first" returns one match, "last" returns the final match (without limit/offset), "all" returns every match, "exactlyOne" fails if not exactly one match. ' +
       'Supports scoping via "within" to search inside a single block. ' +
       'Patterns are plain text by default; pass select.mode: "regex" for regular-expression search (g/gi semantics, 1024-char cap, no wholeWord, capture groups returned on matches). Invalid or unsafe patterns fail with INVALID_INPUT. Do NOT use markdown formatting markers (#, **, etc.) in search patterns. ' +
       'Do NOT use this tool when you already have a ref from superdoc_get_content blocks or superdoc_create; use that ref directly.',
