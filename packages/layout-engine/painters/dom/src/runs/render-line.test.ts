@@ -1504,30 +1504,32 @@ describe('renderLine aligned wrap spaces', () => {
       lineHeight: 20,
       segments: [{ runIndex: 0, fromChar: 0, toChar: measuredEnd, width: 80 }],
     };
+    const source = structuredClone({ block, line });
     const lineEl = renderLine({
       block,
       line,
       context: { pageNumber: 1, totalPages: 1, section: 'body' },
       runContext: makeRunContext(),
     });
-    return { block, line, lineEl };
+    return { block, line, lineEl, source };
   };
 
   it.each(['right', 'center'] as const)(
-    'retains consumed wrap space for %s hit geometry and source extent',
+    'omits consumed wrap space from %s ink while retaining its source extent',
     (alignment) => {
-      const { block, line, lineEl } = paint(alignment, 10);
+      const { block, line, lineEl, source } = paint(alignment, 10);
       const leaf = lineEl.querySelector<HTMLElement>('.superdoc-text-run')!;
-      expect(leaf.textContent).toBe('Alpha Beta ');
+      expect(leaf.textContent).toBe('Alpha Beta');
       expect(leaf.dataset.pmStart).toBe('1');
-      expect(leaf.dataset.pmEnd).toBe('12');
+      expect(leaf.dataset.pmEnd).toBe('11');
       expect(lineEl.dataset.pmEnd).toBe('12');
       expect(line.toChar).toBe(11);
       expect(block.runs[0]).toMatchObject({ text: 'Alpha Beta ', pmEnd: 12 });
+      expect({ block, line }).toEqual(source);
     },
   );
 
-  it('retains a consumed wrap space in a separate styled run for hit geometry', () => {
+  it('omits a separate styled wrap-space carrier while retaining its source extent', () => {
     const block: ParagraphBlock = {
       kind: 'paragraph',
       id: 'styled-wrap-space',
@@ -1549,15 +1551,22 @@ describe('renderLine aligned wrap spaces', () => {
       lineHeight: 20,
       segments: [{ runIndex: 0, fromChar: 0, toChar: 10, width: 80 }],
     };
+    const source = structuredClone({ block, line });
     const lineEl = renderLine({
       block,
       line,
       context: { pageNumber: 1, totalPages: 1, section: 'body' },
       runContext: makeRunContext(),
     });
-    expect(lineEl.textContent).toBe('Alpha Beta ');
+    expect(lineEl.textContent).toBe('Alpha Beta');
+    const leaves = lineEl.querySelectorAll<HTMLElement>('.superdoc-text-run');
+    expect(leaves).toHaveLength(1);
+    expect(leaves[0]!.dataset.pmStart).toBe('1');
+    expect(leaves[0]!.dataset.pmEnd).toBe('11');
+    expect(lineEl.querySelector('[data-pm-start="11"]')).toBeNull();
     expect(lineEl.dataset.pmEnd).toBe('12');
     expect(block.runs[1]).toMatchObject({ text: ' ', pmStart: 11, pmEnd: 12 });
+    expect({ block, line }).toEqual(source);
   });
 
   it('keeps non-space source text when a measured segment omits more than wrap spaces', () => {

@@ -3049,6 +3049,7 @@ export const useCommentsStore = defineStore('comments', () => {
           // order and card geometry unchanged. Advance the paint capability
           // without replacing reactive collections or overwriting local drafts.
           previousPresentation.version = presentation.version;
+          previousPresentation.coordinate = presentation.coordinate;
           previousPresentation.readPaintOrigin = presentation.readPaintOrigin;
           previousPresentation.updateContext = presentation.updateContext;
           return {

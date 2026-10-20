@@ -3953,6 +3953,54 @@ describe('comments-store committed review-window apply', () => {
     expect(store.committedReviewPresentations['doc-1']).toBe(presentation);
   });
 
+  it.each([10, 11])('advances decision coordinates for unchanged rows at source commit %s', (commitSequence) => {
+    const presentation = {
+      epoch: 'document',
+      baseVersion: 6,
+      version: 7,
+      coordinate: { documentEpoch: 'document', mountId: 'mount', commitSequence: 10, reviewVersion: 7 },
+      instances: [{ id: 'comment-1', rowId: 'comment-1', threadId: 'comment-1', top: 100 }],
+      rowVersions: { 'comment-1': 1 },
+      threads: { 'comment-1': ['comment-1'] },
+      groupOrder: { open: ['comment-1'], resolved: [] },
+      readPaintOrigin: vi.fn(() => ({ left: 0, top: 0 })),
+      updateContext: vi.fn(),
+    };
+    const comments = [{ commentId: 'comment-1', commentText: 'Source mapped', fileId: null, resolvedTime: null }];
+    expect(apply({ trackedChangeItems: [], preparedReview: { comments, trackedChanges: [], presentation } }).ok).toBe(
+      true,
+    );
+    const list = store.commentsList,
+      row = list[0],
+      instances = presentation.instances,
+      rowVersions = presentation.rowVersions;
+    row.commentText = 'Local draft';
+    const coordinate = { ...presentation.coordinate, commitSequence, reviewVersion: 8 };
+    const next = {
+      ...presentation,
+      unchanged: true,
+      baseVersion: 7,
+      version: 8,
+      coordinate,
+      readPaintOrigin: vi.fn(() => ({ left: 0, top: 20 })),
+      updateContext: vi.fn(),
+    };
+    expect(
+      apply({ trackedChangeItems: [], preparedReview: { comments, trackedChanges: [], presentation: next } }).ok,
+    ).toBe(true);
+    const current = store.committedReviewPresentations['doc-1'];
+    expect(current).toBe(presentation);
+    expect(store.commentsList).toBe(list);
+    expect(store.commentsList[0]).toBe(row);
+    expect(row.commentText).toBe('Local draft');
+    expect(current.instances).toBe(instances);
+    expect(current.rowVersions).toBe(rowVersions);
+    expect(current.readPaintOrigin).toBe(next.readPaintOrigin);
+    expect(current.updateContext).toBe(next.updateContext);
+    expect(current.version).toBe(8);
+    expect(current.coordinate).toEqual(coordinate);
+  });
+
   it('keeps prepared rows with identical Word comment IDs scoped to each document', () => {
     for (const documentId of ['doc-1', 'doc-2']) {
       const scopedComments = { ...commentsAdapter, documentId },
