@@ -4185,6 +4185,61 @@ describe('comments-store v2 pending document comments', () => {
     store = useCommentsStore();
   });
 
+  it.each(['editing', 'suggesting'])(
+    'keeps a newer %s selection when pending comment creation finishes',
+    async (documentMode) => {
+      const creation = deferred();
+      const target = { kind: 'text', segments: [{ blockId: 'paragraph', start: 0, end: 7 }] };
+      const newerTarget = { kind: 'text', segments: [{ blockId: 'paragraph', start: 8, end: 13 }] };
+      let currentTarget = target;
+      const clear = vi.fn(() => {
+        currentTarget = null;
+      });
+      const adapter = {
+        documentId: 'doc-1',
+        getCapabilityState: () => ({ canWrite: true, reason: null }),
+        captureCurrentSelection: async () => ({ ok: true, target }),
+        setActiveComment: vi.fn(async () => ({ ok: true })),
+        commitPendingComment: vi.fn(() => creation.promise),
+        mapV2CommentToUseCommentInput: (item) => item,
+      };
+      const superdoc = makeSuperdoc(adapter);
+      superdoc.config = { isInternal: true, documentMode };
+      superdoc.activeEditor.host = { getHandles: () => ({ selection: { clear } }) };
+      store.setV2CommentsAdapter(adapter);
+      store.setViewingVisibility({ documentMode });
+      expect(await store.showAddComment(superdoc)).toEqual({ ok: true });
+      store.currentCommentText = 'Review';
+      const pending = store.addComment({ superdoc, comment: store.pendingComment });
+
+      currentTarget = newerTarget;
+      creation.resolve({
+        ok: true,
+        createdCommentId: 'created',
+        items: [{ commentId: 'created', fileId: 'doc-1', commentText: 'Review' }],
+      });
+      expect(await pending).toMatchObject({ ok: true });
+
+      expect(currentTarget).toBe(newerTarget);
+      expect(clear).not.toHaveBeenCalled();
+      expect(store.pendingComment).toBeNull();
+      expect(store.activeComment).toBe('created');
+    },
+  );
+
+  it('clears the retained viewing selection when removing a pending comment', () => {
+    const clear = vi.fn();
+    const superdoc = makeSuperdoc({});
+    superdoc.activeEditor.host = { getHandles: () => ({ selection: { clear } }) };
+    store.setViewingVisibility({ documentMode: 'viewing' });
+    store.pendingComment = { commentId: 'pending' };
+
+    store.removePendingComment(superdoc);
+
+    expect(clear).toHaveBeenCalledOnce();
+    expect(store.pendingComment).toBeNull();
+  });
+
   it.each([
     ['repeated breaks', '<p>first &lt;&amp;&gt; line<br><br><br>last line</p>', 'first <&> line\n\n\nlast line'],
     ['outer breaks', '<p><br>first line<br></p>', '\nfirst line\n'],

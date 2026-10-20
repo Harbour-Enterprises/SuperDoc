@@ -1900,7 +1900,9 @@ export const useCommentsStore = defineStore('comments', () => {
     // would touch a null `commands` surface. Still clear the retained viewing
     // selection so the host overlay does not linger under the new decoration.
     if (isV2EditorActive(superdoc)) {
-      if (hadPending) {
+      // Editable selection belongs to native input. Creation may finish after
+      // the user has already selected another range for their next edit.
+      if (hadPending && isViewingMode.value) {
         try {
           superdoc?.activeEditor?.host?.getHandles?.()?.selection?.clear?.();
         } catch {
