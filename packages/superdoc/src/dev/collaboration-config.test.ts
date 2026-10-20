@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
 import { describe, expect, test } from 'vite-plus/test';
 import {
   createDevCollaborationAutoUrl,
@@ -101,7 +102,20 @@ describe('dev v2 collaboration config', () => {
       const configSource = readFileSync(resolve(packageRoot, configFile), 'utf8');
       expect(configSource).not.toContain('y-prosemirror');
       expect(configSource).not.toContain('prosemirror-');
-      expect(configSource).toContain("dedupe: ['yjs']");
+      const syntax = ts.createSourceFile(configFile, configSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
+      const dedupeLists: string[][] = [];
+      const visit = (node: ts.Node) => {
+        if (
+          ts.isPropertyAssignment(node) &&
+          node.name.getText(syntax) === 'dedupe' &&
+          ts.isArrayLiteralExpression(node.initializer)
+        ) {
+          dedupeLists.push(node.initializer.elements.filter(ts.isStringLiteralLike).map((element) => element.text));
+        }
+        ts.forEachChild(node, visit);
+      };
+      visit(syntax);
+      expect(dedupeLists).toEqual([expect.arrayContaining(['yjs'])]);
     }
   });
 });

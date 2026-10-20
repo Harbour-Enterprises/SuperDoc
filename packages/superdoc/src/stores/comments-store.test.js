@@ -4328,6 +4328,44 @@ describe('comments-store v2 pending document comments', () => {
     expect(adapter.edit).not.toHaveBeenCalled();
   });
 
+  it('preserves a newer pending draft when an earlier comment submission completes', async () => {
+    let complete;
+    const adapter = {
+      documentId: 'doc-1',
+      getCapabilityState: vi.fn(() => ({ canWrite: true })),
+      captureCurrentSelection: vi.fn(async () => ({ ok: true, target: null })),
+      setActiveComment: vi.fn(async () => ({ ok: true })),
+      commitPendingComment: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            complete = resolve;
+          }),
+      ),
+      mapV2CommentToUseCommentInput: vi.fn((item) => item),
+    };
+    const superdoc = makeSuperdoc(adapter);
+    superdoc.config = { isInternal: true };
+    store.setV2CommentsAdapter(adapter);
+    await store.showAddComment(superdoc);
+    store.currentCommentText = '<p>First comment</p>';
+    const submission = store.addComment({ superdoc, comment: store.pendingComment });
+    store.cancelComment(superdoc);
+    await store.showAddComment(superdoc);
+    const newerDraft = store.pendingComment;
+    store.currentCommentText = '<p>Second comment</p>';
+    complete({
+      ok: true,
+      createdCommentId: 'created',
+      items: [{ commentId: 'created', fileId: 'doc-1', commentText: '<p>First comment</p>' }],
+    });
+    expect((await submission).ok).toBe(true);
+    expect(store.pendingComment).toBe(newerDraft);
+    expect(store.currentCommentText).toBe('<p>Second comment</p>');
+    expect(store.activeComment).toBe(newerDraft.commentId);
+    expect(adapter.setActiveComment).not.toHaveBeenCalled();
+    expect(store.commentsList.map((comment) => comment.commentId)).toContain('created');
+  });
+
   it('submits a pending comment with the target captured when the card was opened', async () => {
     const target = {
       kind: 'text',

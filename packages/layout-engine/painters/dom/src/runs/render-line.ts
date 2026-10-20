@@ -22,7 +22,11 @@ import {
 import { CLASS_NAMES, lineStyles } from '../styles.js';
 import { applyRtlStyles } from '../features/inline-direction/index.js';
 import { applyTooltipAccessibility } from './links.js';
-import { appendFormattingLineBreakMark, appendFormattingParagraphMark } from './formatting-marks.js';
+import {
+  appendFormattingLineBreakMark,
+  appendFormattingParagraphMark,
+  setTextContentWithFormattingSpaceMarks,
+} from './formatting-marks.js';
 import { textRunMergeSignature } from './hash.js';
 import { inlineBoxAdvanceBeforeOffset, markInlineBoxRun, paintInlineBoxes, splitInlineBoxRuns } from './inline-box.js';
 import { isBreakRun, isFieldAnnotationRun, isImageRun, isLineBreakRun, isMathRun, renderRun } from './render-run.js';
@@ -235,42 +239,55 @@ const applyInterCharacterSpacingToRuns = (runs: Run[], spacing: number, boundari
   });
 };
 
-const trimUnmeasuredAlignmentSpaces = (block: ParagraphBlock, line: Line, runs: Run[]): Run[] => {
-  if (block.attrs?.alignment !== 'right' && block.attrs?.alignment !== 'center') return runs;
+const unmeasuredAlignmentSpaces = (block: ParagraphBlock, line: Line, runs: Run[]): Map<Run, number> | undefined => {
+  if (block.attrs?.alignment !== 'right' && block.attrs?.alignment !== 'center') return undefined;
   const lastSegment = line.segments?.at(-1);
-  if (!lastSegment || lastSegment.runIndex < line.fromRun || lastSegment.runIndex > line.toRun) return runs;
-  if (!runs.some((run) => isTextRun(run) && /[^ ]/u.test(run.text))) return runs;
+  if (!lastSegment || lastSegment.runIndex < line.fromRun || lastSegment.runIndex > line.toRun) return undefined;
+  if (!runs.some((run) => isTextRun(run) && /[^ ]/u.test(run.text))) return undefined;
 
   let omittedSpaces = 0;
   for (let index = lastSegment.runIndex; index <= line.toRun; index += 1) {
     const run = block.runs[index];
-    if (!run || !isTextRun(run)) return runs;
+    if (!run || !isTextRun(run)) return undefined;
     const start = index === lastSegment.runIndex ? lastSegment.toChar : 0;
     const end = index === line.toRun ? line.toChar : run.text.length;
     const suffix = run.text.slice(start, end);
-    if (/[^ ]/u.test(suffix)) return runs;
+    if (/[^ ]/u.test(suffix)) return undefined;
     omittedSpaces += suffix.length;
   }
-  if (omittedSpaces === 0) return runs;
 
-  // Wrapped source spaces remain in the line's source extent, but the measured
-  // segments exclude their advance. Native center/right alignment must exclude it too.
-  const painted = [...runs];
-  while (omittedSpaces > 0 && painted.length > 0) {
-    const run = painted.at(-1)!;
-    if (!isTextRun(run)) return runs;
+  if (omittedSpaces === 0) return undefined;
+  const omittedByRun = new Map<Run, number>();
+  for (let index = runs.length - 1; omittedSpaces > 0 && index >= 0; index -= 1) {
+    const run = runs[index]!;
+    if (!isTextRun(run)) return undefined;
     const count = Math.min(omittedSpaces, run.text.length);
-    if (/[^ ]/u.test(run.text.slice(run.text.length - count))) return runs;
+    if (/[^ ]/u.test(run.text.slice(run.text.length - count))) return undefined;
+    if (count > 0) omittedByRun.set(run, count);
     omittedSpaces -= count;
-    if (count === run.text.length) painted.pop();
-    else {
-      const trimmed = cloneTextRun(run);
-      trimmed.text = run.text.slice(0, -count);
-      if (trimmed.pmEnd != null) trimmed.pmEnd -= count;
-      painted[painted.length - 1] = trimmed;
-    }
   }
-  return omittedSpaces === 0 ? painted : runs;
+  return omittedSpaces === 0 ? omittedByRun : undefined;
+};
+
+const preserveUnmeasuredAlignmentSpaces = (
+  element: HTMLElement,
+  run: TextRun,
+  count: number,
+  showFormattingMarks: boolean,
+): void => {
+  if (element.textContent !== run.text) return;
+  const doc = element.ownerDocument;
+  // PaintDocument supports construction, not browser TreeWalker/Range APIs.
+  // Keep the source suffix inside its styled leaf without advancing alignment.
+  setTextContentWithFormattingSpaceMarks(element, run.text.slice(0, -count), doc, showFormattingMarks);
+  const wrapper = doc.createElement('span');
+  wrapper.classList.add('superdoc-unmeasured-wrap-space');
+  wrapper.style.display = 'inline-block';
+  wrapper.style.width = '0px';
+  wrapper.style.overflow = 'visible';
+  wrapper.style.textAlign = 'left';
+  setTextContentWithFormattingSpaceMarks(wrapper, run.text.slice(-count), doc, showFormattingMarks);
+  element.appendChild(wrapper);
 };
 
 const normalizeJustifiedRuns = (runsForLine: Run[]): Run[] => {
@@ -593,7 +610,6 @@ export function* renderLineWork({
   const lineRange = computeLinePmRange(expandedBlock, line);
   let runsForLine = sliceRunsForLine(expandedBlock, line);
   runsForLine = splitInlineBoxRuns(expandedBlock as ParagraphBlock, line) ?? runsForLine;
-  runsForLine = trimUnmeasuredAlignmentSpaces(expandedBlock as ParagraphBlock, line, runsForLine);
 
   const el = runContext.doc.createElement('div');
   el.classList.add(CLASS_NAMES.line);
@@ -1427,6 +1443,7 @@ function* renderInlineRuns({
   isRtl: boolean;
   spacingPerSpace: number;
 }): RenderWork<void> {
+  const omittedAlignmentSpaces = unmeasuredAlignmentSpaces(block, line, runsForLine);
   // Use run-based rendering for normal text flow
   // Track current inline SDT wrapper to group adjacent runs with the same SDT id
   let currentInlineSdtWrapper: HTMLElement | null = null;
@@ -1486,6 +1503,10 @@ function* renderInlineRuns({
         : renderRun(runForRender, context, runContext, trackedConfig);
 
     if (elem) {
+      const omittedSpaces = omittedAlignmentSpaces?.get(run);
+      if (omittedSpaces && isTextRun(run)) {
+        preserveUnmeasuredAlignmentSpaces(elem, run, omittedSpaces, runContext.showFormattingMarks);
+      }
       if (run.kind === 'tab') runContext.applyTrackedChangeDecorations(elem, run, trackedConfig);
       if (suppressUnderline && run.kind !== 'tab') {
         elem.style.textDecorationLine = 'strike' in runForRender && runForRender.strike ? 'line-through' : 'none';

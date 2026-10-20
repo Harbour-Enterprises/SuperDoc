@@ -1953,7 +1953,10 @@ export const useCommentsStore = defineStore('comments', () => {
       // the synchronous receipt commits and we refresh from
       // `host.getHandles().comments.list()`. This keeps the sidebar
       // receipt-driven; rejected mutations never produce orphan sidebar rows.
-      const text = normalizeV2CommentDraftText(pendingComment.value ? currentCommentText.value : comment.commentText);
+      const submittedPendingComment = pendingComment.value;
+      const text = normalizeV2CommentDraftText(
+        submittedPendingComment ? currentCommentText.value : comment.commentText,
+      );
       const mentions = pendingComment.value ? currentCommentMentions.value : (comment.mentions ?? []);
       const target = pendingComment.value ? pendingV2CommentTarget.value : null;
       const parentCommentId = comment.parentCommentId
@@ -1997,7 +2000,8 @@ export const useCommentsStore = defineStore('comments', () => {
           items: outcome.items,
         });
         const created = getV2CreatedComment({ outcome, reconciled, documentId: v2Adapter.documentId });
-        const hadPendingComment = !!pendingComment.value;
+        const hadPendingComment =
+          submittedPendingComment != null && pendingComment.value?.commentId === submittedPendingComment.commentId;
         if (hadPendingComment) removePendingComment(superdoc);
         // Hand off activeComment/instance to the newly created comment instead
         // of leaving it null, so the floating sidebar keeps treating this row

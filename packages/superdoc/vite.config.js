@@ -257,7 +257,7 @@ export default defineConfig(({ mode, command }) => {
   // forbidden from importing it and the published engine has no headless
   // surface (see headlessImportGuardPlugin).
   const v2FsAllow = v2Resolution.mode === 'source'
-    ? [V2_ROOT]
+    ? [V2_ROOT, path.resolve(V2_ROOT, '../tests/public-shell')]
     : [engineDistRoot];
 
   // Use emoji marker instead of ANSI colors to avoid reporter layout issues
@@ -287,6 +287,14 @@ export default defineConfig(({ mode, command }) => {
       retry: 2,
       testTimeout: 20000,
       hookTimeout: 10000,
+      // Orbit-only shell tests exercise private engine source. Keep them out
+      // of the exported public tree while retaining source-mode CI discovery.
+      include: [
+        ...configDefaults.include,
+        ...(v2Resolution.mode === 'source'
+          ? [path.resolve(V2_ROOT, '../tests/public-shell/**/*.test.js')]
+          : []),
+      ],
       exclude: [
         ...configDefaults.exclude,
         '**/*.spec.js',
@@ -422,7 +430,13 @@ export default defineConfig(({ mode, command }) => {
           : []),
         ...getAliases(command, v2Resolution),
       ],
-      dedupe: ['yjs'],
+      dedupe: [
+        'yjs',
+        // Private shell fixtures share this package's test dependencies.
+        ...(mode === 'test' && v2Resolution.mode === 'source'
+          ? ['@vue/test-utils', 'pinia', 'vue', 'eventemitter3']
+          : []),
+      ],
       extensions: ['.mjs', '.js', '.mts', '.ts', '.jsx', '.tsx', '.json'],
       conditions: v2Resolution.conditions,
       preserveSymlinks: false,
