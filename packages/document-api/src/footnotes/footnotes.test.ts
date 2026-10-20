@@ -80,6 +80,37 @@ describe('footnotes validation', () => {
 
   // ── Input validation ────────────────────────────────────────────────
   describe('executeFootnotesInsert', () => {
+    it.each(['changeMode', 'dryRun'])('rejects misplaced %s before delegating a body-story insertion', (field) => {
+      const adapter = makeAdapter();
+      const input = {
+        type: 'footnote',
+        content: 'Retained input control',
+        at: {
+          kind: 'text',
+          segments: [{ blockId: 'AAAA0001', range: { start: 0, end: 0 } }],
+          story: { kind: 'story', storyType: 'body' },
+        },
+        [field]: field === 'changeMode' ? 'tracked' : true,
+      };
+      expect(() => executeFootnotesInsert(adapter, input as any)).toThrow('second options argument');
+      expect(adapter.insert).not.toHaveBeenCalled();
+    });
+
+    it('preserves an explicit body story and collapsed target with second-argument options', () => {
+      const adapter = makeAdapter();
+      const input = {
+        type: 'footnote' as const,
+        content: 'Supported input control',
+        at: {
+          kind: 'text' as const,
+          segments: [{ blockId: 'AAAA0001', range: { start: 0, end: 0 } }],
+          story: { kind: 'story' as const, storyType: 'body' as const },
+        },
+      };
+      executeFootnotesInsert(adapter, input, { changeMode: 'tracked' });
+      expect(adapter.insert).toHaveBeenCalledWith(input, { changeMode: 'tracked', dryRun: false });
+    });
+
     it('throws INVALID_INPUT when type is missing', () => {
       const adapter = makeAdapter();
       expect(() => executeFootnotesInsert(adapter, { content: 'text' } as any)).toThrow(DocumentApiValidationError);

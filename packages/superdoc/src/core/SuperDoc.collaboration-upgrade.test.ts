@@ -18,6 +18,42 @@ afterEach(() => {
 });
 
 describe('SuperDoc.upgradeToCollaboration', () => {
+  it('keeps a reused caller modules object unchanged across upgrades and remounts', async () => {
+    const modules = Object.freeze({ comments: Object.freeze({ visible: false }) });
+    for (const suffix of ['first', 'remount']) {
+      const selector = document.createElement('div');
+      document.body.append(selector);
+      const instance = new SuperDoc({ selector, modules, telemetry: { enabled: false } } as never);
+      instances.push(instance);
+      const source = new Blob([new Uint8Array([1, 2, 3])]);
+      const editor = {
+        editorVersion: 2,
+        options: { documentId: `doc-${suffix}` },
+        upgradeToCollaboration: vi.fn().mockResolvedValue(undefined),
+      };
+      const configDoc = { id: `doc-${suffix}`, type: DOCX, data: source };
+      const mutable = instance as unknown as {
+        config: { documents: unknown[] };
+        superdocStore: { documents: unknown[] };
+      };
+      mutable.config.documents = [configDoc];
+      mutable.superdocStore = { documents: [{ ...configDoc, getEditor: () => editor, v2Collaboration: null }] };
+      instance.activeEditor = editor as never;
+      expect(
+        await instance.upgradeToCollaboration({
+          collaboration: {
+            providerType: 'y-websocket',
+            documentId: `room-${suffix}`,
+            serverUrl: 'wss://example.test',
+          },
+        } as never),
+      ).toEqual({ roomId: `room-${suffix}`, documentId: `doc-${suffix}` });
+      instance.destroy();
+      expect(modules).toEqual({ comments: { visible: false } });
+      expect(Object.hasOwn(modules, 'collaboration')).toBe(false);
+    }
+  });
+
   it('preserves syncTimeoutMs while creating and then retaining the room as a join target', async () => {
     const selector = document.createElement('div');
     document.body.append(selector);

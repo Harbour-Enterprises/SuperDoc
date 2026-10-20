@@ -1,7 +1,7 @@
 import type { MutationOptions } from '../write/write.js';
 import { normalizeMutationOptions } from '../write/write.js';
 import { DocumentApiValidationError } from '../errors.js';
-import { assertTargetPresent } from '../validation-primitives.js';
+import { assertNoUnknownFields, assertTargetPresent, isRecord } from '../validation-primitives.js';
 import { validateDocumentFragment } from '../validation/fragment-validator.js';
 import type {
   FootnoteAddress,
@@ -127,6 +127,10 @@ export function executeFootnotesInsert(
   input: FootnoteInsertInput,
   options?: MutationOptions,
 ): FootnoteMutationResult {
+  if (!isRecord(input)) {
+    throw new DocumentApiValidationError('INVALID_INPUT', 'footnotes.insert requires an input object.');
+  }
+  assertNoUnknownFields(input, new Set(['at', 'type', 'content', 'body']), 'footnotes.insert', 'doc.footnotes.insert');
   if (!input.type || (input.type !== 'footnote' && input.type !== 'endnote')) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',
