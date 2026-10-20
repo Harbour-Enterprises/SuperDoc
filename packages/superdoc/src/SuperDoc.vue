@@ -37,9 +37,8 @@ import useSelection from '@superdoc/helpers/use-selection';
 import { useSuperdocStore } from '@superdoc/stores/superdoc-store';
 import { useCommentsStore } from '@superdoc/stores/comments-store';
 
-import { DOCX, PDF, HTML } from '@superdoc/common';
+import { DOCX, PDF } from '@superdoc/common';
 import { composeAuthorColorResolver } from '@superdoc/contracts';
-import HtmlViewer from './components/HtmlViewer/HtmlViewer.vue';
 import useComment from './components/CommentsLayer/use-comment';
 import { collectRemovedCommentIds } from './components/CommentsLayer/collect-removed-comment-ids.js';
 import { useHighContrastMode } from './composables/use-high-contrast-mode';
@@ -336,7 +335,7 @@ const {
 });
 
 // V2 branch: DOCX is always routed through the v2 host shell wrapper
-// (`V2DocumentEditor`). PDF / HTML keep their viewer-specific paths.
+// (`V2DocumentEditor`). PDF keeps its viewer-specific path.
 const isV2Mode = computed(() => true);
 
 // ui-phase3-001: v2 geometry bridge state. `v2GeometryRender` holds the
@@ -3607,8 +3606,8 @@ watch(
     const zoomFactor = (zoom ?? 100) / 100;
     const zoomPercent = zoom ?? 100;
 
-    // Route DOCX zoom through the v2 page metrics runtime. PDF and HTML
-    // viewers stay on their existing paths (still set below).
+    // Route DOCX zoom through the v2 page metrics runtime. The PDF viewer
+    // stays on its existing path (still set below).
     const v2PageMetrics = proxy.$superdoc?.activeEditor?.pageMetrics ?? null;
     const v2FacadeActive = isV2Mode.value && proxy.$superdoc?.activeEditor?.editorVersion === 2;
 
@@ -3776,15 +3775,6 @@ const whiteboardInteractive = computed(() => whiteboardEnabled.value);
             @v2-page-metrics="onV2PageMetrics"
             @v2-render-readiness="(payload) => onV2RenderReadiness(doc, payload)"
             @v2-open-diagnostics="(payload) => onV2OpenDiagnostics(doc, payload)"
-          />
-
-          <!-- omitting field props -->
-          <HtmlViewer
-            v-if="doc.type === HTML"
-            @ready="(id) => handleDocumentReady(id, null)"
-            @selection-change="handleSelectionChange"
-            :file-source="doc.data"
-            :document-id="doc.id"
           />
         </div>
 

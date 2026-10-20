@@ -27,6 +27,13 @@ afterEach(() => {
 });
 
 describe('Config.document sources', () => {
+  it('advertises DOCX and PDF viewers without a standalone HTML viewer', () => {
+    const instance = createInstance('/contract.docx');
+
+    expect(SuperDoc.allowedTypes).toEqual([DOCX, PDF]);
+    expect(instance.getV2FeatureMatrix().some(({ feature }) => feature === 'html.viewer')).toBe(false);
+  });
+
   it('opens a URL string as a DOCX source', () => {
     const instance = createInstance('/contract.docx');
 

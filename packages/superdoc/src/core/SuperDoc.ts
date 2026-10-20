@@ -14,7 +14,7 @@ import type { HocuspocusProviderWebsocket } from '@hocuspocus/provider';
 import type { ContentControlType } from '@superdoc/document-api';
 import JSZip from 'jszip';
 
-import { DOCX, PDF, HTML, getActorIdentityKey, normalizeActorEmail } from '@superdoc/common';
+import { DOCX, PDF, getActorIdentityKey, normalizeActorEmail } from '@superdoc/common';
 import { DOM_CLASS_NAMES } from '@superdoc/dom-contract';
 import { SuperComments } from '../components/CommentsLayer/commentsList/super-comments-list.js';
 import { computeAppliedFitZoom, resolveFitWidthOptions } from '../composables/use-viewport-fit.js';
@@ -709,7 +709,7 @@ interface SuperDocEventMap {
  * @class
  */
 export class SuperDoc extends EventEmitter<SuperDocEventMap> {
-  static allowedTypes = [DOCX, PDF, HTML];
+  static allowedTypes = [DOCX, PDF];
 
   #destroyed = false;
   #diagnostics!: SuperDocDiagnostics;
@@ -3313,7 +3313,6 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
           'Legacy ProseMirror `editorExtensions` are ignored in v2.',
       },
       { feature: 'pdf.viewer', status: 'supported', reason: 'editorVersion ignored for PDF documents' },
-      { feature: 'html.viewer', status: 'supported', reason: 'editorVersion ignored for HTML documents' },
     ];
   }
 

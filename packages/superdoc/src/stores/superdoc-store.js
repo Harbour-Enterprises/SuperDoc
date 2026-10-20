@@ -2,7 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, reactive, computed } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 import { useCommentsStore } from './comments-store';
-import { getFileObject, DOCX, PDF } from '@superdoc/common';
+import { getFileObject, DOCX, PDF, HTML } from '@superdoc/common';
 import { normalizeDocumentEntry } from '@superdoc/core/helpers/file.js';
 import useDocument from '@superdoc/composables/use-document';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
@@ -215,6 +215,13 @@ export const useSuperdocStore = defineStore('superdoc', () => {
   const _initializeDocumentData = async (doc) => {
     // Normalize any uploader-specific wrapper to a native File/Blob upfront
     doc = normalizeDocumentEntry(doc);
+    const documentType = doc.data?.type || doc.type;
+    if (typeof documentType === 'string') {
+      const mimeType = documentType.split(';', 1)[0].trim().toLowerCase();
+      if (mimeType === HTML || mimeType === 'html') {
+        throw new Error('SuperDoc: HTML document viewing is not supported. Open a DOCX or PDF document.');
+      }
+    }
     if (currentConfig.value?.html) doc.html = currentConfig.value.html;
 
     // Use docx as default if no type provided

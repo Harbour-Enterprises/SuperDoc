@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vite-plus/test';
 import { createPinia, setActivePinia } from 'pinia';
 import { useSuperdocStore } from './superdoc-store.js';
 import { DOCX, PDF, HTML, getFileObject } from '@superdoc/common';
+import { normalizeDocumentEntry } from '../core/helpers/file.js';
 
 // Mock getFileObject while keeping the rest of the module's exports intact
 vi.mock('@superdoc/common', async (importOriginal) => {
@@ -54,6 +55,83 @@ const createTestConfig = (documents = [], overrides = {}) => {
     ...rest,
   };
 };
+
+describe('standalone HTML document viewing', () => {
+  let store;
+
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    store = useSuperdocStore();
+    getFileObject.mockReset();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  const htmlFile = (name = 'document.html', type = HTML) => new File(['<p>Document</p>'], name, { type });
+
+  it.each([
+    ['File', () => htmlFile()],
+    ['Blob', () => new Blob(['<p>Document</p>'], { type: HTML })],
+    ['empty-MIME .html', () => htmlFile('document.html', '')],
+    ['empty-MIME .htm', () => htmlFile('document.htm', '')],
+    ['generic-MIME .html', () => htmlFile('document.html', 'application/octet-stream')],
+    ['originFileObj wrapper', () => ({ originFileObj: htmlFile() })],
+    ['file wrapper', () => ({ file: htmlFile() })],
+    ['raw wrapper', () => ({ raw: htmlFile() })],
+    [
+      'wrapper filename',
+      () => ({ name: 'document.html', originFileObj: htmlFile('upload.bin', 'application/octet-stream') }),
+    ],
+    ['structured File', () => ({ data: htmlFile(), type: 'html' })],
+    ['typed bytes', () => ({ data: new Uint8Array([60, 112, 62]), type: 'HtMl' })],
+    ['ArrayBuffer', () => ({ data: new ArrayBuffer(3), type: HTML.toUpperCase() })],
+    ['URL', () => ({ url: 'https://example.com/document.html', type: 'html' })],
+    ['MIME with parameters', () => ({ data: htmlFile('document.html', 'text/html; charset=utf-8') })],
+  ])('rejects a standalone HTML %s through the document-init exception', async (_label, source) => {
+    const onException = vi.fn();
+
+    await store.init(createTestConfig([normalizeDocumentEntry(source())], { onException }));
+
+    expect(store.documents).toEqual([]);
+    expect(getFileObject).not.toHaveBeenCalled();
+    expect(onException).toHaveBeenCalledExactlyOnceWith({
+      error: expect.objectContaining({
+        message: 'SuperDoc: HTML document viewing is not supported. Open a DOCX or PDF document.',
+      }),
+      stage: 'document-init',
+      document: expect.any(Object),
+    });
+  });
+
+  it('rejects HTML before the legacy collaboration shortcut', async () => {
+    const onException = vi.fn();
+    await store.init(
+      createTestConfig([{ data: htmlFile(), type: HTML }], { modules: { collaboration: {} }, onException }),
+    );
+
+    expect(store.documents).toEqual([]);
+    expect(onException).toHaveBeenCalledOnce();
+  });
+
+  it('keeps DOCX and PDF siblings when an HTML entry is rejected', async () => {
+    const onException = vi.fn();
+    const docx = { id: 'docx', data: new File(['docx'], 'document.docx', { type: DOCX }), type: DOCX };
+    const pdf = { id: 'pdf', data: new File(['pdf'], 'document.pdf', { type: PDF }), type: PDF };
+
+    await store.init(createTestConfig([docx, { data: htmlFile(), type: HTML }, pdf], { onException }));
+
+    expect(store.documents.map(({ id }) => id)).toEqual(['docx', 'pdf']);
+    expect(onException).toHaveBeenCalledOnce();
+  });
+
+  it('preserves the separate DOCX HTML initialization metadata', async () => {
+    const html = '<p>DOCX import content</p>';
+    const data = new File(['docx'], 'document.docx', { type: DOCX });
+
+    await store.init(createTestConfig([{ data, type: DOCX }], { html }));
+
+    expect(store.documents[0]).toMatchObject({ type: DOCX, data, html });
+  });
+});
 
 describe('SuperDoc Store - Blob Support', () => {
   let store;
@@ -186,18 +264,6 @@ describe('SuperDoc Store - Blob Support', () => {
 
       const document = store.documents[0];
       expect(document.data.type).toBe(DOCX);
-    });
-
-    it('should canonicalize an HTML shorthand before fetching a URL', async () => {
-      const file = new File(['test content'], 'test.html', { type: HTML });
-      getFileObject.mockResolvedValueOnce(file);
-
-      const config = createTestConfig([{ url: 'https://example.com/test.html', name: 'test.html', type: 'html' }]);
-
-      await store.init(config);
-
-      expect(getFileObject).toHaveBeenCalledWith('https://example.com/test.html', 'test.html', HTML);
-      expect(store.documents[0]).toMatchObject({ type: HTML, data: file });
     });
 
     it('should handle mixed File and Blob objects', async () => {

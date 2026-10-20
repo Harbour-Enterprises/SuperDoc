@@ -72,14 +72,62 @@ test('opens a PDF File in the PDF viewer', async ({ page }) => {
   await expect(page.locator('[data-pdf-page]').first()).toBeVisible({ timeout: 60_000 });
 });
 
-test('opens an HTML Blob in the HTML viewer', async ({ page }) => {
-  await page.evaluate(() => {
-    const data = new Blob(['<p>Compatibility document</p>'], { type: 'text/html' });
-    const SuperDoc = (window as never as { SuperDoc: new (config: unknown) => unknown }).SuperDoc;
-    new SuperDoc({ selector: '#editor', document: data });
-  });
+for (const source of ['File', 'Blob', 'wrapper', 'bytes', 'URL'] as const) {
+  test(`rejects a standalone HTML ${source} without executing its markup`, async ({ page }) => {
+    let documentRequests = 0;
+    await page.route('**/standalone.html', (route) => {
+      documentRequests += 1;
+      return route.fulfill({ contentType: 'text/html', body: '<p>HTML document</p>' });
+    });
 
-  const content = page.locator('.superdoc-html-viewer__content');
-  await expect(content).toBeVisible();
-  await expect(content).toContainText('Compatibility document');
-});
+    await page.evaluate((source) => {
+      const state = window as unknown as {
+        SuperDoc: new (config: unknown) => { state: { documents: unknown[] } };
+        htmlViewerInstance: { state: { documents: unknown[] } };
+        htmlViewerErrors: Array<{ stage: string; message: string }>;
+        htmlViewerExecuted?: boolean;
+      };
+      const html = '<img src="data:,invalid" onerror="window.htmlViewerExecuted = true">';
+      const file = new File([html], 'standalone.html', { type: 'text/html' });
+      const inputs = {
+        File: file,
+        Blob: new Blob([html], { type: 'text/html' }),
+        wrapper: { originFileObj: file },
+        bytes: { data: new TextEncoder().encode(html), type: 'html' },
+        URL: { url: '/standalone.html', type: 'html' },
+      };
+      state.htmlViewerErrors = [];
+      state.htmlViewerInstance = new state.SuperDoc({
+        selector: '#editor',
+        document: inputs[source],
+        documentMode: 'viewing',
+        onException: ({ stage, error }: { stage: string; error: unknown }) => {
+          state.htmlViewerErrors.push({ stage, message: error instanceof Error ? error.message : String(error) });
+        },
+      });
+    }, source);
+
+    await expect
+      .poll(() => page.evaluate(() => (window as unknown as { htmlViewerErrors: unknown[] }).htmlViewerErrors))
+      .toEqual([
+        {
+          stage: 'document-init',
+          message: 'SuperDoc: HTML document viewing is not supported. Open a DOCX or PDF document.',
+        },
+      ]);
+    expect(
+      await page.evaluate(() => {
+        const state = window as unknown as {
+          htmlViewerExecuted?: boolean;
+          htmlViewerInstance: { state: { documents: unknown[] } };
+        };
+        return {
+          executed: state.htmlViewerExecuted === true,
+          documents: state.htmlViewerInstance.state.documents.length,
+        };
+      }),
+    ).toEqual({ executed: false, documents: 0 });
+    await expect(page.locator('.superdoc-html-viewer')).toHaveCount(0);
+    expect(documentRequests).toBe(0);
+  });
+}
