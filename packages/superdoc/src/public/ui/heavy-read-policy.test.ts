@@ -998,6 +998,89 @@ describe('public ui — heavy-read policy behavior details', () => {
     harness.ui.destroy();
   });
 
+  it('keeps tracked-change list readiness independent of a pending selection read', async () => {
+    vi.useFakeTimers();
+    let holdSelection = false;
+    const harness = makeHarness('source-complete', {
+      selectionCurrent: () =>
+        holdSelection ? new Promise(() => {}) : { empty: true, activeChangeIds: [], activeCommentIds: [] },
+      reviewWindowItems: () => [{ id: 'existing', type: 'insert', insertedText: 'retained' }],
+    });
+    const snapshots: unknown[] = [];
+    const stop = harness.ui.trackChanges.observe((snapshot) => snapshots.push(snapshot));
+    await settle();
+    holdSelection = true;
+    harness.emitSelection({ anchor: { blockId: 'P1', blockOffset: 0 }, focus: { blockId: 'P1', blockOffset: 5 } });
+    await settle();
+    expect(harness.ui.selection.getSnapshot().status).not.toBe('ready');
+    expect(harness.ui.trackChanges.getSnapshot()).toMatchObject({
+      listStatus: 'ready',
+      total: 1,
+      items: [{ id: 'existing' }],
+    });
+    expect(snapshots.at(-1)).toMatchObject({ listStatus: 'ready', total: 1 });
+    stop();
+    harness.ui.destroy();
+  });
+
+  it('withholds retained selection rectangles while a different selection read is pending', async () => {
+    vi.useFakeTimers();
+    const target = (start: number, end: number) => ({
+      kind: 'selection' as const,
+      start: { kind: 'text' as const, blockId: 'P1', offset: start },
+      end: { kind: 'text' as const, blockId: 'P1', offset: end },
+    });
+    const oldTarget = target(0, 5),
+      nextTarget = target(8, 12);
+    const selectionValue = (selectionTarget: ReturnType<typeof target>) => ({
+      empty: false,
+      selectionTarget,
+      activeChangeIds: [],
+      activeCommentIds: [],
+    });
+    let pending = false;
+    let complete!: (value: unknown) => void;
+    const harness = makeHarness('source-complete', {
+      selectionCurrent: () =>
+        pending
+          ? new Promise((resolve) => {
+              complete = resolve;
+            })
+          : selectionValue(oldTarget),
+    });
+    const rect = (left: number) => ({
+      left,
+      right: left + 50,
+      top: 10,
+      bottom: 20,
+      width: 50,
+      height: 10,
+      pageIndex: 0,
+    });
+    const host = (harness.superdoc.activeEditor as { host: Record<string, unknown> }).host;
+    host.getTargetRects = vi.fn(({ target: value }: { target: { start: { offset: number } } }) => ({
+      success: true,
+      rects: [rect(value.start.offset === 0 ? 10 : 90)],
+    }));
+    try {
+      await settle();
+      expect(harness.ui.selection.getSnapshot().status).toBe('ready');
+      expect(harness.ui.selection.getRects()).toEqual([rect(10)]);
+      pending = true;
+      harness.emitSelection({ anchor: { blockId: 'P1', blockOffset: 8 }, focus: { blockId: 'P1', blockOffset: 12 } });
+      await settle();
+      expect(harness.ui.selection.getSnapshot()).toMatchObject({ status: 'stale', selectionTarget: oldTarget });
+      expect(harness.ui.selection.getRects()).toEqual([]);
+      expect(harness.ui.viewport.getRect({ target: oldTarget })).toMatchObject({ found: true, rects: [rect(10)] });
+      complete(selectionValue(nextTarget));
+      await settle();
+      expect(harness.ui.selection.getSnapshot()).toMatchObject({ status: 'ready', selectionTarget: nextTarget });
+      expect(harness.ui.selection.getRects()).toEqual([rect(90)]);
+    } finally {
+      harness.ui.destroy();
+    }
+  });
+
   it.each([0, 900])('SD-5646 keeps an observed review directory ready after a %ims foreground tail', async (tailMs) => {
     vi.useFakeTimers();
     let offset = 0;

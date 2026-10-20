@@ -357,6 +357,7 @@ export function useSuperDocContentControls(): Readonly<ShallowRef<ContentControl
 export function useSuperDocTrackChanges(): Readonly<ShallowRef<TrackChangesSlice>> {
   return useSuperDocSlice((ui) => ui.trackChanges, {
     status: 'pending',
+    listStatus: 'pending',
     items: [],
     total: 0,
     activeId: null,

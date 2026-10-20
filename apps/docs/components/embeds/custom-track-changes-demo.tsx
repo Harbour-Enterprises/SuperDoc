@@ -19,6 +19,7 @@ const INITIAL_ZOOM = {
 } satisfies ZoomSlice;
 const INITIAL_TRACK_CHANGES = {
   status: 'pending',
+  listStatus: 'pending',
   items: [],
   total: 0,
   activeId: null,
@@ -313,7 +314,8 @@ export function CustomTrackChangesDemo() {
   }
 
   const controlsReady = state === 'ready';
-  const changesReady = trackChanges.status !== 'pending';
+  // The CDN runtime pinned in config/editor-demo-runtime.json can predate listStatus.
+  const changesReady = (trackChanges.listStatus ?? trackChanges.status) !== 'pending';
   const fitActive = zoom.mode === 'fit-width';
 
   return (

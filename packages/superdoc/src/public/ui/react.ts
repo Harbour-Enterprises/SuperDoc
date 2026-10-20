@@ -235,6 +235,7 @@ export function useSuperDocContentControls(): ContentControlsSlice {
 export function useSuperDocTrackChanges(): TrackChangesSlice {
   return useSuperDocSlice((ui) => ui.trackChanges, {
     status: 'pending',
+    listStatus: 'pending',
     items: [],
     total: 0,
     activeId: null,

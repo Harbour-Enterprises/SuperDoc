@@ -4461,6 +4461,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const activeId = explicitActiveId ?? selectionActiveId;
     return {
       status: combineStatus(listStatus, selection.status),
+      listStatus,
       items,
       total: items.length,
       activeId,
@@ -4506,6 +4507,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       : windowSnapshot.activeId;
     return {
       status: combineStatus(directory.status, selection.status),
+      listStatus: directory.status,
       items,
       total: items.length,
       activeId,
@@ -10619,7 +10621,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       // host target-geometry surface. Fails closed to [] (never fabricates).
       const snapshot = selectionSub.get();
       const target = snapshot.selectionTarget ?? snapshot.target;
-      if (snapshot.empty || !target) return [];
+      // Explicit targets can retain valid painted geometry while this live
+      // selection snapshot still describes the previous range.
+      if (snapshot.status !== 'ready' || snapshot.empty || !target) return [];
       const result = viewport.getRect({
         target: target as ViewportGetRectInput['target'],
         relativeTo: input?.relativeTo,

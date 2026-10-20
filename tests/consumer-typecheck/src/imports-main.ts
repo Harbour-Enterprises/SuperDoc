@@ -109,6 +109,12 @@ const stopObservingComments: () => void = ui.comments.observe((comments) => {
   const status: 'ready' | 'pending' | 'stale' = comments.listStatus;
   void [total, status];
 });
+const stopObservingChanges: () => void = ui.trackChanges.observe((changes) => {
+  const total: number = changes.total;
+  const listStatus: 'ready' | 'pending' | 'stale' = changes.listStatus;
+  const status: 'ready' | 'pending' | 'stale' = changes.status;
+  void [total, listStatus, status];
+});
 
 // A command handle carries state, an unsubscribe-returning observer, and
 // execution. Annotating each member is the point: a collapsed handle type

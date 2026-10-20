@@ -770,8 +770,10 @@ export interface CommentsSlice {
 
 /** Track-changes slice. */
 export interface TrackChangesSlice {
-  /** Readiness of the underlying async tracked-change read ({@link SliceStatus}). */
+  /** Readiness of the tracked-change list combined with live selection ({@link SliceStatus}). */
   status: SliceStatus;
+  /** Readiness of the tracked-change list alone, independent of selection. */
+  listStatus: SliceStatus;
   /** All tracked changes currently loaded. */
   items: readonly TrackChangesItem[];
   /** Total tracked-change count. */
@@ -1009,8 +1011,8 @@ export interface SelectionHandle extends SnapshotSubscribable<SelectionSlice> {
   /**
    * Resolve every painted rectangle covering the current selection (one per
    * line/fragment) through the host geometry surface. Returns an empty array
-   * when geometry is host-unavailable or the selection has no painted target —
-   * it never fabricates rectangles.
+   * while the selection read is pending or stale, when geometry is host-unavailable,
+   * or when the selection has no painted target. It never fabricates rectangles.
    */
   getRects(input?: { relativeTo?: HTMLElement }): readonly ViewportRect[];
 }
@@ -1354,7 +1356,11 @@ export interface DocumentHandle extends SnapshotSubscribable<DocumentSlice> {
 
 /** Viewport handle. */
 export interface ViewportHandle {
-  /** Resolve current painted geometry for a selection, text target, or supported entity address. */
+  /**
+   * Resolve acknowledged painted geometry for a selection, text target, or supported entity address.
+   * Pending pointer, caret navigation, Select All, or direct selection input preserves unchanged geometry;
+   * document and viewport changes still invalidate it.
+   */
   getRect(input: ViewportGetRectInput): ViewportRectResult;
   /**
    * Subscribe to geometry invalidation after selection, zoom, scroll, resize,
