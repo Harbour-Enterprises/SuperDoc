@@ -102,7 +102,10 @@ export type NativeOoxmlReplaceInput = OoxmlContentSource & {
 export type SnapshotReplaceInput = { target: BlockNodeAddress; snapshotId: string; in?: never };
 export type ParagraphTextReplaceInput = { target: BlockNodeAddress; text: string; in?: never };
 export interface ReplaceMutationOptions extends RichContentMutationOptions {
-  /** Replace one paragraph's contents, retaining its identity and exact paragraph properties. */
+  /**
+   * Replace one paragraph's contents, retaining its identity and exact paragraph properties.
+   * Plain text newlines (LF, CRLF, or CR) become inline line breaks; tabs become inline tabs.
+   */
   replaceMode?: 'contents';
   /** Compare the addressed paragraph with an unchanged retained snapshot before committing. */
   expectedSnapshotId?: string;
