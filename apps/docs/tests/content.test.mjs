@@ -3547,7 +3547,7 @@ test('the shared Editor demo fit-width helper uses V2 base page metrics', async 
   ]);
 });
 
-test('the shared Editor demo view controls preserve every interaction contract', async () => {
+test('the shared Editor demo view controls preserve every interaction contract', async (t) => {
   const { Window } = await import('happy-dom');
   const browserWindow = new Window({ url: 'https://docs.superdoc.dev/' });
   const globalNames = ['window', 'document', 'navigator', 'IS_REACT_ACT_ENVIRONMENT'];
@@ -3608,16 +3608,70 @@ test('the shared Editor demo view controls preserve every interaction contract',
     assert.equal(button('Fit document to width').textContent, 'Fit');
     button('Exit fullscreen');
 
-    await render({ zoom: { max: 150, min: 50, mode: 'manual', value: 50 } });
+    await render({ zoom: { max: 150, min: 50, fitWidth: { min: 50, max: 150 }, mode: 'manual', value: 1 } });
     assert.equal(button('Zoom out').disabled, true);
     assert.equal(button('Zoom in').disabled, false);
 
-    await render({ zoom: { max: 150, min: 50, mode: 'manual', value: 150 } });
+    await render({ zoom: { max: 150, min: 50, fitWidth: { min: 50, max: 150 }, mode: 'manual', value: 150 } });
     assert.equal(button('Zoom out').disabled, false);
-    assert.equal(button('Zoom in').disabled, true);
+    assert.equal(button('Zoom in').disabled, false);
+    await click('Zoom in');
+    assert.equal(interactions.at(-1), 1);
 
     await render({ disabled: true });
     assert.ok([...container.querySelectorAll('button')].every((control) => control.disabled));
+
+    const compileHandler = (source, name, scope) => {
+      const declaration = source.match(new RegExp(`  function ${name}\\([^]*?\\n  \\}`, 'u'))?.[0];
+      assert.ok(declaration, `Missing ${name} handler.`);
+      const javascript = ts.transpileModule(declaration, {
+        compilerOptions: { target: ts.ScriptTarget.ES2022 },
+      }).outputText;
+      return Function(...Object.keys(scope), `${javascript}\nreturn ${name};`)(...Object.values(scope));
+    };
+
+    await t.test('theme zoom buttons move past the fit-width bounds', async () => {
+      const source = await readFile(themePlaygroundUrl, 'utf8');
+      const calls = [];
+      const zoomRef = { current: null };
+      const changeZoom = compileHandler(source, 'changeZoom', {
+        zoomRef,
+        instanceRef: { current: { ui: { zoom: { set: (value) => calls.push(value) } } } },
+      });
+      for (const [value, direction, expected] of [[200, 1, 210], [10, -1, 1], [2, -1, 1]]) {
+        zoomRef.current = { min: 10, max: 200, fitWidth: { min: 10, max: 200 }, mode: 'manual', value };
+        await render({ zoom: zoomRef.current, onZoom: changeZoom });
+        await click(direction === 1 ? 'Zoom in' : 'Zoom out');
+        assert.equal(calls.at(-1), expected);
+      }
+    });
+
+    await t.test('collaboration zoom buttons update both peers beyond fit bounds', async () => {
+      const source = await readFile(new URL('../components/embeds/collaboration-demo.tsx', import.meta.url), 'utf8');
+      const calls = [[], []];
+      let displayedZoom;
+      const editors = { current: calls.map((values) => ({
+        setZoom: (value) => values.push(value),
+        activeEditor: { pageMetrics: { getSnapshot: () => ({ pages: [{ base: { widthPx: 100 } }] }) } },
+      })) };
+      const applyZoom = compileHandler(source, 'applyZoom', { editors, setZoom: (value) => { displayedZoom = value; } });
+      for (const [value, direction, expected] of [[120, 1, 130], [20, -1, 10], [2, -1, 1]]) {
+        await render({
+          zoom: { min: 20, max: 120, fitWidth: { min: 20, max: 120 }, mode: 'manual', value },
+          onZoom: (step) => applyZoom(value + step * 10),
+        });
+        await click(direction === 1 ? 'Zoom in' : 'Zoom out');
+        assert.deepEqual(calls.map((values) => values.at(-1)), [expected, expected]);
+        assert.equal(displayedZoom, expected);
+      }
+      const mount = { current: { clientWidth: 200 } };
+      const fit = compileHandler(source, 'fit', { editors, alex: mount, sam: mount, applyZoom });
+      fit();
+      assert.equal(displayedZoom, 120);
+      mount.current.clientWidth = 1;
+      fit();
+      assert.equal(displayedZoom, 20);
+    });
   } finally {
     await act(async () => root.unmount());
     browserWindow.close();

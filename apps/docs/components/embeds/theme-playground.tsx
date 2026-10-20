@@ -12,7 +12,13 @@ import { createRuntimeEditor, loadRuntime, type SuperDocConstructor, type SuperD
 const DEMO_DOCUMENT = '/fixtures/getting-started.docx';
 const THEME_NAME = 'docs-playground';
 const NARROW_DEMO_WIDTH = 520;
-const INITIAL_ZOOM = { max: 200, min: 10, mode: 'manual', value: 80 } satisfies ZoomSlice;
+const INITIAL_ZOOM = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 80,
+} satisfies ZoomSlice;
 
 type DemoState = 'idle' | 'loading' | 'ready' | 'error';
 type ThemePresetId = 'default' | 'product';
@@ -433,7 +439,7 @@ export function ThemePlayground() {
 
   function changeZoom(direction: -1 | 1) {
     const current = zoomRef.current;
-    const next = Math.min(current.max, Math.max(current.min, current.value + direction * 10));
+    const next = Math.max(1, current.value + direction * 10);
     instanceRef.current?.ui.zoom.set(next);
   }
 

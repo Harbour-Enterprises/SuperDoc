@@ -14,7 +14,13 @@ const DEMO_DOCUMENT = '/fixtures/getting-started.docx';
 const COMMAND_ID = 'application.insertClause';
 const CLAUSE_TEXT = ' This agreement is governed by the laws of California.';
 const NARROW_DEMO_WIDTH = 520;
-const INITIAL_ZOOM = { max: 200, min: 10, mode: 'manual', value: 80 } satisfies ZoomSlice;
+const INITIAL_ZOOM = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 80,
+} satisfies ZoomSlice;
 const INITIAL_COMMAND_STATE = {
   active: false,
   disabled: true,
@@ -295,7 +301,7 @@ export function CustomCommandDemo() {
 
   function changeZoom(direction: -1 | 1) {
     const currentZoom = zoomRef.current;
-    const nextZoom = Math.min(currentZoom.max, Math.max(currentZoom.min, currentZoom.value + direction * 10));
+    const nextZoom = Math.max(1, currentZoom.value + direction * 10);
     instanceRef.current?.ui.zoom.set(nextZoom);
   }
 

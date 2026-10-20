@@ -17,7 +17,8 @@ export function fitRuntimeEditorToWidth(instance: SuperDocInstance) {
   if (!documentWidth || !availableWidth || availableWidth <= EDITOR_DEMO_FIT_WIDTH_PADDING) return false;
 
   const fitZoom = Math.round(((availableWidth - EDITOR_DEMO_FIT_WIDTH_PADDING) / documentWidth) * 100);
-  const { max, min } = instance.getZoomState();
+  const state = instance.getZoomState();
+  const { max, min } = state.fitWidth ?? state;
   instance.ui.zoom.set(Math.min(max, Math.max(min, fitZoom)));
   instance.ui.zoom.setMode('fit-width');
   return true;

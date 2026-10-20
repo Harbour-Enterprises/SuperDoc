@@ -463,5 +463,11 @@ export function useSuperDocFontSizeOptions(): Readonly<ShallowRef<readonly FontS
 
 /** Subscribe to the zoom slice. */
 export function useSuperDocZoom(): Readonly<ShallowRef<ZoomSlice>> {
-  return useSuperDocSlice((ui) => ui.zoom, { mode: null, value: 100, min: 10, max: 100 });
+  return useSuperDocSlice((ui) => ui.zoom, {
+    mode: null,
+    value: 100,
+    fitWidth: { min: 10, max: 100 },
+    min: 10,
+    max: 100,
+  });
 }

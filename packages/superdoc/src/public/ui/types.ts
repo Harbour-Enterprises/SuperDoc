@@ -804,11 +804,13 @@ export interface FontsSlice {
 export interface ZoomSlice {
   /** Current zoom mode. */
   mode: 'manual' | 'fit-width' | null;
-  /** Current zoom value as a percentage (100 = 100%). */
+  /** Current percentage (100 = 100%). Manual zoom accepts any finite value greater than zero. */
   value: number;
-  /** Minimum allowed zoom percentage. */
+  /** Effective bounds applied only in fit-width mode. */
+  fitWidth: { min: number; max: number };
+  /** @deprecated Fit-width lower bound alias. Use `fitWidth.min`; this does not limit manual zoom. */
   min: number;
-  /** Maximum allowed zoom percentage. */
+  /** @deprecated Fit-width upper bound alias. Use `fitWidth.max`; this does not limit manual zoom. */
   max: number;
 }
 

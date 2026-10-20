@@ -33,7 +33,13 @@ import { EditorDemoViewControls } from './editor-demo-view-controls';
 import { createRuntimeEditor, loadRuntime, loadUIModule, type SuperDocInstance } from './superdoc-runtime';
 
 const zoomStep = 10;
-const initialZoom = { max: 200, min: 10, mode: 'manual', value: 100 } satisfies ZoomSlice;
+const initialZoom = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 100,
+} satisfies ZoomSlice;
 const initialTrackedChanges: Pick<TrackChangesSlice, 'status' | 'total'> = {
   status: 'pending',
   total: 0,
@@ -343,7 +349,7 @@ export function EditorDemo({
       const availableWidth = mount.clientWidth - 32;
       if (!(widestPage > 0) || !(availableWidth > 0)) return;
 
-      const { min, max } = zoomRef.current;
+      const { min, max } = zoomRef.current.fitWidth ?? zoomRef.current;
       const nextZoom = Math.max(min, Math.min(max, Math.round((availableWidth / widestPage) * 100)));
       if (nextZoom === Math.round(zoomRef.current.value)) return;
       fitZoomRef.current = nextZoom;
@@ -855,7 +861,7 @@ export function EditorDemo({
   }
 
   function changeZoom(direction: -1 | 1) {
-    const nextZoom = Math.min(zoom.max, Math.max(zoom.min, zoom.value + direction * zoomStep));
+    const nextZoom = Math.max(1, zoom.value + direction * zoomStep);
     fitActiveRef.current = false;
     setFitActive(false);
     uiRef.current?.zoom.set(nextZoom);

@@ -42,7 +42,7 @@ function DocumentControls({ errorMessage }: { errorMessage: string }) {
   const exportInFlight = useRef(false);
 
   function changeZoom(delta: number) {
-    ui?.zoom.set(Math.min(zoom.max, Math.max(zoom.min, zoom.value + delta)));
+    ui?.zoom.set(Math.max(1, zoom.value + delta));
   }
 
   async function downloadDocx() {
@@ -74,10 +74,10 @@ function DocumentControls({ errorMessage }: { errorMessage: string }) {
   return (
     <>
       <div aria-label='Document controls' role='toolbar'>
-        <button disabled={!ui || zoom.value <= zoom.min} onClick={() => changeZoom(-10)} type='button'>
+        <button disabled={!ui || zoom.value <= 1} onClick={() => changeZoom(-10)} type='button'>
           Zoom out
         </button>
-        <button disabled={!ui || zoom.value >= zoom.max} onClick={() => changeZoom(10)} type='button'>
+        <button disabled={!ui} onClick={() => changeZoom(10)} type='button'>
           Zoom in
         </button>
         <button disabled={!ui || !documentState.ready || isExporting} onClick={() => void downloadDocx()} type='button'>

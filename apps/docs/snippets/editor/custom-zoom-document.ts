@@ -48,8 +48,8 @@ const superdoc = new SuperDoc({
     const render = () => {
       const zoom = ui.zoom.getSnapshot();
       const currentDocument = ui.document.getSnapshot();
-      zoomOut.disabled = zoom.value <= zoom.min;
-      zoomIn.disabled = zoom.value >= zoom.max;
+      zoomOut.disabled = zoom.value <= 1;
+      zoomIn.disabled = false;
       exportButton.disabled = !currentDocument.ready || exportInFlight;
       status.value = currentDocument.ready
         ? `${modeLabel(currentDocument.mode)} · ${zoom.value}%${actionMessage ? ` · ${actionMessage}` : ''}`
@@ -58,7 +58,7 @@ const superdoc = new SuperDoc({
 
     const changeZoom = (delta: number) => {
       const zoom = ui.zoom.getSnapshot();
-      ui.zoom.set(Math.min(zoom.max, Math.max(zoom.min, zoom.value + delta)));
+      ui.zoom.set(Math.max(1, zoom.value + delta));
     };
     const zoomOutHandler = () => changeZoom(-10);
     const zoomInHandler = () => changeZoom(10);

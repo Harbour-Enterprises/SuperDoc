@@ -328,5 +328,11 @@ export function useSuperDocFontSizeOptions(): readonly FontSizeOption[] {
 
 /** Subscribe to the zoom slice. */
 export function useSuperDocZoom(): ZoomSlice {
-  return useSuperDocSlice((ui) => ui.zoom, { mode: null, value: 100, min: 10, max: 100 });
+  return useSuperDocSlice((ui) => ui.zoom, {
+    mode: null,
+    value: 100,
+    fitWidth: { min: 10, max: 100 },
+    min: 10,
+    max: 100,
+  });
 }

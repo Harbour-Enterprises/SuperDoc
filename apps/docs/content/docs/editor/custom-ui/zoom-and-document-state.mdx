@@ -49,8 +49,16 @@ Replace the setup guide's Editor code:
 sets `toolbar.container` because the application owns that mount. React creates one when `container` is omitted. Use
 `toolbar: false` only when your application will render the complete toolbar.
 
-`ui.zoom` reports the current percentage and supported range. `set()` switches to manual zoom. Zoom changes the view,
-not the DOCX.
+`ui.zoom` reports the current percentage, mode, and `fitWidth: { min, max }` policy bounds. Those bounds apply only in
+Fit width mode. `set()` switches to manual zoom and accepts any finite percentage greater than zero, including 150%
+with the default Fit width maximum of 100%. The legacy `min` and `max` fields remain deprecated aliases for the Fit
+width bounds. The sample buttons use a 1% minimum for their steps. Zoom changes the view, not the DOCX.
+
+If you construct typed `ZoomSlice` or `SuperDocZoomState` values, add the required `fitWidth` object to your state
+literals. Keep the legacy `min` and `max` fields when migrating existing literals; they remain compatibility aliases.
+
+To restore a saved zoom snapshot, call `ui.zoom.set(saved.value)` followed by `ui.zoom.setMode(saved.mode)` when the
+saved mode is non-null. Restoring the percentage alone leaves the view in manual mode.
 
 The document snapshot's `ready` field tells you when document actions can run, and its `mode` field reports whether
 the Editor is in editing, suggesting, or viewing mode. Read them from `ui.document.getSnapshot()` or receive them from

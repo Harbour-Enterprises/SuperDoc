@@ -10112,6 +10112,55 @@ describe('public ui — Plan B command catalog (row 747)', () => {
     await expect(pending).resolves.toEqual({ success: true, txId: 'tx-async' });
   });
 
+  it('projects explicit fit-width bounds while preserving manual zoom and legacy aliases', () => {
+    const superdoc = makeCatalogSuperdoc({
+      instance: {
+        getZoomState: () => ({ value: 150, mode: 'manual', min: 10, max: 100, fitWidth: { min: 10, max: 100 } }),
+      },
+    });
+    const ui = createSuperDocUI({ superdoc });
+    expect(ui.zoom.getSnapshot()).toEqual({
+      value: 150,
+      mode: 'manual',
+      min: 10,
+      max: 100,
+      fitWidth: { min: 10, max: 100 },
+    });
+  });
+
+  it('keeps unchanged fit bounds referentially stable and observes policy-only changes once', () => {
+    let min = 10;
+    const superdoc = makeCatalogSuperdoc({
+      instance: {
+        getZoomState: () => ({ value: 150, mode: 'manual', min, max: 100, fitWidth: { min, max: 100 } }),
+        setZoomMode: vi.fn(),
+      },
+    });
+    const ui = createSuperDocUI({ superdoc });
+    const seen = vi.fn();
+    const unsubscribe = ui.zoom.observe(seen);
+    const first = ui.zoom.getSnapshot().fitWidth;
+    ui.zoom.setMode('manual');
+    expect(ui.zoom.getSnapshot().fitWidth).toBe(first);
+    expect(seen).toHaveBeenCalledTimes(1);
+    min = 20;
+    ui.zoom.setMode('manual');
+    expect(ui.zoom.getSnapshot().fitWidth).toEqual({ min: 20, max: 100 });
+    expect(seen).toHaveBeenCalledTimes(2);
+    unsubscribe();
+    ui.destroy();
+  });
+
+  it('projects legacy hosts with explicit fit-width metadata', () => {
+    const ui = createSuperDocUI({
+      superdoc: makeCatalogSuperdoc({
+        instance: { getZoomState: () => ({ value: 150, mode: 'manual', min: 25, max: 90 }) },
+      }),
+    });
+    expect(ui.zoom.getSnapshot()).toMatchObject({ value: 150, fitWidth: { min: 25, max: 90 } });
+    ui.destroy();
+  });
+
   it('routes zoom through SuperDoc.setZoom and normalizes percent payloads', async () => {
     const setZoom = vi.fn();
     const superdoc = makeCatalogSuperdoc({

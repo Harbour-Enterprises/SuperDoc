@@ -11,7 +11,13 @@ import { createRuntimeEditor, loadRuntime, type SuperDocInstance } from './super
 
 const DEMO_DOCUMENT = '/fixtures/custom-selection-workflow.docx';
 const NARROW_DEMO_WIDTH = 520;
-const INITIAL_ZOOM = { max: 200, min: 10, mode: 'manual', value: 80 } satisfies ZoomSlice;
+const INITIAL_ZOOM = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 80,
+} satisfies ZoomSlice;
 const PROMPT_GAP = 12;
 const PROMPT_EDGE = 8;
 const ESTIMATED_ACTION_BAR_WIDTH = 104;
@@ -547,7 +553,7 @@ export function CustomSelectionDemo({ reviewFindings = false }: CustomSelectionD
 
   function changeZoom(direction: -1 | 1) {
     const currentZoom = zoomRef.current;
-    const nextZoom = Math.min(currentZoom.max, Math.max(currentZoom.min, currentZoom.value + direction * 10));
+    const nextZoom = Math.max(1, currentZoom.value + direction * 10);
     instanceRef.current?.ui.zoom.set(nextZoom);
   }
 

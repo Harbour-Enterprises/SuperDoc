@@ -10,7 +10,13 @@ import { EDITOR_DEMO_FIT_WIDTH_PADDING, fitRuntimeEditorToWidth } from './editor
 import { createRuntimeEditor, loadRuntime, type SuperDocInstance } from './superdoc-runtime';
 
 const DEMO_DOCUMENT = '/fixtures/custom-content-controls-workflow.docx';
-const INITIAL_ZOOM = { max: 200, min: 10, mode: 'manual', value: 80 } satisfies ZoomSlice;
+const INITIAL_ZOOM = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 80,
+} satisfies ZoomSlice;
 const INITIAL_CONTENT_CONTROLS = {
   status: 'pending',
   items: [],
@@ -367,7 +373,7 @@ export function CustomContentControlsDemo() {
 
   function changeZoom(direction: -1 | 1) {
     const currentZoom = zoomRef.current;
-    const nextZoom = Math.min(currentZoom.max, Math.max(currentZoom.min, currentZoom.value + direction * 10));
+    const nextZoom = Math.max(1, currentZoom.value + direction * 10);
     instanceRef.current?.ui.zoom.set(nextZoom);
   }
 

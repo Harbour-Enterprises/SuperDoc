@@ -29,6 +29,11 @@ void _acceptAll;
 
 declare const ui: SuperDocUI;
 const commands: CommandsHandle = ui.commands;
+const fitBounds: { min: number; max: number } = ui.zoom.getSnapshot().fitWidth;
+const manualValue: number = ui.zoom.getSnapshot().value;
+ui.zoom.set(150);
+ui.zoom.setMode('fit-width');
+void [fitBounds, manualValue];
 const builtInCommandId: CommandId = 'document-mode';
 const applicationCommandId: string = 'app.save-document';
 const _commandIdAcceptsString: CommandId = applicationCommandId;

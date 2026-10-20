@@ -3726,13 +3726,15 @@ export interface SuperDocFitWidthOptions {
 export interface SuperDocZoomState {
   /** Current zoom mode. */
   mode: SuperDocZoomMode;
-  /** Current zoom value as a percentage. */
+  /** Current percentage. Manual zoom accepts any finite value greater than zero, independently of fit bounds. */
   value: number;
   /** Latest computed fit zoom (unclamped), or `null` before the first viewport measurement. */
   fitZoom: number | null;
-  /** Effective lower bound the fit policy applies (config or default). */
+  /** Effective bounds applied only in fit-width mode (config or defaults). */
+  fitWidth: { min: number; max: number };
+  /** @deprecated Fit-width lower bound alias. Use `fitWidth.min`; this does not limit manual zoom. */
   min: number;
-  /** Effective upper bound the fit policy applies (config or default). */
+  /** @deprecated Fit-width upper bound alias. Use `fitWidth.max`; this does not limit manual zoom. */
   max: number;
 }
 

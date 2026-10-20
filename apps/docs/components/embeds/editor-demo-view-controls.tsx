@@ -23,12 +23,7 @@ export function EditorDemoViewControls({
   return (
     <div className='sd-editor-demo-toolbar-group sd-editor-demo-view-controls' role='group' aria-label='View'>
       <div className='sd-editor-demo-zoom-control'>
-        <button
-          type='button'
-          aria-label='Zoom out'
-          disabled={disabled || zoom.value <= zoom.min}
-          onClick={() => onZoom(-1)}
-        >
+        <button type='button' aria-label='Zoom out' disabled={disabled || zoom.value <= 1} onClick={() => onZoom(-1)}>
           <Minus aria-hidden='true' />
         </button>
         <button
@@ -41,12 +36,7 @@ export function EditorDemoViewControls({
         >
           {fitActive ? 'Fit' : `${Math.round(zoom.value)}%`}
         </button>
-        <button
-          type='button'
-          aria-label='Zoom in'
-          disabled={disabled || zoom.value >= zoom.max}
-          onClick={() => onZoom(1)}
-        >
+        <button type='button' aria-label='Zoom in' disabled={disabled} onClick={() => onZoom(1)}>
           <Plus aria-hidden='true' />
         </button>
       </div>

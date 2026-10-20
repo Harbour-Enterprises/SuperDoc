@@ -3992,6 +3992,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
    * `fit-width`; use `setZoomMode('fit-width')` to re-enter fitting).
    * Updates the centralized activeZoom state, which propagates to all
    * presentation editors, PDF viewers, and whiteboard layers via the Vue watcher.
+   * Accepts any finite percentage greater than zero, independently of fit-width bounds.
    * @param percent - The zoom level as a percentage (e.g., 100, 150, 200)
    * @example
    * superdoc.setZoom(150); // Set zoom to 150%, mode becomes 'manual'
@@ -4077,6 +4078,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
       mode: this.superdocStore?.zoomMode ?? 'manual',
       value: this.superdocStore?.activeZoom ?? 100,
       fitZoom: this.superdocStore?.viewportMetrics?.fitZoom ?? null,
+      fitWidth: { min: fit.min, max: fit.max },
       min: fit.min,
       max: fit.max,
     };

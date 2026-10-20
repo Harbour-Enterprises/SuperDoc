@@ -9,7 +9,13 @@ import { EditorDemoViewControls } from './editor-demo-view-controls';
 import { createRuntimeEditor, loadRuntime, loadUIModule, type SuperDocInstance } from './superdoc-runtime';
 
 const fixture = '/fixtures/clause-library-sample.docx';
-const initialZoom = { max: 200, min: 10, mode: 'manual', value: 100 } satisfies ZoomSlice;
+const initialZoom = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 100,
+} satisfies ZoomSlice;
 
 type DemoState = 'loading' | 'ready' | 'error';
 
@@ -200,7 +206,7 @@ export function ClauseLibraryDemo() {
   }
 
   function changeZoom(direction: -1 | 1) {
-    const nextZoom = Math.min(zoom.max, Math.max(zoom.min, zoom.value + direction * 10));
+    const nextZoom = Math.max(1, zoom.value + direction * 10);
     fitActiveRef.current = false;
     setFitActive(false);
     uiRef.current?.zoom.set(nextZoom);

@@ -4666,6 +4666,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     };
   };
 
+  let zoomFitWidth: ZoomSlice['fitWidth'] | undefined;
   const computeZoom = (): ZoomSlice => {
     const state = safeCall<LooseRecord | null>(
       superdoc?.getZoomState ? () => superdoc.getZoomState() : undefined,
@@ -4674,9 +4675,13 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const value = typeof state?.value === 'number' ? state.value : 100;
     const rawMode = state?.mode;
     const mode = rawMode === 'manual' || rawMode === 'fit-width' ? rawMode : rawMode === 'fixed' ? 'manual' : null;
-    const min = typeof state?.min === 'number' ? state.min : 10;
-    const max = typeof state?.max === 'number' ? state.max : 100;
-    return { mode, value, min, max };
+    const fit = state?.fitWidth as LooseRecord | undefined;
+    const min = typeof fit?.min === 'number' ? fit.min : typeof state?.min === 'number' ? state.min : 10;
+    const max = typeof fit?.max === 'number' ? fit.max : typeof state?.max === 'number' ? state.max : 100;
+    // Slice subscriptions use shallow equality. Reuse unchanged policy metadata
+    // so unrelated editor updates do not notify every zoom consumer.
+    if (!zoomFitWidth || zoomFitWidth.min !== min || zoomFitWidth.max !== max) zoomFitWidth = { min, max };
+    return { mode, value, fitWidth: zoomFitWidth, min, max };
   };
 
   const readMeasurementUnit = (): 'in' | 'cm' => {

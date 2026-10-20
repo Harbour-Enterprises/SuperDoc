@@ -17,7 +17,13 @@ const fixture = '/fixtures/service-agreement-template.docx';
 const fieldTag = 'client.address';
 const initialAddress = '100 Market Street, San Francisco, CA 94105';
 const replacementAddress = '250 Market Street, San Francisco, CA 94105';
-const initialZoom = { max: 200, min: 10, mode: 'manual', value: 100 } satisfies ZoomSlice;
+const initialZoom = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 100,
+} satisfies ZoomSlice;
 
 type DemoState = 'loading' | 'ready' | 'error';
 type LockableControl = Pick<ContentControlInfo, 'lockMode' | 'target'>;
@@ -266,7 +272,7 @@ export function ContentControlLocksDemo() {
   }
 
   function changeZoom(direction: -1 | 1) {
-    const nextZoom = Math.min(zoom.max, Math.max(zoom.min, zoom.value + direction * 10));
+    const nextZoom = Math.max(1, zoom.value + direction * 10);
     fitActiveRef.current = false;
     setFitActive(false);
     uiRef.current?.zoom.set(nextZoom);

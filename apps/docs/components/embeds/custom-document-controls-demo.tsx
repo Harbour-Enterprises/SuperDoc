@@ -10,7 +10,7 @@ import { createRuntimeEditor, loadRuntime, type SuperDocInstance } from './super
 
 const DEMO_DOCUMENT = '/fixtures/getting-started.docx';
 const ZOOM_STEP = 10;
-const INITIAL_ZOOM = { max: 200, min: 10, mode: null, value: 100 } satisfies ZoomSlice;
+const INITIAL_ZOOM = { max: 200, min: 10, fitWidth: { min: 10, max: 200 }, mode: null, value: 100 } satisfies ZoomSlice;
 const INITIAL_DOCUMENT = { dirty: false, mode: null, ready: false } satisfies DocumentSlice;
 
 type DemoState = 'idle' | 'loading' | 'ready' | 'error';
@@ -182,7 +182,7 @@ export function CustomDocumentControlsDemo() {
     const ui = uiRef.current;
     if (!ui) return;
     const currentZoom = ui.zoom.getSnapshot();
-    ui.zoom.set(Math.min(currentZoom.max, Math.max(currentZoom.min, currentZoom.value + delta)));
+    ui.zoom.set(Math.max(1, currentZoom.value + delta));
   }
 
   async function downloadDocx() {
@@ -246,7 +246,7 @@ export function CustomDocumentControlsDemo() {
         <div className='sd-custom-document-controls-zoom' role='group' aria-label='Zoom'>
           <button
             aria-label='Zoom out'
-            disabled={!controlsReady || zoom.value <= zoom.min}
+            disabled={!controlsReady || zoom.value <= 1}
             onClick={() => changeZoom(-ZOOM_STEP)}
             type='button'
           >
@@ -263,12 +263,7 @@ export function CustomDocumentControlsDemo() {
           >
             Fit width
           </button>
-          <button
-            aria-label='Zoom in'
-            disabled={!controlsReady || zoom.value >= zoom.max}
-            onClick={() => changeZoom(ZOOM_STEP)}
-            type='button'
-          >
+          <button aria-label='Zoom in' disabled={!controlsReady} onClick={() => changeZoom(ZOOM_STEP)} type='button'>
             <Plus aria-hidden='true' size={16} />
           </button>
         </div>

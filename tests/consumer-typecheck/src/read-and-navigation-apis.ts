@@ -49,6 +49,9 @@ const _zoomStateReturnOk: AssertEqual<ReturnType<SuperDoc['getZoomState']>, Supe
 const _zoomState = sd.getZoomState();
 const _zoomStateMode: 'manual' | 'fit-width' = _zoomState.mode;
 const _zoomStateFit: number | null = _zoomState.fitZoom;
+const _fitBounds: { min: number; max: number } = _zoomState.fitWidth;
+const _legacyFitMin: number = _zoomState.min;
+void [_fitBounds, _legacyFitMin];
 void _zoomStateMode;
 void _zoomStateFit;
 

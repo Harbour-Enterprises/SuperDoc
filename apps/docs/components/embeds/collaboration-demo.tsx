@@ -66,9 +66,9 @@ export function CollaborationDemo({ presence = false, access = false }: { presen
   }, []);
 
   function applyZoom(value: number) {
-    const bounded = Math.max(20, Math.min(120, value));
-    for (const editor of editors.current) editor.setZoom(bounded);
-    setZoom(bounded);
+    const next = Math.max(1, value);
+    for (const editor of editors.current) editor.setZoom(next);
+    setZoom(next);
   }
 
   function fit() {
@@ -81,7 +81,7 @@ export function CollaborationDemo({ presence = false, access = false }: { presen
       const widest = metrics.getSnapshot().pages.reduce((width, page) => Math.max(width, page.base.widthPx), 0);
       return mount && widest ? [(mount.clientWidth / widest) * 100] : [];
     });
-    if (widths.length) applyZoom(Math.floor(Math.min(...widths)));
+    if (widths.length) applyZoom(Math.max(20, Math.min(120, Math.floor(Math.min(...widths)))));
   }
 
   async function start() {
@@ -328,7 +328,7 @@ export function CollaborationDemo({ presence = false, access = false }: { presen
           disabled={state !== 'ready'}
           fitActive={false}
           isFullscreen={fullscreen}
-          zoom={{ min: 20, max: 120, mode: 'manual', value: zoom }}
+          zoom={{ min: 20, max: 120, fitWidth: { min: 20, max: 120 }, mode: 'manual', value: zoom }}
           onFit={fit}
           onFullscreen={() => void toggleFullscreen()}
           onZoom={(direction) => applyZoom(zoom + direction * 10)}

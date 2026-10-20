@@ -10,7 +10,13 @@ import { createRuntimeEditor, loadRuntime, type SuperDocInstance } from './super
 
 const DEMO_DOCUMENT = '/fixtures/getting-started.docx';
 const NARROW_DEMO_WIDTH = 520;
-const INITIAL_ZOOM = { max: 200, min: 10, mode: 'manual', value: 80 } satisfies ZoomSlice;
+const INITIAL_ZOOM = {
+  max: 200,
+  min: 10,
+  fitWidth: { min: 10, max: 200 },
+  mode: 'manual',
+  value: 80,
+} satisfies ZoomSlice;
 
 type DemoState = 'idle' | 'loading' | 'ready' | 'error';
 type ConfirmationResult = Readonly<{ action: 'continue' }>;
@@ -327,7 +333,7 @@ export function SurfaceLifecycleDemo() {
 
   function changeZoom(direction: -1 | 1) {
     const currentZoom = zoomRef.current;
-    const nextZoom = Math.min(currentZoom.max, Math.max(currentZoom.min, currentZoom.value + direction * 10));
+    const nextZoom = Math.max(1, currentZoom.value + direction * 10);
     instanceRef.current?.ui.zoom.set(nextZoom);
   }
 
