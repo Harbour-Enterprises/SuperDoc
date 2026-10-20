@@ -6711,6 +6711,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
           description: "Required. Insert position relative to target: 'before' or 'after'.",
         },
         text: { type: 'string', description: 'Text content for the new list item.' },
+        inheritFrom: {
+          ...listItemAddressSchema,
+          description:
+            'Optional same-story list item to inherit paragraph and run formatting from without changing placement or numbering. When omitted, existing paragraph-creation formatting behavior, including next-style handling, is preserved.',
+        },
       },
       ['target', 'position'],
     ),

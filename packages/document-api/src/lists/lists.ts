@@ -589,6 +589,9 @@ export function executeListsInsert(
   options?: MutationOptions,
 ): ListsInsertResult {
   validateListItemTarget(input, 'lists.insert');
+  if (input.inheritFrom !== undefined) {
+    validateListItemTarget({ target: input.inheritFrom }, 'lists.insert inheritFrom');
+  }
   requireEnum(input.position, 'position', VALID_INSERT_POSITIONS, 'lists.insert');
   if (input.text !== undefined && typeof input.text !== 'string') {
     throw new DocumentApiValidationError(

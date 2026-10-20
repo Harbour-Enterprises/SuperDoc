@@ -186,6 +186,19 @@ describe('executeListsGet validation', () => {
 // ---------------------------------------------------------------------------
 
 describe('executeListsInsert validation', () => {
+  it('insert validates inheritFrom and forwards a valid formatting source', () => {
+    const adapter = stubAdapter();
+    const input = { target: validTarget, position: 'after' as const, inheritFrom: validTarget };
+    executeListsInsert(adapter, input);
+    expect(adapter.insert).toHaveBeenCalledWith(input, expect.objectContaining({ changeMode: 'direct' }));
+    expect(() =>
+      executeListsInsert(adapter, {
+        ...input,
+        inheritFrom: { kind: 'block', nodeType: 'paragraph', nodeId: 'x' },
+      } as any),
+    ).toThrow(/inheritFrom/);
+  });
+
   it('rejects missing target', () => {
     expect(() => executeListsInsert(stubAdapter(), { position: 'after' } as any)).toThrow(/requires a target/);
   });

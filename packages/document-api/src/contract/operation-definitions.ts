@@ -2132,14 +2132,14 @@ export const OPERATION_DEFINITIONS = {
   'lists.insert': {
     memberPath: 'lists.insert',
     description:
-      'Insert a new list item before or after an existing list item. The new item inherits the target list context.',
+      'Insert a new list item before or after an existing list item. The new item inherits the target list context. Optional inheritFrom selects a same-story list item for paragraph and run formatting without changing placement or numbering. When omitted, existing paragraph-creation formatting, including next-style handling, is preserved.',
     expectedResult: 'Returns a ListsInsertResult with the new list item address and block ID.',
     requiresDocumentContext: true,
     metadata: mutationOperation({
       idempotency: 'non-idempotent',
       supportsDryRun: true,
       trackedSupport: 'always',
-      possibleFailureCodes: ['INVALID_TARGET'],
+      possibleFailureCodes: ['INVALID_TARGET', 'TARGET_NOT_FOUND', 'INVALID_CONTEXT'],
       throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET'],
     }),
     referenceDocPath: 'lists/insert.mdx',

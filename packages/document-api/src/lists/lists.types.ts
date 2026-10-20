@@ -164,6 +164,8 @@ export interface ListInsertInput {
   target: ListItemAddress;
   position: ListInsertPosition;
   text?: string;
+  /** Copy paragraph and run formatting from this item; placement and numbering still come from target. Omit to preserve existing paragraph-creation formatting, including next-style handling. */
+  inheritFrom?: ListItemAddress;
 }
 export interface ListTargetInput {
   target: ListItemAddress;
