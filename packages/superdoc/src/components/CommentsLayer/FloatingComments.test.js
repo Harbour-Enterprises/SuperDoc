@@ -203,6 +203,76 @@ describe('FloatingComments sidebar continuity', () => {
     }
   });
 
+  it('publishes a current committed decision anchor before the native action handler', async () => {
+    const updateContext = vi.fn();
+    const rows = ['a', 'b', 'c'];
+    const presentation = {
+      coordinate: { documentEpoch: 'document', mountId: 'mount', commitSequence: 10, reviewVersion: 7 },
+      readPaintOrigin: () => ({ left: 0, top: 0 }),
+      rowVersions: { a: 1, b: 2, c: 3 },
+      threads: {},
+      groupOrder: { open: rows, resolved: [] },
+      updateContext,
+      instances: rows.map((id, index) => ({
+        id: `instance-${id}`,
+        rowId: id,
+        threadId: id,
+        version: index + 1,
+        pageIndex: 0,
+        positionKey: id,
+        positionEntry: makePosition(id, 100 + index * 100),
+        anchorTop: 100 + index * 100,
+        anchorBottom: 120 + index * 100,
+        top: 100 + index * 100,
+        height: 90,
+        isPrimary: true,
+        isOffscreenReviewCard: false,
+        mount: true,
+      })),
+    };
+    commentsStore.committedReviewPresentations = { 'doc-1': presentation };
+    const wrapper = await mountSidebar(rows.map((id, index) => ({ id, top: 100 + index * 100 })));
+    try {
+      const action = document.createElement('button');
+      action.dataset.commentAction = 'reject';
+      wrapper.get('[data-comment-instance-id="instance-b"]').element.appendChild(action);
+      let captured;
+      action.addEventListener('click', () => {
+        captured = updateContext.mock.lastCall?.[0]?.decisionContinuity;
+      });
+      action.click();
+      expect(captured).toEqual({
+        ...presentation.coordinate,
+        removedInstanceId: 'instance-b',
+        removedRowVersion: 2,
+        targetInstanceId: 'instance-c',
+        targetRowVersion: 3,
+        top: 300,
+      });
+      expect(() => structuredClone(updateContext.mock.lastCall[0])).not.toThrow();
+      expect(readTranslateY(wrapper.get('.sidebar-container').element)).toBe(0);
+      commentsStore.committedReviewPresentations = {
+        'doc-1': {
+          ...presentation,
+          coordinate: { ...presentation.coordinate, commitSequence: 11, reviewVersion: 8 },
+          instances: presentation.instances.filter((instance) => instance.rowId !== 'b'),
+        },
+      };
+      await settleLayout();
+      expect(updateContext.mock.lastCall[0].decisionContinuity).toEqual(captured);
+      commentsStore.committedReviewPresentations = {
+        'doc-1': { ...presentation, coordinate: { ...presentation.coordinate, mountId: 'replacement' } },
+      };
+      await settleLayout();
+      expect(updateContext.mock.lastCall[0].decisionContinuity).toBeNull();
+      commentsStore.committedReviewPresentations = { 'doc-1': presentation };
+      await settleLayout();
+      expect(updateContext.mock.lastCall[0].decisionContinuity).toBeNull();
+    } finally {
+      wrapper.unmount();
+    }
+  });
+
   it('reports the attached paint origin when the contained document scrolls independently of its layers', async () => {
     let paintTop = -500;
     const updateContext = vi.fn();

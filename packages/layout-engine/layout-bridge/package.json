@@ -28,7 +28,8 @@
     "@superdoc/font-system": "workspace:*",
     "@superdoc/layout-engine": "workspace:*",
     "@superdoc/measuring-dom": "workspace:*",
-    "@superdoc/word-layout": "workspace:*"
+    "@superdoc/word-layout": "workspace:*",
+    "bidi-js": "1.0.3"
   },
   "devDependencies": {
     "@superdoc/layout-resolved": "workspace:*",

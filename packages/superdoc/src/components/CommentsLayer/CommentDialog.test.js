@@ -385,6 +385,157 @@ describe('CommentDialog', () => {
     });
   });
 
+  describe('v2 edit completion ownership', () => {
+    const deferred = () => {
+      let resolve;
+      const promise = new Promise((done) => {
+        resolve = done;
+      });
+      return { promise, resolve };
+    };
+
+    const prepare = () => {
+      superdocStub.activeEditor.editorVersion = 2;
+      superdocStub.activeEditor.v2Comments = {
+        getCapabilityState: () => ({ canWrite: true }),
+        setActiveComment: vi.fn(),
+      };
+      const root = useComment({ commentId: 'edit-root', fileId: 'doc-1', commentText: 'Root' });
+      const reply = useComment({
+        commentId: 'edit-reply',
+        fileId: 'doc-1',
+        parentCommentId: root.commentId,
+        commentText: 'Reply',
+      });
+      commentsStore.commentsList = [root, reply];
+      commentsStore.activeComment = root.commentId;
+      const wrapper = mountDialog(root);
+      const start = async (comment) => {
+        wrapper
+          .findAllComponents({ name: 'CommentHeader' })
+          .find((header) => header.props('comment').commentId === comment.commentId)
+          .vm.$emit('overflow-select', 'edit');
+        await flushPromises();
+      };
+      return { root, reply, wrapper, start };
+    };
+
+    it.each(['reply', 'same comment reopened', 'another dialog'])(
+      'keeps a newer %s edit when an old real outcome returns',
+      async (next) => {
+        const pending = deferred();
+        const edit = vi.spyOn(commentsStore, 'editCommentV2').mockReturnValue(pending.promise);
+        const { root, reply, wrapper, start } = prepare();
+        let other;
+        try {
+          await start(root);
+          commentsStore.currentCommentText = 'Submitted root';
+          await wrapper.find('button.reply-btn-primary').trigger('click');
+          expect(edit).toHaveBeenCalledWith({
+            superdoc: superdocStub,
+            commentId: root.commentId,
+            text: 'Submitted root',
+          });
+          if (next === 'same comment reopened') {
+            await wrapper.find('button.reply-btn-cancel').trigger('click');
+            await start(root);
+          } else if (next === 'another dialog') {
+            other = mountDialog(root);
+            other.findAllComponents({ name: 'CommentHeader' })[0].vm.$emit('overflow-select', 'edit');
+            await flushPromises();
+          } else {
+            await start(reply);
+          }
+          const nextDraft = next === 'reply' ? 'New edit draft' : 'Submitted root';
+          commentsStore.currentCommentText = nextDraft;
+          pending.resolve({ ok: true });
+          await flushPromises();
+          expect(commentsStore.editingCommentId).toBe(next === 'reply' ? reply.commentId : root.commentId);
+          expect(commentsStore.currentCommentText).toBe(nextDraft);
+          expect((other ?? wrapper).find('.reply-expanded').exists()).toBe(true);
+        } finally {
+          other?.unmount();
+          wrapper.unmount();
+        }
+      },
+    );
+
+    it.each(['editor replaced', 'document replaced', 'adapter replaced', 'dialog disposed'])(
+      'keeps current composer state after the submitting %s',
+      async (retirement) => {
+        const pending = deferred();
+        vi.spyOn(commentsStore, 'editCommentV2').mockReturnValue(pending.promise);
+        const { root, wrapper, start } = prepare();
+        try {
+          await start(root);
+          commentsStore.currentCommentText = 'Identical draft';
+          await wrapper.find('button.reply-btn-primary').trigger('click');
+          if (retirement === 'editor replaced') superdocStub.activeEditor = { ...superdocStub.activeEditor };
+          else if (retirement === 'document replaced') superdocStub.activeEditor.doc = {};
+          else if (retirement === 'adapter replaced')
+            superdocStub.activeEditor.v2Comments = { ...superdocStub.activeEditor.v2Comments };
+          else wrapper.unmount();
+          pending.resolve({ ok: true });
+          await flushPromises();
+          expect(commentsStore.editingCommentId).toBe(root.commentId);
+          expect(commentsStore.currentCommentText).toBe('Identical draft');
+        } finally {
+          if (retirement !== 'dialog disposed') wrapper.unmount();
+        }
+      },
+    );
+
+    it('keeps a later submission of the same edit when an earlier submission completes', async () => {
+      const first = deferred();
+      const second = deferred();
+      const edit = vi
+        .spyOn(commentsStore, 'editCommentV2')
+        .mockReturnValueOnce(first.promise)
+        .mockReturnValueOnce(second.promise);
+      const { root, wrapper, start } = prepare();
+      try {
+        await start(root);
+        commentsStore.currentCommentText = 'Same submitted text';
+        await wrapper.find('button.reply-btn-primary').trigger('click');
+        await wrapper.find('button.reply-btn-primary').trigger('click');
+        expect(edit).toHaveBeenCalledTimes(2);
+        first.resolve({ ok: true });
+        await flushPromises();
+        expect(commentsStore.editingCommentId).toBe(root.commentId);
+        expect(commentsStore.currentCommentText).toBe('Same submitted text');
+        second.resolve({ ok: true });
+        await flushPromises();
+        expect(commentsStore.editingCommentId).toBeNull();
+        expect(commentsStore.currentCommentText).toBe('');
+      } finally {
+        wrapper.unmount();
+      }
+    });
+
+    it.each(['rejected', 'new draft', 'successful'])(
+      'preserves the correct composer after a %s completion',
+      async (result) => {
+        const pending = deferred();
+        vi.spyOn(commentsStore, 'editCommentV2').mockReturnValue(pending.promise);
+        const { root, wrapper, start } = prepare();
+        try {
+          await start(root);
+          commentsStore.currentCommentText = 'Submitted text';
+          await wrapper.find('button.reply-btn-primary').trigger('click');
+          if (result === 'new draft') commentsStore.currentCommentText = 'New draft';
+          pending.resolve({ ok: result !== 'rejected' });
+          await flushPromises();
+          expect(commentsStore.editingCommentId).toBe(result === 'successful' ? null : root.commentId);
+          expect(commentsStore.currentCommentText).toBe(
+            result === 'successful' ? '' : result === 'new draft' ? 'New draft' : 'Submitted text',
+          );
+        } finally {
+          wrapper.unmount();
+        }
+      },
+    );
+  });
+
   it.each([
     ['resolve', 'accept'],
     ['reject', 'reject'],

@@ -90,7 +90,7 @@ describe('resolveSdtMetadata', () => {
   it('carries appearance through for inline structured content (SD-3110)', () => {
     const metadata = resolveSdtMetadata({
       nodeType: 'structuredContent',
-      attrs: { id: '7', tag: 'citation', alias: 'Harvey citation', appearance: 'hidden' },
+      attrs: { id: '7', tag: 'citation', alias: 'Citation label', appearance: 'hidden' },
     });
     expect(metadata).toMatchObject({
       type: 'structuredContent',

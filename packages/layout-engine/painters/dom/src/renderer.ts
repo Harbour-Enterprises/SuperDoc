@@ -3686,6 +3686,9 @@ export class DomPainter {
               sourceAnchor: contentBlock.sourceAnchor,
             }),
           );
+          // The paragraph frame can span several neutral line fragments.
+          // Only the rendered lines below are addressable paint carriers.
+          delete paragraphHost.dataset[DATASET_KEYS.LAYOUT_FRAGMENT_ID];
         }
         applySourceAnchorDataset(paragraphHost, contentBlock.sourceAnchor);
         const rendered = renderParagraphContent({

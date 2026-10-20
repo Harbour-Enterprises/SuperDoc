@@ -118,6 +118,7 @@ const commentsRenderKey = ref(0);
 const sidebarOffsetY = ref(0);
 const disableInstantLayoutTransitions = ref(false);
 const directDecisionContinuityTargetId = ref(null);
+const workerDecisionContinuity = ref(null);
 const viewportRevision = ref(0);
 
 const isPendingThread = (commentOrId) => {
@@ -471,56 +472,72 @@ const allPositions = computed(() => {
   return positions;
 });
 
+const measuredReviewContext = computed(() => {
+  const presentation = committedPresentation.value,
+    container = floatingCommentsContainer.value;
+  if (!presentation || !container) return null;
+  viewportRevision.value;
+  const viewport = getFloatingViewportRange();
+  if (!viewport) return null;
+  const rail = container.getBoundingClientRect();
+  // A contained document can scroll without moving the outer layers or rail.
+  // Worker anchors start at the attached paint root, not those outer layers.
+  const stage =
+    typeof presentation.readPaintOrigin === 'function'
+      ? presentation.readPaintOrigin()
+      : props.parent?.getBoundingClientRect?.();
+  if (!stage || !Number.isFinite(stage.left) || !Number.isFinite(stage.top)) return null;
+  const instances = committedInstances.value ?? [];
+  const captured = workerDecisionContinuity.value;
+  const coordinate = presentation.coordinate;
+  const target = captured && instances.find((instance) => instance.id === captured.request.targetInstanceId);
+  const ownsContinuity =
+    captured &&
+    coordinate &&
+    target &&
+    captured.documentId === String(props.currentDocument.id) &&
+    captured.documentMode === commentsStore.viewingVisibility?.documentMode &&
+    coordinate.documentEpoch === captured.request.documentEpoch &&
+    coordinate.mountId === captured.request.mountId &&
+    coordinate.commitSequence >= captured.request.commitSequence &&
+    coordinate.commitSequence <= captured.request.commitSequence + 1 &&
+    target.rowVersion === captured.request.targetRowVersion;
+  return {
+    decisionContinuity: ownsContinuity ? { ...captured.request } : null,
+    activeThreadId: activeComment.value == null ? null : String(activeComment.value),
+    activeInstanceId: activeCommentInstanceId.value == null ? null : String(activeCommentInstanceId.value),
+    editingRowId: editingCommentId.value == null ? null : String(editingCommentId.value),
+    retainedThreadIds: [],
+    visibility: {
+      comments:
+        commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
+        commentsStore.viewingVisibility?.commentsVisible === true,
+      trackedChanges:
+        commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
+        commentsStore.viewingVisibility?.trackChangesVisible === true,
+    },
+    viewport: {
+      ...viewport,
+      width: Math.max(1, rail.width),
+      scale: 1,
+      stageOffsetX: (stage?.left ?? rail.left) - rail.left,
+      stageOffsetY: (stage?.top ?? rail.top) - rail.top,
+    },
+    pending:
+      pendingComment.value?.fileId === props.currentDocument.id && getPendingAnchorTop() != null
+        ? { anchorTop: getPendingAnchorTop(), height: measuredHeights.value.pending || ESTIMATED_HEIGHT }
+        : null,
+    measurements: instances
+      .filter((instance) => measuredHeights.value[instance.id] > 0)
+      .map((instance) => ({
+        instanceId: instance.id,
+        rowVersion: instance.rowVersion,
+        height: measuredHeights.value[instance.id],
+      })),
+  };
+});
 watch(
-  () => {
-    const presentation = committedPresentation.value,
-      container = floatingCommentsContainer.value;
-    if (!presentation || !container) return null;
-    viewportRevision.value;
-    const viewport = getFloatingViewportRange();
-    if (!viewport) return null;
-    const rail = container.getBoundingClientRect();
-    // A contained document can scroll without moving the outer layers or rail.
-    // Worker anchors start at the attached paint root, not those outer layers.
-    const stage =
-      typeof presentation.readPaintOrigin === 'function'
-        ? presentation.readPaintOrigin()
-        : props.parent?.getBoundingClientRect?.();
-    if (!stage || !Number.isFinite(stage.left) || !Number.isFinite(stage.top)) return null;
-    const instances = committedInstances.value ?? [];
-    return {
-      activeThreadId: activeComment.value == null ? null : String(activeComment.value),
-      activeInstanceId: activeCommentInstanceId.value == null ? null : String(activeCommentInstanceId.value),
-      editingRowId: editingCommentId.value == null ? null : String(editingCommentId.value),
-      retainedThreadIds: [],
-      visibility: {
-        comments:
-          commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
-          commentsStore.viewingVisibility?.commentsVisible === true,
-        trackedChanges:
-          commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
-          commentsStore.viewingVisibility?.trackChangesVisible === true,
-      },
-      viewport: {
-        ...viewport,
-        width: Math.max(1, rail.width),
-        scale: 1,
-        stageOffsetX: (stage?.left ?? rail.left) - rail.left,
-        stageOffsetY: (stage?.top ?? rail.top) - rail.top,
-      },
-      pending:
-        pendingComment.value?.fileId === props.currentDocument.id && getPendingAnchorTop() != null
-          ? { anchorTop: getPendingAnchorTop(), height: measuredHeights.value.pending || ESTIMATED_HEIGHT }
-          : null,
-      measurements: instances
-        .filter((instance) => measuredHeights.value[instance.id] > 0)
-        .map((instance) => ({
-          instanceId: instance.id,
-          rowVersion: instance.rowVersion,
-          height: measuredHeights.value[instance.id],
-        })),
-    };
-  },
+  measuredReviewContext,
   (input) => {
     if (input) committedPresentation.value?.updateContext(input);
   },
@@ -693,8 +710,19 @@ const releaseDirectDecisionContinuity = () => {
   directDecisionContinuity = null;
   directDecisionSourceId = null;
   directDecisionContinuityTargetId.value = null;
+  workerDecisionContinuity.value = null;
   setInstantLayoutTransitionsDisabled(false);
 };
+
+watch(
+  [
+    () => props.currentDocument?.id,
+    () => committedPresentation.value?.coordinate?.documentEpoch,
+    () => committedPresentation.value?.coordinate?.mountId,
+    () => commentsStore.viewingVisibility?.documentMode,
+  ],
+  () => releaseDirectDecisionContinuity(),
+);
 
 const releaseDirectDecisionContinuityForUnrelatedPointer = (event) => {
   if (!directDecisionContinuity) return;
@@ -931,6 +959,48 @@ const prepareSidebarContinuityForDirectDecision = (event) => {
   directDecisionSourceId = removedKey;
   directDecisionContinuityTargetId.value = targetKey;
   setInstantLayoutTransitionsDisabled(true);
+  const presentation = committedPresentation.value;
+  const coordinate = presentation?.coordinate;
+  const removed = committedInstances.value?.find((instance) => instance.id === removedKey);
+  const target = committedInstances.value?.find((instance) => instance.id === targetKey);
+  const origin = presentation?.readPaintOrigin?.();
+  if (
+    coordinate &&
+    typeof coordinate.documentEpoch === 'string' &&
+    coordinate.documentEpoch &&
+    typeof coordinate.mountId === 'string' &&
+    coordinate.mountId &&
+    Number.isSafeInteger(coordinate.commitSequence) &&
+    coordinate.commitSequence >= 0 &&
+    Number.isSafeInteger(coordinate.reviewVersion) &&
+    coordinate.reviewVersion > 0 &&
+    removed &&
+    target &&
+    Number.isSafeInteger(removed.rowVersion) &&
+    removed.rowVersion > 0 &&
+    Number.isSafeInteger(target.rowVersion) &&
+    target.rowVersion > 0 &&
+    origin &&
+    Number.isFinite(origin.left) &&
+    Number.isFinite(origin.top)
+  ) {
+    workerDecisionContinuity.value = {
+      documentId: String(props.currentDocument.id),
+      documentMode: commentsStore.viewingVisibility?.documentMode,
+      request: {
+        ...coordinate,
+        removedInstanceId: removedKey,
+        removedRowVersion: removed.rowVersion,
+        targetInstanceId: targetKey,
+        targetRowVersion: target.rowVersion,
+        top: targetClientY - floatingCommentsContainer.value.getBoundingClientRect().top,
+      },
+    };
+    // Capture precedes the action's async mutation, so its source-owned worker
+    // context must be ordered before that decision rather than a later watcher.
+    const input = measuredReviewContext.value;
+    if (input) presentation.updateContext(input);
+  }
 };
 
 // Re-measure when active comment changes. The active dialog expands (reply input, thread)

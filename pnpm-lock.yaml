@@ -800,6 +800,9 @@ importers:
       '@superdoc/word-layout':
         specifier: workspace:*
         version: link:../../word-layout
+      bidi-js:
+        specifier: 1.0.3
+        version: 1.0.3
     devDependencies:
       '@superdoc/layout-resolved':
         specifier: workspace:*

@@ -759,6 +759,103 @@ describe('renderLine native text baselines beside expanding images', () => {
   });
 });
 
+describe('renderLine aligned wrap spaces', () => {
+  const paint = (alignment: 'left' | 'right' | 'center', measuredEnd: number) => {
+    const text = 'Alpha Beta ';
+    const block: ParagraphBlock = {
+      kind: 'paragraph',
+      id: 'aligned-wrap-space',
+      attrs: { alignment },
+      runs: [{ kind: 'text', text, fontFamily: 'Arial', fontSize: 16, pmStart: 1, pmEnd: 12 }],
+    };
+    const line: Line = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 0,
+      toChar: 11,
+      width: 80,
+      maxWidth: 100,
+      ascent: 12,
+      descent: 4,
+      lineHeight: 20,
+      segments: [{ runIndex: 0, fromChar: 0, toChar: measuredEnd, width: 80 }],
+    };
+    const lineEl = renderLine({
+      block,
+      line,
+      context: { pageNumber: 1, totalPages: 1, section: 'body' },
+      runContext: makeRunContext(),
+    });
+    return { block, line, lineEl };
+  };
+
+  it.each(['right', 'center'] as const)(
+    'excludes the unmeasured wrap space from %s alignment without losing source extent',
+    (alignment) => {
+      const { block, line, lineEl } = paint(alignment, 10);
+      const leaf = lineEl.querySelector<HTMLElement>('.superdoc-text-run')!;
+      expect(leaf.textContent).toBe('Alpha Beta');
+      expect(leaf.dataset.pmStart).toBe('1');
+      expect(leaf.dataset.pmEnd).toBe('11');
+      expect(lineEl.dataset.pmEnd).toBe('12');
+      expect(line.toChar).toBe(11);
+      expect(block.runs[0]).toMatchObject({ text: 'Alpha Beta ', pmEnd: 12 });
+    },
+  );
+
+  it('excludes a wrap space in a separate styled run while preserving its source range', () => {
+    const block: ParagraphBlock = {
+      kind: 'paragraph',
+      id: 'styled-wrap-space',
+      attrs: { alignment: 'right' },
+      runs: [
+        { kind: 'text', text: 'Alpha Beta', fontFamily: 'Arial', fontSize: 16, pmStart: 1, pmEnd: 11 },
+        { kind: 'text', text: ' ', bold: true, fontFamily: 'Arial', fontSize: 16, pmStart: 11, pmEnd: 12 },
+      ],
+    };
+    const line: Line = {
+      fromRun: 0,
+      fromChar: 0,
+      toRun: 1,
+      toChar: 1,
+      width: 80,
+      maxWidth: 100,
+      ascent: 12,
+      descent: 4,
+      lineHeight: 20,
+      segments: [{ runIndex: 0, fromChar: 0, toChar: 10, width: 80 }],
+    };
+    const lineEl = renderLine({
+      block,
+      line,
+      context: { pageNumber: 1, totalPages: 1, section: 'body' },
+      runContext: makeRunContext(),
+    });
+    expect(lineEl.textContent).toBe('Alpha Beta');
+    expect(lineEl.dataset.pmEnd).toBe('12');
+    expect(block.runs[1]).toMatchObject({ text: ' ', pmStart: 11, pmEnd: 12 });
+  });
+
+  it('keeps non-space source text when a measured segment omits more than wrap spaces', () => {
+    const { lineEl } = paint('right', 9);
+    expect(lineEl.querySelector('.superdoc-text-run')?.textContent).toBe('Alpha Beta ');
+  });
+
+  it.each(['left', 'right', 'center'] as const)(
+    'retains a measured authored trailing space for %s alignment',
+    (alignment) => {
+      const { lineEl } = paint(alignment, 11);
+      expect(lineEl.querySelector('.superdoc-text-run')?.textContent).toBe('Alpha Beta ');
+    },
+  );
+
+  it('keeps left-aligned wrap-space text and source positions unchanged', () => {
+    const { lineEl } = paint('left', 10);
+    expect(lineEl.querySelector('.superdoc-text-run')?.textContent).toBe('Alpha Beta ');
+    expect(lineEl.querySelector<HTMLElement>('.superdoc-text-run')?.dataset.pmEnd).toBe('12');
+  });
+});
+
 describe('renderLine justification', () => {
   const makeLine = (text: string, overrides: Partial<Line> = {}): Line => ({
     fromRun: 0,

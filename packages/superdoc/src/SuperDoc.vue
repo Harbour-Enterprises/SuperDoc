@@ -5,7 +5,11 @@ import {
   getWorkflowRecording,
 } from './internal/diagnostics/interaction-history.js';
 import { createTrackedChangePermissionResolver } from './core/collaboration/permissions.js';
-import { executeFirstPartyCommandAsync, registerFirstPartyCommandMutation } from './public/ui/create-super-doc-ui.js';
+import {
+  executeFirstPartyCommandAsync,
+  executeFirstPartyShortcutAsync,
+  registerFirstPartyCommandMutation,
+} from './public/ui/create-super-doc-ui.js';
 import { getSuperDocUiOwnerId } from './core/superdoc-ui-owner.js';
 import '@superdoc/common/styles/common-styles.css';
 import { superdocIcons } from './icons.js';
@@ -570,6 +574,12 @@ const installV2CommandShortcutBinding = ({ documentId, bindEditShortcuts }) => {
         const ui = getSuperDocUI();
         if (!ui) return Promise.resolve(UNAVAILABLE_COMMAND_RESULT);
         return executeFirstPartyCommandAsync(ui, commandId, payload);
+      },
+      executeAfterSelection: (commandId, payload) => {
+        const ui = getSuperDocUI();
+        return ui
+          ? executeFirstPartyShortcutAsync(ui, commandId, payload)
+          : Promise.resolve(UNAVAILABLE_COMMAND_RESULT);
       },
       // Fail closed: a shortcut must never read as enabled when the shell has
       // outlived its SuperDoc instance.
@@ -3400,6 +3410,14 @@ const getV2ActivePageRect = () => {
   const stage =
     activeDocumentId == null ? latestV2MountStage : (v2MountStagesByDocumentId.get(String(activeDocumentId)) ?? null);
   if (!stage?.isConnected) return null;
+  const workerRoots = stage.querySelectorAll('[data-sd-worker-dom-root]');
+  if (workerRoots.length) {
+    if (workerRoots.length !== 1) return null;
+    const page = workerRoots[0].querySelector(
+      `.superdoc-page[data-worker-page-id][data-page-index="${v2RulerActivePageIndex}"]`,
+    );
+    return page?.getBoundingClientRect() ?? null;
+  }
   const wrapper = Array.from(stage.children).find((element) => element.dataset?.v2PaintWrapper === 'true') ?? stage;
   const pages = Array.from(wrapper.children).filter((element) => element.classList?.contains('superdoc-page'));
   const activePage = pages.find((element) => Number(element.dataset?.pageIndex) === v2RulerActivePageIndex) ?? pages[0];

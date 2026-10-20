@@ -884,6 +884,9 @@ const caretWidthMemoByCtx = new WeakMap<LayoutMeasurementContext, Map<string, Ma
 const CARET_WIDTH_MEMO_MAX_TEXTS = 512;
 
 function memoizedCaretWidth(ctx: LayoutMeasurementContext, fontKey: string, displayText: string, upTo: number): number {
+  // Match the current run painter and paragraph measurer: projected runs do
+  // not expose Word's kerning opt-in, so every painted run disables kerning.
+  ctx.fontKerning = 'none';
   let caretWidthMemo = caretWidthMemoByCtx.get(ctx);
   if (!caretWidthMemo) {
     caretWidthMemo = new Map();

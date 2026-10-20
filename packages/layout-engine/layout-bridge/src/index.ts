@@ -1702,3 +1702,12 @@ const mapPmToX = (
 };
 
 // isRtlBlock is now in position-hit.ts and re-exported above.
+
+export { measureVisualBidiFragment, type MeasuredVisualBidiFragment } from './neutral-segment-geometry.js';
+export {
+  measuredVisualBidiCaretX,
+  measuredVisualBidiOffsetAtX,
+  measuredVisualBidiRangeBands,
+  isMeasuredVisualBidiLineCurrent,
+  type MeasuredVisualBidiLine,
+} from './visual-bidi-geometry.js';

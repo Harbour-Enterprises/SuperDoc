@@ -1,6 +1,10 @@
 import { afterEach, describe, it, expect, vi } from 'vite-plus/test';
 import { BUILT_IN_COMMAND_IDS, createSuperDocUI, shallowEqual } from './ui.js';
-import { executeFirstPartyCommandAsync, registerFirstPartyCommandMutation } from './ui/create-super-doc-ui.js';
+import {
+  executeFirstPartyCommandAsync,
+  executeFirstPartyShortcutAsync,
+  registerFirstPartyCommandMutation,
+} from './ui/create-super-doc-ui.js';
 import { SUPERDOC_UI_REASONS } from './ui/reasons.js';
 import { COMMAND_CATALOG, ALL_BUILT_IN_COMMAND_IDS } from './ui/commands.js';
 import { LIST_PRESET_IDS } from '@superdoc/document-api';
@@ -9332,6 +9336,106 @@ describe('public ui — Plan B command catalog (row 747)', () => {
     },
   );
 
+  it.each([
+    'matching',
+    'different-offsets',
+    'different-story',
+    'replaced-document',
+    'viewing-mode',
+    'cache-refresh',
+  ] as const)(
+    'keeps an authoritative command range only for current native selection identity (%s)',
+    async (identity) => {
+      const bold = vi.fn(() => ({ success: true }));
+      const setPendingInlineFormat = vi.fn();
+      const caret = {
+        ...SELECTION_INFO,
+        empty: true,
+        text: '',
+        target: { kind: 'text', segments: [{ blockId: 'P1', range: { start: 2, end: 2 } }] },
+        selectionTarget: {
+          kind: 'selection',
+          start: { kind: 'text', blockId: 'P1', offset: 2 },
+          end: { kind: 'text', blockId: 'P1', offset: 2 },
+        },
+      };
+      let active = 0;
+      let hostSnapshot: unknown = {
+        anchor: { blockId: 'P1', blockOffset: 2 },
+        focus: { blockId: 'P1', blockOffset: 2 },
+      };
+      let notify!: (value: unknown) => void;
+      let commandReads = 0;
+      const current = vi.fn(() => {
+        if (!active) return caret;
+        return Promise.resolve().then(() => {
+          // Native input ACK and its applied frame can advance the epoch while
+          // the ordered worker read already describes the same final range.
+          if (++commandReads <= 2) {
+            hostSnapshot = {
+              anchor: { blockId: 'P1', blockOffset: identity === 'different-offsets' ? 1 : 0 },
+              focus: { blockId: 'P1', blockOffset: 5 },
+              ...(identity === 'different-story'
+                ? { story: { kind: 'story', storyType: 'headerFooterPart', refId: 'other' } }
+                : {}),
+            };
+            notify(hostSnapshot);
+            if (identity === 'replaced-document') superdoc.activeEditor.doc = { ...superdoc.activeEditor.doc };
+            if (identity === 'viewing-mode') superdoc.config.documentMode = 'viewing';
+          }
+          return SELECTION_INFO;
+        });
+      });
+      const superdoc = makeCatalogSuperdoc({
+        host: {
+          getForegroundMutationState: () => ({ active, pending: active }),
+          readLiveSelectionSyncSnapshot: () => caret,
+          getPendingInlineFormat: () => null,
+          setPendingInlineFormat,
+          getHandles: () => ({
+            editing: {
+              selection: {
+                getSnapshot: () => hostSnapshot,
+                subscribe: (listener: (value: unknown) => void) => {
+                  notify = listener;
+                  return () => {};
+                },
+              },
+            },
+          }),
+        },
+        doc: {
+          selection: { current },
+          format: { bold },
+          comments: { list: () => ({ items: [] }) },
+          trackChanges: { list: () => ({ items: [] }) },
+        },
+      });
+      const ui = createSuperDocUI({ superdoc });
+      let refresh = identity === 'cache-refresh';
+      const stop = ui
+        .select((snapshot) => snapshot.selection)
+        .subscribe((selection) => {
+          if (!refresh || selection.empty) return;
+          refresh = false;
+          hostSnapshot = { anchor: { blockId: 'P1', blockOffset: 2 }, focus: { blockId: 'P1', blockOffset: 2 } };
+          notify(hostSnapshot);
+        });
+      try {
+        expect(ui.state.selection).toMatchObject({ empty: true });
+        active = 1;
+        await ui.commands.get('bold').executeAsync();
+        if (identity === 'matching' || identity === 'cache-refresh') {
+          expect(bold).toHaveBeenCalledWith({ target: SELECTION_TARGET, value: true }, { offsetSpace: 'selection' });
+        } else expect(bold).not.toHaveBeenCalled();
+        expect(setPendingInlineFormat).not.toHaveBeenCalled();
+      } finally {
+        stop();
+        ui.destroy();
+      }
+    },
+  );
+
   it('reads applied selection presentation for font and mark state without requesting projection graphs', () => {
     const readProjection = vi.fn(() => {
       throw new Error('projection graphs remain worker-owned');
@@ -9695,6 +9799,89 @@ describe('public ui — Plan B command catalog (row 747)', () => {
     const ui = createSuperDocUI({ superdoc });
     expect(ui.commands.get('bold').getState().active).toBe(false);
   });
+
+  it.each([true, false])(
+    'retains all20 ordered first-party toggles through own content notifications only with a current private reader (%s)',
+    async (proved) => {
+      let notify: (event: unknown) => void = () => {};
+      let active = false,
+        notifying = false,
+        underline = false;
+      const issued = new WeakSet<object>();
+      const hostSnapshot = { anchor: { blockId: 'P1', blockOffset: 0 }, focus: { blockId: 'P1', blockOffset: 5 } };
+      const host = {
+        events: {
+          subscribe: (listener: (event: unknown) => void) => {
+            notify = listener;
+            return () => {};
+          },
+        },
+        getHandles: () => ({ editing: { selection: { getSnapshot: () => hostSnapshot, subscribe: () => () => {} } } }),
+      };
+      const info = () => ({ ...SELECTION_INFO, activeMarks: underline ? ['underline'] : [] });
+      const current = () => {
+        if (!active || notifying) return Promise.resolve(info());
+        return Promise.resolve().then(() => {
+          notifying = true;
+          try {
+            notify({ type: 'document:mutated' });
+          } finally {
+            notifying = false;
+          }
+          const result = info();
+          issued.add(result);
+          return result;
+        });
+      };
+      const format = vi.fn((input: { value: boolean }) => {
+        underline = input.value;
+        return { success: true, txId: `toggle-${format.mock.calls.length}` };
+      });
+      const superdoc = makeCatalogSuperdoc({
+        host,
+        doc: {
+          selection: { current },
+          format: { underline: format },
+          comments: { list: () => ({ items: [] }) },
+          trackChanges: { list: () => ({ items: [] }) },
+        },
+      });
+      Object.assign(superdoc.activeEditor, { editorVersion: 2 });
+      registerFirstPartyCommandMutation(superdoc, host, {
+        supports: (path) => path === 'format.underline',
+        run: (_path, args) => format(args[0] as never),
+        runListApply: async () => false,
+        ...(proved
+          ? {
+              selectionReader: {
+                capture: () => ({
+                  read: () => Promise.resolve(current()),
+                  isCurrent: (raw: unknown) => !!raw && typeof raw === 'object' && issued.has(raw),
+                }),
+              },
+            }
+          : {}),
+      } as never);
+      const ui = createSuperDocUI({ superdoc });
+      active = true;
+      try {
+        for (let i = 0; i < 20; i++) {
+          notifying = true;
+          try {
+            notify({ type: 'document:mutated' });
+          } finally {
+            notifying = false;
+          }
+          await executeFirstPartyCommandAsync(ui, 'underline');
+        }
+        expect(format).toHaveBeenCalledTimes(proved ? 20 : 0);
+        expect(underline).toBe(false);
+      } finally {
+        active = false;
+        ui.destroy();
+      }
+    },
+  );
 
   it('keeps document paint at most one mutation behind a rapid inline-toggle burst (SD-3788)', async () => {
     const paintResolvers: Array<() => void> = [];
@@ -12082,6 +12269,85 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     ui.destroy();
   });
 
+  it('keeps the displayed caret font while its next worker input is awaiting presentation (SD-4464)', () => {
+    let selection = caretSelectionInfo('P1', 1);
+    let foreground = { active: 0, pending: 0 };
+    let applied: { selection: typeof selection; inlineStyle: { fontFamily?: string; fontSize?: string } } | null = {
+      selection,
+      inlineStyle: { fontFamily: 'Arial', fontSize: '11' },
+    };
+    let publishSelection: (() => void) | null = null;
+    const host = storeCapableHost({
+      getForegroundMutationState: () => foreground,
+      readLiveSelectionSyncSnapshot: () => selection,
+      readAppliedSelectionPresentation: () => applied,
+      readMountedProjectionBlocksByIds: () => null,
+      getHandles: () => ({
+        editing: {
+          selection: {
+            subscribe: (listener: () => void) => {
+              publishSelection = listener;
+              return () => {};
+            },
+          },
+        },
+      }),
+    });
+    const superdoc = makeBlockSuperdoc(
+      {
+        selection: { current: () => selection },
+        format: { fontFamily: vi.fn(), fontSize: vi.fn() },
+      },
+      { selectionInfo: null, editorExtra: { host } },
+    );
+    const ui = createSuperDocUI({ superdoc });
+    publishSelection?.();
+    expect(ui.commands.get('font-family').getState().value).toBe('Arial');
+    expect(ui.commands.get('font-size').getState().value).toBe('11');
+
+    // The receipt has settled, but the next native input has no current paint.
+    // The host correctly refuses its strict applied-presentation read.
+    foreground = { active: 0, pending: 1 };
+    applied = null;
+    publishSelection?.();
+    expect.soft(ui.commands.get('font-family').getState().value).toBe('Arial');
+    expect.soft(ui.commands.get('font-size').getState().value).toBe('11');
+
+    // The applied scene can advance before the UI's selection subscription.
+    // A passive recompute must not combine that new paint with the old caret.
+    foreground = { active: 0, pending: 0 };
+    selection = caretSelectionInfo('P2', 0);
+    applied = { selection, inlineStyle: { fontFamily: 'Cambria', fontSize: '15' } };
+    const repaintUi = superdoc.on.mock.calls.find(([name]) => name === 'fonts-changed')?.[1] as () => void;
+    repaintUi();
+    expect.soft(ui.commands.get('font-family').getState().value).toBe('Arial');
+    expect.soft(ui.commands.get('font-size').getState().value).toBe('11');
+    publishSelection?.();
+    expect(ui.commands.get('font-family').getState().value).toBe('Cambria');
+    expect(ui.commands.get('font-size').getState().value).toBe('15');
+
+    // A settled unavailable font is truthful, and overwrites the hold.
+    applied = { selection, inlineStyle: {} };
+    publishSelection?.();
+    expect(ui.commands.get('font-family').getState().value).toBeUndefined();
+    expect(ui.commands.get('font-size').getState().value).toBeUndefined();
+    applied = { selection, inlineStyle: { fontFamily: 'Cambria', fontSize: '15' } };
+    publishSelection?.();
+
+    // Leaving a caret retires its hold, even if that caret is revisited before
+    // another source presentation settles.
+    applied = null;
+    foreground = { active: 0, pending: 1 };
+    selection = caretSelectionInfo('P3', 0);
+    publishSelection?.();
+    expect(ui.commands.get('font-family').getState().value).toBeUndefined();
+    selection = caretSelectionInfo('P2', 0);
+    publishSelection?.();
+    expect.soft(ui.commands.get('font-family').getState().value).toBeUndefined();
+    expect.soft(ui.commands.get('font-size').getState().value).toBeUndefined();
+    ui.destroy();
+  });
+
   it('does not publish unresolved font values before an Enter-created paragraph paints (SD-4464)', async () => {
     let selection = caretSelectionInfo('P1', 1);
     let mountedBlocks = [
@@ -12655,6 +12921,77 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     );
   });
 
+  it.each(['optimized-list', 'list', 'paragraph', 'spacing', 'style'] as const)(
+    'rejects cached selection-derived %s commands until genuine text ownership resumes',
+    async (route) => {
+      const mutate = vi.fn(() => ({ success: true }));
+      const empty = {
+        empty: true,
+        target: null,
+        selectionTarget: null,
+        activeMarks: [],
+        activeCommentIds: [],
+        activeChangeIds: [],
+      };
+      let active = true;
+      const host = { readLiveSelectionSyncSnapshot: () => (active ? SELECTION_INFO : empty) };
+      const superdoc = makeBlockSuperdoc(
+        {
+          lists: { apply: mutate, getState: () => ({ success: true, isListItem: false, seed: null }) },
+          format: { paragraph: { setAlignment: mutate, setSpacing: mutate } },
+          styles: { paragraph: { setStyle: mutate } },
+        },
+        {
+          editorExtra: { host, ...(route === 'optimized-list' ? { editCommands: { lists: { apply: mutate } } } : {}) },
+        },
+      );
+      const ui = createSuperDocUI({ superdoc });
+      expect(ui.selection.getSnapshot().selectionTarget).not.toBeNull();
+      active = false;
+      const id =
+        route === 'paragraph'
+          ? 'text-align'
+          : route === 'spacing'
+            ? 'line-height'
+            : route === 'style'
+              ? 'linked-style'
+              : 'bullet-list';
+      const payload =
+        route === 'paragraph'
+          ? 'center'
+          : route === 'spacing'
+            ? 1.5
+            : route === 'style'
+              ? { styleId: 'Heading1' }
+              : undefined;
+      expect(await ui.commands.executeAsync(id, payload)).toBe(false);
+      expect(mutate).not.toHaveBeenCalled();
+      active = true;
+      expect(await ui.commands.executeAsync(id, payload)).toMatchObject({ success: true });
+      expect(mutate).toHaveBeenCalled();
+    },
+  );
+
+  it('rejects a list target whose authoritative state resolves after text ownership is lost', async () => {
+    let resolve!: (value: unknown) => void;
+    const stateRead = new Promise((resolveState) => {
+      resolve = resolveState;
+    });
+    const apply = vi.fn(() => ({ success: true }));
+    let active = true;
+    const host = {
+      readLiveSelectionSyncSnapshot: () =>
+        active ? SELECTION_INFO : { empty: true, target: null, selectionTarget: null },
+    };
+    const superdoc = makeBlockSuperdoc({ lists: { apply, getState: () => stateRead } }, { editorExtra: { host } });
+    const ui = createSuperDocUI({ superdoc });
+    const pending = ui.commands.executeAsync('bullet-list');
+    active = false;
+    resolve({ success: true, isListItem: false, seed: null });
+    expect(await pending).toBe(false);
+    expect(apply).not.toHaveBeenCalled();
+  });
+
   it('text-align reports the first per-block failure instead of a later success', async () => {
     const failure = { success: false, failure: { code: 'BLOCK_FAILED', message: 'first block failed' } };
     const setAlignment = vi.fn().mockReturnValueOnce(failure).mockReturnValueOnce({ success: true, txId: 'tx-later' });
@@ -12809,6 +13146,59 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     expect(host.setPendingInlineFormat).not.toHaveBeenCalled();
   });
 
+  it('keeps command selection preparation and mutation inside the foreground interaction', async () => {
+    let selectionInfo: unknown = null;
+    let resolveSelection!: (value: unknown) => void;
+    let resolveMutation!: (value: unknown) => void;
+    const selection = new Promise((resolve) => {
+      resolveSelection = resolve;
+    });
+    const mutation = new Promise((resolve) => {
+      resolveMutation = resolve;
+    });
+    const bold = vi.fn(() => mutation);
+    const orderedReadForeground: number[] = [];
+    const { superdoc, host } = makeCaretSuperdocWithPendingHost({
+      format: { bold },
+      selection: {
+        current: () => {
+          if (selectionInfo === selection) orderedReadForeground.push(active);
+          return selectionInfo;
+        },
+      },
+    });
+    let active = 0;
+    Object.assign(host, {
+      getForegroundMutationState: () => ({ active, pending: 0 }),
+      async runForegroundInteraction(action: (signal: AbortSignal) => Promise<unknown>) {
+        active++;
+        try {
+          return await action(new AbortController().signal);
+        } finally {
+          active--;
+        }
+      },
+    });
+    const ui = createSuperDocUI({ superdoc });
+    selectionInfo = selection;
+    const pending = ui.commands.get('bold').executeAsync();
+    try {
+      expect(active, 'the pending ordered selection read must not look idle').toBe(1);
+      expect(orderedReadForeground, 'the ordered reader must start inside the admitted foreground task').toEqual([1]);
+      expect(bold).not.toHaveBeenCalled();
+      resolveSelection(SELECTION_INFO);
+      await vi.waitFor(() => expect(bold).toHaveBeenCalledTimes(1));
+      expect(active, 'the accepted mutation remains in the same foreground task').toBe(1);
+      resolveMutation({ success: true });
+      expect(await pending).toEqual({ success: true });
+      expect(active).toBe(0);
+    } finally {
+      resolveSelection(SELECTION_INFO);
+      resolveMutation({ success: true });
+      await pending;
+    }
+  });
+
   it('refreshes a disabled missing-caret snapshot before executing a new range (SD-5394)', async () => {
     let selectionInfo: unknown = null;
     const bold = vi.fn(() => ({ success: true }));
@@ -12825,6 +13215,44 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
     expect(bold).toHaveBeenCalledWith({ target: SELECTION_TARGET, value: true }, { offsetSpace: 'selection' });
     expect(host.setPendingInlineFormat).not.toHaveBeenCalled();
   });
+
+  it.each(['ready', 'missing', 'viewing', 'editor', 'document', 'destroy'] as const)(
+    'gates an ordered first-party shortcut on the current selection and %s owner',
+    async (outcome) => {
+      let selectionInfo: unknown = null;
+      let resolve!: (value: unknown) => void;
+      const selected = new Promise((value) => {
+        resolve = value;
+      });
+      const bold = vi.fn(() => ({ success: true }));
+      const { superdoc, host } = makeCaretSuperdocWithPendingHost({
+        format: { bold },
+        selection: { current: () => selectionInfo },
+      });
+      const ui = createSuperDocUI({ superdoc });
+      expect(ui.commands.get('bold').getState().enabled).toBe(false);
+      selectionInfo = selected;
+      const pending = executeFirstPartyShortcutAsync(ui, 'bold');
+      expect(bold).not.toHaveBeenCalled();
+      if (outcome === 'viewing') superdoc.config.documentMode = 'viewing';
+      if (outcome === 'editor') superdoc.activeEditor = { ...superdoc.activeEditor };
+      if (outcome === 'document') superdoc.activeEditor.doc = { ...superdoc.activeEditor.doc };
+      if (outcome === 'destroy') ui.destroy();
+      resolve(outcome === 'missing' ? null : SELECTION_INFO);
+      const result = await pending;
+      if (outcome === 'ready') {
+        expect(result).toEqual({ success: true });
+        expect(bold).toHaveBeenCalledExactlyOnceWith(
+          { target: SELECTION_TARGET, value: true },
+          { offsetSpace: 'selection' },
+        );
+      } else {
+        expect(result).toBe(false);
+        expect(bold).not.toHaveBeenCalled();
+      }
+      expect(host.setPendingInlineFormat).not.toHaveBeenCalled();
+    },
+  );
 
   it.each([
     ['body', undefined],
@@ -13703,6 +14131,237 @@ describe('public ui — block / paragraph / list / link / create routing (row 74
       link: { destination: { href: 'https://example.com' } },
     });
   });
+
+  it.each(['wrap', 'remove', 'patch', 'unresolved', 'other-story'] as const)(
+    'link executeAsync resolves its explicit text target instead of a cached unrelated link (%s)',
+    async (operation) => {
+      const addressA = linkAddress(0, 5);
+      const addressB = {
+        ...linkAddress(10, 15),
+        anchor: {
+          start: { blockId: 'P2', offset: 10 },
+          end: { blockId: 'P2', offset: 15 },
+        },
+      };
+      const replace = vi.fn(() => ({ success: true }));
+      const patch = vi.fn(() => ({ success: true }));
+      const remove = vi.fn(() => ({ success: true }));
+      const wrap = vi.fn(() => ({ success: true }));
+      let pending = 0;
+      let live: unknown = SELECTION_INFO;
+      const superdoc = makeBlockSuperdoc(
+        {
+          selection: { current: () => live },
+          text: { replace },
+          hyperlinks: {
+            patch,
+            wrap,
+            remove,
+            list: () => ({
+              items: [
+                { address: addressA, properties: { href: 'https://original.example/' } },
+                ...(operation === 'patch'
+                  ? [{ address: addressB, properties: { href: 'https://second.example/' } }]
+                  : []),
+              ],
+            }),
+          },
+        },
+        { editorExtra: { host: { getForegroundMutationState: () => ({ active: pending, pending }) } } },
+      );
+      const ui = createSuperDocUI({ superdoc });
+      try {
+        await vi.waitFor(() => expect(ui.commands.get('link').getState()).toMatchObject({ active: true }));
+        live = null;
+        pending = 1;
+        const story = { kind: 'story', storyType: 'headerFooterPart', refId: 'rIdHeader' };
+        const textTarget =
+          operation === 'other-story'
+            ? { ...SELECTION_TARGET, story }
+            : {
+                kind: 'selection',
+                start: { kind: 'text', blockId: 'P2', offset: 10 },
+                end: { kind: 'text', blockId: operation === 'unresolved' ? 'P3' : 'P2', offset: 15 },
+              };
+        const result = await ui.commands.get('link').executeAsync({
+          href: operation === 'remove' ? null : 'https://new.example/',
+          textTarget,
+          text: 'New label',
+        });
+        expect(remove).not.toHaveBeenCalled();
+        if (operation === 'remove' || operation === 'unresolved') {
+          expect(result).toBe(false);
+          expect(patch).not.toHaveBeenCalled();
+          expect(replace).not.toHaveBeenCalled();
+          expect(wrap).not.toHaveBeenCalled();
+        } else if (operation === 'patch') {
+          expect(result).toMatchObject({ success: true });
+          expect(patch).toHaveBeenCalledExactlyOnceWith({ target: addressB, patch: { href: 'https://new.example/' } });
+          expect(replace).toHaveBeenCalledExactlyOnceWith({ target: textTarget, text: 'New label' });
+          expect(wrap).not.toHaveBeenCalled();
+        } else {
+          expect(result).toMatchObject({ success: true });
+          expect(patch).not.toHaveBeenCalled();
+          expect(replace).not.toHaveBeenCalled();
+          expect(wrap).toHaveBeenCalledExactlyOnceWith({
+            target:
+              operation === 'other-story'
+                ? { kind: 'text', blockId: 'P1', range: { start: 0, end: 5 }, story }
+                : { kind: 'text', blockId: 'P2', range: { start: 10, end: 15 } },
+            link: { destination: { href: 'https://new.example/' } },
+          });
+        }
+      } finally {
+        ui.destroy();
+      }
+    },
+  );
+
+  it.each(['settle', 'viewing', 'document', 'invalid-read'] as const)(
+    'link executeAsync binds an asynchronous explicit-target lookup and its mutation (%s)',
+    async (change) => {
+      let resolveContext!: (value: unknown) => void;
+      const context = new Promise<unknown>((resolve) => {
+        resolveContext = resolve;
+      });
+      let resolveMutation!: (value: unknown) => void;
+      const mutation = new Promise<unknown>((resolve) => {
+        resolveMutation = resolve;
+      });
+      const addressA = linkAddress(0, 5);
+      const addressB = {
+        ...linkAddress(10, 15),
+        anchor: {
+          start: { blockId: 'P2', offset: 10 },
+          end: { blockId: 'P2', offset: 15 },
+        },
+      };
+      const patch = vi.fn(() => mutation);
+      const wrap = vi.fn(() => ({ success: true }));
+      let pending = 0;
+      let live: unknown = SELECTION_INFO;
+      const list = vi.fn(({ within }: { within: { nodeId: string } }) =>
+        within.nodeId === 'P2'
+          ? context
+          : { items: [{ address: addressA, properties: { href: 'https://original.example/' } }] },
+      );
+      const superdoc = makeBlockSuperdoc(
+        {
+          selection: { current: () => live },
+          hyperlinks: { patch, wrap, list, remove: vi.fn() },
+        },
+        { editorExtra: { host: { getForegroundMutationState: () => ({ active: pending, pending }) } } },
+      );
+      const ui = createSuperDocUI({ superdoc });
+      try {
+        await vi.waitFor(() => expect(ui.commands.get('link').getState()).toMatchObject({ active: true }));
+        pending = 1;
+        live = null;
+        const result = ui.commands.get('link').executeAsync({
+          href: 'https://new.example/',
+          textTarget: {
+            kind: 'selection',
+            start: { kind: 'text', blockId: 'P2', offset: 10 },
+            end: { kind: 'text', blockId: 'P2', offset: 15 },
+          },
+        });
+        await vi.waitFor(() =>
+          expect(list).toHaveBeenCalledWith({
+            within: {
+              kind: 'block',
+              nodeType: 'paragraph',
+              nodeId: 'P2',
+            },
+          }),
+        );
+        expect(patch).not.toHaveBeenCalled();
+        expect(wrap).not.toHaveBeenCalled();
+        if (change === 'viewing') superdoc.config.documentMode = 'viewing';
+        if (change === 'document') superdoc.activeEditor.doc = { ...superdoc.activeEditor.doc };
+        resolveContext(
+          change === 'invalid-read'
+            ? null
+            : { items: [{ address: addressB, properties: { href: 'https://second.example/' } }] },
+        );
+        if (change === 'settle') {
+          await vi.waitFor(() =>
+            expect(patch).toHaveBeenCalledExactlyOnceWith({
+              target: addressB,
+              patch: { href: 'https://new.example/' },
+            }),
+          );
+          let settled = false;
+          void result.then(() => {
+            settled = true;
+          });
+          await Promise.resolve();
+          expect(settled).toBe(false);
+          resolveMutation({ success: true });
+          await expect(result).resolves.toMatchObject({ success: true });
+        } else {
+          await expect(result).resolves.toBe(false);
+          expect(patch).not.toHaveBeenCalled();
+        }
+        expect(wrap).not.toHaveBeenCalled();
+      } finally {
+        resolveContext(null);
+        resolveMutation({ success: false });
+        ui.destroy();
+      }
+    },
+  );
+
+  it.each(['null', 'async-null', 'throws'] as const)(
+    'link executeAsync uses its explicit text target when the live selection reader %s',
+    async (reader) => {
+      const wrap = vi.fn(() => ({ success: true }));
+      const current = vi.fn(() => {
+        if (reader === 'throws') throw new Error('Selection is unavailable');
+        return reader === 'async-null' ? Promise.resolve(null) : null;
+      });
+      const superdoc = makeBlockSuperdoc({
+        hyperlinks: { wrap, list: () => ({ items: [] }), patch: vi.fn(), remove: vi.fn() },
+        selection: { current },
+      });
+      const ui = createSuperDocUI({ superdoc });
+
+      await expect(
+        ui.commands.get('link').executeAsync({ href: 'https://example.com', textTarget: SELECTION_TARGET }),
+      ).resolves.toMatchObject({ success: true });
+      expect(wrap).toHaveBeenCalledWith({
+        target: { kind: 'text', blockId: 'P1', range: { start: 0, end: 5 } },
+        link: { destination: { href: 'https://example.com' } },
+      });
+    },
+  );
+
+  it.each(['null', 'async-null', 'throws'] as const)(
+    'link executeAsync uses its explicit hyperlink target when the live selection reader %s',
+    async (reader) => {
+      const updateTarget = vi.fn(async () => ({ success: true, hyperlinkNodeId: 'hl:1', txId: 'updated-link' }));
+      const current = vi.fn(() => {
+        if (reader === 'throws') throw new Error('Selection is unavailable');
+        return reader === 'async-null' ? Promise.resolve(null) : null;
+      });
+      const superdoc = makeBlockSuperdoc({
+        hyperlinks: { updateTarget, wrap: vi.fn(), list: () => ({ items: [] }), patch: vi.fn(), remove: vi.fn() },
+        selection: { current },
+      });
+      const ui = createSuperDocUI({ superdoc });
+
+      await expect(
+        ui.commands.get('link').executeAsync({
+          href: 'https://updated.example/',
+          hyperlinkTarget: { storyId: 'main:/word/document.xml', hyperlinkNodeId: 'hl:1' },
+        }),
+      ).resolves.toMatchObject({ success: true });
+      expect(updateTarget).toHaveBeenCalledWith({
+        storyId: 'main:/word/document.xml',
+        hyperlinkNodeId: 'hl:1',
+        newTarget: { kind: 'external', url: 'https://updated.example/' },
+      });
+    },
+  );
 
   it('link wraps the toolbar textTarget after its popover collapses the live selection', async () => {
     const wrap = vi.fn(() => ({ success: true }));

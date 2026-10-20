@@ -572,7 +572,7 @@ const inheritedBorderWidthPx = (border: BorderSpec | undefined, fallback: TableB
  * own shared edges, while a uniform double cell ring keeps all four sides on
  * the selected cell so its corners remain continuous.
  */
-function getTableCellBorderInsets(params: {
+export function getTableCellBorderInsets(params: {
   cellBorders?: CellBorders;
   aboveCellBorders?: CellBorders;
   leftCellBorders?: CellBorders;

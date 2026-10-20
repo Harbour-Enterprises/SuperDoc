@@ -3787,6 +3787,135 @@ describe('comments-store committed review-window apply', () => {
     });
   }
 
+  it('retains the committed row through an authored canonical regroup and publishes its current decision identity', async () => {
+    const source = 'tc|main%3A%2Fword%2Fdocument.xml|ins|8B4EDC8A%7CwId%3A1';
+    const group = 'tc|main%3A%2Fword%2Fdocument.xml|ins|word-paragraph-range|c98fbef1';
+    const presentation = {
+      instances: [{ id: source, rowId: source, threadId: source, isPrimary: true }],
+      rowVersions: { [source]: 1 },
+      threads: { [source]: [source] },
+      groupOrder: { open: [source], resolved: [] },
+      updateContext: vi.fn(),
+    };
+    // These source-prepared identities reproduce the worker's initial insertion
+    // and the same retained row after Enter extends its canonical review group.
+    const publish = (canonicalId) =>
+      apply({
+        commentItems: [],
+        trackedChangeItems: [{ id: canonicalId }],
+        preparedReview: {
+          comments: [],
+          presentation: { ...presentation, rowVersions: { [source]: canonicalId === source ? 1 : 2 } },
+          trackedChanges: [
+            {
+              event: 'add',
+              changeId: source,
+              importedId: '1',
+              trackedChangeCanonicalId: canonicalId,
+              trackedChangeText: 'line one',
+              trackedChangeType: 'insert',
+              trackedChangeDisplayType: 'insert',
+              trackedChangeStory: { kind: 'story', storyType: 'body' },
+              trackedChangeStoryKind: 'body',
+              trackedChangeAnchorKey: `tc::body::${canonicalId}`,
+              trackedChangePositionAliases: ['1', '8B4EDC8A'],
+            },
+          ],
+        },
+      });
+    expect(publish(source).ok).toBe(true);
+    const row = store.commentsList[0];
+    store.activeComment = source;
+    store.activeFloatingCommentInstanceId = source;
+    store.commentsList.push(
+      useComment({
+        commentId: 'reply',
+        fileId: 'doc-1',
+        commentText: 'reply',
+        parentCommentId: source,
+        trackedChangeThreadParentId: source,
+      }),
+    );
+
+    store.remapTrackedChangeIdentities([{ from: source, to: group }], { documentId: 'doc-1' });
+    expect(row.commentId).toBe(presentation.instances[0].rowId);
+    expect(store.getGroupedComments.parentComments.map((row) => row.commentId)).toEqual([source]);
+    expect(store.activeComment).toBe(source);
+    expect(store.activeFloatingCommentInstanceId).toBe(source);
+    expect(store.commentsList.find((row) => row.commentId === 'reply').parentCommentId).toBe(source);
+
+    expect(publish(group).ok).toBe(true);
+    expect(store.commentsList[0]).toBe(row);
+    expect(row).toMatchObject({
+      commentId: source,
+      trackedChangeCanonicalId: group,
+      trackedChangeAnchorKey: `tc::body::${group}`,
+    });
+    expect(store.getGroupedComments.parentComments.map((row) => row.commentId)).toEqual([source]);
+    trackedChangesAdapter.reject = vi.fn(async (comment) => ({ ok: false, reason: comment.trackedChangeCanonicalId }));
+    expect(await store.decideTrackedChangeFromSidebar({ superdoc, comment: row, decision: 'reject' })).toMatchObject({
+      ok: false,
+      reason: group,
+    });
+    expect(trackedChangesAdapter.reject).toHaveBeenCalledWith(row);
+  });
+
+  it('does not reserve unowned rows or rows in another document for a committed presentation', () => {
+    store.committedReviewPresentations = { 'doc-1': { rowVersions: { retained: 1 } } };
+    store.commentsList = [
+      makeTrackedChangeRow({ commentId: 'unowned' }),
+      makeTrackedChangeRow({ commentId: 'retained', fileId: 'doc-2' }),
+    ];
+    store.remapTrackedChangeIdentities([{ from: 'unowned', to: 'new-unowned' }], { documentId: 'doc-1' });
+    store.remapTrackedChangeIdentities([{ from: 'retained', to: 'new-foreign' }], { documentId: 'doc-2' });
+    expect(store.commentsList.map((row) => row.commentId)).toEqual(['new-unowned', 'new-foreign']);
+  });
+
+  it.each(['duplicate', 'story', 'type', 'version', 'retired', 'document', 'params-document'])(
+    'refuses a source-prepared canonical transition with an invalid %s owner',
+    (invalid) => {
+      const row = makeTrackedChangeRow({ commentId: 'stable', trackedChangeCanonicalId: 'before' });
+      store.commentsList = [row];
+      if (invalid === 'duplicate') store.commentsList.push(makeTrackedChangeRow({ commentId: 'stable' }));
+      const previous = { rowVersions: { stable: 1 } };
+      const current = { rowVersions: { stable: invalid === 'version' ? 1 : 2 } };
+      store.committedReviewPresentations = { 'doc-1': current };
+      store.reconcileTrackedChangesFromV2({
+        superdoc,
+        adapter: trackedChangesAdapter,
+        documentId: invalid === 'document' ? 'doc-2' : 'doc-1',
+        items: [],
+        pruneStale: false,
+        preparedPresentation: invalid === 'retired' ? previous : current,
+        previousPreparedPresentation: previous,
+        preparedParams: [
+          {
+            event: 'add',
+            changeId: 'stable',
+            trackedChangeCanonicalId: 'after',
+            documentId: invalid === 'params-document' ? 'doc-2' : 'doc-1',
+            trackedChangeType: invalid === 'type' ? 'delete' : 'insert',
+            trackedChangeDisplayType: invalid === 'type' ? 'delete' : 'insert',
+            trackedChangeAnchorKey: `tc::${invalid === 'story' ? 'fn:2' : 'body'}::after`,
+          },
+        ],
+      });
+      expect(row.trackedChangeCanonicalId).toBe('before');
+      expect(store.commentsList.every((row) => row.trackedChangeCanonicalId !== 'after')).toBe(true);
+      if (invalid !== 'duplicate') expect(store.commentsList).toHaveLength(1);
+    },
+  );
+
+  it('releases row identity reservation when its committed presentation is retired', () => {
+    store.committedReviewPresentations = { 'doc-1': { rowVersions: { retained: 1 } } };
+    store.commentsList = [makeTrackedChangeRow({ commentId: 'retained' })];
+    store.removeCommentsForDocument('doc-1');
+    expect(store.committedReviewPresentations['doc-1']).toBeUndefined();
+    store.commentsList = [makeTrackedChangeRow({ commentId: 'retained' })];
+    store.remapTrackedChangeIdentities([{ from: 'retained', to: 'next' }], { documentId: 'doc-1' });
+    expect(store.commentsList[0].commentId).toBe('next');
+  });
+
   it('applies source-prepared review rows with browser document identity and source grouping without remapping', () => {
     const presentation = {
       instances: [],

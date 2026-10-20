@@ -93,7 +93,7 @@ export interface AnchoredMetadataAttachInput {
    */
   target: MetadataTarget;
   /**
-   * Logical namespace for the metadata set, e.g. `'urn:harvey:citations:1'`.
+   * Logical namespace for the metadata set, e.g. `'urn:example:citations:1'`.
    * SuperDoc writes this as the `xmlns` of the `<refs>` element in the
    * backing Custom XML Data Storage Part. All entries sharing a namespace
    * share one part on disk.

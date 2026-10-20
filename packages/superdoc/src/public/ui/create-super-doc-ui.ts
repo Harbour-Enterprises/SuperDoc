@@ -125,6 +125,9 @@ type AnyFn = (...args: any[]) => any;
 type LooseRecord = Record<string, any>;
 
 type FirstPartyCommandMutation = {
+  selectionReader?: {
+    capture: () => { read: () => Promise<unknown>; isCurrent: (info: unknown) => boolean } | null;
+  };
   supports: (memberPath: string) => boolean;
   run: (memberPath: string, args: readonly unknown[]) => unknown;
   runListApply: (input: unknown) => Promise<boolean>;
@@ -133,7 +136,7 @@ type FirstPartyCommandMutation = {
 const firstPartyCommandMutations = new WeakMap<object, WeakMap<object, FirstPartyCommandMutation>>();
 const firstPartyCommandExecutors = new WeakMap<
   object,
-  (id: string, payload?: unknown) => Promise<CommandExecutionResult>
+  (id: string, payload?: unknown, requireEnabled?: boolean) => Promise<CommandExecutionResult>
 >();
 
 export function registerFirstPartyCommandMutation(
@@ -165,6 +168,14 @@ export function executeFirstPartyCommandAsync(
   payload?: unknown,
 ): Promise<CommandExecutionResult> {
   return firstPartyCommandExecutors.get(ui)?.(id, payload) ?? ui.commands.executeAsync(id, payload);
+}
+
+export function executeFirstPartyShortcutAsync(
+  ui: object,
+  id: string,
+  payload?: unknown,
+): Promise<CommandExecutionResult> {
+  return firstPartyCommandExecutors.get(ui)?.(id, payload, true) ?? Promise.resolve(false);
 }
 
 type WorkerMessageBenchContext = {
@@ -2362,6 +2373,16 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * change, so an identical object means the selection has not moved since.
    */
   const selectionHostSnapshots = new WeakMap<object, object>();
+  let wholeTableParagraphSeed: {
+    editor: LooseRecord;
+    host: LooseRecord;
+    doc: unknown;
+    mount: unknown;
+    lifetime: AbortSignal;
+    sourceToken: string;
+    mode: string;
+    info: SelectionInfo;
+  } | null = null;
   const readHostSelectionSnapshot = (): object | null => {
     const handles = safeCall<LooseRecord | null>(() => getHost()?.getHandles?.() ?? null, null);
     const selectionHandle = (handles?.editing as LooseRecord | undefined)?.selection as LooseRecord | undefined;
@@ -4049,6 +4070,35 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (wholeTableSelectionChanged) {
       typedCaretValidationHeld = false;
       pendingSelectionSeedValidationToken = null;
+      wholeTableParagraphSeed = null;
+      const editor = getEditor();
+      const lifetime = safeCall<AbortSignal | null>(() => host?.getForegroundInteractionLifetime?.() ?? null, null);
+      const mount = safeCall<unknown>(() => host?.getMountedHandle?.() ?? null, null);
+      const mode = readDocumentMode();
+      if (
+        host &&
+        editor &&
+        mount &&
+        lifetime &&
+        !lifetime.aborted &&
+        mode !== null &&
+        !seed.empty &&
+        seed.tableSelection?.kind === 'tableCells' &&
+        seed.tableSelection.type === 'table' &&
+        seed.target?.segments.length &&
+        seed.selectionTarget
+      ) {
+        wholeTableParagraphSeed = {
+          editor,
+          host,
+          doc: editor.doc,
+          mount,
+          lifetime,
+          sourceToken: contentToken(),
+          mode,
+          info: seed,
+        };
+      }
       const token = selectionReadToken();
       asyncReads.set('selection', { token, value: seed, hasSettled: true, inflightToken: null });
       issueAsyncRead('selection', token, selectionCurrentRun, normalizeSelectionInfo);
@@ -4124,16 +4174,39 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     });
   };
 
+  const selectionInfoMatchesHost = (info: SelectionInfo | null): boolean => {
+    const snapshot = readHostSelectionSnapshot() as LooseRecord | null;
+    const target = info?.selectionTarget as LooseRecord | undefined;
+    if (!snapshot || target?.kind !== 'selection') return false;
+    const matches = (point: LooseRecord | undefined, endpoint: LooseRecord | undefined): boolean => {
+      const offset = target.coordinateSpace === 'tracked' ? endpoint?.trackedBlockOffset : endpoint?.blockOffset;
+      return (
+        point?.kind === 'text' &&
+        typeof point.blockId === 'string' &&
+        point.blockId === endpoint?.blockId &&
+        typeof point.offset === 'number' &&
+        point.offset === offset &&
+        storyLocatorSignature(point.story ?? target.story) === storyLocatorSignature(endpoint?.story ?? snapshot.story)
+      );
+    };
+    return (
+      (matches(target.start, snapshot.anchor) && matches(target.end, snapshot.focus)) ||
+      (matches(target.start, snapshot.focus) && matches(target.end, snapshot.anchor))
+    );
+  };
+
   const readSelectionInfoFresh = async (attempt = 0): Promise<SelectionSlice> => {
     const doc = getDoc();
     const selectionApi = doc?.selection as LooseRecord | undefined;
     const current = selectionApi?.current;
     const token = selectionReadToken();
+    const sourceToken = contentToken();
+    const mode = readDocumentMode();
 
     if (typeof current !== 'function') {
       asyncReads.set('selection', { token, value: null, hasSettled: true, inflightToken: null });
       recompute();
-      return state.selection;
+      return selectionSliceFromInfo(null, 'pending');
     }
 
     let raw: unknown;
@@ -4145,18 +4218,31 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     }
 
     if (disposed) return selectionSliceFromInfo(null, 'pending');
-    if (selectionReadToken() !== token) {
-      return attempt < 1 ? readSelectionInfoFresh(attempt + 1) : state.selection;
+    const info = normalizeSelectionInfo(raw);
+    // Native ACK and applied-frame notifications can advance the local epoch
+    // while the ordered worker read already describes their final selection.
+    // Accept that advance only when the current host endpoints prove the read.
+    if (
+      selectionReadToken() !== token &&
+      !(
+        getDoc() === doc &&
+        contentToken() === sourceToken &&
+        readDocumentMode() === mode &&
+        selectionInfoMatchesHost(info)
+      )
+    ) {
+      return attempt < 1 ? readSelectionInfoFresh(attempt + 1) : selectionSliceFromInfo(null, 'pending');
     }
 
     asyncReads.set('selection', {
-      token,
-      value: normalizeSelectionInfo(raw),
+      token: selectionReadToken(),
+      value: info,
       hasSettled: true,
       inflightToken: null,
     });
+    const selection = selectionSliceFromInfo(info, info ? 'ready' : 'pending');
     recompute();
-    return state.selection;
+    return selection;
   };
 
   const readCommentsDirectory = () => {
@@ -5083,6 +5169,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       }
       return { values: combined, effectiveUniformityStatus: uniformity.status };
     }
+    // A strict worker presentation read can be unavailable between native
+    // input acceptance and its paint. An unresolved caret is still pending.
+    if (
+      selection.empty &&
+      typeof getHost()?.readAppliedSelectionPresentation === 'function' &&
+      !appliedSelectionPresentation(selection)
+    ) {
+      return { values: combined, effectiveUniformityStatus: 'pending' };
+    }
     return { values: combined, effectiveUniformityStatus: 'ready' };
   };
 
@@ -5341,9 +5436,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   const projectInlineValuesWithSettledHold = (selection: SelectionSlice): ProjectedInlineValuesRead => {
     const projection = projectSelectionInlineValuesWithStatus(selection);
     const projected = projection.values;
-    if (selection.empty) return projection;
     const signature = selectionInlineValueSignature(selection);
     if (!signature) return projection;
+    if (heldSettledInlineValues?.key !== signature) heldSettledInlineValues = null;
     // NOTE: called after projectSelectionInlineValues so the query read is
     // seeded; this is a status-only lookup.
     if (
@@ -5830,6 +5925,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   };
 
   function hyperlinkOverlapsSelection(link: LooseRecord, selection: SelectionSlice): boolean {
+    if (storyLocatorSignature(readEntityStory(link)) !== storyLocatorSignature(selectionStoryLocator(selection))) {
+      return false;
+    }
     const anchor = (link.address as LooseRecord | undefined)?.anchor as LooseRecord | undefined;
     const start = anchor?.start as LooseRecord | undefined;
     const end = anchor?.end as LooseRecord | undefined;
@@ -5874,10 +5972,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     if (!linksApi || typeof linksApi.list !== 'function') return null;
     const blockIds = selectionBlockIds(selection);
     if (!canProbeEverySelectedBlock(blockIds)) return null;
+    const story = selectionStoryLocator(selection);
     for (const blockId of blockIds) {
-      const within = { kind: 'block', nodeType: 'paragraph', nodeId: blockId };
+      const within = paragraphTarget(blockId, story);
       const { value: result } = readAsync<LooseRecord>(
-        `hyperlinks:${blockId}`,
+        story ? `hyperlinks:${storyLocatorSignature(story)}:${blockId}` : `hyperlinks:${blockId}`,
         contentToken(),
         () => linksApi.list({ within }),
         (raw) => (raw && typeof raw === 'object' ? (raw as LooseRecord) : null),
@@ -7980,7 +8079,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     return executeTrackDecisionTarget(command.kind, resolved.target, resolved.changeId, resolved.story);
   }
 
+  const hasInactiveTextSelection = (): boolean => {
+    const host = getHost();
+    const read = host?.readLiveSelectionSyncSnapshot;
+    if (typeof read !== 'function') return false;
+    // Public active text can be empty while the worker retains a resumable
+    // body caret. Toolbar block targets must not borrow that private caret.
+    const info = safeCall<LooseRecord | null>(() => read.call(host), null);
+    return !info || (info.empty === true && !info.target && !info.selectionTarget);
+  };
+
   function executeListToggleCommand(kind: 'bullet' | 'ordered', payload: unknown): CommandExecutionResult {
+    if (hasInactiveTextSelection()) return false;
     const editCommands = getEditCommands();
     const lists = editCommands?.lists as LooseRecord | undefined;
     const apply = lists?.apply;
@@ -8142,6 +8252,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     readDocumentMode() === 'suggesting' ? TRACKED_CLEAR_INLINE_PATCH : CLEAR_INLINE_PATCH;
 
   const callEditorMutation = (route: string, op: AnyFn, input: unknown): unknown => {
+    if (
+      (route.startsWith('format.paragraph.') || route.startsWith('lists.') || route.startsWith('styles.paragraph.')) &&
+      hasInactiveTextSelection()
+    )
+      return false;
     const options = editorMutationOptionsForRoute(route);
     if (options && options.success === false) return options;
     return options ? op(input, options) : op(input);
@@ -8474,7 +8589,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
    * command drops all stored marks. The host applies the store to the created
    * span on the next insert; settleCommandExecution drives the recompute.
    */
-  const storePendingInlineFormat = (descriptor: CommandDescriptor, payload: unknown): CommandExecutionResult => {
+  const storePendingInlineFormat = (
+    descriptor: CommandDescriptor,
+    payload: unknown,
+    selection = state.selection,
+  ): CommandExecutionResult => {
     const spec = descriptor.inline;
     const method = inlineFormatMethod(descriptor);
     const host = getHost();
@@ -8488,7 +8607,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
     let value: boolean | string | number | null;
     if (spec.kind === 'toggle') {
-      value = !commandActiveState(descriptor, getDoc(), state.selection);
+      value = !commandActiveState(descriptor, getDoc(), selection);
     } else {
       const raw =
         payload && typeof payload === 'object' && 'value' in (payload as LooseRecord)
@@ -8884,182 +9003,265 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       ? (record.hyperlinkTarget as LooseRecord)
       : null;
     const requestedTextTarget = isLooseObject(record.textTarget) ? (record.textTarget as LooseRecord) : null;
-    const existing = resolveCurrentHyperlink(doc, state.selection);
     const hasRequestedHyperlinkTarget =
       typeof requestedHyperlinkTarget?.storyId === 'string' &&
       typeof requestedHyperlinkTarget?.hyperlinkNodeId === 'string';
-    if (hasRequestedHyperlinkTarget && href === null) {
-      const remove = linksApi.remove as AnyFn | undefined;
-      if (typeof remove !== 'function') return false;
-      try {
-        return callEditorMutation('hyperlinks.remove', remove, {
-          storyId: requestedHyperlinkTarget.storyId,
-          hyperlinkNodeId: requestedHyperlinkTarget.hyperlinkNodeId,
-          keepText: true,
-        });
-      } catch {
-        return false;
-      }
-    }
-    // Active link + explicit null href → unwrap.
-    if (existing && href === null) {
-      const remove = trustedLinksApi?.remove as AnyFn | undefined;
-      if (typeof remove !== 'function') return false;
-      try {
-        return callEditorMutation('hyperlinks.remove', remove, { target: existing.address, mode: 'unwrap' });
-      } catch {
-        return false;
-      }
-    }
-    // Active link + new href → patch target, optionally replacing display text atomically when requested.
-    if ((existing || requestedHyperlinkTarget) && typeof href === 'string' && href.trim() !== '') {
-      const patch = trustedLinksApi?.patch as AnyFn | undefined;
-      const updateTarget = linksApi.updateTarget as AnyFn | undefined;
-      const canPatchExisting = !hasRequestedHyperlinkTarget && existing && typeof patch === 'function';
-      const canUpdateRequested = hasRequestedHyperlinkTarget && typeof updateTarget === 'function';
-      if (!canPatchExisting && !canUpdateRequested) return false;
-      const shouldReplaceText =
-        typeof text === 'string' &&
-        text !== (hasRequestedHyperlinkTarget ? currentText : (existing?.text ?? currentText));
-      const replace = (doc?.text as LooseRecord | undefined)?.replace as AnyFn | undefined;
-      const target = shouldReplaceText
-        ? hasRequestedHyperlinkTarget
-          ? requestedTextTarget
-          : hyperlinkAddressToSelectionTarget(existing?.address as LooseRecord | undefined)
-        : null;
-      const canReplaceText = shouldReplaceText && Boolean(target) && typeof replace === 'function';
-      if (shouldReplaceText && !canReplaceText) return false;
-      const results: CommandExecutionResult[] = [];
-      const settledResults: Array<Promise<CommandExecutionResult>> = [];
-      let hyperlinkResult: CommandExecutionResult | null = null;
-      let committedHyperlinkResult: Promise<CommandExecutionResult> | null = null;
-      let settledHyperlinkResult: Promise<CommandExecutionResult> | null = null;
-      let hyperlinkWasDeferred = false;
-      try {
-        if (hasRequestedHyperlinkTarget) {
-          if (typeof updateTarget !== 'function') return false;
-          const operationResult = callEditorMutation('hyperlinks.updateTarget', updateTarget, {
+    const textTargets = textAddressesFromTarget(payloadTarget);
+    const caretTarget = collapsedTextAddressFromTarget(payloadTarget);
+    if (payloadTarget !== null && !textTargets.length && !caretTarget && !hasRequestedHyperlinkTarget) return false;
+    const addresses = textTargets.length ? textTargets : caretTarget ? [caretTarget] : [];
+    // An explicit target supplies the command's context as well as its mutation
+    // address. Cached live selection must never select a different hyperlink.
+    const linkSelection: SelectionSlice =
+      payloadTarget !== null
+        ? {
+            ...EMPTY_SELECTION,
+            empty: textTargets.length === 0,
+            target: {
+              kind: 'text',
+              segments: addresses.map((address) => ({ blockId: address.blockId, range: address.range })),
+              ...(addresses[0]?.story ? { story: addresses[0].story } : {}),
+            } as SelectionSlice['target'],
+          }
+        : state.selection;
+    const executeMutation = (existing: LooseRecord | null): unknown => {
+      if (hasRequestedHyperlinkTarget && href === null) {
+        const remove = linksApi.remove as AnyFn | undefined;
+        if (typeof remove !== 'function') return false;
+        try {
+          return callEditorMutation('hyperlinks.remove', remove, {
             storyId: requestedHyperlinkTarget.storyId,
             hyperlinkNodeId: requestedHyperlinkTarget.hyperlinkNodeId,
-            newTarget: hyperlinkTargetFromHref(href),
+            keepText: true,
           });
-          hyperlinkWasDeferred = isPromiseLike(operationResult);
-          const result = settleOperationResult(operationResult);
-          if (!commandResultSucceeded(result.immediate)) return false;
-          results.push(result.immediate);
-          settledResults.push(result.settled);
-          hyperlinkResult = result.immediate;
-          committedHyperlinkResult = result.committed;
-          settledHyperlinkResult = result.settled;
-        } else if (existing) {
-          if (typeof patch !== 'function') return false;
-          const operationResult = callEditorMutation('hyperlinks.patch', patch, {
-            target: existing.address,
-            patch: { href },
-          });
-          hyperlinkWasDeferred = isPromiseLike(operationResult);
-          const result = settleOperationResult(operationResult);
-          if (!commandResultSucceeded(result.immediate)) return false;
-          results.push(result.immediate);
-          settledResults.push(result.settled);
-          hyperlinkResult = result.immediate;
-          committedHyperlinkResult = result.committed;
-          settledHyperlinkResult = result.settled;
-        }
-      } catch {
-        return false;
-      }
-      if (canReplaceText) {
-        const combineSettledLinkEdit = (
-          finalHyperlinkResult: CommandExecutionResult,
-          finalTextResult: CommandExecutionResult,
-        ): CommandExecutionResult => {
-          if (!commandResultSucceeded(finalTextResult)) {
-            return commandResultSucceeded(finalHyperlinkResult)
-              ? partialLinkEditFailure(finalHyperlinkResult, finalTextResult)
-              : finalTextResult;
-          }
-          return combineCommandResults([finalHyperlinkResult, finalTextResult]);
-        };
-        const replaceTextAfterHyperlinkCommit = (
-          finalHyperlinkResult: CommandExecutionResult,
-        ): Promise<CommandExecutionResult> | CommandExecutionResult => {
-          if (!commandResultSucceeded(finalHyperlinkResult)) return finalHyperlinkResult;
-          try {
-            const result = settleOperationResult(callEditorMutation('text.replace', replace, { target, text }));
-            if (!commandResultSucceeded(result.immediate)) {
-              return partialLinkEditFailure(finalHyperlinkResult, result.immediate);
-            }
-            return Promise.all([settledHyperlinkResult ?? Promise.resolve(finalHyperlinkResult), result.settled]).then(
-              ([settledHyperlink, finalTextResult]) => combineSettledLinkEdit(settledHyperlink, finalTextResult),
-            );
-          } catch {
-            return partialLinkEditFailure(finalHyperlinkResult, false);
-          }
-        };
-        if (hyperlinkWasDeferred) {
-          pendingCommandSettlement = (committedHyperlinkResult ?? Promise.resolve(hyperlinkResult ?? false)).then(
-            replaceTextAfterHyperlinkCommit,
-          );
-          return combineCommandResults(results);
-        }
-        try {
-          const result = settleOperationResult(callEditorMutation('text.replace', replace, { target, text }));
-          if (!commandResultSucceeded(result.immediate)) {
-            return hyperlinkResult ? partialLinkEditFailure(hyperlinkResult, result.immediate) : result.immediate;
-          }
-          results.push(result.immediate);
-          settledResults.push(result.settled);
-          pendingCommandSettlement = Promise.all([
-            settledHyperlinkResult ?? Promise.resolve(hyperlinkResult ?? false),
-            result.settled,
-          ]).then(([finalHyperlinkResult, finalTextResult]) => {
-            return combineSettledLinkEdit(finalHyperlinkResult, finalTextResult);
-          });
-        } catch {
-          return hyperlinkResult ? partialLinkEditFailure(hyperlinkResult, false) : false;
-        }
-      }
-      if (!canReplaceText && settledResults.length > 0) {
-        pendingCommandSettlement = Promise.all(settledResults).then((settled) => combineCommandResults(settled));
-      }
-      return combineCommandResults(results);
-    }
-    // No active link + range selection + href → wrap the selected text.
-    if (typeof href === 'string' && href.trim() !== '') {
-      const normalizedHref = href.trim();
-      const wrap = trustedLinksApi?.wrap as AnyFn | undefined;
-      const textTargets = textAddressesFromTarget(payloadTarget);
-      const wrapTargets = textTargets.length > 0 ? textTargets : selectionTextAddresses(state.selection);
-      if (wrapTargets.length > 0) {
-        if (typeof wrap !== 'function') return false;
-        try {
-          return applyPerTextAddress('hyperlinks.wrap', wrap, wrapTargets, (target) => ({
-            target,
-            link: { destination: { href: normalizedHref } },
-          }));
         } catch {
           return false;
         }
       }
-      if (requestedTextTarget && !collapsedTextAddressFromTarget(requestedTextTarget)) return false;
-      const insert = trustedLinksApi?.insert as AnyFn | undefined;
-      const text = readLinkPayloadText(payload, normalizedHref);
-      if (typeof insert !== 'function' || text.trim() === '') return false;
-      const target =
-        collapsedTextAddressFromTarget(payloadTarget) ?? collapsedTextAddressFromSelection(state.selection);
-      if (!target) return false;
-      try {
-        return callEditorMutation('hyperlinks.insert', insert, {
-          target,
-          text,
-          link: { destination: { href: normalizedHref } },
-        });
-      } catch {
-        return false;
+      // Active link + explicit null href → unwrap.
+      if (existing && href === null) {
+        const remove = trustedLinksApi?.remove as AnyFn | undefined;
+        if (typeof remove !== 'function') return false;
+        try {
+          return callEditorMutation('hyperlinks.remove', remove, { target: existing.address, mode: 'unwrap' });
+        } catch {
+          return false;
+        }
       }
+      // Active link + new href → patch target, optionally replacing display text atomically when requested.
+      if ((existing || requestedHyperlinkTarget) && typeof href === 'string' && href.trim() !== '') {
+        const patch = trustedLinksApi?.patch as AnyFn | undefined;
+        const updateTarget = linksApi.updateTarget as AnyFn | undefined;
+        const canPatchExisting = !hasRequestedHyperlinkTarget && existing && typeof patch === 'function';
+        const canUpdateRequested = hasRequestedHyperlinkTarget && typeof updateTarget === 'function';
+        if (!canPatchExisting && !canUpdateRequested) return false;
+        const shouldReplaceText =
+          typeof text === 'string' &&
+          text !== (hasRequestedHyperlinkTarget ? currentText : (existing?.text ?? currentText));
+        const replace = (doc?.text as LooseRecord | undefined)?.replace as AnyFn | undefined;
+        const target = shouldReplaceText
+          ? hasRequestedHyperlinkTarget
+            ? requestedTextTarget
+            : hyperlinkAddressToSelectionTarget(existing?.address as LooseRecord | undefined)
+          : null;
+        const canReplaceText = shouldReplaceText && Boolean(target) && typeof replace === 'function';
+        if (shouldReplaceText && !canReplaceText) return false;
+        const results: CommandExecutionResult[] = [];
+        const settledResults: Array<Promise<CommandExecutionResult>> = [];
+        let hyperlinkResult: CommandExecutionResult | null = null;
+        let committedHyperlinkResult: Promise<CommandExecutionResult> | null = null;
+        let settledHyperlinkResult: Promise<CommandExecutionResult> | null = null;
+        let hyperlinkWasDeferred = false;
+        try {
+          if (hasRequestedHyperlinkTarget) {
+            if (typeof updateTarget !== 'function') return false;
+            const operationResult = callEditorMutation('hyperlinks.updateTarget', updateTarget, {
+              storyId: requestedHyperlinkTarget.storyId,
+              hyperlinkNodeId: requestedHyperlinkTarget.hyperlinkNodeId,
+              newTarget: hyperlinkTargetFromHref(href),
+            });
+            hyperlinkWasDeferred = isPromiseLike(operationResult);
+            const result = settleOperationResult(operationResult);
+            if (!commandResultSucceeded(result.immediate)) return false;
+            results.push(result.immediate);
+            settledResults.push(result.settled);
+            hyperlinkResult = result.immediate;
+            committedHyperlinkResult = result.committed;
+            settledHyperlinkResult = result.settled;
+          } else if (existing) {
+            if (typeof patch !== 'function') return false;
+            const operationResult = callEditorMutation('hyperlinks.patch', patch, {
+              target: existing.address,
+              patch: { href },
+            });
+            hyperlinkWasDeferred = isPromiseLike(operationResult);
+            const result = settleOperationResult(operationResult);
+            if (!commandResultSucceeded(result.immediate)) return false;
+            results.push(result.immediate);
+            settledResults.push(result.settled);
+            hyperlinkResult = result.immediate;
+            committedHyperlinkResult = result.committed;
+            settledHyperlinkResult = result.settled;
+          }
+        } catch {
+          return false;
+        }
+        if (canReplaceText) {
+          const combineSettledLinkEdit = (
+            finalHyperlinkResult: CommandExecutionResult,
+            finalTextResult: CommandExecutionResult,
+          ): CommandExecutionResult => {
+            if (!commandResultSucceeded(finalTextResult)) {
+              return commandResultSucceeded(finalHyperlinkResult)
+                ? partialLinkEditFailure(finalHyperlinkResult, finalTextResult)
+                : finalTextResult;
+            }
+            return combineCommandResults([finalHyperlinkResult, finalTextResult]);
+          };
+          const replaceTextAfterHyperlinkCommit = (
+            finalHyperlinkResult: CommandExecutionResult,
+          ): Promise<CommandExecutionResult> | CommandExecutionResult => {
+            if (!commandResultSucceeded(finalHyperlinkResult)) return finalHyperlinkResult;
+            try {
+              const result = settleOperationResult(callEditorMutation('text.replace', replace, { target, text }));
+              if (!commandResultSucceeded(result.immediate)) {
+                return partialLinkEditFailure(finalHyperlinkResult, result.immediate);
+              }
+              return Promise.all([
+                settledHyperlinkResult ?? Promise.resolve(finalHyperlinkResult),
+                result.settled,
+              ]).then(([settledHyperlink, finalTextResult]) =>
+                combineSettledLinkEdit(settledHyperlink, finalTextResult),
+              );
+            } catch {
+              return partialLinkEditFailure(finalHyperlinkResult, false);
+            }
+          };
+          if (hyperlinkWasDeferred) {
+            pendingCommandSettlement = (committedHyperlinkResult ?? Promise.resolve(hyperlinkResult ?? false)).then(
+              replaceTextAfterHyperlinkCommit,
+            );
+            return combineCommandResults(results);
+          }
+          try {
+            const result = settleOperationResult(callEditorMutation('text.replace', replace, { target, text }));
+            if (!commandResultSucceeded(result.immediate)) {
+              return hyperlinkResult ? partialLinkEditFailure(hyperlinkResult, result.immediate) : result.immediate;
+            }
+            results.push(result.immediate);
+            settledResults.push(result.settled);
+            pendingCommandSettlement = Promise.all([
+              settledHyperlinkResult ?? Promise.resolve(hyperlinkResult ?? false),
+              result.settled,
+            ]).then(([finalHyperlinkResult, finalTextResult]) => {
+              return combineSettledLinkEdit(finalHyperlinkResult, finalTextResult);
+            });
+          } catch {
+            return hyperlinkResult ? partialLinkEditFailure(hyperlinkResult, false) : false;
+          }
+        }
+        if (!canReplaceText && settledResults.length > 0) {
+          pendingCommandSettlement = Promise.all(settledResults).then((settled) => combineCommandResults(settled));
+        }
+        return combineCommandResults(results);
+      }
+      // No active link + range selection + href → wrap the selected text.
+      if (typeof href === 'string' && href.trim() !== '') {
+        const normalizedHref = href.trim();
+        const wrap = trustedLinksApi?.wrap as AnyFn | undefined;
+        const wrapTargets = payloadTarget !== null ? textTargets : selectionTextAddresses(state.selection);
+        if (wrapTargets.length > 0) {
+          if (typeof wrap !== 'function') return false;
+          try {
+            return applyPerTextAddress('hyperlinks.wrap', wrap, wrapTargets, (target) => ({
+              target,
+              link: { destination: { href: normalizedHref } },
+            }));
+          } catch {
+            return false;
+          }
+        }
+        if (requestedTextTarget && !collapsedTextAddressFromTarget(requestedTextTarget)) return false;
+        const insert = trustedLinksApi?.insert as AnyFn | undefined;
+        const text = readLinkPayloadText(payload, normalizedHref);
+        if (typeof insert !== 'function' || text.trim() === '') return false;
+        const target = payloadTarget !== null ? caretTarget : collapsedTextAddressFromSelection(state.selection);
+        if (!target) return false;
+        try {
+          return callEditorMutation('hyperlinks.insert', insert, {
+            target,
+            text,
+            link: { destination: { href: normalizedHref } },
+          });
+        } catch {
+          return false;
+        }
+      }
+      return false;
+    };
+    const executeResolved = (
+      existing: LooseRecord | null,
+    ): {
+      immediate: unknown;
+      settled: Promise<CommandExecutionResult> | null;
+    } => {
+      const previousSettlement = pendingCommandSettlement;
+      pendingCommandSettlement = null;
+      try {
+        const immediate = executeMutation(existing);
+        return { immediate, settled: pendingCommandSettlement };
+      } finally {
+        pendingCommandSettlement = previousSettlement;
+      }
+    };
+    const finish = (existing: LooseRecord | null) => {
+      const result = executeResolved(existing);
+      pendingCommandSettlement = result.settled;
+      return result.immediate;
+    };
+    if (requestedHyperlinkTarget) return finish(null);
+    if (payloadTarget === null) return finish(resolveCurrentHyperlink(doc, linkSelection));
+    const blockIds = selectionBlockIds(linkSelection);
+    if (!canProbeEverySelectedBlock(blockIds) || typeof linksApi.list !== 'function') return false;
+    const commandEditor = getEditor(),
+      commandDocSource = commandEditor?.doc;
+    const commandMode = readDocumentMode(),
+      commandContent = contentToken();
+    const story = selectionStoryLocator(linkSelection);
+    try {
+      // A user command reads its explicit target now; passive toolbar read
+      // deferral must not turn an unknown hyperlink into a plain-text wrap.
+      const reads = blockIds.map((blockId) => linksApi.list({ within: paragraphTarget(blockId, story) }));
+      const validReports = (reports: unknown[]) =>
+        reports.every((report) => isLooseObject(report) && Array.isArray(report.items));
+      const existingFrom = (reports: unknown[]): LooseRecord | null => {
+        for (const report of reports) {
+          const items = isLooseObject(report) && Array.isArray(report.items) ? (report.items as LooseRecord[]) : [];
+          const hit = items.find((item) => hyperlinkOverlapsSelection(item, linkSelection));
+          if (hit) return hit;
+        }
+        return null;
+      };
+      if (!reads.some(isPromiseLike)) return validReports(reads) ? finish(existingFrom(reads)) : false;
+      return Promise.all(reads).then(
+        async (reports) => {
+          if (
+            disposed ||
+            getEditor() !== commandEditor ||
+            commandEditor?.doc !== commandDocSource ||
+            readDocumentMode() !== commandMode ||
+            contentToken() !== commandContent ||
+            !validReports(reports)
+          )
+            return false;
+          const result = executeResolved(existingFrom(reports));
+          return result.settled ? await result.settled : result.immediate;
+        },
+        () => false,
+      );
+    } catch {
+      return false;
     }
-    return false;
   };
 
   /** Route a create command (`create.table` / `create.image` / `create.tableOfContents`). */
@@ -9290,11 +9492,48 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     );
   };
 
+  const currentWholeTableParagraphSelection = (): boolean => {
+    const owner = wholeTableParagraphSeed,
+      host = getHost();
+    if (
+      !owner ||
+      disposed ||
+      owner.lifetime.aborted ||
+      owner.host !== host ||
+      owner.editor !== getEditor() ||
+      owner.editor.doc !== owner.doc ||
+      owner.sourceToken !== contentToken() ||
+      owner.mode !== readDocumentMode() ||
+      safeCall<unknown>(() => host?.getMountedHandle?.(), null) !== owner.mount
+    )
+      return false;
+    const tableId = owner.info.tableSelection?.tableId;
+    const activeTable = safeCall<unknown>(() => host?.getHandles?.().selection?.getWholeTableNodeId?.(), null);
+    if (
+      !tableId ||
+      activeTable !== tableId ||
+      state.selection.tableSelection?.type !== 'table' ||
+      state.selection.tableSelection.tableId !== tableId ||
+      selectionSignature(state.selection) !== selectionSignature(selectionSliceFromInfo(owner.info, 'ready'))
+    )
+      return false;
+    // This host read is available only at its current applied source/input
+    // frontier. A delayed quoted-text read does not invalidate that paragraph scope.
+    const applied = appliedSelectionPresentation(state.selection);
+    const info = normalizeSelectionInfo(applied?.selection);
+    return (
+      !!info &&
+      selectionInfoMatchesHost(info) &&
+      JSON.stringify(info.tableSelection) === JSON.stringify(owner.info.tableSelection)
+    );
+  };
+
   const commandSelectionIsReady = (id: string, descriptor: CommandDescriptor | null, payload: unknown): boolean => {
     const foreground = foregroundMutationState();
     // A cached painted caret can precede an already captured native range.
     // Resolve through the ordered worker reader before choosing range vs marks.
     if (foreground && (foreground.active > 0 || foreground.pending > 0)) return false;
+    if (descriptor?.blockParagraph && currentWholeTableParagraphSelection()) return true;
     if (state.selection.status !== 'ready') return false;
     const trackCommand = trackDecisionCommand(id);
     if (trackCommand?.scope === 'id') return true;
@@ -9325,16 +9564,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // An explicit change id is a complete target. Only a selection-derived
     // decision has to wait for the selection read to settle.
     if (trackCommand?.scope === 'id' && explicitTrackDecisionTarget(payload)) return false;
+    // Link popovers retain their own target after the live selection is gone.
+    if (descriptor?.link && linkPayloadHasExplicitTarget(payload)) return false;
     if (trackCommand?.scope !== 'id' && !descriptorNeedsFreshSelection(descriptor)) return false;
     return !commandSelectionIsReady(id, descriptor, payload);
   };
 
-  const prepareCommandSelectionAsync = (id: string, payload: unknown): Promise<void> | null => {
-    if (!commandNeedsFreshSelection(id, payload)) return null;
-    return readSelectionInfoFresh().then(() => undefined);
-  };
-
-  const executeCommandInternal = (id: string, payload?: unknown, context?: ViewportContext): CommandExecutionResult => {
+  const executeCommandInternal = (
+    id: string,
+    payload?: unknown,
+    context?: ViewportContext,
+    preparedSelection?: SelectionSlice,
+  ): CommandExecutionResult => {
     pendingCommandSettlement = null;
     lastCommandSettlement = Promise.resolve(false);
     if (disposed) return false;
@@ -9394,6 +9635,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     // selection or with an invalid payload rather than calling with a missing
     // target.
     if (descriptor.inline) {
+      const selection = preparedSelection ?? state.selection;
       // Word parity (SD-3274): mirrors the read-only guard above — fail closed
       // rather than let a style change silently no-op against locked content.
       //
@@ -9412,17 +9654,17 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       // during that same cold-read window) as a known limitation instead.
       const { lockModesById } = computeActiveContentControlLockModes(
         doc?.contentControls as LooseRecord | undefined,
-        state.selection,
+        selection,
       );
       if (contentControlLockReason(lockModesById)) return false;
-      const target = resolveInlineCommandTarget(state.selection);
+      const target = resolveInlineCommandTarget(selection);
       // Pending formatting belongs to a resolved collapsed text caret.
       // Missing or unresolved selections must not arm the next insertion.
       if (!target) {
-        if (!canStorePendingInlineFormat(state.selection)) return settleCommandExecution(false);
-        return settleCommandExecution(storePendingInlineFormat(descriptor, normalized));
+        if (!canStorePendingInlineFormat(selection)) return settleCommandExecution(false);
+        return settleCommandExecution(storePendingInlineFormat(descriptor, normalized, selection));
       }
-      const active = commandActiveState(descriptor, doc, state.selection);
+      const active = commandActiveState(descriptor, doc, selection);
       // One `format.*` call regardless of paragraph count: a cross-block
       // selection passes the host's original `selectionTarget` through and the
       // v2 adapter resolves it centrally into one multi-range transaction
@@ -9432,7 +9674,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
       if (!input) return false;
       // A queued toggle must retain the accepted scope even when the user
       // moves the caret or selects a different cell rectangle before paint.
-      const commandSelection = state.selection;
+      const commandSelection = selection;
       const tableCellSelection = tableCellSelectionForTarget(target);
       let releaseScheduledMutation: (() => void) | null = null;
       try {
@@ -9448,15 +9690,15 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
             return false;
           return callInlineFormatMutation(route, op, input, commandSelection, tableCellSelection);
         };
-        const selectionSignature = selectionInlineValueSignature(state.selection) ?? selectionKey(state.selection);
+        const selectionSignature = selectionInlineValueSignature(selection) ?? selectionKey(selection);
         const scheduledMutation =
           descriptor.inline.kind === 'toggle'
             ? scheduleInlineToggleMutation(`${descriptor.id}:${selectionSignature}`, mutate)
             : null;
         releaseScheduledMutation = scheduledMutation?.release ?? null;
         const mutationResult = scheduledMutation ? scheduledMutation.result : mutate();
-        const optimisticGeneration = captureOptimisticInlineToggle(descriptor, state.selection, input, mutationResult);
-        const result = decorateInlineCommandResult(descriptor, state.selection, input, mutationResult);
+        const optimisticGeneration = captureOptimisticInlineToggle(descriptor, selection, input, mutationResult);
+        const result = decorateInlineCommandResult(descriptor, selection, input, mutationResult);
         const immediate = settleCommandExecution(result, (settled) => {
           settleOptimisticInlineToggle(descriptor, optimisticGeneration, settled);
           releaseScheduledMutation?.();
@@ -9473,6 +9715,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     }
     // Block-level paragraph / list / link / create commands resolve their target
     // and context from the live selection rather than forwarding the raw payload.
+    if ((descriptor.blockParagraph || descriptor.list) && hasInactiveTextSelection()) return false;
     if (descriptor.blockParagraph) {
       const result = executeBlockParagraph(descriptor, op, normalized);
       const optimisticAlignmentGeneration =
@@ -9539,16 +9782,17 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     payload: unknown,
     context: ViewportContext | undefined,
     firstParty: boolean,
+    preparedSelection?: SelectionSlice,
   ): CommandExecutionResult => {
     const actionId = beginInteraction(superdoc, 'command:started', () => ({
       commandId: id,
-      selection: state.selection,
+      selection: preparedSelection ?? state.selection,
     }));
     let result: CommandExecutionResult;
     const previousCommandDoc = firstPartyCommandDoc;
     firstPartyCommandDoc = firstParty && !customCommands.has(id) ? createFirstPartyCommandDoc() : undefined;
     try {
-      result = executeCommandInternal(id, payload, context);
+      result = executeCommandInternal(id, payload, context, preparedSelection);
     } catch (error) {
       recordInteraction(superdoc, 'command:settled', () => ({ actionId, commandId: id, outcome: 'threw' }));
       throw error;
@@ -10058,17 +10302,70 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     payload: unknown,
     context: ViewportContext | undefined,
     firstParty: boolean,
+    requireEnabled = false,
   ): Promise<CommandExecutionResult> => {
-    const prepared = prepareCommandSelectionAsync(id, payload);
-    const settlement = prepared
-      ? prepared.then(() => {
-          runCommand(id, payload, context, firstParty);
-          return lastCommandSettlement;
-        })
-      : (() => {
-          runCommand(id, payload, context, firstParty);
-          return lastCommandSettlement;
-        })();
+    const editor = getEditor();
+    const doc = editor?.doc;
+    const mode = readDocumentMode();
+    const host = editor?.host as LooseRecord | undefined;
+    const reader =
+      firstParty && getCommandDescriptor(id)?.inline?.kind === 'toggle' && !customCommands.has(id) && host
+        ? firstPartyCommandMutations.get(superdoc)?.get(host)?.selectionReader?.capture()
+        : null;
+    let rawSelection: unknown;
+    const needsSelection = !!reader || commandNeedsFreshSelection(id, payload);
+    const execute = () => {
+      // Ordered reads participate in the same admitted task as their mutation.
+      const prepared = reader
+        ? reader.read().then(
+            (raw) => {
+              rawSelection = raw;
+              const info = reader.isCurrent(raw) ? normalizeSelectionInfo(raw) : null;
+              return selectionSliceFromInfo(info, info ? 'ready' : 'pending');
+            },
+            () => selectionSliceFromInfo(null, 'pending'),
+          )
+        : needsSelection
+          ? readSelectionInfoFresh()
+          : null;
+      return prepared
+        ? prepared.then((selection) => {
+            if (
+              disposed ||
+              getEditor() !== editor ||
+              editor?.doc !== doc ||
+              readDocumentMode() !== mode ||
+              selection.status !== 'ready' ||
+              (reader && !reader.isCurrent(rawSelection))
+            )
+              return false;
+            if (requireEnabled) {
+              const command = computeCommandState(id, getDoc(), selection, projectSelectionInlineValues(selection));
+              if (!command.supported || !command.enabled) return false;
+            }
+            runCommand(id, payload, context, firstParty, selection);
+            return lastCommandSettlement;
+          })
+        : (() => {
+            if (requireEnabled) {
+              const command = computeCommandState(
+                id,
+                getDoc(),
+                state.selection,
+                projectSelectionInlineValues(state.selection),
+              );
+              if (!command.supported || !command.enabled) return false;
+            }
+            runCommand(id, payload, context, firstParty);
+            return lastCommandSettlement;
+          })();
+    };
+    const runForeground = host?.runForegroundInteraction;
+    const lifetime = safeCall<AbortSignal | undefined>(() => host?.getForegroundInteractionLifetime?.(), undefined);
+    const settlement =
+      needsSelection && typeof runForeground === 'function'
+        ? (Promise.resolve(runForeground.call(host, execute, lifetime)) as Promise<CommandExecutionResult>)
+        : Promise.resolve(execute());
     if (getCommandDescriptor(id)?.inline?.kind === 'toggle') {
       lastInlineToggleCommandSettlement = settlement;
     }
@@ -10079,8 +10376,11 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     payload?: unknown,
     context?: ViewportContext,
   ): Promise<CommandExecutionResult> => runCommandAsync(id, payload, context, false);
-  const executeFirstPartyCommandAsync = (id: string, payload?: unknown): Promise<CommandExecutionResult> =>
-    runCommandAsync(id, payload, undefined, true);
+  const executeFirstPartyCommandAsync = (
+    id: string,
+    payload?: unknown,
+    requireEnabled = false,
+  ): Promise<CommandExecutionResult> => runCommandAsync(id, payload, undefined, true, requireEnabled);
 
   const makeCommandHandle = <Id extends string>(id: Id): CommandHandle<Id> => ({
     id,
@@ -12190,6 +12490,10 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     getContextAsync: async () => {
       for (let attempt = 0; attempt < 2; attempt += 1) {
         const token = selectionReadToken();
+        const editor = getEditor(),
+          doc = editor?.doc,
+          content = contentToken(),
+          mode = readDocumentMode();
         const host = getHost();
         const read = host?.getTableContextAsync;
         if (typeof read !== 'function') return publicTableContext(readHostTableContext());
@@ -12200,9 +12504,29 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
           return { ...EMPTY_TABLE_CONTEXT, status: 'pending' };
         }
         if (disposed) return { ...EMPTY_TABLE_CONTEXT, status: 'pending' };
-        if (token !== selectionReadToken() || host !== getHost()) continue;
+        if (
+          host !== getHost() ||
+          editor !== getEditor() ||
+          doc !== getEditor()?.doc ||
+          content !== contentToken() ||
+          mode !== readDocumentMode()
+        )
+          continue;
         const context = publicTableContext(snapshot);
         if (context.status === 'stale') continue;
+        if (token !== selectionReadToken()) {
+          // Queued selection paints can catch up while an ordered worker read
+          // resolves. Accept it only when current fenced facts prove the same context.
+          const appliedSnapshot = readHostTableContext();
+          if (appliedSnapshot?.status !== 'ready') continue;
+          const applied = publicTableContext(appliedSnapshot);
+          if (
+            context.status !== 'ready' ||
+            applied.status !== 'ready' ||
+            JSON.stringify(context) !== JSON.stringify(applied)
+          )
+            continue;
+        }
         return context;
       }
       return { ...EMPTY_TABLE_CONTEXT, status: 'stale' };

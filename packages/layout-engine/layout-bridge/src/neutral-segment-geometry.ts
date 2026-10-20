@@ -1,3 +1,5 @@
+import type { FontMeasureContext } from '@superdoc/font-system';
+import { canMeasureVisualBidi, measureVisualBidiLine, type MeasuredVisualBidiLine } from './visual-bidi-geometry.js';
 /**
  * Editor-neutral measured segment-geometry readback (Phase 1 / 001).
  *
@@ -587,3 +589,115 @@ const buildParaFragmentGeometry = (
     ...(diagnostics.length > 0 ? { diagnostics } : {}),
   };
 };
+
+export interface MeasuredVisualBidiFragment {
+  readonly geometry: NeutralFragmentGeometry;
+  readonly block: ParagraphBlock;
+  readonly measure: ParagraphMeasure;
+  readonly lines: ReadonlyMap<number, MeasuredVisualBidiLine>;
+}
+
+/** Private supplement; the frozen neutral readback keeps its unsupported diagnostic. */
+export function measureVisualBidiFragment(input: {
+  base: NeutralFragmentGeometry;
+  fragment: ParaFragment;
+  block: ParagraphBlock;
+  measure: ParagraphMeasure;
+  pageTopY: number;
+  fontContext: FontMeasureContext;
+}): MeasuredVisualBidiFragment | null {
+  const { base, fragment, block, measure, pageTopY, fontContext } = input;
+  const identity = buildLayoutSourceIdentityForFragment(fragment, bodyStoryLocator());
+  if (
+    !canMeasureVisualBidi(block) ||
+    fragment.blockId !== block.id ||
+    base.blockRef !== block.id ||
+    base.fragmentKind !== 'para' ||
+    base.story.kind !== 'body' ||
+    !base.diagnostics?.length ||
+    base.diagnostics.some(
+      (diagnostic) => diagnostic.code !== 'unsupported-direction' && diagnostic.code !== 'unsupported-complex-bidi',
+    ) ||
+    block.sourceAnchor?.sourceRef?.partUri !== '/word/document.xml' ||
+    JSON.stringify(base.identity) !== JSON.stringify(identity) ||
+    base.fragmentId !== identity.fragmentId ||
+    !block.sourceAnchor?.sourceRef ||
+    JSON.stringify(fragment.sourceAnchor) !== JSON.stringify(block.sourceAnchor) ||
+    JSON.stringify(base.sourceAnchor) !== JSON.stringify(block.sourceAnchor) ||
+    fragment.lines?.length ||
+    fragment.markerWidth ||
+    measure.marker?.markerWidth ||
+    !Number.isSafeInteger(base.pageIndex) ||
+    base.pageIndex! < 0 ||
+    !Number.isFinite(pageTopY) ||
+    base.bounds.x !== fragment.x ||
+    base.bounds.y !== fragment.y + pageTopY ||
+    base.bounds.width !== fragment.width ||
+    fragment.fromLine < 0 ||
+    fragment.toLine > measure.lines.length ||
+    fragment.fromLine >= fragment.toLine
+  )
+    return null;
+  const built = buildParagraphLineGeometry(
+    block,
+    fragment,
+    measure.lines,
+    fragment.fromLine,
+    fragment.toLine,
+    fragment.fromLine,
+    fragment.y + pageTopY,
+    0,
+    undefined,
+    false,
+    'rtl',
+  );
+  const ownerSignature = JSON.stringify({
+    base,
+    fragment,
+    lines: measure.lines.slice(fragment.fromLine, fragment.toLine),
+  });
+  const ownerCurrent = () =>
+    JSON.stringify({ base, fragment, lines: measure.lines.slice(fragment.fromLine, fragment.toLine) }) ===
+    ownerSignature;
+  const mapped = new Map<number, MeasuredVisualBidiLine>();
+  for (const geometry of built.lines) {
+    const line = measure.lines[geometry.lineIndex]!;
+    const availableWidth = resolveAvailableWidth(
+      block,
+      line,
+      fragment.width,
+      geometry.lineIndex === fragment.fromLine && !fragment.continuesFromPrev,
+      false,
+      undefined,
+    );
+    const alignment = block.attrs?.alignment ?? 'right';
+    const unaligned = {
+      ...geometry,
+      contentLeft:
+        geometry.contentLeft -
+        (alignment === 'justify' ? 0 : resolveAlignmentOffset(alignment, availableWidth, line.width)),
+    };
+    const result = measureVisualBidiLine({
+      block,
+      line,
+      geometry: unaligned,
+      availableWidth,
+      fontContext,
+      ownerCurrent,
+    });
+    if (!result) return null;
+    mapped.set(geometry.lineIndex, result);
+  }
+  if (mapped.size !== fragment.toLine - fragment.fromLine) return null;
+  return Object.freeze({
+    block,
+    measure,
+    lines: mapped,
+    geometry: Object.freeze({
+      ...base,
+      bounds: { ...base.bounds, height: built.height },
+      lines: [...mapped.values()].map((line) => line.geometry),
+      diagnostics: undefined,
+    }),
+  });
+}

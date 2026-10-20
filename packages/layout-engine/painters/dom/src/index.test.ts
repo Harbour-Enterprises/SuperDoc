@@ -3605,7 +3605,7 @@ describe('DomPainter', () => {
             scope: 'inline',
             id: 'sc-hidden-1',
             tag: 'citation',
-            alias: 'Harvey citation',
+            alias: 'Citation label',
             appearance: 'hidden',
           },
         },
@@ -3660,7 +3660,7 @@ describe('DomPainter', () => {
     // textContent of the wrapper must equal exactly the wrapped phrase,
     // with no alias text leaked in.
     expect(wrapper.textContent).toBe('Alpha Corp v. SEC');
-    expect(wrapper.textContent).not.toContain('Harvey citation');
+    expect(wrapper.textContent).not.toContain('Citation label');
   });
 
   it('renders a visible wrapper for an empty inline SDT placeholder', () => {
@@ -8699,6 +8699,15 @@ describe('DomPainter', () => {
     expect(lineEl?.dataset.layoutStory).toBe('textbox:tb0');
     expect(lineEl?.dataset.layoutBlockRef).toBe('textbox-paragraph-lines');
     expect(lineEl?.dataset.layoutFragmentId).toBe('textbox:tb0|textbox-paragraph-lines|para:0:1');
+    for (const line of lineEls) {
+      expect(
+        Array.from(mount.querySelectorAll<HTMLElement>('[data-layout-fragment-id]')).filter(
+          (element) => element.dataset.layoutFragmentId === line.dataset.layoutFragmentId,
+        ),
+      ).toEqual([line]);
+      expect(line.parentElement?.dataset.layoutBlockRef).toBe(line.dataset.layoutBlockRef);
+      expect(line.parentElement?.dataset.layoutStory).toBe(line.dataset.layoutStory);
+    }
     expect(lineEl?.dataset.sourceNodeId).toBe('textbox-para-node');
     expect(shapeEl?.querySelector('.superdoc-paragraph-marker')?.textContent).toBe('(A)');
     expect(lineEl?.style.paddingLeft).toBe('24px');

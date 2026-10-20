@@ -3104,6 +3104,7 @@ export const useCommentsStore = defineStore('comments', () => {
             .filter(Boolean),
         );
         patch(() => {
+          const previousPreparedPresentation = committedReviewPresentations.value[normalizedDocumentId] ?? null;
           if (preparedReview?.presentation)
             committedReviewPresentations.value = {
               ...committedReviewPresentations.value,
@@ -3115,6 +3116,8 @@ export const useCommentsStore = defineStore('comments', () => {
             documentId: normalizedDocumentId,
             items: trackedChangeItems,
             preparedParams,
+            preparedPresentation: preparedReview?.presentation ?? null,
+            previousPreparedPresentation,
             pruneStale: false,
           });
           reconcileCommentsFromV2({
@@ -4467,6 +4470,15 @@ export const useCommentsStore = defineStore('comments', () => {
 
       const comment = commentsList.value.find((row) => matchesRemapSource(row, fromId));
       if (!comment) continue;
+      // Worker publications own stable row/thread keys and advance canonical
+      // decision identities together. A receipt must not rename that row first.
+      const presentation = committedReviewPresentations.value[normalizedDocumentId];
+      if (
+        normalizeCommentId(comment.fileId) === normalizedDocumentId &&
+        presentation &&
+        Object.prototype.hasOwnProperty.call(presentation.rowVersions ?? {}, String(comment.commentId))
+      )
+        continue;
 
       const previousCommentId = normalizeCommentId(comment.commentId);
       const previousCanonicalId = normalizeCommentId(comment.trackedChangeCanonicalId);
@@ -4947,6 +4959,8 @@ export const useCommentsStore = defineStore('comments', () => {
     items,
     pruneStale = true,
     preparedParams = null,
+    preparedPresentation = null,
+    previousPreparedPresentation = null,
     liveIds: suppliedLiveIds = null,
     liveAnchorKeys: suppliedLiveAnchorKeys = null,
     hydrationGeneration,
@@ -4981,6 +4995,39 @@ export const useCommentsStore = defineStore('comments', () => {
         try {
           for (const params of paramsList) {
             if (!params) continue;
+            if (preparedPresentation) {
+              if (preparedPresentation !== committedReviewPresentations.value[String(effectiveDocumentId)]) continue;
+              if (params.documentId != null && String(params.documentId) !== String(effectiveDocumentId)) continue;
+              const id = normalizeCommentId(params.changeId);
+              const version = preparedPresentation.rowVersions?.[id];
+              if (!id || !Number.isSafeInteger(version) || version < 1) continue;
+              const existing = [...trackedChangeIdentityIndex.candidates({ changeId: id })].filter(
+                (row) => String(row.fileId) === String(effectiveDocumentId) && String(row.commentId) === id,
+              );
+              if (existing.length > 1) continue;
+              const row = existing[0];
+              if (row && row.trackedChangeCanonicalId !== params.trackedChangeCanonicalId) {
+                const previousVersion = previousPreparedPresentation?.rowVersions?.[id];
+                if (
+                  !row.trackedChange ||
+                  params.event !== 'add' ||
+                  typeof params.trackedChangeCanonicalId !== 'string' ||
+                  !params.trackedChangeCanonicalId ||
+                  !Number.isSafeInteger(previousVersion) ||
+                  previousVersion < 1 ||
+                  version <= previousVersion ||
+                  getTrackedChangeStoryKey(row) !==
+                    parseTrackedChangeAnchorKey(params.trackedChangeAnchorKey)?.storyKey ||
+                  row.trackedChangeType !== params.trackedChangeType ||
+                  row.trackedChangeDisplayType !== params.trackedChangeDisplayType
+                )
+                  continue;
+                // This publication owns the stable row and its newer canonical
+                // decision identity; generic alias refresh keeps its strict guard.
+                row.trackedChangeCanonicalId = params.trackedChangeCanonicalId;
+                row.updateIdentityValues?.({ trackedChangeCanonicalId: params.trackedChangeCanonicalId });
+              }
+            }
             // TCS Phase 0 / 005 §5: adapters may surface canonical v2 types that
             // do not map to a Phase 0 dialog variant (`move` / `structural` /
             // unknown). They return `{ event: 'omit', reason }` so callers can

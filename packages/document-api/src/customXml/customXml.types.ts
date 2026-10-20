@@ -41,7 +41,7 @@ export type CustomXmlPartTarget = { id: CustomXmlPartId } | { partName: string }
 export interface CustomXmlPartsListInput {
   /**
    * Filter by the XML namespace of the Storage Part's root element
-   * (e.g. `<harveyRefs xmlns="urn:harvey:refs:1"/>` → `'urn:harvey:refs:1'`).
+   * (e.g. `<exampleRefs xmlns="urn:example:refs:1"/>` → `'urn:example:refs:1'`).
    *
    * Distinct from `schemaRef`: this is what the *data* declares; schemaRef
    * is what the Properties Part declares as the associated XML schema's

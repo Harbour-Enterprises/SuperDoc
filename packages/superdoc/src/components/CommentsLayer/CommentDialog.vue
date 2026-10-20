@@ -1,3 +1,8 @@
+<script>
+// The shared composer can move between dialog instances while a mutation settles.
+const commentEditSessions = new WeakMap();
+</script>
+
 <script setup>
 import { computed, ref, getCurrentInstance, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { storeToRefs } from 'pinia';
@@ -56,6 +61,12 @@ const props = defineProps({
 const { proxy } = getCurrentInstance();
 const superdocStore = useSuperdocStore();
 const commentsStore = useCommentsStore();
+const editSessionOwner = {};
+const retireOwnEditSession = () => {
+  if (commentEditSessions.get(commentsStore)?.owner === editSessionOwner) {
+    commentEditSessions.delete(commentsStore);
+  }
+};
 
 /* Comments store refs */
 const {
@@ -1197,6 +1208,7 @@ const handleOverflowSelect = (value, comment) => {
 
   switch (value) {
     case 'edit':
+      commentEditSessions.set(commentsStore, { owner: editSessionOwner, submission: null });
       currentCommentText.value = comment?.commentText?.value ?? comment?.commentText ?? '';
       currentCommentMentions.value = Array.isArray(comment?.mentions) ? [...comment.mentions] : [];
       activeComment.value = props.comment.commentId;
@@ -1224,12 +1236,35 @@ const handleCommentUpdate = async (comment) => {
   // dispatch / refresh fails. The dialog only owns `editingCommentId` and
   // text input; we keep both intact on rejection so the user can retry.
   if (isV2Mode.value && v2CommentsAdapter.value) {
+    const session = commentEditSessions.get(commentsStore);
+    const submission = Symbol('comment-edit-submission');
+    if (session?.owner === editSessionOwner) session.submission = submission;
+    const editor = proxy.$superdoc.activeEditor;
+    const adapter = editor.v2Comments;
+    const documentId = adapter.documentId;
+    const document = editor.doc;
+    const thread = props.comment;
+    const draft = currentCommentText.value;
     const outcome = await commentsStore.editCommentV2({
       superdoc: proxy.$superdoc,
       commentId: comment.commentId,
-      text: currentCommentText.value,
+      text: draft,
     });
     if (!outcome?.ok) return outcome;
+    if (
+      session?.owner !== editSessionOwner ||
+      commentEditSessions.get(commentsStore) !== session ||
+      session.submission !== submission ||
+      proxy.$superdoc.activeEditor !== editor ||
+      editor.v2Comments !== adapter ||
+      adapter.documentId !== documentId ||
+      editor.doc !== document ||
+      props.comment !== thread ||
+      editingCommentId.value !== comment.commentId ||
+      currentCommentText.value !== draft
+    )
+      return outcome;
+    retireOwnEditSession();
     editingCommentId.value = null;
     removePendingComment(proxy.$superdoc);
     return outcome;
@@ -1265,6 +1300,7 @@ const getProcessedDate = (timestamp) => {
 };
 
 const handleCancel = (comment) => {
+  retireOwnEditSession();
   editingCommentId.value = null;
   isReplying.value = false;
   cancelComment(proxy.$superdoc);
@@ -1303,6 +1339,7 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  retireOwnEditSession();
   proxy.$superdoc?.off?.('active-editor-change', refreshActiveEditor);
 });
 
