@@ -30,6 +30,10 @@
 // them) keeps `superdoc/ui` structurally identical to `@superdoc/document-api`.
 export type {
   Receipt,
+  DocumentApiRejectionReason,
+  DocumentApiRejectionDetails,
+  TextRangeRejectionReason,
+  ContentControlCreationRejectionReason,
   SelectionInfo,
   SelectionTarget,
   SelectionPoint,

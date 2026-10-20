@@ -25,6 +25,7 @@
  */
 
 export { createSuperDocUI } from './ui/create-super-doc-ui.js';
+export { getDocumentApiRejectionReason } from './ui/rejection-reasons.js';
 export { shallowEqual } from './ui/equality.js';
 export { BUILT_IN_COMMAND_IDS } from './ui/commands.js';
 
@@ -148,6 +149,10 @@ export type {
   PartialBrowserDocumentApi,
   DocumentApi,
   Receipt,
+  DocumentApiRejectionReason,
+  DocumentApiRejectionDetails,
+  TextRangeRejectionReason,
+  ContentControlCreationRejectionReason,
   SelectionInfo,
   SelectionTarget,
   SelectionPoint,

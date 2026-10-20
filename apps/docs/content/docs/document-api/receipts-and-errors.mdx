@@ -91,6 +91,54 @@ Use the code to select a bounded recovery path:
 
 Not every operation can return every code. Use the generated operation reference when implementing operation-specific recovery.
 
+### Read a structured refusal reason
+
+Known V2 text-range refusals add a stable `failure.details.reason`. Use the
+public helper and types from `superdoc/ui` (also exported by
+`@superdoc/document-api`) instead of parsing the human-readable message:
+
+```ts
+import { getDocumentApiRejectionReason } from 'superdoc/ui';
+
+const reason = getDocumentApiRejectionReason(receipt.failure?.details);
+if (reason === 'text-range-in-sdt') {
+  // Ask the caller to choose editable content.
+}
+```
+
+| Reason                                         | Identified refusal                                                                                             |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `text-range-in-sdt`                            | The refused text range intersects a locked or non-editable content control.                                    |
+| `text-range-in-field`                          | The refused range intersects unsupported field-backed content.                                                 |
+| `text-range-in-unsupported-tracked-wrapper`    | The refused range intersects an unsupported tracked wrapper.                                                   |
+| `content-control-unsupported-inline-structure` | Inline content-control creation cannot wrap or replace the selected structure.                                 |
+| `content-control-shared-run-boundary`          | Inline content-control creation cannot resolve the caret inside a shared run; choose a supported run boundary. |
+
+`DocumentApiRejectionReason`, `TextRangeRejectionReason`,
+`ContentControlCreationRejectionReason`, and `DocumentApiRejectionDetails` describe
+these values. Existing top-level codes and messages remain unchanged, including
+`CAPABILITY_UNAVAILABLE` for these creation refusals. This metadata does not
+change which edits are permitted.
+
+Read `check.failure.details` from `capabilities.check`, or `receipt.failure.details`
+from a mutation receipt. The CLI-backed Node SDK promotes a failed receipt to
+`SuperDocCliError`: its public failure is nested at `error.details.failure`, so
+pass `error.details.failure.details` to the helper after narrowing the unknown
+error and details objects. The SDK outer code can differ from the nested failure
+code. Document-host SDK calls that return receipts use the receipt path.
+
+A reason may be absent when the failure is unrelated or the runtime cannot
+identify one of these exact contexts. For example, rich HTML/Markdown replacement
+may return `INVALID_TARGET` / `paste-target-unsupported` where plain-text
+replacement identifies an SDT or tracked wrapper. `capabilities.check` accepts
+rich inputs only; it cannot preflight the plain-text replacement shape. Preserve
+that distinction. Supported edits, including wrapping existing text across a
+proofing marker, remain supported; supplying replacement content follows a
+different creation path and can still refuse at that marker.
+
+The helper returns `undefined` for absent, unrelated, or unrecognized details.
+Continue to handle the existing failure code in that case.
+
 ## 4. Retry state drift once
 
 When a revision or target is stale, run the original query again and review its current result before retrying. Limit automatic retries to one. A repeated state-drift failure usually means another writer is active or the workflow is targeting unstable content.

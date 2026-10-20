@@ -72,6 +72,38 @@ export type ReceiptFailureCode =
   | 'UNSUPPORTED_SOURCE'
   | 'INVALID_PACKAGE'
   | 'UNSUPPORTED_TEMPLATE_CONTENT';
+/** Known refusals for a text range whose underlying context is identified. */
+export type TextRangeRejectionReason =
+  | 'text-range-in-sdt'
+  | 'text-range-in-field'
+  | 'text-range-in-unsupported-tracked-wrapper';
+
+/** Content-control creation keeps its existing top-level failure code. */
+export type ContentControlCreationRejectionReason =
+  | 'content-control-unsupported-inline-structure'
+  | 'content-control-shared-run-boundary';
+
+export type DocumentApiRejectionReason = TextRangeRejectionReason | ContentControlCreationRejectionReason;
+
+export interface DocumentApiRejectionDetails extends Record<string, unknown> {
+  reason: DocumentApiRejectionReason;
+}
+
+/** Read a known failure.details.reason without assuming every failure has one. */
+export function getDocumentApiRejectionReason(details: unknown): DocumentApiRejectionReason | undefined {
+  if (typeof details !== 'object' || details === null || !('reason' in details)) return undefined;
+  switch (details.reason) {
+    case 'text-range-in-sdt':
+    case 'text-range-in-field':
+    case 'text-range-in-unsupported-tracked-wrapper':
+    case 'content-control-unsupported-inline-structure':
+    case 'content-control-shared-run-boundary':
+      return details.reason;
+    default:
+      return undefined;
+  }
+}
+
 export type ReceiptFailure = {
   code: ReceiptFailureCode;
   message: string;
