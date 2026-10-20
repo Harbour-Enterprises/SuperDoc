@@ -94,9 +94,11 @@ export type TextRewriteStep = {
     caseHandling?: 'exact' | 'preserve-match';
     /**
      * Style policy for the replacement text.
-     * When omitted, defaults to preserve mode:
-     *   inline: { mode: 'preserve', onNonUniform: 'majority' }
+     * When omitted, uses the native preserve policy:
+     *   inline: { mode: 'preserve' }
      *   paragraph: { mode: 'preserve' }
+     * Explicit mark changes, uniformity requirements, and nonuniform-run
+     * strategies are unsupported and rejected before mutation.
      */
     style?: StylePolicy;
   };
