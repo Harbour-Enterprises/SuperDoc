@@ -1034,6 +1034,7 @@ export const OPERATION_DEFINITIONS = {
       possibleFailureCodes: [
         'INVALID_TARGET',
         'NO_OP',
+        'LOCK_VIOLATION',
         'INVALID_NESTING',
         'INVALID_PLACEMENT',
         'INVALID_PAYLOAD',
@@ -1079,7 +1080,13 @@ export const OPERATION_DEFINITIONS = {
       idempotency: 'conditional',
       supportsDryRun: true,
       trackedSupport: 'always',
-      possibleFailureCodes: ['NO_OP'],
+      possibleFailureCodes: [
+        'NO_OP',
+        'LOCK_VIOLATION',
+        'CAPABILITY_UNAVAILABLE',
+        'PRECONDITION_FAILED',
+        'REVISION_MISMATCH',
+      ],
       throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT', ...T_STORY],
       returnsReceipt: true,
     }),

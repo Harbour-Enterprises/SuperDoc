@@ -19,6 +19,23 @@ const EFFECTS: ReceiptEffects = {
 };
 
 describe('receipt-bridge: failure code mapping', () => {
+  it('preserves content-control lock failures and the existing capability mapping', () => {
+    for (const [source, projected] of [
+      ['LOCK_VIOLATION', 'LOCK_VIOLATION'],
+      ['CAPABILITY_UNAVAILABLE', 'CAPABILITY_UNSUPPORTED'],
+    ] as const) {
+      const receipt = textReceiptToSDReceipt({
+        success: false,
+        failure: { code: source, message: source },
+        resolution: {
+          target: { kind: 'text', blockId: '', range: { start: 0, end: 0 } },
+          range: { from: 0, to: 0 },
+          text: '',
+        },
+      });
+      expect(receipt).toMatchObject({ success: false, failure: { code: projected } });
+    }
+  });
   // Reproduces a real bug (reported against a live two-peer room on
   // superdoc@2.20.0, re-localized here): root `doc.replace`/`doc.insert`
   // under enforced document protection returned `INTERNAL_ERROR` instead of
