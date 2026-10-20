@@ -36,12 +36,12 @@
   ],
   "license": "AGPL-3.0",
   "dependencies": {
-    "superdoc": "workspace:2.25.0-next.18"
+    "superdoc": "workspace:2.25.0-next.19"
   },
   "peerDependencies": {
     "react": ">=16.8.0",
     "react-dom": ">=16.8.0",
-    "superdoc": "workspace:2.25.0-next.18"
+    "superdoc": "workspace:2.25.0-next.19"
   },
   "devDependencies": {
     "@testing-library/react": "catalog:",
