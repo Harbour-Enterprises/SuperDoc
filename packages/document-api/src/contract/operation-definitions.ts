@@ -1021,6 +1021,8 @@ export const OPERATION_DEFINITIONS = {
       'For explicit single-paragraph text selections, expectedText rejects mismatches with PRECONDITION_FAILED before mutation. ' +
       'Rich string path accepts HTML or Markdown plus a BlockNodeAddress, SelectionTarget, or ref. ' +
       'Structural path accepts the same locator forms plus SDFragment content. ' +
+      "A single-paragraph rich replacement may overlap pending insertions: tracked mode drops the covered part of your own insertion, nests a deletion inside another author's insertion, and adds the content as a new insertion; direct mode removes the covered part and leaves the rest pending. " +
+      'A tracked rich replacement spanning paragraphs that crosses a pending insertion, or a range that mixes pending insertions with comment, bookmark, field, or content-control markup, rejects without changes; capabilities.check reports the same result. ' +
       "An explicit {kind:'story', storyType:'body'} target replaces the complete main body in direct mode while preserving the destination DOCX package.",
     expectedResult:
       'Returns an SDMutationReceipt with applied status; receipt reports NO_OP if the target range already contains identical content.',
