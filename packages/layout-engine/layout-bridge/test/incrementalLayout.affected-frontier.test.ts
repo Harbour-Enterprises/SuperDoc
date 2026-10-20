@@ -3,6 +3,10 @@ import type { FlowBlock, Layout, Line, Measure, ParagraphBlock, ParagraphMeasure
 import { incrementalLayout, measureCache } from '../src/incrementalLayout.js';
 import { computeDirtyRegions } from '../src/diff.js';
 import { selectionToRects } from '../src/index.js';
+import {
+  createCanonicalPaginationSourceReader,
+  type CanonicalPaginationSourceSplice,
+} from '../../layout-engine/src/source-preparation.js';
 
 const options = {
   pageSize: { w: 200, h: 100 },
@@ -190,6 +194,113 @@ function geometry(layout: Layout): unknown {
     })),
   }));
 }
+
+describe('canonical pagination preparation lifecycle', () => {
+  beforeEach(() => measureCache.clear());
+
+  it('retains preparation through typing, Enter, Undo, and paragraph-range restoration', async () => {
+    const recipes = new WeakMap<object, CanonicalPaginationSourceSplice>();
+    const sources = new WeakSet<object>();
+    const reader = createCanonicalPaginationSourceReader(
+      (previous, current) => {
+        const recipe = recipes.get(current);
+        return recipe?.previous === previous ? recipe : null;
+      },
+      (source) => sources.has(source),
+    );
+    const measureRangeBlock = async (block: FlowBlock) => {
+      const measured = measureFor(block);
+      return { ...measured, totalHeight: 60, lines: measured.lines.map((line) => ({ ...line, lineHeight: 60 })) };
+    };
+    const measureBlock = Object.assign(measureRangeBlock, { paginationSourceOwner: reader });
+    let before = documentBlocks(60);
+    sources.add(before);
+    let previous = await incrementalLayout([], null, before, options, measureBlock);
+    const head = 8;
+    const original = before;
+    const typed = replaceParagraphText(before, head, `${before[head]!.runs[0]!.text}!`);
+    const split = [
+      ...typed.slice(0, head),
+      paragraph(typed[head]!.id, 'head', typed[head]!.runs[0]!.pmStart!),
+      paragraph('split-tail', 'tail', typed[head]!.runs[0]!.pmStart! + 20),
+      ...typed.slice(head + 1).map((block) => paragraph(block.id, block.runs[0]!.text, block.runs[0]!.pmStart! + 20)),
+    ];
+    const collapsed = [
+      ...typed.slice(0, head),
+      paragraph(typed[head]!.id, 'merged', typed[head]!.runs[0]!.pmStart!),
+      ...typed.slice(head + 4).map((block) => paragraph(block.id, block.runs[0]!.text, block.runs[0]!.pmStart! - 60)),
+    ];
+    const transitions = [
+      { name: 'typing', after: typed, deleteCount: 1, insertCount: 1, dirtyIds: [typed[head]!.id] },
+      { name: 'Enter', after: split, deleteCount: 1, insertCount: 2, dirtyIds: [typed[head]!.id, 'split-tail'] },
+      { name: 'Undo Enter', after: typed.slice(), deleteCount: 2, insertCount: 1, dirtyIds: [typed[head]!.id] },
+      { name: 'range collapse', after: collapsed, deleteCount: 4, insertCount: 1, dirtyIds: [typed[head]!.id] },
+      {
+        name: 'range restore',
+        after: typed.slice(),
+        deleteCount: 1,
+        insertCount: 4,
+        dirtyIds: typed.slice(head, head + 4).map((block) => block.id),
+      },
+      { name: 'Undo typing', after: original.slice(), deleteCount: 1, insertCount: 1, dirtyIds: [typed[head]!.id] },
+    ];
+    for (const transition of transitions) {
+      const { after, dirtyIds } = transition;
+      sources.add(after);
+      recipes.set(after, {
+        previous: before,
+        current: after,
+        authoredChangedBlockIds: dirtyIds,
+        replacements: [{ start: head, deleteCount: transition.deleteCount, insertCount: transition.insertCount }],
+      });
+      const oldIds = new Set(before.map((block) => block.id));
+      const newIds = new Set(after.map((block) => block.id));
+      const delta = transition.insertCount - transition.deleteCount;
+      const reuse = {
+        ...provedReuse(before, after, previous.layout),
+        allowBlockIdChurn: true,
+        previousBlockIndexById: new Map(before.map((block, index) => [block.id, index])),
+        dirtyBlockIds: dirtyIds,
+        blockIdRewrites: { previousToCurrent: new Map<string, string>(), currentToPrevious: new Map<string, string>() },
+        maxRelaidPages: 6,
+        provedDirtyRegion: {
+          firstDirtyIndex: head,
+          lastStableIndex: head - 1,
+          insertedBlockIds: after.filter((block) => !oldIds.has(block.id)).map((block) => block.id),
+          deletedBlockIds: before.filter((block) => !newIds.has(block.id)).map((block) => block.id),
+          changedBlockIds: dirtyIds,
+          stableBlockIds: new Set(after.filter((block) => !dirtyIds.includes(block.id)).map((block) => block.id)),
+        },
+        ...(delta === 0
+          ? {}
+          : { pmShift: { atChar: before[head + transition.deleteCount]!.runs[0]!.pmStart!, delta: delta * 20 } }),
+      };
+      const result = await incrementalLayout(
+        before,
+        previous.layout,
+        after,
+        options,
+        measureBlock,
+        undefined,
+        previous.measures,
+        undefined,
+        undefined,
+        reuse,
+      );
+      const cold = await incrementalLayout([], null, after.slice(), options, async (block) => measureRangeBlock(block));
+      expect(geometry(result.layout), transition.name).toEqual(geometry(cold.layout));
+      expect(result.measureReuse, transition.name).toMatchObject({
+        mode: 'proved-dirty-only',
+        blocksMeasured: dirtyIds.length,
+      });
+      expect(result.layoutReuse.mode, `${transition.name}: ${JSON.stringify(result.layoutReuse)}`).toBe('tail-splice');
+      expect(result.bridgeTiming.paginationPreparationRejection, transition.name).toBeUndefined();
+      expect(result.bridgeTiming.counters.paginationPreparationReuses, transition.name).toBe(1);
+      before = after;
+      previous = result;
+    }
+  });
+});
 
 describe('contiguous paragraph-range layout reuse', () => {
   beforeEach(() => measureCache.clear());

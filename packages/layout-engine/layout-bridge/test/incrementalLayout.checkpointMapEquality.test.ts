@@ -201,4 +201,170 @@ describe('incrementalLayout spliced checkpoint sidecar equality (plan 15)', () =
     );
     expect(current.layout.pageStartColumns).toEqual(cold.layout.pageStartColumns);
   });
+
+  const verifyStructuralCheckpointComposition = async (
+    count: number,
+    qualification: 'paired' | 'ordinary' | 'mismatched-token' | 'wrong-direction' | 'one-sided' = 'paired',
+  ): Promise<void> => {
+    const baseline = Array.from({ length: count }, (_, index) =>
+      paragraph(`n/main:body/P${index}/o${index}`, `text-${index}`, 1 + index * 20),
+    );
+    const head = Math.floor(count / 3);
+    const headId = baseline[head]!.id;
+    const tailId = `n/main:body/TAIL/o${head + 1}`;
+    const measureSingleLine = async (block: FlowBlock): Promise<Measure> => {
+      if (block.kind !== 'paragraph') throw new Error('unexpected');
+      return {
+        kind: 'paragraph',
+        lines: [
+          {
+            fromRun: 0,
+            fromChar: 0,
+            toRun: 0,
+            toChar: block.runs[0]!.text.length,
+            width: 100,
+            ascent: 90,
+            descent: 30,
+            lineHeight: 120,
+          },
+        ],
+        totalHeight: 120,
+      } as ParagraphMeasure;
+    };
+    let currentBlocks = baseline;
+    let current = await incrementalLayout([], null, currentBlocks, OPTIONS, measureSingleLine);
+    current.layout.layoutEpoch = 1;
+    for (let step = 0; step < (qualification === 'paired' ? 4 : 1); step++) {
+      const split = step % 2 === 0;
+      const text = baseline[head]!.runs[0]!.text;
+      const start = baseline[head]!.runs[0]!.pmStart!;
+      const nextBlocks = split
+        ? [
+            ...baseline.slice(0, head),
+            paragraph(headId, text.slice(0, 3), start),
+            paragraph(tailId, text.slice(3), start + 3),
+            ...baseline
+              .slice(head + 1)
+              .map((block, index) =>
+                paragraph(
+                  `n/main:body/P${head + index + 1}/o${head + index + 2}`,
+                  block.runs[0]!.text,
+                  block.runs[0]!.pmStart! + 20,
+                ),
+              ),
+          ]
+        : baseline;
+      const sourceStartIndex = head + (split ? 1 : 2);
+      const targetStartIndex = head + (split ? 2 : 1);
+      const token = {};
+      let identityEntriesVisited = 0;
+      class CountedIdentityMap extends Map<string, string> {
+        override *entries(): MapIterator<[string, string]> {
+          for (const entry of super.entries()) {
+            identityEntriesVisited++;
+            yield entry;
+          }
+        }
+        override [Symbol.iterator](): MapIterator<[string, string]> {
+          return this.entries();
+        }
+      }
+      const forward = new CountedIdentityMap(
+        currentBlocks
+          .slice(sourceStartIndex)
+          .map((block, index) => [block.id, nextBlocks[targetStartIndex + index]!.id] as const),
+      );
+      const reverse = new CountedIdentityMap([...Map.prototype.entries.call(forward)].map(([from, to]) => [to, from]));
+      for (const [map, direction] of [
+        [forward, 'previous-to-current'],
+        [reverse, 'current-to-previous'],
+      ] as const) {
+        if (qualification === 'ordinary' || (qualification === 'one-sided' && map === reverse)) continue;
+        Object.defineProperty(map, Symbol.for('superdoc.v2.structural-block-id-rewrite.v1'), {
+          value: Object.freeze({
+            version: 1,
+            token: qualification === 'mismatched-token' && map === reverse ? {} : token,
+            direction: qualification === 'wrong-direction' && map === reverse ? 'previous-to-current' : direction,
+            sourceStartIndex,
+            targetStartIndex,
+            localRewriteCount: 0,
+            sourceSize: currentBlocks.length,
+            targetSize: nextBlocks.length,
+          }),
+        });
+      }
+      const insertedBlockIds = split ? [tailId] : [];
+      const deletedBlockIds = split ? [] : [tailId];
+      const changedBlockIds = [headId, ...insertedBlockIds];
+      const reuse = {
+        ...buildReuse(currentBlocks, nextBlocks, current.layout, start + text.length),
+        allowBlockIdChurn: true,
+        previousBlockIndexById: new Map(currentBlocks.map((block, index) => [block.id, index])),
+        blockIdRewrites: { previousToCurrent: forward, currentToPrevious: reverse },
+        dirtyBlockIds: changedBlockIds,
+        provedDirtyRegion: {
+          firstDirtyIndex: head,
+          lastStableIndex: head - 1,
+          insertedBlockIds,
+          deletedBlockIds,
+          changedBlockIds,
+          stableBlockIds: new Set(
+            nextBlocks.filter((_, index) => index < head || index >= targetStartIndex).map((block) => block.id),
+          ),
+        },
+        pmShift: { atChar: currentBlocks[sourceStartIndex]!.runs[0]!.pmStart!, delta: split ? 20 : -20 },
+      };
+      const next = await incrementalLayout(
+        currentBlocks,
+        current.layout,
+        nextBlocks,
+        OPTIONS,
+        measureSingleLine,
+        undefined,
+        current.measures,
+        undefined,
+        undefined,
+        reuse,
+      );
+      expect(next.layoutReuse.mode, `step=${step}: ${JSON.stringify(next.layoutReuse)}`).toBe('tail-splice');
+      if (qualification === 'paired') {
+        expect(
+          identityEntriesVisited,
+          `step=${step}: qualified checkpoint construction must use local identity lookups`,
+        ).toBe(0);
+      } else {
+        expect(
+          identityEntriesVisited,
+          `${qualification}: generic checkpoint construction remains eager`,
+        ).toBeGreaterThan(0);
+      }
+      clearIncrementalModuleState();
+      const cold = await incrementalLayout([], null, nextBlocks, OPTIONS, measureSingleLine);
+      expect([...next.layout.pages], `step=${step}: complete geometry`).toEqual([...cold.layout.pages]);
+      expect(new Map(next.layout.blockResumeCheckpoints ?? []), `step=${step}: exact checkpoints`).toEqual(
+        new Map(cold.layout.blockResumeCheckpoints ?? []),
+      );
+      next.layout.layoutEpoch = step + 2;
+      currentBlocks = nextBlocks;
+      current = next;
+    }
+    if (qualification === 'paired') expect(currentBlocks).toBe(baseline);
+    const stats = __test_only_splicedCheckpointStats(current.layout.blockResumeCheckpoints);
+    expect(stats!.pieceCount).toBeLessThanOrEqual(4);
+    expect(stats!.sourceCount).toBeLessThanOrEqual(4);
+  };
+
+  it.each([64, 512])(
+    'keeps checkpoint identity composition local through repeated split and inverse merge in %i paragraphs',
+    async (count) => {
+      await verifyStructuralCheckpointComposition(count);
+    },
+  );
+
+  it.each(['ordinary', 'mismatched-token', 'wrong-direction', 'one-sided'] as const)(
+    'preserves eager checkpoint composition and cold parity for %s rewrite maps',
+    async (qualification) => {
+      await verifyStructuralCheckpointComposition(64, qualification);
+    },
+  );
 });

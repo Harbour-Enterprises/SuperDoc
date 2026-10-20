@@ -149,6 +149,17 @@ export default defineConfig(({ mode, command }) => {
   const skipDts = internalEsOnly || process.env.SUPERDOC_SKIP_DTS === '1';
   const stringDecoderEntry = stdlibRequire.resolve('string_decoder/lib/string_decoder.js');
   const plugins = [
+    {
+      name: 'superdoc-interaction-compile-hints',
+      apply: 'serve',
+      enforce: 'post',
+      transform(code, id) {
+        const file = id.split('?')[0];
+        if (v2Resolution.mode !== 'source' || !/\.[cm]?[jt]s$/.test(file)
+          || !(file.includes('/superdoc/v2/') || file.includes('/packages/layout-engine/'))) return null;
+        return { code: '//# allFunctionsCalledOnLoad\n' + code, map: null };
+      },
+    },
     // Vite can recover package provenance for optimized entries, but not shared
     // chunks. Keep external Vue in the bootstrap and opt-in host adapter only.
     {

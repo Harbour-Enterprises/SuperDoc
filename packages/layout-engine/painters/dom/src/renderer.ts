@@ -81,6 +81,7 @@ import {
   patchPage as patchPageContent,
   renderPage as renderPageContent,
   type PageContentContext,
+  type FragmentDomState,
   type PageDomState,
   type PaintWorkSummary,
   type PatchPageWork,
@@ -106,8 +107,13 @@ import {
 } from './styles.js';
 import { applyAlphaToSVG, applyGradientToSVG, createGradient, validateHexColor } from './svg-utils.js';
 import {
+  applyTableFragmentPatchWork,
+  planTableFragmentPatch,
   renderTableFragment as renderTableFragmentElement,
   renderTableFragmentWork,
+  type TableCellSourceIdentity,
+  type TableFragmentPatchInput,
+  type TableFragmentPatchResult,
   type TableRenderDependencies,
 } from './table/renderTableFragment.js';
 import { applyCellBorders } from './table/border-utils.js';
@@ -292,6 +298,8 @@ type PainterOptions = {
   contentControlsChrome?: 'default' | 'none';
   /** Per-document logical->physical font resolver (face-aware); see DomPainterOptions.resolvePhysical. */
   resolvePhysical?: (cssFontFamily: string, face: { weight: '400' | '700'; style: 'normal' | 'italic' }) => string;
+  /** In-place table patching cell identity; see DomPainterOptions.tableCellSourceIdentity. */
+  tableCellSourceIdentity?: TableCellSourceIdentity;
   /** Populate PaintWorkSummary's per-page index arrays (P5 §4.6). Dark by default; see DomPainterOptions.paintWorkAttribution. */
   paintWorkAttribution?: boolean;
   /** Story-aware position-coverage validation. Dark by default; see DomPainterOptions.positionValidation. */
@@ -2786,7 +2794,43 @@ export class DomPainter {
       updatePositionAttributes: (fragmentEl, mapping) => this.updatePositionAttributes(fragmentEl, mapping),
       updateFragmentElement: (el, fragment, section, resolvedItem) =>
         this.updateFragmentElement(el, fragment, section, resolvedItem),
+      canPatchTableFragment: (current, fragment, context, sdtBoundary, resolvedItem) =>
+        this.tableFragmentPatch(current, fragment, context, sdtBoundary, resolvedItem, false) != null,
+      patchTableFragment: (current, fragment, context, sdtBoundary, resolvedItem) =>
+        this.tableFragmentPatch(current, fragment, context, sdtBoundary, resolvedItem, true),
     };
+  }
+
+  /**
+   * In-place table patching (painter table locality): plan, and optionally
+   * apply, a cell-level patch of an already painted table fragment. Any
+   * failure during application leaves the element to the caller's ordinary
+   * rebuild, which replaces it wholesale.
+   */
+  private tableFragmentPatch(
+    current: FragmentDomState,
+    fragment: TableFragment,
+    context: FragmentRenderContext,
+    sdtBoundary: SdtBoundaryOptions | undefined,
+    resolvedItem: ResolvedPaintItem,
+    apply: boolean,
+  ): TableFragmentPatchResult | null {
+    if (!this.doc || resolvedItem.kind !== 'fragment' || resolvedItem.fragmentKind !== 'table') return null;
+    if (current.element.dataset.v2RenderDiagnostic === 'true') return null;
+    try {
+      const tableRenderData = this.resolveTableRenderData(fragment, resolvedItem as ResolvedTableItem);
+      const input: TableFragmentPatchInput = {
+        ...this.tableRenderDependencies(fragment, context, sdtBoundary, tableRenderData),
+        container: current.element,
+        cellSourceIdentity: this.options.tableCellSourceIdentity,
+      };
+      const plan = planTableFragmentPatch(input);
+      if (!plan) return null;
+      if (!apply) return { cellsRendered: plan.cellsChanged, cellsReused: plan.reused.length };
+      return completeRenderWork(applyTableFragmentPatchWork(plan));
+    } catch {
+      return null;
+    }
   }
 
   private applySemanticPageOverrides(el: HTMLElement): void {
@@ -5741,6 +5785,56 @@ export class DomPainter {
     return completeRenderWork(this.renderTableFragmentWork(fragment, context, sdtBoundary, resolvedItem));
   }
 
+  /** The table renderer inputs shared by a full fragment render and an in-place patch. */
+  private tableRenderDependencies(
+    fragment: TableFragment,
+    context: FragmentRenderContext,
+    sdtBoundary: SdtBoundaryOptions | undefined,
+    tableRenderData: ReturnType<DomPainter['resolveTableRenderData']>,
+  ): TableRenderDependencies {
+    if (!this.doc) {
+      throw new Error('DomPainter: document is not available');
+    }
+    // Wrap applyFragmentFrame to capture section from context.
+    // Table cell inner fragments always stay on the legacy frame path for now.
+    const applyFragmentFrameWithSection = (el: HTMLElement, frag: Fragment): void => {
+      this.applyFragmentFrame(el, frag, context.section, context.story);
+    };
+    const renderLineForTableCell = this.createTableCellLineRenderer(this.detachedPreparationActive);
+    const renderDrawingContentForTableCell = (
+      block: DrawingBlock,
+      interactionHost: HTMLElement,
+      measure: DrawingMeasure,
+    ): HTMLElement => this.renderDrawingContentForTable(block, interactionHost, measure, context);
+    return {
+      doc: this.doc,
+      fragment,
+      context,
+      block: tableRenderData.block,
+      measure: tableRenderData.measure,
+      cellSpacingPx: tableRenderData.cellSpacingPx,
+      effectiveColumnWidths: tableRenderData.effectiveColumnWidths,
+      chrome: this.contentControlsChrome,
+      sdtBoundary,
+      renderLine: renderLineForTableCell,
+      captureLineSnapshot: (lineEl, lineContext, options) => {
+        this.capturePaintSnapshotLine(lineEl, lineContext, {
+          inTableFragment: true,
+          inTableParagraph: options?.inTableParagraph ?? false,
+          wrapperEl: options?.wrapperEl,
+        });
+      },
+      renderDrawingContent: renderDrawingContentForTableCell,
+      applyFragmentFrame: applyFragmentFrameWithSection,
+      applySdtDataset,
+      applyContainerSdtDataset,
+      applyStyles,
+      // Per-document font resolver so in-cell list markers and drop caps paint the same physical
+      // family they were measured in (undefined => the renderers fall back to the global default).
+      resolvePhysical: this.options.resolvePhysical,
+    };
+  }
+
   private *renderTableFragmentWork(
     fragment: TableFragment,
     context: FragmentRenderContext,
@@ -5752,48 +5846,11 @@ export class DomPainter {
         throw new Error('DomPainter: document is not available');
       }
 
-      // Wrap applyFragmentFrame to capture section from context.
-      // Table cell inner fragments always stay on the legacy frame path for now.
-      const applyFragmentFrameWithSection = (el: HTMLElement, frag: Fragment): void => {
-        this.applyFragmentFrame(el, frag, context.section, context.story);
-      };
-
-      const renderLineForTableCell = this.createTableCellLineRenderer(this.detachedPreparationActive);
-      const renderDrawingContentForTableCell = (
-        block: DrawingBlock,
-        interactionHost: HTMLElement,
-        measure: DrawingMeasure,
-      ): HTMLElement => this.renderDrawingContentForTable(block, interactionHost, measure, context);
-
       const tableRenderData = this.resolveTableRenderData(fragment, resolvedItem);
 
-      const el = yield* renderTableFragmentWork({
-        doc: this.doc,
-        fragment,
-        context,
-        block: tableRenderData.block,
-        measure: tableRenderData.measure,
-        cellSpacingPx: tableRenderData.cellSpacingPx,
-        effectiveColumnWidths: tableRenderData.effectiveColumnWidths,
-        chrome: this.contentControlsChrome,
-        sdtBoundary,
-        renderLine: renderLineForTableCell,
-        captureLineSnapshot: (lineEl, lineContext, options) => {
-          this.capturePaintSnapshotLine(lineEl, lineContext, {
-            inTableFragment: true,
-            inTableParagraph: options?.inTableParagraph ?? false,
-            wrapperEl: options?.wrapperEl,
-          });
-        },
-        renderDrawingContent: renderDrawingContentForTableCell,
-        applyFragmentFrame: applyFragmentFrameWithSection,
-        applySdtDataset,
-        applyContainerSdtDataset,
-        applyStyles,
-        // Per-document font resolver so in-cell list markers and drop caps paint the same physical
-        // family they were measured in (undefined => the renderers fall back to the global default).
-        resolvePhysical: this.options.resolvePhysical,
-      });
+      const el = yield* renderTableFragmentWork(
+        this.tableRenderDependencies(fragment, context, sdtBoundary, tableRenderData),
+      );
 
       // Override outer wrapper positioning with resolved data when available.
       // Inner cell fragments still use legacy applyFragmentFrame via deps closure.

@@ -102,7 +102,7 @@ import {
   isOutOfFlowDrawing,
 } from './layout-utils.js';
 export { findLineIndexForRunOrdinal, findKeepNextChainStart, isOutOfFlowDrawing } from './layout-utils.js';
-import { shouldSkipParagraphDuringLayout } from './paragraph-layout-eligibility.js';
+import { retainParagraphLayoutFacts, shouldSkipParagraphDuringLayout } from './paragraph-layout-eligibility.js';
 import {
   balanceSectionOnPage,
   type BalancingFragment,
@@ -1114,6 +1114,21 @@ function* collectPreparedSectionBoundaryFillerIds(
 }
 
 function* layoutDocumentSteps(
+  ...args: Parameters<typeof layoutDocumentBodySteps>
+): Generator<LayoutExecutionCheckpoint, Layout, void> {
+  const source = readPaginationSourceScan(args[0], args[1]);
+  const release =
+    args[3] == null || source?.isCurrent?.() === true
+      ? retainParagraphLayoutFacts(args[0], source?.isCurrent ?? (() => true))
+      : null;
+  try {
+    return yield* layoutDocumentBodySteps(...args);
+  } finally {
+    release?.();
+  }
+}
+
+function* layoutDocumentBodySteps(
   blocks: FlowBlock[],
   measures: Measure[],
   options: LayoutOptions,

@@ -14,6 +14,73 @@ function fakeContext(onMeasure?: () => void): CanvasRenderingContext2D {
   } as unknown as CanvasRenderingContext2D;
 }
 
+it('keeps settled native table metrics owned by their surface with the same font generation', async () => {
+  const context = (width: number) =>
+    ({
+      font: '',
+      measureText: (text: string) =>
+        ({
+          width: text.length * width,
+          actualBoundingBoxAscent: 12,
+          actualBoundingBoxDescent: 3,
+        }) as TextMetrics,
+    }) as unknown as CanvasRenderingContext2D;
+  const table: FlowBlock = {
+    kind: 'table',
+    id: 'surface-owned-native-table',
+    attrs: { tableLayout: 'fixed' },
+    columnWidths: [120],
+    rows: [
+      {
+        id: 'surface-owned-row',
+        cells: [
+          {
+            id: 'surface-owned-cell',
+            blocks: [
+              {
+                kind: 'paragraph',
+                id: 'surface-owned-paragraph',
+                runs: [{ text: 'alpha beta gamma delta epsilon', fontFamily: 'Browser Font', fontSize: 16 }],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+  const first = createDomMeasurementRuntime({
+    createCanvasContext: () => context(2),
+    flushTextMetrics: () => null,
+    provisionalTextMetrics: () => 0,
+  });
+  const second = createDomMeasurementRuntime({
+    createCanvasContext: () => context(12),
+    flushTextMetrics: () => null,
+    provisionalTextMetrics: () => 0,
+  });
+  const oracle = createDomMeasurementRuntime({ createCanvasContext: () => context(12) });
+  const measure = async (runtime: ReturnType<typeof createDomMeasurementRuntime>, signature: string) => {
+    const pass = runtime.beginPass(fontContext(signature));
+    try {
+      return await pass.measureBlock(table, 120);
+    } finally {
+      pass.finish();
+    }
+  };
+  try {
+    const narrow = await measure(first, 'shared-native-generation');
+    const wide = await measure(second, 'shared-native-generation');
+    const expected = await measure(oracle, 'independent-native-oracle');
+    expect(wide).toEqual(expected);
+    expect(wide).not.toEqual(narrow);
+    expect(await measure(second, 'shared-native-generation')).toEqual(expected);
+  } finally {
+    first.dispose();
+    second.dispose();
+    oracle.dispose();
+  }
+});
+
 const fontContext = (fontSignature: string): FontMeasureContext => ({
   fontSignature,
   resolvePhysical: (family) => family,
@@ -79,6 +146,134 @@ describe('surface-owned DOM measurement runtime', () => {
     } finally {
       pass.finish();
       runtime.dispose();
+    }
+  });
+
+  it('keeps settled widths and table entries across native metric retries under one font signature', async () => {
+    // Mirrors the worker's native font proxy: a miss answers with a placeholder
+    // width and queues the query; flush settles queued queries to exact widths.
+    const settled = new Map<string, number>();
+    const queued = new Set<string>();
+    const waves: string[][] = [];
+    let provisional = 0;
+    const calls = new Map<string, number>();
+    const context = {
+      font: '',
+      measureText(text: string) {
+        calls.set(text, (calls.get(text) ?? 0) + 1);
+        const exact = settled.get(text);
+        if (exact !== undefined)
+          return { width: exact, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 3 } as TextMetrics;
+        provisional += 1;
+        queued.add(text);
+        return { width: text.length * 2, actualBoundingBoxAscent: 5, actualBoundingBoxDescent: 1 } as TextMetrics;
+      },
+    } as unknown as CanvasRenderingContext2D;
+    const flushTextMetrics = () => {
+      if (queued.size === 0) return null;
+      const wave = [...queued];
+      queued.clear();
+      waves.push(wave);
+      return Promise.resolve().then(() => {
+        for (const text of wave) settled.set(text, text.length * 9);
+      });
+    };
+    const exactContext = {
+      font: '',
+      measureText: (text: string) =>
+        ({ width: text.length * 9, actualBoundingBoxAscent: 12, actualBoundingBoxDescent: 3 }) as TextMetrics,
+    } as unknown as CanvasRenderingContext2D;
+    const paragraph = (id: string, text: string): FlowBlock => ({
+      kind: 'paragraph',
+      id,
+      attrs: {},
+      runs: [{ text, fontFamily: 'Browser Font', fontSize: 16 }],
+    });
+    const table = (id: string): FlowBlock => ({
+      kind: 'table',
+      id,
+      attrs: { tableLayout: 'fixed' },
+      columnWidths: [120, 120],
+      rows: [
+        {
+          id: `${id}-row`,
+          cells: [
+            { id: `${id}-a`, blocks: [paragraph(`${id}-a-p`, 'alpha beta gamma')] },
+            { id: `${id}-b`, blocks: [paragraph(`${id}-b-p`, 'delta epsilon zeta')] },
+          ],
+        },
+      ],
+    });
+    const runtime = createDomMeasurementRuntime({
+      createCanvasContext: () => context,
+      flushTextMetrics,
+      provisionalTextMetrics: () => provisional,
+    });
+    const oracle = createDomMeasurementRuntime({ createCanvasContext: () => exactContext });
+    const measureExact = async (block: FlowBlock, width: number) => {
+      const pass = oracle.beginPass(fontContext('oracle'));
+      try {
+        return await pass.measureBlock(block, width);
+      } finally {
+        pass.finish();
+      }
+    };
+    try {
+      const pass = runtime.beginPass(fontContext('browser-fonts'));
+      const first = await pass.measureBlock(paragraph('first', 'alpha beta gamma'), 400);
+      expect(first).toEqual(await measureExact(paragraph('first', 'alpha beta gamma'), 400));
+      expect(waves).toHaveLength(1);
+      const alphaCalls = calls.get('alpha');
+      // A second block sharing settled words only discovers its new word: the
+      // retry of the first block did not evict the settled widths.
+      const second = await pass.measureBlock(paragraph('second', 'alpha beta delta'), 400);
+      expect(second).toEqual(await measureExact(paragraph('second', 'alpha beta delta'), 400));
+      expect(waves).toHaveLength(2);
+      expect(waves[1]).not.toContain('alpha');
+      expect(waves[1]).not.toContain('beta');
+      expect(calls.get('alpha')).toBe(alphaCalls);
+      expect(runtime.snapshotStats().residentEntries).toBeGreaterThan(0);
+
+      const outcomes: Record<string, number> = {};
+      const trace = {
+        depth: 0,
+        cacheIdentity: 'strict' as const,
+        observer: (observation: { cellBlockCache: Record<string, number>; measuredRowCount: number }) => {
+          for (const [outcome, count] of Object.entries(observation.cellBlockCache)) {
+            outcomes[outcome] = (outcomes[outcome] ?? 0) + count;
+          }
+        },
+      };
+      const grid = table('grid');
+      const measuredGrid = await pass.measureBlock(grid, { maxWidth: 240, tableMeasurementTrace: trace });
+      // Equality with the exact oracle proves no placeholder-derived cell measure
+      // was recorded and served to a later attempt under the shared signature.
+      expect(measuredGrid).toEqual(await measureExact(table('grid'), 240));
+      expect(outcomes.miss).toBeGreaterThanOrEqual(4);
+      pass.finish();
+      const wavesBeforeReuse = waves.length;
+
+      const again = runtime.beginPass(fontContext('browser-fonts'));
+      const outcomesAgain: Record<string, number> = {};
+      await again.measureBlock(grid, {
+        maxWidth: 240,
+        tableMeasurementTrace: {
+          ...trace,
+          observer: (observation) => {
+            for (const [outcome, count] of Object.entries(observation.cellBlockCache)) {
+              outcomesAgain[outcome] = (outcomesAgain[outcome] ?? 0) + count;
+            }
+          },
+        },
+      });
+      again.finish();
+      // Settled cell measures were recorded under the pass font signature, so a
+      // later pass over identical cells reuses them.
+      expect(outcomesAgain).toMatchObject({ 'exact-hit': 2, miss: 0 });
+      expect(waves).toHaveLength(wavesBeforeReuse);
+    } finally {
+      runtime.dispose();
+      oracle.dispose();
     }
   });
 
@@ -231,4 +426,82 @@ describe('surface-owned DOM measurement runtime', () => {
     stillLive.finish();
     secondRuntime.dispose();
   });
+});
+
+describe('native font retry with repeated table content', () => {
+  for (const withCounter of [true, false])
+    it(`matches exact geometry after cached placeholders, counter=${withCounter}`, async () => {
+      const settled = new Set<string>();
+      const pending = new Set<string>();
+      let provisional = 0;
+      const canvas = (exact: boolean) =>
+        ({
+          font: '',
+          measureText(text: string) {
+            if (!exact && !settled.has(text)) {
+              pending.add(text);
+              provisional++;
+            }
+            const ready = exact || settled.has(text);
+            return {
+              width: text.length * (ready ? 9 : 2),
+              actualBoundingBoxAscent: ready ? 12 : 5,
+              actualBoundingBoxDescent: ready ? 3 : 1,
+            } as TextMetrics;
+          },
+        }) as unknown as CanvasRenderingContext2D;
+      const context = canvas(false);
+      const runtime = createDomMeasurementRuntime({
+        createCanvasContext: () => context,
+        flushTextMetrics: () => {
+          if (!pending.size) return null;
+          const wave = [...pending];
+          pending.clear();
+          return Promise.resolve().then(() => {
+            for (const text of wave) settled.add(text);
+          });
+        },
+        ...(withCounter ? { provisionalTextMetrics: () => provisional } : {}),
+      });
+      const oracle = createDomMeasurementRuntime({ createCanvasContext: () => canvas(true) });
+      const paragraph = (id: string) => ({
+        kind: 'paragraph' as const,
+        id,
+        attrs: {},
+        runs: [{ text: 'novel repeated words in every cell', fontFamily: 'Browser Font', fontSize: 16 }],
+      });
+      const table = () => ({
+        kind: 'table' as const,
+        id: 'table',
+        attrs: { tableLayout: 'fixed' },
+        columnWidths: [120, 120],
+        rows: [
+          {
+            id: 'row',
+            cells: [
+              { id: 'a', blocks: [paragraph('a-p')] },
+              { id: 'b', blocks: [paragraph('b-p')] },
+            ],
+          },
+        ],
+      });
+      const pass = runtime.beginPass({
+        fontSignature: `repeated-candidate-${withCounter}`,
+        resolvePhysical: (family) => family,
+      });
+      const exactPass = oracle.beginPass({
+        fontSignature: `repeated-oracle-${withCounter}`,
+        resolvePhysical: (family) => family,
+      });
+      try {
+        const actual = await pass.measureBlock(table(), 240);
+        const expected = await exactPass.measureBlock(table(), 240);
+        expect(actual).toEqual(expected);
+      } finally {
+        pass.finish();
+        exactPass.finish();
+        runtime.dispose();
+        oracle.dispose();
+      }
+    });
 });

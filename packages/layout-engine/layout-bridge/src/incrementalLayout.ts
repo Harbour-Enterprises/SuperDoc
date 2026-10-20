@@ -17,6 +17,8 @@ import {
 import {
   prepareCanonicalPaginationSource,
   createPreparedPaginationSuffix,
+  readCanonicalPaginationTextSource,
+  canonicalPaginationSourceContainsCrossReferences,
 } from '@superdoc/layout-engine/internal-source-preparation';
 import type {
   NonFlowingPageRelativeAnchorDependencyProof,
@@ -1304,6 +1306,8 @@ export type IncrementalPaginationProof = IncrementalPaginationProofBase &
         multiColumnSectionsProvedNonBalanceable: boolean;
         /** Last balanceable section end; convergence is fenced after its retained page. */
         balanceableSectionsBoundaryBlockId?: string;
+        /** First page-bearing owner in a balanced section; permits same-page-index convergence strictly before it. */
+        balanceableSectionsStartBlockId?: string;
         vAlignSectionsBoundaryBlockId?: string;
         vAlignSectionsReplayThroughBoundary?: true;
         pageRelativeAnchorsScopedBoundary?: {
@@ -1336,6 +1340,8 @@ export type IncrementalPaginationProof = IncrementalPaginationProofBase &
          */
         multiColumnSectionsProvedNonBalanceable: boolean;
         balanceableSectionsBoundaryBlockId?: string;
+        /** First page-bearing owner in a balanced section; permits same-page-index convergence strictly before it. */
+        balanceableSectionsStartBlockId?: string;
         /** The unchanged balanced sections precede every dirty owner; the bridge re-verifies the seeded checkpoint. */
         balanceableSectionsRetainedPrefix?: true;
         /** Last vertically aligned section page; validated before reuse. */
@@ -2805,13 +2811,29 @@ async function incrementalLayoutComplete(
   }
 
   const suppliedMeasureReuseProof = measureReuseProof ?? layoutReuse;
+  const excludesLiveCrossReferences =
+    retainedProofExcludesLiveCrossReferences(suppliedMeasureReuseProof?.dependencyProof) ||
+    (sourcePreparationOwner != null &&
+      canonicalPaginationSourceContainsCrossReferences(sourcePreparationOwner, nextBlocks) === false);
+  let fieldTextSource =
+    !excludesLiveCrossReferences && sourcePreparationOwner
+      ? (readCanonicalPaginationTextSource(sourcePreparationOwner, nextBlocks) ?? nextBlocks)
+      : nextBlocks;
   const hasLiveBodyCrossReferences =
-    !retainedProofExcludesLiveCrossReferences(suppliedMeasureReuseProof?.dependencyProof) &&
-    flowBlocksContainCrossReferenceMetadata(nextBlocks);
+    !excludesLiveCrossReferences && flowBlocksContainCrossReferenceMetadata(fieldTextSource);
   if (hasLiveBodyCrossReferences) {
-    const resolved = cloneLiveCrossReferenceFieldBlocks(nextBlocks);
+    let resolved = cloneLiveCrossReferenceFieldBlocks(fieldTextSource);
     // Compare against the current source, whose imported field caches may be stale.
-    if (resolveLiveCrossReferences(resolved)) nextBlocks = resolved;
+    if (resolveLiveCrossReferences(resolved)) {
+      // Text-only views cannot publish coordinates. A changed field result uses
+      // the ordinary current-coordinate resolver and dirty-region path.
+      if (fieldTextSource !== nextBlocks) {
+        resolved = cloneLiveCrossReferenceFieldBlocks(nextBlocks);
+        resolveLiveCrossReferences(resolved);
+      }
+      nextBlocks = resolved;
+      fieldTextSource = nextBlocks;
+    }
   }
 
   // Live field results are derived layout inputs. The host's exact packet can
@@ -2822,8 +2844,10 @@ async function incrementalLayoutComplete(
   // section carriers as dirty and discard the packet's exact locality proof.
   const liveCrossReferenceChangedBlockIds = hasLiveBodyCrossReferences
     ? collectChangedLiveCrossReferenceBlockIds(
-        previousBlocks,
-        nextBlocks,
+        sourcePreparationOwner
+          ? (readCanonicalPaginationTextSource(sourcePreparationOwner, previousBlocks) ?? previousBlocks)
+          : previousBlocks,
+        fieldTextSource,
         layoutReuse?.blockIdRewrites?.currentToPrevious,
       )
     : [];
@@ -2974,8 +2998,18 @@ async function incrementalLayoutComplete(
 
   const provedDirtyMeasure = provedDirtyMeasureCandidate && canReusePreviousMeasures ? provedDirtyMeasurePacket : null;
   const measurementEquivalentChangedBlockIds = new Set<string>();
-  if (fontCapabilities && dirty.changedBlockIds.length > 0) {
-    const indexedBlocksAreUnique = effectiveMeasureReuseProof?.dependencyProof?.blockIdsUnique === true;
+  const indexedBlocksAreUnique = effectiveMeasureReuseProof?.dependencyProof?.blockIdsUnique === true;
+  const hasUniqueBlockIndexes =
+    indexedBlocksAreUnique &&
+    effectiveMeasureReuseProof?.previousBlockIndexById &&
+    effectiveMeasureReuseProof?.currentBlockIndexById;
+  // A single-ID fallback is linear. Broad dirty sets keep conservative
+  // invalidation unless proved indexes bound the optional equivalence lookup.
+  if (
+    fontCapabilities &&
+    dirty.changedBlockIds.length > 0 &&
+    (hasUniqueBlockIndexes || dirty.changedBlockIds.length === 1)
+  ) {
     const readChangedBlock = (
       blocks: readonly FlowBlock[],
       indexById: ReadonlyMap<string, number> | null | undefined,
@@ -8421,6 +8455,8 @@ async function layoutWithOptionalReuse(input: {
       : null;
   let scopedBalanceableBoundaryPages: { firstPage: number; lastPage: number } | null = null;
   let scopedBalanceableBoundaryCurrentBlockIndex: number | null = null;
+  let scopedBalanceableStartPage: number | null = null;
+  let scopedBalanceableStartCurrentBlockIndex: number | null = null;
   const balanceableSectionsRetainedPrefix =
     dependencyProof?.profile === 'page-checkpoint-local-text' &&
     dependencyProof.balanceableSectionsRetainedPrefix === true &&
@@ -8458,6 +8494,29 @@ async function layoutWithOptionalReuse(input: {
     }
     scopedBalanceableBoundaryPages = boundaryPages;
     scopedBalanceableBoundaryCurrentBlockIndex = currentBoundaryBlockIndex!;
+    const startId =
+      dependencyProof?.profile !== 'single-section-local-text'
+        ? dependencyProof?.balanceableSectionsStartBlockId
+        : undefined;
+    const startPages = startId ? reuse.previousBlockPageIndex?.get(startId) : null;
+    const startIndex = startId ? reuse.currentBlockIndexById?.get(startId) : undefined;
+    if (
+      startId &&
+      startPages &&
+      Number.isInteger(startPages.firstPage) &&
+      startPages.firstPage > 0 &&
+      startPages.lastPage >= startPages.firstPage &&
+      startPages.lastPage < previousPages.length &&
+      Number.isInteger(startIndex) &&
+      input.blocks[startIndex!]?.id === startId &&
+      input.stableBlockIds.has(startId) &&
+      !reuse.blockIdRewrites?.previousToCurrent.has(startId) &&
+      input.dirty.insertedBlockIds.length === 0 &&
+      input.dirty.deletedBlockIds.length === 0
+    ) {
+      scopedBalanceableStartPage = startPages.firstPage;
+      scopedBalanceableStartCurrentBlockIndex = startIndex!;
+    }
   }
   const scopedVAlignBoundaryBlockId =
     dependencyProof != null && dependencyProof.profile !== 'single-section-local-text'
@@ -9124,9 +9183,12 @@ async function layoutWithOptionalReuse(input: {
   const requestedRelaidPageHorizon = Number.isFinite(reuse.maxRelaidPages)
     ? Math.max(1, Math.floor(reuse.maxRelaidPages!))
     : 3;
-  const balanceableFencePageHorizon = scopedBalanceableBoundaryPages
-    ? Math.max(1, scopedBalanceableBoundaryPages.lastPage + 2 - sourceAffectedFrontierPageIndex)
-    : 1;
+  const canConvergeBeforeBalancedSections =
+    scopedBalanceableStartPage != null && sourceAffectedFrontierPageIndex < scopedBalanceableStartPage;
+  const balanceableFencePageHorizon =
+    scopedBalanceableBoundaryPages && !canConvergeBeforeBalancedSections
+      ? Math.max(1, scopedBalanceableBoundaryPages.lastPage + 2 - sourceAffectedFrontierPageIndex)
+      : 1;
   const initialRelaidPageHorizon = sameInvocationReserveRelayout
     ? previousPages.length
     : input.preparedCoupled?.measuredCurrentNotePlaneRetainsOwner === true
@@ -9457,11 +9519,24 @@ async function layoutWithOptionalReuse(input: {
           checkpointConvergenceRejection = `target-${targetPageIndex}-source-index-invalid`;
           return false;
         }
-        if (scopedBalanceableBoundaryPages != null && sourcePageIndex <= scopedBalanceableBoundaryPages.lastPage) {
+        const beforeBalancedSections =
+          canConvergeBeforeBalancedSections &&
+          sourcePageIndex === targetPageIndex &&
+          sourcePageIndex < scopedBalanceableStartPage! &&
+          (() => {
+            const id = readFirstPageBlockId(completedPage);
+            const index = id == null ? undefined : reuse.currentBlockIndexById?.get(id);
+            return Number.isInteger(index) && index! < scopedBalanceableStartCurrentBlockIndex!;
+          })();
+        if (
+          !beforeBalancedSections &&
+          scopedBalanceableBoundaryPages != null &&
+          sourcePageIndex <= scopedBalanceableBoundaryPages.lastPage
+        ) {
           checkpointConvergenceRejection = `target-${targetPageIndex}-before-balanceable-section-fence`;
           return false;
         }
-        if (scopedBalanceableBoundaryCurrentBlockIndex != null) {
+        if (!beforeBalancedSections && scopedBalanceableBoundaryCurrentBlockIndex != null) {
           const candidateFirstBlockId = readFirstPageBlockId(completedPage);
           const candidateFirstBlockIndex =
             candidateFirstBlockId == null ? null : reuse.currentBlockIndexById?.get(candidateFirstBlockId);
@@ -9631,6 +9706,8 @@ async function layoutWithOptionalReuse(input: {
         pageIndexDelta,
         previousToCurrentBlockId: reuse.blockIdRewrites?.previousToCurrent ?? null,
         currentToPreviousBlockId: reuse.blockIdRewrites?.currentToPrevious ?? null,
+        previousBlockCount: input.previousBlocks.length,
+        currentBlockCount: input.blocks.length,
         positionTransforms,
         suffixStartBlockId: input.blocks[suffixStartBlockIndex]?.id ?? null,
         checkpointPagePrefixFragmentCount: partialPageCheckpoint ? partialPageCheckpoint.prefixFragments.length : null,
@@ -9743,6 +9820,8 @@ async function layoutWithOptionalReuse(input: {
         pageIndexDelta: 0,
         previousToCurrentBlockId: reuse.blockIdRewrites?.previousToCurrent ?? null,
         currentToPreviousBlockId: reuse.blockIdRewrites?.currentToPrevious ?? null,
+        previousBlockCount: input.previousBlocks.length,
+        currentBlockCount: input.blocks.length,
         positionTransforms: normalizePositionTransforms(reuse.pmShift),
         suffixStartBlockId: input.blocks[suffixStartBlockIndex]?.id ?? null,
         checkpointPagePrefixFragmentCount: partialPageCheckpoint ? partialPageCheckpoint.prefixFragments.length : null,
@@ -10252,11 +10331,46 @@ function createSplicedBlockResumeCheckpointMap(input: {
   pageIndexDelta: number;
   previousToCurrentBlockId: ReadonlyMap<string, string> | null;
   currentToPreviousBlockId: ReadonlyMap<string, string> | null;
+  previousBlockCount: number;
+  currentBlockCount: number;
   positionTransforms: readonly LayoutPositionTransform[];
   suffixStartBlockId: string | null;
   checkpointPagePrefixFragmentCount: number | null;
 }): ReadonlyMap<string, LayoutBlockResumeCheckpoint> | undefined {
   if (!input.previous || !input.local) return undefined;
+  const qualifiedStructuralPair =
+    input.previousToCurrentBlockId != null &&
+    input.currentToPreviousBlockId != null &&
+    validateStructuralBlockIdRewritePair(
+      input.previousToCurrentBlockId,
+      input.currentToPreviousBlockId,
+      input.previousBlockCount,
+      input.currentBlockCount,
+    );
+  type IdentityPlane = Pick<BlockResumeCheckpointPiece, 'sourceToCurrentBlockId' | 'currentToSourceBlockId'>;
+  const composedPlanes = new Map<
+    ReadonlyMap<string, string> | null,
+    Map<ReadonlyMap<string, string> | null, IdentityPlane>
+  >();
+  const composeBlockIds = (piece: BlockResumeCheckpointPiece): BlockResumeCheckpointPiece => {
+    if (!qualifiedStructuralPair) {
+      return composeCheckpointPieceBlockIds(piece, input.previousToCurrentBlockId, input.currentToPreviousBlockId);
+    }
+    let byReverse = composedPlanes.get(piece.sourceToCurrentBlockId);
+    if (!byReverse) {
+      byReverse = new Map();
+      composedPlanes.set(piece.sourceToCurrentBlockId, byReverse);
+    }
+    let plane = byReverse.get(piece.currentToSourceBlockId);
+    if (!plane) {
+      plane = {
+        sourceToCurrentBlockId: composeBlockIdRewrites(piece.sourceToCurrentBlockId, input.previousToCurrentBlockId),
+        currentToSourceBlockId: composeBlockIdRewrites(input.currentToPreviousBlockId, piece.currentToSourceBlockId),
+      };
+      byReverse.set(piece.currentToSourceBlockId, plane);
+    }
+    return { ...piece, ...plane };
+  };
   const priorPieces = splicedCheckpointPieces.get(input.previous as object) ?? [
     {
       source: input.previous,
@@ -10299,9 +10413,7 @@ function createSplicedBlockResumeCheckpointMap(input: {
   for (const priorPiece of priorPieces) {
     const prefix = clipCheckpointPiece(priorPiece, Number.NEGATIVE_INFINITY, input.checkpointPageIndex);
     if (prefix) {
-      retainedPieces.push(
-        composeCheckpointPieceBlockIds(prefix, input.previousToCurrentBlockId, input.currentToPreviousBlockId),
-      );
+      retainedPieces.push(composeBlockIds(prefix));
     }
     if (input.checkpointPagePrefixFragmentCount != null) {
       const checkpointPrefix = clipCheckpointPiece(
@@ -10311,27 +10423,17 @@ function createSplicedBlockResumeCheckpointMap(input: {
         input.checkpointPagePrefixFragmentCount,
       );
       if (checkpointPrefix) {
-        retainedPieces.push(
-          composeCheckpointPieceBlockIds(
-            checkpointPrefix,
-            input.previousToCurrentBlockId,
-            input.currentToPreviousBlockId,
-          ),
-        );
+        retainedPieces.push(composeBlockIds(checkpointPrefix));
       }
     }
     const tail = clipCheckpointPiece(priorPiece, input.sourceTailStartPageIndex, Number.POSITIVE_INFINITY);
     if (tail) {
       retainedPieces.push(
-        composeCheckpointPieceBlockIds(
-          {
-            ...tail,
-            pageIndexDelta: tail.pageIndexDelta + input.pageIndexDelta,
-            positionTransforms: appendCheckpointPositionTransforms(tail.positionTransforms, input.positionTransforms),
-          },
-          input.previousToCurrentBlockId,
-          input.currentToPreviousBlockId,
-        ),
+        composeBlockIds({
+          ...tail,
+          pageIndexDelta: tail.pageIndexDelta + input.pageIndexDelta,
+          positionTransforms: appendCheckpointPositionTransforms(tail.positionTransforms, input.positionTransforms),
+        }),
       );
     }
   }

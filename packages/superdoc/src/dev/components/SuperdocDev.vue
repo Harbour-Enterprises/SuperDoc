@@ -1870,8 +1870,8 @@ if (scrollTestMode.value) {
   display: flex;
   justify-content: center;
   overflow: auto;
-  /* Test: creates a containing block for position:fixed elements (like context menu) */
-  backdrop-filter: blur(0.5px);
+  /* Exercise fixed-position containing blocks without filtering the editor viewport. */
+  transform: translate(0, 0);
 }
 
 .dev-app__sidebar {

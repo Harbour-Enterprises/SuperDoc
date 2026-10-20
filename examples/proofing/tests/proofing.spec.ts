@@ -18,16 +18,9 @@ test('rechecks new text, replaces a dictionary typo, and ignores a word', async 
   await expect(page.locator('#editor')).toContainText('don’t mispelled workng');
 
   const typoPoint = await textPoint(page.locator('#editor'), 'workng');
-  await expect
-    .poll(
-      async () => {
-        await page.mouse.click(typoPoint.x, typoPoint.y, { button: 'right' });
-        return page.locator('[data-sd-context-menu-item="proofing-replace-0"]').count();
-      },
-      { timeout: 120_000 },
-    )
-    .toBe(1);
+  await page.mouse.click(typoPoint.x, typoPoint.y, { button: 'right' });
   const replacement = page.locator('[data-sd-context-menu-item="proofing-replace-0"]');
+  await expect(replacement).toBeVisible({ timeout: 120_000 });
   await expect(replacement).toHaveText('working');
   await replacement.click();
 
@@ -35,22 +28,19 @@ test('rechecks new text, replaces a dictionary typo, and ignores a word', async 
   await expect(page.locator('#editor')).not.toContainText('workng');
 
   const ignoredPoint = await textPoint(page.locator('#editor'), 'mispelled');
-  await expect
-    .poll(
-      async () => {
-        await page.mouse.click(ignoredPoint.x, ignoredPoint.y, { button: 'right' });
-        return page.locator('[data-sd-context-menu-item="proofing-ignore"]').count();
-      },
-      { timeout: 120_000 },
-    )
-    .toBe(1);
-  await page.locator('[data-sd-context-menu-item="proofing-ignore"]').click();
+  await page.mouse.click(ignoredPoint.x, ignoredPoint.y, { button: 'right' });
+  const ignore = page.locator('[data-sd-context-menu-item="proofing-ignore"]');
+  await expect(ignore).toBeVisible({ timeout: 120_000 });
+  await ignore.click();
+  await expect(page.locator('[data-sd-context-menu]')).toBeHidden();
 
   await page.mouse.click(ignoredPoint.x, ignoredPoint.y, { button: 'right' });
+  await expect(page.locator('[data-sd-context-menu]')).toBeVisible({ timeout: 120_000 });
   await expect(page.locator('[data-sd-context-menu-section="proofing"]')).toHaveCount(0);
 
   const apostrophePoint = await textPoint(page.locator('#editor'), 'don’t');
   await page.mouse.click(apostrophePoint.x, apostrophePoint.y, { button: 'right' });
+  await expect(page.locator('[data-sd-context-menu]')).toBeVisible({ timeout: 120_000 });
   await expect(page.locator('[data-sd-context-menu-section="proofing"]')).toHaveCount(0);
   expect(errors).toEqual([]);
 });

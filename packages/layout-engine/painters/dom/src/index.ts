@@ -74,6 +74,7 @@ export type {
 export type { DerivedRunTextPlane } from './derived-run-text-plane.js';
 // Painter plan §4.6: dark observability for the persistent-page paint path.
 export type { PaintWorkSummary } from './page-content.js';
+export type { TableCellSourceIdentity, TableFragmentPatchResult } from './table/renderTableFragment.js';
 export type { RenderedLineInfo } from './runs/index.js';
 
 // Re-export utility functions for testing
@@ -113,8 +114,17 @@ export type LayoutMode = 'vertical';
 export type { FlowMode } from './renderer.js';
 export type { PageDecorationPayload, PageDecorationProvider } from './renderer.js';
 
+import type { TableCellSourceIdentity } from './table/renderTableFragment.js';
+
 export type DomPainterOptions = {
   pageStyles?: PageStyles;
+  /**
+   * In-place table patching: resolves the immutable source identity of a
+   * painted table cell. Hosts whose paint blocks are pm-rebased clones map a
+   * clone back to its source owner so unchanged cells keep one identity across
+   * edits; without it, cell object identity is the proof.
+   */
+  tableCellSourceIdentity?: TableCellSourceIdentity;
   layoutMode?: LayoutMode;
   flowMode?: FlowMode;
   /** Gap between pages in pixels (default: 24px) */

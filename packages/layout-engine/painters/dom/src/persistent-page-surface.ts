@@ -750,6 +750,9 @@ function reconcileContentWindow(
       ctx.recordPageWork('patchedContentPageIndices', pageIndex);
       ctx.work.fragmentsRendered += work.fragmentsRendered;
       ctx.work.fragmentsReused += work.fragmentsReused;
+      ctx.work.fragmentsPatchedInPlace += work.fragmentsPatchedInPlace;
+      ctx.work.tableCellsRendered += work.tableCellsRendered;
+      ctx.work.tableCellsReused += work.tableCellsReused;
     } else {
       const fragments: FragmentDomState[] = hydratePageContent(ctx.contentContext, shell.element, packet, pageIndex);
       state.content.set(pageIndex, {

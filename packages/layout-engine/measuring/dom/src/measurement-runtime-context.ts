@@ -20,6 +20,14 @@ export interface SurfaceMeasurementRuntimeState {
   measurementAttempt: { settled: boolean } | null;
   activePass: boolean;
   disposed: boolean;
+  /**
+   * Monotonic count of canvas replies that were discovery placeholders rather
+   * than settled browser metrics (see `DomMeasurementRuntimeOptions.provisionalTextMetrics`).
+   * Null when the surface measures synchronously with exact local fonts.
+   */
+  provisionalMetrics: (() => number) | null;
+  /** Async metrics without a provenance counter cannot certify derived cache entries. */
+  untrackedProvisionalMetrics: boolean;
 }
 
 const runtimeByFontContext = new WeakMap<FontMeasureContext, SurfaceMeasurementRuntimeState>();
@@ -29,13 +37,16 @@ export function createSurfaceMeasurementRuntimeState(options: {
   maxTextEntries: number;
   maxEstimatedTextBytes: number;
   createCanvasContext?: () => CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+  provisionalMetrics?: () => number;
+  requiresMetricSettlement?: boolean;
 }): SurfaceMeasurementRuntimeState {
   return {
     textWidths: new TextWidthMeasurementCache({
       maxEntries: options.maxTextEntries,
       maxEstimatedBytes: options.maxEstimatedTextBytes,
+      provisionalMeasurementCount: options.provisionalMetrics,
     }),
-    fontMetrics: new FontMetricsMeasurementCache(),
+    fontMetrics: new FontMetricsMeasurementCache(options.provisionalMetrics),
     canvasContext: null,
     createCanvasContext: options.createCanvasContext
       ? () => options.createCanvasContext!() as CanvasRenderingContext2D
@@ -46,7 +57,31 @@ export function createSurfaceMeasurementRuntimeState(options: {
     measurementAttempt: null,
     activePass: false,
     disposed: false,
+    provisionalMetrics: options.provisionalMetrics ?? null,
+    untrackedProvisionalMetrics: options.requiresMetricSettlement === true && !options.provisionalMetrics,
   };
+}
+
+/**
+ * Start watching whether the bound surface serves a provisional canvas reply.
+ * The returned probe includes reads of cached placeholder widths and font
+ * bounds: another cell can consume them without calling `measureText` again.
+ * Derived results computed under a true probe must
+ * not enter a cache that outlives the current measurement attempt: the attempt
+ * is discarded and rerun once the browser metrics settle, and the settled rerun
+ * records the exact result under the same font signature.
+ */
+export function beginProvisionalMetricWatch(fontContext: FontMeasureContext | undefined): () => boolean {
+  const runtime = fontContext ? runtimeByFontContext.get(fontContext) : undefined;
+  const count = runtime?.provisionalMetrics;
+  if (!runtime || !count) return () => runtime?.untrackedProvisionalMetrics ?? false;
+  const before = count();
+  const widthReads = runtime.textWidths.provisionalReadCount;
+  const fontReads = runtime.fontMetrics.provisionalReadCount;
+  return () =>
+    count() !== before ||
+    runtime.textWidths.provisionalReadCount !== widthReads ||
+    runtime.fontMetrics.provisionalReadCount !== fontReads;
 }
 
 export function getSurfaceMeasurementRuntime(

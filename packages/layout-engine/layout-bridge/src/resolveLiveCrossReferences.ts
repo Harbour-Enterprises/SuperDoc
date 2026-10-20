@@ -126,13 +126,15 @@ function cloneLiveCrossReferenceFieldBlock(block: FlowBlock): FlowBlock {
  */
 export function resolveLiveCrossReferences(bodyBlocks: FlowBlock[]): boolean {
   const paragraphs = collectParagraphs(bodyBlocks);
+  const groups = collectFieldRunGroups(paragraphs).filter((group) => group.paragraphOrders.size === 1);
+  if (!groups.length) return false;
   const bookmarks = collectBookmarks(paragraphs);
   const paragraphNumbers = collectFullContextParagraphNumbers(paragraphs);
   const styleCandidates = collectStyleCandidates(paragraphs);
   const noteReferences = collectBookmarkedNoteReferenceMarkers(paragraphs);
   let changed = false;
 
-  for (const group of collectFieldRunGroups(paragraphs)) {
+  for (const group of groups) {
     // A field result spanning paragraphs carries paragraph structure that a
     // text-run substitution cannot reproduce. Preserve its imported cache
     // until a structure-aware field-result projector owns that case.

@@ -36,7 +36,8 @@ import {
   getSurfaceMeasurementRuntimeForCanvas,
   surfaceMeasurementCheckpointIfDue,
 } from './measurement-runtime-context.js';
-import { serializeMeasurementInput } from './measurement-input-key.js';
+import { memoizedMeasurementInputKey, serializeMeasurementInput } from './measurement-input-key.js';
+import { beginProvisionalMetricWatch } from './measurement-runtime-context.js';
 
 const DEFAULT_CELL_PADDING = { top: 0, right: 4, bottom: 0, left: 4 };
 const DEFAULT_FIELD_ANNOTATION_FONT_SIZE = 16;
@@ -316,16 +317,25 @@ export function buildTableCellContentMetricsCacheKey(
   options: Omit<TableCellContentMetricsOptions, 'measureBlock'>,
 ): string {
   const fontContext = options.fontContext ?? DEFAULT_FONT_MEASURE_CONTEXT;
-  return serializeMeasurementInput(
-    {
-      maxWidth: Math.max(1, Math.round(options.maxWidth)),
-      fontSignature: fontContext.fontSignature ?? '',
-      layoutEpoch: options.layoutEpoch ?? null,
-      attrs: cell.attrs ?? null,
-      paragraph: cell.paragraph ?? null,
-      blocks: cell.blocks ?? null,
-    },
-    { omitObjectIds: options.identityNeutralCache === true },
+  const maxWidth = Math.max(1, Math.round(options.maxWidth));
+  const fontSignature = fontContext.fontSignature ?? '';
+  const layoutEpoch = options.layoutEpoch ?? null;
+  const omitObjectIds = options.identityNeutralCache === true;
+  return memoizedMeasurementInputKey(
+    cell,
+    `${maxWidth}\u0000${fontSignature}\u0000${String(layoutEpoch)}\u0000${omitObjectIds ? 1 : 0}`,
+    () =>
+      serializeMeasurementInput(
+        {
+          maxWidth,
+          fontSignature,
+          layoutEpoch,
+          attrs: cell.attrs ?? null,
+          paragraph: cell.paragraph ?? null,
+          blocks: cell.blocks ?? null,
+        },
+        { omitObjectIds },
+      ),
   );
 }
 
@@ -437,6 +447,7 @@ async function measureTableCellContentMetricsWithKey(
   let minContentWidthPx = 0;
   let maxContentWidthPx = 0;
 
+  const consumedProvisionalMetrics = beginProvisionalMetricWatch(options.fontContext);
   for (const block of contentBlocks) {
     const metrics = await measureIntrinsicBlockWidthMetrics(block, options);
     minContentWidthPx = Math.max(minContentWidthPx, metrics.minWidthPx);
@@ -448,7 +459,7 @@ async function measureTableCellContentMetricsWithKey(
     maxWidthPx: maxContentWidthPx + horizontalInsets,
   };
 
-  tableCellMetricsCache.set(cacheKey, result);
+  if (!consumedProvisionalMetrics()) tableCellMetricsCache.set(cacheKey, result);
   return result;
 }
 

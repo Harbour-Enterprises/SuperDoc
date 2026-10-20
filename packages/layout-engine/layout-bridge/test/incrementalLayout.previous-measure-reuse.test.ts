@@ -375,4 +375,84 @@ describe('incrementalLayout previous-measure reuse', () => {
     expect(measureWidths).toEqual([272.67, 365.4]);
     expect(contentWidth).toBe(638);
   });
+
+  it('bounds broad dirty-region work without a unique block-index proof', async () => {
+    const count = 128;
+    let reads = 0;
+    const freeze = <T>(value: T): T => {
+      if (value && typeof value === 'object') {
+        for (const child of Object.values(value)) freeze(child);
+        Object.freeze(value);
+      }
+      return value;
+    };
+    const previousData = Array.from({ length: count }, (_, index) =>
+      freeze({
+        kind: 'paragraph' as const,
+        id: `p${index}`,
+        runs: [
+          {
+            kind: 'text' as const,
+            text: `body ${index}`,
+            fontFamily: 'Arial',
+            fontSize: 12,
+            pmStart: index * 20,
+            pmEnd: index * 20 + 8,
+          },
+        ],
+      }),
+    );
+    const nextData = previousData.map((block) =>
+      freeze({ ...block, runs: block.runs.map((run) => ({ ...run, pmStart: run.pmStart + 1, pmEnd: run.pmEnd + 1 })) }),
+    );
+    const source = (data: FlowBlock[]) =>
+      new Proxy(Object.freeze(data) as unknown as FlowBlock[], {
+        get(target, key, receiver) {
+          if (typeof key === 'string' && /^(0|[1-9]\d*)$/.test(key)) reads++;
+          return Reflect.get(target, key, receiver);
+        },
+      });
+    const previous = source(previousData),
+      next = source(nextData);
+    const measure = vi.fn(async () => ({ kind: 'paragraph' as const, lines: [], totalHeight: 10 }));
+    const options = { pageSize: { w: 300, h: 400 }, margins: { top: 20, right: 20, bottom: 20, left: 20 } };
+    const fontContext = { fontSignature: 'owned-lookup', resolvePhysical: (family: string) => family };
+    const fontCapabilities = { hasTabularDigits: () => false };
+    const cold = await incrementalLayout([], null, previous, options, measure, undefined, undefined, {
+      fontContext,
+      fontCapabilities,
+    });
+    reads = 0;
+    measure.mockClear();
+    const warm = await incrementalLayout(
+      previous,
+      cold.layout,
+      next,
+      options,
+      measure,
+      undefined,
+      cold.measures,
+      { fontContext, previousFontSignature: fontContext.fontSignature, fontCapabilities },
+      undefined,
+      undefined,
+      {
+        provedDirtyRegion: {
+          firstDirtyIndex: 0,
+          lastStableIndex: -1,
+          changedBlockIds: nextData.map((block) => block.id),
+          insertedBlockIds: [],
+          deletedBlockIds: [],
+          stableBlockIds: new Set<string>(),
+        },
+      },
+    );
+    const warmReads = reads;
+    measureCache.clear();
+    const reference = await incrementalLayout([], null, nextData, options, measure, undefined, undefined, {
+      fontContext,
+      fontCapabilities,
+    });
+    expect(warm.layout.pages).toEqual(reference.layout.pages);
+    expect(warmReads).toBeLessThan(count * 32);
+  });
 });

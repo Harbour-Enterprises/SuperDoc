@@ -328,6 +328,14 @@ type TableRowRenderDependencies = {
   tableIndent?: number;
   /** Whether the table is visually right-to-left (w:bidiVisual, ECMA-376 §17.4.1) */
   isRtl?: boolean;
+  /**
+   * In-place table patching: construct DOM only for these cell indices. Row
+   * context (neighbor borders, spans, heights) is still resolved for every
+   * cell so the subset paints exactly as a full row render would.
+   */
+  onlyCellIndices?: ReadonlySet<number>;
+  /** Receives every element a cell appended to `container` (cell plus its border overlays). */
+  onCellRendered?: (cellIndex: number, elements: Element[]) => void;
   /** Rendering context */
   context: FragmentRenderContext;
   /** Function to render a line of paragraph content */
@@ -465,6 +473,8 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
     cellSpacingPx = 0,
     chrome,
     resolvePhysical,
+    onlyCellIndices,
+    onCellRendered,
   } = deps;
 
   const totalCols = columnWidths.length;
@@ -795,6 +805,8 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
       x = tableContentWidth - x - computedCellWidth;
     }
 
+    if (onlyCellIndices && !onlyCellIndices.has(cellIndex)) continue;
+
     // Never use default borders - cells are either explicitly styled or borderless
     // This prevents gray borders on cells with borders={} (intentionally borderless)
     const { cellElement } = yield* renderTableCellWork({
@@ -872,20 +884,28 @@ export function* renderTableRowWork(deps: TableRowRenderDependencies): RenderWor
     }
 
     container.appendChild(cellElement);
+    const appended: Element[] = [cellElement];
     const specialBorderOverlay = createCellBorderOverlay(doc, finalBorders, {
       left: cellElement.style.left,
       top: cellElement.style.top,
       width: computedCellWidth > 0 ? computedCellWidth : cellMeasure.width,
       height: cellHeight,
     });
-    if (specialBorderOverlay) container.appendChild(specialBorderOverlay);
+    if (specialBorderOverlay) {
+      container.appendChild(specialBorderOverlay);
+      appended.push(specialBorderOverlay);
+    }
     const thinDoubleBorderOverlay = createThinDoubleBorderOverlay(doc, cellElement, {
       left: cellElement.style.left,
       top: cellElement.style.top,
       width: cellElement.style.width,
       height: cellElement.style.height,
     });
-    if (thinDoubleBorderOverlay) container.appendChild(thinDoubleBorderOverlay);
+    if (thinDoubleBorderOverlay) {
+      container.appendChild(thinDoubleBorderOverlay);
+      appended.push(thinDoubleBorderOverlay);
+    }
+    onCellRendered?.(cellIndex, appended);
   }
 }
 

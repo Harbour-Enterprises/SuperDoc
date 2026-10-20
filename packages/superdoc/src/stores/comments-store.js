@@ -3036,6 +3036,28 @@ export const useCommentsStore = defineStore('comments', () => {
           return { ok: false, reason: 'adapter-mapper-missing' };
         }
 
+        const presentation = preparedReview?.presentation;
+        const previousPresentation = committedReviewPresentations.value[normalizedDocumentId];
+        if (
+          presentation?.unchanged === true &&
+          previousPresentation &&
+          presentation.epoch === previousPresentation.epoch &&
+          presentation.baseVersion === previousPresentation.version &&
+          presentation.version === presentation.baseVersion + 1
+        ) {
+          // The worker's acknowledged delta proves all rows, threads, aliases,
+          // order and card geometry unchanged. Advance the paint capability
+          // without replacing reactive collections or overwriting local drafts.
+          previousPresentation.version = presentation.version;
+          previousPresentation.readPaintOrigin = presentation.readPaintOrigin;
+          previousPresentation.updateContext = presentation.updateContext;
+          return {
+            ok: true,
+            commentItems: preparedReview.comments.length,
+            trackedItems: preparedReview.trackedChanges.length,
+          };
+        }
+
         let effectiveCommentItems = commentItems;
         if (!preparedReview && typeof commentsAdapter.seedReviewCatalog === 'function') {
           const seeded = commentsAdapter.seedReviewCatalog(commentItems, {

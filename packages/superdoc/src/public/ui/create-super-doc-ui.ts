@@ -3887,6 +3887,9 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const editor = getEditor();
     const superdocRecord = superdoc && typeof superdoc === 'object' ? (superdoc as LooseRecord) : null;
     const fromConfig = normalizeDocumentMode((superdocRecord?.config as LooseRecord | undefined)?.documentMode);
+    // The public config wins while a mode change is settling. Avoid building
+    // a complete runtime capability snapshot merely to read that same mode.
+    if (fromConfig) return fromConfig;
     const runtimeSnapshot = safeCall<LooseRecord | null>(
       typeof superdocRecord?.getActiveRuntime === 'function'
         ? () => {
@@ -3899,11 +3902,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const fromRuntime = normalizeDocumentMode(runtimeSnapshot?.documentMode);
     const fromOptions = normalizeDocumentMode((editor?.options as LooseRecord | undefined)?.documentMode);
 
-    // `superdoc.setDocumentMode(...)` updates the public config synchronously
-    // before the runtime snapshot settles. Prefer that public value when they
-    // disagree so shell controls do not lag a mode change by one tick.
-    if (fromConfig && fromRuntime && fromConfig !== fromRuntime) return fromConfig;
-    return fromRuntime ?? fromConfig ?? fromOptions;
+    return fromRuntime ?? fromOptions;
   };
 
   const commentsAreReadOnly = (): boolean => {
@@ -5475,10 +5474,26 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const ccApi = doc?.contentControls as LooseRecord | undefined;
     const { lockModesById } = computeActiveContentControlLockModes(ccApi, selection);
     const states: Record<string, CommandState> = {};
+    const previous = state?.toolbar.commands;
     for (const id of allCommandIds()) {
-      states[id] = computeCommandState(id, doc, selection, projectedInlineValues, lockModesById);
+      const computed = computeCommandState(id, doc, selection, projectedInlineValues, lockModesById);
+      const prior = previous?.[id];
+      const value = computed.value;
+      if (
+        prior?.source === 'builtin' &&
+        computed.source === 'builtin' &&
+        value &&
+        typeof value === 'object' &&
+        Object.getPrototypeOf(value) === Object.prototype &&
+        Object.values(value).every((field) => field === null || typeof field !== 'object') &&
+        shallowEqual(prior.value, value)
+      )
+        computed.value = prior.value;
+      states[id] = prior && shallowEqual(prior, computed) ? prior : computed;
     }
-    return states;
+    // Selection coordinates change on each key; toolbar consumers only need a
+    // notification when the computed command facts actually change.
+    return previous && shallowEqual(previous, states) ? (previous as Record<string, CommandState>) : states;
   };
 
   /** Stable reason a routed command cannot reach its Document API operation. */

@@ -21,6 +21,7 @@ import type {
   ShapeGroupChild,
   ShapeTextContent,
   TableBlock,
+  TableFragment,
 } from '@superdoc/contracts';
 import { LAYOUT_BOUNDARY_SCHEMA } from '@superdoc/contracts';
 import type { FragmentRenderContext, PositionMapping } from './renderer.js';
@@ -31,6 +32,7 @@ import { computeBetweenBorderFlags, type BetweenBorderInfo } from './paragraph/b
 import { applyStyles } from './utils/apply-styles.js';
 import { CLASS_NAMES, pageStyles, type PageStyles } from './styles.js';
 import { TABLE_ROW_ROLE_ATTRIBUTE } from './table/row-role.js';
+import type { TableFragmentPatchResult } from './table/renderTableFragment.js';
 import { blockUsesDerivedRunTextPlane, type DerivedRunTextPlane } from './derived-run-text-plane.js';
 
 export type FragmentDomState = {
@@ -65,6 +67,12 @@ export type PageDomState = {
 export type PatchPageWork = {
   fragmentsRendered: number;
   fragmentsReused: number;
+  /** Table fragments brought current in place instead of rebuilt (counted in neither bucket above). */
+  fragmentsPatchedInPlace: number;
+  /** Cells repainted inside in-place table patches. */
+  tableCellsRendered: number;
+  /** Cells whose DOM an in-place table patch left untouched. */
+  tableCellsReused: number;
 };
 
 /**
@@ -104,6 +112,9 @@ export type PaintWorkSummary = {
   contentPmDemoted: number;
   fragmentsRendered: number;
   fragmentsReused: number;
+  fragmentsPatchedInPlace: number;
+  tableCellsRendered: number;
+  tableCellsReused: number;
   domNodesCreated: number | null;
   /**
    * Per-page attribution for the counters above (painter plan P5 §4.6): the
@@ -136,6 +147,9 @@ export function createEmptyPaintWorkSummary(): PaintWorkSummary {
     contentPmDemoted: 0,
     fragmentsRendered: 0,
     fragmentsReused: 0,
+    fragmentsPatchedInPlace: 0,
+    tableCellsRendered: 0,
+    tableCellsReused: 0,
     domNodesCreated: null,
     createdPersistentPageIndices: [],
     removedPersistentPageIndices: [],
@@ -259,6 +273,25 @@ export interface PageContentContext {
     section?: 'body' | 'header' | 'footer',
     resolvedItem?: ResolvedPaintItem,
   ): void;
+  /**
+   * In-place table patching: true when `current.element` can be brought to
+   * `fragment` by repainting only its changed cells. Pure.
+   */
+  canPatchTableFragment?(
+    current: FragmentDomState,
+    fragment: TableFragment,
+    context: FragmentRenderContext,
+    sdtBoundary: SdtBoundaryOptions | undefined,
+    resolvedItem: ResolvedPaintItem,
+  ): boolean;
+  /** Perform the in-place table patch, or null when it is not provable (the caller then rebuilds). */
+  patchTableFragment?(
+    current: FragmentDomState,
+    fragment: TableFragment,
+    context: FragmentRenderContext,
+    sdtBoundary: SdtBoundaryOptions | undefined,
+    resolvedItem: ResolvedPaintItem,
+  ): TableFragmentPatchResult | null;
 }
 
 /**
@@ -415,6 +448,9 @@ export function patchPage(
 ): PatchPageWork {
   let fragmentsRendered = 0;
   let fragmentsReused = 0;
+  let fragmentsPatchedInPlace = 0;
+  let tableCellsRendered = 0;
+  let tableCellsReused = 0;
   const pageEl = state.element;
   applyStyles(pageEl, pageStyles(page.width, page.height, ctx.getEffectivePageStyles()));
   ctx.applySemanticPageOverrides(pageEl);
@@ -468,7 +504,22 @@ export function patchPage(
         betweenInfo,
       );
 
-      if (needsRebuild) {
+      const patched =
+        needsRebuild &&
+        fragment.kind === 'table' &&
+        ctx.patchTableFragment &&
+        !fragmentRebuildBlocksTablePatch(ctx, current, fragment, contextBase, resolvedItem, sdtBoundary, betweenInfo)
+          ? ctx.patchTableFragment(current, fragment, contextBase, sdtBoundary, resolvedItem)
+          : null;
+      if (patched) {
+        ctx.recordChangedRoot?.(current.element);
+        current.signature = resolvedSig;
+        current.pmInteriorVersion = resolvedPmInteriorVersion(resolvedItem);
+        current.hasPmDescendants = elementHasPmAttributes(current.element);
+        fragmentsPatchedInPlace += 1;
+        tableCellsRendered += patched.cellsRendered;
+        tableCellsReused += patched.cellsReused;
+      } else if (needsRebuild) {
         const replacement = ctx.renderFragment(fragment, contextBase, sdtBoundary, betweenInfo, resolvedItem);
         pageEl.replaceChild(replacement, current.element);
         ctx.recordChangedRoot?.(replacement);
@@ -541,7 +592,33 @@ export function patchPage(
   state.fragments = nextFragments;
   ctx.renderDecorationsForPage(pageEl, page, pageIndex);
   ctx.renderColumnSeparators(pageEl, page, page.width, page.height);
-  return { fragmentsRendered, fragmentsReused };
+  return { fragmentsRendered, fragmentsReused, fragmentsPatchedInPlace, tableCellsRendered, tableCellsReused };
+}
+
+/**
+ * Rebuild causes an in-place table patch cannot absorb: diagnostics, SDT or
+ * between-border chrome changes, page-context changes, and transaction
+ * mappings (the patch derives pm shifts from the blocks themselves).
+ */
+function fragmentRebuildBlocksTablePatch(
+  ctx: PageContentContext,
+  current: FragmentDomState,
+  fragment: Fragment,
+  contextBase: FragmentRenderContext,
+  resolvedItem: ResolvedPaintItem,
+  sdtBoundary?: SdtBoundaryOptions,
+  betweenInfo?: BetweenBorderInfo,
+): boolean {
+  if (ctx.currentMapping != null) return true;
+  if (current.element.dataset.v2RenderDiagnostic === 'true') return true;
+  if (shouldRebuildForSdtBoundary(current.element, sdtBoundary)) return true;
+  if (
+    (current.element.dataset.betweenBorder === 'true') !== (betweenInfo?.showBetweenBorder ?? false) ||
+    (current.element.dataset.suppressTopBorder === 'true') !== (betweenInfo?.suppressTopBorder ?? false) ||
+    (current.element.dataset.gapBelow ?? '') !== (betweenInfo?.gapBelow ? String(betweenInfo.gapBelow) : '')
+  )
+    return true;
+  return needsRebuildForPageContext(current.context, contextBase, resolvedItem);
 }
 
 function getPageContentFragments(pageEl: HTMLElement): Element[] {
@@ -1099,6 +1176,16 @@ export function* planDetachedPageFragments(
     const sdtBoundary = boundaries.get(index);
     const betweenInfo = borders.get(index);
     if (!current || fragmentNeedsRebuild(ctx, current, item.fragment, contextBase, item, sdtBoundary, betweenInfo)) {
+      if (
+        current &&
+        item.fragment.kind === 'table' &&
+        ctx.canPatchTableFragment &&
+        !fragmentRebuildBlocksTablePatch(ctx, current, item.fragment, contextBase, item, sdtBoundary, betweenInfo) &&
+        ctx.canPatchTableFragment(current, item.fragment, contextBase, sdtBoundary, item)
+      ) {
+        // `patchPage` brings this fragment current in place.
+        continue;
+      }
       result.push({ item, context: contextBase, sdtBoundary, betweenInfo });
     }
   }

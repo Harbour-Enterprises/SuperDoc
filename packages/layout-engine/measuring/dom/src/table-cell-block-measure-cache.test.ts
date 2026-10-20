@@ -28,6 +28,39 @@ const paragraphMeasure = (tabWidth?: number): ParagraphMeasure => ({
 describe('table cell block measure cache', () => {
   beforeEach(() => clearTableCellBlockMeasureCache());
 
+  it('remeasures changing getter text inside a frozen input while retaining ordinary frozen data', async () => {
+    let text = 'a';
+    const run = Object.freeze({
+      get text() {
+        return text;
+      },
+    });
+    const block = Object.freeze({
+      kind: 'paragraph',
+      id: 'getter',
+      runs: Object.freeze([run]),
+    }) as unknown as FlowBlock;
+    const measure = vi.fn(async (): Promise<Measure> => {
+      const result = paragraphMeasure();
+      result.lines[0]!.width = text.length;
+      return result;
+    });
+    const first = await measureTableCellBlocks([block], 100, DEFAULT_FONT_MEASURE_CONTEXT, 'browser', measure);
+    text = 'longer text';
+    const next = await measureTableCellBlocks([block], 100, DEFAULT_FONT_MEASURE_CONTEXT, 'browser', measure);
+    expect((first[0] as ParagraphMeasure).lines[0]!.width).toBe(1);
+    expect((next[0] as ParagraphMeasure).lines[0]!.width).toBe(text.length);
+    expect(measure).toHaveBeenCalledTimes(2);
+    const plain = Object.freeze({
+      kind: 'paragraph',
+      id: 'plain',
+      runs: Object.freeze([Object.freeze({ text })]),
+    }) as unknown as FlowBlock;
+    await measureTableCellBlocks([plain], 100, DEFAULT_FONT_MEASURE_CONTEXT, 'browser', measure);
+    await measureTableCellBlocks([plain], 100, DEFAULT_FONT_MEASURE_CONTEXT, 'browser', measure);
+    expect(measure).toHaveBeenCalledTimes(3);
+  });
+
   it('reuses unchanged geometry across absolute position shifts and proves a safe single-line width adoption', async () => {
     const measure = vi.fn(async (): Promise<Measure> => paragraphMeasure());
     const original: FlowBlock[] = [

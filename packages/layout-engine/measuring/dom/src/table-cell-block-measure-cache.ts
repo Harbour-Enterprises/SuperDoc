@@ -11,7 +11,8 @@ import type {
   TableMeasure,
 } from '@superdoc/contracts';
 import type { FontMeasureContext } from '@superdoc/font-system';
-import { serializeMeasurementInput } from './measurement-input-key.js';
+import { memoizedMeasurementInputKey, serializeMeasurementInput } from './measurement-input-key.js';
+import { beginProvisionalMetricWatch } from './measurement-runtime-context.js';
 
 const TABLE_CELL_BLOCK_MEASURE_CACHE_SIZE = 5_000;
 
@@ -82,13 +83,12 @@ export async function measureTableCellBlocks(
       measured.push(retained);
       continue;
     }
-    const contentKey = serializeMeasurementInput(
-      {
-        block,
-        fontSignature: fontContext.fontSignature ?? '',
-        measurementRuntimeSignature,
-      },
-      { omitObjectIds: identityNeutralCache && block.kind === 'paragraph' },
+    const fontSignature = fontContext.fontSignature ?? '';
+    const omitObjectIds = identityNeutralCache && block.kind === 'paragraph';
+    const contentKey = memoizedMeasurementInputKey(
+      block,
+      `${fontSignature}\u0000${measurementRuntimeSignature}\u0000${omitObjectIds ? 1 : 0}`,
+      () => serializeMeasurementInput({ block, fontSignature, measurementRuntimeSignature }, { omitObjectIds }),
     );
     const exactKey = `${contentWidth}@${contentKey}`;
     const exact = exactBlockMeasureCache.get(exactKey);
@@ -112,9 +112,12 @@ export async function measureTableCellBlocks(
     }
 
     observeCacheOutcome?.('miss');
+    const consumedProvisionalMetrics = beginProvisionalMetricWatch(fontContext);
     const next = await measureBlock(block, { maxWidth: contentWidth, maxHeight: Infinity }, blockIndex);
-    exactBlockMeasureCache.set(exactKey, next);
-    latestBlockMeasureByContent.set(contentKey, { width: contentWidth, measure: next });
+    if (!consumedProvisionalMetrics()) {
+      exactBlockMeasureCache.set(exactKey, next);
+      latestBlockMeasureByContent.set(contentKey, { width: contentWidth, measure: next });
+    }
     measured.push(next);
   }
   return measured;

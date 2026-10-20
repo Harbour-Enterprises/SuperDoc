@@ -22,6 +22,8 @@ const readers = new WeakMap<
   {
     read: (previous: readonly FlowBlock[], current: readonly FlowBlock[]) => CanonicalPaginationSourceSplice | null;
     owns: (source: readonly FlowBlock[]) => boolean;
+    readTextSource?: (source: readonly FlowBlock[]) => readonly FlowBlock[] | null;
+    containsCrossReferences?: (source: readonly FlowBlock[]) => boolean | null;
   }
 >();
 const scans = new WeakMap<object, PaginationSourceScan>();
@@ -75,10 +77,30 @@ function sourceCurrentness(
 export function createCanonicalPaginationSourceReader(
   read: (previous: readonly FlowBlock[], current: readonly FlowBlock[]) => CanonicalPaginationSourceSplice | null,
   owns: (source: readonly FlowBlock[]) => boolean,
+  readTextSource?: (source: readonly FlowBlock[]) => readonly FlowBlock[] | null,
+  containsCrossReferences?: (source: readonly FlowBlock[]) => boolean | null,
 ): object {
   const token = Object.freeze({});
-  readers.set(token, { read, owns });
+  readers.set(token, { read, owns, readTextSource, containsCrossReferences });
   return token;
+}
+
+/** Current text and structure with possibly older PM coordinates; never a layout input. */
+export function readCanonicalPaginationTextSource(
+  reader: object,
+  source: readonly FlowBlock[],
+): readonly FlowBlock[] | null {
+  const owner = readers.get(reader);
+  return owner?.owns(source) ? (owner.readTextSource?.(source) ?? null) : null;
+}
+
+/** Source-owned metadata survives coordinate-only views and certified structural edits. */
+export function canonicalPaginationSourceContainsCrossReferences(
+  reader: object,
+  source: readonly FlowBlock[],
+): boolean | null {
+  const owner = readers.get(reader);
+  return owner?.owns(source) ? (owner.containsCrossReferences?.(source) ?? null) : null;
 }
 
 export function isPaginationPreparationCandidate(block: FlowBlock): boolean {

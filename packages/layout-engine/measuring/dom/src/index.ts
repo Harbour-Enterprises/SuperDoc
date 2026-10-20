@@ -137,6 +137,7 @@ import {
   createMeasurementCanvasContext,
   disposeSurfaceMeasurementRuntime,
   ensureSurfaceMeasurementCanvas,
+  beginProvisionalMetricWatch,
   getSurfaceMeasurementRuntime,
   getSurfaceMeasurementRuntimeForCanvas,
   surfaceMeasurementCheckpointIfDue,
@@ -308,6 +309,13 @@ export interface DomMeasurementRuntimeOptions {
   flushTextMetrics?: () => Promise<void> | null;
   /** Opaque browser fonts cannot supply synchronous reuse proofs until their metrics settle. */
   canMeasureSynchronously?: (font: string) => boolean;
+  /**
+   * Monotonic count of canvas replies that were discovery placeholders rather
+   * than settled metrics. With it, a native metric retry drops only widths and
+   * derived table entries measured from placeholders; settled work survives
+   * under the pass font signature. Without it, derived table entries are not retained.
+   */
+  provisionalTextMetrics?: () => number;
   maxTextEntries?: number;
   maxEstimatedTextBytes?: number;
 }
@@ -336,10 +344,13 @@ const measurementCheckpointIfDue = surfaceMeasurementCheckpointIfDue;
 const WORD_BOUNDARIES_PER_MEASUREMENT_CHECKPOINT = 8;
 
 export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOptions = {}): DomMeasurementRuntime {
+  const nativeFontNamespace = options.flushTextMetrics ? `|native-surface:${++nativeMetricRuntime}` : '';
   const state = createSurfaceMeasurementRuntimeState({
     createCanvasContext: options.createCanvasContext,
     maxTextEntries: options.maxTextEntries ?? 50_000,
     maxEstimatedTextBytes: options.maxEstimatedTextBytes ?? 16 * 1024 * 1024,
+    provisionalMetrics: options.provisionalTextMetrics,
+    requiresMetricSettlement: options.flushTextMetrics !== undefined,
   });
 
   return {
@@ -352,9 +363,10 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
         clearSurfaceMeasurementGeneration(state, fontContext.fontSignature);
       }
       let passFontContext: FontMeasureContext = Object.freeze({
-        fontSignature: options.flushTextMetrics
-          ? `${fontContext.fontSignature}|native:${++nativeMetricAttempt}`
-          : fontContext.fontSignature,
+        fontSignature:
+          options.flushTextMetrics && !options.provisionalTextMetrics
+            ? `${fontContext.fontSignature}${nativeFontNamespace}|native:${++nativeMetricAttempt}`
+            : `${fontContext.fontSignature}${nativeFontNamespace}`,
         resolvePhysical: fontContext.resolvePhysical,
         ...(fontContext.resolveNaturalLineMultiplier
           ? { resolveNaturalLineMultiplier: fontContext.resolveNaturalLineMultiplier }
@@ -400,16 +412,25 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
           } finally {
             if (state.measurementAttempt === authority) state.measurementAttempt = null;
           }
-          // No speculative widths, font metrics or recursive table cache may escape this attempt.
-          state.textWidths.clear(false);
+          // The attempt is discarded. Nothing measured from a placeholder may
+          // survive it: placeholder widths leave the text cache here, font
+          // metrics are re-read from the now-settled canvas, and the table caches
+          // skipped their own placeholder-derived entries (`beginProvisionalMetricWatch`).
+          // Settled widths and table entries stay resident under the pass font
+          // signature, so the retry re-measures the newly discovered strings only
+          // and the converged table remains reusable by the next pass.
+          if (state.provisionalMetrics) state.textWidths.clearProvisional();
+          else state.textWidths.clear(false);
+          if (!options.provisionalTextMetrics) {
+            unbindSurfaceMeasurementPass(state, passFontContext);
+            passFontContext = Object.freeze({
+              ...fontContext,
+              fontSignature: `${fontContext.fontSignature}${nativeFontNamespace}|native:${++nativeMetricAttempt}`,
+            });
+            bindSurfaceMeasurementPass(state, passFontContext, execution);
+          }
           state.fontMetrics.clear();
           digitProbe = undefined;
-          unbindSurfaceMeasurementPass(state, passFontContext);
-          passFontContext = Object.freeze({
-            ...fontContext,
-            fontSignature: `${fontContext.fontSignature}|native:${++nativeMetricAttempt}`,
-          });
-          bindSurfaceMeasurementPass(state, passFontContext, execution);
         }
         throw new DomMeasurementInfrastructureError('Native text metrics did not converge');
       };
@@ -445,6 +466,7 @@ export function createDomMeasurementRuntime(options: DomMeasurementRuntimeOption
   };
 }
 
+let nativeMetricRuntime = 0;
 let nativeMetricAttempt = 0;
 
 /** Compatibility canvas for callers using the exported singleton measureBlock. */
@@ -4852,6 +4874,7 @@ async function measureTableBlock(
   const measurementStartedAt = tableMeasurementNow();
   const tableObservation = createMutableTableMeasurementObservation();
   const maxWidth = typeof constraints === 'number' ? constraints : constraints.maxWidth;
+  const consumedProvisionalMetrics = beginProvisionalMetricWatch(fontContext);
   const measurementConfiguration = {
     mode: measurementConfig.mode,
     deterministicFamily: measurementConfig.fonts.deterministicFamily,
@@ -4950,6 +4973,7 @@ async function measureTableBlock(
     }
     measuredRowCount++;
     const rowMeasurementOwner = createTableRowMeasurementOwner(measurementOwner, rowIndex);
+    const rowConsumedProvisionalMetrics = beginProvisionalMetricWatch(fontContext);
     const normalizedRow = workingInput.rows[rowIndex];
     const cellMeasures: TableCellMeasure[] = [];
     let gridColIndex = 0; // Track position in the grid
@@ -5257,13 +5281,15 @@ async function measureTableBlock(
 
     finishTableRowMeasurementOwner(measurementOwner, rowMeasurementOwner);
     const rowMeasure = { cells: cellMeasures, height: 0 };
-    recordTableRowGeometry(
-      rowMeasurementOwner,
-      rowMeasure,
-      rowBaseHeights[rowIndex],
-      rowAuthoredHeightPadding[rowIndex],
-      rowAuthoredHeightChrome[rowIndex],
-    );
+    if (!rowConsumedProvisionalMetrics() || measurementOwner?.attempt) {
+      recordTableRowGeometry(
+        rowMeasurementOwner,
+        rowMeasure,
+        rowBaseHeights[rowIndex],
+        rowAuthoredHeightPadding[rowIndex],
+        rowAuthoredHeightChrome[rowIndex],
+      );
+    }
     rows[rowIndex] = rowMeasure;
   }
   const rowAssemblyWallMs = tableMeasurementNow() - rowAssemblyStartedAt;
@@ -5426,9 +5452,13 @@ async function measureTableBlock(
     autoFitCellMetricCache: tableObservation.autoFitCellMetricCache,
     autoFitTableResultCache: tableObservation.autoFitTableResultCache,
   });
-  recordTableMeasurementOwner(measure, measurementOwner, maxWidth);
-  tableWorkingInputs.set(measure, workingInput);
-  if (boundedRows) recordTableMeasurementClosure(measure, retainedTable!, boundedRows);
+  // Attempt authority independently rejects geometry from canceled or failed
+  // native discovery, including surfaces without a per-call provenance counter.
+  if (!consumedProvisionalMetrics() || measurementOwner?.attempt) {
+    recordTableMeasurementOwner(measure, measurementOwner, maxWidth);
+    tableWorkingInputs.set(measure, workingInput);
+    if (boundedRows) recordTableMeasurementClosure(measure, retainedTable!, boundedRows);
+  }
   return measure;
 }
 
@@ -5469,6 +5499,7 @@ async function resolveRuntimeTableColumnWidths(
     return { columnWidths, mode: 'stable-auto-grid' };
   }
 
+  const consumedProvisionalMetrics = beginProvisionalMetricWatch(fontContext);
   const { contentMetrics, cellMetricKeys } = await recordAsyncTableMeasurementPhase(
     observation,
     'autofit-content-metrics',
@@ -5499,10 +5530,12 @@ async function resolveRuntimeTableColumnWidths(
     }),
   );
 
-  setCachedAutoFitTableResult(cacheKey, {
-    columnWidths: result.columnWidths,
-    totalWidth: result.totalWidth,
-  });
+  if (!consumedProvisionalMetrics()) {
+    setCachedAutoFitTableResult(cacheKey, {
+      columnWidths: result.columnWidths,
+      totalWidth: result.totalWidth,
+    });
+  }
   return { columnWidths: result.columnWidths, mode: 'full-autofit' };
 }
 

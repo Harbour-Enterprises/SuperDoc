@@ -171,8 +171,15 @@ function buildFontStringForMetrics(
  * font generation are both part of identity, so a newly available face can
  * never inherit ascent/descent measured against its fallback. */
 export class FontMetricsMeasurementCache {
-  private entries = new Map<string, FontMetricsResult>();
+  private entries = new Map<string, { result: FontMetricsResult; provisional: boolean }>();
   private disposed = false;
+  private provisionalReads = 0;
+
+  constructor(private readonly provisionalMeasurementCount?: () => number) {}
+
+  get provisionalReadCount(): number {
+    return this.provisionalReads;
+  }
 
   get(
     ctx: CanvasRenderingContext2D,
@@ -185,10 +192,15 @@ export class FontMetricsMeasurementCache {
     const font = buildFontStringForMetrics(fontInfo, mode, fonts);
     const key = `${fontSignature}\u0000${fontInfo.wordLineMetricFamily ?? ''}\u0000${fontInfo.naturalLineMultiplier ?? ''}\u0000${font}`;
     const cached = this.entries.get(key);
-    if (cached) return cached;
+    if (cached) {
+      if (cached.provisional) this.provisionalReads += 1;
+      return cached.result;
+    }
 
     ctx.font = font;
+    const provisionalBefore = this.provisionalMeasurementCount?.();
     const textMetrics = ctx.measureText(METRICS_TEST_STRING);
+    const provisional = this.provisionalMeasurementCount?.() !== provisionalBefore;
     const glyphMetrics: FontMetricsResult =
       typeof textMetrics.actualBoundingBoxAscent === 'number' &&
       typeof textMetrics.actualBoundingBoxDescent === 'number' &&
@@ -221,7 +233,7 @@ export class FontMetricsMeasurementCache {
       const firstKey = this.entries.keys().next().value;
       if (firstKey !== undefined) this.entries.delete(firstKey);
     }
-    this.entries.set(key, result);
+    this.entries.set(key, { result, provisional });
     return result;
   }
 

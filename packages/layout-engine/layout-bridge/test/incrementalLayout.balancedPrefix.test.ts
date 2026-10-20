@@ -58,8 +58,11 @@ function pageIndex(layout: Layout) {
 function geometry(layout: Layout) {
   return JSON.parse(JSON.stringify(layout, (key, value) => (key === 'layoutEpoch' ? undefined : value)));
 }
-async function run(dirtyId = 'p90', mutate?: (reuse: IncrementalLayoutReuseOptions, previous: Layout) => void) {
-  const previousBlocks = body();
+async function run(
+  dirtyId = 'p90',
+  mutate?: (reuse: IncrementalLayoutReuseOptions, previous: Layout) => void,
+  previousBlocks = body(),
+) {
   const nextBlocks = previousBlocks.map((block) =>
     block.kind === 'paragraph' && block.id === dirtyId
       ? { ...block, runs: block.runs.map((run) => ('text' in run ? { ...run, text: run.text.toUpperCase() } : run)) }
@@ -178,5 +181,75 @@ describe('retained balanced prefix before a seeded checkpoint', () => {
     });
     expect(result.current.layoutReuse).toMatchObject({ mode: 'tail-splice', checkpointPageIndex: 0 });
     expect(result.current.layoutReuse!.sourceConvergencePageIndex).toBeGreaterThan(result.boundary.lastPage);
+  });
+});
+
+describe('unchanged balanced suffix', () => {
+  beforeEach(() => clearIncrementalModuleState());
+  function prefixedBody(): FlowBlock[] {
+    return [
+      {
+        kind: 'sectionBreak',
+        id: 'single-start',
+        type: 'continuous',
+        columns: { count: 1, gap: 0 },
+        attrs: { source: 'sectPr', sectionIndex: 0, isFirstSection: true },
+      },
+      ...Array.from(
+        { length: 40 },
+        (_, index): FlowBlock => ({
+          kind: 'paragraph',
+          id: `pre${index}`,
+          attrs: { sectionIndex: 0 },
+          runs: [{ kind: 'text', text: `prefix-${index}` }],
+        }),
+      ),
+      ...body().map((block) => ({
+        ...block,
+        attrs: {
+          ...block.attrs,
+          isFirstSection: false,
+          sectionIndex: ((block.attrs?.sectionIndex as number) ?? 0) + 1,
+        },
+      })),
+    ];
+  }
+  it('converges before a distant balanced section and matches the complete cold layout', async () => {
+    const result = await run(
+      'pre0',
+      (reuse) => {
+        reuse.requireDocumentStartCheckpoint = true;
+        const proof = reuse.dependencyProof!;
+        if (proof.profile !== 'page-checkpoint-local-text') throw new Error('wrong fixture proof');
+        delete proof.balanceableSectionsRetainedPrefix;
+        proof.balanceableSectionsStartBlockId = 'p0';
+      },
+      prefixedBody(),
+    );
+    expect(result.current.layoutReuse).toMatchObject({ mode: 'tail-splice', checkpointPageIndex: 0 });
+    expect(result.current.layoutReuse!.sourceConvergencePageIndex).toBeLessThan(
+      pageIndex(result.previous.layout).get('p0')!.firstPage,
+    );
+    expect(result.current.layoutReuse!.pagesPaginated).toBeLessThanOrEqual(6);
+    clearIncrementalModuleState();
+    const cold = await incrementalLayout([], null, result.nextBlocks, options, measure);
+    expect(geometry(result.current.layout)).toEqual(geometry(cold.layout));
+  });
+  it('retains the full balanced-section fence for an edit within that section', async () => {
+    const result = await run(
+      'p2',
+      (reuse) => {
+        reuse.requireDocumentStartCheckpoint = true;
+        const proof = reuse.dependencyProof!;
+        if (proof.profile !== 'page-checkpoint-local-text') throw new Error('wrong fixture proof');
+        delete proof.balanceableSectionsRetainedPrefix;
+        proof.balanceableSectionsStartBlockId = 'p0';
+      },
+      prefixedBody(),
+    );
+    expect(result.current.layoutReuse!.sourceConvergencePageIndex).toBeGreaterThan(result.boundary.lastPage);
+    clearIncrementalModuleState();
+    const cold = await incrementalLayout([], null, result.nextBlocks, options, measure);
+    expect(geometry(result.current.layout)).toEqual(geometry(cold.layout));
   });
 });

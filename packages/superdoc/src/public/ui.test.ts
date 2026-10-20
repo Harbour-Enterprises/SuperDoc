@@ -3485,11 +3485,21 @@ describe('public ui — viewport + metadata geometry', () => {
     const ui = createSuperDocUI({ superdoc });
 
     let recomputes = 0;
-    ui.toolbar.subscribe(() => {
-      recomputes += 1;
+    const stopRecomputes = ui
+      .select(
+        (state) => state,
+        () => false,
+      )
+      .subscribe(() => {
+        recomputes += 1;
+      });
+    let toolbarEmissions = 0;
+    const stopToolbar = ui.toolbar.subscribe(() => {
+      toolbarEmissions += 1;
     });
     await Promise.resolve();
     recomputes = 0;
+    toolbarEmissions = 0;
 
     // The adapter subscribes to selection during host mount, before the
     // controller does, so its republish lands first for a given gesture.
@@ -3499,14 +3509,18 @@ describe('public ui — viewport + metadata geometry', () => {
     await Promise.resolve();
 
     expect(recomputes, 'one caret move must drive one recompute, not two').toBe(1);
+    expect(toolbarEmissions, 'unchanged toolbar facts must not emit').toBe(0);
+    stopRecomputes();
+    stopToolbar();
     ui.destroy();
   });
 
   it('coalesces repeated edit-command emissions into one recompute', async () => {
     let notify: (() => void) | null = null;
+    let undoEnabled = false;
     const getSnapshot = vi.fn(() => ({
       commands: {
-        'history.undo': { shippedStatus: 'supported', enabled: false, reason: null, historyResolved: true },
+        'history.undo': { shippedStatus: 'supported', enabled: undoEnabled, reason: null, historyResolved: true },
         'history.redo': { shippedStatus: 'supported', enabled: false, reason: null, historyResolved: true },
       },
     }));
@@ -3535,13 +3549,23 @@ describe('public ui — viewport + metadata geometry', () => {
     const ui = createSuperDocUI({ superdoc });
 
     let recomputes = 0;
-    const stop = ui.toolbar.subscribe(() => {
-      recomputes += 1;
+    const stopRecomputes = ui
+      .select(
+        (state) => state,
+        () => false,
+      )
+      .subscribe(() => {
+        recomputes += 1;
+      });
+    let toolbarEmissions = 0;
+    const stopToolbar = ui.toolbar.subscribe(() => {
+      toolbarEmissions += 1;
     });
     // Ignore whatever the subscription itself emits on attach; only the
     // adapter-driven recomputes below are being counted.
     await Promise.resolve();
     recomputes = 0;
+    toolbarEmissions = 0;
 
     for (let i = 0; i < 5; i += 1) notify!();
     await Promise.resolve();
@@ -3550,8 +3574,20 @@ describe('public ui — viewport + metadata geometry', () => {
     // Exactly one: `<= 1` would also pass if the recompute were dropped
     // entirely, which is the other half of what coalescing must not do.
     expect(recomputes, 'five emissions in one tick must drive exactly one recompute').toBe(1);
+    expect(toolbarEmissions, 'unchanged toolbar facts must not emit').toBe(0);
 
-    stop?.();
+    undoEnabled = true;
+    recomputes = 0;
+    for (let i = 0; i < 5; i += 1) notify!();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(recomputes, 'a changed snapshot must still recompute exactly once').toBe(1);
+    expect(toolbarEmissions, 'changed toolbar facts must publish exactly once').toBe(1);
+    expect(ui.commands.get('undo').getState().enabled).toBe(true);
+
+    stopRecomputes();
+    stopToolbar();
     ui.destroy();
   });
 

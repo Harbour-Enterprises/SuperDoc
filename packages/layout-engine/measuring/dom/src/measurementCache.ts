@@ -7,6 +7,8 @@ type CacheEntry = {
   letterSpacing: number;
   estimatedBytes: number;
   recent: boolean;
+  /** Measured from a discovery placeholder; dropped before the settled rerun. */
+  provisional: boolean;
   slot: number;
   textEntries: Map<string, CacheEntry>;
   spacingEntries: Map<number, Map<string, CacheEntry>>;
@@ -30,6 +32,12 @@ export interface TextWidthCacheStats {
 export interface TextWidthCacheOptions {
   maxEntries?: number;
   maxEstimatedBytes?: number;
+  /**
+   * Monotonic count of canvas replies that were discovery placeholders. A
+   * width whose `measureText` advanced this count is retained only until
+   * `clearProvisional()`; settled widths survive native metric retries.
+   */
+  provisionalMeasurementCount?: () => number;
 }
 
 const DEFAULT_COMPATIBILITY_MAX_ENTRIES = 5_000;
@@ -79,10 +87,14 @@ export class TextWidthMeasurementCache {
   private clockCursor = 0;
   private stats = emptyStats();
   private disposed = false;
+  private readonly provisionalCount: (() => number) | null;
+  private provisionalEntries = 0;
+  private provisionalReads = 0;
 
   constructor(options: TextWidthCacheOptions = {}) {
     this.maxEntries = positiveLimit(options.maxEntries, DEFAULT_COMPATIBILITY_MAX_ENTRIES);
     this.maxEstimatedBytes = positiveLimit(options.maxEstimatedBytes, Number.MAX_SAFE_INTEGER);
+    this.provisionalCount = options.provisionalMeasurementCount ?? null;
   }
 
   setLimits(options: TextWidthCacheOptions): void {
@@ -108,6 +120,7 @@ export class TextWidthMeasurementCache {
     if (hit !== undefined) {
       hit.recent = true;
       this.stats.hits += 1;
+      if (hit.provisional) this.provisionalReads += 1;
       return hit.width;
     }
 
@@ -115,7 +128,9 @@ export class TextWidthMeasurementCache {
     try {
       ctx.font = font;
       const intrinsicStartedAt = now();
+      const provisionalBefore = this.provisionalCount?.() ?? 0;
       const metrics = ctx.measureText(text);
+      const provisional = (this.provisionalCount?.() ?? 0) !== provisionalBefore;
       this.stats.intrinsicMeasureMs += Math.max(0, now() - intrinsicStartedAt);
       this.stats.intrinsicMeasureCalls += 1;
       const extra = letterSpacing ? Math.max(0, text.length - 1) * letterSpacing : 0;
@@ -157,6 +172,7 @@ export class TextWidthMeasurementCache {
         letterSpacing: normalizedLetterSpacing,
         estimatedBytes,
         recent: true,
+        provisional,
         slot,
         textEntries,
         spacingEntries,
@@ -167,6 +183,7 @@ export class TextWidthMeasurementCache {
       spaceEntries?.set(normalizedLetterSpacing, entry);
       if (slot === this.clock.length) this.clock.push(entry);
       else this.clock[slot] = entry;
+      if (provisional) this.provisionalEntries += 1;
       this.stats.keyCharacters += text.length + font.length;
       this.stats.residentEntries += 1;
       this.stats.estimatedResidentBytes += estimatedBytes;
@@ -181,6 +198,33 @@ export class TextWidthMeasurementCache {
     return { ...this.stats };
   }
 
+  /** Resident entries measured from a discovery placeholder. */
+  get provisionalResidentEntries(): number {
+    return this.provisionalEntries;
+  }
+
+  /** Monotonic reads of cached placeholders, including reads by another cell. */
+  get provisionalReadCount(): number {
+    return this.provisionalReads;
+  }
+
+  /**
+   * Drop only the provisional entries. Settled widths stay resident so a native
+   * metric retry re-measures the newly discovered strings, not the whole block.
+   */
+  clearProvisional(): number {
+    this.assertLive();
+    if (this.provisionalEntries === 0) return 0;
+    let dropped = 0;
+    for (let slot = 0; slot < this.clock.length; slot += 1) {
+      const entry = this.clock[slot];
+      if (!entry?.provisional) continue;
+      this.remove(entry);
+      dropped += 1;
+    }
+    return dropped;
+  }
+
   clear(resetStats = true): void {
     this.assertLive();
     this.cacheByContext = new WeakMap();
@@ -188,6 +232,7 @@ export class TextWidthMeasurementCache {
     this.clock = [];
     this.freeSlots = [];
     this.clockCursor = 0;
+    this.provisionalEntries = 0;
     this.stats = resetStats ? emptyStats() : { ...this.stats, residentEntries: 0, estimatedResidentBytes: 0 };
   }
 
@@ -198,6 +243,7 @@ export class TextWidthMeasurementCache {
     this.clock = [];
     this.freeSlots = [];
     this.clockCursor = 0;
+    this.provisionalEntries = 0;
     this.stats = emptyStats();
     this.disposed = true;
   }
@@ -223,20 +269,25 @@ export class TextWidthMeasurementCache {
         continue;
       }
 
-      entry.textEntries.delete(entry.text);
-      entry.spaceEntries?.delete(entry.letterSpacing);
-      if (entry.textEntries.size === 0) {
-        entry.spacingEntries.delete(entry.letterSpacing);
-        if (entry.spacingEntries.size === 0) entry.fontEntries.delete(entry.font);
-      }
-      this.clock[slot] = null;
-      this.freeSlots.push(slot);
+      this.remove(entry);
       this.stats.evictions += 1;
-      this.stats.residentEntries -= 1;
-      this.stats.estimatedResidentBytes -= entry.estimatedBytes;
       return true;
     }
     return false;
+  }
+
+  private remove(entry: CacheEntry): void {
+    entry.textEntries.delete(entry.text);
+    entry.spaceEntries?.delete(entry.letterSpacing);
+    if (entry.textEntries.size === 0) {
+      entry.spacingEntries.delete(entry.letterSpacing);
+      if (entry.spacingEntries.size === 0) entry.fontEntries.delete(entry.font);
+    }
+    this.clock[entry.slot] = null;
+    this.freeSlots.push(entry.slot);
+    if (entry.provisional) this.provisionalEntries -= 1;
+    this.stats.residentEntries -= 1;
+    this.stats.estimatedResidentBytes -= entry.estimatedBytes;
   }
 
   private assertLive(): void {

@@ -2916,8 +2916,50 @@ const isEmptyParagraphSkippedAtBoundary = (block: ParagraphBlock): boolean => {
   );
 };
 
+export interface ParagraphLayoutSkipFacts {
+  readonly anchoredParagraphIds: ReadonlySet<string>;
+  readonly anchoredSourceRoots: ReadonlySet<string>;
+  readonly explicitAnchorOwnersEligible: boolean;
+}
+
+/** Immutable-invocation facts; retain scalar ownership, not the flow graph. */
+export function createParagraphLayoutSkipFacts(blocks: FlowBlock[]): ParagraphLayoutSkipFacts {
+  const owners = new Map<string, boolean>();
+  for (let index = 0; index < blocks.length; index++) {
+    const block = blocks[index]!;
+    owners.set(
+      block.id,
+      block.kind === 'paragraph' &&
+        block.attrs?.sectPrMarker !== true &&
+        !(
+          isEmptyParagraphSkippedAtBoundary(block) &&
+          blocks[index - 1]?.kind === 'pageBreak' &&
+          blocks[index + 1]?.kind === 'sectionBreak'
+        ),
+    );
+  }
+  const anchoredParagraphIds = new Set<string>(),
+    anchoredSourceRoots = new Set<string>();
+  let explicitAnchorOwnersEligible = true;
+  for (const block of blocks) {
+    if (block.kind !== 'drawing' && block.kind !== 'image' && block.kind !== 'table') continue;
+    const anchorId = (block.attrs as { anchorParagraphId?: unknown } | undefined)?.anchorParagraphId;
+    if (typeof anchorId === 'string') anchoredParagraphIds.add(anchorId);
+    const root = sourceParagraphRootKey(block);
+    if (root != null) anchoredSourceRoots.add(root);
+    if (block.anchor?.isAnchored && (typeof anchorId !== 'string' || owners.get(anchorId) !== true)) {
+      explicitAnchorOwnersEligible = false;
+    }
+  }
+  return { anchoredParagraphIds, anchoredSourceRoots, explicitAnchorOwnersEligible };
+}
+
 /** An invisible continuous carrier must not spill before its closing boundary. */
-const isInvisibleUnequalColumnClosingCarrier = (blocks: FlowBlock[], index: number): boolean => {
+const isInvisibleUnequalColumnClosingCarrier = (
+  blocks: FlowBlock[],
+  index: number,
+  facts?: ParagraphLayoutSkipFacts,
+): boolean => {
   const block = blocks[index];
   const next = blocks[index + 1];
   if (
@@ -2958,6 +3000,15 @@ const isInvisibleUnequalColumnClosingCarrier = (blocks: FlowBlock[], index: numb
   )
     return false;
 
+  if (facts) {
+    const markerRoot = sourceParagraphRootKey(block);
+    return (
+      facts.explicitAnchorOwnersEligible &&
+      !facts.anchoredParagraphIds.has(block.id) &&
+      (markerRoot == null || !facts.anchoredSourceRoots.has(markerRoot))
+    );
+  }
+
   // Anchor resolvers consult this predicate before building their maps. Prove
   // explicit owners stay eligible without recursively resolving fallback paths.
   const owners = new Map<string, { block: FlowBlock; index: number }>();
@@ -2981,7 +3032,11 @@ const isInvisibleUnequalColumnClosingCarrier = (blocks: FlowBlock[], index: numb
 };
 
 /** Shared eligibility for paragraphs the layout loop deliberately omits. */
-export const shouldSkipParagraphDuringLayout = (blocks: FlowBlock[], index: number): boolean => {
+export const shouldSkipParagraphDuringLayout = (
+  blocks: FlowBlock[],
+  index: number,
+  facts?: ParagraphLayoutSkipFacts,
+): boolean => {
   const block = blocks[index];
   if (block?.kind !== 'paragraph' || !isEmptyParagraphSkippedAtBoundary(block)) return false;
   if (isReviewableSectionBoundaryMarkerBlock(block)) return false;
@@ -3001,7 +3056,7 @@ export const shouldSkipParagraphDuringLayout = (blocks: FlowBlock[], index: numb
     // insertion/deletion geometry remains addressable.
     if (sectionBreakForcesPage(next)) return true;
     if (next.attrs?.source === 'sectPr' && hasUnequalExplicitColumnWidths(next)) return true;
-    if (isInvisibleUnequalColumnClosingCarrier(blocks, index)) return true;
+    if (isInvisibleUnequalColumnClosingCarrier(blocks, index, facts)) return true;
     if (next.attrs?.source === 'sectPr' && isExplicitEmptyTextParagraphBlock(previous ?? undefined)) return true;
   }
   return previous?.kind === 'pageBreak' && next?.kind === 'sectionBreak';

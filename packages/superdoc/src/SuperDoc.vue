@@ -3374,6 +3374,8 @@ const v2RulerHostStyle = ref({});
 const v2RulerPageRect = ref(null);
 let v2RulerEditorObserver = null;
 let v2RulerContainerObserver = null;
+let v2RulerObservedLayers = null;
+let v2RulerObservedContainer = null;
 let v2RulerActivePageIndex = 0;
 let v2RulerContextPageLayout = null;
 let unsubscribeV2RulerContext = null;
@@ -3426,35 +3428,45 @@ const getV2ActivePageRect = () => {
 
 const syncV2RulerOffset = () => {
   if (!isV2Mode.value) {
-    v2RulerHostStyle.value = {};
-    v2RulerPageRect.value = null;
+    if (Object.keys(v2RulerHostStyle.value).length) v2RulerHostStyle.value = {};
+    if (v2RulerPageRect.value !== null) v2RulerPageRect.value = null;
     return;
   }
   const alignmentContainer = resolveV2RulerAlignmentContainer();
   if (!alignmentContainer) {
-    v2RulerHostStyle.value = {};
-    v2RulerPageRect.value = null;
+    if (Object.keys(v2RulerHostStyle.value).length) v2RulerHostStyle.value = {};
+    if (v2RulerPageRect.value !== null) v2RulerPageRect.value = null;
     return;
   }
   const pageRect = getV2ActivePageRect();
   if (!pageRect) {
-    v2RulerHostStyle.value = {};
-    v2RulerPageRect.value = null;
+    if (Object.keys(v2RulerHostStyle.value).length) v2RulerHostStyle.value = {};
+    if (v2RulerPageRect.value !== null) v2RulerPageRect.value = null;
     return;
   }
   const containerRect = alignmentContainer.getBoundingClientRect();
   const paddingLeft = Math.max(0, pageRect.left - containerRect.left);
   const paddingRight = Math.max(0, containerRect.right - pageRect.right);
-  v2RulerHostStyle.value = {
-    paddingLeft: `${paddingLeft}px`,
-    paddingRight: `${paddingRight}px`,
-  };
-  v2RulerPageRect.value = {
-    left: pageRect.left,
-    top: pageRect.top,
-    width: pageRect.width,
-    height: pageRect.height,
-  };
+  const left = `${paddingLeft}px`;
+  const right = `${paddingRight}px`;
+  if (v2RulerHostStyle.value.paddingLeft !== left || v2RulerHostStyle.value.paddingRight !== right) {
+    v2RulerHostStyle.value = { paddingLeft: left, paddingRight: right };
+  }
+  const previousRect = v2RulerPageRect.value;
+  if (
+    !previousRect ||
+    previousRect.left !== pageRect.left ||
+    previousRect.top !== pageRect.top ||
+    previousRect.width !== pageRect.width ||
+    previousRect.height !== pageRect.height
+  ) {
+    v2RulerPageRect.value = {
+      left: pageRect.left,
+      top: pageRect.top,
+      width: pageRect.width,
+      height: pageRect.height,
+    };
+  }
 };
 
 const cleanupV2RulerContextSubscription = () => {
@@ -3525,14 +3537,19 @@ const cleanupV2RulerObservers = () => {
     /* ignore */
   }
   v2RulerContainerObserver = null;
+  v2RulerObservedLayers = null;
+  v2RulerObservedContainer = null;
 };
 
 const setupV2RulerObservers = () => {
-  cleanupV2RulerObservers();
-  if (typeof window !== 'undefined') window.addEventListener('scroll', syncV2RulerOffset, true);
-  if (typeof ResizeObserver === 'undefined') return;
   const layersEl = layers.value;
   const alignmentContainer = resolveV2RulerAlignmentContainer();
+  if (layersEl === v2RulerObservedLayers && alignmentContainer === v2RulerObservedContainer) return;
+  cleanupV2RulerObservers();
+  v2RulerObservedLayers = layersEl;
+  v2RulerObservedContainer = alignmentContainer;
+  if (typeof window !== 'undefined') window.addEventListener('scroll', syncV2RulerOffset, true);
+  if (typeof ResizeObserver === 'undefined') return;
   if (layersEl) {
     v2RulerEditorObserver = new ResizeObserver(() => syncV2RulerOffset());
     v2RulerEditorObserver.observe(layersEl);

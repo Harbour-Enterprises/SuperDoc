@@ -185,6 +185,8 @@ export class BuiltInToolbar extends EventEmitter {
   toolbarItems = [];
   overflowItems = [];
   #imagePicker = null;
+  #groupItems = new Map();
+  #highlightOptions = new WeakMap();
   #painterListenersDetach = null;
   isDev = false;
   role = 'editor';
@@ -627,7 +629,12 @@ export class BuiltInToolbar extends EventEmitter {
   // ---------------------------------------------------------------------------
 
   getToolbarItemByGroup(groupName) {
-    return this.toolbarItems.filter((item) => (item.group?.value || 'center') === groupName);
+    const items = this.toolbarItems.filter((item) => (item.group?.value || 'center') === groupName);
+    const previous = this.#groupItems.get(groupName);
+    if (previous?.length === items.length && previous.every((item, index) => item === items[index])) return previous;
+    if (this.#groupItems.size >= 32) this.#groupItems.clear();
+    this.#groupItems.set(groupName, items);
+    return items;
   }
 
   getToolbarItemByName(name) {
@@ -750,12 +757,12 @@ export class BuiltInToolbar extends EventEmitter {
     // wired through a public surface in a later phase.
     const highlightItem = this.toolbarItems.find((item) => item.name.value === 'highlight');
     if (!highlightItem) return;
-    const option = {
-      key: 'color',
-      type: 'render',
-      render: () => renderColorOptions(this, highlightItem, [], true),
-    };
-    highlightItem.nestedOptions.value = [option];
+    let options = this.#highlightOptions.get(highlightItem);
+    if (!options) {
+      options = [{ key: 'color', type: 'render', render: () => renderColorOptions(this, highlightItem, [], true) }];
+      this.#highlightOptions.set(highlightItem, options);
+    }
+    highlightItem.nestedOptions.value = options;
   }
 
   #isFontSizeMixedState(commandState) {
@@ -844,7 +851,10 @@ export class BuiltInToolbar extends EventEmitter {
         item.active.value = Boolean(commandState?.active);
         // Write only the href: `attributes` also carries the item's static
         // configuration, `ariaLabel` among it, and this runs on every sync.
-        item.attributes.value = withLinkHref(item.attributes.value, commandState?.value ?? null);
+        const href = commandState?.value ?? null;
+        if (href ? item.attributes.value?.href !== href : Object.hasOwn(item.attributes.value ?? {}, 'href')) {
+          item.attributes.value = withLinkHref(item.attributes.value, href);
+        }
       },
       fontFamily: () => {
         if (commandState?.value != null) {
@@ -927,8 +937,7 @@ export class BuiltInToolbar extends EventEmitter {
       });
     } else {
       this.#getAllToolbarItems().forEach((item) => {
-        item.resetDisabled();
-        this.#applyHeadlessState(item);
+        if (!this.#applyHeadlessState(item)) item.resetDisabled();
       });
     }
 

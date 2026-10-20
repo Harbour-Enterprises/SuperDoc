@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FlowBlock, Layout, ParagraphBlock, TextRun } from '@superdoc/contracts';
 import { buildPageStyleReferenceResolver, resolveLiveCrossReferences } from '../src/resolveLiveCrossReferences';
 import { incrementalLayout, measureCache } from '../src/incrementalLayout';
+import { createCanonicalPaginationSourceReader } from '@superdoc/layout-engine/internal-source-preparation';
 
 const textRun = (text: string, extra: Partial<TextRun> = {}): TextRun => ({
   kind: 'text',
@@ -65,6 +66,38 @@ describe('resolveLiveCrossReferences', () => {
     expect(result.blocks, 'Unchanged live fields must preserve the source preparation owner').toBe(source);
     expect(result.blocks).toEqual(source);
   });
+
+  it.each(['Current target', 'stale'])(
+    'keeps current coordinates when the owned text view contains %s field text',
+    async (cachedText) => {
+      measureCache.clear();
+      const textSource = referenceFixture(cachedText);
+      const source = textSource.map((block) => ({
+        ...block,
+        runs: block.runs.map((run, i) => ({ ...run, pmStart: 100 + i, pmEnd: 101 + i })),
+      }));
+      const owner = createCanonicalPaginationSourceReader(
+        () => null,
+        (candidate) => candidate === source,
+        () => textSource,
+      );
+      const result = await incrementalLayout(
+        [],
+        null,
+        source,
+        referenceOptions,
+        Object.assign((block: FlowBlock) => referenceMeasure(block), { paginationSourceOwner: owner }),
+      );
+      expect((result.blocks[0] as ParagraphBlock).runs[0]).toMatchObject({
+        text: 'Current target',
+        pmStart: 100,
+        pmEnd: 101,
+      });
+      expect(source[0]!.runs[0]!.text).toBe(cachedText);
+      expect(textSource[0]!.runs[0]!.text).toBe(cachedText);
+      if (cachedText === 'Current target') expect(result.blocks).toBe(source);
+    },
+  );
 
   it('resolves stale current REF caches even when they agree with the previous computed plane', async () => {
     measureCache.clear();
