@@ -3233,19 +3233,32 @@ export class DomPainter {
       const innerWrapper = this.doc.createElement('div');
       innerWrapper.classList.add('superdoc-drawing-inner');
       innerWrapper.style.position = 'absolute';
-      innerWrapper.style.left = '50%';
-      innerWrapper.style.top = '50%';
       innerWrapper.style.width = `${fragment.geometry.width}px`;
       innerWrapper.style.height = `${fragment.geometry.height}px`;
       innerWrapper.style.transformOrigin = 'center';
 
       const scale = fragment.scale ?? 1;
-      const transforms: string[] = ['translate(-50%, -50%)'];
-      transforms.push(`rotate(${fragment.geometry.rotation ?? 0}deg)`);
-      transforms.push(`scaleX(${fragment.geometry.flipH ? -1 : 1})`);
-      transforms.push(`scaleY(${fragment.geometry.flipV ? -1 : 1})`);
-      transforms.push(`scale(${scale})`);
-      innerWrapper.style.transform = transforms.join(' ');
+      if (
+        (fragment.geometry.rotation ?? 0) === 0 &&
+        !fragment.geometry.flipH &&
+        !fragment.geometry.flipV &&
+        scale === 1
+      ) {
+        // An unnecessary half-pixel transform clips thin SVG ink in Chromium.
+        // Numeric centering keeps the same frame without a transformed surface.
+        innerWrapper.style.left = `${((resolvedItem?.width ?? fragment.width) - fragment.geometry.width) / 2}px`;
+        innerWrapper.style.top = `${((resolvedItem?.height ?? fragment.height) - fragment.geometry.height) / 2}px`;
+        innerWrapper.style.zIndex = '0';
+      } else {
+        innerWrapper.style.left = '50%';
+        innerWrapper.style.top = '50%';
+        const transforms: string[] = ['translate(-50%, -50%)'];
+        transforms.push(`rotate(${fragment.geometry.rotation ?? 0}deg)`);
+        transforms.push(`scaleX(${fragment.geometry.flipH ? -1 : 1})`);
+        transforms.push(`scaleY(${fragment.geometry.flipV ? -1 : 1})`);
+        transforms.push(`scale(${scale})`);
+        innerWrapper.style.transform = transforms.join(' ');
+      }
 
       innerWrapper.appendChild(this.renderDrawingContent(block, fragment, context));
       fragmentEl.appendChild(innerWrapper);

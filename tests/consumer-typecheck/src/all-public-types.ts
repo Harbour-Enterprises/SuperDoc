@@ -24,6 +24,11 @@
  * scenarios then exercise this file to catch the actual any-collapses.
  */
 import type {
+  DocumentLoadOptions,
+  PageBodyTarget,
+  PageMetricsHandle,
+  PageMetricsPage,
+  PageMetricsSnapshot,
   DiagnosticsConfig,
   InteractionHistoryConfig,
   InteractionHistoryEvent,
@@ -601,3 +606,9 @@ import type { PermissionRangeEditor, PermissionRangeEditorResolution, SetEditing
 const _real_PermissionRangeEditor: AssertNotAny<PermissionRangeEditor> = true;
 const _real_PermissionRangeEditorResolution: AssertNotAny<PermissionRangeEditorResolution> = true;
 const _real_SetEditingRestrictionInput: AssertNotAny<SetEditingRestrictionInput> = true;
+
+const _real_DocumentLoadOptions: AssertNotAny<DocumentLoadOptions> = true;
+const _real_PageBodyTarget: AssertNotAny<PageBodyTarget> = true;
+const _real_PageMetricsHandle: AssertNotAny<PageMetricsHandle> = true;
+const _real_PageMetricsPage: AssertNotAny<PageMetricsPage> = true;
+const _real_PageMetricsSnapshot: AssertNotAny<PageMetricsSnapshot> = true;

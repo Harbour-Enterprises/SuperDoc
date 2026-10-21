@@ -1,5 +1,11 @@
 import type { OperationId } from '../contract/types.js';
-import type { AffectedRef, AffectedRefRemapping, ReceiptEntity, TextRangeShift } from '../types/receipt.js';
+import type {
+  AffectedRef,
+  AffectedRefRemapping,
+  ReceiptEntity,
+  TextRangeShift,
+  TrackedTextRangeShift,
+} from '../types/receipt.js';
 import type { StoryLocator } from '../types/story.types.js';
 /**
  * Snapshot of the editor's undo/redo history state.
@@ -92,6 +98,10 @@ export interface HistoryActionResult {
    * undone or redone transaction changed visible text.
    */
   textRangeShifts?: TextRangeShift[];
+  /** Exact block-local physical-text shifts, including deleted revision text. */
+  trackedTextRangeShifts?: TrackedTextRangeShift[];
+  /** Original forward transaction identity; absent on older adapters and no-op results. */
+  history?: { txId: string; direction: 'undo' | 'redo'; txIds?: string[] };
   /**
    * Collaborative undo status. v1 callers may ignore this.
    */

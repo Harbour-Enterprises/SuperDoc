@@ -1,5 +1,6 @@
+import { createDocumentLoadScope } from '../core/helpers/document-load.js';
 import { defineStore } from 'pinia';
-import { ref, reactive, computed } from 'vue';
+import { ref, reactive, computed, markRaw } from 'vue';
 import { v4 as uuidv4 } from 'uuid';
 import { useCommentsStore } from './comments-store';
 import { getFileObject, DOCX, PDF, HTML } from '@superdoc/common';
@@ -49,7 +50,11 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     source: null,
   });
 
+  const pendingLoads = new Set();
+
   const reset = () => {
+    for (const scope of pendingLoads) scope.cancel();
+    pendingLoads.clear();
     documents.value = [];
     documentBounds.value = [];
     Object.assign(pages, {});
@@ -172,11 +177,28 @@ export const useSuperdocStore = defineStore('superdoc', () => {
         continue;
       }
 
+      let loadScope;
+      let loadFailureReported = false;
       try {
+        loadScope = doc.load === undefined ? undefined : markRaw(createDocumentLoadScope(doc.load, doc.id));
+        if (loadScope) {
+          pendingLoads.add(loadScope);
+          loadScope.onSettled(() => pendingLoads.delete(loadScope));
+          loadScope.onFailure((error) => {
+            loadFailureReported = true;
+            pendingLoads.delete(loadScope);
+            documents.value = documents.value.filter((entry) => entry.loadScope !== loadScope);
+            emitException({ error, code: error.code, stage: 'document-init', document: doc, documentId: doc.id });
+          });
+          loadScope.assertActive();
+        }
         // Ensure the document object has data (ie: if loading from URL)
-        let docWithData = await _initializeDocumentData(doc);
+        const dataTask = _initializeDocumentData(doc, loadScope);
+        let docWithData = await (loadScope ? loadScope.wait(dataTask) : dataTask);
+        loadScope?.assertActive();
 
         if (!docWithData) {
+          loadScope?.finish();
           emitException({
             error: new Error('Document could not be initialized with the provided configuration.'),
             stage: 'document-init',
@@ -187,10 +209,12 @@ export const useSuperdocStore = defineStore('superdoc', () => {
         }
 
         // Create composable and append to our documents
-        const smartDoc = useDocument(docWithData, currentConfig.value);
+        const smartDoc = useDocument({ ...docWithData, loadScope }, currentConfig.value);
         documents.value.push(smartDoc);
       } catch (e) {
-        emitException({ error: e, stage: 'document-init', document: doc });
+        loadScope?.finish();
+        if (loadScope) pendingLoads.delete(loadScope);
+        if (!loadFailureReported) emitException({ error: e, stage: 'document-init', document: doc });
         console.warn('[superdoc] Error initializing document:', doc, 'with error:', e, 'Skipping document.');
       }
     }
@@ -212,7 +236,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
    * @param {Object} doc The document config
    * @returns {Promise<Object>} The document object with data
    */
-  const _initializeDocumentData = async (doc) => {
+  const _initializeDocumentData = async (doc, loadScope) => {
     // Normalize any uploader-specific wrapper to a native File/Blob upfront
     doc = normalizeDocumentEntry(doc);
     const documentType = doc.data?.type || doc.type;
@@ -269,7 +293,12 @@ export const useSuperdocStore = defineStore('superdoc', () => {
       if (doc.type.toLowerCase() === 'docx') doc.type = DOCX;
       else if (doc.type.toLowerCase() === 'pdf') doc.type = PDF;
       try {
-        const fileObject = await getFileObject(doc.url, doc.name || 'document', doc.type);
+        const fileObject = await getFileObject(
+          doc.url,
+          doc.name || 'document',
+          doc.type,
+          ...(loadScope ? [{ signal: loadScope.signal }] : []),
+        );
         return { ...doc, data: fileObject };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -322,6 +351,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     delete pages[normalizedDocumentId];
 
     const [removed] = documents.value.splice(docIndex, 1);
+    removed?.loadScope?.cancel();
 
     const configDocs = currentConfig.value?.documents;
     if (Array.isArray(configDocs)) {

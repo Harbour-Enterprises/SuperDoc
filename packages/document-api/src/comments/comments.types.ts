@@ -122,6 +122,10 @@ export interface CommentTrackedChangeLink {
 export interface CommentInfo {
   address: CommentAddress;
   commentId: string;
+  /** Word comment-body paragraph identity used for threading, not the annotated paragraph. */
+  readonly paraId?: string;
+  /** Word durable comment identity, when present in the source. */
+  readonly durableId?: string;
   /**
    * Caller-owned integration id. This is distinct from the Word-compatible
    * {@link commentId} and survives save/reopen as a durable correlation key.
@@ -238,6 +242,10 @@ export interface CommentDomain {
   address: CommentAddress;
   /** Canonical comment id alias returned by native runtimes. */
   commentId?: string;
+  /** See {@link CommentInfo.paraId}. */
+  readonly paraId?: string;
+  /** See {@link CommentInfo.durableId}. */
+  readonly durableId?: string;
   /** See {@link CommentInfo.externalId}. */
   externalId?: string;
   /** See {@link CommentInfo.metadata}. */

@@ -8,15 +8,32 @@ description: Set the browser Editor license identity.
 
 Set the license key when you create the Editor. When telemetry is enabled, the browser Editor sends it with document-open events. It is client-visible configuration, not a secret or an authorization credential.
 
+The browser Editor does not validate the key's commercial entitlement locally and does not call a license-validation service before opening or editing a document. A successful document open, including an offline open, does not prove that a license is valid. The licensing terms still apply.
+
+## Supply the identity at deployment time
+
+Read the identity from configuration served by your application when you need to change it without rebuilding the JavaScript bundle. For example, deploy `/editor-config.json` alongside the application:
+
+```json
+{ "licenseKey": "deployment-license-identity" }
+```
+
 ```ts
+const response = await fetch('/editor-config.json');
+if (!response.ok) throw new Error('Could not load Editor configuration');
+const deploymentConfig = await response.json();
+
 const superdoc = new SuperDoc({
   selector: '#editor',
   document: '/contract.docx',
-  licenseKey: import.meta.env.VITE_SUPERDOC_LICENSE_KEY,
+  licenseKey: deploymentConfig.licenseKey,
+  telemetry: { enabled: false },
 });
 ```
 
-When telemetry is enabled and you omit the key, document-open events use the community and evaluation identity. Browser build variables remain visible to the person running the application. Keep document access, collaboration credentials, and service authorization separate from the license identity.
+The key is accepted as runtime configuration. This example explicitly disables telemetry; it does not demonstrate offline license validation. With all document and runtime assets served by the deployment, opening, editing, and exporting a document do not require a vendor license-validation request. See [Secure integration](/editor/secure-integration) for the remaining asset and network configuration.
+
+When telemetry is enabled and you omit the key, document-open events use the community and evaluation identity. Runtime configuration and browser build variables remain visible to the person running the application. Keep document access, collaboration credentials, and service authorization separate from the license identity.
 
 This page covers Editor configuration. See [Licensing](/resources/license) for the open-source and commercial terms and the licensing contact.
 

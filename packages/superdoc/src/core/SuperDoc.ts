@@ -1,3 +1,4 @@
+import type { PageMetricsHandle } from '../public/ui/page-metrics.js';
 import {
   createInteractionHistory,
   recordInteraction,
@@ -461,7 +462,7 @@ type V2ActiveEditorFacade = {
       listener: (snapshot: { isLocked?: boolean; lockedBy?: Record<string, unknown> | null }) => void,
     ) => () => void;
   } | null;
-  pageMetrics?: unknown;
+  pageMetrics?: PageMetricsHandle | null;
   pageLayout?: unknown;
   pageFurniture?: unknown;
   reviewWindow?: unknown;
@@ -666,6 +667,8 @@ interface SuperDocEventMap {
    */
   'document-replaced': [SuperDocDocumentReplacedPayload];
   'editor-update': [EditorUpdateEvent];
+  /** Exact acknowledged history depths, including changes that keep Undo enabled. */
+  'history-change': [{ documentId: string | null; history: Readonly<import('@superdoc/document-api').HistoryState> }];
   'tracked-changes:bulk-decision': [SuperDocTrackedChangesBulkDecisionPayload];
   'content-error': [EditorContentErrorPayload];
   'fonts-resolved': [FontsResolvedPayload];

@@ -176,7 +176,11 @@ export type CommentRelocateStep = {
 export type TrackChangesDecideStep = {
   id: string;
   op: 'trackChanges.decide';
-  args: { decision: 'accept' | 'reject'; target: { kind: 'id'; id: string } | { kind: 'ids'; ids: string[] } };
+  args: {
+    decision: 'accept' | 'reject';
+    commentRetention?: 'point';
+    target: { kind: 'id'; id: string } | { kind: 'ids'; ids: string[] };
+  };
 };
 export type ReviewMutationStep = CommentRelocateStep | TrackChangesDecideStep;
 

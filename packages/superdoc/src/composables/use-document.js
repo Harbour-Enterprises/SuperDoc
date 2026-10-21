@@ -104,6 +104,8 @@ export default function useDocument(params, superdocConfig) {
     markdown,
     password,
     fieldContext: params.fieldContext,
+    load: params.load,
+    loadScope: params.loadScope,
     type,
     config,
     state,

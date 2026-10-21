@@ -81,7 +81,12 @@ export class FetchFailedError extends FileObjectError {
  * @throws {FetchFailedError} If network request fails
  * @throws {FileObjectError} For other file creation errors
  */
-export const getFileObject = async (fileUrl: string, name: string, type: MimeType): Promise<File> => {
+export const getFileObject = async (
+  fileUrl: string,
+  name: string,
+  type: MimeType,
+  options?: { signal?: AbortSignal },
+): Promise<File> => {
   try {
     // Handle base64 data URIs without fetch (CSP-safe)
     if (fileUrl.startsWith('data:') && fileUrl.includes(';base64,')) {
@@ -95,7 +100,7 @@ export const getFileObject = async (fileUrl: string, name: string, type: MimeTyp
     }
 
     // Regular URLs and non-base64 data URIs use fetch
-    const response = await fetch(fileUrl);
+    const response = await (options?.signal ? fetch(fileUrl, { signal: options.signal }) : fetch(fileUrl));
     if (!response.ok) {
       throw new FetchFailedError(fileUrl, new Error(`HTTP ${response.status}: ${response.statusText}`));
     }

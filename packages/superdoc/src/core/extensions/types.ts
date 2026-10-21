@@ -74,6 +74,8 @@ export interface SuperDocTextAddress {
 export interface SuperDocTextTarget {
   kind: 'text';
   segments: ReadonlyArray<{ blockId: string; range: { start: number; end: number } }>;
+  /** Omitted means visible; tracked includes pending deleted text. */
+  coordinateSpace?: 'visible' | 'tracked';
   story?: SuperDocStoryLocator;
 }
 
@@ -99,7 +101,7 @@ export interface SuperDocSelectionTarget {
   coordinateSpace?: 'visible' | 'tracked';
 }
 
-/** Visible-coordinate locations an extension anchor can be created from. */
+/** Visible or tracked locations; markup-hidden tracked ranges stay active but unpainted. */
 export type SuperDocAnchorTarget = SuperDocSelectionTarget | SuperDocTextTarget | SuperDocTextAddress;
 
 /** Lifecycle status of a {@link SuperDocAnchor}. */
@@ -177,6 +179,10 @@ export interface SuperDocMutationFilter {
 
 /** Simplified mutation event delivered to named/filtered handlers. */
 export interface SuperDocMutationEvent {
+  /** Additive operation cause; existing origin filters retain their meanings. */
+  cause?: 'user' | 'api' | 'undo' | 'redo' | 'remote' | 'preview';
+  /** Caller correlation on the current commit only. */
+  changeTag?: string;
   id: string;
   origin: SuperDocMutationOrigin;
   affects: Set<SuperDocMutationAffect>;

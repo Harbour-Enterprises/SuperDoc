@@ -5,8 +5,8 @@
  * They route through the `SelectionMutationAdapter` (backed by the plan engine).
  */
 
-import type { MutationOptions } from '../types/mutation-plan.types.js';
-import { normalizeMutationOptions } from '../write/write.js';
+import type { TextMutationOptions } from '../write/write.js';
+import { normalizeTextMutationOptions } from '../write/write.js';
 import type { SelectionTarget, TargetLocator } from '../types/address.js';
 import type { TextMutationReceipt } from '../types/receipt.js';
 import type { StoryLocator } from '../types/story.types.js';
@@ -79,18 +79,18 @@ export type FormatRangeInput = TargetLocator & {
   properties: InlineRunPatch;
   /** Target a specific document story (body, header, footer, footnote, endnote). */
   in?: StoryLocator;
-  changeMode?: MutationOptions['changeMode'];
+  changeMode?: TextMutationOptions['changeMode'];
   dryRun?: boolean;
   expectedRevision?: string;
 };
 
 /**
- * Named alias for MutationOptions on format.apply.
+ * Named alias for TextMutationOptions on format.apply.
  *
  * Exists as a distinct type so the styles system can add style-specific
  * options (e.g. scope, priority) without changing the public API shape.
  */
-export type StyleApplyOptions = MutationOptions;
+export type StyleApplyOptions = TextMutationOptions;
 
 // ---------------------------------------------------------------------------
 // Public API surface
@@ -98,13 +98,13 @@ export type StyleApplyOptions = MutationOptions;
 
 /** Direct alias methods (`format.<inlineKey>`) that route to `format.apply`. */
 export type FormatInlineAliasApi = {
-  [K in InlineRunPatchKey]: (input: FormatInlineAliasInput<K>, options?: MutationOptions) => TextMutationReceipt;
+  [K in InlineRunPatchKey]: (input: FormatInlineAliasInput<K>, options?: TextMutationOptions) => TextMutationReceipt;
 };
 
 /** Public helper surface exposed on `DocumentApi.format`. */
 export interface FormatApi extends FormatInlineAliasApi {
-  strikethrough(input: FormatStrikethroughInput, options?: MutationOptions): TextMutationReceipt;
-  apply(input: StyleApplyInput, options?: MutationOptions): TextMutationReceipt;
+  strikethrough(input: FormatStrikethroughInput, options?: TextMutationOptions): TextMutationReceipt;
+  apply(input: StyleApplyInput, options?: TextMutationOptions): TextMutationReceipt;
 }
 
 // ---------------------------------------------------------------------------
@@ -172,14 +172,14 @@ function validateStyleApplyInput(input: unknown): asserts input is StyleApplyInp
 export function executeStyleApply(
   adapter: SelectionMutationAdapter,
   input: StyleApplyInput,
-  options?: MutationOptions,
+  options?: TextMutationOptions,
 ): TextMutationReceipt {
   validateStyleApplyInput(input);
   const request = input.target
     ? { kind: 'format' as const, target: input.target, inline: input.inline, in: input.in }
     : { kind: 'format' as const, ref: input.ref!, inline: input.inline, in: input.in };
 
-  return adapter.execute(request, normalizeMutationOptions(options));
+  return adapter.execute(request, normalizeTextMutationOptions(options));
 }
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ export function executeInlineAlias<K extends InlineRunPatchKey>(
   adapter: SelectionMutationAdapter,
   key: K,
   input: FormatInlineAliasInput<K>,
-  options?: MutationOptions,
+  options?: TextMutationOptions,
 ): TextMutationReceipt {
   validateInlineAliasInput(key, input);
   const value = normalizeInlineAliasValue(key, (input as { value?: InlineRunPatch[K] }).value);
@@ -232,5 +232,5 @@ export function executeInlineAlias<K extends InlineRunPatchKey>(
     ? { kind: 'format' as const, target: input.target, inline, in: input.in }
     : { kind: 'format' as const, ref: input.ref!, inline, in: input.in };
 
-  return adapter.execute(request, normalizeMutationOptions(options));
+  return adapter.execute(request, normalizeTextMutationOptions(options));
 }

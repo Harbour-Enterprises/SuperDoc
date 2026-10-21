@@ -68,6 +68,7 @@ export interface SDError {
 export type MutationResolutionTarget = TextAddress | BlockNodeAddress | BodyStoryLocator;
 
 export interface SDMutationReceipt {
+  changeTag?: string;
   success: boolean;
   /** Effective content mode on a committed success; absent for no-op and dry-run calls. */
   appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
@@ -86,6 +87,7 @@ export interface SDMutationReceipt {
   remappedRefs?: ReceiptSuccess['remappedRefs'];
   affectedStories?: ReceiptSuccess['affectedStories'];
   textRangeShifts?: ReceiptSuccess['textRangeShifts'];
+  trackedTextRangeShifts?: ReceiptSuccess['trackedTextRangeShifts'];
   txId?: ReceiptSuccess['txId'];
   warnings?: ReceiptSuccess['warnings'];
   resolution?: {

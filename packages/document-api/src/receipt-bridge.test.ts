@@ -254,6 +254,33 @@ describe('receipt-bridge: created-content effects', () => {
 });
 
 describe('receipt-bridge: shared tracked and no-op metadata', () => {
+  it('preserves omitted, empty and populated physical shifts without inventing replay metadata', () => {
+    const target = { kind: 'text' as const, blockId: 'B1', range: { start: 0, end: 0 } };
+    const range = { from: 0, to: 0 };
+    for (const shifts of [
+      undefined,
+      [],
+      [{ story: { kind: 'story' as const, storyType: 'body' as const }, blockId: 'B1', atCharInBlock: 2, delta: -1 }],
+    ]) {
+      const metadata = shifts === undefined ? {} : { trackedTextRangeShifts: shifts };
+      const textReceipt: TextMutationReceipt = { success: true, resolution: { target, range, text: '' }, ...metadata };
+      for (const result of [
+        textReceiptToSDReceipt(textReceipt),
+        buildStructuralReceipt(true, { target, range, ...metadata }),
+      ]) {
+        if (shifts === undefined) expect(result).not.toHaveProperty('trackedTextRangeShifts');
+        else expect(result).toHaveProperty('trackedTextRangeShifts', shifts);
+        expect(result).not.toHaveProperty('history');
+      }
+      const failed = buildStructuralReceipt(
+        false,
+        { target, range, ...metadata },
+        { code: 'INVALID_INPUT', message: 'Rejected' },
+      );
+      expect(failed).not.toHaveProperty('trackedTextRangeShifts');
+    }
+  });
+
   it('preserves false, zero, empty refs and authored refs on both success paths', () => {
     const target = { kind: 'text' as const, blockId: 'B1', range: { start: 0, end: 0 } };
     const range = { from: 0, to: 0 };

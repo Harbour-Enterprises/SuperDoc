@@ -469,3 +469,48 @@ describe('SuperDoc Store - measurementUnit seeding', () => {
     expect(store.measurementUnit).toBe('in');
   });
 });
+
+describe('opt-in initial load lifetime', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    getFileObject.mockReset();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  it('bounds a stalled download and cannot publish its late response', async () => {
+    let release;
+    getFileObject.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    const store = useSuperdocStore();
+    const failures = [];
+    await store.init(
+      createTestConfig([{ id: 'late', type: DOCX, url: '/late.docx', load: { timeoutMs: 5 } }], {
+        onException: (failure) => failures.push(failure),
+      }),
+    );
+    expect(failures).toHaveLength(1);
+    expect(failures[0].error.code).toBe('DOCUMENT_LOAD_TIMEOUT');
+    release(new File(['late'], 'late.docx', { type: DOCX }));
+    await Promise.resolve();
+    expect(store.documents).toHaveLength(0);
+  });
+  it('retires a stalled import without activating the timed-out document', async () => {
+    const store = useSuperdocStore();
+    const failures = [];
+    await store.init(
+      createTestConfig(
+        [{ id: 'import', type: DOCX, data: new File(['doc'], 'doc.docx', { type: DOCX }), load: { timeoutMs: 5 } }],
+        { onException: (failure) => failures.push(failure) },
+      ),
+    );
+    const scope = store.documents[0].loadScope;
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    expect(store.documents).toHaveLength(0);
+    expect(scope.finish()).toBe(false);
+    expect(failures).toHaveLength(1);
+    expect(failures[0].code).toBe('DOCUMENT_LOAD_TIMEOUT');
+  });
+});

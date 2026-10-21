@@ -478,6 +478,7 @@ const scheduleReplayTrackedChangeSync = () => {
 
 const handleDocumentReady = (documentId, container) => {
   const doc = getDocument(documentId);
+  if (!doc || (doc.loadScope && !doc.loadScope.finish())) return;
   doc.isReady = true;
   doc.container = container;
   if (areDocumentsReady.value) {
@@ -870,6 +871,8 @@ const clearDocumentFieldContext = (documentId) => {
 
 const onV2EditorReady = (payload) => {
   if (!payload) return;
+  const loadingDocument = documents.value.find((doc) => doc.id === payload.documentId);
+  if (loadingDocument?.loadScope && !loadingDocument.loadScope.finish()) return;
   // A successful open clears any prior terminal failure for this surface.
   clearV2EditorFailure(payload.documentId ?? null);
   clearV2MutationRejectionNotifications(payload.documentId ?? null);
@@ -1892,6 +1895,10 @@ const onV2HostEvent = (document, event) => {
   // acquire editor-update or review side effects through this subscription.
   if (event.type === 'mutation:committed' && event.origin === 'extension') return;
   const documentId = document?.id ?? null;
+  if (event.type === 'history:changed' && event.state) {
+    proxy.$superdoc.emit('history-change', { documentId, history: event.state });
+    return;
+  }
   if (event.type === 'collaboration:document-replaced') clearDocumentFieldContext(documentId);
   if (event.type === 'review-mutation:started') {
     v2ReviewWindowController.beginMutation(event.reviewMutation);
@@ -2146,6 +2153,7 @@ const normalizeV2EditorFailureDetail = (detail) =>
   typeof detail === 'string' && detail.trim().length > 0 ? detail.trim() : null;
 
 const onV2EditorFailed = (payload) => {
+  documents.value.find((doc) => doc.id === payload?.documentId)?.loadScope?.finish();
   clearActiveV2EditorFacade(payload?.documentId ?? null);
   const reason = typeof payload?.reason === 'string' && payload.reason.length > 0 ? payload.reason : 'open-failed';
   const detail = normalizeV2EditorFailureDetail(payload?.detail);
@@ -2337,6 +2345,7 @@ const editorOptions = (doc) => {
       : {}),
     isDebug: proxy.$superdoc.config.isDebug || false,
     documentId: doc.id,
+    documentLoadScope: doc.loadScope,
     user: proxy.$superdoc.user,
     users: proxy.$superdoc.users,
     colors: proxy.$superdoc.colors,

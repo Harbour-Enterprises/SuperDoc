@@ -334,3 +334,8 @@ export type {
   InteractionHistorySnapshot,
   SuperDocDiagnostics,
 } from '../core/types/diagnostics.js';
+
+export type { PageMetricsHandle, PageMetricsSnapshot, PageMetricsPage, PageBodyTarget } from './ui/page-metrics.js';
+
+export { DocumentLoadError } from '../core/helpers/document-load.js';
+export type { DocumentLoadOptions } from '../core/helpers/document-load.js';

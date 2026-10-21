@@ -1,0 +1,129 @@
+---
+title: Host integration hooks
+description: Correlate edits, read geometry and history, and bound initial document loading without built-in controls.
+---
+
+These APIs do not add controls or change default appearance. Keep toolbars, review cards,
+Simple Markup indicators and overlays in your application.
+
+## Mutation correlation and attribution
+
+Pass an optional `changeTag` in the options of an ordinary Document API mutation. Committed
+success receipts echo the tag; extension mutation notifications expose it as `changeTag`
+and through `receipt.changeTag`. Tags belong to their individual asynchronous call, are not
+stored in DOCX, and are not replayed as the original request on Undo or Redo. Dry runs,
+failures and unchanged results do not receive a commit tag. Tags are nonempty strings of
+at most 256 characters.
+
+Existing mutation `origin` values and filters are unchanged. Browser mutation notifications
+also expose `cause`: `user`, `api`, `undo`, `redo`, `remote` or `preview`. Preview notifications
+are not committed content changes. Remote changes do not inherit a local caller's tag.
+
+Tracked plain-text `insert`, `delete`, `replace`, and inline `format` calls accept an
+optional author and ISO 8601 UTC date. Dates must include time and a `Z` suffix; invalid
+calendar dates fail before mutation. Omit either value to keep session author/transaction
+time. Attribution does not change the session user or imported revisions.
+
+```ts
+await superdoc.activeEditor.doc.format.bold(
+  { ref: selectedRangeRef },
+  { changeMode: 'tracked', author: { name: 'Review service' },
+    date: '2025-02-03T04:05:06Z', changeTag: 'request-42' },
+);
+```
+
+Attribution is not accepted on rich-content or unsupported structural writes. Use the
+operation's declared support instead of passing transaction internals.
+
+Comment results expose optional read-only `paraId` and `durableId`. `paraId` identifies the
+comment-body paragraph used by Word threading, **not** the annotated contract paragraph.
+Absent source identities stay absent; reads do not allocate or write IDs.
+
+## Page metrics and geometry
+
+`activeEditor.pageMetrics` is a typed per-editor facade. `getSnapshot()` exposes document
+identity, layout generation, render epoch, zoom, page sizes/margins and source provenance.
+Subscribe to this facade and release its subscription before closing/replacing that editor.
+An empty page array means no painted snapshot; page metadata can include unmounted pages.
+
+`base` values use unzoomed CSS pixels. Despite its historical name, each page's `viewport`
+box is in **scaled stage coordinates**, not browser client coordinates. It already includes
+zoom. Do not subtract window scroll from these values or multiply by zoom again. Use
+`ui.viewport.getRect` for exact painted target client coordinates, or its `relativeTo`
+option for an application overlay container. Applications that own a scroll container can
+retain `(pageIndex, unzoomedOffsetWithinPage)` and use their container's scroll offset plus
+this page table to synchronize panes at different zooms. Recompute after resize/zoom/layout
+changes; unmounted target geometry is unavailable until revealed.
+
+`scrollToPage(index)` admits navigation and returns a boolean; it is not a paint-complete
+promise. `revealBodyTarget({ paraId })` resolves with a painted target or an explicit rejection.
+Indices are zero-based. Keep model readiness distinct from initial rendered readiness.
+
+```ts
+const batch = await superdoc.ui.viewport.getRects({ targets, relativeTo: overlay, signal });
+if (batch.status === 'complete') {
+  batch.results.forEach((result, index) => {
+    if (result.found) positionOverlay(index, result.rects);
+  });
+}
+```
+
+A batch preserves input order and the single-query result vocabulary. It accepts at most
+5000 targets, yields every 32, and never silently renders the document to satisfy a query.
+The opaque `generation` binds the result to its document/layout/viewport state. If the
+state changes during the request, `status` is `stale` and every result is unavailable.
+Cancellation and disposal similarly return `cancelled` or `disposed` without partial usable
+geometry. Retry stale requests after the viewport settles. Missing/virtualized targets keep
+their individual unavailable reasons in a complete batch.
+
+## Per-instance caret and selection colors
+
+Set these CSS variables on the application's editor container, or use `buildTheme({ vars })`
+and apply its class to that container:
+
+```css
+.contract-editor {
+  --sd-caret-color: #804000;
+  --sd-selection-background: rgb(255 210 0 / 35%);
+  --sd-selection-text-color: #502000;
+}
+```
+
+Caret and selection fill consume these variables in the main editor's paint path.
+Selection text color uses the browser CSS Custom Highlight API over exact resolved painted
+text ranges; unsupported or unresolved ranges retain their normal text color. No text nodes
+or document formatting are rewritten. Another editor inherits only its own container's values.
+Omitting the variables retains existing colors. History and exported content are unaffected.
+
+## Initial-load deadline and cancellation
+
+```ts
+const controller = new AbortController();
+const superdoc = new SuperDoc({
+  selector: '#editor',
+  document: { url: '/contract.docx', load: { timeoutMs: 15_000, signal: controller.signal } },
+  onException({ error }) {
+    if (error instanceof DocumentLoadError) reportLoadFailure(error.code);
+  },
+});
+```
+
+`load` is optional per document. Its deadline spans that document's download, import and
+initial rendered readiness. Timeout and cancellation report `DocumentLoadError` with
+`DOCUMENT_LOAD_TIMEOUT` or `DOCUMENT_LOAD_CANCELLED`. A timed-out document cannot activate
+later. Other instances remain usable. Fetch cancellation is forwarded to the browser;
+retiring a stalled import removes that document and guards its ready publication. This is
+not a synchronous interrupt of a running JavaScript instruction.
+
+The timer and signal listener retire at initial readiness. Aborting afterward does not
+close the document. Omitted `load` leaves current behavior unchanged, including the separate
+worker-startup timeout. Corrupt/unsupported inputs retain their existing diagnostic outcomes.
+This option does not redefine kernel/model readiness or add loading/error controls.
+
+## Exact history observation
+
+Use existing `doc.history.get()` for the initial state and
+`superdoc.on('history-change', ({ documentId, history }) => { ... })` for acknowledged
+worker-owned depth changes, including changes while Undo stays enabled. Release the listener
+with `superdoc.off` when your application closes its view. No new controller or second stack
+is created. Preview/history semantics remain owned by the existing Document API history owner.

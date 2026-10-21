@@ -31,6 +31,35 @@ either after a reload, export the changed DOCX and save it through your applicat
 Metadata does not render by itself. List and resolve findings when the document opens, then paint their current ranges.
 Use tracked changes for edits because SuperDoc already renders and exports them as reviewable revisions.
 
+## Compose overlapping highlights
+
+A highlight supplies a host CSS class through `ctx.visuals.highlight(id, { className })`. Overlapping highlights keep
+both classes on their shared text. Define their appearance in your stylesheet; registering a provider later is not a
+visual priority setting. When two classes set the same CSS property, the normal CSS cascade decides the result.
+
+For example, combine a background and an underline so both findings remain visible regardless of registration order.
+Inside your extension's `activate(ctx)`, use public targets from the Document API:
+
+```ts
+const risk = ctx.visuals.highlight('risk', { className: 'review-risk' });
+const definedTerm = ctx.visuals.highlight('defined-term', { className: 'review-defined-term' });
+risk.replace([riskTarget]);
+definedTerm.replace([definedTermTarget]);
+```
+
+```css
+.review-risk { background-color: rgba(255, 180, 0, 0.45); }
+.review-defined-term {
+  text-decoration-line: underline;
+  text-decoration-color: rgb(40, 100, 255);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+```
+
+`replace()` changes a handle's targets. `invalidate()` requests that its decoration provider run again, and `dispose()`
+removes that handle. These render-only styles do not add document edits or export to DOCX.
+
 The [Track changes](/editor/custom-ui/tracked-changes) page owns navigation and accept/reject controls. Use
 [comments](/editor/custom-ui/comments) instead when people need a Word comment thread.
 

@@ -1183,7 +1183,9 @@ test('exports storage, version, and configuration guidance for the v2 Editor', a
   assert.match(configuration, /structured document carrying `collaboration`/);
   assert.doesNotMatch(configuration, /`modules` configures[^\n]*collaboration/);
   assert.match(telemetry, /new SuperDoc\([\s\S]*telemetry: \{/);
-  assert.match(license, /licenseKey: import\.meta\.env\.VITE_SUPERDOC_LICENSE_KEY/);
+  assert.match(license, /fetch\('\/editor-config\.json'\)/);
+  assert.match(license, /licenseKey: deploymentConfig\.licenseKey/);
+  assert.match(license, /does not validate the key's commercial entitlement locally/);
   assert.match(license, /not a secret or an authorization credential/);
 });
 

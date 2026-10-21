@@ -121,3 +121,38 @@ That comparison narrows the risk without settling it. Content-control hits carry
 `story` is not a general field on a hit. Only tracked-change hits carry it, and only when the change is painted outside the body, in a footnote, endnote, header, footer, or textbox. It exists because one tracked-change id can repeat across stories, so `story` names the occurrence actually under the point. Comment and content-control hits are returned normally in those stories but carry no `story`, so do not write story-sensitive handling for them. Use `ui.trackChanges.getAt()` when you need the full tracked-change row rather than the hit.
 
 Pass the object form. The legacy positional form `entityAt(x, y)` fails closed and returns `null`, because the addresses it produced are not resolvable by `getRect()`.
+
+
+## Coordinate spaces and viewport changes
+
+`ui.viewport.getRect({ target })` returns painted text rectangles in browser client coordinates, the same coordinate
+space as `MouseEvent.clientX` and `clientY`. Each rectangle includes a zero-based `pageIndex`.
+Pass your application-owned overlay container as `relativeTo` to subtract that element's current bounding-box origin:
+
+```ts
+const result = superdoc.ui.viewport.getRect({ target, relativeTo: overlayContainer });
+if (result.found) {
+  const first = result.rects[0];
+  overlay.style.left = `${first.left}px`;
+  overlay.style.top = `${first.bottom}px`;
+}
+```
+
+These are coordinates relative to the element's border box, not its scroll-content coordinates. If your overlay lives
+inside a scrolling content layer, account for that layer's scroll and border offsets in your application's positioning
+code. To convert a returned element-relative point back to browser client space, add the current
+`relativeTo.getBoundingClientRect().left` and `.top`. Resolve the rectangles again after the container moves or scrolls.
+
+Use `ui.viewport.observe(reposition)` to re-read geometry after scrolling, zoom, resize, layout and repaint changes.
+The callback is an invalidation signal coalesced to one per animation frame; it does not carry affected pages or a
+scroll-position snapshot. Unsubscribe when the overlay is removed. Use `ui.zoom.getSnapshot()` and `ui.zoom.set(percent)`
+to read and change zoom. Use the awaited `ui.viewport.scrollIntoView({ target })` to reveal a document range; check its
+`success` result.
+
+The older `superdoc.activeEditor.pageMetrics` facade also exposes page snapshots, subscriptions and `scrollToPage`.
+It remains typed as `unknown` on the editor facade, so consumers must validate its shape and recheck it when upgrading.
+Its page `viewport.xPx` and `viewport.yPx` describe zoomed layout-stage offsets; they are not browser client coordinates
+and do not include the host's client origin or scroll transform. Do not combine them with pointer coordinates as if the
+origins were the same. `scrollToPage` returns a boolean indicating whether navigation was accepted, not a promise that
+scrolling and painting have finished. The typed UI API does not currently provide visible-page snapshots, a
+page-plus-offset scroll restore operation, or a page-local/window coordinate conversion pair.

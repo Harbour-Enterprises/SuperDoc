@@ -952,6 +952,21 @@ export interface ViewportGetRectInput {
   relativeTo?: HTMLElement;
 }
 
+/** One bounded, cancellable request for acknowledged geometry in input order. */
+export interface ViewportGetRectsInput {
+  targets: readonly ViewportGetRectTarget[];
+  relativeTo?: HTMLElement;
+  signal?: AbortSignal;
+}
+
+export interface ViewportGetRectsResult {
+  status: 'complete' | 'stale' | 'cancelled' | 'disposed';
+  /** Opaque document/layout/viewport generation; compare for equality only. */
+  generation: string;
+  /** One result per input. An invalidated batch contains no usable rectangles. */
+  results: readonly ViewportRectResult[];
+}
+
 /** Result of `ui.viewport.getRect`. */
 export interface ViewportRectResult {
   /** Whether the target resolved to any painted geometry. */
@@ -1362,6 +1377,8 @@ export interface ViewportHandle {
    * document and viewport changes still invalidate it.
    */
   getRect(input: ViewportGetRectInput): ViewportRectResult;
+  /** At most 5000 targets, yielding every 32. Never forces unpainted pages to render. */
+  getRects(input: ViewportGetRectsInput): Promise<ViewportGetRectsResult>;
   /**
    * Subscribe to geometry invalidation after selection, zoom, scroll, resize,
    * layout, or repaint changes. The callback is coalesced to one per frame.

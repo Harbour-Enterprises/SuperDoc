@@ -60,6 +60,66 @@ describe('DomPainter shape regressions', () => {
     mount.remove();
   });
 
+  it.each([
+    { width: 192, height: 1, frameWidth: 192, frameHeight: 1, y: 100 },
+    { width: 192, height: 1, frameWidth: 192, frameHeight: 1, y: 100.78125 },
+    { width: 120, height: 50, frameWidth: 140, frameHeight: 70, y: 100 },
+    { width: 192.25, height: 1.25, frameWidth: 197.75, frameHeight: 3.75, y: 100.25 },
+  ])('centers identity drawings without a transformed clipping surface: %j', (dimensions) => {
+    const geometry = { width: dimensions.width, height: dimensions.height };
+    const block: DrawingFlowBlock = {
+      kind: 'drawing',
+      id: 'identity-ink',
+      drawingKind: 'vectorShape',
+      geometry,
+      shapeKind: 'rect',
+      fillColor: '#000000',
+      strokeColor: null,
+    };
+    const { blocks, measures, layout } = createDrawingFixtures(block);
+    Object.assign(layout.pages[0].fragments[0], {
+      y: dimensions.y,
+      width: dimensions.frameWidth,
+      height: dimensions.frameHeight,
+    });
+    createDomPainter({ blocks, measures }).paint(layout, mount);
+    const inner = mount.querySelector('.superdoc-drawing-inner') as HTMLElement;
+    expect(inner.style.left).toBe(`${(dimensions.frameWidth - geometry.width) / 2}px`);
+    expect(inner.style.top).toBe(`${(dimensions.frameHeight - geometry.height) / 2}px`);
+    expect(inner.style.transform).toBe('');
+    expect(inner.style.zIndex).toBe('0');
+    expect(inner.style.width).toBe(`${geometry.width}px`);
+    expect(inner.style.height).toBe(`${geometry.height}px`);
+    expect(inner.querySelector('path')?.getAttribute('fill')).toBe('#000000');
+  });
+
+  it.each([
+    { rotation: 320, flipH: false, flipV: false, scale: 1 },
+    { rotation: 0, flipH: true, flipV: false, scale: 1 },
+    { rotation: 0, flipH: false, flipV: true, scale: 1 },
+    { rotation: 0, flipH: false, flipV: false, scale: 0.75 },
+  ])('retains authored drawing transforms: %j', ({ scale, ...transform }) => {
+    const geometry = { width: 120, height: 50, ...transform };
+    const block: DrawingFlowBlock = {
+      kind: 'drawing',
+      id: 'transformed-ink',
+      drawingKind: 'vectorShape',
+      geometry,
+      shapeKind: 'rect',
+      fillColor: '#000000',
+      strokeColor: null,
+    };
+    const { blocks, measures, layout } = createDrawingFixtures(block);
+    Object.assign(layout.pages[0].fragments[0], { scale });
+    createDomPainter({ blocks, measures }).paint(layout, mount);
+    const inner = mount.querySelector('.superdoc-drawing-inner') as HTMLElement;
+    expect(inner.style.left).toBe('50%');
+    expect(inner.style.top).toBe('50%');
+    expect(inner.style.transform).toBe(
+      `translate(-50%, -50%) rotate(${transform.rotation}deg) scaleX(${transform.flipH ? -1 : 1}) scaleY(${transform.flipV ? -1 : 1}) scale(${scale})`,
+    );
+  });
+
   it('prefers custom geometry paths over preset lookups when both are present', () => {
     const geometry: DrawingGeometry = { width: 120, height: 120, rotation: 0, flipH: false, flipV: false };
     const customPath = 'M 0 100 L 50 0 L 100 100 Z';

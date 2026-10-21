@@ -31,6 +31,8 @@ export type CapabilityFlag = {
 
 /** Per-operation runtime capability describing availability, tracked-mode, and dry-run support. */
 export interface OperationRuntimeCapability {
+  /** Explicit optional-policy support for trackChanges.decide; absence means unsupported. */
+  commentRetention?: readonly 'point'[];
   available: boolean;
   tracked: boolean;
   /**

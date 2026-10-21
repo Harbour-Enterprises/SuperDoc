@@ -1,13 +1,13 @@
 {
   "generatedAt": "2026-09-02T00:00:00.000Z",
   "summary": {
-    "total": 296,
+    "total": 302,
     "byBucket": {
       "legacy-root": 3,
-      "supported-root": 293
+      "supported-root": 299
     },
     "byConfidence": {
-      "high": 246,
+      "high": 252,
       "medium": 50
     }
   },
@@ -3267,6 +3267,72 @@
       "inDcts": true,
       "inEsm": true,
       "inCjs": true
+    },
+    {
+      "name": "DocumentLoadError",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": true,
+      "inCjs": true
+    },
+    {
+      "name": "DocumentLoadOptions",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "PageBodyTarget",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "PageMetricsHandle",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "PageMetricsPage",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
+    },
+    {
+      "name": "PageMetricsSnapshot",
+      "bucket": "supported-root",
+      "rationale": "Additive host integration contract documented in editor/integration-hooks; optional load lifetime or existing page metrics facade.",
+      "confidence": "high",
+      "source": "integration",
+      "inDts": true,
+      "inDcts": true,
+      "inEsm": false,
+      "inCjs": false
     }
   ]
 }

@@ -1,3 +1,17 @@
+import type {
+  TemporaryMutationInput,
+  TemporaryMutationHandleInput,
+  TemporaryMutationReplaceInput,
+  TemporaryMutationReceipt,
+} from './types/temporary-mutation.js';
+export type {
+  TemporaryMutationInput,
+  TemporaryMutationHandleInput,
+  TemporaryMutationReplaceInput,
+  TemporaryMutationReceipt,
+  TemporaryMutationMetadata,
+  TemporaryMutationOperation,
+} from './types/temporary-mutation.js';
 /**
  * Engine-agnostic Document API surface.
  */
@@ -1956,6 +1970,10 @@ export interface QueryApi {
   match(input: QueryMatchInput | TextSelector | NodeSelector): QueryMatchOutput;
 }
 export interface MutationsApi {
+  beginTemporary(input: TemporaryMutationInput): Promise<TemporaryMutationReceipt>;
+  replaceTemporary(input: TemporaryMutationReplaceInput): Promise<TemporaryMutationReceipt>;
+  rollbackTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
+  commitTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
   preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput>;
   /**
    * Apply an atomic plan. `options` is host-side cancellation and is not part
@@ -1973,6 +1991,10 @@ export interface QueryAdapter {
   match(input: QueryMatchInput): QueryMatchOutput;
 }
 export interface MutationsAdapter {
+  beginTemporary?(input: TemporaryMutationInput): Promise<TemporaryMutationReceipt>;
+  replaceTemporary?(input: TemporaryMutationReplaceInput): Promise<TemporaryMutationReceipt>;
+  rollbackTemporary?(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
+  commitTemporary?(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt>;
   preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput>;
   apply(input: MutationsApplyInput): Promise<PlanReceipt>;
 }
@@ -2537,6 +2559,50 @@ function installCapabilityPreflight(api: DocumentApi, adapter: CapabilitiesAdapt
         }
       }
       return execute.call(this, input, options);
+    };
+  }
+}
+
+/** Capture tags in each call closure, including asynchronous calls that settle out of order. */
+function installMutationCorrelation(api: DocumentApi): void {
+  for (const operationId of OPERATION_IDS) {
+    if (!OPERATION_DEFINITIONS[operationId].metadata.mutates || operationId.startsWith('history.')) continue;
+    const path = OPERATION_DEFINITIONS[operationId].memberPath.split('.');
+    const member = path.pop()!;
+    let parent = api as unknown as Record<string, unknown>;
+    for (const segment of path) parent = parent[segment] as Record<string, unknown>;
+    const execute = parent[member];
+    if (typeof execute !== 'function') continue;
+    parent[member] = function correlatedMutation(input: unknown, options?: unknown): unknown {
+      const tag = options && typeof options === 'object' && 'changeTag' in options ? options.changeTag : undefined;
+      if (tag !== undefined && (typeof tag !== 'string' || !tag.length || tag.length > 256)) {
+        throw new DocumentApiValidationError(
+          'INVALID_INPUT',
+          'changeTag must be a non-empty string of at most 256 characters.',
+        );
+      }
+      const dryRun = options && typeof options === 'object' && 'dryRun' in options && options.dryRun === true;
+      const annotate = (result: unknown): unknown => {
+        if (
+          typeof tag === 'string' &&
+          !dryRun &&
+          result &&
+          typeof result === 'object' &&
+          'success' in result &&
+          result.success === true &&
+          'txId' in result &&
+          typeof result.txId === 'string' &&
+          !('changed' in result && result.changed === false)
+        ) {
+          // Retain the original receipt identity and its private render sidecar.
+          (result as { changeTag?: string }).changeTag = tag;
+        }
+        return result;
+      };
+      const result = execute.call(this, input, options);
+      return result && typeof result === 'object' && 'then' in result && typeof result.then === 'function'
+        ? Promise.resolve(result).then(annotate)
+        : annotate(result);
     };
   }
 }
@@ -4010,6 +4076,38 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       },
     },
     mutations: {
+      beginTemporary(input: TemporaryMutationInput): Promise<TemporaryMutationReceipt> {
+        const method = adapters.mutations.beginTemporary;
+        if (!method)
+          return Promise.reject(
+            new DocumentApiValidationError('CAPABILITY_UNAVAILABLE', 'Temporary mutation sessions are unavailable.'),
+          );
+        return method.call(adapters.mutations, input);
+      },
+      replaceTemporary(input: TemporaryMutationReplaceInput): Promise<TemporaryMutationReceipt> {
+        const method = adapters.mutations.replaceTemporary;
+        if (!method)
+          return Promise.reject(
+            new DocumentApiValidationError('CAPABILITY_UNAVAILABLE', 'Temporary mutation sessions are unavailable.'),
+          );
+        return method.call(adapters.mutations, input);
+      },
+      rollbackTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt> {
+        const method = adapters.mutations.rollbackTemporary;
+        if (!method)
+          return Promise.reject(
+            new DocumentApiValidationError('CAPABILITY_UNAVAILABLE', 'Temporary mutation sessions are unavailable.'),
+          );
+        return method.call(adapters.mutations, input);
+      },
+      commitTemporary(input: TemporaryMutationHandleInput): Promise<TemporaryMutationReceipt> {
+        const method = adapters.mutations.commitTemporary;
+        if (!method)
+          return Promise.reject(
+            new DocumentApiValidationError('CAPABILITY_UNAVAILABLE', 'Temporary mutation sessions are unavailable.'),
+          );
+        return method.call(adapters.mutations, input);
+      },
       preview(input: MutationsPreviewInput): Promise<MutationsPreviewOutput> {
         return adapters.mutations.preview(input);
       },
@@ -4133,6 +4231,7 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
     },
   };
   installCapabilityPreflight(api, adapters.capabilities);
+  installMutationCorrelation(api);
   const dispatch = buildDispatchTable(api);
   return api;
 }

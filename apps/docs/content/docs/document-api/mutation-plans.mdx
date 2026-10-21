@@ -149,6 +149,53 @@ The returned plan receipt includes the before/after revision, a result for every
 
 The generated [`mutations.preview` reference](/document-api/reference/mutations/preview) and [`mutations.apply` reference](/document-api/reference/mutations/apply) list supported steps, limits, outputs, and failure codes.
 
+## Show temporary edits in the document
+
+Use `mutations.beginTemporary` to display an in-memory suggestion without adding an Undo entry or clearing Redo. Supply a nonempty host `tag` and an ordered `operations` array. Each operation uses the corresponding public method's input and options:
+
+```ts
+const shown = await doc.mutations.beginTemporary({
+  tag: 'suggestion-preview',
+  expectedRevision: revision,
+  operations: [
+    { operation: 'replace', input: { target, text: 'Proposed wording' }, options: { changeMode: 'direct' } },
+  ],
+});
+// Replace the entire displayed choice without first rolling it back.
+await doc.mutations.replaceTemporary({
+  previewId: shown.temporary.id,
+  tag: 'suggestion-preview',
+  operations: [
+    { operation: 'replace', input: { target, text: 'Alternative wording' }, options: { changeMode: 'direct' } },
+  ],
+});
+await doc.mutations.rollbackTemporary({ previewId: shown.temporary.id });
+```
+
+`replaceTemporary` takes the same `previewId`, original `tag`, and a new complete operation array. It evaluates the new choice against the original state, then publishes the replacement once. If validation fails, the currently displayed choice remains intact. `rollbackTemporary` restores the original package and preserves the existing Undo and Redo stacks. `commitTemporary` keeps the displayed content and adds one Undo entry. A completed handle cannot be reused. Each lifecycle receipt includes `temporary: { id, phase, tag }` and the before/after revision. Temporary semantic refs and text shifts use the original preview baseline. A consumer maintaining its own anchors must retain a baseline snapshot, restore it before processing a `replace` receipt, and restore it on `rollback`; do not compose replacement shifts onto the previous choice. The revision pair describes the actual old and new displayed states. Built-in extension anchors handle this lifecycle automatically.
+
+Set `onNativeEdit: 'cancel'` on `beginTemporary` to let native editor interaction cancel the preview before continuing. Clicking into the document, typing, deletion, paste, composition and native Undo/Redo first restore the baseline, rebase the captured selection, then perform the original interaction once. A caret inside replaced wording keeps its relative offset, clamped to the restored range; positions outside it follow the actual transition. The policy remains fixed for the handle; `replaceTemporary` can omit it or repeat it. Without the option, the existing exclusive editing lease remains in effect. This does not allow unrelated programmatic edits while a preview owns the document.
+
+Native cancellation emits the existing mutation event with `receipt.temporary.phase: 'rollback'` and `receipt.temporary.cancelledBy: 'native-edit'`, including the preview ID, tag and `onNativeEdit` policy. Hosts can reset their pending choice from this event; an explicit Cancel does not carry `cancelledBy`. A lifecycle-only commit or unchanged rollback has no paint transaction ID; a rollback that changes content carries its actual paint transaction ID.
+
+Use `replaceTemporary` to switch choices directly; a separate rollback followed by begin would expose two lifecycle operations. This is the temporary lifecycle's publication guarantee, not a general layout-hold API for arbitrary calls.
+
+Supported operations are plain-text `insert`, `replace`, `delete`, whole-revision `trackChanges.decide`, and `comments.create`, with their existing author, tracking, permission, target, and revision checks. Preparation is atomic. HTML, retained snapshots, and collaboration are not currently supported by this lifecycle and return typed failures. Temporary sessions take an exclusive document mutation lease: API writes are rejected until rollback or commit. Native editor writes, Undo and Redo are also rejected by default; `onNativeEdit: 'cancel'` restores the baseline before allowing those native interactions. Reads and rendering remain available. Dispose the editor when abandoning the entire document; otherwise finish the temporary session explicitly.
+
+## Retain discussions when a revision erases their text
+
+Pass `commentRetention: 'point'` to `trackChanges.decide` (or its review-plan step) to keep a thread whose text is erased. The thread becomes a point at the exact removed range; IDs, replies, resolved state, author, dates, and comment parts are retained. A partially surviving anchor remains a range over the surviving text. The decision and retention form one undoable mutation.
+
+```ts
+await doc.trackChanges.decide({
+  decision: 'reject',
+  target: { kind: 'id', id: revisionId },
+  commentRetention: 'point',
+});
+```
+
+Omitting the option keeps the existing native deletion policy. Retention currently supports whole text revisions in materialized story XML. Structural revision decisions, partial revision fragments, and source-fenced large-document review return an explicit unsupported-context failure rather than silently applying the deletion policy.
+
 ## Commit content-control operations together
 
 V2 also supports `doc.plan.execute({ atomic: true, entries })` for supported content-control operations and associated text or formatting edits. Without `atomic: true`, plans keep their existing stepwise behavior and retain successful entries before a failure.

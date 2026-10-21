@@ -418,6 +418,11 @@ export type TrackChangeTarget =
   | {
       kind: 'formatting';
       address: TrackedChangeAddress;
+      /** Exact affected text for run, paragraph and list formatting, when resolvable. */
+      segments?: TextTarget['segments'];
+      /** Story and coordinate space of the affected text. */
+      story?: TextTarget['story'];
+      coordinateSpace?: TextTarget['coordinateSpace'];
       /** Which property class the revision affects. */
       subtype: TrackChangeFormattingSubtype;
       /**

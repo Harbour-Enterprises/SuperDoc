@@ -42,6 +42,19 @@ whether a command is available.
 Disable a control when `enabled` is `false`. Show `reason` when it helps someone recover. Remove the control only when
 the workflow does not need it.
 
+## Observe Undo and Redo
+
+`ui.commands.get('undo').observe(listener)` and the corresponding `redo` handle
+report command availability. Retain and call both returned unsubscribe functions
+when the host control is removed. Use `doc.history.get()` when you need
+`undoDepth`, `redoDepth`, `canUndo`, and `canRedo` after an awaited mutation.
+
+Command state describes whether an action can run. It is not an undo-stack-depth
+subscription: adding a second entry can leave Undo enabled with the same command
+state. Applications that display a stack count must read history after their
+operations; command observation alone does not promise notification for every
+depth change.
+
 ## Confirm the command result
 
 Use `executeAsync()` when your interface or later work depends on the action:

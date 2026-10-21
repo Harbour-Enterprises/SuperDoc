@@ -44,8 +44,19 @@ only after storage confirms the write.
 
 ## Check comments and tracked changes
 
-Export preserves comments by default. The Quickstart's default v2 worker runtime does not support
-`commentsType: 'clean'`: export rejects instead of returning a copy without comments.
+Export preserves comments by default. To return a separate copy without comments, set
+`commentsType: 'clean'`. This export does not remove comments from the open document:
+
+```ts
+const withoutComments = await superdoc.export({
+  triggerDownload: false,
+  commentsType: 'clean',
+});
+```
+
+The v2 worker supports this option for the resident document save path. A source-fenced large-document
+save can reject clean export when removing comment markers would require rewriting the fenced main story.
+Handle the rejected promise; do not report the preserving export as a clean copy.
 
 If you need final text, finish the
 [review workflow](/editor/track-changes) before exporting. The v2 Editor does not apply `isFinalDoc`
@@ -76,10 +87,12 @@ in the same order, with one filename for each file. Omit `triggerDownload: false
 | ----------------------------------------- | ------------ | ------------------------------------------------------------------------------------- |
 | `exportedName`                            | Editor title | Name the DOCX or ZIP without its extension.                                           |
 | `triggerDownload`                         | `true`       | Download the result; set it to `false` to return a `Blob` or ZIP without downloading. |
-| `commentsType`                            | `'external'` | Preserve comments. The default v2 worker runtime rejects `'clean'`.                   |
+| `commentsType`                            | `'external'` | Preserve comments; `'clean'` returns a separate comment-free copy on supported save paths. |
 | `additionalFiles` / `additionalFileNames` | Empty arrays | Include related files in a ZIP.                                                       |
 
 `exportType` defaults to `['docx']`, the browser Editor's supported export format.
 The v2 Editor does not apply `fieldsHighlightColor` during export.
 
 Use [Version history](/editor/version-history) when your application needs to retain each exported DOCX as a saved version.
+
+Review [DOCX support and known limits](/editor/docx-support) for this version's preservation, rendering, and editing boundaries.

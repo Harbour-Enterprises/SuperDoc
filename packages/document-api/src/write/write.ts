@@ -46,6 +46,8 @@ export function validateChangeMode(value: unknown): void {
  * applicable.
  */
 export interface RevisionGuardOptions {
+  /** Caller correlation for this operation only; echoed only on committed receipts, never persisted. */
+  changeTag?: string;
   /** When provided, the engine rejects with REVISION_MISMATCH if the document has advanced past this revision. */
   expectedRevision?: string;
 }
@@ -65,14 +67,17 @@ export interface MutationOptions extends RevisionGuardOptions {
 
 export interface RichContentMutationOptions extends MutationOptions {
   author?: never;
+  date?: never;
   /** Guard returned by `doc.capabilities.check` for an exact rich write. */
   supportCheck?: SDHtmlMarkdownCheckGuard;
 }
 
-/** Display-only attribution for one tracked plain-text mutation. */
+/** Display-only attribution for one tracked plain-text or inline-format mutation. */
 export interface TrackedTextMutationOptions extends MutationOptions {
   changeMode: 'tracked';
-  author: { name: string };
+  author?: { name: string };
+  /** ISO 8601 UTC revision timestamp. Omitted values use the transaction time. */
+  date?: string;
 }
 
 export type TextMutationOptions = MutationOptions | TrackedTextMutationOptions;
@@ -80,22 +85,43 @@ export type TextMutationOptions = MutationOptions | TrackedTextMutationOptions;
 export function normalizeTextMutationOptions(
   options?: RichContentMutationOptions | TextMutationOptions,
 ): RichContentMutationOptions | TrackedTextMutationOptions {
-  const { author, ...mutationOptions } = (options ?? {}) as MutationOptions & { author?: unknown };
+  const { author, date, ...mutationOptions } = (options ?? {}) as MutationOptions & {
+    author?: unknown;
+    date?: unknown;
+  };
   const normalized = normalizeMutationOptions(mutationOptions);
-  if (!options || !('author' in options)) return normalized;
+  if (!options || (author === undefined && date === undefined)) return normalized;
   if (
     options.changeMode !== 'tracked' ||
-    !isRecord(author) ||
-    Object.keys(author).some((key) => key !== 'name') ||
-    typeof author.name !== 'string' ||
-    author.name.trim().length === 0
+    (author !== undefined &&
+      (!isRecord(author) ||
+        Object.keys(author).some((key) => key !== 'name') ||
+        typeof author.name !== 'string' ||
+        author.name.trim().length === 0))
   ) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',
-      'author requires changeMode: "tracked" and an object containing only a non-empty name.',
+      'author/date require changeMode: "tracked"; author must contain only a non-empty name.',
     );
   }
-  return { ...normalized, changeMode: 'tracked', author: { name: author.name } };
+  let revisionDate: string | undefined;
+  if (date !== undefined) {
+    if (
+      typeof date !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z$/.test(date) ||
+      !Number.isFinite(Date.parse(date)) ||
+      new Date(date).toISOString().slice(0, 19) !== date.slice(0, 19)
+    ) {
+      throw new DocumentApiValidationError('INVALID_INPUT', 'date must be a valid ISO 8601 UTC timestamp.');
+    }
+    revisionDate = new Date(date).toISOString();
+  }
+  return {
+    ...normalized,
+    changeMode: 'tracked',
+    ...(isRecord(author) ? { author: { name: author.name as string } } : {}),
+    ...(revisionDate ? { date: revisionDate } : {}),
+  };
 }
 
 /**
@@ -136,10 +162,14 @@ export function normalizeMutationOptions(
   options?: MutationOptions | RichContentMutationOptions,
   supportCheckOperation?: 'insert' | 'replace',
 ): RichContentMutationOptions {
-  if (options && typeof options === 'object' && 'author' in options) {
+  if (
+    options &&
+    typeof options === 'object' &&
+    ((options as { author?: unknown }).author !== undefined || (options as { date?: unknown }).date !== undefined)
+  ) {
     throw new DocumentApiValidationError(
       'INVALID_INPUT',
-      'author is supported only for tracked plain-text doc.insert, doc.delete, and doc.replace calls.',
+      'author/date are supported only for tracked plain-text doc.insert, doc.delete, doc.replace, and inline format calls.',
     );
   }
   validateChangeMode(options?.changeMode);

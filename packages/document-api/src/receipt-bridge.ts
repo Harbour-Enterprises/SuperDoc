@@ -25,6 +25,7 @@ export interface MutationReceiptBridgeContext {
 }
 
 interface CanonicalSuccessMetadata {
+  changeTag?: ReceiptSuccess['changeTag'];
   appliedChangeMode?: ReceiptSuccess['appliedChangeMode'];
   changed?: ReceiptSuccess['changed'];
   trackedChangeRefs?: ReceiptSuccess['trackedChangeRefs'];
@@ -37,6 +38,7 @@ interface CanonicalSuccessMetadata {
   remappedRefs?: ReceiptSuccess['remappedRefs'];
   affectedStories?: ReceiptSuccess['affectedStories'];
   textRangeShifts?: ReceiptSuccess['textRangeShifts'];
+  trackedTextRangeShifts?: ReceiptSuccess['trackedTextRangeShifts'];
   txId?: ReceiptSuccess['txId'];
   warnings?: ReceiptSuccess['warnings'];
   effects?: ReceiptSuccess['effects'];
@@ -44,6 +46,7 @@ interface CanonicalSuccessMetadata {
 
 function projectSuccessMetadata(metadata: CanonicalSuccessMetadata): Partial<SDMutationReceipt> {
   return {
+    ...(metadata.changeTag !== undefined ? { changeTag: metadata.changeTag } : {}),
     ...(metadata.appliedChangeMode !== undefined ? { appliedChangeMode: metadata.appliedChangeMode } : {}),
     ...(metadata.changed !== undefined ? { changed: metadata.changed } : {}),
     ...(metadata.trackedChangeRefs !== undefined ? { trackedChangeRefs: metadata.trackedChangeRefs } : {}),
@@ -56,6 +59,9 @@ function projectSuccessMetadata(metadata: CanonicalSuccessMetadata): Partial<SDM
     ...(metadata.remappedRefs !== undefined ? { remappedRefs: metadata.remappedRefs } : {}),
     ...(metadata.affectedStories !== undefined ? { affectedStories: metadata.affectedStories } : {}),
     ...(metadata.textRangeShifts !== undefined ? { textRangeShifts: metadata.textRangeShifts } : {}),
+    ...(metadata.trackedTextRangeShifts !== undefined
+      ? { trackedTextRangeShifts: metadata.trackedTextRangeShifts }
+      : {}),
     ...(metadata.txId !== undefined ? { txId: metadata.txId } : {}),
     ...(metadata.warnings !== undefined ? { warnings: metadata.warnings } : {}),
     ...(metadata.effects !== undefined ? { effects: metadata.effects } : {}),

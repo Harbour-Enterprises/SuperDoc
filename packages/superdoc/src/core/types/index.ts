@@ -1,3 +1,4 @@
+import type { PageMetricsHandle } from '../../public/ui/page-metrics.js';
 import type { DiagnosticsConfig } from './diagnostics.js';
 // Public-contract type definitions for the `superdoc` package.
 //
@@ -568,6 +569,8 @@ export interface Editor {
    */
   doc?: BrowserDocumentApi | null;
   authoring?: V2AuthoringFacade | null;
+  /** Existing per-editor page geometry, zoom and navigation facade. */
+  pageMetrics?: PageMetricsHandle | null;
   /**
    * Command bag exposed by v1 editors (`null` on v2-shaped runtimes). Only the
    * commands the shell dispatches directly are typed; everything else stays
@@ -1074,6 +1077,8 @@ export type DocumentUploadSource = {
 export type DocumentDataSource = globalThis.File | globalThis.Blob | ArrayBuffer | Uint8Array | DocumentUploadSource;
 
 export interface Document {
+  /** Optional whole-load deadline/cancellation. Defaults retain the existing unbounded load behavior. */
+  load?: import('../helpers/document-load.js').DocumentLoadOptions;
   /** V2 scalar-field values for this document, copied when it opens. */
   fieldContext?: {
     fileName?: string | null;
@@ -1171,6 +1176,8 @@ export interface SuperDocState {
  * into `Config.documents` from outside.
  */
 export interface RuntimeDocument extends Document {
+  /** Internal initial-load lifetime; never a document format field. */
+  loadScope?: ReturnType<typeof import('../helpers/document-load.js').createDocumentLoadScope>;
   /**
    * Per-document role. `useDocument()` reads `params.role` from the input
    * config and exposes it on the smart-doc object; once collaboration

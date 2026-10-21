@@ -171,11 +171,12 @@ export type ReviewWarning = {
  * Consumers that store block-local ranges must fail closed when that pair is
  * absent rather than interpreting `atChar` as a block offset.
  *
- * Negative `delta` describes a deletion. Positive `delta` describes an
- * insertion (e.g. when a `<w:del>` is rejected and its content is restored
+ * Without `replacedLength`, negative `delta` describes a deletion and positive
+ * `delta` describes an insertion (e.g. when a `<w:del>` is rejected and its content is restored
  * to the visible flow).
  *
- * One entry is emitted per story. Cross-story shifts are reported separately.
+ * When `replacedLength` is present, this is one atomic replacement, including
+ * equal-length replacements (`delta: 0`). Apply entries in array order.
  */
 export interface TextRangeShift {
   /** The story whose text was shifted. */
@@ -188,7 +189,21 @@ export interface TextRangeShift {
   atCharInBlock?: number;
   /** Net change in characters. Negative for deletions, positive for insertions. */
   delta: number;
+  /** Exact replaced span length at the shift origin; replacement length is this plus delta. */
+  replacedLength?: number;
 }
+/**
+ * Exact physical-text splice in paragraph-local tracked coordinates (including
+ * pending deleted text). Entries are applied in array order. An empty array
+ * proves that physical text did not move; omission makes no such guarantee.
+ */
+export interface TrackedTextRangeShift {
+  story: StoryLocator;
+  blockId: string;
+  atCharInBlock: number;
+  delta: number;
+}
+
 // ---------------------------------------------------------------------------
 // Created-content effects
 //
@@ -247,6 +262,12 @@ export interface ReceiptEffects {
 }
 
 export type ReceiptSuccess = {
+  /** Caller correlation for this commit. Never replayed as the original edit on Undo/Redo. */
+  changeTag?: string;
+  /** Original forward transaction identity for exact anchor restoration during history replay. */
+  history?: { txId: string; direction: 'undo' | 'redo'; txIds?: string[] };
+  /** Temporary-preview lifecycle and caller tag, also delivered through mutation events. */
+  temporary?: import('./temporary-mutation.js').TemporaryMutationMetadata;
   success: true;
   /** Whether a successful request changed the document; false represents a no-op commit. */
   changed?: boolean;
@@ -286,6 +307,8 @@ export type ReceiptSuccess = {
    * restore visible content. See {@link TextRangeShift}.
    */
   textRangeShifts?: TextRangeShift[];
+  /** Exact shifts for tracked-coordinate targets, independent of visible text. */
+  trackedTextRangeShifts?: TrackedTextRangeShift[];
   /**
    * Transaction id of the successful commit. Optional and
    * additive — engines that lack a per-tx identity omit it. v2 populates

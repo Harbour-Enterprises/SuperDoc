@@ -256,6 +256,26 @@ describe('document-api contract catalog', () => {
     }
   });
 
+  it.each([
+    'mutations.beginTemporary',
+    'mutations.replaceTemporary',
+    'mutations.rollbackTemporary',
+    'mutations.commitTemporary',
+  ] as const)('describes %s thrown failures without widening its success-only output', (operationId) => {
+    const operation = buildInternalContractSchemas().operations[operationId];
+    const output = operation.output as ContractTestSchemaShape;
+    const failure = operation.failure as ContractTestSchemaShape | undefined;
+    expect(output).toEqual(operation.success);
+    expect(output.properties?.success).toEqual({ const: true });
+    expect(output.oneOf).toBeUndefined();
+    expect(COMMAND_CATALOG[operationId].possibleFailureCodes).toEqual([]);
+    expect(failure?.required).toEqual(['success', 'failure']);
+    expect(failure?.properties?.success).toEqual({ const: false });
+    expect(failure?.properties?.failure?.properties?.code?.enum).toEqual([
+      ...COMMAND_CATALOG[operationId].throws.preApply,
+    ]);
+  });
+
   it('publishes list mutation receipt metadata on continuePrevious success', () => {
     const schemas = buildInternalContractSchemas();
     const outputSchema = schemas.operations['lists.continuePrevious'].output as ContractTestSchemaShape;
@@ -263,9 +283,11 @@ describe('document-api contract catalog', () => {
 
     expect(successSchema).toBeDefined();
     expect(successSchema!.additionalProperties).toBe(false);
+    expect(successSchema!.required ?? []).not.toContain('temporary');
     expect(Object.keys(successSchema!.properties!).sort()).toEqual([
       'affectedStories',
       'appliedChangeMode',
+      'changeTag',
       'changed',
       'effects',
       'id',
@@ -275,9 +297,11 @@ describe('document-api contract catalog', () => {
       'remappedRefs',
       'removed',
       'success',
+      'temporary',
       'textRangeShifts',
       'trackedChangeCount',
       'trackedChangeRefs',
+      'trackedTextRangeShifts',
       'txId',
       'updated',
       'warnings',
@@ -513,6 +537,7 @@ describe('document-api contract catalog', () => {
     const expectedSuccessKeys = [
       'affectedStories',
       'appliedChangeMode',
+      'changeTag',
       'changed',
       'conversion',
       'effects',
@@ -525,9 +550,11 @@ describe('document-api contract catalog', () => {
       'removed',
       'resolution',
       'success',
+      'temporary',
       'textRangeShifts',
       'trackedChangeCount',
       'trackedChangeRefs',
+      'trackedTextRangeShifts',
       'txId',
       'updated',
       'warnings',
@@ -541,6 +568,7 @@ describe('document-api contract catalog', () => {
       expect(Object.keys(success.properties ?? {}).sort()).toEqual(expectedSuccessKeys);
       expect(Object.keys(failure.properties ?? {}).sort()).toEqual(expectedFailureKeys);
       expect(success.additionalProperties).toBe(false);
+      expect(success.required ?? []).not.toContain('temporary');
       expect(failure.additionalProperties).toBe(false);
       expect(failure.properties).not.toHaveProperty('id');
       expect(failure.properties).not.toHaveProperty('inserted');
@@ -1699,7 +1727,16 @@ describe('document-api contract catalog', () => {
 
   it('marks exactly the Promise-returning operations as async', () => {
     const asyncOps = OPERATION_IDS.filter((id) => COMMAND_CATALOG[id].returnsPromise === true).sort();
-    expect(asyncOps).toEqual(['capabilities.check', 'projectHtml', 'projectMarkdown', 'templates.apply']);
+    expect(asyncOps).toEqual([
+      'capabilities.check',
+      'mutations.beginTemporary',
+      'mutations.commitTemporary',
+      'mutations.replaceTemporary',
+      'mutations.rollbackTemporary',
+      'projectHtml',
+      'projectMarkdown',
+      'templates.apply',
+    ]);
 
     // returnsPromise is a strict boolean signal: it is either true or absent.
     for (const id of OPERATION_IDS) {
@@ -1710,6 +1747,55 @@ describe('document-api contract catalog', () => {
 });
 
 describe('public mutation result vocabulary', () => {
+  it('declares optional physical shifts and replay identities on their runtime receipt surfaces', () => {
+    const schemas = buildInternalContractSchemas();
+    const defs = schemas.$defs as Record<string, ContractTestSchemaShape>;
+    expect(defs.TrackedTextRangeShift).toEqual({
+      type: 'object',
+      properties: {
+        story: { $ref: '#/$defs/StoryLocator' },
+        blockId: { type: 'string' },
+        atCharInBlock: { type: 'integer' },
+        delta: { type: 'integer' },
+      },
+      required: ['story', 'blockId', 'atCharInBlock', 'delta'],
+      additionalProperties: false,
+    });
+    expect(defs.HistoryReplay).toEqual({
+      type: 'object',
+      properties: {
+        txId: { type: 'string' },
+        direction: { enum: ['undo', 'redo'] },
+        txIds: { type: 'array', items: { type: 'string' } },
+      },
+      required: ['txId', 'direction'],
+      additionalProperties: false,
+    });
+    expect(defs.TextRangeShift.properties?.replacedLength).toEqual({ type: 'integer', minimum: 1 });
+    expect(defs.TextRangeShift.required).not.toContain('replacedLength');
+    const physicalShifts = { type: 'array', items: { $ref: '#/$defs/TrackedTextRangeShift' } };
+    for (const receipt of [
+      defs.ReceiptSuccess,
+      defs.TextMutationSuccess,
+      schemas.operations['history.undo'].success as ContractTestSchemaShape,
+      schemas.operations['history.redo'].success as ContractTestSchemaShape,
+    ]) {
+      expect(receipt.properties?.trackedTextRangeShifts).toEqual(physicalShifts);
+      expect(receipt.properties?.history).toEqual({ $ref: '#/$defs/HistoryReplay' });
+      expect(receipt.required).not.toContain('trackedTextRangeShifts');
+      expect(receipt.required).not.toContain('history');
+    }
+    for (const id of ['insert', 'replace'] as const) {
+      const success = schemas.operations[id].success as ContractTestSchemaShape;
+      const failure = schemas.operations[id].failure as ContractTestSchemaShape;
+      expect(success.properties?.trackedTextRangeShifts).toEqual(physicalShifts);
+      expect(success.required).not.toContain('trackedTextRangeShifts');
+      expect(success.properties).not.toHaveProperty('history');
+      expect(failure.properties).not.toHaveProperty('trackedTextRangeShifts');
+      expect(failure.properties).not.toHaveProperty('history');
+    }
+  });
+
   it('preserves complete receipt metadata across text, image, list, hyperlink, plan and structural results', () => {
     const schemas = buildInternalContractSchemas();
     const defs = schemas.$defs as Record<string, ContractTestSchemaShape>;
@@ -1719,6 +1805,7 @@ describe('public mutation result vocabulary', () => {
       invalidatedRefs: [],
       remappedRefs: [],
       textRangeShifts: [],
+      trackedTextRangeShifts: [],
       trackedChangeRefs: [{ kind: 'entity', entityType: 'trackedChange', entityId: 'change-1' }],
       trackedChangeCount: 1,
       changed: true,

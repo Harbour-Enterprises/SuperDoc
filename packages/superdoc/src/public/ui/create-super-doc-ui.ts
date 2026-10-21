@@ -1,3 +1,4 @@
+import { readViewportBatch } from './viewport-batch.js';
 import { beginInteraction, recordInteraction } from '../../internal/diagnostics/interaction-history.js';
 /**
  * v2-native `createSuperDocUI` controller.
@@ -12300,6 +12301,53 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
   activeEditorResetHooks.push(rebindGeometryObservers);
 
   const viewport: ViewportHandle = {
+    getRects: async (input) => {
+      const initialHost = getHost();
+      let geometryRevision = 0;
+      let unsubscribe: unknown;
+      let observationFailed = false;
+      try {
+        unsubscribe =
+          typeof initialHost?.observeGeometry === 'function'
+            ? initialHost.observeGeometry(() => {
+                geometryRevision++;
+              })
+            : undefined;
+      } catch {
+        observationFailed = true;
+      }
+      const generation = (): string | null => {
+        if (observationFailed) return null;
+        const host = getHost();
+        const metrics = typeof host?.getPageMetricsSnapshot === 'function' ? host.getPageMetricsSnapshot() : null;
+        const localRevision =
+          typeof host?.getLocalMutationRevision === 'function' ? host.getLocalMutationRevision() : null;
+        const relative = input.relativeTo?.getBoundingClientRect();
+        return JSON.stringify([
+          contentToken(),
+          host === initialHost,
+          localRevision,
+          metrics?.documentId,
+          metrics?.renderEpoch,
+          metrics?.layoutGeneration,
+          geometryRevision,
+          relative?.left,
+          relative?.top,
+          relative?.width,
+          relative?.height,
+        ]);
+      };
+      try {
+        return await readViewportBatch(
+          input,
+          (target) => viewport.getRect({ target, relativeTo: input.relativeTo }),
+          generation,
+          () => disposed,
+        );
+      } finally {
+        if (typeof unsubscribe === 'function') safeCall(() => unsubscribe(), undefined);
+      }
+    },
     getRect: (input: ViewportGetRectInput): ViewportRectResult => {
       // v2 path: resolve through the v2 host target-geometry surface. This
       // replaces the old v1 entity-rect probe and fails closed (no synthesized

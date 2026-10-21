@@ -139,6 +139,8 @@ export type {
   // Viewport geometry
   ViewportRect,
   ViewportGetRectInput,
+  ViewportGetRectsInput,
+  ViewportGetRectsResult,
   ViewportRectResult,
   // Re-surfaced public Document API shapes. `BrowserDocumentApi` is what the
   // controller hands back on `CustomCommandContext.doc`, so a consumer writing
@@ -179,3 +181,5 @@ export type {
   WatermarksApplySuccess,
   WatermarksApplyTarget,
 } from './ui/types.js';
+
+export type { PageMetricsHandle, PageMetricsSnapshot, PageMetricsPage, PageBodyTarget } from './ui/page-metrics.js';

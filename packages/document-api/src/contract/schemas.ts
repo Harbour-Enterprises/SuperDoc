@@ -152,6 +152,20 @@ const conversionReportSchema = objectSchema(
   ['format', 'lossy', 'diagnostics'],
 );
 const receiptSuccessMetadataProperties: Record<string, JsonSchema> = {
+  changeTag: {
+    type: 'string',
+    description: 'Caller correlation for this commit only; never persisted or replayed on Undo/Redo.',
+  },
+  temporary: objectSchema(
+    {
+      id: { type: 'string' },
+      phase: { enum: ['begin', 'replace', 'rollback', 'commit'] },
+      tag: { type: 'string' },
+      onNativeEdit: { const: 'cancel', type: 'string' },
+      cancelledBy: { const: 'native-edit', type: 'string' },
+    },
+    ['id', 'phase', 'tag'],
+  ),
   appliedChangeMode: { enum: ['direct', 'tracked'] },
   id: { type: 'string' },
   inserted: arraySchema(ref('EntityAddress')),
@@ -161,6 +175,7 @@ const receiptSuccessMetadataProperties: Record<string, JsonSchema> = {
   remappedRefs: arraySchema(ref('AffectedRefRemapping')),
   affectedStories: arraySchema(ref('StoryLocator')),
   textRangeShifts: arraySchema(ref('TextRangeShift')),
+  trackedTextRangeShifts: arraySchema(ref('TrackedTextRangeShift')),
   txId: { type: 'string' },
   warnings: arraySchema(ref('ReviewWarning')),
   effects: ref('ReceiptEffects'),
@@ -882,8 +897,26 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
       blockId: { type: 'string' },
       atCharInBlock: { type: 'integer' },
       delta: { type: 'integer' },
+      replacedLength: { type: 'integer', minimum: 1 },
     },
     ['story', 'atChar', 'delta'],
+  ),
+  TrackedTextRangeShift: objectSchema(
+    {
+      story: ref('StoryLocator'),
+      blockId: { type: 'string' },
+      atCharInBlock: { type: 'integer' },
+      delta: { type: 'integer' },
+    },
+    ['story', 'blockId', 'atCharInBlock', 'delta'],
+  ),
+  HistoryReplay: objectSchema(
+    {
+      txId: { type: 'string' },
+      direction: { enum: ['undo', 'redo'] },
+      txIds: arraySchema({ type: 'string' }),
+    },
+    ['txId', 'direction'],
   ),
   ReviewWarning: objectSchema(
     {
@@ -901,6 +934,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
     {
       success: { const: true },
       ...receiptSuccessMetadataProperties,
+      history: ref('HistoryReplay'),
     },
     ['success'],
   ),
@@ -908,6 +942,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
     {
       success: { const: true },
       ...receiptSuccessMetadataProperties,
+      history: ref('HistoryReplay'),
     },
     ['success', 'id'],
   ),
@@ -942,6 +977,7 @@ const SHARED_DEFS: Record<string, JsonSchema> = {
       appliedChangeMode: { enum: ['direct', 'tracked'] },
       resolution: ref('TextMutationResolution'),
       ...receiptSuccessMetadataProperties,
+      history: ref('HistoryReplay'),
       trackedChangeOutcomes: arraySchema(
         objectSchema(
           {
@@ -2253,6 +2289,8 @@ const commentReadMetadataProperties: Record<string, JsonSchema> = {
 };
 const commentInfoSchema = objectSchema(
   {
+    paraId: { type: 'string', description: 'Source Word comment-body paragraph identity for threading.' },
+    durableId: { type: 'string', description: 'Source Word durable comment identity, when present.' },
     address: commentAddressSchema,
     commentId: { type: 'string' },
     externalId: {
@@ -2312,6 +2350,8 @@ const commentInfoSchema = objectSchema(
 );
 const commentDomainItemSchema = discoveryItemSchema(
   {
+    paraId: { type: 'string', description: 'Source Word comment-body paragraph identity for threading.' },
+    durableId: { type: 'string', description: 'Source Word durable comment identity, when present.' },
     address: commentAddressSchema,
     commentId: { type: 'string', description: 'Canonical comment id alias returned by native runtimes.' },
     externalId: {
@@ -2928,6 +2968,7 @@ const capabilityFlagSchema = objectSchema(
 );
 const operationRuntimeCapabilitySchema = objectSchema(
   {
+    commentRetention: { type: 'array', items: { const: 'point', type: 'string' }, uniqueItems: true },
     available: { type: 'boolean' },
     tracked: { type: 'boolean' },
     trackedSupport: { enum: ['always', 'conditional', 'never'] },
@@ -3589,6 +3630,8 @@ const historyActionSuccessSchema: JsonSchema = objectSchema(
     remappedRefs: arraySchema(ref('AffectedRefRemapping')),
     affectedStories: arraySchema(ref('StoryLocator')),
     textRangeShifts: arraySchema(ref('TextRangeShift')),
+    trackedTextRangeShifts: arraySchema(ref('TrackedTextRangeShift')),
+    history: ref('HistoryReplay'),
     status: { enum: ['applied', 'noop', 'rejected', 'partial', 'repaired'] },
     diagnosticCode: { type: 'string' },
     collaboration: historyActionCollaborationSchema,
@@ -4786,7 +4829,62 @@ const diffApplyResultSchema: JsonSchema = objectSchema(
     'diagnostics',
   ],
 );
+const temporaryHandleProperties = { previewId: { type: 'string', minLength: 1 }, expectedRevision: { type: 'string' } };
+const temporaryProgramProperties = {
+  onNativeEdit: { const: 'cancel', type: 'string' },
+  tag: { type: 'string', minLength: 1 },
+  expectedRevision: { type: 'string' },
+  operations: {
+    type: 'array',
+    minItems: 1,
+    maxItems: 200,
+    items: objectSchema(
+      {
+        operation: { enum: ['insert', 'replace', 'delete', 'trackChanges.decide', 'comments.create'] },
+        input: { type: 'object' },
+        options: { type: 'object' },
+      },
+      ['operation', 'input'],
+    ),
+  },
+};
+const temporaryReceiptSchema = mutationSuccessSchema(
+  {
+    success: { const: true },
+    revision: objectSchema({ before: { type: 'string' }, after: { type: 'string' } }, ['before', 'after']),
+  },
+  ['success', 'temporary', 'revision'],
+);
 const operationSchemas: Record<OperationId, OperationSchemaSet> = {
+  'mutations.beginTemporary': {
+    input: objectSchema(temporaryProgramProperties, ['tag', 'operations']),
+    output: temporaryReceiptSchema,
+    success: temporaryReceiptSchema,
+    failure: preApplyFailureResultSchemaFor('mutations.beginTemporary'),
+  },
+  'mutations.replaceTemporary': {
+    input: objectSchema({ ...temporaryProgramProperties, ...temporaryHandleProperties }, [
+      'tag',
+      'operations',
+      'previewId',
+    ]),
+    output: temporaryReceiptSchema,
+    success: temporaryReceiptSchema,
+    failure: preApplyFailureResultSchemaFor('mutations.replaceTemporary'),
+  },
+  'mutations.rollbackTemporary': {
+    input: objectSchema(temporaryHandleProperties, ['previewId']),
+    output: temporaryReceiptSchema,
+    success: temporaryReceiptSchema,
+    failure: preApplyFailureResultSchemaFor('mutations.rollbackTemporary'),
+  },
+  'mutations.commitTemporary': {
+    input: objectSchema(temporaryHandleProperties, ['previewId']),
+    output: temporaryReceiptSchema,
+    success: temporaryReceiptSchema,
+    failure: preApplyFailureResultSchemaFor('mutations.commitTemporary'),
+  },
+
   get: {
     input: objectSchema({
       options: objectSchema({
@@ -7759,6 +7857,11 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       type: 'object',
       properties: {
         decision: { enum: ['accept', 'reject'] },
+        commentRetention: {
+          const: 'point',
+          type: 'string',
+          description: 'Keep erased comment anchors as points instead of deleting their threads.',
+        },
         expectedRevision: {
           type: 'string',
           description:
@@ -8217,6 +8320,7 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
         args: objectSchema(
           {
             decision: { enum: ['accept', 'reject'], type: 'string' },
+            commentRetention: { const: 'point', type: 'string' },
             target: {
               oneOf: [
                 objectSchema({ kind: { const: 'id', type: 'string' }, id: { type: 'string', minLength: 1 } }, [

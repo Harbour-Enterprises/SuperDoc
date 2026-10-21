@@ -106,6 +106,8 @@ export type LegacyReviewDecideTarget =
   | { scope: 'all'; story?: StoryLocator | 'all' };
 export type ReviewDecisionTarget = ReviewDecideTarget | LegacyReviewDecideTarget;
 export interface ReviewDecideInput {
+  /** Keep fully erased comment anchors as points. Omit for native deletion behavior. */
+  commentRetention?: 'point';
   decision: 'accept' | 'reject';
   target: ReviewDecideTarget | LegacyReviewDecideTarget;
   /**
@@ -120,10 +122,13 @@ export interface ReviewDecideInput {
  * form so the kernel side does not need to re-handle legacy aliases.
  */
 export interface ReviewDecideRangeInput {
+  commentRetention?: 'point';
   decision: 'accept' | 'reject';
   target: ReviewDecideTarget;
 }
 export interface TrackChangesAdapter {
+  /** Explicit opt-in prevents older decide adapters silently dropping retention policy. */
+  readonly supportsCommentRetention?: boolean;
   /** List tracked changes matching the given query. */
   list(input?: TrackChangesListInput): TrackChangesListResult;
   /** Retrieve full information for a single tracked change. */
@@ -218,9 +223,19 @@ export function executeTrackChangesDecide(
   }
   const canonical = validateReviewDecideInput(rawInput);
   const revisionOptions = normalizeReviewDecideOptions(rawInput, options);
-  if (typeof adapter.decide === 'function') {
-    return adapter.decide(canonical, revisionOptions);
+  if (
+    canonical.commentRetention &&
+    (adapter.supportsCommentRetention !== true || typeof adapter.decide !== 'function')
+  ) {
+    return {
+      success: false,
+      failure: {
+        code: 'CAPABILITY_UNAVAILABLE',
+        message: 'Point comment retention requires a compatible decide adapter.',
+      },
+    };
   }
+  if (typeof adapter.decide === 'function') return adapter.decide(canonical, revisionOptions);
   // Legacy adapter fallback: range and multi-id targets are not representable through
   // accept/reject/acceptAll/rejectAll. Use the older decideRange hook for
   // TextTarget ranges when available; logical ranges still require decide().
@@ -322,9 +337,16 @@ export function validateReviewDecideInput(rawInput: ReviewDecideInput): ReviewDe
     );
   }
   const target = input.target as Record<string, unknown>;
+  if (input.commentRetention !== undefined && input.commentRetention !== 'point') {
+    throw new DocumentApiValidationError('INVALID_INPUT', 'commentRetention must be point when supplied.');
+  }
   const decision = input.decision;
   const normalized = normalizeReviewDecideTarget(target);
-  return { decision, target: normalized };
+  return {
+    decision,
+    target: normalized,
+    ...(input.commentRetention === 'point' ? { commentRetention: 'point' as const } : {}),
+  };
 }
 function normalizeReviewDecideTarget(target: Record<string, unknown>): ReviewDecideTarget {
   const kind = target.kind;

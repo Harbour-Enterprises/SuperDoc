@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-16T04:44:48.967Z",
+  "generatedAt": "2026-10-20T23:26:02.711Z",
   "ticket": "SD-3212 PR A0",
   "package": "superdoc",
   "rootExport": {
@@ -63,6 +63,8 @@
         "DocumentApi",
         "DocumentCollaborationConfig",
         "DocumentDataSource",
+        "DocumentLoadError",
+        "DocumentLoadOptions",
         "DocumentMode",
         "DocumentProtectionState",
         "DocumentReplacementResult",
@@ -114,6 +116,10 @@
         "Modules",
         "NavigableAddress",
         "PDF",
+        "PageBodyTarget",
+        "PageMetricsHandle",
+        "PageMetricsPage",
+        "PageMetricsSnapshot",
         "PasswordPromptAttemptResult",
         "PasswordPromptConfig",
         "PasswordPromptContext",
@@ -365,6 +371,8 @@
         "DocumentApi",
         "DocumentCollaborationConfig",
         "DocumentDataSource",
+        "DocumentLoadError",
+        "DocumentLoadOptions",
         "DocumentMode",
         "DocumentProtectionState",
         "DocumentReplacementResult",
@@ -416,6 +424,10 @@
         "Modules",
         "NavigableAddress",
         "PDF",
+        "PageBodyTarget",
+        "PageMetricsHandle",
+        "PageMetricsPage",
+        "PageMetricsSnapshot",
         "PasswordPromptAttemptResult",
         "PasswordPromptConfig",
         "PasswordPromptContext",
@@ -620,6 +632,7 @@
       "names": [
         "BlankDOCX",
         "DOCX",
+        "DocumentLoadError",
         "HTML",
         "PDF",
         "SuperDoc",
@@ -638,6 +651,7 @@
       "names": [
         "BlankDOCX",
         "DOCX",
+        "DocumentLoadError",
         "HTML",
         "PDF",
         "SuperDoc",
@@ -653,11 +667,11 @@
     }
   },
   "counts": {
-    "types.import": 296,
-    "types.require": 296,
-    "import": 12,
-    "require": 12,
-    "union": 296
+    "types.import": 302,
+    "types.require": 302,
+    "import": 13,
+    "require": 13,
+    "union": 302
   },
   "divergences": {
     "typesImportVsRequire": {
@@ -717,6 +731,7 @@
         "DocumentApi",
         "DocumentCollaborationConfig",
         "DocumentDataSource",
+        "DocumentLoadOptions",
         "DocumentMode",
         "DocumentProtectionState",
         "DocumentReplacementResult",
@@ -766,6 +781,10 @@
         "LinkPopoverResolver",
         "Modules",
         "NavigableAddress",
+        "PageBodyTarget",
+        "PageMetricsHandle",
+        "PageMetricsPage",
+        "PageMetricsSnapshot",
         "PasswordPromptAttemptResult",
         "PasswordPromptConfig",
         "PasswordPromptContext",
