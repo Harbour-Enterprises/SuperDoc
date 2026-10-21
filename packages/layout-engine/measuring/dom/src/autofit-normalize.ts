@@ -11,6 +11,7 @@ import type {
 const TWIPS_PER_PX = 15;
 /** Authored/skipped grid columns at or below this width are treated as import placeholders. */
 const PLACEHOLDER_COLUMN_MAX_WIDTH = 1;
+const PLACEHOLDER_REPAIR_TOLERANCE = 0.5;
 
 /**
  * Narrow OOXML measurement shape used by normalization.
@@ -176,10 +177,18 @@ export function buildAutoFitWorkingGridInput(
     return normalized.row;
   });
   const occupiedGridColumnCount = determineGridColumnCount(0, rows);
-  const preferredColumnWidths = trimTrailingUnoccupiedPlaceholderColumns(
+  const authoredColumnWidths = trimTrailingUnoccupiedPlaceholderColumns(
     rawPreferredColumnWidths,
     occupiedGridColumnCount,
   );
+  const repairedColumnWidths = derivePlaceholderGridCellWidths({
+    block,
+    rows,
+    authoredColumnWidths,
+    layoutMode,
+    tableWidthSemantics,
+  });
+  const preferredColumnWidths = repairedColumnWidths ?? authoredColumnWidths;
   const gridColumnCount = determineGridColumnCount(preferredColumnWidths.length, rows);
   const preserveAuthoredGrid = shouldPreserveAuthoredGrid({
     layoutMode,
@@ -196,7 +205,9 @@ export function buildAutoFitWorkingGridInput(
     maxTableWidth,
     rows,
   });
-  const preserveStableAutoGrid = stableAutoGrid && rowsMatchAuthoredGrid(rows, preferredColumnWidths, gridColumnCount);
+  const preserveStableAutoGrid =
+    stableAutoGrid &&
+    (repairedColumnWidths != null || rowsMatchAuthoredGrid(rows, preferredColumnWidths, gridColumnCount));
   const preserveAutoGrid =
     preserveStableAutoGrid ||
     shouldPreserveAutoGrid({
@@ -239,6 +250,92 @@ export function buildAutoFitWorkingGridInput(
     gridColumnCount,
     rows,
   };
+}
+
+/** Reconcile a complete, tiny AutoFit grid with consistent dxa cell widths. */
+function derivePlaceholderGridCellWidths(args: {
+  block: TableBlock;
+  rows: WorkingTableRowInput[];
+  authoredColumnWidths: number[];
+  layoutMode: AutoFitLayoutMode;
+  tableWidthSemantics: AutoFitTableWidthSemantics;
+}): number[] | undefined {
+  const { block, rows, authoredColumnWidths, layoutMode, tableWidthSemantics } = args;
+  const columnCount = authoredColumnWidths.length;
+  if (layoutMode !== 'autofit' || tableWidthSemantics !== 'explicit-auto' || columnCount === 0) return undefined;
+  if (authoredColumnWidths.some((width) => width <= 0 || width > 8)) return undefined;
+  if (authoredColumnWidths.some((width) => Math.abs(width - authoredColumnWidths[0]) > PLACEHOLDER_REPAIR_TOLERANCE)) {
+    return undefined;
+  }
+  if (rows.length === 0 || rows.length !== block.rows.length) return undefined;
+
+  let cellWidths: number[] | undefined;
+  let activeRowSpans = Array<number>(columnCount).fill(0);
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    const sourceRow = block.rows[rowIndex];
+    if (
+      row.logicalColumnCount !== columnCount ||
+      row.skippedColumns.length > 0 ||
+      row.cells.length === 0 ||
+      row.cells.length !== sourceRow.cells.length
+    )
+      return undefined;
+
+    const occupiedColumns = activeRowSpans.map((remainingRows) => remainingRows > 0);
+    const nextActiveRowSpans = advanceRowSpans(activeRowSpans);
+    let cursor = 0;
+    for (let cellIndex = 0; cellIndex < row.cells.length; cellIndex++) {
+      const cell = row.cells[cellIndex];
+      const sourceCell = sourceRow.cells[cellIndex];
+      const width = (sourceCell.attrs?.tableCellProperties as NormalizationTableCellProperties | undefined)?.cellWidth;
+      const span = cell.span ?? 1;
+      const rowSpan = sourceCell.rowSpan ?? 1;
+      while (occupiedColumns[cursor]) cursor++;
+      if (
+        cell.startColumn !== cursor ||
+        !Number.isInteger(rowSpan) ||
+        rowSpan < 1 ||
+        rowIndex + rowSpan > rows.length ||
+        !width ||
+        (width.type ?? 'dxa').toLowerCase() !== 'dxa' ||
+        !Number.isFinite(width.value) ||
+        (width.value ?? 0) <= 0 ||
+        cell.preferredWidth == null ||
+        cell.preferredWidth <= 0
+      )
+        return undefined;
+      if (cursor + span > columnCount) return undefined;
+      for (let column = cursor; column < cursor + span; column++) {
+        if (occupiedColumns[column]) return undefined;
+        occupiedColumns[column] = true;
+      }
+      if (rowSpan > 1) markRowSpanOccupancy(nextActiveRowSpans, cursor, span, rowSpan - 1);
+      cursor += span;
+    }
+    if (occupiedColumns.some((occupied) => !occupied)) return undefined;
+    activeRowSpans = nextActiveRowSpans;
+
+    if (row.cells.length === columnCount && row.cells.every((cell) => cell.span === 1)) {
+      const rowWidths = row.cells.map((cell) => cell.preferredWidth!);
+      if (cellWidths == null) cellWidths = rowWidths;
+      else if (rowWidths.some((width, index) => Math.abs(width - cellWidths![index]) > PLACEHOLDER_REPAIR_TOLERANCE)) {
+        return undefined;
+      }
+    }
+  }
+  if (cellWidths == null) return undefined;
+  const cellOffsets = buildWidthOffsets(cellWidths);
+  for (const row of rows) {
+    for (const cell of row.cells) {
+      const spanWidth = cellOffsets[cell.startColumn + (cell.span ?? 1)] - cellOffsets[cell.startColumn];
+      if (Math.abs(cell.preferredWidth! - spanWidth) > PLACEHOLDER_REPAIR_TOLERANCE) return undefined;
+    }
+  }
+
+  const cellTotal = sumWidths(cellWidths);
+  if (cellTotal <= sumWidths(authoredColumnWidths) + PLACEHOLDER_REPAIR_TOLERANCE) return undefined;
+  return cellWidths;
 }
 
 /**

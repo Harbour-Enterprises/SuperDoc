@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vite-plus/test';
 import type { TableBlock } from '@superdoc/contracts';
 import { buildAutoFitWorkingGridInput } from './autofit-normalize.js';
+import { computeFixedTableColumnWidths } from './fixed-table-columns.js';
+import { computeAutoFitColumnWidths } from './autofit-columns.js';
 
 /**
  * Build a minimal runtime table block for normalization tests.
@@ -20,6 +22,198 @@ function createTableBlock(overrides: Partial<TableBlock> = {}): TableBlock {
 }
 
 describe('buildAutoFitWorkingGridInput', () => {
+  const widthCell = (id: string, twips: number, colSpan = 1) => ({
+    id,
+    colSpan,
+    attrs: { tableCellProperties: { cellWidth: { value: twips, type: 'dxa' } } },
+  });
+  const placeholderTable = (columnCount: number, rows: TableBlock['rows'], overrides: Partial<TableBlock> = {}) =>
+    createTableBlock({
+      attrs: { tableWidth: { value: 100, type: 'auto' } },
+      columnWidths: Array(columnCount).fill(100 / 15),
+      rows,
+      ...overrides,
+    });
+  const resolveWidths = (block: TableBlock) => {
+    const workingInput = buildAutoFitWorkingGridInput(block, { maxWidth: 624 });
+    const fixedLayout = computeFixedTableColumnWidths(workingInput);
+    const resolved = computeAutoFitColumnWidths({ workingInput, fixedLayout, contentMetrics: { rowMetrics: [] } });
+    return { workingInput, resolved };
+  };
+
+  it('uses complete 3000-twip cell preferences instead of the two-column placeholder grid', () => {
+    const block = placeholderTable(2, [
+      { id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] },
+      { id: 'row-2', cells: [widthCell('c', 3000), widthCell('d', 3000)] },
+    ]);
+    const originalWidths = [...block.columnWidths!];
+    const { workingInput, resolved } = resolveWidths(block);
+
+    expect(workingInput.preferredColumnWidths).toEqual([200, 200]);
+    expect(resolved.columnWidths).toEqual([200, 200]);
+    expect(block.columnWidths).toEqual(originalWidths);
+  });
+
+  it('repairs complete cell widths when one column has a vertical merge', () => {
+    const block = placeholderTable(2, [
+      { id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] },
+      { id: 'row-2', cells: [{ ...widthCell('c', 3000), rowSpan: 2 }, widthCell('d', 3000)] },
+      { id: 'row-3', cells: [widthCell('e', 3000)] },
+    ]);
+    const { workingInput, resolved } = resolveWidths(block);
+
+    expect(workingInput.rows.map((row) => row.cells.map((cell) => cell.startColumn))).toEqual([[0, 1], [0, 1], [1]]);
+    expect(workingInput.preferredColumnWidths).toEqual([200, 200]);
+    expect(resolved.columnWidths).toEqual([200, 200]);
+  });
+
+  it('keeps the placeholder grid when a cell beside a vertical merge lacks a compatible width', () => {
+    const firstRows = [
+      { id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] },
+      { id: 'row-2', cells: [{ ...widthCell('c', 3000), rowSpan: 2 }, widthCell('d', 3000)] },
+    ];
+    for (const continuation of [{ id: 'e' }, widthCell('e', 3500)]) {
+      const block = placeholderTable(2, [...firstRows, { id: 'row-3', cells: [continuation] }]);
+      expect(buildAutoFitWorkingGridInput(block, { maxWidth: 624 }).preferredColumnWidths).toEqual([
+        100 / 15,
+        100 / 15,
+      ]);
+    }
+  });
+
+  it('treats omitted cell-width types as dxa when repairing a two-column placeholder grid', () => {
+    const cellWithoutType = (id: string) => ({
+      id,
+      attrs: { tableCellProperties: { cellWidth: { value: 3000 } } },
+    });
+    const block = placeholderTable(2, [
+      { id: 'row-1', cells: [cellWithoutType('a'), cellWithoutType('b')] },
+      { id: 'row-2', cells: [cellWithoutType('c'), cellWithoutType('d')] },
+    ]);
+    const { workingInput, resolved } = resolveWidths(block);
+
+    expect(workingInput.preferredColumnWidths).toEqual([200, 200]);
+    expect(resolved.columnWidths).toEqual([200, 200]);
+  });
+
+  it.each(['pct', 'auto', 'nil', 'px'])('does not repair %s cell widths as dxa', (type) => {
+    const cell = (id: string) => ({
+      id,
+      attrs: { tableCellProperties: { cellWidth: { value: 3000, type } } },
+    });
+    const block = placeholderTable(2, [
+      { id: 'row-1', cells: [cell('a'), cell('b')] },
+      { id: 'row-2', cells: [cell('c'), cell('d')] },
+    ]);
+
+    expect(buildAutoFitWorkingGridInput(block, { maxWidth: 624 }).preferredColumnWidths).toEqual([100 / 15, 100 / 15]);
+  });
+
+  it('shrinks repaired cell widths when they exceed the available width', () => {
+    const block = placeholderTable(2, [
+      { id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] },
+      { id: 'row-2', cells: [widthCell('c', 3000), widthCell('d', 3000)] },
+    ]);
+    const workingInput = buildAutoFitWorkingGridInput(block, { maxWidth: 390 });
+    const fixedLayout = computeFixedTableColumnWidths(workingInput);
+    const resolved = computeAutoFitColumnWidths({ workingInput, fixedLayout, contentMetrics: { rowMetrics: [] } });
+
+    expect(workingInput.preferredColumnWidths).toEqual([200, 200]);
+    expect(resolved.columnWidths).toEqual([195, 195]);
+  });
+
+  it('uses the complete four-column cell vector and keeps a compatible merged header', () => {
+    const block = placeholderTable(4, [
+      { id: 'header', cells: [widthCell('header-cell', 6000, 4)] },
+      { id: 'row-1', cells: [0, 1, 2, 3].map((index) => widthCell(`row-1-${index}`, 1500)) },
+      { id: 'row-2', cells: [0, 1, 2, 3].map((index) => widthCell(`row-2-${index}`, 1500)) },
+    ]);
+    const { workingInput, resolved } = resolveWidths(block);
+
+    expect(workingInput.preferredColumnWidths).toEqual([100, 100, 100, 100]);
+    expect(resolved.columnWidths).toEqual([100, 100, 100, 100]);
+    expect(workingInput.rows.map((row) => row.cells.length)).toEqual([1, 4, 4]);
+  });
+
+  it('allows subpixel 100/101-twip grid and span rounding while repairing a wide placeholder table', () => {
+    const block = placeholderTable(
+      2,
+      [
+        { id: 'header', cells: [widthCell('header-cell', 6001, 2)] },
+        { id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] },
+        { id: 'row-2', cells: [widthCell('c', 3001), widthCell('d', 3000)] },
+      ],
+      { columnWidths: [100 / 15, 101 / 15] },
+    );
+    const { workingInput, resolved } = resolveWidths(block);
+
+    expect(workingInput.preferredColumnWidths).toEqual([200, 200]);
+    expect(resolved.columnWidths).toEqual([200, 200]);
+  });
+
+  const controlCases: Array<[string, Partial<TableBlock>, number[]]> = [
+    ['3000-twip grid', { columnWidths: [200, 200] }, [200, 200]],
+    ['explicit tblW', { attrs: { tableWidth: { value: 6000, type: 'dxa' } } }, [100 / 15, 100 / 15]],
+    [
+      'fixed layout',
+      { attrs: { tableLayout: 'fixed', tableWidth: { value: 100, type: 'auto' } } },
+      [100 / 15, 100 / 15],
+    ],
+    [
+      'matching grid and cells',
+      {
+        columnWidths: [100 / 15, 100 / 15],
+        rows: [{ id: 'row-1', cells: [widthCell('a', 100), widthCell('b', 100)] }],
+      },
+      [100 / 15, 100 / 15],
+    ],
+    [
+      'narrow cell preferences',
+      { rows: [{ id: 'row-1', cells: [widthCell('a', 80), widthCell('b', 80)] }] },
+      [100 / 15, 100 / 15],
+    ],
+    [
+      '100/101-twip rounding',
+      { rows: [{ id: 'row-1', cells: [widthCell('a', 101), widthCell('b', 101)] }] },
+      [100 / 15, 100 / 15],
+    ],
+    ['150-twip placeholders', { columnWidths: [10, 10] }, [10, 10]],
+    [
+      'partial cell widths',
+      { rows: [{ id: 'row-1', cells: [widthCell('a', 3000), { id: 'b' }] }] },
+      [100 / 15, 100 / 15],
+    ],
+    ['no cell widths', { rows: [{ id: 'row-1', cells: [{ id: 'a' }, { id: 'b' }] }] }, [100 / 15, 100 / 15]],
+  ];
+  it.each(controlCases)('keeps the authored grid for %s', (_label, overrides, expected) => {
+    const block = placeholderTable(
+      2,
+      [{ id: 'row-1', cells: [widthCell('a', 3000), widthCell('b', 3000)] }],
+      overrides,
+    );
+    const result = buildAutoFitWorkingGridInput(block, { maxWidth: 624 });
+    expect(result.preferredColumnWidths).toEqual(expected);
+  });
+
+  it('does not repair inconsistent complete rows or incompatible merged spans', () => {
+    const normalRow = { id: 'row-1', cells: [widthCell('a', 1500), widthCell('b', 1500)] };
+    const inconsistent = placeholderTable(2, [
+      normalRow,
+      { id: 'row-2', cells: [widthCell('c', 1500), widthCell('d', 1800)] },
+    ]);
+    const incompatibleSpan = placeholderTable(2, [
+      { id: 'header', cells: [widthCell('header-cell', 4000, 2)] },
+      normalRow,
+    ]);
+    expect(buildAutoFitWorkingGridInput(inconsistent, { maxWidth: 624 }).preferredColumnWidths).toEqual([
+      100 / 15,
+      100 / 15,
+    ]);
+    expect(buildAutoFitWorkingGridInput(incompatibleSpan, { maxWidth: 624 }).preferredColumnWidths).toEqual([
+      100 / 15,
+      100 / 15,
+    ]);
+  });
   it('normalizes a plain grid-backed table', () => {
     const block = createTableBlock({
       attrs: {
