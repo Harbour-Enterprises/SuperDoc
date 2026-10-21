@@ -8,6 +8,7 @@ import {
   expandRunsForInlineNewlines,
   isEmptyInlineSdtPlaceholderRun,
   isEmptySdtPlaceholderRun,
+  hasZeroWidthMarkerSpan,
   normalizeBaselineShift,
   resolveBaseFontSizeForVerticalText,
   shouldApplyJustify,
@@ -1290,8 +1291,12 @@ function* renderExplicitlyPositionedRuns({
       const segmentText = baseText.slice(segment.fromChar, segment.toChar);
       if (!segmentText) continue;
 
-      const pmSliceStart = runPmStart != null ? runPmStart + segment.fromChar : undefined;
-      const pmSliceEnd = runPmStart != null ? runPmStart + segment.toChar : (fallbackPmEnd ?? undefined);
+      const [pmSliceStart, pmSliceEnd] = hasZeroWidthMarkerSpan(baseRun)
+        ? [baseRun.pmStart, baseRun.pmEnd]
+        : [
+            runPmStart != null ? runPmStart + segment.fromChar : undefined,
+            runPmStart != null ? runPmStart + segment.toChar : (fallbackPmEnd ?? undefined),
+          ];
       const segmentOffset = (visibleRunStarts[segment.runIndex] ?? 0) + segment.fromChar - lineVisibleStart;
       const segmentRun = markInlineBoxRun(
         {

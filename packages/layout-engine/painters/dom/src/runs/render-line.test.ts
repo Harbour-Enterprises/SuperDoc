@@ -23,6 +23,57 @@ const makeRunContext = (overrides: Partial<RunRenderContext> = {}): RunRenderCon
   ...overrides,
 });
 
+describe.each(['data-bookmark-marker', 'data-comment-point-marker'])('zero-span %s paint ranges', (markerAttr) => {
+  for (const positioned of [false, true]) {
+    it(`preserves marker coordinates in ${positioned ? 'positioned' : 'inline'} line paint`, () => {
+      const block: ParagraphBlock = {
+        kind: 'paragraph',
+        id: 'bookmark',
+        runs: [
+          { kind: 'text', text: 'abc', fontFamily: 'Arial', fontSize: 12, pmStart: 1, pmEnd: 4 },
+          {
+            kind: 'text',
+            text: '\u200B',
+            fontFamily: 'Arial',
+            fontSize: 12,
+            pmStart: 4,
+            pmEnd: 4,
+            dataAttrs: { [markerAttr]: 'true' },
+          },
+        ],
+      };
+      const element = renderLine({
+        block,
+        line: {
+          fromRun: 0,
+          toRun: 1,
+          fromChar: 0,
+          toChar: 1,
+          width: 30,
+          ascent: 12,
+          descent: 3,
+          lineHeight: 15,
+          ...(positioned
+            ? {
+                segments: [
+                  { runIndex: 0, fromChar: 0, toChar: 3, width: 30, x: 0 },
+                  { runIndex: 1, fromChar: 0, toChar: 1, width: 0, x: 30 },
+                ],
+              }
+            : {}),
+        },
+        context: { pageNumber: 1, totalPages: 1, section: 'body' },
+        runContext: makeRunContext(),
+      });
+      expect(element.dataset.pmEnd).toBe('4');
+      expect(element.querySelector<HTMLElement>(`[${markerAttr}]`)?.dataset).toMatchObject({
+        pmStart: '4',
+        pmEnd: '4',
+      });
+    });
+  }
+});
+
 describe('renderLine native text baselines beside expanding images', () => {
   const text = (value: string, overrides: Partial<TextRun> = {}): TextRun => ({
     kind: 'text',

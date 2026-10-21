@@ -3,6 +3,8 @@ import type { FlowBlock, Line, ParagraphBlock, Run, TabRun, TextRun, TrackedChan
 import {
   expandRunsForInlineNewlines,
   isEmptySdtPlaceholderRun,
+  isZeroWidthMarkerRun,
+  hasZeroWidthMarkerSpan,
   sliceRunsForLine,
   usesPositionedTextGeometry,
 } from './run-helpers.js';
@@ -76,7 +78,59 @@ describe('expandRunsForInlineNewlines', () => {
   });
 });
 
+describe('zero-width marker recognition', () => {
+  it.each(['data-bookmark-marker', 'data-comment-point-marker'])(
+    'recognizes only the %s marker glyph',
+    (markerAttr) => {
+      const marker: TextRun = {
+        kind: 'text',
+        text: '\u200B',
+        fontFamily: 'Arial',
+        fontSize: 12,
+        dataAttrs: { [markerAttr]: 'true' },
+      };
+      expect(isZeroWidthMarkerRun(marker)).toBe(true);
+      expect(hasZeroWidthMarkerSpan(marker)).toBe(false);
+      expect(hasZeroWidthMarkerSpan({ ...marker, pmStart: 0, pmEnd: 0 })).toBe(true);
+      expect(hasZeroWidthMarkerSpan({ ...marker, pmStart: 0, pmEnd: 1 })).toBe(false);
+      expect(isZeroWidthMarkerRun({ ...marker, dataAttrs: {} })).toBe(false);
+      expect(isZeroWidthMarkerRun({ ...marker, text: 'X' })).toBe(false);
+      expect(hasZeroWidthMarkerSpan({ ...marker, text: 'X', pmStart: 0, pmEnd: 0 })).toBe(false);
+    },
+  );
+});
+
 describe('sliceRunsForLine', () => {
+  it.each([
+    { markerAttr: 'data-bookmark-marker', span: 0 },
+    { markerAttr: 'data-bookmark-marker', span: 1 },
+    { markerAttr: 'data-comment-point-marker', span: 0 },
+    { markerAttr: 'data-comment-point-marker', span: 1 },
+  ])('preserves a $markerAttr with a supplied $span-position span', ({ markerAttr, span }) => {
+    const run: TextRun = {
+      kind: 'text',
+      text: '\u200B',
+      fontFamily: 'Arial',
+      fontSize: 12,
+      pmStart: 4,
+      pmEnd: 4 + span,
+      dataAttrs: { [markerAttr]: 'true' },
+    };
+    const block: ParagraphBlock = { kind: 'paragraph', id: 'bookmark', runs: [run] };
+    const line: Line = {
+      fromRun: 0,
+      toRun: 0,
+      fromChar: 0,
+      toChar: 1,
+      width: 0,
+      ascent: 12,
+      descent: 3,
+      lineHeight: 15,
+    };
+    expect(sliceRunsForLine(block, line)).toEqual([run]);
+    expect(sliceRunsForLine(block, { ...line, toChar: 0 })).toEqual([]);
+  });
+
   const makeTextRun = (text: string, pmStart = 0): TextRun => ({
     text,
     fontFamily: 'Arial',

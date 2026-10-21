@@ -17,6 +17,19 @@ export function isBodyNoteReferenceRun(run: Run): boolean {
   return run.kind === 'text' && typeof run.dataAttrs?.[NOTE_REFERENCE_MARKER_ATTR] === 'string';
 }
 
+export function isZeroWidthMarkerRun(run: Run): boolean {
+  return (
+    run.kind === 'text' &&
+    run.text === '\u200B' &&
+    (typeof run.dataAttrs?.['data-bookmark-marker'] === 'string' ||
+      typeof run.dataAttrs?.['data-comment-point-marker'] === 'string')
+  );
+}
+
+export function hasZeroWidthMarkerSpan(run: Run): boolean {
+  return isZeroWidthMarkerRun(run) && run.pmStart != null && run.pmStart === run.pmEnd;
+}
+
 /** Synthetic note-band or appended-endnote label keyed to its source note. */
 export function isNoteLabelRun(run: Run): boolean {
   return run.kind === 'text' && typeof run.dataAttrs?.[NOTE_LABEL_MARKER_ATTR] === 'string';
@@ -126,7 +139,11 @@ export function sliceRunsForLine(block: FlowBlock, line: Line): Run[] {
     if (isFirstRun || isLastRun) {
       const start = isFirstRun ? line.fromChar : 0;
       const end = isLastRun ? line.toChar : text.length;
-      if (isBodyNoteReferenceRun(run) || run.dataAttrs?.['data-paragraph-mark-deletion-anchor'] === 'true') {
+      if (
+        isBodyNoteReferenceRun(run) ||
+        hasZeroWidthMarkerSpan(run) ||
+        run.dataAttrs?.['data-paragraph-mark-deletion-anchor'] === 'true'
+      ) {
         const slice = text.slice(start, end);
         if (!slice) continue;
         result.push(start === 0 && end === text.length ? run : { ...run, text: slice });

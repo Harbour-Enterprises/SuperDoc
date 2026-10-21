@@ -11,6 +11,33 @@ const makeLine = (params: Pick<Line, 'fromRun' | 'toRun' | 'fromChar' | 'toChar'
 });
 
 describe('pm-range', () => {
+  it.each([
+    { markerAttr: 'data-bookmark-marker', span: 0 },
+    { markerAttr: 'data-bookmark-marker', span: 1 },
+    { markerAttr: 'data-comment-point-marker', span: 0 },
+    { markerAttr: 'data-comment-point-marker', span: 1 },
+  ])('preserves a $markerAttr with a supplied $span-position span', ({ markerAttr, span }) => {
+    const block: ParagraphBlock = {
+      kind: 'paragraph',
+      id: 'bookmark',
+      runs: [
+        {
+          kind: 'text',
+          text: '\u200B',
+          fontFamily: 'Arial',
+          fontSize: 12,
+          pmStart: 4,
+          pmEnd: 4 + span,
+          dataAttrs: { [markerAttr]: 'true' },
+        },
+      ],
+    };
+    expect(computeLinePmRange(block, makeLine({ fromRun: 0, toRun: 0, fromChar: 0, toChar: 1 }))).toEqual({
+      pmStart: 4,
+      pmEnd: 4 + span,
+    });
+  });
+
   it('ignores stale pmEnd for text runs', () => {
     const block: ParagraphBlock = {
       kind: 'paragraph',

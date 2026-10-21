@@ -1,5 +1,5 @@
 import type { FlowBlock, Line, ParagraphBlock, ParagraphMeasure } from './index.js';
-import { isBodyNoteReferenceRun, isEmptySdtPlaceholderRun } from './run-helpers.js';
+import { isBodyNoteReferenceRun, isEmptySdtPlaceholderRun, hasZeroWidthMarkerSpan } from './run-helpers.js';
 
 /**
  * Represents a ProseMirror position range for a line or fragment.
@@ -94,7 +94,7 @@ export function computeLinePmRange(block: FlowBlock, line: Line): LinePmRange {
     const runPmStart = coercePmStart(run);
     if (runPmStart == null) continue;
 
-    if (isEmptySdtPlaceholderRun(run)) {
+    if (isEmptySdtPlaceholderRun(run) || hasZeroWidthMarkerSpan(run)) {
       const runPmEnd = coercePmEnd(run) ?? runPmStart;
       if (pmStart == null) {
         pmStart = runPmStart;

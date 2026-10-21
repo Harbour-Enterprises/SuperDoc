@@ -3931,6 +3931,8 @@ export { isResolvedTableItem, isResolvedImageItem, isResolvedDrawingItem } from 
 export {
   expandRunsForInlineNewlines,
   isBodyNoteReferenceRun,
+  isZeroWidthMarkerRun,
+  hasZeroWidthMarkerSpan,
   isNoteLabelRun,
   isNumberedNoteMarkerRun,
   isEmptyInlineSdtPlaceholderRun,
