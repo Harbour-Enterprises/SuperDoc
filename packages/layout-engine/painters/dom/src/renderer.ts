@@ -3246,8 +3246,8 @@ export class DomPainter {
       ) {
         // An unnecessary half-pixel transform clips thin SVG ink in Chromium.
         // Numeric centering keeps the same frame without a transformed surface.
-        innerWrapper.style.left = `${((resolvedItem?.width ?? fragment.width) - fragment.geometry.width) / 2}px`;
-        innerWrapper.style.top = `${((resolvedItem?.height ?? fragment.height) - fragment.geometry.height) / 2}px`;
+        innerWrapper.style.left = `${(resolvedItem.width - fragment.geometry.width) / 2}px`;
+        innerWrapper.style.top = `${(resolvedItem.height - fragment.geometry.height) / 2}px`;
         innerWrapper.style.zIndex = '0';
       } else {
         innerWrapper.style.left = '50%';

@@ -1,3 +1,5 @@
+import { ST_HIGHLIGHT_VALUES } from '../inline-semantics/token-sets.js';
+
 type JsonSchema = Record<string, unknown>;
 
 function objectSchema(properties: Record<string, JsonSchema>, required: readonly string[] = []): JsonSchema {
@@ -73,7 +75,7 @@ export const SD_CONVERSION_FRAGMENT_SCHEMA_DEFS: Record<string, JsonSchema> = {
     underline: ref('SDInboundUnderline'),
     strikethrough: { type: 'boolean' },
     color: ref('SDInboundColor'),
-    highlight: { const: 'yellow' },
+    highlight: { enum: [...ST_HIGHLIGHT_VALUES] },
     shading: ref('SDInboundShading'),
     fontSize: { type: 'number', exclusiveMinimum: 0 },
     fontFamily: { type: 'string', minLength: 1 },

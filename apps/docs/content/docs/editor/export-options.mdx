@@ -83,12 +83,12 @@ in the same order, with one filename for each file. Omit `triggerDownload: false
 
 ## Choose options for the next export
 
-| Option                                    | Default      | Effect                                                                                |
-| ----------------------------------------- | ------------ | ------------------------------------------------------------------------------------- |
-| `exportedName`                            | Editor title | Name the DOCX or ZIP without its extension.                                           |
-| `triggerDownload`                         | `true`       | Download the result; set it to `false` to return a `Blob` or ZIP without downloading. |
+| Option                                    | Default      | Effect                                                                                     |
+| ----------------------------------------- | ------------ | ------------------------------------------------------------------------------------------ |
+| `exportedName`                            | Editor title | Name the DOCX or ZIP without its extension.                                                |
+| `triggerDownload`                         | `true`       | Download the result; set it to `false` to return a `Blob` or ZIP without downloading.      |
 | `commentsType`                            | `'external'` | Preserve comments; `'clean'` returns a separate comment-free copy on supported save paths. |
-| `additionalFiles` / `additionalFileNames` | Empty arrays | Include related files in a ZIP.                                                       |
+| `additionalFiles` / `additionalFileNames` | Empty arrays | Include related files in a ZIP.                                                            |
 
 `exportType` defaults to `['docx']`, the browser Editor's supported export format.
 The v2 Editor does not apply `fieldsHighlightColor` during export.

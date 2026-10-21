@@ -456,6 +456,31 @@ describe('document-api contract catalog', () => {
     ).toEqual([['htmlToFragment', 'html-to-fragment.mdx']]);
   });
 
+  it('allows every canonical Word highlight in converted fragments', () => {
+    const defs = buildInternalContractSchemas().$defs as Record<string, ContractTestSchemaShape>;
+    expect(defs.SDInboundRunProps?.properties?.highlight).toEqual({
+      enum: [
+        'black',
+        'blue',
+        'cyan',
+        'green',
+        'magenta',
+        'red',
+        'yellow',
+        'white',
+        'darkBlue',
+        'darkCyan',
+        'darkGreen',
+        'darkMagenta',
+        'darkRed',
+        'darkYellow',
+        'darkGray',
+        'lightGray',
+        'none',
+      ],
+    });
+  });
+
   it('publishes concrete recursive fragments for both conversion operations', () => {
     const schemas = buildInternalContractSchemas();
     const defs = schemas.$defs as Record<string, ContractTestSchemaShape>;

@@ -270,10 +270,10 @@ test('lifecycle export retries restore the current document state', async () => 
   }
 });
 
-test('export guide examples select download, bytes, and paired attachments', async () => {
+test('export guide examples select download, bytes, clean comments, and paired attachments', async () => {
   const page = await readFile(new URL('../content/docs/editor/export-options.mdx', import.meta.url), 'utf8');
   const examples = [...page.matchAll(/```ts\n([\s\S]*?)```/gu)].map((match) => match[1]);
-  assert.equal(examples.length, 4);
+  assert.equal(examples.length, 5);
   const allCalls = [];
   const superdoc = { export: async (options) => { allCalls.push(options); return new Blob(['docx']); } };
   const AsyncFunction = Object.getPrototypeOf(async function () {}).constructor;
@@ -282,16 +282,17 @@ test('export guide examples select download, bytes, and paired attachments', asy
     await new AsyncFunction('editorRef', `${examples[0]}\n${example}`)({ current: { getInstance: () => superdoc } });
     await new AsyncFunction('editorRef', `${examples[0]}\n${example}`)({ current: null });
   }
-  assert.equal(allCalls.length, 6);
-  assert.deepEqual(allCalls[0], allCalls[1]);
-  assert.deepEqual(allCalls[2], allCalls[3]);
-  assert.deepEqual(allCalls[4], allCalls[5]);
+  assert.equal(allCalls.length, 8);
+  for (let index = 0; index < allCalls.length; index += 2) {
+    assert.deepEqual(allCalls[index], allCalls[index + 1]);
+  }
   const calls = allCalls.filter((_, index) => index % 2 === 0);
-  assert.deepEqual(calls.slice(0, 2), [
+  assert.deepEqual(calls.slice(0, 3), [
     { exportedName: 'sample-edited' },
     { triggerDownload: false },
+    { triggerDownload: false, commentsType: 'clean' },
   ]);
-  const bundle = calls[2];
+  const bundle = calls[3];
   assert.equal(bundle.exportedName, 'sample-edited');
   assert.equal(bundle.triggerDownload, false);
   assert.deepEqual(bundle.additionalFileNames, ['metadata.json']);

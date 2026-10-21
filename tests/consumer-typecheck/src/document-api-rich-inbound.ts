@@ -56,6 +56,15 @@ const fragment = {
 const htmlInput: Parameters<DocumentApi['htmlToFragment']>[0] = { html: '<p>Canonical content</p>' };
 const markdownInput: Parameters<DocumentApi['markdownToFragment']>[0] = { markdown: 'Canonical content' };
 const htmlResult: ReturnType<DocumentApi['htmlToFragment']> = doc.htmlToFragment(htmlInput);
+const wordHighlightResult: ReturnType<DocumentApi['htmlToFragment']> = doc.htmlToFragment({
+  html: '<span style="background:silver;mso-highlight:silver">Word highlight</span>',
+});
+const namedHighlightFragment: ReturnType<DocumentApi['htmlToFragment']>['fragment'] = {
+  kind: 'paragraph',
+  paragraph: { inlines: [{ kind: 'run', run: { text: 'Word highlight', props: { highlight: 'lightGray' } } }] },
+};
+const namedHighlightInsert: ReturnType<DocumentApi['insert']> = doc.insert({ content: namedHighlightFragment });
+void [wordHighlightResult, namedHighlightInsert];
 const markdownResult: ReturnType<DocumentApi['markdownToFragment']> = doc.markdownToFragment(markdownInput);
 
 const mutationInput: Parameters<DocumentApi['mutations']['apply']>[0] = {
