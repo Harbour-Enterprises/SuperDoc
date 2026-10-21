@@ -33,6 +33,32 @@ function validParagraph() {
 // Rule 1: Fragment must be non-empty
 // ---------------------------------------------------------------------------
 
+describe('row-span continuation rows', () => {
+  it('accepts empty rows covered by an earlier vertical span', () => {
+    expect(() =>
+      validateSDFragment({
+        kind: 'table',
+        table: { rows: [{ cells: [{ rowSpan: 2, content: [validParagraph()] }] }, { cells: [] }] },
+      }),
+    ).not.toThrow();
+  });
+  it('rejects spans beyond the final row, including covered empty rows', () => {
+    for (const rows of [
+      [{ cells: [{ rowSpan: 2, content: [validParagraph()] }] }],
+      [{ cells: [{ rowSpan: 5, content: [validParagraph()] }] }, { cells: [] }],
+      [{ cells: [{ content: [validParagraph()] }] }, { cells: [{ rowSpan: 2, content: [validParagraph()] }] }],
+    ])
+      expectError(() => validateSDFragment({ kind: 'table', table: { rows } }), 'INVALID_PAYLOAD', /final row/);
+  });
+  it('rejects empty rows without an active vertical span', () => {
+    for (const rows of [
+      [{ cells: [] }],
+      [{ cells: [{ rowSpan: 2, content: [validParagraph()] }] }, { cells: [] }, { cells: [] }],
+    ])
+      expectError(() => validateSDFragment({ kind: 'table', table: { rows } }), 'INVALID_PAYLOAD');
+  });
+});
+
 describe('Rule 1: non-empty fragment', () => {
   it('rejects null', () => expectError(() => validateSDFragment(null), 'INVALID_PAYLOAD'));
   it('rejects undefined', () => expectError(() => validateSDFragment(undefined), 'INVALID_PAYLOAD'));
@@ -220,7 +246,11 @@ describe('Rule 6: table spans', () => {
     expectError(() => validateSDFragment(tableWithCellSpans(undefined, -1)), 'INVALID_PAYLOAD'));
   it('rejects non-integer rowSpan', () =>
     expectError(() => validateSDFragment(tableWithCellSpans(1.5)), 'INVALID_PAYLOAD'));
-  it('accepts valid spans', () => expect(() => validateSDFragment(tableWithCellSpans(2, 3))).not.toThrow());
+  it('accepts valid spans', () => {
+    const table = tableWithCellSpans(2, 3);
+    table.table.rows.push({ cells: [] });
+    expect(() => validateSDFragment(table)).not.toThrow();
+  });
   it('accepts omitted spans', () => expect(() => validateSDFragment(tableWithCellSpans())).not.toThrow());
 
   it('accepts semantic header cells', () => {

@@ -41,7 +41,7 @@ const inboundTableCellSchema = objectSchema(
 const inboundTableRowSchema = objectSchema(
   {
     ...idProperty,
-    cells: arraySchema(inboundTableCellSchema, 1),
+    cells: arraySchema(inboundTableCellSchema),
   },
   ['cells'],
 );

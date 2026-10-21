@@ -306,12 +306,13 @@ function validateTablePayload(rec: Record<string, unknown>, seenIds: Set<string>
     throw new DocumentApiValidationError('INVALID_PAYLOAD', 'Table must have at least one row.', { field: 'rows' });
   }
 
-  for (const row of payload.rows as unknown[]) {
+  let lastSpannedRow = -1;
+  for (const [rowIndex, row] of (payload.rows as unknown[]).entries()) {
     assertPlainObject(row);
     const rowRec = row as Record<string, unknown>;
     collectAndCheckId(rowRec, seenIds);
 
-    if (!Array.isArray(rowRec.cells) || (rowRec.cells as unknown[]).length === 0) {
+    if (!Array.isArray(rowRec.cells) || ((rowRec.cells as unknown[]).length === 0 && rowIndex > lastSpannedRow)) {
       throw new DocumentApiValidationError('INVALID_PAYLOAD', 'Table row must have at least one cell.', {
         field: 'cells',
       });
@@ -325,6 +326,13 @@ function validateTablePayload(rec: Record<string, unknown>, seenIds: Set<string>
       // Rule 6: row/cell spans must be valid positive integers
       validatePositiveInt(cellRec, 'rowSpan');
       validatePositiveInt(cellRec, 'colSpan');
+      const rowSpan = (cellRec.rowSpan as number | undefined) ?? 1;
+      if (rowSpan > payload.rows.length - rowIndex) {
+        throw new DocumentApiValidationError('INVALID_PAYLOAD', 'Table row spans cannot extend beyond the final row.', {
+          field: 'rowSpan',
+        });
+      }
+      lastSpannedRow = Math.max(lastSpannedRow, rowIndex + rowSpan - 1);
 
       if (cellRec.header !== undefined && typeof cellRec.header !== 'boolean') {
         throw new DocumentApiValidationError('INVALID_PAYLOAD', 'Table cell header must be a boolean.', {

@@ -305,3 +305,14 @@ const additionalModeTypes: [
   SuccessMode<ReturnType<DocumentApi['citations']['bibliography']['insert']>>,
 ] = [true, true, true, true, true, true, true, true, true, true, true, true, true, true];
 void additionalModeTypes;
+
+// A row covered entirely by a vertical merge has no new source cells.
+const verticallyMergedFragment: Parameters<DocumentApi['insert']>[0] = {
+  target: paragraph,
+  content: {
+    kind: 'table',
+    table: { rows: [{ cells: [{ rowSpan: 2, colSpan: 2, content: [fragment] }] }, { cells: [] }] },
+  },
+};
+const verticallyMergedReceipt: ReturnType<DocumentApi['insert']> = doc.insert(verticallyMergedFragment);
+void verticallyMergedReceipt;

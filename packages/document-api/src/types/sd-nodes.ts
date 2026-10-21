@@ -130,6 +130,7 @@ export interface SDTableRow {
 export interface SDTableCell {
   props?: SDCellProps;
   colSpan?: number;
+  /** Number of rows occupied; covered positions are omitted from later rows, which may have no cells. */
   rowSpan?: number;
   /** Marks a semantic table header cell. */
   header?: boolean;
