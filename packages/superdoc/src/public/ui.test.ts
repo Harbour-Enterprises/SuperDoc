@@ -4483,6 +4483,72 @@ describe('public ui — command reason taxonomy', () => {
     );
   });
 
+  it.each(['live', 'editor', 'document', 'mode', 'lifetime', 'destroy'] as const)(
+    'copy-format owns pending capture and checks owner %s before arming',
+    async (owner) => {
+      let resolveCapture!: (value: unknown) => void;
+      const captureValues = new Promise((resolve) => {
+        resolveCapture = resolve;
+      });
+      const readEffectiveInlineUniformity = vi.fn(() => captureValues);
+      const { superdoc } = makeFormatPainterSuperdoc({
+        queryMatch: () => ({ items: [] }),
+        readEffectiveInlineUniformity,
+      });
+      const lifetime = new AbortController();
+      let active = 0;
+      const host = {
+        getForegroundInteractionLifetime: () => lifetime.signal,
+        async runForegroundInteraction(action: () => Promise<unknown>) {
+          active++;
+          try {
+            return await action();
+          } finally {
+            active--;
+          }
+        },
+      };
+      superdoc.activeEditor.host = host as any;
+      const ui = createSuperDocUI({ superdoc });
+      expect(ui.selection.getSnapshot().status).toBe('ready');
+      const readsBeforeCapture = readEffectiveInlineUniformity.mock.calls.length;
+      const pending = executeFirstPartyCommandAsync(ui, 'copy-format');
+      try {
+        await vi.waitFor(() =>
+          expect(readEffectiveInlineUniformity.mock.calls.length).toBeGreaterThan(readsBeforeCapture),
+        );
+        expect(active, 'capture must remain visible to foreground readiness until it arms').toBe(1);
+        expect(ui.commands.get('copy-format').getState().active).toBe(false);
+        if (owner === 'editor') superdoc.activeEditor = { ...superdoc.activeEditor };
+        if (owner === 'document') superdoc.activeEditor.doc = { ...superdoc.activeEditor.doc };
+        if (owner === 'mode') superdoc.config.documentMode = 'viewing';
+        if (owner === 'lifetime') lifetime.abort();
+        if (owner === 'destroy') ui.destroy();
+        resolveCapture({ success: true, values: { fontSize: { state: 'uniform', value: '18' } } });
+        expect(await pending).toBe(owner === 'live');
+        expect(ui.commands.get('copy-format').getState().active).toBe(owner === 'live');
+        expect(active).toBe(0);
+      } finally {
+        resolveCapture({ success: true, values: {} });
+        await pending;
+        ui.destroy();
+      }
+    },
+  );
+
+  it('copy-format keeps custom overrides outside built-in capture ownership', async () => {
+    const { superdoc } = makeFormatPainterSuperdoc();
+    const runForegroundInteraction = vi.fn((action) => action());
+    superdoc.activeEditor.host = { runForegroundInteraction } as any;
+    const ui = createSuperDocUI({ superdoc });
+    const execute = vi.fn(() => true);
+    ui.commands.register({ id: 'copy-format', execute });
+    expect(await executeFirstPartyCommandAsync(ui, 'copy-format')).toBe(true);
+    expect(execute).toHaveBeenCalledTimes(1);
+    expect(runForegroundInteraction).not.toHaveBeenCalled();
+    ui.destroy();
+  });
+
   it('copy-format awaits uncached effective font and size before publishing its snapshot', async () => {
     let resolveUniformity: (value: unknown) => void = () => undefined;
     const effectiveUniformity = new Promise((resolve) => {

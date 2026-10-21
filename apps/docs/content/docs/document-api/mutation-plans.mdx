@@ -148,3 +148,26 @@ The returned plan receipt includes the before/after revision, a result for every
 </Callout>
 
 The generated [`mutations.preview` reference](/document-api/reference/mutations/preview) and [`mutations.apply` reference](/document-api/reference/mutations/apply) list supported steps, limits, outputs, and failure codes.
+
+## Commit content-control operations together
+
+V2 also supports `doc.plan.execute({ atomic: true, entries })` for supported content-control operations and associated text or formatting edits. Without `atomic: true`, plans keep their existing stepwise behavior and retain successful entries before a failure.
+
+```ts
+const result = await doc.plan.execute({
+  atomic: true,
+  entries: controls.map(({ target }, index) => ({
+    operationId: 'contentControls.replaceContent',
+    input: { target, content: `Reference ${index + 1}`, overrideContentLock: true },
+  })),
+});
+if (result.failure) throw new Error(result.failure.message);
+```
+
+The atomic route prepares on detached document bytes and commits the supported result once to the active session. It preserves existing history and gives the whole batch one Undo unit. Preparation or commit failure leaves the active document and history unchanged. It is bounded to 1,000 entries in one existing body, header or footer story. Cross-story batches and operations that change the package graph are refused unchanged.
+
+Local plans support content-control creation, unwrap, deletion, property patching, lock changes and content replacement; plain text insertion/replacement/deletion; inline formatting; and existing `mutations.apply` operations. Each operation retains its own support boundaries. For example, tracked lock changes, inline retagging/deletion and replacement of a newly tracked inline insertion may be refused. Atomic execution does not make an unsupported tracked representation valid: it discards the complete prepared proposal on refusal.
+
+Shared rooms support direct control/formatting batches within one story when the batch preserves document identities. Structural creation/deletion, tracked atomic proposals and cross-story shared batches are refused unchanged. A shared batch is one backend commit and one local Undo unit; peer history remains local to each peer.
+
+`captureAs` and capture references may connect entries **inside** an atomic plan. Atomic captures do not persist across calls and `captureReturns` is unavailable, because preparation can produce revision-bound handles. Read fresh results after a successful commit. Failure expectations and per-entry history exclusion are also unavailable in this route. Hosts without atomic support refuse the opt-in before executing entries.

@@ -4120,6 +4120,11 @@ function buildContentControlSchemas(): Record<ContentControlOperationId, Operati
           target: contentControlTargetSchema,
           content: { type: 'string' },
           format: { enum: ['text', 'html', 'ooxml'] },
+          overrideContentLock: {
+            type: 'boolean',
+            description:
+              'Direct V2 edits only: replace locked content while preserving the target lock and identity. Document and ancestor protection still apply.',
+          },
         },
         ['target', 'content'],
       ),
@@ -8510,6 +8515,12 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
       'plan.execute': {
         input: objectSchema(
           {
+            atomic: {
+              const: true,
+              type: 'boolean',
+              description:
+                'Opt in to host-supported all-or-nothing execution. Check host support and operation restrictions.',
+            },
             entries: arraySchema(
               objectSchema(
                 {

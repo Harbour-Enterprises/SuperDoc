@@ -602,6 +602,9 @@ export function executeContentControlsReplaceContent(
   validateCCInput(input, 'contentControls.replaceContent');
   validateCCTarget(input.target, 'contentControls.replaceContent');
   validateContentPayload(input, 'contentControls.replaceContent');
+  if (input.overrideContentLock !== undefined) {
+    requireBoolean(input.overrideContentLock, 'overrideContentLock', 'contentControls.replaceContent');
+  }
   return adapter.replaceContent(input, options);
 }
 

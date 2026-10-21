@@ -58,6 +58,8 @@ export interface PlanExecuteEntry {
 
 export interface PlanExecuteInput {
   entries: PlanExecuteEntry[];
+  /** Opt in to a supported host's all-or-nothing, single-commit execution. */
+  atomic?: true;
   /** Capture keys to return to the client, or '*' for the full capture map. */
   captureReturns?: '*' | string[];
 }
@@ -95,6 +97,7 @@ export interface PlanApi<TExecuteResult = PlanExecuteResult> {
 
 type DynamicInvoke = (operationId: string, input: unknown, options: unknown) => unknown;
 type AsyncDynamicInvoke = (operationId: string, input: unknown, options: unknown) => PromiseLike<unknown>;
+export type AtomicPlanExecutor = (input: PlanExecuteInput) => Promise<PlanExecuteResult>;
 
 function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
   return (
@@ -381,6 +384,9 @@ function validatePlanExecuteInput(input: PlanExecuteInput): void {
   if (!input || !Array.isArray(input.entries)) {
     throw new DocumentApiValidationError('INVALID_INPUT', 'plan.execute requires input.entries to be an array.');
   }
+  if (input.atomic !== undefined && input.atomic !== true) {
+    throw new DocumentApiValidationError('INVALID_INPUT', 'plan.execute atomic must be true when supplied.');
+  }
   if (
     typeof input.captureReturns !== 'undefined' &&
     input.captureReturns !== '*' &&
@@ -416,9 +422,19 @@ function validatePlanExecuteInput(input: PlanExecuteInput): void {
  * The capture map lives in this closure, so it persists across chunked
  * `plan.execute` calls for the lifetime of the owning DocumentApi instance.
  */
-export function createPlanApi(invoke: AsyncDynamicInvoke): PlanApi<Promise<PlanExecuteResult>>;
+export function createPlanApi(
+  invoke: AsyncDynamicInvoke,
+  atomicExecutor?: AtomicPlanExecutor,
+): PlanApi<Promise<PlanExecuteResult>>;
 export function createPlanApi(invoke: DynamicInvoke): PlanApi;
-export function createPlanApi(invoke: DynamicInvoke): PlanApi<PlanExecuteResult | Promise<PlanExecuteResult>> {
+export function createPlanApi(
+  invoke: DynamicInvoke,
+  atomicExecutor?: AtomicPlanExecutor,
+): PlanApi<PlanExecuteResult | Promise<PlanExecuteResult>>;
+export function createPlanApi(
+  invoke: DynamicInvoke,
+  atomicExecutor?: AtomicPlanExecutor,
+): PlanApi<PlanExecuteResult | Promise<PlanExecuteResult>> {
   const captures: Record<string, unknown> = {};
   // Empty plans and input validation run before any invoke return can be sampled,
   // so only native async functions can be forced through the async path up front.
@@ -427,6 +443,15 @@ export function createPlanApi(invoke: DynamicInvoke): PlanApi<PlanExecuteResult 
     execute(input: PlanExecuteInput): PlanExecuteResult | Promise<PlanExecuteResult> {
       const executePlan = (): PlanExecuteResult | Promise<PlanExecuteResult> => {
         validatePlanExecuteInput(input);
+        if (input.atomic) {
+          if (!atomicExecutor) {
+            throw new DocumentApiValidationError(
+              'CAPABILITY_UNAVAILABLE',
+              'This host does not support atomic plan execution.',
+            );
+          }
+          return atomicExecutor(input);
+        }
         const captureReturns = input.captureReturns ?? [];
         const receipts: PlanEntryReceipt[] = [];
         let failure: PlanExecuteFailure | undefined;

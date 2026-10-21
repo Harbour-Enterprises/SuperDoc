@@ -384,6 +384,18 @@ describe('content operations validate content string', () => {
         format: 'xml' as any,
       }),
     ).toThrow(/format must be 'text' or 'html'/);
+    const adapter = stubAdapter();
+    expect(() =>
+      executeContentControlsReplaceContent(adapter, {
+        target: validTarget,
+        content: 'hello',
+        overrideContentLock: 'true',
+      } as any),
+    ).toThrow(/overrideContentLock must be a boolean/);
+    expect(adapter.replaceContent).not.toHaveBeenCalled();
+    const input = { target: validTarget, content: 'hello', overrideContentLock: true };
+    executeContentControlsReplaceContent(adapter, input);
+    expect(adapter.replaceContent).toHaveBeenCalledWith(input, undefined);
   });
 });
 

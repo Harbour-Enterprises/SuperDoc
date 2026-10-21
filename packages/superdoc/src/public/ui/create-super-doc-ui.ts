@@ -9855,6 +9855,18 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
 
   const executeCopyFormat = async (): Promise<boolean> => {
     const commandDoc = firstPartyCommandDoc ?? null;
+    const editor = getEditor();
+    const doc = editor?.doc;
+    const host = editor?.host;
+    const mode = readDocumentMode();
+    const lifetime = safeCall<AbortSignal | undefined>(() => host?.getForegroundInteractionLifetime?.(), undefined);
+    const isCurrent = () =>
+      !disposed &&
+      getEditor() === editor &&
+      editor?.doc === doc &&
+      editor?.host === host &&
+      readDocumentMode() === mode &&
+      !lifetime?.aborted;
     // Toolbar state is optimistic, but format-painter capture must snapshot the
     // authoritative source formatting. An async toolbar command may still be
     // preparing its selection before the mutation scheduler becomes active, so
@@ -9864,6 +9876,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     );
     const inlineToggleSettlement = await lastInlineToggleCommandSettlement;
     await inlineToggleMutationIdle;
+    if (!isCurrent()) return false;
     const visibleActiveMarks = commandResultSucceeded(inlineToggleSettlement) ? visibleActiveMarksAtClick : [];
     const DOUBLE_CLICK_MS = 500;
     const now = Date.now();
@@ -9893,6 +9906,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const sourceKey = `${selectionKey(captureSlice)}:${contentToken()}`;
     const captureProjected = sourceKey && sourceKey === frozenProjectedValuesKey ? frozenProjectedValues : undefined;
     const painterSnapshot = await captureFormatPainter(null, captureSlice, captureProjected, visibleActiveMarks);
+    if (!isCurrent()) return false;
     // Only the newest overlapping capture may publish painter state. Without
     // this guard, whichever async click settles last can overwrite a newer
     // persistent capture with stale armed state.
@@ -10331,6 +10345,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
         : null;
     let rawSelection: unknown;
     const needsSelection = !!reader || commandNeedsFreshSelection(id, payload);
+    const needsForeground = needsSelection || (id === 'copy-format' && !customCommands.has(id));
     const execute = () => {
       // Ordered reads participate in the same admitted task as their mutation.
       const prepared = reader
@@ -10380,7 +10395,7 @@ export function createSuperDocUI(options: SuperDocUIOptions): SuperDocUI {
     const runForeground = host?.runForegroundInteraction;
     const lifetime = safeCall<AbortSignal | undefined>(() => host?.getForegroundInteractionLifetime?.(), undefined);
     const settlement =
-      needsSelection && typeof runForeground === 'function'
+      needsForeground && typeof runForeground === 'function'
         ? (Promise.resolve(runForeground.call(host, execute, lifetime)) as Promise<CommandExecutionResult>)
         : Promise.resolve(execute());
     if (getCommandDescriptor(id)?.inline?.kind === 'toggle') {

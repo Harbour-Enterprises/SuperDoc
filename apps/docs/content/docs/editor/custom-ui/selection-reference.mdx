@@ -27,6 +27,16 @@ position. Use [Context menu](/editor/custom-ui/context-menus) for a complete poi
 allows the geometry fallback `selectionTarget ?? target`, but only `selectionTarget` is accepted by
 `apply()`. Read it directly and handle `null` rather than reusing that geometry fallback.
 
+## Find controls intersecting selected text
+
+`selection.current()` does not include a content-control collection. For a nonempty text selection, combine its document-ordered `selectionTarget` with `contentControls.listInRange()`, then filter the block-scoped candidates by their exact selection endpoints. This includes enclosing/nested controls and excludes adjacent controls that only touch a selection boundary. The helper paginates the candidate results and keeps story identities separate:
+
+<include>../../../../snippets/editor/selected-content-controls.ts</include>
+
+Collapsed carets and non-text/table selections return an empty list in this helper; use `viewport.entityAt()` for pointer hits. A headless session has no live UI selection and returns its documented collapsed default. Pass an explicit text range instead when building a headless workflow.
+
+Temporary lock changes can separately use `contentControls.setLockMode({ target, lockMode, addToHistory: false })` in local sessions. Keep the substantive content edit in history and restore the original lock mode. This history-neutral alternative does not group execution or layout; use an atomic plan for a complete multi-control operation.
+
 ## Read table and cell context
 
 In the V2 browser editor, `doc.selection.current()` and

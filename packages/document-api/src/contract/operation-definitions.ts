@@ -3149,7 +3149,8 @@ export const OPERATION_DEFINITIONS = {
     memberPath: 'plan.execute',
     description:
       'Execute a compiled batch of plan-safe operation entries with per-entry transactions, ' +
-      'capture resolution between entries, and keep-prefix-and-continue failure semantics.',
+      'capture resolution between entries, and keep-prefix-and-continue failure semantics. ' +
+      'Hosts may support atomic: true for all-or-nothing single-commit execution with operation restrictions.',
     expectedResult:
       'Returns a PlanExecuteResult with per-entry receipts, projected captures, and the first hard failure if any.',
     requiresDocumentContext: true,
@@ -5311,7 +5312,8 @@ export const OPERATION_DEFINITIONS = {
   },
   'contentControls.replaceContent': {
     memberPath: 'contentControls.replaceContent',
-    description: 'Replace the entire content of a content control.',
+    description:
+      'Replace the entire content of a content control. For direct V2 edits, overrideContentLock replaces locked content in one history entry while preserving the target lock and identity.',
     expectedResult: 'Returns a ContentControlMutationResult with the updated target.',
     requiresDocumentContext: true,
     metadata: mutationOperation({

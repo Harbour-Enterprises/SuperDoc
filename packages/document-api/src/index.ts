@@ -456,7 +456,7 @@ import type { OperationId } from './contract/types.js';
 import { OPERATION_DEFINITIONS, OPERATION_IDS } from './contract/operation-definitions.js';
 import type { DynamicInvokeRequest, InvokeRequest, InvokeResult } from './contract/operation-registry.js';
 import { buildDispatchTable } from './invoke/invoke.js';
-import { createPlanApi, type PlanApi, type PlanExecuteResult } from './plan/plan.js';
+import { createPlanApi, type PlanApi, type PlanExecuteResult, type AtomicPlanExecutor } from './plan/plan.js';
 export {
   createPlanApi,
   type PlanApi,
@@ -2252,6 +2252,8 @@ export interface DocumentApi extends DocumentApiSurface {
   invoke(request: DynamicInvokeRequest): unknown;
 }
 export interface DocumentApiAdapters {
+  /** Optional host-owned preparation and single-commit path for atomic plans. */
+  executeAtomicPlan?: AtomicPlanExecutor;
   get: GetAdapter;
   find: FindAdapter;
   getNode: GetNodeAdapter;
@@ -4016,8 +4018,9 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
         return adapters.mutations.apply(input);
       },
     },
-    plan: createPlanApi((operationId, input, options) =>
-      api.invoke({ operationId, input, options } as DynamicInvokeRequest),
+    plan: createPlanApi(
+      (operationId, input, options) => api.invoke({ operationId, input, options } as DynamicInvokeRequest),
+      adapters.executeAtomicPlan,
     ),
     diff: {
       capture(): DiffSnapshot {

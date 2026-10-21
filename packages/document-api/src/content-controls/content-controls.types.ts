@@ -416,6 +416,11 @@ export interface ContentControlsReplaceContentInput {
   target: ContentControlTarget;
   content: string;
   format?: 'text' | 'html' | 'ooxml';
+  /**
+   * Replace locked content without changing the target's lock or identity.
+   * Supported for direct V2 edits; document and ancestor protection still apply.
+   */
+  overrideContentLock?: boolean;
 }
 
 export interface ContentControlsClearContentInput {
