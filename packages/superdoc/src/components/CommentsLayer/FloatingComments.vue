@@ -197,6 +197,7 @@ const toFinitePdfCoordinate = (value) => {
 // Heights: measured (actual) or estimated. Seeded from module-level cache to
 // survive remounts triggered by hasInitializedLocations toggle in SuperDoc.vue.
 const measuredHeights = ref({ ..._heightsCache });
+const measuredFontRevisions = ref({});
 
 // Set of comment IDs that are near the viewport (should mount CommentDialog)
 const visibleIds = ref(new Set());
@@ -472,7 +473,7 @@ const allPositions = computed(() => {
   return positions;
 });
 
-const measuredReviewContext = computed(() => {
+const readReviewViewport = () => {
   const presentation = committedPresentation.value,
     container = floatingCommentsContainer.value;
   if (!presentation || !container) return null;
@@ -487,6 +488,18 @@ const measuredReviewContext = computed(() => {
       ? presentation.readPaintOrigin()
       : props.parent?.getBoundingClientRect?.();
   if (!stage || !Number.isFinite(stage.left) || !Number.isFinite(stage.top)) return null;
+  return {
+    ...viewport,
+    width: Math.max(1, rail.width),
+    scale: 1,
+    stageOffsetX: stage.left - rail.left,
+    stageOffsetY: stage.top - rail.top,
+  };
+};
+const measuredReviewContext = computed(() => {
+  const presentation = committedPresentation.value;
+  const viewport = readReviewViewport();
+  if (!presentation || !viewport) return null;
   const instances = committedInstances.value ?? [];
   const captured = workerDecisionContinuity.value;
   const coordinate = presentation.coordinate;
@@ -516,13 +529,7 @@ const measuredReviewContext = computed(() => {
         commentsStore.viewingVisibility?.documentMode !== 'viewing' ||
         commentsStore.viewingVisibility?.trackChangesVisible === true,
     },
-    viewport: {
-      ...viewport,
-      width: Math.max(1, rail.width),
-      scale: 1,
-      stageOffsetX: (stage?.left ?? rail.left) - rail.left,
-      stageOffsetY: (stage?.top ?? rail.top) - rail.top,
-    },
+    viewport,
     pending:
       pendingComment.value?.fileId === props.currentDocument.id && getPendingAnchorTop() != null
         ? { anchorTop: getPendingAnchorTop(), height: measuredHeights.value.pending || ESTIMATED_HEIGHT }
@@ -533,13 +540,14 @@ const measuredReviewContext = computed(() => {
         instanceId: instance.id,
         rowVersion: instance.rowVersion,
         height: measuredHeights.value[instance.id],
+        fontRevision: measuredFontRevisions.value[instance.id],
       })),
   };
 });
 watch(
   measuredReviewContext,
   (input) => {
-    if (input) committedPresentation.value?.updateContext(input);
+    if (input) committedPresentation.value?.updateContext(input, readReviewViewport);
   },
   { immediate: true },
 );
@@ -604,10 +612,30 @@ const observePlaceholders = () => {
 // Store a measured height for a comment key. Deduplicates the update logic
 // shared between initial mount (handleDialog) and active-state remeasure.
 const storeHeight = (key, height) => {
-  if (height <= 0 || height === measuredHeights.value[key]) return;
+  if (height <= 0) return;
+  const fontRevision = committedPresentation.value?.readFontRevision?.();
+  if (height === measuredHeights.value[key] && fontRevision === measuredFontRevisions.value[key]) return;
   _heightsCache[key] = height;
+  measuredFontRevisions.value = { ...measuredFontRevisions.value, [key]: fontRevision };
   measuredHeights.value = { ...measuredHeights.value, [key]: height };
 };
+
+const remeasureAfterFontChange = () => {
+  measuredFontRevisions.value = {};
+  nextTick(() => {
+    for (const [key, placeholder] of Object.entries(placeholderRefs.value)) {
+      const dialog = placeholder?.querySelector('.comments-dialog');
+      if (dialog) storeHeight(key, dialog.getBoundingClientRect().height);
+    }
+  });
+};
+
+watch(
+  () => committedPresentation.value?.fontRevision,
+  (revision) => {
+    if (revision != null) remeasureAfterFontChange();
+  },
+);
 
 // When a CommentDialog mounts and reports its size, record the measured height.
 const handleDialog = (dialog) => {
@@ -1286,6 +1314,8 @@ watch(allPositions, (positions) => {
 });
 
 onMounted(() => {
+  document.fonts?.addEventListener('loadingdone', remeasureAfterFontChange);
+  document.fonts?.addEventListener('loadingerror', remeasureAfterFontChange);
   setupObserver();
   registerOwnerScrollListeners();
   window.addEventListener('resize', refreshViewportWindow, { passive: true });
@@ -1294,6 +1324,8 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  document.fonts?.removeEventListener('loadingdone', remeasureAfterFontChange);
+  document.fonts?.removeEventListener('loadingerror', remeasureAfterFontChange);
   clearDeferredRemeasureTimers();
   if (scrollTimer) clearTimeout(scrollTimer);
   releaseDirectDecisionContinuity();
@@ -1331,14 +1363,15 @@ onBeforeUnmount(() => {
     @click.capture="prepareSidebarContinuityForDirectDecision"
     :style="{
       minHeight: wrapperMinHeight + 'px',
-      transition: disableInstantLayoutTransitions ? 'none' : undefined,
+      '--sd-ui-comments-transition': committedPresentation ? 'none' : undefined,
+      transition: committedPresentation || disableInstantLayoutTransitions ? 'none' : undefined,
     }"
   >
     <div
       class="sidebar-container"
       :style="{
         transform: `translateY(${committedPresentation ? 0 : sidebarOffsetY}px)`,
-        transition: disableInstantLayoutTransitions ? 'none' : undefined,
+        transition: committedPresentation || disableInstantLayoutTransitions ? 'none' : undefined,
       }"
     >
       <!-- Only the bounded viewport window owns placeholders and dialogs. -->
@@ -1358,7 +1391,7 @@ onBeforeUnmount(() => {
           // Only the legacy translated rail needs compensation for excluded rows.
           top: (pos.isOffscreenReviewCard && !committedPresentation ? pos.top - sidebarOffsetY : pos.top) + 'px',
           height: pos.height + 'px',
-          transition: disableInstantLayoutTransitions ? 'none' : undefined,
+          transition: committedPresentation || disableInstantLayoutTransitions ? 'none' : undefined,
         }"
         class="comment-placeholder"
       >

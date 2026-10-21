@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it, vi } from 'vite-plus/test';
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia } from 'pinia';
 import { defineComponent, h, nextTick } from 'vue';
@@ -7,11 +7,6 @@ import { DOCX } from '@superdoc/common';
 import { useSuperdocStore } from '../stores/superdoc-store.js';
 import { useCommentsStore } from '../stores/comments-store.js';
 import { normalizeUiConfig } from '../core/config/normalize-ui-config.js';
-import {
-  configureDefaultV2IntegrationLoader,
-  loadDefaultV2Integration,
-  resolveV2Integration,
-} from '../core/v2-integration/v2-integration.js';
 import SuperDoc from '../SuperDoc.vue';
 
 // The shell fixture replaces the editor; keep the real integration and bridge
@@ -23,10 +18,11 @@ vi.mock('@superdoc/v2-browser-shell/vue', () => ({
 
 vi.mock('../core/v2-integration/v2-integration.js', async (importOriginal) => {
   const actual = await importOriginal();
+  const { createSuperDocV2Integration } = await import('@superdoc/v2-browser-shell/superdoc');
   return {
     ...actual,
     resolveV2Integration: () => ({
-      ...actual.resolveV2Integration(),
+      ...createSuperDocV2Integration(),
       EditorComponent: defineComponent({
         name: 'ReviewGeometryFixture',
         emits: ['v2-render'],
@@ -36,11 +32,6 @@ vi.mock('../core/v2-integration/v2-integration.js', async (importOriginal) => {
   };
 });
 
-beforeAll(async () => {
-  configureDefaultV2IntegrationLoader(() => import('@superdoc/v2-browser-shell/superdoc'));
-  await loadDefaultV2Integration();
-  expect(resolveV2Integration().version).toBe(3);
-}, 30_000);
 const mounted = [];
 afterEach(() => {
   for (const wrapper of mounted.splice(0)) wrapper.unmount();

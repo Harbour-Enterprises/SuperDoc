@@ -3033,6 +3033,51 @@ export const useCommentsStore = defineStore('comments', () => {
         if (trackedList?.complete !== false || trackedList?.visibleWindowSource !== 'visible-window') {
           return { ok: false, reason: 'tracked-list-not-partial-visible-window' };
         }
+        if (preparedReview?.reuseCatalog === true && committedReviewPresentations.value[normalizedDocumentId]) {
+          const previous = committedReviewPresentations.value[normalizedDocumentId];
+          const next = preparedReview.presentation;
+          if (
+            !next ||
+            !Number.isSafeInteger(preparedReview.catalogVersion) ||
+            preparedReview.catalogVersion < 1 ||
+            previous.catalogVersion > preparedReview.catalogVersion ||
+            next.catalogVersion !== preparedReview.catalogVersion ||
+            previous.coordinate?.documentEpoch !== next.coordinate?.documentEpoch ||
+            previous.coordinate?.mountId !== next.coordinate?.mountId ||
+            next.coordinate?.reviewVersion <= previous.coordinate?.reviewVersion ||
+            next.coordinate?.commitSequence < previous.coordinate?.commitSequence
+          ) {
+            return { ok: false, reason: 'review-catalog-stale' };
+          }
+          if (typeof patch !== 'function') return { ok: false, reason: 'patch-missing' };
+          if (previous.catalogVersion === preparedReview.catalogVersion) {
+            // A changed font generation must wake card measurement even when
+            // the worker reports unchanged geometry.
+            if (
+              next.unchanged === true &&
+              next.fontRevision === previous.fontRevision &&
+              next.epoch === previous.epoch &&
+              next.baseVersion === previous.version &&
+              next.version === next.baseVersion + 1
+            ) {
+              previous.version = next.version;
+              previous.coordinate = next.coordinate;
+              previous.readPaintOrigin = next.readPaintOrigin;
+              previous.readFontRevision = next.readFontRevision;
+              previous.updateContext = next.updateContext;
+              return { ok: true, geometryOnly: true };
+            }
+            patch(() => {
+              committedReviewPresentations.value = {
+                ...committedReviewPresentations.value,
+                [normalizedDocumentId]: next,
+              };
+            });
+            return { ok: true, geometryOnly: true };
+          }
+          // Mutation pauses can coalesce the first catalog publication. The
+          // host also supplies its validated retained payload for this recovery.
+        }
         if (
           typeof commentsAdapter.mapV2CommentToUseCommentInput !== 'function' ||
           typeof trackedChangesAdapter.mapV2TrackedChangeToCommentParams !== 'function'
@@ -3043,8 +3088,10 @@ export const useCommentsStore = defineStore('comments', () => {
         const presentation = preparedReview?.presentation;
         const previousPresentation = committedReviewPresentations.value[normalizedDocumentId];
         if (
+          preparedReview?.catalogVersion == null &&
           presentation?.unchanged === true &&
           previousPresentation &&
+          presentation.fontRevision === previousPresentation.fontRevision &&
           presentation.epoch === previousPresentation.epoch &&
           presentation.baseVersion === previousPresentation.version &&
           presentation.version === presentation.baseVersion + 1
@@ -3055,6 +3102,7 @@ export const useCommentsStore = defineStore('comments', () => {
           previousPresentation.version = presentation.version;
           previousPresentation.coordinate = presentation.coordinate;
           previousPresentation.readPaintOrigin = presentation.readPaintOrigin;
+          previousPresentation.readFontRevision = presentation.readFontRevision;
           previousPresentation.updateContext = presentation.updateContext;
           return {
             ok: true,

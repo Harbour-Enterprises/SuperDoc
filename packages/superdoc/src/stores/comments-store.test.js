@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test';
 import { createPinia, setActivePinia } from 'pinia';
-import { isProxy, markRaw, reactive } from 'vue';
+import { computed, isProxy, markRaw, reactive } from 'vue';
 import { useCommentsStore } from './comments-store.js';
 import { useSuperdocStore } from './superdoc-store.js';
 import useComment from '../components/CommentsLayer/use-comment.js';
@@ -3786,6 +3786,140 @@ describe('comments-store committed review-window apply', () => {
       ...overrides,
     });
   }
+
+  it('retains unchanged presentation identity for a catalog-aware host patch', () => {
+    const presentation = {
+      catalogVersion: 1,
+      fontRevision: 1,
+      epoch: 'e',
+      baseVersion: 0,
+      version: 1,
+      coordinate: { documentEpoch: 'e', mountId: 'm', reviewVersion: 1, commitSequence: 1 },
+      instances: [],
+      rowVersions: {},
+      threads: {},
+      groupOrder: { open: [], resolved: [] },
+    };
+    const preparedReview = { catalogVersion: 1, comments: [], trackedChanges: [], presentation };
+    expect(apply({ commentItems: [], trackedChangeItems: [], preparedReview }).ok).toBe(true);
+    let computedRuns = 0,
+      clones = 0;
+    const instances = computed(() => {
+      computedRuns++;
+      return store.committedReviewPresentations['doc-1'].instances;
+    });
+    instances.value;
+    computedRuns = 0;
+    const next = {
+      ...presentation,
+      unchanged: true,
+      baseVersion: 1,
+      version: 2,
+      coordinate: { ...presentation.coordinate, reviewVersion: 2 },
+    };
+    Object.defineProperty(next, 'instances', {
+      enumerable: true,
+      get() {
+        clones++;
+        return structuredClone([]);
+      },
+    });
+    expect(apply({ preparedReview: { ...preparedReview, reuseCatalog: true, presentation: next } }).ok).toBe(true);
+    instances.value;
+    expect.soft(store.committedReviewPresentations['doc-1']).toBe(presentation);
+    expect.soft(computedRuns).toBe(0);
+    expect(clones).toBe(0);
+  });
+
+  it.each([false, true])('publishes changed font generations reactively (catalog-qualified: %s)', (qualified) => {
+    const presentation = {
+      ...(qualified ? { catalogVersion: 1 } : {}),
+      fontRevision: 1,
+      epoch: 'e',
+      baseVersion: 0,
+      version: 1,
+      coordinate: { documentEpoch: 'e', mountId: 'm', reviewVersion: 1, commitSequence: 1 },
+      instances: [],
+      rowVersions: {},
+      threads: {},
+      groupOrder: { open: [], resolved: [] },
+    };
+    const preparedReview = {
+      ...(qualified ? { catalogVersion: 1 } : {}),
+      comments: [],
+      trackedChanges: [],
+      presentation,
+    };
+    expect(apply({ commentItems: [], trackedChangeItems: [], preparedReview }).ok).toBe(true);
+    const revision = computed(() => store.committedReviewPresentations['doc-1'].fontRevision);
+    expect(revision.value).toBe(1);
+    const next = {
+      ...presentation,
+      unchanged: true,
+      baseVersion: 1,
+      version: 2,
+      fontRevision: 2,
+      coordinate: { ...presentation.coordinate, reviewVersion: 2 },
+    };
+    expect(apply({ preparedReview: { ...preparedReview, reuseCatalog: qualified, presentation: next } }).ok).toBe(true);
+    expect(store.committedReviewPresentations['doc-1']).toBe(next);
+    expect(revision.value).toBe(2);
+  });
+
+  it('updates acknowledged review geometry without remapping unchanged catalog rows', () => {
+    const presentation = {
+      catalogVersion: 1,
+      coordinate: { documentEpoch: 'e', mountId: 'm', reviewVersion: 1, commitSequence: 1 },
+      instances: [],
+      rowVersions: {},
+      threads: {},
+      groupOrder: { open: [], resolved: [] },
+    };
+    const preparedReview = { catalogVersion: 1, comments: [], trackedChanges: [], presentation };
+    expect(apply({ commentItems: [], trackedChangeItems: [], preparedReview }).ok).toBe(true);
+    const rows = store.commentsList;
+    commentsAdapter.mapV2CommentToUseCommentInput.mockClear();
+    trackedChangesAdapter.mapV2TrackedChangeToCommentParams.mockClear();
+    const next = { ...presentation, coordinate: { ...presentation.coordinate, reviewVersion: 2 } };
+    expect(apply({ preparedReview: { ...preparedReview, reuseCatalog: true, presentation: next } })).toMatchObject({
+      ok: true,
+      geometryOnly: true,
+    });
+    expect(store.committedReviewPresentations['doc-1']).toBe(next);
+    Object.assign(next, { epoch: 'e', version: 3 });
+    expect(store.commentsList).toBe(rows);
+    expect(commentsAdapter.mapV2CommentToUseCommentInput).not.toHaveBeenCalled();
+    expect(trackedChangesAdapter.mapV2TrackedChangeToCommentParams).not.toHaveBeenCalled();
+    const advanced = {
+      ...next,
+      catalogVersion: 2,
+      epoch: 'e',
+      baseVersion: 3,
+      version: 4,
+      unchanged: true,
+      coordinate: { ...next.coordinate, reviewVersion: 4, commitSequence: 2 },
+    };
+    expect(
+      apply({
+        commentItems: [],
+        trackedChangeItems: [],
+        preparedReview: { ...preparedReview, reuseCatalog: true, catalogVersion: 2, presentation: advanced },
+      }).ok,
+    ).toBe(true);
+    expect(store.committedReviewPresentations['doc-1']).toBe(advanced);
+    expect(
+      apply({ preparedReview: { ...preparedReview, reuseCatalog: true, catalogVersion: 2, presentation: next } }),
+    ).toMatchObject({ ok: false, reason: 'review-catalog-stale' });
+    expect(
+      apply({
+        preparedReview: {
+          ...preparedReview,
+          reuseCatalog: true,
+          presentation: { ...next, coordinate: { ...next.coordinate, mountId: 'replacement', reviewVersion: 3 } },
+        },
+      }),
+    ).toMatchObject({ ok: false, reason: 'review-catalog-stale' });
+  });
 
   it('retains the committed row through an authored canonical regroup and publishes its current decision identity', async () => {
     const source = 'tc|main%3A%2Fword%2Fdocument.xml|ins|8B4EDC8A%7CwId%3A1';

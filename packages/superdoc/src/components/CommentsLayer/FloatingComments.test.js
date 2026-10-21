@@ -125,6 +125,95 @@ describe('FloatingComments sidebar continuity', () => {
     return wrapper;
   };
 
+  it.each(['loadingdone', 'loadingerror', 'presentation'])(
+    'remeasures a changed font generation on %s, including unchanged heights, and removes its listeners',
+    async (notification) => {
+      const previousFonts = Object.getOwnPropertyDescriptor(document, 'fonts');
+      const fonts = new EventTarget();
+      Object.defineProperty(document, 'fonts', { configurable: true, value: fonts });
+      const remove = vi.spyOn(fonts, 'removeEventListener');
+      let fontRevision = 1;
+      const updateContext = vi.fn();
+      commentsStore.committedReviewPresentations = {
+        'doc-1': {
+          version: 1,
+          fontRevision: 1,
+          rowVersions: { 'tc-a': 1 },
+          threads: {},
+          groupOrder: { open: ['tc-a'], resolved: [] },
+          readPaintOrigin: () => ({ left: 0, top: 0 }),
+          readFontRevision: () => fontRevision,
+          updateContext,
+          instances: [
+            {
+              id: 'tc-a',
+              rowId: 'tc-a',
+              threadId: 'tc-a',
+              version: 1,
+              pageIndex: 0,
+              positionKey: 'tc-a',
+              positionEntry: makePosition('tc-a', 10),
+              anchorTop: 10,
+              anchorBottom: 30,
+              top: 10,
+              height: 110,
+              isPrimary: true,
+              isOffscreenReviewCard: false,
+              mount: true,
+            },
+          ],
+        },
+      };
+      let wrapper;
+      try {
+        wrapper = await mountSidebar([{ id: 'tc-a', top: 10 }], {
+          commentDialogStub: { template: '<div class="comments-dialog" />' },
+        });
+        window.dispatchEvent(new Event('resize'));
+        await settleLayout();
+        await settleLayout();
+        expect(updateContext.mock.lastCall[0].measurements).toContainEqual({
+          instanceId: 'tc-a',
+          rowVersion: 1,
+          height: 110,
+          fontRevision: 1,
+        });
+        const dialog = wrapper.find('.comments-dialog').element;
+        const measure = vi.fn(dialog.getBoundingClientRect.bind(dialog));
+        dialog.getBoundingClientRect = measure;
+        fontRevision = 2;
+        if (notification === 'presentation') {
+          commentsStore.committedReviewPresentations = {
+            'doc-1': { ...commentsStore.committedReviewPresentations['doc-1'], version: 2, fontRevision: 2 },
+          };
+        } else fonts.dispatchEvent(new Event(notification));
+        await settleLayout();
+        expect(updateContext.mock.lastCall[0].measurements).toContainEqual({
+          instanceId: 'tc-a',
+          rowVersion: 1,
+          height: 110,
+          fontRevision: 2,
+        });
+        expect(measure).toHaveBeenCalled();
+        const measurements = measure.mock.calls.length;
+        commentsStore.committedReviewPresentations = {
+          'doc-1': { ...commentsStore.committedReviewPresentations['doc-1'], version: 3 },
+        };
+        window.dispatchEvent(new Event('scroll'));
+        await settleLayout();
+        expect(measure).toHaveBeenCalledTimes(measurements);
+        wrapper.unmount();
+        wrapper = null;
+        expect(remove).toHaveBeenCalledWith('loadingdone', expect.any(Function));
+        expect(remove).toHaveBeenCalledWith('loadingerror', expect.any(Function));
+      } finally {
+        wrapper?.unmount();
+        if (previousFonts) Object.defineProperty(document, 'fonts', previousFonts);
+        else delete document.fonts;
+      }
+    },
+  );
+
   it('uses the current document row when another document has the same Word comment ID', async () => {
     commentsStore.committedReviewPresentations = {
       'doc-1': {
@@ -194,6 +283,7 @@ describe('FloatingComments sidebar continuity', () => {
       expect(wrapper.find('[data-comment-id="worker-instance"]').attributes('style')).toContain('top: 333px');
       expect(updateContext).toHaveBeenCalledWith(
         expect.objectContaining({ viewport: expect.objectContaining({ width: 300 }), activeThreadId: null }),
+        expect.any(Function),
       );
       commentsStore.editorCommentPositions = { 'tc-a': makePosition('tc-a', 900) };
       await settleLayout();
@@ -288,18 +378,24 @@ describe('FloatingComments sidebar continuity', () => {
     };
     const wrapper = await mountSidebar([{ id: 'tc-a', top: 10 }]);
     try {
+      const readViewport = updateContext.mock.lastCall[1];
+      expect(readViewport).toEqual(expect.any(Function));
       expect(updateContext).toHaveBeenLastCalledWith(
         expect.objectContaining({
           viewport: expect.objectContaining({ stageOffsetX: 44, stageOffsetY: -500 }),
         }),
+        readViewport,
       );
       paintTop = -650;
+      expect(readViewport()).toEqual(expect.objectContaining({ stageOffsetX: 44, stageOffsetY: -650 }));
+      expect(updateContext.mock.lastCall[0].viewport.stageOffsetY).toBe(-500);
       parent.dispatchEvent(new Event('scroll'));
       await settleLayout();
       expect(updateContext).toHaveBeenLastCalledWith(
         expect.objectContaining({
           viewport: expect.objectContaining({ stageOffsetX: 44, stageOffsetY: -650 }),
         }),
+        readViewport,
       );
     } finally {
       wrapper.unmount();
