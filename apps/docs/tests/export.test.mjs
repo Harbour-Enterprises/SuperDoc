@@ -1524,7 +1524,6 @@ test('exports the Cloudflare Pages configuration', async () => {
   assert.deepEqual(connectSources, [
     'https://superdoc-docs-collaboration-staging.superdoc.workers.dev',
     engineSource,
-    'https://api.github.com',
     'https://*.google-analytics.com',
     'https://*.analytics.google.com',
     'https://www.googletagmanager.com',
@@ -1543,6 +1542,17 @@ test('exports the Cloudflare Pages configuration', async () => {
   // redirect to assert. What the file must contain is the V1 route rules.
   assert.match(redirects, /^\/getting-started\/quickstart \/editor\/quickstart\/ 301$/mu);
   assert.match(redirects, /^\/modules\/\* https:\/\/docs-v1\.superdoc\.dev\/editor\/built-in-ui\/:splat 302$/mu);
+});
+
+test('exports the star-count function, routed for its endpoint only', async () => {
+  // Without these files the header's /api/github-stars request 404s and the
+  // header quietly keeps its fallback count, so the deploy would still succeed.
+  const routes = JSON.parse(await readFile(new URL('../out/_routes.json', import.meta.url), 'utf8'));
+  const worker = await readFile(new URL('../out/_worker.js/index.js', import.meta.url), 'utf8');
+
+  assert.deepEqual(routes.include, ['/api/github-stars']);
+  assert.deepEqual(routes.exclude, []);
+  assert.match(worker, /stargazers_count/);
 });
 
 test('exports clean Markdown across the machine-readable corpus', async () => {

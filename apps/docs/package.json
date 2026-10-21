@@ -14,7 +14,8 @@
     "sync:runtime": "node scripts/sync-editor-demo-runtime.mjs",
     "check:runtime": "node scripts/sync-editor-demo-runtime.mjs --check",
     "dev": "pnpm sync:runtime && pnpm generate:migration-catalog && pnpm generate:reference && next dev --port 3002",
-    "build": "pnpm sync:runtime && pnpm generate:migration-catalog && pnpm generate:reference && next build && pnpm generate:redirects && pnpm generate:v1-redirects",
+    "build": "pnpm sync:runtime && pnpm generate:migration-catalog && pnpm generate:reference && next build && pnpm generate:redirects && pnpm generate:v1-redirects && pnpm build:functions",
+    "build:functions": "wrangler pages functions build --outdir out/_worker.js --output-routes-path out/_routes.json",
     "test:migration-catalog": "pnpm sync:runtime && pnpm generate:reference && tsx --test tests/migration-catalog.test.mjs",
     "test:migration-explorer": "tsx --test tests/migration-explorer.test.mjs",
     "test:migration-explorer-contrast": "tsx --test tests/migration-explorer-contrast.test.mjs",
@@ -26,6 +27,7 @@
     "test:migration-snippets:contract": "node scripts/verify-migration-snippets.mjs && MIGRATION_SNIPPETS_CONTRACT_ONLY=1 node scripts/execute-migration-snippets.mjs",
     "typecheck": "pnpm sync:runtime && pnpm generate:reference && fumadocs-mdx && tsc --noEmit && tsc -p tsconfig.scripts.json && tsc -p tsconfig.headless-snippets.json",
     "test:version-menu": "node --test tests/version-menu.test.mjs",
+    "test:github-stars": "tsx --test tests/github-stars.test.mjs",
     "generate:v1-redirects": "node scripts/v1-routes.mjs generate",
     "verify:v1-routes": "node scripts/verify-route-matrix.mjs",
     "verify:not-found": "node scripts/verify-not-found.mjs"
@@ -55,6 +57,7 @@
     "jszip": "catalog:",
     "parse5": "8.0.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "wrangler": "4.130.0"
   }
 }

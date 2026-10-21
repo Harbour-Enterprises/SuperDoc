@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react';
 import { useDocsLayout } from 'fumadocs-ui/layouts/docs';
 import { useHomeLayout } from 'fumadocs-ui/layouts/home';
 import { VersionMenu } from '@/components/version-menu';
-import { repositoryApiUrl, repositoryUrl } from '@/lib/site-url';
+import { repositoryUrl } from '@/lib/site-url';
 
 const DOCS_NAV_ITEMS = [
   { label: 'Editor', href: '/editor', activePrefix: '/editor' },
@@ -84,16 +84,12 @@ function SiteHeader({
   useEffect(() => {
     const controller = new AbortController();
 
-    fetch(repositoryApiUrl, { signal: controller.signal })
+    // Served by functions/api/github-stars.ts, which caches GitHub's answer.
+    fetch('/api/github-stars', { signal: controller.signal })
       .then((response) => (response.ok ? response.json() : null))
       .then((data: unknown) => {
-        if (
-          typeof data === 'object' &&
-          data !== null &&
-          'stargazers_count' in data &&
-          typeof data.stargazers_count === 'number'
-        ) {
-          setGithubStars(data.stargazers_count.toLocaleString());
+        if (typeof data === 'object' && data !== null && 'stars' in data && typeof data.stars === 'number') {
+          setGithubStars(data.stars.toLocaleString());
         }
       })
       .catch(() => undefined);
