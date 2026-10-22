@@ -136,4 +136,11 @@ Re-list changes after each decision. The receipt can invalidate or remap referen
   ID. The saved DOCX should preserve the accepted or rejected document state.
 </Callout>
 
+Export normalization preserves public pending tracked-change refs through SuperDoc
+save and reopen. DOCX export uses Word-compatible numeric revision IDs and retains SuperDoc review identities in
+ignorable metadata. Word and other editors may rewrite or discard that metadata;
+re-list changes after an external editor saves the document. Diagnostic-aware
+export and sink-save results report numeric normalization as `revision-id-normalized`;
+byte-only save methods return the DOCX bytes without export warnings.
+
 For a complete code-to-human handoff, follow [Review tracked changes](/agents/workflows/review-tracked-changes). The generated [`trackChanges` reference](/document-api/reference/track-changes) covers range, side, bulk, and story-specific targets.
