@@ -3267,7 +3267,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     if (!storeDocs?.length) return false;
     const documentRuntime = storeDocs[0].getDocumentRuntime?.();
     if (!documentRuntime?.navigateTo) return false;
-    return documentRuntime.navigateTo(target);
+    return documentRuntime.navigateTo(target) as boolean | Promise<boolean>;
   }
 
   /**
@@ -3292,7 +3292,7 @@ export class SuperDoc extends EventEmitter<SuperDocEventMap> {
     if (!storeDocs?.length) return false;
     const documentRuntime = storeDocs[0].getDocumentRuntime?.();
     if (!documentRuntime?.scrollToElement) return false;
-    return documentRuntime.scrollToElement(elementId);
+    return documentRuntime.scrollToElement(elementId) as boolean | Promise<boolean>;
   }
 
   /**

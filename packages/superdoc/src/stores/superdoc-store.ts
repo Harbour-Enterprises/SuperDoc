@@ -1,12 +1,68 @@
 import { createDocumentLoadScope } from '../core/helpers/document-load.js';
 import { defineStore } from 'pinia';
 import { ref, reactive, computed, markRaw } from 'vue';
+import type { Ref } from 'vue';
+import type { MimeType } from '@superdoc/common';
 import { v4 as uuidv4 } from 'uuid';
 import { useCommentsStore } from './comments-store';
 import { getFileObject, DOCX, PDF, HTML } from '@superdoc/common';
-import { normalizeDocumentEntry } from '@superdoc/core/helpers/file.js';
-import useDocument from '@superdoc/composables/use-document';
+import { normalizeDocumentEntry } from '../core/helpers/file.js';
+import useDocument from '../composables/use-document.js';
 import BlankDOCX from '@superdoc/common/data/blank.docx?url';
+import type {
+  InternalConfig,
+  Modules,
+  RuntimeDocument,
+  SuperDocExceptionStorePayload,
+  SuperDocMeasurementUnit,
+  SuperDocViewportMetrics,
+  SuperDocZoomMode,
+  User,
+} from '../core/types/index.js';
+
+type DocumentLoadScope = NonNullable<ReturnType<typeof createDocumentLoadScope>>;
+
+type PageEntry = {
+  page: number;
+  containerBounds?: unknown;
+  container?: Element | null;
+};
+
+type StoreDocument = RuntimeDocument &
+  Required<Pick<RuntimeDocument, 'getEditor' | 'getDocumentRuntime'>> & {
+    isReady: boolean;
+    pageContainers: PageEntry[];
+  };
+
+type StoreDocumentSource = RuntimeDocument & {
+  html?: string;
+  markdown?: string;
+};
+
+type StoreExceptionPayload = SuperDocExceptionStorePayload & {
+  code?: string;
+  documentId?: string;
+};
+
+type StoreExceptionHandler = (payload: SuperDocExceptionStorePayload) => void;
+
+type ActiveSelection = {
+  documentId?: string | number | null;
+  [key: string]: unknown;
+};
+
+type SelectionPosition = {
+  left: number;
+  top: number;
+  width?: number;
+  height?: number;
+  right?: number;
+  bottom?: number;
+  startX?: number;
+  startY?: number;
+  page?: number | null;
+  source: string | null;
+};
 
 // Default measurement unit for rulers and measurement fields (Word's en-US
 // default). Shared by init() and reset() so a fresh load always starts at
@@ -14,35 +70,31 @@ import BlankDOCX from '@superdoc/common/data/blank.docx?url';
 const DEFAULT_MEASUREMENT_UNIT = 'in';
 
 export const useSuperdocStore = defineStore('superdoc', () => {
-  const currentConfig = ref(null);
-  let exceptionHandler = null;
+  const currentConfig: Ref<InternalConfig | null> = ref(null);
+  let exceptionHandler: StoreExceptionHandler | null = null;
   const commentsStore = useCommentsStore();
-  /** @type {import('vue').Ref<import('@superdoc/core/types/index.js').RuntimeDocument[]>} */
-  const documents = ref([]);
-  const documentBounds = ref([]);
-  const pages = reactive({});
-  const documentUsers = ref([]);
+  const documents: Ref<StoreDocument[]> = ref([]);
+  const documentBounds: Ref<unknown[]> = ref([]);
+  const pages: Record<string, PageEntry[]> = reactive({});
+  const documentUsers: Ref<User[]> = ref([]);
   const activeZoom = ref(100);
-  /** @type {import('vue').Ref<import('@superdoc/core/types/index.js').SuperDocZoomMode>} */
-  const zoomMode = ref('manual');
+  const zoomMode: Ref<SuperDocZoomMode> = ref('manual');
   // Document-wide measurement unit for rulers and measurement fields (Word's
   // "measurement units" preference). Defaults to inches (Word's en-US default).
-  /** @type {import('vue').Ref<import('@superdoc/core/types/index.js').SuperDocMeasurementUnit>} */
-  const measurementUnit = ref(DEFAULT_MEASUREMENT_UNIT);
+  const measurementUnit: Ref<SuperDocMeasurementUnit> = ref(DEFAULT_MEASUREMENT_UNIT);
   // Latest viewport measurements (availableWidth / documentWidth / fitZoom),
   // written by the viewport-fit composable; null until editors mount.
-  /** @type {import('vue').Ref<import('@superdoc/core/types/index.js').SuperDocViewportMetrics | null>} */
-  const viewportMetrics = ref(null);
+  const viewportMetrics: Ref<SuperDocViewportMetrics | null> = ref(null);
   const isReady = ref(false);
   const isInternal = ref(false);
 
-  const users = ref([]);
+  const users: Ref<User[]> = ref([]);
 
-  const user = reactive({ name: null, email: null });
-  const modules = reactive({});
+  const user: User = reactive({ name: null, email: null });
+  const modules: Modules = reactive({});
 
-  const activeSelection = ref(null);
-  const selectionPosition = ref({
+  const activeSelection: Ref<ActiveSelection | null> = ref(null);
+  const selectionPosition: Ref<SelectionPosition | null> = ref({
     left: 0,
     top: 0,
     width: 0,
@@ -50,7 +102,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     source: null,
   });
 
-  const pendingLoads = new Set();
+  const pendingLoads = new Set<DocumentLoadScope>();
 
   const reset = () => {
     for (const scope of pendingLoads) scope.cancel();
@@ -77,16 +129,16 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     scrollLeft: 0,
   });
 
-  const setExceptionHandler = (handler) => {
+  const setExceptionHandler = (handler: StoreExceptionHandler | null | undefined) => {
     exceptionHandler = typeof handler === 'function' ? handler : null;
   };
 
-  const emitException = (payload) => {
+  const emitException = (payload: StoreExceptionPayload) => {
     const handler = exceptionHandler || currentConfig.value?.onException;
     if (typeof handler === 'function') handler(payload);
   };
 
-  const init = async (config) => {
+  const init = async (config: InternalConfig) => {
     reset();
     currentConfig.value = config;
 
@@ -136,7 +188,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     // For shorthand 'format' key, we can initialize a blank docx
     if (!configDocs?.length && !config.modules.collaboration) {
       const newDoc = await getFileObject(BlankDOCX, 'blank.docx', DOCX);
-      const newDocConfig = {
+      const newDocConfig: StoreDocumentSource = {
         id: uuidv4(),
         type: DOCX,
         data: newDoc,
@@ -160,10 +212,8 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
   /**
    * Initialize the documents for this SuperDoc. Changes the store's documents array ref directly.
-   * @param {Array[Object]} docsToProcess The documents to process from the config
-   * @returns {Promise<void>}
    */
-  const initializeDocuments = async (docsToProcess = []) => {
+  const initializeDocuments = async (docsToProcess: Array<StoreDocumentSource | null | undefined> = []) => {
     if (!docsToProcess) return [];
 
     for (let doc of docsToProcess) {
@@ -177,20 +227,22 @@ export const useSuperdocStore = defineStore('superdoc', () => {
         continue;
       }
 
-      let loadScope;
+      let loadScope: DocumentLoadScope | undefined;
       let loadFailureReported = false;
       try {
-        loadScope = doc.load === undefined ? undefined : markRaw(createDocumentLoadScope(doc.load, doc.id));
+        const createdScope = doc.load === undefined ? undefined : createDocumentLoadScope(doc.load, doc.id);
+        loadScope = createdScope ? markRaw(createdScope) : undefined;
         if (loadScope) {
-          pendingLoads.add(loadScope);
-          loadScope.onSettled(() => pendingLoads.delete(loadScope));
-          loadScope.onFailure((error) => {
+          const activeScope = loadScope;
+          pendingLoads.add(activeScope);
+          activeScope.onSettled(() => pendingLoads.delete(activeScope));
+          activeScope.onFailure((error) => {
             loadFailureReported = true;
-            pendingLoads.delete(loadScope);
-            documents.value = documents.value.filter((entry) => entry.loadScope !== loadScope);
+            pendingLoads.delete(activeScope);
+            documents.value = documents.value.filter((entry) => entry.loadScope !== activeScope);
             emitException({ error, code: error.code, stage: 'document-init', document: doc, documentId: doc.id });
           });
-          loadScope.assertActive();
+          activeScope.assertActive();
         }
         // Ensure the document object has data (ie: if loading from URL)
         const dataTask = _initializeDocumentData(doc, loadScope);
@@ -210,7 +262,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
         // Create composable and append to our documents
         const smartDoc = useDocument({ ...docWithData, loadScope }, currentConfig.value);
-        documents.value.push(smartDoc);
+        documents.value.push(reactive(smartDoc));
       } catch (e) {
         loadScope?.finish();
         if (loadScope) pendingLoads.delete(loadScope);
@@ -222,21 +274,15 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
   /**
    * Convert a Blob to a File object when a filename is required
-   * @param {Blob} blob The blob to convert
-   * @param {string} name The filename to assign
-   * @param {string} type The mime type
-   * @returns {File} The file object
    */
-  const _blobToFile = (blob, name, type) => {
+  const _blobToFile = (blob: Blob, name: string, type: string): File => {
     return new File([blob], name, { type });
   };
 
   /**
    * Initialize the document data by fetching the file if necessary
-   * @param {Object} doc The document config
-   * @returns {Promise<Object>} The document object with data
    */
-  const _initializeDocumentData = async (doc, loadScope) => {
+  const _initializeDocumentData = async (doc: StoreDocumentSource, loadScope: DocumentLoadScope | undefined) => {
     // Normalize any uploader-specific wrapper to a native File/Blob upfront
     doc = normalizeDocumentEntry(doc);
     const documentType = doc.data?.type || doc.type;
@@ -296,7 +342,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
         const fileObject = await getFileObject(
           doc.url,
           doc.name || 'document',
-          doc.type,
+          doc.type as MimeType,
           ...(loadScope ? [{ signal: loadScope.signal }] : []),
         );
         return { ...doc, data: fileObject };
@@ -317,15 +363,12 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     return true;
   });
 
-  const getDocument = (documentId) => documents.value.find((doc) => doc.id === documentId);
+  const getDocument = (documentId: string) => documents.value.find((doc) => doc.id === documentId);
 
   /**
    * Remove one mounted document by id and prune shell-owned state tied to it.
-   *
-   * @param {string} documentId
-   * @returns {import('@superdoc/core/types/index.js').RuntimeDocument | null}
    */
-  const removeDocument = (documentId) => {
+  const removeDocument = (documentId: string): RuntimeDocument | null => {
     const normalizedDocumentId = documentId != null ? String(documentId) : null;
     if (!normalizedDocumentId) return null;
 
@@ -361,7 +404,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
 
     return removed ?? null;
   };
-  const getPageBounds = (documentId, page) => {
+  const getPageBounds = (documentId: string, page: number) => {
     const matchedPage = pages[documentId];
     if (!matchedPage) return;
     const pageInfo = matchedPage.find((p) => p.page == page);
@@ -375,7 +418,7 @@ export const useSuperdocStore = defineStore('superdoc', () => {
     };
   };
 
-  const handlePageReady = (documentId, index, containerBounds) => {
+  const handlePageReady = (documentId: string, index: number, containerBounds: unknown) => {
     if (!pages[documentId]) pages[documentId] = [];
     pages[documentId].push({ page: index, containerBounds });
 
