@@ -1,15 +1,68 @@
-// @ts-check
-import { ref, computed, markRaw, watch } from 'vue';
+import { ref, computed, markRaw, watch, type Ref } from 'vue';
 import { createReplaceContinuation } from './replace-continuation.js';
+import type { SurfaceManager } from '../core/surface-manager.js';
+import type {
+  Editor,
+  FindReplaceConfig,
+  FindReplaceContext,
+  FindReplaceHandle,
+  ResolvedFindReplaceTexts,
+  SearchFloatingConfig,
+  SurfaceHandle,
+} from '../core/types/index.js';
+import type { SearchController, SearchSlice } from '../public/ui/types.js';
 
-/** @typedef {import('../core/types').FindReplaceConfig} FindReplaceConfig */
-/** @typedef {import('../core/types').ResolvedFindReplaceTexts} ResolvedFindReplaceTexts */
-/** @typedef {import('../core/types').FindReplaceHandle} FindReplaceHandle */
-/** @typedef {import('../core/types').FindReplaceContext} FindReplaceContext */
-/** @typedef {import('../core/types').FindReplaceResolution} FindReplaceResolution */
+type FindReplaceRenderer = NonNullable<FindReplaceConfig['render']>;
 
-/** @type {ResolvedFindReplaceTexts} */
-const DEFAULT_TEXTS = {
+type ResolvedFindReplaceConfig = {
+  enabled: boolean;
+  texts: ResolvedFindReplaceTexts;
+  replaceEnabled: boolean;
+  includeDeletedText?: boolean;
+  component?: unknown;
+  props?: Record<string, unknown>;
+  render?: FindReplaceRenderer;
+  resolver?: FindReplaceConfig['resolver'];
+  floating?: SearchFloatingConfig;
+};
+
+type FindReplaceRendering = {
+  suppressed?: boolean;
+  component?: unknown;
+  props?: Record<string, unknown>;
+  render?: FindReplaceRenderer;
+  builtin?: boolean;
+};
+
+type UseFindReplaceOptions = {
+  getSurfaceManager: () => SurfaceManager | null;
+  getActiveEditor: () => Editor | null;
+  activeEditorRef?: Ref<Editor | null | undefined>;
+  getFindReplaceConfig?: () => boolean | FindReplaceConfig | undefined;
+  /**
+   * Getter for the SuperDoc-owned UI controller (`superdoc.ui`). Its `.search`
+   * slice is the single find/replace session authority.
+   */
+  getSuperDocUI?: () => { search?: SearchController | null } | null | undefined;
+};
+
+function isThenable(value: unknown): boolean {
+  return (
+    (typeof value === 'object' || typeof value === 'function') &&
+    value !== null &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
+}
+
+function markRawComponent(component: unknown): unknown {
+  if ((typeof component === 'object' && component !== null) || typeof component === 'function') {
+    return markRaw(component);
+  }
+  return component;
+}
+
+const DEFAULT_TEXTS: ResolvedFindReplaceTexts = {
   findPlaceholder: 'Find',
   findAriaLabel: 'Find text',
   replacePlaceholder: 'Replace',
@@ -34,23 +87,12 @@ const DEFAULT_TEXTS = {
   ignoreDiacriticsAriaLabel: 'Ignore diacritics',
 };
 
-/** @typedef {import('../core/types/index.js').Editor} Editor */
-
 /**
  * Composable that manages a find/replace floating surface.
  *
  * Owns all search state (query, toggles, match count, active index) and the
  * resolution chain for custom/external/built-in rendering. The component
  * receives a FindReplaceHandle with reactive state and actions.
- *
- * @param {Object} options
- * @param {() => import('../core/surface-manager.js').SurfaceManager | null} options.getSurfaceManager
- * @param {() => Editor | null} options.getActiveEditor
- * @param {import('vue').Ref} [options.activeEditorRef] - Reactive ref to the active editor (for watching switches)
- * @param {() => boolean | FindReplaceConfig | undefined} [options.getFindReplaceConfig] - Config getter
- * @param {() => { search?: any } | null | undefined} [options.getSuperDocUI] - Getter for the
- *   SuperDoc-owned UI controller (`superdoc.ui`). Its `.search` slice is the single
- *   find/replace session authority.
  */
 export function useFindReplace({
   getSurfaceManager,
@@ -58,19 +100,16 @@ export function useFindReplace({
   activeEditorRef,
   getFindReplaceConfig,
   getSuperDocUI,
-}) {
+}: UseFindReplaceOptions) {
   // ---- internal state -------------------------------------------------------
 
-  /** @type {import('../core/surface-manager.js').SurfaceHandle | null} */
-  let currentSurfaceHandle = null;
-  /** @type {Editor | null} */
-  let currentEditor = null;
+  let currentSurfaceHandle: SurfaceHandle | null = null;
+  let currentEditor: Editor | null = null;
   /**
    * The `ui.search` handle for the current session, or null when the host
    * exposes none. Set at open() time.
-   * @type {any}
    */
-  let currentSearch = null;
+  let currentSearch: SearchController | null = null;
   let destroyed = false;
   let opening = false; // sync guard against double-open across the await gap
 
@@ -78,9 +117,8 @@ export function useFindReplace({
 
   /**
    * Ref to the find input element, set by the renderer via handle.registerFocusFn.
-   * @type {(() => void) | null}
    */
-  let focusFindInputFn = null;
+  let focusFindInputFn: (() => void) | null = null;
 
   // ---- reactive state (owned by composable, consumed by renderers) ----------
 
@@ -107,8 +145,7 @@ export function useFindReplace({
   // Regex search needs a host search session (see open()).
   const regexSupported = ref(false);
   // Inline error label when the current regex pattern is invalid/unsafe.
-  /** @type {import('vue').Ref<string | null>} */
-  const searchError = ref(null);
+  const searchError = ref<string | null>(null);
 
   /** Current resolved texts — updated on each open(). */
   let currentTexts = DEFAULT_TEXTS;
@@ -130,18 +167,15 @@ export function useFindReplace({
 
   // ---- timers ---------------------------------------------------------------
 
-  /** @type {ReturnType<typeof setTimeout> | null} */
-  let debounceTimer = null;
-  /** @type {ReturnType<typeof setInterval> | null} */
-  let syncInterval = null;
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  let syncInterval: ReturnType<typeof setInterval> | null = null;
 
   // ---- search session -------------------------------------------------------
 
   /**
    * Resolve the `ui.search` handle when available. Never throws.
-   * @returns {any}
    */
-  function resolveSearch() {
+  function resolveSearch(): SearchController | null {
     try {
       const ui = typeof getSuperDocUI === 'function' ? getSuperDocUI() : null;
       const search = ui?.search;
@@ -153,10 +187,10 @@ export function useFindReplace({
 
   /**
    * Sync the reactive match state from the current host search snapshot.
-   * @param {any} slice
    */
-  function applySlice(slice) {
-    if (!slice) return;
+  function applySlice(snapshot: unknown) {
+    if (!snapshot) return;
+    const slice: Partial<SearchSlice> = typeof snapshot === 'object' ? snapshot : {};
     matchCount.value = typeof slice.total === 'number' ? slice.total : 0;
     activeMatchIndex.value = typeof slice.activeIndex === 'number' ? slice.activeIndex : -1;
     canReplaceState.value = slice.canReplace === true;
@@ -260,7 +294,7 @@ export function useFindReplace({
         replacePending.value = false;
       },
     });
-    let result = null;
+    let result: unknown = null;
     try {
       result = search.replace(replaceText.value);
     } catch {
@@ -269,7 +303,7 @@ export function useFindReplace({
     // Worker-backed replace resolves asynchronously. Hold the pending flag
     // (which disables the replace controls) until the mutation settles so a
     // second click cannot start a concurrent replace.
-    if (result && typeof result.then === 'function') {
+    if (isThenable(result)) {
       void Promise.resolve(result).then(finish, finish);
     } else {
       finish();
@@ -291,7 +325,7 @@ export function useFindReplace({
         replacePending.value = false;
       },
     });
-    let result = null;
+    let result: unknown = null;
     try {
       result = search.replaceAll(replaceText.value);
     } catch {
@@ -300,7 +334,7 @@ export function useFindReplace({
     // Worker-backed replace-all resolves asynchronously. Hold the pending
     // flag (which disables the replace controls) until the mutations settle
     // so a second click cannot start a concurrent replace-all.
-    if (result && typeof result.then === 'function') {
+    if (isThenable(result)) {
       void Promise.resolve(result).then(finish, finish);
     } else {
       finish();
@@ -353,7 +387,7 @@ export function useFindReplace({
    * Normalise `getFindReplaceConfig()` into a full config with defaults.
    * Throws on invalid combinations (component + render).
    */
-  function resolveConfig() {
+  function resolveConfig(): ResolvedFindReplaceConfig {
     const raw = typeof getFindReplaceConfig === 'function' ? getFindReplaceConfig() : undefined;
 
     if (raw === false || raw == null) {
@@ -364,14 +398,13 @@ export function useFindReplace({
       return { enabled: true, texts: DEFAULT_TEXTS, replaceEnabled: true };
     }
 
-    const cfg = typeof raw === 'object' ? raw : {};
+    const cfg: FindReplaceConfig = typeof raw === 'object' ? raw : {};
 
     if (cfg.component != null && typeof cfg.render === 'function') {
       throw new Error('Search configuration cannot provide both "component" and "render". Use one or the other.');
     }
 
-    /** @type {ResolvedFindReplaceTexts} */
-    const texts = {
+    const texts: ResolvedFindReplaceTexts = {
       findPlaceholder: cfg.findPlaceholder ?? DEFAULT_TEXTS.findPlaceholder,
       findAriaLabel: cfg.findAriaLabel ?? DEFAULT_TEXTS.findAriaLabel,
       replacePlaceholder: cfg.replacePlaceholder ?? DEFAULT_TEXTS.replacePlaceholder,
@@ -418,12 +451,8 @@ export function useFindReplace({
    * 1. Dedicated findReplace.resolver
    * 2. Direct findReplace.component / findReplace.render
    * 3. Built-in FindReplaceSurface
-   *
-   * @param {ReturnType<typeof resolveConfig>} config
-   * @param {FindReplaceContext} resolverCtx
-   * @returns {{ suppressed?: boolean, component?: unknown, props?: Record<string, unknown>, render?: Function, builtin?: boolean }}
    */
-  function resolveRendering(config, resolverCtx) {
+  function resolveRendering(config: ResolvedFindReplaceConfig, resolverCtx: FindReplaceContext): FindReplaceRendering {
     // Tier 1: dedicated resolver
     if (typeof config.resolver === 'function') {
       const resolution = config.resolver(resolverCtx);
@@ -448,11 +477,8 @@ export function useFindReplace({
 
   /**
    * Build a FindReplaceHandle from reactive state + actions + config.
-   * @param {ReturnType<typeof resolveConfig>} config
-   * @param {(reason?: unknown) => void} closeFn Late-wired close function
-   * @returns {FindReplaceHandle}
    */
-  function createHandle(config, closeFn) {
+  function createHandle(config: ResolvedFindReplaceConfig, closeFn: (reason?: unknown) => void): FindReplaceHandle {
     return {
       // Reactive state
       findQuery,
@@ -500,9 +526,8 @@ export function useFindReplace({
   /**
    * Wrap a FindReplaceHandle for external (non-Vue) renderers.
    * Converts Vue refs to JavaScript getter/setter properties.
-   * @param {FindReplaceHandle} handle
    */
-  function wrapHandleForExternal(handle) {
+  function wrapHandleForExternal(handle: FindReplaceHandle) {
     return {
       get findQuery() {
         return handle.findQuery.value;
@@ -589,9 +614,8 @@ export function useFindReplace({
   /**
    * Clear the host search session (query, matches, highlights) when the given
    * editor is the current one, swallowing errors (the host may be gone).
-   * @param {Editor | null | undefined} editor
    */
-  function clearEditorSession(editor) {
+  function clearEditorSession(editor: Editor | null | undefined) {
     if (!editor) return;
     if (currentSearch && editor === currentEditor) {
       try {
@@ -620,7 +644,7 @@ export function useFindReplace({
       const config = resolveConfig();
       if (!config.enabled) return false;
 
-      const resolverCtx = { texts: config.texts, replaceEnabled: config.replaceEnabled ?? true };
+      const resolverCtx: FindReplaceContext = { texts: config.texts, replaceEnabled: config.replaceEnabled ?? true };
       const resolution = resolveRendering(config, resolverCtx);
       if (resolution.suppressed) return false;
 
@@ -674,7 +698,7 @@ export function useFindReplace({
         return;
       }
 
-      const resolverCtx = { texts: config.texts, replaceEnabled: config.replaceEnabled ?? true };
+      const resolverCtx: FindReplaceContext = { texts: config.texts, replaceEnabled: config.replaceEnabled ?? true };
       const resolution = resolveRendering(config, resolverCtx);
 
       if (resolution.suppressed) {
@@ -689,15 +713,14 @@ export function useFindReplace({
 
       // Floating placement: default top-right, overridable via config so the
       // integrator can move the bar out of the document's way.
-      const floatingOptions =
-        /** @type {{ placement?: import('../core/types/index.js').SurfaceFloatingPlacement } & Record<string, unknown>} */ ({
-          placement: 'top-right',
-          autoFocus: true,
-          // The one-row find layout (field + query toggles + nav) needs more
-          // room than the 360px floating default before queries truncate.
-          width: 420,
-          ...config.floating,
-        });
+      const floatingOptions: SearchFloatingConfig = {
+        placement: 'top-right',
+        autoFocus: true,
+        // The one-row find layout (field + query toggles + nav) needs more
+        // room than the 360px floating default before queries truncate.
+        width: 420,
+        ...config.floating,
+      };
 
       // If there was a previous editor with an open search session, clear it
       if (currentEditor && currentEditor !== editor) {
@@ -718,12 +741,11 @@ export function useFindReplace({
       focusFindInputFn = null;
 
       // Late-wired close — the handle is created before the surface opens
-      /** @type {(reason?: unknown) => void} */
-      let lateCloseFn = () => {};
+      let lateCloseFn: (reason?: unknown) => void = () => {};
 
       const handle = createHandle(config, (reason) => lateCloseFn(reason));
 
-      let surfaceHandle;
+      let surfaceHandle: SurfaceHandle;
 
       if (resolution.component) {
         // Custom Vue component (from resolver or direct config)
@@ -732,7 +754,7 @@ export function useFindReplace({
           ariaLabel: config.texts.findAriaLabel,
           closeOnEscape: true,
           floating: floatingOptions,
-          component: markRaw(resolution.component),
+          component: markRawComponent(resolution.component),
           props: { ...resolution.props, findReplace: handle },
         });
       } else if (resolution.render) {
@@ -754,14 +776,11 @@ export function useFindReplace({
             }),
         });
       } else {
-        // Built-in — lazy import. The `.vue` shim types the default export as
-        // `unknown`; narrow to `object` for `markRaw()` since the Vue compiler
-        // guarantees the SFC default export is a component definition object.
-        /** @type {object | undefined} */
-        let FindReplaceSurface;
+        // Built-in — lazy import.
+        let FindReplaceSurface: unknown;
         try {
           const mod = await import('../components/surfaces/FindReplaceSurface.vue');
-          FindReplaceSurface = /** @type {object} */ (mod.default);
+          FindReplaceSurface = mod.default;
         } catch {
           opening = false;
           return;
@@ -784,7 +803,7 @@ export function useFindReplace({
         surfaceHandle = manager.open({
           mode: 'floating',
           ariaLabel: config.texts.findAriaLabel,
-          component: markRaw(FindReplaceSurface),
+          component: markRawComponent(FindReplaceSurface),
           closeOnEscape: true,
           floating: floatingOptions,
           props: { findReplace: handle },

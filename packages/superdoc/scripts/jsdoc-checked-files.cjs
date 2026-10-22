@@ -29,7 +29,6 @@ module.exports = {
    * one file at a time, not in a mass migration.
    */
   CHECKED_FILES: [
-    'packages/superdoc/src/composables/use-find-replace.js',
     'packages/superdoc/src/composables/use-password-prompt.js',
   ],
 
@@ -41,7 +40,6 @@ module.exports = {
    * these — they're already accounted for explicitly.
    */
   REACHABILITY_EXEMPT_CHECKED_FILES: [
-    'packages/superdoc/src/composables/use-find-replace.js',
     'packages/superdoc/src/composables/use-password-prompt.js',
   ],
 };
