@@ -17,6 +17,7 @@ import { isSelectionTarget } from '../validation/selection-target-validator.js';
 import { validateStoryLocator } from '../validation/story-validator.js';
 import type { InlineRunPatch, InlineRunPatchKey } from './inline-run-patch.js';
 import { INLINE_PROPERTY_BY_KEY, validateInlineRunPatch } from './inline-run-patch.js';
+import type { FormatReadSelectionInput, FormatReadSelectionResult } from './read-selection.js';
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -105,6 +106,8 @@ export type FormatInlineAliasApi = {
 export interface FormatApi extends FormatInlineAliasApi {
   strikethrough(input: FormatStrikethroughInput, options?: TextMutationOptions): TextMutationReceipt;
   apply(input: StyleApplyInput, options?: TextMutationOptions): TextMutationReceipt;
+  /** Read inline formatting across a selection in `format.apply`-compatible values. */
+  readSelection(input: FormatReadSelectionInput): Promise<FormatReadSelectionResult>;
 }
 
 // ---------------------------------------------------------------------------

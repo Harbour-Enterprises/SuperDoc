@@ -78,6 +78,44 @@ function objectSchema(properties: Record<string, JsonSchema>, required: readonly
   }
   return schema;
 }
+const inlineReadSlotStateSchema: JsonSchema = {
+  oneOf: [
+    objectSchema({ state: { const: 'uniform' }, value: {} }, ['state', 'value']),
+    objectSchema({ state: { const: 'mixed' } }, ['state']),
+    objectSchema({ state: { const: 'unset' } }, ['state']),
+    objectSchema({ state: { const: 'unresolvable' }, reason: { type: 'string' } }, ['state', 'reason']),
+  ],
+};
+
+function inlineReadStateSchema(valueSchema: JsonSchema): JsonSchema {
+  return {
+    oneOf: [
+      objectSchema({ state: { const: 'uniform' }, value: valueSchema }, ['state', 'value']),
+      objectSchema(
+        { state: { const: 'mixed' }, slots: { type: 'object', additionalProperties: inlineReadSlotStateSchema } },
+        ['state'],
+      ),
+      objectSchema({ state: { const: 'unset' } }, ['state']),
+      objectSchema({ state: { const: 'unresolvable' }, reason: { type: 'string' } }, ['state', 'reason']),
+    ],
+  };
+}
+
+const formatReadSelectionOptionsSchema: Record<string, JsonSchema> = {
+  keys: {
+    type: 'array',
+    items: { enum: INLINE_PROPERTY_REGISTRY.map((entry) => entry.key) },
+    minItems: 1,
+    uniqueItems: true,
+    description: 'Inline properties to read. Defaults to every format.apply property.',
+  },
+  view: {
+    enum: ['effective', 'direct'],
+    description: "'effective' (default) resolves the style cascade; 'direct' reads run-level formatting only.",
+  },
+  in: ref('StoryLocator'),
+};
+
 function arraySchema(items: JsonSchema): JsonSchema {
   return {
     type: 'array',
@@ -5341,6 +5379,42 @@ const operationSchemas: Record<OperationId, OperationSchemaSet> = {
     failure: textMutationFailureSchemaFor('format.apply'),
   },
   ...formatInlineAliasOperationSchemas,
+  'format.readSelection': {
+    input: {
+      oneOf: [
+        objectSchema({ target: selectionTargetSchema, ...formatReadSelectionOptionsSchema }, ['target']),
+        objectSchema(
+          {
+            ref: { type: 'string', minLength: 1, description: 'Handle ref string from a search result.' },
+            ...formatReadSelectionOptionsSchema,
+          },
+          ['ref'],
+        ),
+        objectSchema(
+          {
+            selection: {
+              const: 'current',
+              description: 'Read the live editor selection, including pending caret formatting.',
+            },
+            ...formatReadSelectionOptionsSchema,
+          },
+          ['selection'],
+        ),
+      ],
+    },
+    output: objectSchema(
+      {
+        collapsed: { type: 'boolean' },
+        pendingApplied: { type: 'boolean' },
+        properties: objectSchema(
+          Object.fromEntries(
+            INLINE_PROPERTY_REGISTRY.map((entry) => [entry.key, inlineReadStateSchema(entry.schema as JsonSchema)]),
+          ),
+        ),
+      },
+      ['collapsed', 'properties'],
+    ),
+  },
   'blocks.findText': {
     input: objectSchema(
       {

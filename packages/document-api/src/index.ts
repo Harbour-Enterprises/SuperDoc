@@ -65,6 +65,7 @@ export {
   executeSelectionExtractOoxml,
   executeSelectionReleaseSnapshot,
 } from './selection/selection.js';
+export { executeFormatReadSelection } from './format/read-selection.js';
 export type { HeaderFootersAdapter, HeaderFootersApi } from './header-footers/header-footers.js';
 export * from './header-footers/header-footers.types.js';
 export type { WatermarksAdapter, WatermarksApi } from './watermarks/watermarks.js';
@@ -152,6 +153,11 @@ import type {
   StyleApplyInput,
 } from './format/format.js';
 import { executeStyleApply, executeInlineAlias } from './format/format.js';
+import {
+  executeFormatReadSelection,
+  type FormatReadSelectionInput,
+  type FormatReadSelectionResult,
+} from './format/read-selection.js';
 import { INLINE_PROPERTY_REGISTRY, type InlineRunPatchKey } from './format/inline-run-patch.js';
 import type {
   StylesAdapter,
@@ -1209,6 +1215,15 @@ export type {
   StyleApplyInput,
   StyleApplyOptions,
 } from './format/format.js';
+export type {
+  FormatReadSelectionAdapter,
+  FormatReadSelectionInput,
+  FormatReadSelectionRequest,
+  FormatReadSelectionResult,
+  InlineReadSlotState,
+  InlineReadState,
+  InlineReadView,
+} from './format/read-selection.js';
 export type {
   InlineRunPatch,
   InlineRunPatchKey,
@@ -2494,7 +2509,10 @@ const HOOK_GATED_OPERATIONS: ReadonlyArray<{
   readonly hasHook: (adapters: DocumentApiAdapters) => boolean;
   // Optional chaining despite the required type: the namespace loop above
   // tolerates a missing adapter, and a JavaScript host can pass one.
-}> = [{ operationId: 'styles.create', hasHook: (a) => typeof a.styles?.create === 'function' }];
+}> = [
+  { operationId: 'styles.create', hasHook: (a) => typeof a.styles?.create === 'function' },
+  { operationId: 'format.readSelection', hasHook: (a) => typeof a.selectionMutation?.readSelection === 'function' },
+];
 
 function assertCapabilityDecision(
   operationId: OperationId,
@@ -2740,6 +2758,9 @@ export function createDocumentApi(adapters: DocumentApiAdapters): DocumentApi {
       },
       apply(input: StyleApplyInput, options?: MutationOptions): TextMutationReceipt {
         return executeStyleApply(adapters.selectionMutation, input, options);
+      },
+      readSelection(input: FormatReadSelectionInput): Promise<FormatReadSelectionResult> {
+        return executeFormatReadSelection(adapters.selectionMutation, input);
       },
       paragraph: {
         resetDirectFormatting(

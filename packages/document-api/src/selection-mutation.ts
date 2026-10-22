@@ -13,6 +13,7 @@ import type { TextMutationReceipt } from './types/receipt.js';
 import type { TextMutationOptions } from './write/write.js';
 import type { InlineRunPatch } from './format/inline-run-patch.js';
 import type { StoryLocator } from './types/story.types.js';
+import type { FormatReadSelectionRequest, FormatReadSelectionResult } from './format/read-selection.js';
 
 // ---------------------------------------------------------------------------
 // Adapter request types
@@ -73,4 +74,6 @@ export type SelectionMutationRequest =
  */
 export interface SelectionMutationAdapter {
   execute(request: SelectionMutationRequest, options?: TextMutationOptions): TextMutationReceipt;
+  /** Backs `format.readSelection`; engines without it reject with CAPABILITY_UNAVAILABLE. */
+  readSelection?(request: FormatReadSelectionRequest): Promise<FormatReadSelectionResult>;
 }

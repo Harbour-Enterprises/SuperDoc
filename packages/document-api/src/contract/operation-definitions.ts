@@ -1288,6 +1288,21 @@ export const OPERATION_DEFINITIONS = {
     intentAction: 'inline',
   },
   ...FORMAT_INLINE_ALIAS_OPERATION_DEFINITIONS,
+  'format.readSelection': {
+    memberPath: 'format.readSelection',
+    description:
+      'Read inline formatting across a selection or caret, reporting each property as uniform, mixed, unset or unresolvable.',
+    expectedResult:
+      'Returns per-property states whose uniform values use the same shape format.apply accepts, without changing the document.',
+    requiresDocumentContext: true,
+    metadata: readOperation({
+      idempotency: 'idempotent',
+      throws: [...T_NOT_FOUND_CAPABLE, 'INVALID_TARGET', 'INVALID_INPUT', 'REVISION_MISMATCH', ...T_STORY],
+      deterministicTargetResolution: true,
+    }),
+    referenceDocPath: 'format/read-selection.mdx',
+    referenceGroup: 'format',
+  },
   'styles.apply': {
     memberPath: 'styles.apply',
     description:

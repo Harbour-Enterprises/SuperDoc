@@ -1624,6 +1624,52 @@ describe('createDocumentApi', () => {
       } as unknown as DocumentApiAdapters);
     }
 
+    it('masks format.readSelection when its optional adapter hook is absent', async () => {
+      const api = createDocumentApi({
+        capabilities: makeCapabilitiesAdapter({
+          operations: {
+            'format.readSelection': { available: true, tracked: false, dryRun: false },
+          } as unknown as DocumentApiCapabilities['operations'],
+        }),
+        selectionMutation: {},
+      } as unknown as DocumentApiAdapters);
+      expect(api.capabilities().operations['format.readSelection']).toMatchObject({
+        available: false,
+        reasons: ['OPERATION_UNAVAILABLE'],
+      });
+      await expect(
+        api.format.readSelection({
+          target: {
+            kind: 'selection',
+            start: { kind: 'text', blockId: 'p1', offset: 0 },
+            end: { kind: 'text', blockId: 'p1', offset: 1 },
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'CAPABILITY_UNAVAILABLE' });
+    });
+
+    it('keeps format.readSelection available when the advertised hook exists', async () => {
+      const result = { collapsed: true, properties: {} };
+      const api = createDocumentApi({
+        capabilities: makeCapabilitiesAdapter({
+          operations: {
+            'format.readSelection': { available: true, tracked: false, dryRun: false },
+          } as unknown as DocumentApiCapabilities['operations'],
+        }),
+        selectionMutation: { readSelection: async () => result },
+      } as unknown as DocumentApiAdapters);
+      expect(api.capabilities().operations['format.readSelection'].available).toBe(true);
+      expect(
+        await api.format.readSelection({
+          target: {
+            kind: 'selection',
+            start: { kind: 'text', blockId: 'p1', offset: 0 },
+            end: { kind: 'text', blockId: 'p1', offset: 0 },
+          },
+        }),
+      ).toEqual(result);
+    });
+
     it('masks styles.create when the styles adapter has no create hook', () => {
       const capabilities = makeStylesApi({ apply: () => undefined }).capabilities();
 
